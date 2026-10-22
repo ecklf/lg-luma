@@ -849,6 +849,9 @@ fn run() -> Result<(), String> {
                 }
                 _ => {}
             }
+            if state.take_greeting_save() {
+                pending.push(Effect::Save);
+            }
             running &= effects(
                 pending,
                 &mut state,

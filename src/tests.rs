@@ -291,6 +291,29 @@ fn focused_navigation_tabs_switch_pages_immediately() {
 }
 
 #[test]
+fn greeting_name_row_opens_the_keyboard_and_saves_when_it_closes() {
+    let mut state = ready();
+    state.open(2);
+    state.focus = Target::Setting(6);
+    assert!(state.activate().is_empty());
+    assert!(state.text_input_active());
+    state.text("Ana");
+    assert_eq!(state.preferences.greeting_name, "Ana");
+    assert!(
+        !state.take_greeting_save(),
+        "nothing to save while the keyboard is open"
+    );
+    state.finish_text_input();
+    assert_eq!(state.focus, Target::Setting(6));
+    assert!(state.take_greeting_save());
+    assert!(!state.take_greeting_save());
+    assert_eq!(
+        crate::i18n::Language::En.greeting(9, &state.preferences.greeting_name),
+        "Good morning, Ana."
+    );
+}
+
+#[test]
 fn clock_format_subpage_saves_and_restores_its_parent_row() {
     let mut state = ready();
     state.open(2);

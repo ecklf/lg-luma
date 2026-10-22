@@ -92,6 +92,9 @@ Backspace deletes while editing. Native Back uses SDL's webOS-specific keycode. 
 the keyboard first; Weather Location then returns to its parent Location row, HDMI choices to
 that HDMI row, and the Background gallery to Background in the sidebar. Back from the sidebar
 focuses the Settings tab, then returns Home. General ends with a vector power-icon Quit app row.
+General also has a **Greeting name** row: OK opens the text keyboard (the system keyboard on the TV)
+and the name is appended to the Home greeting ("Good evening, Ana."); an empty name keeps the plain
+greeting. Preferences are saved when the keyboard closes.
 
 Home favorites form one horizontal strip, never a second row. Left/Right follows saved order,
 including reorder mode, and reveals complete cards. Up returns to Home navigation; Down enters

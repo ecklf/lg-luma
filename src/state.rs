@@ -100,6 +100,7 @@ pub enum Subpage {
 pub enum TextField {
     Apps,
     Location,
+    Name,
 }
 
 #[derive(Clone, Copy)]
@@ -149,6 +150,8 @@ pub struct State {
     pub panel_started: Option<Instant>,
     pub weather: weather::Weather,
     pub keyboard_field: TextField,
+    /// Set while the greeting name is edited; the main loop saves preferences once input ends.
+    pub greeting_edited: bool,
 }
 
 impl State {
@@ -177,6 +180,7 @@ impl State {
             panel_started: None,
             weather: weather::Weather::default(),
             keyboard_field: TextField::Apps,
+            greeting_edited: false,
         }
     }
 
@@ -907,6 +911,17 @@ impl State {
                 self.dirty = true;
                 return;
             }
+            if self.keyboard_field == TextField::Name {
+                let name = &mut self.preferences.greeting_name;
+                name.extend(
+                    text.chars()
+                        .filter(|c| !c.is_control())
+                        .take(40usize.saturating_sub(name.chars().count())),
+                );
+                self.greeting_edited = true;
+                self.dirty = true;
+                return;
+            }
             self.query.extend(
                 text.chars()
                     .filter(|c| !c.is_control())
@@ -923,6 +938,9 @@ impl State {
                 let mut query = self.weather.query.clone();
                 query.pop();
                 self.weather.edit(query);
+            } else if self.keyboard_field == TextField::Name {
+                self.preferences.greeting_name.pop();
+                self.greeting_edited = true;
             } else {
                 self.query.pop();
             }
@@ -966,6 +984,9 @@ impl State {
         query.replace_range(start..end, "");
         if self.keyboard_field == TextField::Location {
             self.weather.edit(query);
+        } else if self.keyboard_field == TextField::Name {
+            self.preferences.greeting_name = query;
+            self.greeting_edited = true;
         } else {
             self.query = query;
             self.scroll = 0.;
@@ -974,11 +995,19 @@ impl State {
     }
 
     pub fn editing_text(&self) -> &str {
-        if self.keyboard_field == TextField::Location {
-            &self.weather.query
-        } else {
-            &self.query
+        match self.keyboard_field {
+            TextField::Location => &self.weather.query,
+            TextField::Name => &self.preferences.greeting_name,
+            TextField::Apps => &self.query,
         }
+    }
+    /// True once after the greeting name changed and the keyboard closed; the caller saves.
+    pub fn take_greeting_save(&mut self) -> bool {
+        if self.greeting_edited && !self.text_input_active() {
+            self.greeting_edited = false;
+            return true;
+        }
+        false
     }
     pub fn open_keyboard(&mut self, field: TextField) {
         self.keyboard_field = field;
@@ -988,10 +1017,10 @@ impl State {
             target_arch = "arm"
         )) {
             self.overlay = Some(Overlay::SystemKeyboard);
-            self.focus = if field == TextField::Location {
-                Target::WeatherQuery
-            } else {
-                Target::Search
+            self.focus = match field {
+                TextField::Location => Target::WeatherQuery,
+                TextField::Name => Target::Setting(6),
+                TextField::Apps => Target::Search,
             };
             self.panel_started = None;
             self.dirty = true;
@@ -1015,10 +1044,10 @@ impl State {
         self.dirty = true;
     }
     fn keyboard_return(&self) -> Target {
-        if self.keyboard_field == TextField::Location {
-            Target::WeatherSearch
-        } else {
-            Target::Search
+        match self.keyboard_field {
+            TextField::Location => Target::WeatherSearch,
+            TextField::Name => Target::Setting(6),
+            TextField::Apps => Target::Search,
         }
     }
 
@@ -1128,6 +1157,10 @@ impl State {
                         return vec![];
                     }
                     5 => return vec![Effect::Quit],
+                    6 => {
+                        self.open_keyboard(TextField::Name);
+                        return vec![];
+                    }
                     _ => return vec![Effect::Refresh],
                 }
                 return vec![Effect::Save];
@@ -1261,6 +1294,9 @@ impl State {
                 "Clear" => {
                     if self.keyboard_field == TextField::Location {
                         self.weather.edit(String::new());
+                    } else if self.keyboard_field == TextField::Name {
+                        self.preferences.greeting_name.clear();
+                        self.greeting_edited = true;
                     } else {
                         self.query.clear();
                     }

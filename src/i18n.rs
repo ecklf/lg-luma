@@ -78,13 +78,19 @@ impl Language {
             _ => id,
         })
     }
-    pub fn greeting(self, hour: u8) -> &'static str {
-        self.t(match hour {
+    pub fn greeting(self, hour: u8, name: &str) -> String {
+        let key = match hour {
             0..=4 => "greetingNight",
             5..=11 => "morning",
             12..=17 => "afternoon",
             _ => "evening",
-        })
+        };
+        let name = name.trim();
+        if name.is_empty() {
+            self.t(key).to_owned()
+        } else {
+            self.format(&format!("{key}Named"), &[("name", name)])
+        }
     }
     pub fn date(self, now: OffsetDateTime) -> String {
         let weekday = now.weekday().number_days_from_monday() as usize;
@@ -253,6 +259,10 @@ mod tests {
             "已隐藏（3）"
         );
         assert_eq!(Language::De.category("Gaming"), "Spiele");
+        assert_eq!(Language::En.greeting(15, ""), "Good afternoon.");
+        assert_eq!(Language::En.greeting(15, "  Ana "), "Good afternoon, Ana.");
+        assert_eq!(Language::Es.greeting(2, "Ana"), "¿Aún despiertos, Ana?");
+        assert_eq!(Language::Zh.greeting(20, "小明"), "小明，晚上好。");
     }
     #[test]
     fn clock_and_date_follow_the_selected_locale() {

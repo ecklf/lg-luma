@@ -92,6 +92,8 @@ pub struct Preferences {
     pub show_names: bool,
     pub hour_24: bool,
     pub reduced_motion: bool,
+    /// Optional name appended to the Home greeting ("Good evening, Ana."). Empty = plain greeting.
+    pub greeting_name: String,
     pub input_modes: BTreeMap<String, InputMode>,
     #[serde(deserialize_with = "crate::weather::deserialize_enabled")]
     pub show_weather: bool,
@@ -112,6 +114,7 @@ impl Default for Preferences {
             show_names: false,
             hour_24: false,
             reduced_motion: false,
+            greeting_name: String::new(),
             input_modes: BTreeMap::new(),
             show_weather: true,
             weather_location: None,
