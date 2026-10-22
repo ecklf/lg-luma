@@ -261,9 +261,40 @@ function restore(config) {
   if (wasHome) launchHome();
 }
 
+// The LG splash is a static file. Stage the splash of the owner's current background, so a cold
+// boot into Luma Home opens on their wallpaper. Falls back to the package default on any error.
+function stageSplash(appDir) {
+  var background = 'dunes';
+  var candidates = [
+    '/media/developer/' + APP + '/preferences.json',
+    '/media/developer/temp/' + APP + '/preferences.json',
+    '/media/internal/.' + APP + '/preferences.json'
+  ];
+  for (var i = 0; i < candidates.length; i++) {
+    try {
+      var saved = json(candidates[i]).background;
+      if (typeof saved === 'string' && /^[a-z0-9-]{1,32}$/.test(saved)) {
+        background = saved;
+        break;
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') console.log('home: preferences unreadable: ' + error.message);
+    }
+  }
+  var source = appDir + '/splash/' + background + '.png';
+  if (!fs.existsSync(source)) source = appDir + '/splash.png';
+  try {
+    fs.writeFileSync(STAGE + '/splash.png.new', fs.readFileSync(source), { mode: 420 });
+    fs.renameSync(STAGE + '/splash.png.new', STAGE + '/splash.png');
+  } catch (error) {
+    console.log('home: splash not staged: ' + error.message);
+  }
+}
+
 function apply(config, open) {
   if (foreignMount()) throw new Error('Another integration is mounted over LG Home');
   if (!fs.existsSync(config.appDir + '/luma')) throw new Error('Luma is no longer installed');
+  if (!mounted()) stageSplash(config.appDir);
   var front = foreground();
   try {
     if (!mounted()) run('/bin/mount', ['--bind', STAGE, TARGET]);
@@ -333,7 +364,7 @@ function install(appDir) {
   mkdir(STAGE);
   // Symlinks keep the executable at its installed path for the dynamic loader
   // and LS2. They also follow ordinary in-place package updates.
-  ['luma', 'assets', 'lib', app.icon, app.largeIcon].forEach(function (name) {
+  ['luma', 'assets', 'lib', 'splash', app.icon, app.largeIcon].forEach(function (name) {
     var link = STAGE + '/' + name;
     if (exists(link + '.new')) fs.unlinkSync(link + '.new');
     fs.symlinkSync(appDir + '/' + name, link + '.new');

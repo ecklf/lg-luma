@@ -15,6 +15,7 @@ for (const directory of [
   'app-icons',
   'ui-icons',
   'surfaces',
+  'splash',
 ]) {
   await fs.mkdir(path.join(out, directory), { recursive: true });
 }
@@ -116,6 +117,15 @@ for (const [id, relative] of Object.entries(map)) {
 }
 await fs.writeFile(path.join(out, 'icons.json'), `${JSON.stringify(icons, null, 2)}\n`);
 await fs.copyFile(path.join(source, 'icon-colours.json'), path.join(out, 'colors.json'));
+// webOS shows `splashBackground` (a static image, scaled to 1080p) until the window opens. One
+// 1080p PNG per background lets the package start on the user's wallpaper instead of a grey card.
+for (const file of await fs.readdir(path.join(out, 'wallpapers'))) {
+  if (!file.endsWith('.jpg') || file.includes('@2x')) continue;
+  await sharp(path.join(out, 'wallpapers', file))
+    .resize(1920, 1080, { fit: 'cover' })
+    .png({ compressionLevel: 9 })
+    .toFile(path.join(out, 'splash', file.replace(/\.jpg$/, '.png')));
+}
 await fs.writeFile(
   path.join(out, 'version.txt'),
   JSON.parse(await fs.readFile(path.join(root, 'appinfo.json'), 'utf8')).version,

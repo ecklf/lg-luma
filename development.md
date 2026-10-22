@@ -105,6 +105,15 @@ vector icons/logos and text. The wallpaper/header are unmasked; no blur texture 
 TV editing uses the system keyboard through SDL-webOS. Desktop editing uses the custom panel.
 System text events update app/location queries; Done/Back stops editing and restores focus.
 
+## Splash images
+
+`pnpm assets` renders one 1920×1080 PNG per background into `.build/assets/splash/` from the shaded
+wallpapers. `tools/package.mjs` ships them under `splash/` plus `splash.png` (the default background),
+which `appinfo.json` names as `splashBackground`, with `bgColor` set to the UI base colour so the
+frame between the splash and the first draw is not black. With Home takeover enabled, `tv/home.cjs`
+copies the selected background's splash into the staged Home app on every apply, reading the saved
+preferences from the TV storage candidates in `storage.rs`.
+
 ## Vector rendering
 
 `assets/ui-icons/` holds standalone SVGs exported from the original Lucide/control artwork,

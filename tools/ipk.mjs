@@ -82,6 +82,8 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     'autostart.sh',
     'home.sh',
     'home.cjs',
+    'splash.png',
+    'splash/dunes.png',
     'lib/libSDL2-2.0.so.0',
     'licenses/sdl2.txt',
     'licenses/lucide.txt',

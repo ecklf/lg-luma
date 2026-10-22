@@ -69,7 +69,9 @@ APP=/media/developer/apps/usr/palm/applications/com.ecklf.luma
 sh "$APP/home.sh" enable
 ```
 
-Takeover mounts Luma over the system Home app and reapplies the mount at cold boot.
+Takeover mounts Luma over the system Home app and reapplies the mount at cold boot. The LG splash
+shown before Luma's window opens is the wallpaper you selected in **Settings → Background**, staged
+from the saved preferences at each boot (the plain package uses the default background).
 LG Home's original files remain underneath, using the same approach as
 [Glasshouse Home](https://github.com/rorygallagher2024/glasshouse/blob/main/server/lib/home-takeover.js).
 

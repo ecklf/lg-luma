@@ -12,5 +12,7 @@
   "appCategory": ["home"],
   "requiredACG": ["application.launcher", "application.query", "lunabus.query"],
   "handlesRelaunch": false,
-  "iconColor": "#25272d"
+  "iconColor": "#25272d",
+  "splashBackground": "splash.png",
+  "bgColor": "#17191c"
 }
