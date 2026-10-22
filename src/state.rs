@@ -1161,7 +1161,13 @@ impl State {
             }
             Target::Choice(index) => {
                 match self.subpage.clone() {
-                    Some(Subpage::Clock) => self.preferences.hour_24 = index == 1,
+                    Some(Subpage::Clock) => {
+                        if index == 2 {
+                            self.preferences.show_seconds = !self.preferences.show_seconds;
+                        } else {
+                            self.preferences.hour_24 = index == 1;
+                        }
+                    }
                     Some(Subpage::Input(id)) => {
                         self.preferences.input_modes.insert(
                             id,
