@@ -75,6 +75,17 @@ try {
   const searched = await scenario('search', 'apps,type:YouTube,back');
   assert.equal(searched.query, 'YouTube');
   assert.deepEqual(searched.apps, ['youtube.leanback.v4']);
+  for (const [id, title] of [
+    ['coupangplay', 'Coupang Play'],
+    ['com.frograms.watchaplay.webos', 'Watcha Play'],
+    ['pooq', 'Wavve'],
+    ['com.cmb.rainbowtv', 'Rainbow TV'],
+    ['com.lgtvod.kr.app', 'LG TV VOD'],
+  ]) {
+    const koreanApp = await scenario(`korean-${id}`, `apps,type:${title},back`);
+    assert.deepEqual(koreanApp.apps, [id]);
+    assert.ok(koreanApp.ui_text.includes(title));
+  }
   const settings = await scenario('settings', 'settings,down,down,enter,down,enter');
   assert.equal(settings.preferences.background, 'forest');
   const saved = await scenario('saved', 'down,hold,right,back');
