@@ -1,5 +1,5 @@
 ---
-'lg-luma': patch
+'lg-luma': minor
 ---
 
 Add custom input names: rename any input with the remote in Settings → Inputs, or reset it to the
