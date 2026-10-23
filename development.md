@@ -319,6 +319,17 @@ Select `lg-luma`, choose patch/minor/major and describe the change. Commit the g
 under `.changeset/` with the PR. Documentation-only and maintenance PRs that do not need a release
 can omit it. Keep the existing app version in ordinary PRs.
 
+`.github/workflows/changeset-status.yml` adds a Changesets status check and maintains one comment
+per PR, including fork PRs. It reports the requested release types or notes that a PR without a
+changeset will not request an app version bump. For code or behavior changes, add a changeset
+using semantic versioning: **patch** for backward-compatible fixes, **minor** for backward-compatible
+features, or **major** for breaking changes. The comment is informational, so documentation-only
+and maintenance PRs can still merge without a release changeset. It updates when a PR is opened,
+reopened, edited, marked ready or receives new commits, and skips the generated Version Packages
+PR. The workflow becomes active once it is merged into the PR's base branch. It uses
+`pull_request_target` with a read-only status job and a separate comment-writing job, without
+installing dependencies or running code from the PR.
+
 After changesets merge into `main`, `.github/workflows/release-pr.yml` creates or updates the
 **Version Packages** PR on `changeset-release/main`. Changesets combines the pending notes using
 the highest requested bump. The custom `pnpm version:release` command updates `package.json`
