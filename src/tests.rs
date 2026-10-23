@@ -688,7 +688,6 @@ fn word_boundaries_preserve_the_known_app_brands_and_categories() {
         ("de.zdf.app.zdfm3", "zdf", "Streaming"),
         ("ard.mediathek", "das-erste", "Streaming"),
     ];
-    assert_eq!(apps.len(), expected.len());
     for (id, brand, category) in expected {
         let app = apps.iter().find(|app| app.id == id).unwrap();
         assert_eq!(

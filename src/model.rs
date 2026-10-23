@@ -228,6 +228,11 @@ pub fn demo_inventory() -> Inventory {
             ("com.arte.tv", "ARTE"),
             ("de.zdf.app.zdfm3", "ZDF"),
             ("ard.mediathek", "Das Erste"),
+            ("coupangplay", "Coupang Play"),
+            ("com.frograms.watchaplay.webos", "Watcha Play"),
+            ("pooq", "Wavve"),
+            ("com.cmb.rainbowtv", "Rainbow TV"),
+            ("com.lgtvod.kr.app", "LG TV VOD"),
         ]
         .into_iter()
         .map(|(id, title)| App::new(id, title))
