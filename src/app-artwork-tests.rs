@@ -204,8 +204,6 @@ fn decoded_cache_evicts_old_icons_when_scrolling_through_many_apps() {
 fn visible_cards_switch_from_fallback_to_installed_artwork_without_an_icon_map() {
     let assets = crate::view::Assets {
         root: PathBuf::new(),
-        icons: Default::default(),
-        colors: Default::default(),
         version: "test".into(),
         metrics: Default::default(),
         artwork: Service::with_loader(true, |_| {

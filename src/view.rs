@@ -21,8 +21,6 @@ const GRID_PITCH: f32 = 296.4;
 
 pub struct Assets {
     pub root: PathBuf,
-    pub icons: BTreeMap<String, String>,
-    pub colors: BTreeMap<String, [u8; 3]>,
     pub version: String,
     pub metrics: BTreeMap<String, BTreeMap<char, f32>>,
     pub artwork: crate::app_artwork::Service,
@@ -33,25 +31,11 @@ impl Assets {
             std::fs::read(root.join(file))
                 .map_err(|e| format!("Native assets are missing: {e}. Run pnpm assets."))
         };
-        // Collected artwork is a desktop preview fixture, never a prerequisite
-        // for displaying an app installed on the television.
-        let icons = if webos {
-            BTreeMap::new()
-        } else {
-            serde_json::from_slice(&load("icons.json")?).map_err(|e| e.to_string())?
-        };
-        let colors = if webos {
-            BTreeMap::new()
-        } else {
-            serde_json::from_slice(&load("colors.json")?).map_err(|e| e.to_string())?
-        };
         let version = String::from_utf8(load("version.txt")?).map_err(|e| e.to_string())?;
         let metrics =
             serde_json::from_slice(&load("font-metrics.json")?).map_err(|e| e.to_string())?;
         Ok(Self {
             root,
-            icons,
-            colors,
             version,
             metrics,
             artwork: crate::app_artwork::Service::new(webos),
@@ -497,31 +481,16 @@ fn tile(
         if focused { 14. } else { 9. },
         if focused { 0.4 } else { 0.165 },
     );
-    let logos = [
-        "netflix",
-        "youtube",
-        "apple-tv",
-        "disney-plus",
-        "prime-video",
-        "jellyfin",
-        "arte",
-        "zdf",
-        "das-erste",
-    ];
-    let logo = logos.contains(&app.brand.as_str());
-    let artwork = (!logo)
+    let logo = crate::branding::for_key(&app.brand);
+    let artwork = logo
+        .is_none()
         .then(|| {
             app.icon
                 .as_ref()
                 .and_then(|source| assets.artwork.get(source))
         })
         .flatten();
-    let installed = (!logo).then(|| assets.icons.get(&app.id)).flatten();
-    if let Some(rgb) = artwork
-        .as_ref()
-        .map(|image| &image.color)
-        .or_else(|| installed.and_then(|_| assets.colors.get(&app.id)))
-    {
+    if let Some(rgb) = artwork.as_ref().map(|image| &image.color) {
         out.shape(
             rect,
             19.2,
@@ -533,35 +502,16 @@ fn tile(
             ],
         );
     } else {
-        let brand = if app.brand == "live-tv" {
-            "generic"
-        } else {
-            &app.brand
-        };
         out.image(
-            assets.path(format!("surfaces/{brand}.png")),
+            assets.path(format!("surfaces/{}.png", app.brand)),
             rect,
             19.2,
             false,
         );
     }
     out.border(rect, 19.2, 1., c(0xffffff, 0.063));
-    if logo {
-        let ratio = match app.brand.as_str() {
-            "netflix" => 0.76,
-            "youtube" => 0.74,
-            "apple-tv" => 0.43,
-            "disney-plus" | "prime-video" => 0.72,
-            "jellyfin" => 0.83,
-            "arte" => 0.58,
-            "zdf" => 0.50,
-            _ => 0.70,
-        };
-        let h = if app.brand == "disney-plus" {
-            105.6
-        } else {
-            88.
-        };
+    if let Some(brand) = logo {
+        let (ratio, h) = brand.artwork_size();
         out.image(
             assets.path(format!("logos/{}.lvec", app.brand)),
             Rect::new(
@@ -584,18 +534,6 @@ fn tile(
             ),
             [1.; 4],
         ));
-    } else if let Some(icon) = installed {
-        out.image(
-            assets.path(icon),
-            Rect::new(
-                rect.x + rect.w * 0.16,
-                rect.y + rect.h * 0.16,
-                rect.w * 0.68,
-                rect.h * 0.68,
-            ),
-            0.,
-            true,
-        );
     } else {
         brand_mark(out, assets, app, rect, state.preferences.language);
     }

@@ -16,8 +16,6 @@ fn ready() -> State {
 fn controls(state: &State) -> Vec<crate::state::Control> {
     let assets = view::Assets {
         root: PathBuf::new(),
-        icons: BTreeMap::new(),
-        colors: BTreeMap::new(),
         version: "test".into(),
         metrics: BTreeMap::new(),
         artwork: crate::app_artwork::Service::new(false),
@@ -158,7 +156,7 @@ fn inventory_filters_system_apps_duplicates_and_unsafe_identifiers() {
 }
 
 #[test]
-fn icon_collector_visibility_cases_match_the_launcher_inventory() {
+fn inventory_visibility_cases_match_the_launcher_filters() {
     let cases: Vec<serde_json::Value> =
         serde_json::from_str(include_str!("../tests/fixtures/app-visibility.json")).unwrap();
     let inventory: Vec<_> = cases.iter().map(|case| case["app"].clone()).collect();
@@ -173,6 +171,38 @@ fn icon_collector_visibility_cases_match_the_launcher_inventory() {
         .map(|case| case["app"]["id"].as_str().unwrap().to_owned())
         .collect();
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn asset_loading_and_unknown_app_cards_do_not_require_collected_artwork() {
+    let root = std::env::temp_dir().join(format!("luma-assets-no-dumps-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("version.txt"), "test").unwrap();
+    std::fs::write(root.join("font-metrics.json"), "{}").unwrap();
+    for webos in [false, true] {
+        let assets = view::Assets::load(root.clone(), webos).unwrap();
+        let mut state = State::new(Preferences::default());
+        state.set_inventory(
+            crate::model::Inventory {
+                apps: vec![App::new("com.example.regional", "Regional App")],
+                inputs: vec![],
+            },
+            None,
+        );
+        state.open(1);
+        let scene = view::scene_with_pill(
+            &state,
+            &assets,
+            800.,
+            100.,
+            time::OffsetDateTime::UNIX_EPOCH,
+        );
+        assert!(scene.draw.iter().any(|draw| matches!(draw,
+            crate::renderer::Draw::TintedImage(path, ..) if path.ends_with("ui-icons/generic.lvec"))));
+        assert!(scene.draw.iter().any(|draw| matches!(draw,
+            crate::renderer::Draw::Text(value, ..) if value == "Regional App")));
+    }
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -624,7 +654,7 @@ fn unsupported_language_preferences_recover_without_losing_other_choices() {
 }
 
 #[test]
-fn brand_keywords_match_whole_words_not_substrings() {
+fn unrelated_app_ids_and_titles_keep_their_installed_artwork() {
     for (id, title) in [
         ("com.tvweb.dashboard", "Glasshouse"),
         ("com.example.ardent", "Notes"),
@@ -634,20 +664,24 @@ fn brand_keywords_match_whole_words_not_substrings() {
         ("com.example.media", "Standard dashboard"),
         ("com.example.media", "netflixer"),
         ("com.example.media", "preNetflix"),
+        ("amazon.alexa.view", "Amazon Alexa"),
+        ("com.example.spotify", "Spotify tools"),
+        ("com.example.media", "Plex"),
+        ("com.example.browser", "Web Browser"),
+        ("com.example.livetv", "Live TV"),
     ] {
         let app = App::new(id, title);
         assert_eq!(
             (app.brand.as_str(), app.category.as_str()),
             ("generic", "Utilities"),
-            "A keyword inside an ASCII word must not rebrand {id} / {title}"
+            "An unrelated application must not be rebranded: {id} / {title}"
         );
     }
 }
 
 #[test]
-fn brand_keywords_accept_separators_utf8_and_later_valid_matches() {
+fn curated_branding_does_not_use_title_words_or_partial_id_matches() {
     for (id, title) in [
-        ("ard.mediathek", "ARD Mediathek"),
         ("com.example.ard_more", "Notes"),
         ("com.example.more-ard", "Notes"),
         ("com.example.ARD", "Notes"),
@@ -662,14 +696,14 @@ fn brand_keywords_accept_separators_utf8_and_later_valid_matches() {
         let app = App::new(id, title);
         assert_eq!(
             (app.brand.as_str(), app.category.as_str()),
-            ("das-erste", "Streaming"),
-            "A delimited keyword must still brand {id} / {title}"
+            ("generic", "Utilities"),
+            "Only an exact app ID may select curated artwork: {id} / {title}"
         );
     }
 }
 
 #[test]
-fn word_boundaries_preserve_the_known_app_brands_and_categories() {
+fn known_app_ids_preserve_the_curated_brands_and_categories() {
     let apps = demo_inventory().apps;
     let expected = [
         ("com.webos.app.livetv", "live-tv", "Streaming"),

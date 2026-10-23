@@ -32,7 +32,7 @@
 The bundled icon/logo SVG sources are compiled into derived `.lvec` triangles with the same
 source licenses. Apple TV, Disney+, Prime Video and Das Erste retain the white display treatment.
 YouTube's wordmark is white and its play mark red. Jellyfin retains its gradient and in-file
-CC BY-SA attribution. Both licenses and this document travel inside the IPK.
+CC BY-SA attribution. Source licence notices and this document travel inside the IPK.
 
 Generated `.build/assets/thumbnails/` are cropped/resized derivatives of the same wallpaper
 sources. Original sources remain in `assets/`; no artwork service is contacted on the TV.
@@ -51,11 +51,62 @@ sources. Original sources remain in `assets/`; no artwork service is contacted o
 | `zdf.svg`         | [ZDF](https://commons.wikimedia.org/wiki/File:ZDF_logo.svg)                                           | ZDF; public-domain logo artwork                                                        |
 | `das-erste.svg`   | [Das Erste](https://commons.wikimedia.org/wiki/File:Das_Erste_2014.svg)                               | ARD; public-domain logo artwork                                                        |
 
+### Expanded streaming and music artwork
+
+`tools/brand-assets.mjs` records each upstream URL and SHA-256. The SVGs are checked in, so
+ordinary builds and TV rendering remain offline. `pnpm assets:brands` is an optional source
+restoration command. The mesh compiler tightly fits these logos and applies white/dark-card ink
+treatments while retaining selected brand colours. Peacock and Watcha have redundant rectangular
+clips removed. Coupang Play's static SVG paths are extracted from its source component.
+
+| SVG asset            | Source / attribution                                                                                                                                                                        | Licence                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `spotify.svg`        | [Spotify](https://commons.wikimedia.org/wiki/File:Spotify_logo_with_text.svg)                                                                                                               | Public domain logo                              |
+| `plex.svg`           | [Plex via Simple Icons](https://simpleicons.org/?q=plex)                                                                                                                                    | CC0 contribution                                |
+| `hbo-max.svg`        | [HBO Max 2025](<https://commons.wikimedia.org/wiki/File:HBO_Max_(2025).svg>), Warner Bros. Discovery, LucasJance2006 and Lee6597                                                            | Public domain logo                              |
+| `paramount-plus.svg` | [Paramount+ via Simple Icons](https://simpleicons.org/?q=paramount)                                                                                                                         | CC0 contribution                                |
+| `peacock.svg`        | [Peacock 2026](<https://commons.wikimedia.org/wiki/File:NBCUniversal_Peacock_Logo_(2026).svg>), NBCUniversal                                                                                | Public domain logo                              |
+| `hulu.svg`           | [Hulu](<https://commons.wikimedia.org/wiki/File:Hulu_logo_(2018).svg>)                                                                                                                      | Public domain logo                              |
+| `crunchyroll.svg`    | [Crunchyroll via Simple Icons](https://simpleicons.org/?q=crunchyroll)                                                                                                                      | CC0 contribution                                |
+| `twitch.svg`         | [Twitch via Simple Icons](https://simpleicons.org/?q=twitch)                                                                                                                                | CC0 contribution                                |
+| `dazn.svg`           | [DAZN via Simple Icons](https://simpleicons.org/?q=dazn)                                                                                                                                    | CC0 contribution                                |
+| `rakuten-tv.svg`     | [Rakuten TV](https://commons.wikimedia.org/wiki/File:Rakuten_TV_logo.svg), Kashiwa Satō                                                                                                     | Public domain logo                              |
+| `apple-music.svg`    | [Apple Music 2026 wordmark](<https://commons.wikimedia.org/wiki/File:Apple_Music_Logo_(2026).svg>), Apple Inc.                                                                              | Public domain logo                              |
+| `amazon-music.svg`   | [Amazon Music](https://commons.wikimedia.org/wiki/File:Amazon_Music_logo.svg), Amazon.com LLC                                                                                               | Public domain logo                              |
+| `bbc-iplayer.svg`    | [BBC iPlayer](<https://commons.wikimedia.org/wiki/File:BBC_iPlayer_2021_(Alt).svg>), BBC                                                                                                    | Public domain logo                              |
+| `itvx.svg`           | [ITVX via Simple Icons](https://simpleicons.org/?q=itvx)                                                                                                                                    | CC0 contribution                                |
+| `channel-4.svg`      | [Channel 4 via Simple Icons](https://simpleicons.org/?q=channel4)                                                                                                                           | CC0 contribution                                |
+| `now-tv.svg`         | [NOW / Now TV via Simple Icons](https://simpleicons.org/?q=now), Sky                                                                                                                        | CC0 contribution                                |
+| `rtl-plus.svg`       | [RTL+](https://commons.wikimedia.org/wiki/File:RTL%2B_Logo_2021.svg), RTL Group                                                                                                             | Public domain logo                              |
+| `joyn.svg`           | [Joyn](https://commons.wikimedia.org/wiki/File:Joyn_logo.svg), Joyn GmbH, vector by Daniel FR                                                                                               | Public domain logo                              |
+| `waipu-tv.svg`       | [waipu.tv](https://commons.wikimedia.org/wiki/File:Waipu_TV_Logo_2016.svg), Exaring AG                                                                                                      | Public domain logo                              |
+| `zattoo.svg`         | [Zattoo](https://commons.wikimedia.org/wiki/File:Logo_Zattoo.svg)                                                                                                                           | Public domain logo                              |
+| `skyshowtime.svg`    | [SkyShowtime](https://commons.wikimedia.org/wiki/File:SkyShowtime_Logo.svg), Comcast / Paramount                                                                                            | Public domain logo                              |
+| `coupang-play.svg`   | Coupang Play, [SVG source preserved by SinJungho](https://github.com/SinJungho/Damoa_Team-Project/blob/db1955f0f6f09d9329518120afe42af375632de0/src/svg/CoupangPlayLogo.jsx)                | Coupang brand artwork, used to identify the app |
+| `tving.svg`          | [TVING](https://commons.wikimedia.org/wiki/File:TVING_logo.svg)                                                                                                                             | Public domain logo                              |
+| `wavve.svg`          | [Official Wavve artwork](https://www.wavve.com/static/element-icons-tag-ic-brand-wavve-b343dcb2.svg)                                                                                        | Wavve brand artwork, used to identify the app   |
+| `watcha.svg`         | [Watcha](https://commons.wikimedia.org/wiki/File:Watcha_logo.svg), xixi pictures                                                                                                            | Public domain logo                              |
+| `movistar-plus.svg`  | [Movistar Plus+](https://commons.wikimedia.org/wiki/File:Movistar_Plus%2B_2022_logo.svg)                                                                                                    | Public domain logo                              |
+| `filmin.svg`         | Filmin, [SVG source preserved by DCueto](https://github.com/DCueto/filmin-svelte-clone/blob/36c977e31ec76abb42473b243584acbaed23579f/src/assets/filmin_logo.svg), originally Brandlogos.net | Filmin brand artwork, used to identify the app  |
+
+Simple Icons contributions use [CC0](https://creativecommons.org/publicdomain/zero/1.0/), with
+the notice bundled in `assets/licenses/simple-icons.txt`. Trademark and other underlying brand
+rights remain with the respective owners. The source artwork's attribution and terms also apply
+to compiled `.lvec` derivatives.
+
+### Live TV and browser cards
+
+`live-tv.svg` and `browser.svg` are original Luma artwork, MIT. Both share a blue/cyan material
+with a light rim and white details. Live TV uses a rounded display, play symbol and live
+indicator. Browser uses a globe with a navigation pointer. The gradients and highlights are vector
+geometry, with no embedded images, runtime fonts, filters or raster effects. Each utility card
+uses its native app's exact ID.
+
 On TV, installed-app PNG/JPEG/WebP artwork is read from that TV's installed applications at runtime.
-Previously collected PNG/JPEG artwork remains in the repository for desktop previews and is
-excluded from native TV packages. Names and marks remain the property of the respective app
-owners. Luma's folded-light L logo is original artwork; its SVG geometry produces the small/large
-webOS installation icons.
+Desktop previews use curated vector logos or generic/category fallbacks, with no dumped TV artwork
+or collected icon maps in the repository. Names and marks remain the property of the respective
+app owners. Luma's folded-light L logo is original artwork; its SVG geometry produces the
+small/large webOS installation icons.
 
 Weather data: [Open-Meteo](https://open-meteo.com/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 

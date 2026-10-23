@@ -1,4 +1,5 @@
 mod app_artwork;
+mod branding;
 mod diagnostics;
 mod font;
 mod i18n;
@@ -1024,6 +1025,7 @@ fn run() -> Result<(), String> {
         let state = serde_json::json!({ "page": state.page, "focus": state.focus, "query": state.query,
             "filter": state.filter, "preferences": state.preferences, "apps": state.apps().iter().map(|a| &a.id).collect::<Vec<_>>(),
             "error": state.error, "scroll": state.scroll, "home_scroll": state.home_scroll, "subpage": state.subpage, "modal": state.overlay.is_some(), "weather": state.weather,
+            "inventory": state.inventory.apps,
             "ui_text": scene.draw.iter().filter_map(|draw| match draw { renderer::Draw::Text(value, ..) => Some(value), _ => None }).collect::<Vec<_>>() });
         std::fs::write(
             path,

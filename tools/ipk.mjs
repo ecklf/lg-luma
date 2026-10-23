@@ -57,7 +57,7 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
   if (
     owned.some((file) => /\/assets\/(app-icons(?:\/|$)|icons\.json$|colors\.json$)/.test(file.name))
   )
-    throw new Error('Collected desktop icon fixtures must not be shipped in the TV package.');
+    throw new Error('Retired dumped artwork must not be shipped in the TV package.');
   const appinfo = owned.find((file) => file.name.endsWith('/appinfo.json'));
   const actual = appinfo && JSON.parse(appinfo.data.toString());
   if (
