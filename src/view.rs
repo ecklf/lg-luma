@@ -25,15 +25,26 @@ pub struct Assets {
     pub colors: BTreeMap<String, [u8; 3]>,
     pub version: String,
     pub metrics: BTreeMap<String, BTreeMap<char, f32>>,
+    pub artwork: crate::app_artwork::Service,
 }
 impl Assets {
-    pub fn load(root: PathBuf) -> Result<Self, String> {
+    pub fn load(root: PathBuf, webos: bool) -> Result<Self, String> {
         let load = |file: &str| {
             std::fs::read(root.join(file))
                 .map_err(|e| format!("Native assets are missing: {e}. Run pnpm assets."))
         };
-        let icons = serde_json::from_slice(&load("icons.json")?).map_err(|e| e.to_string())?;
-        let colors = serde_json::from_slice(&load("colors.json")?).map_err(|e| e.to_string())?;
+        // Collected artwork is a desktop preview fixture, never a prerequisite
+        // for displaying an app installed on the television.
+        let icons = if webos {
+            BTreeMap::new()
+        } else {
+            serde_json::from_slice(&load("icons.json")?).map_err(|e| e.to_string())?
+        };
+        let colors = if webos {
+            BTreeMap::new()
+        } else {
+            serde_json::from_slice(&load("colors.json")?).map_err(|e| e.to_string())?
+        };
         let version = String::from_utf8(load("version.txt")?).map_err(|e| e.to_string())?;
         let metrics =
             serde_json::from_slice(&load("font-metrics.json")?).map_err(|e| e.to_string())?;
@@ -43,6 +54,7 @@ impl Assets {
             colors,
             version,
             metrics,
+            artwork: crate::app_artwork::Service::new(webos),
         })
     }
     fn path(&self, path: impl AsRef<Path>) -> String {
@@ -217,7 +229,8 @@ impl Scene {
                 Draw::Shape(_, _, _, color)
                 | Draw::Shadow(_, _, _, color)
                 | Draw::Text(_, _, _, color, _)
-                | Draw::TintedImage(_, _, _, _, color) => apply(color),
+                | Draw::TintedImage(_, _, _, _, color)
+                | Draw::AppImage(_, _, color) => apply(color),
                 Draw::RoundedGradient(_, _, a, b) => {
                     apply(a);
                     apply(b);
@@ -496,8 +509,19 @@ fn tile(
         "das-erste",
     ];
     let logo = logos.contains(&app.brand.as_str());
+    let artwork = (!logo)
+        .then(|| {
+            app.icon
+                .as_ref()
+                .and_then(|source| assets.artwork.get(source))
+        })
+        .flatten();
     let installed = (!logo).then(|| assets.icons.get(&app.id)).flatten();
-    if let Some(rgb) = installed.and_then(|_| assets.colors.get(&app.id)) {
+    if let Some(rgb) = artwork
+        .as_ref()
+        .map(|image| &image.color)
+        .or_else(|| installed.and_then(|_| assets.colors.get(&app.id)))
+    {
         out.shape(
             rect,
             19.2,
@@ -549,6 +573,17 @@ fn tile(
             0.,
             true,
         );
+    } else if let Some(image) = artwork {
+        out.draw.push(Draw::AppImage(
+            image,
+            Rect::new(
+                rect.x + rect.w * 0.16,
+                rect.y + rect.h * 0.16,
+                rect.w * 0.68,
+                rect.h * 0.68,
+            ),
+            [1.; 4],
+        ));
     } else if let Some(icon) = installed {
         out.image(
             assets.path(icon),

@@ -12,6 +12,7 @@ use std::{
     collections::{HashMap, HashSet},
     ffi::{CStr, CString},
     path::{Path, PathBuf},
+    sync::Arc,
     time::Instant,
 };
 
@@ -66,6 +67,7 @@ pub enum Draw {
     Text(String, Rect, TextStyle, Color, bool),
     Image(String, Rect, f32, bool),
     TintedImage(String, Rect, f32, bool, Color),
+    AppImage(Arc<crate::app_artwork::Artwork>, Rect, Color),
     Clip(Option<Rect>),
     EdgeFade(Option<[f32; 4]>),
 }
@@ -541,19 +543,34 @@ impl Renderer {
         }
         let rect = Rect::new(0., 0., rect.w, rect.h);
         let font_id = style.weight + if style.size >= 32. { 1000 } else { 0 };
-        let fallback_id = if style.weight >= 500 { 2500 } else { 2400 };
+        let cjk_id = if style.weight >= 500 { 2500 } else { 2400 };
+        let hangul_id = cjk_id + 1000;
         if !self.ensure_font(font_id) {
             self.stats.glyph_failures += text.chars().count();
             return;
         }
-        let needs_fallback = text
-            .chars()
-            .any(|c| !c.is_ascii_control() && self.fonts[&font_id].lookup_glyph_index(c) == 0);
-        let fallback_ready = needs_fallback && self.ensure_font(fallback_id);
+        let (mut needs_cjk, mut needs_hangul) = (false, false);
+        for c in text.chars() {
+            if !c.is_ascii_control() && self.fonts[&font_id].lookup_glyph_index(c) == 0 {
+                if is_hangul(c) {
+                    needs_hangul = true;
+                } else {
+                    needs_cjk = true;
+                }
+            }
+        }
+        // Each fallback loads only when a run needs it, so Korean text never
+        // pulls in the larger Chinese font and vice versa.
+        let cjk_ready = needs_cjk && self.ensure_font(cjk_id);
+        let hangul_ready = needs_hangul && self.ensure_font(hangul_id);
         let fonts = &self.fonts;
-        let choose_font = |c| {
-            if fallback_ready && fonts[&font_id].lookup_glyph_index(c) == 0 {
-                fallback_id
+        let choose_font = |c: char| {
+            if fonts[&font_id].lookup_glyph_index(c) != 0 {
+                font_id
+            } else if is_hangul(c) {
+                if hangul_ready { hangul_id } else { font_id }
+            } else if cjk_ready {
+                cjk_id
             } else {
                 font_id
             }
@@ -840,6 +857,32 @@ impl Renderer {
         });
     }
 
+    fn app_image(&mut self, image: &crate::app_artwork::Artwork, rect: Rect, tint: Color) {
+        let entry = self.textures.entry(image.key.clone()).or_insert_with(|| {
+            Some(texture(
+                image.pixels.width(),
+                image.pixels.height(),
+                image.pixels.as_raw(),
+            ))
+        });
+        let Some(texture) = entry else {
+            return;
+        };
+        texture.frame = self.frame;
+        let scale = (rect.w / texture.width as f32).min(rect.h / texture.height as f32);
+        let w = texture.width as f32 * scale;
+        let h = texture.height as f32 * scale;
+        let id = texture.id;
+        self.quad(
+            Rect::new(rect.x + (rect.w - w) / 2., rect.y + (rect.h - h) / 2., w, h),
+            [0., 0., 1., 1.],
+            0.,
+            0.,
+            tint,
+            id,
+        );
+    }
+
     pub fn render(&mut self, commands: &[Draw], width: u32, height: u32) {
         let started = Instant::now();
         self.stats = RenderStats::new(Size::new(width, height));
@@ -891,6 +934,7 @@ impl Renderer {
                 Draw::TintedImage(path, rect, radius, contain, tint) => {
                     self.image(path, *rect, *radius, *contain, *tint)
                 }
+                Draw::AppImage(image, rect, tint) => self.app_image(image, *rect, *tint),
                 Draw::Clip(clip) => self.clip = *clip,
                 Draw::EdgeFade(fade) => self.fade = *fade,
             }
@@ -1171,8 +1215,23 @@ impl Renderer {
     }
 }
 
+// Noto Sans SC (font-cjk) has no Hangul syllables; these go to font-kr instead.
+// Keep in sync with is_hangul() in tools/font-weights.py, which builds font-kr.
+fn is_hangul(c: char) -> bool {
+    matches!(
+        c,
+        '\u{1100}'..='\u{11FF}'
+            | '\u{3130}'..='\u{318F}'
+            | '\u{A960}'..='\u{A97F}'
+            | '\u{AC00}'..='\u{D7A3}'
+            | '\u{D7B0}'..='\u{D7FF}'
+    )
+}
+
 fn load_font(directory: &Path, id: u16) -> Result<Font, String> {
-    let name = if id >= 2000 {
+    let name = if id >= 3000 {
+        format!("font-kr-{}.ttf", id - 3000)
+    } else if id >= 2000 {
         format!("font-cjk-{}.ttf", id - 2000)
     } else if id >= 1000 {
         format!("font-display-{}.ttf", id - 1000)

@@ -1,3 +1,4 @@
+mod app_artwork;
 mod diagnostics;
 mod font;
 mod i18n;
@@ -402,6 +403,10 @@ fn run() -> Result<(), String> {
         eprintln!("Luma webOS surface: {surface_id}");
         sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_BACK", "true");
     }
+    // Resolve the local offset before artwork, HTTP or platform workers start.
+    let local_offset = OffsetDateTime::now_local()
+        .map(|now| now.offset())
+        .unwrap_or(time::UtcOffset::UTC);
     let root = options.assets.clone().unwrap_or_else(|| {
         if webos {
             std::env::current_exe()
@@ -411,7 +416,7 @@ fn run() -> Result<(), String> {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".build/assets")
         }
     });
-    let assets = view::Assets::load(root)?;
+    let assets = view::Assets::load(root, webos)?;
     startup_stage("asset metadata");
     let default_preferences = options
         .preferences
@@ -441,10 +446,6 @@ fn run() -> Result<(), String> {
             preferences_path.display()
         );
     }
-    // Discover the local offset before any HTTP/platform workers start.
-    let local_offset = OffsetDateTime::now_local()
-        .map(|now| now.offset())
-        .unwrap_or(time::UtcOffset::UTC);
     if webos && options.weather_test_server.is_some() {
         return Err("Weather test servers are only available in desktop builds".into());
     }
@@ -576,9 +577,11 @@ fn run() -> Result<(), String> {
             state.dirty = true;
         }
         state.tick();
+        state.dirty |= assets.artwork.poll();
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
                 Response::Inventory(Ok((mut inventory, warning))) => {
+                    assets.artwork.reset();
                     scroll_preview::append(
                         &mut inventory,
                         options.test_extra_apps,

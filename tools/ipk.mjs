@@ -54,6 +54,10 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
   const files = entries(tar);
   const owned = files.filter((file) => file.name.split('/').includes(manifest.id));
   if (!owned.length) throw new Error('The IPK contains no Luma app directory.');
+  if (
+    owned.some((file) => /\/assets\/(app-icons(?:\/|$)|icons\.json$|colors\.json$)/.test(file.name))
+  )
+    throw new Error('Collected desktop icon fixtures must not be shipped in the TV package.');
   const appinfo = owned.find((file) => file.name.endsWith('/appinfo.json'));
   const actual = appinfo && JSON.parse(appinfo.data.toString());
   if (
@@ -83,12 +87,9 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     'home.sh',
     'home.cjs',
     'splash.png',
-    'splash/dunes.png',
     'lib/libSDL2-2.0.so.0',
     'licenses/sdl2.txt',
     'licenses/lucide.txt',
-    'assets/icons.json',
-    'assets/colors.json',
     'assets/font-metrics.json',
     'assets/font-license.txt',
     'assets/font-cjk-license.txt',
@@ -99,6 +100,8 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     ]),
     'assets/font-cjk-400.ttf',
     'assets/font-cjk-500.ttf',
+    'assets/font-kr-400.ttf',
+    'assets/font-kr-500.ttf',
     ...[
       'dunes',
       'midnight',
@@ -109,7 +112,11 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
       'prism',
       'yosemite',
       'northern-lights',
-    ].flatMap((name) => [`assets/wallpapers/${name}.jpg`, `assets/thumbnails/${name}.jpg`]),
+    ].flatMap((name) => [
+      `assets/wallpapers/${name}.jpg`,
+      `assets/thumbnails/${name}.jpg`,
+      `splash/${name}.png`,
+    ]),
     ...vectorAssets.assets.map((name) => {
       if (typeof name !== 'string' || !/^(logos|ui-icons)\/[a-z0-9-]+\.lvec$/.test(name))
         throw new Error('Invalid packaged vector asset path.');

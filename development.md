@@ -48,8 +48,11 @@ including `armv7-unknown-linux-gnueabi` for TV builds. No browser installation i
 | `pnpm deploy --device tv` | Build/install/launch through an ares device profile        |
 | `pnpm check`              | Oxlint and workspace Clippy, without executing tests       |
 | `pnpm format:check`       | Rust and tooling/document formatting checks                |
-| `pnpm test`               | Rust workspace unit tests                                  |
+| `pnpm test`               | Release-tooling and Rust workspace unit tests              |
+| `pnpm test:icons`         | Mocked TV icon collection and bundled artwork checks       |
 | `pnpm test:smoke`         | Desktop rendering, mocked weather and localization checks  |
+| `pnpm changeset`          | Add a release note and requested version bump to a PR      |
+| `pnpm version:check`      | Check synchronized app release versions                    |
 
 The TV target is ARMv7 **soft-float calling convention**, `gnueabi`, not `gnueabihf`. Codegen
 uses the NDK's Cortex-A9/VFP baseline with NEON disabled for Rust code. Hardware floating point
@@ -112,7 +115,10 @@ wallpapers. `tools/package.mjs` ships them under `splash/` plus `splash.png` (th
 which `appinfo.json` names as `splashBackground`, with `bgColor` set to the UI base colour so the
 frame between the splash and the first draw is not black. With Home takeover enabled, `tv/home.cjs`
 copies the selected background's splash into the staged Home app on every apply, reading the saved
-preferences from the TV storage candidates in `storage.rs`.
+preferences from the TV storage candidates in `storage.rs`. Production installations prefer internal
+storage; developer installations prefer developer storage, with existing files taking precedence over
+the legacy installation-local preferences. Reapplying an active Home mount also refreshes the splash.
+`pnpm test:home` checks splash selection and mounted refreshes with a mocked filesystem and no TV calls.
 
 ## Vector rendering
 
@@ -123,8 +129,35 @@ the shared lyon tessellator to emit `.lvec` geometry. The format contains positi
 vertex colors and coverage; holes, round strokes and the bundled gradients are preserved.
 Gradient colors are adaptively sampled at build time. The TV uploads each mesh lazily once and
 draws with a texture-free GLES2 shader. No SVG parser runs on the TV. The shared tessellator also
-handles font outlines. Collected app PNG/JPEG artwork, wallpaper photos, tile-background images
-and the webOS installation icon remain raster assets. See [assets.md](assets.md) for licenses.
+handles font outlines. Installed app PNG/JPEG/WebP artwork, wallpaper photos, tile-background
+images and the webOS installation icon remain raster assets. See [assets.md](assets.md) for licenses.
+
+### Installed app artwork
+
+TV inventory retains each app's `folderPath`, `largeIcon` and `icon`. Visible cards resolve artwork
+from that metadata and the installed `appinfo.json`, preferring large icons and falling back to
+the regular icon or `icon.png`. Developer, store and system application directories are supported,
+including absolute/`file://` paths and relative resource paths. Curated vector brand logos retain
+their existing display treatment; other apps use their own installed artwork and an automatically
+sampled card colour. Missing, corrupt or unsupported artwork uses the existing generic treatment.
+
+Discovery, bounded file reads, decoding and colour sampling run on a dedicated worker. If the
+jailed app cannot read an asset directly, the native process calls Homebrew Channel's elevated
+`exec` service with the embedded Node 8-compatible `tv/read-app-icon.cjs` reader. It returns bounded
+image bytes without writing collected files or changing filesystem permissions. PNG, JPEG and WebP
+are supported; runtime SVG parsing is not required. Source files are limited to 512 KiB and
+2048×2048 pixels; decoded icons are at most 256×256 with a 16 MiB/256-entry CPU cache. GPU uploads
+stay on the SDL thread and share the existing 48 MiB texture cache. Pending/unavailable icons do
+not block input, and failures are cached until inventory is refreshed.
+
+**Refresh apps** (or desktop F5) invalidates artwork, including previous failures; generation IDs
+discard stale replies. Check newly installed/updated apps and both normal tile and Home-takeover
+launches on a real TV to verify sandbox access. These paths are covered with mocked filesystem
+and worker tests, not live-TV calls in automated checks.
+
+`assets/app-icons.json`, collected images and `assets/icon-colours.json` now serve only desktop
+preview fixtures. The TV package excludes those fixtures and their generated icon/colour maps.
+Adding support for an installed app's icon does not require collecting artwork or changing JSON.
 
 Text reads the bundled TTF's advances, kerning and line metrics lazily. Only needed glyph outlines
 are tessellated in font-em coordinates. Complete text runs are cached in static GPU buffers,
@@ -308,10 +341,58 @@ xvfb-run -a pnpm test:smoke
 ```
 
 CI uses this native-only flow, then cross-links with a pinned Linux SDK, inspects/normalizes the
-actual ARM IPK and generates checksums/feed. It uploads release/rendering artifacts. Main release
-publication retains the version/tag guards: a published version is skipped, a draft can be resumed,
-and a tag pointing at another commit requires a new app version. Versions change only on request.
-Host CI cannot prove hardware compatibility, small-text quality or presentation frame rate.
+actual ARM IPK and generates checksums/feed. It uploads release/rendering artifacts on PRs,
+main-branch pushes and manual runs. `pnpm check` also validates synchronized release versions,
+and `pnpm test:release` covers version synchronization and the publish gate, including the real
+Changesets version command in an isolated fixture. Host CI cannot prove hardware compatibility,
+small-text quality or presentation frame rate.
+
+## Releases
+
+Add a changeset to feature/fix PRs that should be included in the next app release:
+
+```sh
+pnpm changeset
+```
+
+Select `lg-luma`, choose patch/minor/major and describe the change. Commit the generated file
+under `.changeset/` with the PR. Documentation-only and maintenance PRs that do not need a release
+can omit it. Keep the existing app version in ordinary PRs.
+
+`.github/workflows/changeset-status.yml` adds a Changesets status check and maintains one comment
+per PR, including fork PRs. It reports the requested release types or notes that a PR without a
+changeset will not request an app version bump. For code or behavior changes, add a changeset
+using semantic versioning: **patch** for backward-compatible fixes, **minor** for backward-compatible
+features, or **major** for breaking changes. The comment is informational, so documentation-only
+and maintenance PRs can still merge without a release changeset. It updates when a PR is opened,
+reopened, edited, marked ready or receives new commits, and skips the generated Version Packages
+PR. The workflow becomes active once it is merged into the PR's base branch. It uses
+`pull_request_target` with a read-only status job and a separate comment-writing job, without
+installing dependencies or running code from the PR.
+
+After changesets merge into `main`, `.github/workflows/release-pr.yml` creates or updates the
+**Version Packages** PR on `changeset-release/main`. Changesets combines the pending notes using
+the highest requested bump. The custom `pnpm version:release` command updates `package.json`
+and `CHANGELOG.md`, then synchronizes `appinfo.json`, the root `Cargo.toml`, the `luma` entry in
+`Cargo.lock`, and the versioned IPK examples in `readme.md`. Dependency pins and supporting Rust
+crate versions are preserved. The package stays private and is never published to npm.
+
+The generated PR receives the same CI build as ordinary PRs. Since PRs created with GitHub's
+built-in token do not trigger `pull_request` workflows, the release workflow explicitly dispatches
+`ci.yml` for the version branch. Enable **Settings → Actions → General → Allow GitHub Actions to
+create and approve pull requests** in the repository. No additional token or npm secret is needed.
+
+Review and merge the version PR when ready to release. Only a main-branch push associated with
+that merged, same-repository PR and a numeric version increase can enter the publish job. It must
+also pass the existing checks, desktop smoke tests and native packaging build. Ordinary merges,
+unmerged PRs and manual CI runs do not publish. To retry a failed publication, rerun the original
+CI run for the merged version PR's main-branch commit.
+
+Publication retains the existing guards: an already-published version is skipped, a draft can be
+resumed, and a tag pointing at another commit requires a new app version. `pnpm version:check`
+checks synchronization without writing files. `pnpm version:sync` repairs metadata from the
+current `package.json` version without calculating a bump. `pnpm version:release` is reserved for
+the automated version PR.
 
 Homebrew Channel's details page reads `packages[].shortDescription` (or `fullDescriptionUrl`),
 not `manifest.appDescription`. The feed generator writes the root app metadata description into

@@ -270,6 +270,10 @@ function stageSplash(appDir) {
     '/media/developer/temp/' + APP + '/preferences.json',
     '/media/internal/.' + APP + '/preferences.json'
   ];
+  // Match storage.rs: production native jails prefer internal storage. Reads
+  // skip absent files, preserving an existing destination before migration.
+  if (appDir.indexOf('/media/cryptofs/') === 0) candidates.unshift(candidates.pop());
+  candidates.push(appDir + '/preferences.json');
   for (var i = 0; i < candidates.length; i++) {
     try {
       var saved = json(candidates[i]).background;
@@ -294,7 +298,7 @@ function stageSplash(appDir) {
 function apply(config, open) {
   if (foreignMount()) throw new Error('Another integration is mounted over LG Home');
   if (!fs.existsSync(config.appDir + '/luma')) throw new Error('Luma is no longer installed');
-  if (!mounted()) stageSplash(config.appDir);
+  stageSplash(config.appDir);
   var front = foreground();
   try {
     if (!mounted()) run('/bin/mount', ['--bind', STAGE, TARGET]);

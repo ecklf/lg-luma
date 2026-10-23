@@ -19,6 +19,9 @@
 - Noto Sans SC: copyright 2014–2021 Adobe, SIL OFL 1.1. Source/license in `assets/fonts/`;
   `tools/font-assets.mjs` pins the Google Fonts revision and checksums. Generated regular/medium
   subsets are renamed Luma CJK and retain copyright/license tables.
+- Noto Sans KR: copyright 2014–2021 Adobe, SIL OFL 1.1 (same license text as Noto Sans SC,
+  `assets/fonts/noto-ofl.txt`). Pinned the same way. Google Fonts ships Hangul only in this family,
+  not in Noto Sans SC; generated Hangul-only regular/medium subsets are renamed Luma KR.
 - Lucide interface icons: exported standalone SVG sources in `assets/ui-icons/`, ISC license
   bundled at `assets/licenses/lucide.txt`. PlayStation/Apple TV input paths were supplied by the
   user; the brand marks belong to Sony/Apple. Spotify/Kodi symbol treatments use the original
@@ -48,9 +51,11 @@ sources. Original sources remain in `assets/`; no artwork service is contacted o
 | `zdf.svg`         | [ZDF](https://commons.wikimedia.org/wiki/File:ZDF_logo.svg)                                           | ZDF; public-domain logo artwork                                                        |
 | `das-erste.svg`   | [Das Erste](https://commons.wikimedia.org/wiki/File:Das_Erste_2014.svg)                               | ARD; public-domain logo artwork                                                        |
 
-Installed-app PNG/JPEG artwork is collected from the owner's TV. Names and marks remain the
-property of the respective app owners. Luma's folded-light L logo is original artwork; its SVG
-geometry produces the small/large webOS installation icons.
+On TV, installed-app PNG/JPEG/WebP artwork is read from that TV's installed applications at runtime.
+Previously collected PNG/JPEG artwork remains in the repository for desktop previews and is
+excluded from native TV packages. Names and marks remain the property of the respective app
+owners. Luma's folded-light L logo is original artwork; its SVG geometry produces the small/large
+webOS installation icons.
 
 Weather data: [Open-Meteo](https://open-meteo.com/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 

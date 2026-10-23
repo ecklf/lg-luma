@@ -5,14 +5,25 @@ import { createHash } from 'node:crypto';
 
 const directory = path.resolve(import.meta.dirname, '../assets/fonts');
 const base =
-  'https://raw.githubusercontent.com/google/fonts/a85815a42757630ce188fdad368c2dfc444d4773/ofl/notosanssc';
+  'https://raw.githubusercontent.com/google/fonts/a85815a42757630ce188fdad368c2dfc444d4773/ofl';
+// Google Fonts ships each CJK language as its own family: Noto Sans SC has no
+// Hangul syllables, so Korean needs Noto Sans KR. Both share this OFL text.
 const files = [
   [
     'noto-sans-sc.ttf',
-    'NotoSansSC%5Bwght%5D.ttf',
+    'notosanssc/NotoSansSC%5Bwght%5D.ttf',
     'a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da',
   ],
-  ['noto-ofl.txt', 'OFL.txt', '1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9'],
+  [
+    'noto-sans-kr.ttf',
+    'notosanskr/NotoSansKR%5Bwght%5D.ttf',
+    '194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252',
+  ],
+  [
+    'noto-ofl.txt',
+    'notosanssc/OFL.txt',
+    '1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9',
+  ],
 ];
 await fs.mkdir(directory, { recursive: true });
 for (const [name, source, hash] of files) {
