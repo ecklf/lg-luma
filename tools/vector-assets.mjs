@@ -35,7 +35,6 @@ export async function generateVectorAssets() {
         'plex',
         'hbo-max',
         'paramount-plus',
-        'crunchyroll',
         'twitch',
         'dazn',
         'rakuten-tv',

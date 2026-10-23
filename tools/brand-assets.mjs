@@ -65,8 +65,8 @@ export const sources = [
   ],
   [
     'apple-music',
-    `${simple}/icons/applemusic.svg`,
-    '365264bcf032a1acb6f18554cf7d34b1b2a75f7e571848629173bbfd0e1cadbb',
+    commons('Apple_Music_Logo_%282026%29.svg'),
+    '974eab4dbecce108dcfc5299bce64a5461eb57a56a259d59d9e52bc4d9b29556',
   ],
   [
     'amazon-music',
@@ -163,6 +163,9 @@ async function download(url) {
 // paths, resolving numeric JSX attributes and removing its redundant bounds clip.
 export function prepareSvg(name, original, url) {
   let svg = original.replace(/<\?xml[^?]*\?>/, '');
+  if (name === 'crunchyroll') {
+    svg = svg.replace('<svg ', '<svg fill="#FF5E00" ');
+  }
   if (name === 'coupang-play') {
     svg = svg
       .slice(svg.indexOf('<svg'), svg.lastIndexOf('</svg>') + 6)
@@ -185,7 +188,14 @@ export function prepareSvg(name, original, url) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   const checksums = process.argv.includes('--checksums');
+  const only = process.argv.includes('--only')
+    ? process.argv[process.argv.indexOf('--only') + 1]
+    : undefined;
+  if (process.argv.includes('--only') && !sources.some(([name]) => name === only)) {
+    throw new Error('Pass a known brand name after --only');
+  }
   for (const [name, url, expected] of sources) {
+    if (only && name !== only) continue;
     let original;
     try {
       original = await download(url);
@@ -206,7 +216,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
     );
     console.log(`Restored vector source: ${name}`);
   }
-  if (!checksums) {
+  if (!checksums && !only) {
     const response = await fetch(`${simple}/LICENSE.md`, { signal: AbortSignal.timeout(60000) });
     if (!response.ok) throw new Error('Could not restore the Simple Icons CC0 notice');
     await fs.writeFile(path.join(root, 'assets/licenses/simple-icons.txt'), await response.text());

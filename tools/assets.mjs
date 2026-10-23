@@ -145,7 +145,7 @@ const surfaces = {
   'paramount-plus': ['#075bda', '#00298e'],
   peacock: ['#171717', '#080808'],
   hulu: ['#152d23', '#091710'],
-  crunchyroll: ['#3c2115', '#19100c'],
+  crunchyroll: ['#141414', '#141414'],
   twitch: ['#6330b8', '#32165c'],
   dazn: ['#252623', '#10110e'],
   'rakuten-tv': ['#bf143a', '#620c20'],
