@@ -23,6 +23,16 @@ pub const BACKGROUNDS: [(&str, &str); 9] = [
 // reads as a boundary too; matching stays on raw bytes, not chars, which is
 // safe here since only the two single bytes right at the needle's edges are
 // ever inspected.
+//
+// A regex crate (`\bard\b` per needle) was the obvious alternative and isn't
+// ruled out for being slow - reused compiled patterns would match at a
+// comparable cost. It's skipped because: there's no regex dependency in this
+// crate yet, so adding one and the once-compiled-pattern machinery needed to
+// avoid recompiling per App::new() call is more than this fix needs; and
+// `\b` is Unicode-aware by default, treating CJK letters as word characters,
+// which would give different (not obviously better) results right next to
+// titles in another script than the plain "any non-ASCII byte is a
+// boundary" rule used here.
 fn contains_word(haystack: &str, needle: &str) -> bool {
     let bytes = haystack.as_bytes();
     haystack.match_indices(needle).any(|(start, matched)| {
