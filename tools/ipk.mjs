@@ -97,6 +97,8 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     ]),
     'assets/font-cjk-400.ttf',
     'assets/font-cjk-500.ttf',
+    'assets/font-kr-400.ttf',
+    'assets/font-kr-500.ttf',
     ...[
       'dunes',
       'midnight',

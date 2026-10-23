@@ -19,6 +19,9 @@
 - Noto Sans SC: copyright 2014–2021 Adobe, SIL OFL 1.1. Source/license in `assets/fonts/`;
   `tools/font-assets.mjs` pins the Google Fonts revision and checksums. Generated regular/medium
   subsets are renamed Luma CJK and retain copyright/license tables.
+- Noto Sans KR: copyright 2014–2021 Adobe, SIL OFL 1.1 (same license text as Noto Sans SC,
+  `assets/fonts/noto-ofl.txt`). Pinned the same way. Google Fonts ships Hangul only in this family,
+  not in Noto Sans SC; generated Hangul-only regular/medium subsets are renamed Luma KR.
 - Lucide interface icons: exported standalone SVG sources in `assets/ui-icons/`, ISC license
   bundled at `assets/licenses/lucide.txt`. PlayStation/Apple TV input paths were supplied by the
   user; the brand marks belong to Sony/Apple. Spotify/Kodi symbol treatments use the original
