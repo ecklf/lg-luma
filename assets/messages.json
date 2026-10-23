@@ -195,6 +195,13 @@
     "zh": "时钟格式",
     "pt": "Formato do relógio"
   },
+  "showSeconds": {
+    "en": "Show seconds",
+    "de": "Sekunden anzeigen",
+    "es": "Mostrar segundos",
+    "zh": "显示秒",
+    "pt": "Mostrar segundos"
+  },
   "hour12": {
     "en": "12-hour",
     "de": "12 Stunden",

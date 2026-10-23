@@ -579,8 +579,14 @@ fn run() -> Result<(), String> {
         let now = options
             .time
             .unwrap_or_else(|| OffsetDateTime::now_utc().to_offset(local_offset));
-        if last_minute != Some(now.unix_timestamp() / 60) {
-            last_minute = Some(now.unix_timestamp() / 60);
+        // Redraw once per minute, or once per second while seconds are shown.
+        let clock_slot = if state.preferences.show_seconds {
+            now.unix_timestamp()
+        } else {
+            now.unix_timestamp() / 60
+        };
+        if last_minute != Some(clock_slot) {
+            last_minute = Some(clock_slot);
             state.dirty = true;
         }
         state.tick();

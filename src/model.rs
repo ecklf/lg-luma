@@ -97,6 +97,7 @@ pub struct Preferences {
     pub show_names: bool,
     pub hour_24: bool,
     pub reduced_motion: bool,
+    pub show_seconds: bool,
     /// Optional name appended to the Home greeting ("Good evening, Ana."). Empty = plain greeting.
     pub greeting_name: String,
     pub input_modes: BTreeMap<String, InputMode>,
@@ -121,6 +122,7 @@ impl Default for Preferences {
             show_names: false,
             hour_24: false,
             reduced_motion: false,
+            show_seconds: false,
             greeting_name: String::new(),
             input_modes: BTreeMap::new(),
             input_names: BTreeMap::new(),

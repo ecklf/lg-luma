@@ -436,6 +436,24 @@ fn clock_format_subpage_saves_and_restores_its_parent_row() {
 }
 
 #[test]
+fn clock_format_subpage_toggles_seconds_without_changing_the_hour_format() {
+    let mut state = ready();
+    state.open(2);
+    state.focus = Target::Setting(1);
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.subpage, Some(crate::state::Subpage::Clock));
+    assert!(!state.preferences.show_seconds);
+    state.direction(Direction::Down, &controls(&state));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Choice(2));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.show_seconds);
+    assert!(!state.preferences.hour_24);
+    assert!(state.subpage.is_none());
+    assert_eq!(state.focus, Target::Setting(1));
+}
+
+#[test]
 fn input_visibility_has_explicit_choices_and_returns_to_the_same_input() {
     let mut state = ready();
     state.open(2);

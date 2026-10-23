@@ -389,7 +389,11 @@ fn header(
     pill_width: f32,
 ) {
     let language = state.preferences.language;
-    let clock = language.clock(now, state.preferences.hour_24);
+    let clock = language.clock(
+        now,
+        state.preferences.hour_24,
+        state.preferences.show_seconds,
+    );
     out.text(
         clock,
         Rect::new(84., 64.8, 300., 24.),
@@ -1689,6 +1693,11 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             Subpage::Clock => vec![
                 (language.t("hour12"), None, !state.preferences.hour_24),
                 (language.t("hour24"), None, state.preferences.hour_24),
+                (
+                    language.t("showSeconds"),
+                    None,
+                    state.preferences.show_seconds,
+                ),
             ],
             Subpage::Input(id) => {
                 let current = state
