@@ -16,23 +16,9 @@ pub const BACKGROUNDS: [(&str, &str); 9] = [
     ("northern-lights", "Northern lights"),
 ];
 
-// Keyword matching for brand icons: a needle only counts where the bytes
-// immediately around it aren't also ASCII alphanumeric, so "ard" doesn't
-// collide with unrelated apps like "dashboard". Any multi-byte UTF-8 byte
-// (title text in another script) is never ASCII-alphanumeric either, so it
-// reads as a boundary too; matching stays on raw bytes, not chars, which is
-// safe here since only the two single bytes right at the needle's edges are
-// ever inspected.
-//
-// A regex crate (`\bard\b` per needle) was the obvious alternative and isn't
-// ruled out for being slow - reused compiled patterns would match at a
-// comparable cost. It's skipped because: there's no regex dependency in this
-// crate yet, so adding one and the once-compiled-pattern machinery needed to
-// avoid recompiling per App::new() call is more than this fix needs; and
-// `\b` is Unicode-aware by default, treating CJK letters as word characters,
-// which would give different (not obviously better) results right next to
-// titles in another script than the plain "any non-ASCII byte is a
-// boundary" rule used here.
+// Generic fallbacks use delimited words, so "game" does not match "endgame".
+// Non-ASCII bytes count as boundaries for localized titles. Curated vector
+// branding is selected separately by exact ID in branding.rs.
 fn contains_word(haystack: &str, needle: &str) -> bool {
     let bytes = haystack.as_bytes();
     haystack.match_indices(needle).any(|(start, matched)| {
@@ -56,31 +42,20 @@ pub struct App {
 impl App {
     pub fn new(id: &str, title: &str) -> Self {
         let identity = format!("{id} {title}").to_lowercase();
-        let (brand, category) = [
-            ("livetv", "live-tv", "Streaming"),
-            ("netflix", "netflix", "Streaming"),
-            ("youtube", "youtube", "Streaming"),
-            ("appletv", "apple-tv", "Streaming"),
-            ("disney", "disney-plus", "Streaming"),
-            ("amazon", "prime-video", "Streaming"),
-            ("jellyfin", "jellyfin", "Streaming"),
-            ("arte", "arte", "Streaming"),
-            ("zdf", "zdf", "Streaming"),
-            ("ard", "das-erste", "Streaming"),
-            ("plex", "plex", "Streaming"),
+        let generic = [
             ("kodi", "kodi", "Streaming"),
-            ("spotify", "spotify", "Music"),
             ("moonlight", "moonlight", "Gaming"),
             ("limelight", "moonlight", "Gaming"),
             ("game", "gaming", "Gaming"),
             ("hbchannel", "homebrew", "Utilities"),
-            ("browser", "browser", "Utilities"),
         ]
         .into_iter()
         .find_map(|(needle, brand, category)| {
             contains_word(&identity, needle).then_some((brand, category))
         })
         .unwrap_or(("generic", "Utilities"));
+        let (brand, category) =
+            crate::branding::for_app(id).map_or(generic, |brand| (brand.key, brand.category));
         Self {
             id: id.into(),
             title: title.into(),
@@ -125,6 +100,8 @@ pub struct Preferences {
     /// Optional name appended to the Home greeting ("Good evening, Ana."). Empty = plain greeting.
     pub greeting_name: String,
     pub input_modes: BTreeMap<String, InputMode>,
+    /// Custom names by input app ID; the TV's port and label stay visible as detail.
+    pub input_names: BTreeMap<String, String>,
     #[serde(deserialize_with = "crate::weather::deserialize_enabled")]
     pub show_weather: bool,
     #[serde(deserialize_with = "crate::weather::deserialize_location")]
@@ -146,6 +123,7 @@ impl Default for Preferences {
             reduced_motion: false,
             greeting_name: String::new(),
             input_modes: BTreeMap::new(),
+            input_names: BTreeMap::new(),
             show_weather: true,
             weather_location: None,
             temperature_unit: Unit::Celsius,
@@ -190,6 +168,28 @@ impl Preferences {
         }
     }
 
+    pub fn input_name(&self, input: &Input) -> Option<&str> {
+        self.input_names.get(&input.id).map(String::as_str)
+    }
+
+    /// The custom name if one is saved, otherwise the port ("HDMI 2").
+    pub fn input_title<'a>(&'a self, input: &'a Input) -> &'a str {
+        self.input_name(input).unwrap_or(&input.port)
+    }
+
+    /// Saves a cleaned name; an empty name restores the port title.
+    pub fn set_input_name(&mut self, id: &str, name: &str) -> bool {
+        if !valid_app_id(id) {
+            return false;
+        }
+        let name = clean_input_name(name);
+        if name.is_empty() {
+            self.input_names.remove(id).is_some()
+        } else {
+            self.input_names.insert(id.into(), name.clone()) != Some(name)
+        }
+    }
+
     pub fn sanitize(&mut self) {
         if !BACKGROUNDS.iter().any(|(id, _)| *id == self.background) {
             self.background = "dunes".into();
@@ -204,7 +204,22 @@ impl Preferences {
         }
         clean(&mut self.hidden);
         self.input_modes.retain(|id, _| valid_app_id(id));
+        self.input_names = std::mem::take(&mut self.input_names)
+            .into_iter()
+            .filter(|(id, _)| valid_app_id(id))
+            .map(|(id, name)| (id, clean_input_name(&name)))
+            .filter(|(_, name)| !name.is_empty())
+            .take(128)
+            .collect();
     }
+}
+
+pub const INPUT_NAME_LIMIT: usize = 40;
+
+pub fn clean_input_name(name: &str) -> String {
+    let clean: String = name.chars().filter(|c| !c.is_control()).collect();
+    let clean: String = clean.trim().chars().take(INPUT_NAME_LIMIT).collect();
+    clean.trim_end().into()
 }
 
 pub fn valid_app_id(id: &str) -> bool {
@@ -216,7 +231,7 @@ pub fn valid_app_id(id: &str) -> bool {
 }
 
 pub fn demo_inventory() -> Inventory {
-    Inventory {
+    let mut inventory = Inventory {
         apps: [
             ("com.webos.app.livetv", "Live TV"),
             ("netflix", "Netflix"),
@@ -265,5 +280,12 @@ pub fn demo_inventory() -> Inventory {
                 connected: Some(false),
             },
         ],
+    };
+    // Desktop-only artwork gallery. TV inventory is always read from services.
+    for brand in crate::branding::BRANDS {
+        if !inventory.apps.iter().any(|app| app.brand == brand.key) {
+            inventory.apps.push(App::new(brand.ids[0], brand.title));
+        }
     }
+    inventory
 }

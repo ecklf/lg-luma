@@ -1,4 +1,5 @@
 mod app_artwork;
+mod branding;
 mod diagnostics;
 mod font;
 mod i18n;
@@ -261,10 +262,12 @@ fn script(
         action if action.starts_with("type:") => {
             let field = if state.text_input_active() {
                 state.keyboard_field
-            } else if state.subpage == Some(state::Subpage::WeatherLocation) {
-                state::TextField::Location
             } else {
-                state::TextField::Apps
+                match state.subpage {
+                    Some(state::Subpage::WeatherLocation) => state::TextField::Location,
+                    Some(state::Subpage::Input(_)) => state::TextField::InputName,
+                    _ => state::TextField::Apps,
+                }
             };
             if !state.text_input_active() {
                 state.open_keyboard(field);
@@ -664,7 +667,7 @@ fn run() -> Result<(), String> {
                         visible = false;
                         press = None;
                         if matches!(state.overlay, Some(Overlay::SystemKeyboard)) {
-                            state.finish_text_input();
+                            pending = state.finish_text_input();
                         }
                         profile.pause();
                     }
@@ -703,7 +706,7 @@ fn run() -> Result<(), String> {
                         if matches!(state.overlay, Some(Overlay::SystemKeyboard)) =>
                     {
                         press = None;
-                        state.finish_text_input();
+                        pending = state.finish_text_input();
                     }
                     Keycode::Return | Keycode::KpEnter if !repeat => {
                         press = Some(Press {
@@ -774,7 +777,7 @@ fn run() -> Result<(), String> {
                         && state.moving.is_none()
                     {
                         if matches!(state.overlay, Some(Overlay::SystemKeyboard)) {
-                            state.finish_text_input();
+                            pending = state.finish_text_input();
                         }
                         // Pointer-down must not normalize scroll and move the clicked control.
                         state.pointer_focus(target);
@@ -916,12 +919,9 @@ fn run() -> Result<(), String> {
             && !video.text_input().is_active()
         {
             press = None;
-            state.finish_text_input();
-        }
-        // Completion can happen outside the SDL event loop (or via a script).
-        if state.take_greeting_save() {
+            let pending = state.finish_text_input();
             running &= effects(
-                vec![Effect::Save],
+                pending,
                 &mut state,
                 &platform,
                 &preferences_path,
@@ -1038,6 +1038,7 @@ fn run() -> Result<(), String> {
         let state = serde_json::json!({ "page": state.page, "focus": state.focus, "query": state.query,
             "filter": state.filter, "preferences": state.preferences, "apps": state.apps().iter().map(|a| &a.id).collect::<Vec<_>>(),
             "error": state.error, "scroll": state.scroll, "home_scroll": state.home_scroll, "subpage": state.subpage, "modal": state.overlay.is_some(), "weather": state.weather,
+            "inventory": state.inventory.apps,
             "ui_text": scene.draw.iter().filter_map(|draw| match draw { renderer::Draw::Text(value, ..) => Some(value), _ => None }).collect::<Vec<_>>() });
         std::fs::write(
             path,

@@ -90,6 +90,34 @@
     "zh": "仅在连接时显示",
     "pt": "Mostrar só quando conectada"
   },
+  "renameInput": {
+    "en": "Rename",
+    "de": "Umbenennen",
+    "es": "Cambiar nombre",
+    "zh": "重命名",
+    "pt": "Renomear"
+  },
+  "inputName": {
+    "en": "Input name",
+    "de": "Name des Eingangs",
+    "es": "Nombre de la entrada",
+    "zh": "输入源名称",
+    "pt": "Nome da entrada"
+  },
+  "inputNameHint": {
+    "en": "Show a custom name instead of the port",
+    "de": "Eigenen Namen statt des Anschlusses anzeigen",
+    "es": "Mostrar un nombre propio en lugar del puerto",
+    "zh": "显示自定义名称而不是端口",
+    "pt": "Mostrar um nome próprio no lugar da porta"
+  },
+  "resetInputName": {
+    "en": "Reset name",
+    "de": "Namen zurücksetzen",
+    "es": "Restablecer nombre",
+    "zh": "恢复默认名称",
+    "pt": "Redefinir nome"
+  },
   "back": {
     "en": "Back",
     "de": "Zurück",

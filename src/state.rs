@@ -1,5 +1,8 @@
 use crate::i18n::Language;
-use crate::model::{App, BACKGROUNDS, CATEGORIES, InputMode, Inventory, Preferences};
+use crate::model::{
+    App, BACKGROUNDS, CATEGORIES, INPUT_NAME_LIMIT, InputMode, Inventory, Preferences,
+    clean_input_name,
+};
 use crate::weather::{self, Unit};
 use serde::Serialize;
 use std::time::{Duration, Instant};
@@ -35,6 +38,8 @@ pub enum Target {
     Setting(usize),
     Background(usize),
     InputMode(String),
+    InputRename,
+    InputNameReset,
     Choice(usize),
     CloseDialog,
     Retry,
@@ -101,6 +106,7 @@ pub enum TextField {
     Apps,
     Location,
     Name,
+    InputName,
 }
 
 #[derive(Clone, Copy)]
@@ -151,8 +157,7 @@ pub struct State {
     pub weather: weather::Weather,
     pub keyboard_field: TextField,
     pub greeting_name_draft: String,
-    /// A committed greeting edit is saved by the main loop, including event-free dismissal.
-    pub greeting_edited: bool,
+    pub input_name: String,
 }
 
 impl State {
@@ -182,7 +187,7 @@ impl State {
             weather: weather::Weather::default(),
             keyboard_field: TextField::Apps,
             greeting_name_draft: String::new(),
-            greeting_edited: false,
+            input_name: String::new(),
         }
     }
 
@@ -600,8 +605,35 @@ impl State {
                         },
                         controls,
                     ),
+                    Direction::Down
+                        if index + 1 == count
+                            && matches!(self.subpage, Some(Subpage::Input(_))) =>
+                    {
+                        self.focus(Target::InputRename, controls)
+                    }
                     Direction::Down => self.focus(Target::Choice((index + 1) % count), controls),
                     Direction::Right => {}
+                }
+                return vec![];
+            }
+            if matches!(self.focus, Target::InputRename | Target::InputNameReset) {
+                match direction {
+                    Direction::Left => self.close_subpage(),
+                    Direction::Up => self.focus(
+                        if self.focus == Target::InputNameReset {
+                            Target::InputRename
+                        } else {
+                            Target::Choice(2)
+                        },
+                        controls,
+                    ),
+                    Direction::Down
+                        if self.focus == Target::InputRename
+                            && controls.iter().any(|c| c.target == Target::InputNameReset) =>
+                    {
+                        self.focus(Target::InputNameReset, controls)
+                    }
+                    _ => {}
                 }
                 return vec![];
             }
@@ -923,6 +955,16 @@ impl State {
                 self.dirty = true;
                 return;
             }
+            if self.keyboard_field == TextField::InputName {
+                let length = self.input_name.chars().count();
+                self.input_name.extend(
+                    text.chars()
+                        .filter(|c| !c.is_control())
+                        .take(INPUT_NAME_LIMIT.saturating_sub(length)),
+                );
+                self.dirty = true;
+                return;
+            }
             self.query.extend(
                 text.chars()
                     .filter(|c| !c.is_control())
@@ -941,6 +983,8 @@ impl State {
                 self.weather.edit(query);
             } else if self.keyboard_field == TextField::Name {
                 self.greeting_name_draft.pop();
+            } else if self.keyboard_field == TextField::InputName {
+                self.input_name.pop();
             } else {
                 self.query.pop();
             }
@@ -955,28 +999,46 @@ impl State {
         )
     }
 
-    pub fn finish_text_input(&mut self) {
+    pub fn finish_text_input(&mut self) -> Vec<Effect> {
         if self.text_input_active() {
             self.overlay = None;
             self.panel_started = None;
             self.focus = self.keyboard_return();
             self.pointer = false;
             self.dirty = true;
-            self.commit_greeting_name();
+            return self.commit_text_input();
         }
+        vec![]
     }
 
-    fn commit_greeting_name(&mut self) {
-        if self.keyboard_field != TextField::Name {
-            return;
+    fn commit_text_input(&mut self) -> Vec<Effect> {
+        if self.keyboard_field == TextField::Name {
+            let name = std::mem::take(&mut self.greeting_name_draft);
+            let name = name.trim();
+            // Empty dismissal preserves the saved value; Reset is explicit.
+            if !name.is_empty() && self.preferences.greeting_name != name {
+                self.preferences.greeting_name = name.into();
+                return vec![Effect::Save];
+            }
+            return vec![];
         }
-        let name = std::mem::take(&mut self.greeting_name_draft);
-        let name = name.trim();
-        // A dismissed empty TV keyboard preserves the saved value. The reset
-        // row explicitly removes it without relying on keyboard pre-filling.
-        if !name.is_empty() && self.preferences.greeting_name != name {
-            self.preferences.greeting_name = name.into();
-            self.greeting_edited = true;
+        self.commit_input_name()
+    }
+
+    /// Closing the keyboard by any route keeps a typed input name. An empty
+    /// field leaves the saved name unchanged; Reset name removes it explicitly.
+    fn commit_input_name(&mut self) -> Vec<Effect> {
+        let name = std::mem::take(&mut self.input_name);
+        if self.keyboard_field != TextField::InputName || clean_input_name(&name).is_empty() {
+            return vec![];
+        }
+        let Some(Subpage::Input(id)) = self.subpage.clone() else {
+            return vec![];
+        };
+        if self.preferences.set_input_name(&id, &name) {
+            vec![Effect::Save]
+        } else {
+            vec![]
         }
     }
 
@@ -1001,6 +1063,8 @@ impl State {
             self.weather.edit(query);
         } else if self.keyboard_field == TextField::Name {
             self.greeting_name_draft = query;
+        } else if self.keyboard_field == TextField::InputName {
+            self.input_name = query;
         } else {
             self.query = query;
             self.scroll = 0.;
@@ -1012,22 +1076,19 @@ impl State {
         match self.keyboard_field {
             TextField::Location => &self.weather.query,
             TextField::Name => &self.greeting_name_draft,
+            TextField::InputName => &self.input_name,
             TextField::Apps => &self.query,
         }
-    }
-    /// True once after the greeting name changed and the keyboard closed; the caller saves.
-    pub fn take_greeting_save(&mut self) -> bool {
-        if self.greeting_edited && !self.text_input_active() {
-            self.greeting_edited = false;
-            return true;
-        }
-        false
     }
     pub fn open_keyboard(&mut self, field: TextField) {
         self.keyboard_field = field;
         if field == TextField::Name {
             // SDL-webOS cannot pre-fill the system keyboard's text model.
             self.greeting_name_draft.clear();
+        }
+        if field == TextField::InputName {
+            // The TV keyboard starts empty, so a new name replaces the old one.
+            self.input_name.clear();
         }
         if cfg!(all(
             feature = "webos",
@@ -1038,6 +1099,7 @@ impl State {
             self.focus = match field {
                 TextField::Location => Target::WeatherQuery,
                 TextField::Name => Target::Setting(6),
+                TextField::InputName => Target::InputRename,
                 TextField::Apps => Target::Search,
             };
             self.panel_started = None;
@@ -1065,6 +1127,7 @@ impl State {
         match self.keyboard_field {
             TextField::Location => Target::WeatherSearch,
             TextField::Name => Target::Setting(6),
+            TextField::InputName => Target::InputRename,
             TextField::Apps => Target::Search,
         }
     }
@@ -1126,6 +1189,15 @@ impl State {
                 }
             }
             Target::WeatherQuery => self.open_keyboard(TextField::Location),
+            Target::InputRename => self.open_keyboard(TextField::InputName),
+            Target::InputNameReset => {
+                if let Some(Subpage::Input(id)) = &self.subpage
+                    && self.preferences.input_names.remove(id).is_some()
+                {
+                    self.focus = Target::InputRename;
+                    return vec![Effect::Save];
+                }
+            }
             Target::WeatherSearch => {
                 return self
                     .weather
@@ -1313,20 +1385,17 @@ impl State {
             Target::Key(index) => match KEYS[index] {
                 "Space" => self.text(" "),
                 "Delete" => self.delete(),
-                "Clear" => {
-                    if self.keyboard_field == TextField::Location {
-                        self.weather.edit(String::new());
-                    } else if self.keyboard_field == TextField::Name {
-                        self.greeting_name_draft.clear();
-                    } else {
-                        self.query.clear();
-                    }
-                }
+                "Clear" => match self.keyboard_field {
+                    TextField::Location => self.weather.edit(String::new()),
+                    TextField::Name => self.greeting_name_draft.clear(),
+                    TextField::InputName => self.input_name.clear(),
+                    TextField::Apps => self.query.clear(),
+                },
                 "Done" => {
                     self.overlay = None;
                     self.panel_started = None;
                     self.focus = self.keyboard_return();
-                    self.commit_greeting_name();
+                    return self.commit_text_input();
                 }
                 key => self.text(key),
             },
@@ -1343,14 +1412,12 @@ impl State {
         }
         if let Some(overlay) = self.overlay.take() {
             self.panel_started = None;
-            self.focus = match overlay {
-                Overlay::Options { restore, .. } => restore,
-                Overlay::Keyboard | Overlay::SystemKeyboard => {
-                    self.commit_greeting_name();
-                    self.keyboard_return()
-                }
-            };
-            return vec![];
+            if let Overlay::Options { restore, .. } = overlay {
+                self.focus = restore;
+                return vec![];
+            }
+            self.focus = self.keyboard_return();
+            return self.commit_text_input();
         }
         if self.page == Page::Settings && self.subpage.is_some() {
             self.close_subpage();
