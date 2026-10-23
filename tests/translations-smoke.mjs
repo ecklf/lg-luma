@@ -225,8 +225,7 @@ try {
     'Portuguese is restored after restart',
   );
   assert.ok(portugueseSettings.ui_text.includes('Português (Brasil)'));
-  for (const key of ['language', 'appNames', 'clockFormat'])
-    contains(portugueseSettings, key, 'pt');
+  for (const key of ['language', 'appNames', 'clock']) contains(portugueseSettings, key, 'pt');
   assert.equal(JSON.parse(await fs.readFile(preferences, 'utf8')).language, 'pt');
 
   const portugueseDialog = await scenario('pt-dialog', 'apps,down,menu');

@@ -139,6 +139,13 @@
     "zh": "通用",
     "pt": "Geral"
   },
+  "system": {
+    "en": "System",
+    "de": "System",
+    "es": "Sistema",
+    "zh": "系统",
+    "pt": "Sistema"
+  },
   "favorites": {
     "en": "Favorites",
     "de": "Favoriten",
@@ -209,12 +216,19 @@
     "zh": "时钟格式",
     "pt": "Formato do relógio"
   },
-  "showSeconds": {
-    "en": "Show seconds",
-    "de": "Sekunden anzeigen",
-    "es": "Mostrar segundos",
-    "zh": "显示秒",
-    "pt": "Mostrar segundos"
+  "clock": {
+    "en": "Clock",
+    "de": "Uhr",
+    "es": "Reloj",
+    "zh": "时钟",
+    "pt": "Relógio"
+  },
+  "timeFormat": {
+    "en": "Time format",
+    "de": "Zeitformat",
+    "es": "Formato de visualización",
+    "zh": "时间显示",
+    "pt": "Formato de exibição"
   },
   "hour12": {
     "en": "12-hour",

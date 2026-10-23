@@ -93,6 +93,9 @@ try {
   assert.deepEqual(saved.preferences.favorites.slice(0, 2), ['youtube.leanback.v4', 'netflix']);
   const clock = await scenario('clock', 'settings,click:900:284');
   assert.equal(clock.subpage, 'Clock');
+  assert.equal(clock.focus, 'ClockFormat');
+  assert.ok(clock.ui_text.includes('Clock format'));
+  assert.ok(clock.ui_text.includes('Time format'));
   const input = await scenario('inputs', 'settings,down,down,down,down,enter,enter,up,enter');
   assert.equal(input.preferences.input_modes['com.webos.app.hdmi1'], 'Off');
   assert.equal(input.subpage, null);
@@ -197,11 +200,27 @@ try {
   assert.equal(renamedInput.focus, 'InputRename');
   assert.equal(renamedInput.preferences.input_names['com.webos.app.hdmi2'], 'Console');
   assert.ok(renamedInput.ui_text.includes('Clear name'));
-  const clockFocus = await scenario(
-    'clock-seconds-focus',
-    'settings,down,enter,down,enter,down,down',
+  const clockEditor = 'settings,down,enter,down,enter';
+  const timeFormat = await scenario('clock-time-format', `${clockEditor},down,enter`);
+  assert.equal(timeFormat.subpage, 'TimeFormat');
+  assert.deepEqual(timeFormat.focus, { Choice: 0 });
+  assert.ok(timeFormat.ui_text.includes('HH:MM'));
+  assert.ok(timeFormat.ui_text.includes('HH:MM:SS'));
+  const withSeconds = await scenario(
+    'clock-time-format-saved',
+    `${clockEditor},down,enter,down,enter`,
   );
-  assert.deepEqual(clockFocus.focus, { Choice: 2 });
+  assert.equal(withSeconds.subpage, 'Clock');
+  assert.equal(withSeconds.focus, 'ClockTimeFormat');
+  assert.equal(withSeconds.preferences.show_seconds, true);
+  assert.equal(withSeconds.preferences.hour_24, false);
+  const clockFocus = await scenario('clock-format-focus', `${clockEditor},enter,down`);
+  assert.equal(clockFocus.subpage, 'ClockFormat');
+  assert.deepEqual(clockFocus.focus, { Choice: 1 });
+  const system = await scenario('system-settings', 'settings,down,down,down,down,down,right,down');
+  assert.deepEqual(system.focus, { Setting: 5 });
+  assert.ok(system.ui_text.includes('Refresh apps & inputs'));
+  assert.ok(system.ui_text.includes('Quit app'));
   console.log(
     'Native smoke checks passed: rendering/alpha, navigation, persistence, SDL pointer input, DPI-aware glyphs, 4K capture and presentation profiling.',
   );

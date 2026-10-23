@@ -4,8 +4,8 @@ use crate::{
     model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode},
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, Control, HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, State,
-        Subpage, Target, TextField, WEATHER_SECTION,
+        APPS_COLUMNS, Control, HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect,
+        SYSTEM_SECTION, State, Subpage, Target, TextField, WEATHER_SECTION,
     },
     weather::{self, Unit},
 };
@@ -1609,7 +1609,7 @@ fn location_settings(out: &mut Scene, state: &State, assets: &Assets) {
 fn settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let s = state.scroll;
-    for (index, key) in ["interface", "background", "weather", "inputs"]
+    for (index, key) in ["interface", "background", "weather", "inputs", "system"]
         .into_iter()
         .enumerate()
     {
@@ -1625,10 +1625,24 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             c(0xeeeeee, 0.73)
         };
         if state.section == index && state.subpage.is_some() {
+            let clock_path = match state.subpage {
+                Some(Subpage::ClockFormat) => Some(format!(
+                    "{} › {}",
+                    language.t("clock"),
+                    language.t("clockFormat")
+                )),
+                Some(Subpage::TimeFormat) => Some(format!(
+                    "{} › {}",
+                    language.t("clock"),
+                    language.t("timeFormat")
+                )),
+                _ => None,
+            };
             let sub = match &state.subpage {
                 Some(Subpage::AppNames) => language.t("appNames"),
                 Some(Subpage::Greeting) => language.t("greeting"),
-                Some(Subpage::Clock) => language.t("clockFormat"),
+                Some(Subpage::Clock) => language.t("clock"),
+                Some(Subpage::ClockFormat | Subpage::TimeFormat) => clock_path.as_deref().unwrap(),
                 Some(Subpage::Input(id)) => state
                     .inventory
                     .inputs
@@ -1656,10 +1670,20 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 Rect::new(rect.x + 24.2 + parent_width + 5., rect.y + 27., 17., 17.),
                 [color[0], color[1], color[2], color[3] * 0.6],
             );
+            let sub_width = rect.w - 24.2 - parent_width - 28. - 24.2;
+            let mut sub_style = text(20.8, 550, -0.02);
+            if clock_path.is_some() {
+                sub_style.size *= (sub_width / assets.width(sub, sub_style)).min(1.);
+            }
             out.text(
                 sub,
-                Rect::new(rect.x + 24.2 + parent_width + 28., rect.y + 23.5, 245., 25.),
-                text(20.8, 550, -0.02),
+                Rect::new(
+                    rect.x + 24.2 + parent_width + 28.,
+                    rect.y + 23.5,
+                    sub_width,
+                    25.,
+                ),
+                sub_style,
                 color,
                 false,
             );
@@ -1690,12 +1714,13 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         let start = out.draw.len();
         if matches!(
             subpage,
-            Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames
+            Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames | Subpage::Clock
         ) {
             match subpage {
                 Subpage::WeatherLocation => location_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::AppNames => app_name_settings(out, state, assets),
+                Subpage::Clock => clock_settings(out, state, assets),
                 _ => unreachable!(),
             }
             if let Some(opened) = state.panel_started {
@@ -1704,14 +1729,13 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             return;
         }
         let options: Vec<(&str, Option<&str>, bool)> = match subpage {
-            Subpage::Clock => vec![
+            Subpage::ClockFormat => vec![
                 (language.t("hour12"), None, !state.preferences.hour_24),
                 (language.t("hour24"), None, state.preferences.hour_24),
-                (
-                    language.t("showSeconds"),
-                    None,
-                    state.preferences.show_seconds,
-                ),
+            ],
+            Subpage::TimeFormat => vec![
+                ("HH:MM", None, !state.preferences.show_seconds),
+                ("HH:MM:SS", None, state.preferences.show_seconds),
             ],
             Subpage::Input(id) => {
                 let current = state
@@ -1750,7 +1774,9 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     state.preferences.temperature_unit == Unit::Fahrenheit,
                 ),
             ],
-            Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames => unreachable!(),
+            Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames | Subpage::Clock => {
+                unreachable!()
+            }
             Subpage::Language => Language::ALL
                 .into_iter()
                 .map(|option| (option.name(), None, option == language))
@@ -1788,7 +1814,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 (0, "appNames", "type", None, true),
                 (
                     1,
-                    "clockFormat",
+                    "clock",
                     "clock",
                     Some(if state.preferences.hour_24 {
                         language.t("hour24")
@@ -1840,40 +1866,6 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     },
                 );
             }
-            row(
-                out,
-                state,
-                assets,
-                Row {
-                    target: Target::Setting(3),
-                    rect: Rect::new(640., 600.8 - s, 1120., 72.),
-                    title: if state.loading {
-                        language.t("refreshNotice")
-                    } else {
-                        language.t("refreshApps")
-                    },
-                    icon: Some("refresh"),
-                    value: None,
-                    description: None,
-                    selected: false,
-                    chevron: false,
-                },
-            );
-            row(
-                out,
-                state,
-                assets,
-                Row {
-                    target: Target::Setting(5),
-                    rect: Rect::new(640., 684.8 - s, 1120., 72.),
-                    title: language.t("quitApp"),
-                    icon: Some("power"),
-                    value: None,
-                    description: None,
-                    selected: false,
-                    chevron: false,
-                },
-            );
         }
         1 => {
             for (index, (id, _title)) in BACKGROUNDS.iter().enumerate() {
@@ -1916,6 +1908,39 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             }
         }
         WEATHER_SECTION => weather_settings(out, state, assets),
+        SYSTEM_SECTION => {
+            for (position, (index, title, icon)) in [
+                (
+                    3,
+                    language.t(if state.loading {
+                        "refreshNotice"
+                    } else {
+                        "refreshApps"
+                    }),
+                    "refresh",
+                ),
+                (5, language.t("quitApp"), "power"),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                row(
+                    out,
+                    state,
+                    assets,
+                    Row {
+                        target: Target::Setting(index),
+                        rect: Rect::new(640., 164.8 + position as f32 * 84. - s, 1120., 72.),
+                        title,
+                        icon: Some(icon),
+                        value: None,
+                        description: None,
+                        selected: false,
+                        chevron: false,
+                    },
+                );
+            }
+        }
         _ => {
             for (index, input) in state.inventory.inputs.iter().enumerate() {
                 let mode = state
@@ -2025,6 +2050,49 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
             chevron: false,
         },
     );
+}
+
+fn clock_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    for (index, (target, key, value)) in [
+        (
+            Target::ClockFormat,
+            "clockFormat",
+            language.t(if state.preferences.hour_24 {
+                "hour24"
+            } else {
+                "hour12"
+            }),
+        ),
+        (
+            Target::ClockTimeFormat,
+            "timeFormat",
+            if state.preferences.show_seconds {
+                "HH:MM:SS"
+            } else {
+                "HH:MM"
+            },
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target,
+                rect: Rect::new(640., 164.8 + index as f32 * 84. - state.scroll, 1120., 72.),
+                title: language.t(key),
+                icon: None,
+                value: Some(value),
+                description: None,
+                selected: false,
+                chevron: true,
+            },
+        );
+    }
 }
 
 fn app_name_settings(out: &mut Scene, state: &State, assets: &Assets) {

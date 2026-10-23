@@ -550,7 +550,8 @@ fn clock_choices_only_highlight_focus_while_preserving_saved_checkmarks() {
     state.open(2);
     state.focus = Target::Setting(1);
     state.activate();
-    for index in 0..3 {
+    state.activate();
+    for index in 0..2 {
         state.pointer_focus(Target::Choice(index));
         let scene = scene(&state);
         let highlighted: Vec<_> = scene
@@ -572,7 +573,7 @@ fn clock_choices_only_highlight_focus_while_preserving_saved_checkmarks() {
             .unwrap();
         assert_eq!(highlighted, vec![focused.rect.y]);
         let checks = scene.draw.iter().filter(|draw| matches!(draw, crate::renderer::Draw::TintedImage(path, ..) if path.ends_with("check.lvec"))).count();
-        assert_eq!(checks, 2);
+        assert_eq!(checks, 1);
         assert!(!state.preferences.hour_24);
         assert!(state.preferences.show_seconds);
     }
@@ -589,34 +590,103 @@ fn clock_format_subpage_saves_and_restores_its_parent_row() {
             .is_empty()
     );
     assert_eq!(state.subpage, Some(crate::state::Subpage::Clock));
+    assert_eq!(state.focus, Target::ClockFormat);
+    assert!(
+        state
+            .direction(Direction::Right, &controls(&state))
+            .is_empty()
+    );
+    assert_eq!(state.subpage, Some(crate::state::Subpage::ClockFormat));
     assert_eq!(state.focus, Target::Choice(0));
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert!(state.preferences.hour_24);
+    assert!(!state.preferences.show_seconds);
+    assert_eq!(state.subpage, Some(crate::state::Subpage::Clock));
+    assert_eq!(state.focus, Target::ClockFormat);
+    state.direction(Direction::Left, &controls(&state));
     assert!(state.subpage.is_none());
     assert_eq!(state.focus, Target::Setting(1));
     state.activate();
+    state.activate();
     state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.subpage, Some(crate::state::Subpage::Clock));
+    assert_eq!(state.focus, Target::ClockFormat);
+    state.back();
     assert_eq!(state.focus, Target::Setting(1));
     assert!(state.subpage.is_none());
 }
 
 #[test]
-fn clock_format_subpage_toggles_seconds_without_changing_the_hour_format() {
+fn time_format_selects_seconds_without_changing_the_hour_format() {
     let mut state = ready();
+    state.preferences.hour_24 = true;
     state.open(2);
     state.focus = Target::Setting(1);
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.subpage, Some(crate::state::Subpage::Clock));
     assert!(!state.preferences.show_seconds);
     state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::ClockTimeFormat);
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.subpage, Some(crate::state::Subpage::TimeFormat));
+    assert_eq!(state.focus, Target::Choice(0));
+    assert!(
+        !controls(&state)
+            .iter()
+            .any(|c| c.target == Target::Choice(2))
+    );
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Choice(2));
+    assert_eq!(state.focus, Target::Choice(1));
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert!(state.preferences.show_seconds);
-    assert!(!state.preferences.hour_24);
+    assert!(state.preferences.hour_24);
+    assert_eq!(state.subpage, Some(crate::state::Subpage::Clock));
+    assert_eq!(state.focus, Target::ClockTimeFormat);
+    state.activate();
+    assert_eq!(state.focus, Target::Choice(1));
+    state.back();
+    assert_eq!(state.subpage, Some(crate::state::Subpage::Clock));
+    assert_eq!(state.focus, Target::ClockTimeFormat);
+    state.activate();
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!state.preferences.show_seconds);
+    assert!(state.preferences.hour_24);
+    state.back();
     assert!(state.subpage.is_none());
     assert_eq!(state.focus, Target::Setting(1));
+}
+
+#[test]
+fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
+    let mut state = ready();
+    state.open(2);
+    assert!(
+        !controls(&state)
+            .iter()
+            .any(|c| matches!(c.target, Target::Setting(3 | 5)))
+    );
+    assert!(
+        controls(&state)
+            .iter()
+            .any(|c| c.target == Target::Sidebar(crate::state::SYSTEM_SECTION))
+    );
+    state.focus = Target::Sidebar(crate::state::SYSTEM_SECTION - 1);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Sidebar(crate::state::SYSTEM_SECTION));
+    assert_eq!(state.section, crate::state::SYSTEM_SECTION);
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::Setting(3));
+    assert_eq!(state.activate(), vec![Effect::Refresh]);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Setting(5));
+    assert_eq!(state.activate(), vec![Effect::Quit]);
+    state.back();
+    assert_eq!(state.focus, Target::Sidebar(crate::state::SYSTEM_SECTION));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Sidebar(0));
+    assert_eq!(state.section, 0);
 }
 
 #[test]

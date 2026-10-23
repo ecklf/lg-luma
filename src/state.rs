@@ -9,7 +9,8 @@ use std::time::{Duration, Instant};
 
 pub const WEATHER_SECTION: usize = 2;
 pub const INPUTS_SECTION: usize = 3;
-pub const SECTION_COUNT: usize = 4;
+pub const SYSTEM_SECTION: usize = 4;
+pub const SECTION_COUNT: usize = 5;
 pub const APPS_COLUMNS: usize = 6;
 pub const HOME_STRIP_LEFT: f32 = 84.;
 pub const HOME_STRIP_RIGHT: f32 = 1836.;
@@ -40,6 +41,8 @@ pub enum Target {
     GreetingNameClear,
     AppNamesHome,
     AppNamesApps,
+    ClockFormat,
+    ClockTimeFormat,
     Background(usize),
     InputMode(String),
     InputRename,
@@ -101,6 +104,8 @@ pub enum Subpage {
     AppNames,
     Greeting,
     Clock,
+    ClockFormat,
+    TimeFormat,
     Input(String),
     WeatherLocation,
     Temperature,
@@ -487,6 +492,7 @@ impl State {
                     .unwrap_or(3),
             ),
             WEATHER_SECTION => Target::WeatherToggle,
+            SYSTEM_SECTION => Target::Setting(3),
             INPUTS_SECTION => self
                 .inventory
                 .inputs
@@ -507,6 +513,14 @@ impl State {
             Some(Subpage::AppNames) => Target::Setting(0),
             Some(Subpage::Greeting) => Target::Setting(6),
             Some(Subpage::Clock) => Target::Setting(1),
+            Some(Subpage::ClockFormat) => {
+                self.subpage = Some(Subpage::Clock);
+                Target::ClockFormat
+            }
+            Some(Subpage::TimeFormat) => {
+                self.subpage = Some(Subpage::Clock);
+                Target::ClockTimeFormat
+            }
             Some(Subpage::Input(id)) => Target::InputMode(id),
             Some(Subpage::WeatherLocation) => Target::WeatherLocation,
             Some(Subpage::Temperature) => Target::WeatherTemperature,
@@ -600,6 +614,7 @@ impl State {
             let setting_rows = match self.subpage {
                 Some(Subpage::Greeting) => Some([Target::GreetingName, Target::GreetingNameClear]),
                 Some(Subpage::AppNames) => Some([Target::AppNamesHome, Target::AppNamesApps]),
+                Some(Subpage::Clock) => Some([Target::ClockFormat, Target::ClockTimeFormat]),
                 _ => None,
             };
             if let Some(rows) = setting_rows
@@ -616,7 +631,12 @@ impl State {
                         controls,
                     ),
                     Direction::Down if index == 0 => self.focus(rows[1].clone(), controls),
-                    Direction::Right if self.focus == Target::GreetingName => {
+                    Direction::Right
+                        if matches!(
+                            self.focus,
+                            Target::GreetingName | Target::ClockFormat | Target::ClockTimeFormat
+                        ) =>
+                    {
                         return self.activate();
                     }
                     _ => {}
@@ -625,7 +645,7 @@ impl State {
             }
             if let Target::Choice(index) = self.focus {
                 let count = match self.subpage {
-                    Some(Subpage::Temperature) => 2,
+                    Some(Subpage::ClockFormat | Subpage::TimeFormat | Subpage::Temperature) => 2,
                     Some(Subpage::Language) => Language::ALL.len(),
                     _ => 3,
                 };
@@ -1237,6 +1257,23 @@ impl State {
                 self.preferences.show_app_names = !self.preferences.show_app_names;
                 return vec![Effect::Save];
             }
+            Target::ClockFormat | Target::ClockTimeFormat => {
+                let format = self.focus == Target::ClockFormat;
+                self.subpage = Some(if format {
+                    Subpage::ClockFormat
+                } else {
+                    Subpage::TimeFormat
+                });
+                self.focus = Target::Choice(usize::from(if format {
+                    self.preferences.hour_24
+                } else {
+                    self.preferences.show_seconds
+                }));
+                self.scroll = 0.;
+                if !self.preferences.reduced_motion {
+                    self.panel_started = Some(Instant::now());
+                }
+            }
             Target::InputRename => self.open_keyboard(TextField::InputName),
             Target::InputNameReset => {
                 if let Some(Subpage::Input(id)) = &self.subpage
@@ -1287,10 +1324,11 @@ impl State {
                     }
                     1 => {
                         self.subpage = Some(Subpage::Clock);
+                        self.scroll = 0.;
                         if !self.preferences.reduced_motion {
                             self.panel_started = Some(Instant::now());
                         }
-                        self.focus = Target::Choice(usize::from(self.preferences.hour_24));
+                        self.focus = Target::ClockFormat;
                         return vec![];
                     }
                     2 => self.preferences.reduced_motion = !self.preferences.reduced_motion,
@@ -1345,13 +1383,8 @@ impl State {
             }
             Target::Choice(index) => {
                 match self.subpage.clone() {
-                    Some(Subpage::Clock) => {
-                        if index == 2 {
-                            self.preferences.show_seconds = !self.preferences.show_seconds;
-                        } else {
-                            self.preferences.hour_24 = index == 1;
-                        }
-                    }
+                    Some(Subpage::ClockFormat) => self.preferences.hour_24 = index == 1,
+                    Some(Subpage::TimeFormat) => self.preferences.show_seconds = index == 1,
                     Some(Subpage::Input(id)) => {
                         self.preferences.input_modes.insert(
                             id,
@@ -1370,7 +1403,12 @@ impl State {
                             Language::ALL[index.min(Language::ALL.len() - 1)];
                         self.weather.cancel_search();
                     }
-                    Some(Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames) => {
+                    Some(
+                        Subpage::WeatherLocation
+                        | Subpage::Greeting
+                        | Subpage::AppNames
+                        | Subpage::Clock,
+                    ) => {
                         return vec![];
                     }
                     None => return vec![],
