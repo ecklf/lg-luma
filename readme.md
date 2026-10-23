@@ -4,7 +4,7 @@ A native launcher for rooted LG webOS TVs, inspired by Apple TV.
 
 > [!NOTE]
 > Tested on **LG OLED55C57** running **webOS 26**.\
-> External testing confirms compatibility with **webOS 6 and newer**.
+> External testing confirms compatibility with **webOS >=5**.
 
 <table>
   <tr>
@@ -62,16 +62,25 @@ Install Luma and verify that it opens normally. Disable any Home mapping e.g.
 [LG Input Hook](https://repo.webosbrew.org/apps/org.webosbrew.inputhook/) and any other Home
 replacement, then run in the TV's root SSH shell:
 
+If you enabled Lumas autostart method earlier, disable it first:
+
 ```sh
 APP=/media/developer/apps/usr/palm/applications/com.ecklf.luma
-# If you enabled Lumas autostart method earlier, disable it first
-# sh "$APP/autostart.sh" disable
+sh "$APP/autostart.sh" disable
+```
+
+To enable the takeover run:
+
+```sh
+APP=/media/developer/apps/usr/palm/applications/com.ecklf.luma
 sh "$APP/home.sh" enable
 ```
 
 Takeover mounts Luma over the system Home app and reapplies the mount at cold boot. The LG splash
 shown before Luma's window opens is the wallpaper you selected in **Settings → Background**, staged
-from the saved preferences at each boot (the plain package uses the default background).
+from the saved preferences at each boot. Normal app launches also use your selected wallpaper:
+Luma updates the launch splash through Homebrew Channel's root service after loading or saving your
+settings. Open Luma once after installing or updating so subsequent launches use your saved background.
 LG Home's original files remain underneath, using the same approach as
 [Glasshouse Home](https://github.com/rorygallagher2024/glasshouse/blob/main/server/lib/home-takeover.js).
 
@@ -186,5 +195,6 @@ in an app-owned persistent directory outside the installed payload.
 Weather search/forecast requests go to Open-Meteo, with embedded TLS roots and bounded responses.
 There is no browser geolocation, IP-based location lookup, telemetry or runtime font download.
 
-Luma is licensed under MIT.
+## License
+Luma is licensed under MIT.\
 Luma is not affiliated with LG, Apple, Plex or any app brands shown in its UI.

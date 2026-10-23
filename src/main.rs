@@ -184,6 +184,8 @@ fn effects(
                 if let Err(error) = storage::save(preferences, &state.preferences) {
                     eprintln!("{error}");
                     state.notify(state.preferences.language.t("savedError"));
+                } else {
+                    platform.sync_splash(&state.preferences.background);
                 }
             }
             effect @ (Effect::Refresh | Effect::Reload) => {
@@ -464,7 +466,10 @@ fn run() -> Result<(), String> {
         weather_service::Client::new(options.weather_test_server.as_deref())?,
         weather_cache,
     );
-    let platform = Platform::new(webos);
+    let platform = Platform::new(
+        webos,
+        options.preferences.is_none() && options.test_extra_apps == 0,
+    );
     effects(
         vec![Effect::Refresh],
         &mut state,
@@ -472,6 +477,7 @@ fn run() -> Result<(), String> {
         &preferences_path,
         &weather_service,
     );
+    platform.sync_splash(&state.preferences.background);
     startup_stage("preferences and workers");
 
     let sdl = sdl2::init()?;

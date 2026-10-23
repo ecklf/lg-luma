@@ -17,7 +17,7 @@
     "deploy": "pnpm run package && node tools/deploy.mjs",
     "test": "pnpm test:release && pnpm test:home && pnpm test:icons && cargo test --locked --workspace --all-features",
     "test:release": "node --test tests/release.test.mjs",
-    "test:home": "node --test tests/home-splash.test.mjs",
+    "test:home": "node --test tests/home-splash.test.mjs tests/sync-splash.test.mjs",
     "test:icons": "node --test tests/read-app-icon.test.mjs tests/brand-assets.test.mjs",
     "test:smoke": "node tests/smoke.mjs && node tests/brands-smoke.mjs && node tests/weather-smoke.mjs && node tests/translations-smoke.mjs",
     "test:brands": "node tests/brands-smoke.mjs",

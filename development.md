@@ -128,12 +128,20 @@ System text events update app/location queries; Done/Back stops editing and rest
 `pnpm assets` renders one 1920×1080 PNG per background into `.build/assets/splash/` from the shaded
 wallpapers. `tools/package.mjs` ships them under `splash/` plus `splash.png` (the default background),
 which `appinfo.json` names as `splashBackground`, with `bgColor` set to the UI base colour so the
-frame between the splash and the first draw is not black. With Home takeover enabled, `tv/home.cjs`
+frame between the splash and the first draw is not black. On a normal TV launch and after successful
+preference saves, the native platform worker passes the loaded background to the embedded
+`tv/sync-splash.cjs` helper through Homebrew Channel's elevated `exec` service. It atomically updates
+the installed `splash.png` and the matching enabled Home stage, skipping identical images. Desktop
+and isolated `--preferences` / `--test-extra-apps` runs do not update launch splashes. The first launch
+after installation or a package update can still show the packaged default until this sync completes;
+later launches use the saved selection. With Home takeover enabled, `tv/home.cjs`
 copies the selected background's splash into the staged Home app on every apply, reading the saved
 preferences from the TV storage candidates in `storage.rs`. Production installations prefer internal
 storage; developer installations prefer developer storage, with existing files taking precedence over
 the legacy installation-local preferences. Reapplying an active Home mount also refreshes the splash.
-`pnpm test:home` checks splash selection and mounted refreshes with a mocked filesystem and no TV calls.
+`pnpm test:home` checks splash selection, runtime updates and mounted refreshes with a mocked filesystem
+and no TV calls. Verify the system-rendered splash on a real TV by changing Background, quitting Luma,
+and relaunching its normal tile; desktop checks cannot establish SAM/compositor image caching behavior.
 
 ## Vector rendering
 
@@ -349,6 +357,11 @@ bind-mounts it over `/usr/palm/applications/com.webos.app.home`. SAM rereads tha
 `blockSystemApp` followed by `releaseBlockSystemApp`, including `forceBlockSystemApp: false` when
 the TV schema requires it. The script verifies the reported manifest before stopping the previous
 Home process. It attempts to restore LG Home if applying the mount or refreshing SAM fails.
+
+Before staging, `enable` closes the normal Luma instance with `closeByAppId` and waits up to five
+seconds for it to leave the running list. The TV's `close` endpoint identifies a process, so passing
+the package ID there can return `no app matched by pid`. If closing reports an error, the script
+rechecks the running list and proceeds only if the normal instance has already exited.
 
 Root-shell calls use `luna-send -n 1` on both firmware versions, with bounded stdout/stderr
 capture and operation-specific diagnostics for empty or invalid replies. `-t 1` is timing mode:

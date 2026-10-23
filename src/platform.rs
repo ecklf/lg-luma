@@ -34,6 +34,7 @@ pub fn redirect_to_home() -> Result<bool, String> {
 pub enum Request {
     Refresh,
     Launch(String),
+    SyncSplash(String),
 }
 pub enum Response {
     Inventory(Result<(Inventory, Option<String>), String>),
@@ -44,13 +45,15 @@ pub struct Platform {
     sender: mpsc::Sender<Request>,
     pub receiver: mpsc::Receiver<Response>,
     pub webos: bool,
+    splash_enabled: bool,
 }
 
 impl Platform {
-    pub fn new(webos: bool) -> Self {
+    pub fn new(webos: bool, splash_enabled: bool) -> Self {
         let (sender, requests) = mpsc::channel();
         let (responses, receiver) = mpsc::channel();
         thread::spawn(move || {
+            let mut splash_background = None;
             while let Ok(request) = requests.recv() {
                 let response = match request {
                     Request::Refresh => Response::Inventory(if webos {
@@ -73,6 +76,18 @@ impl Platform {
                     } else {
                         Ok(())
                     }),
+                    Request::SyncSplash(background) => {
+                        if webos
+                            && splash_enabled
+                            && splash_background.as_ref() != Some(&background)
+                        {
+                            match sync_splash(&background) {
+                                Ok(()) => splash_background = Some(background),
+                                Err(error) => eprintln!("Luma splash: {error}"),
+                            }
+                        }
+                        continue;
+                    }
                 };
                 if responses.send(response).is_err() {
                     break;
@@ -83,12 +98,41 @@ impl Platform {
             sender,
             receiver,
             webos,
+            splash_enabled,
         }
     }
 
     pub fn send(&self, request: Request) {
         let _ = self.sender.send(request);
     }
+
+    pub fn sync_splash(&self, background: &str) {
+        if self.webos && self.splash_enabled {
+            self.send(Request::SyncSplash(background.to_owned()));
+        }
+    }
+}
+
+fn sync_splash(background: &str) -> Result<(), String> {
+    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+    let directory = executable
+        .parent()
+        .ok_or("Missing installation directory")?;
+    let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
+    let command = format!(
+        "/usr/bin/node -e {} {}",
+        quote(include_str!("../tv/sync-splash.cjs")),
+        quote(&json!({"directory": directory, "background": background}).to_string())
+    );
+    let envelope = call(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        json!({"command": command}),
+    )?;
+    let saved = inventory_payload(&envelope, "background")?;
+    if saved.as_str() != Some(background) {
+        return Err("Splash background was not updated".into());
+    }
+    Ok(())
 }
 
 fn call(uri: &str, payload: Value) -> Result<Value, String> {

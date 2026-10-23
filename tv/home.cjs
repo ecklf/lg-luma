@@ -183,6 +183,29 @@ function foreground() {
   return accepted(luna('getForegroundAppInfo', {}), 'Read foreground app').appId;
 }
 
+function normalRunning() {
+  return (accepted(luna('running', {}), 'Read running apps').running || []).some(function (entry) {
+    return entry.id === APP;
+  });
+}
+
+function closeNormal() {
+  if (!normalRunning()) return;
+  try {
+    // On TV, close's id identifies a process. Use the app-ID endpoint for APP.
+    accepted(luna('closeByAppId', { id: APP }), 'Close the normal Luma instance');
+  } catch (error) {
+    // The app may have exited between the running query and the close request.
+    if (normalRunning()) throw error;
+    return;
+  }
+  for (var attempt = 0; attempt <= 5; attempt++) {
+    if (!normalRunning()) return;
+    if (attempt < 5) pause();
+  }
+  throw new Error('Close Luma before enabling Home integration');
+}
+
 function stopHome(appDir) {
   var stopped = [];
   fs.readdirSync('/proc').forEach(function (pid) {
@@ -340,31 +363,7 @@ function install(appDir) {
   }
   // Finish any normal tile instance before the Home identity starts using the
   // same settings. A later tile launch redirects in the native executable.
-  var running = accepted(luna('running', {}), 'Read running apps').running || [];
-  if (
-    running.some(function (entry) {
-      return entry.id === APP;
-    })
-  ) {
-    accepted(luna('close', { id: APP }), 'Close the normal Luma instance');
-    for (var attempt = 0; attempt < 5; attempt++) {
-      running = accepted(luna('running', {}), 'Wait for Luma to close').running || [];
-      if (
-        !running.some(function (entry) {
-          return entry.id === APP;
-        })
-      )
-        break;
-      pause();
-    }
-    if (
-      running.some(function (entry) {
-        return entry.id === APP;
-      })
-    ) {
-      throw new Error('Close Luma before enabling Home integration');
-    }
-  }
+  closeNormal();
   mkdir(STAGE);
   // Symlinks keep the executable at its installed path for the dynamic loader
   // and LS2. They also follow ordinary in-place package updates.

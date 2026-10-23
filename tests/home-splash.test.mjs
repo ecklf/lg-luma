@@ -129,3 +129,78 @@ test('apply refreshes the staged image even while the Home mount is active', () 
   assert.deepEqual(mock.writes, [`${stage}/splash.png.new`]);
   assert.deepEqual(calls, ['reread', 'stop']);
 });
+
+function closeFixture({ running, closeReply = { returnValue: true } }) {
+  const mock = fixture();
+  const calls = [];
+  let queries = 0;
+  let pauses = 0;
+  Object.assign(mock.context, {
+    luna(method, payload) {
+      calls.push([method, { ...payload }]);
+      if (method === 'running') {
+        return { returnValue: true, running: running[Math.min(queries++, running.length - 1)] };
+      }
+      // The old close({id: APP}) call causes "no app matched by pid" on TV.
+      assert.equal(method, 'closeByAppId');
+      assert.equal(payload.id, app);
+      if (closeReply instanceof Error) throw closeReply;
+      return closeReply;
+    },
+    pause() {
+      pauses++;
+    },
+  });
+  return { ...mock, calls, pauses: () => pauses };
+}
+
+test('takeover closes the normal native instance by app ID and waits for its exit', () => {
+  const normal = { id: app, processId: '1234' };
+  const other = { id: 'some.other.app', processId: '5678' };
+  const mock = closeFixture({ running: [[normal, other], [normal, other], [other]] });
+  mock.context.closeNormal();
+  assert.deepEqual(mock.calls, [
+    ['running', {}],
+    ['closeByAppId', { id: app }],
+    ['running', {}],
+    ['running', {}],
+  ]);
+  assert.equal(mock.pauses(), 1);
+});
+
+test('takeover skips closing when the normal instance is not running', () => {
+  const mock = closeFixture({ running: [[{ id: 'com.webos.app.home' }]] });
+  mock.context.closeNormal();
+  assert.deepEqual(mock.calls, [['running', {}]]);
+  assert.equal(mock.pauses(), 0);
+});
+
+test('an instance exiting before the close reply does not block takeover', () => {
+  for (const closeReply of [
+    { returnValue: false, errorCode: 1, errorText: 'no app matched by pid' },
+    new Error('Luna close request timed out'),
+  ]) {
+    const mock = closeFixture({ running: [[{ id: app }], []], closeReply });
+    mock.context.closeNormal();
+    assert.equal(mock.calls.length, 3);
+    assert.equal(mock.pauses(), 0);
+  }
+});
+
+test('close failures remain visible when the normal instance is still running', () => {
+  const mock = closeFixture({
+    running: [[{ id: app }]],
+    closeReply: { returnValue: false, errorText: 'Permission denied' },
+  });
+  assert.throws(
+    () => mock.context.closeNormal(),
+    /Close the normal Luma instance.*Permission denied/,
+  );
+  assert.equal(mock.pauses(), 0);
+});
+
+test('takeover stops waiting after five seconds if the normal instance stays running', () => {
+  const mock = closeFixture({ running: [[{ id: app }]] });
+  assert.throws(() => mock.context.closeNormal(), /Close Luma before enabling Home integration/);
+  assert.equal(mock.pauses(), 5);
+});
