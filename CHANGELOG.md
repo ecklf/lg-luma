@@ -1,5 +1,12 @@
 # lg-luma
 
+## 2.3.1
+
+### Patch Changes
+
+- db4fece: Fix Home takeover enable failing with "no app matched by pid" by closing the normal Luma instance through the app-ID endpoint. Allow takeover to continue if that instance already exited during the close request.
+- db4fece: Update the normal app launch splash to match the saved background, including after changing it in Settings. Refresh the matching Home takeover splash as well.
+
 ## 2.3.0
 
 ### Minor Changes
