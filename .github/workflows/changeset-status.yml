@@ -1,0 +1,58 @@
+name: Changeset PR Status
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  status:
+    name: Changeset status
+    if: github.head_ref != 'changeset-release/main' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      comment-body: ${{ steps.status.outputs.comment-body }}
+    steps:
+      # Read the PR with the bundled Changesets action, without running PR code or installing dependencies.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+      - name: Generate changeset status
+        id: status
+        uses: changesets/action/pr-status@v2
+
+  comment:
+    name: Update changeset comment
+    needs: status
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Create or update the PR comment
+        uses: changesets/action/pr-comment@v2
+        with:
+          update-id: luma-changeset-status
+          body: |
+            ${{ needs.status.outputs.comment-body }}
+
+            ---
+
+            **For code or behavior changes:** run `pnpm changeset`, select `lg-luma`, and commit the generated `.changeset/*.md` file with this PR.
+
+            Choose the semantic version bump that matches the change:
+            - **patch** for backward-compatible bug fixes.
+            - **minor** for backward-compatible features.
+            - **major** for breaking changes.
+
+            A PR without a release changeset does not request an app version bump. Documentation-only or maintenance changes that do not need a release can omit it.
+
+            This comment is informational. Releases are queued in the Version Packages PR and publish only after that PR is merged and CI passes.
