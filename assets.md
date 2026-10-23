@@ -94,6 +94,14 @@ the notice bundled in `assets/licenses/simple-icons.txt`. Trademark and other un
 rights remain with the respective owners. The source artwork's attribution and terms also apply
 to compiled `.lvec` derivatives.
 
+### Live TV and browser cards
+
+`live-tv.svg` and `browser.svg` are original Luma artwork, MIT. Both share a blue/cyan material
+with a light rim and white details. Live TV uses a rounded display, play symbol and live
+indicator. Browser uses a globe with a navigation pointer. The gradients and highlights are vector
+geometry, with no embedded images, runtime fonts, filters or raster effects. Each utility card
+uses its native app's exact ID.
+
 On TV, installed-app PNG/JPEG/WebP artwork is read from that TV's installed applications at runtime.
 Previously collected PNG/JPEG artwork remains in the repository for desktop previews and is
 excluded from native TV packages. Names and marks remain the property of the respective app

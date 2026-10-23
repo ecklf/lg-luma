@@ -8,6 +8,32 @@ pub struct Brand {
     pub category: &'static str,
 }
 
+impl Brand {
+    /// Optical bounds, rather than a shared bounding box: heavy wordmarks need
+    /// more breathing room than wide, fine-lettered logos such as YouTube.
+    pub fn artwork_size(&self) -> (f32, f32) {
+        match self.key {
+            "netflix" => (0.76, 88.),
+            "youtube" => (0.74, 88.),
+            "apple-tv" => (0.43, 88.),
+            "disney-plus" => (0.72, 105.6),
+            "prime-video" => (0.72, 88.),
+            "jellyfin" => (0.83, 88.),
+            "arte" => (0.58, 88.),
+            "zdf" => (0.50, 88.),
+            "das-erste" => (0.70, 88.),
+            "hulu" | "joyn" | "itvx" => (0.62, 48.),
+            "plex" => (0.62, 52.),
+            "filmin" => (0.62, 46.),
+            "hbo-max" | "bbc-iplayer" | "crunchyroll" | "twitch" | "dazn" | "paramount-plus"
+            | "channel-4" | "wavve" => (0.70, 64.),
+            "now-tv" => (0.70, 52.),
+            "live-tv" | "browser" => (0.62, 68.),
+            _ => (0.70, 56.),
+        }
+    }
+}
+
 const fn video(key: &'static str, title: &'static str, ids: &'static [&'static str]) -> Brand {
     Brand {
         key,
@@ -26,6 +52,13 @@ const fn music(key: &'static str, title: &'static str, ids: &'static [&'static s
 }
 
 pub const BRANDS: &[Brand] = &[
+    video("live-tv", "Live TV", &["com.webos.app.livetv"]),
+    Brand {
+        key: "browser",
+        title: "Web Browser",
+        ids: &["com.webos.app.browser"],
+        category: "Utilities",
+    },
     video("netflix", "Netflix", &["netflix"]),
     video("youtube", "YouTube", &["youtube.leanback.v4"]),
     video(

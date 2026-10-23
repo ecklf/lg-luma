@@ -43,13 +43,11 @@ impl App {
     pub fn new(id: &str, title: &str) -> Self {
         let identity = format!("{id} {title}").to_lowercase();
         let generic = [
-            ("livetv", "live-tv", "Streaming"),
             ("kodi", "kodi", "Streaming"),
             ("moonlight", "moonlight", "Gaming"),
             ("limelight", "moonlight", "Gaming"),
             ("game", "gaming", "Gaming"),
             ("hbchannel", "homebrew", "Utilities"),
-            ("browser", "browser", "Utilities"),
         ]
         .into_iter()
         .find_map(|(needle, brand, category)| {

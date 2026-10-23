@@ -50,7 +50,7 @@ export async function generateVectorAssets() {
         'skyshowtime',
         'movistar-plus',
       ].includes(name),
-      light_ink: expanded,
+      light_ink: expanded && !['live-tv', 'browser'].includes(name),
       trim: expanded,
       reference_size: 1536,
     });

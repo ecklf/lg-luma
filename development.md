@@ -149,7 +149,7 @@ Adding support for an installed app's icon does not require collecting artwork o
 
 ### Curated brand cards and the desktop demo
 
-`src/branding.rs` contains the exact app-ID allowlist for 36 curated brand cards. Titles and
+`src/branding.rs` contains the exact app-ID allowlist for 38 curated brand and utility cards. Titles and
 partial ID matches do not select vector overrides. In particular, Amazon Alexa retains its own
 installed icon rather than receiving Prime Video branding. NOW / Now TV recognizes `now.tv`
 and `nowtv`; WOW, Sky Q and the separate Hong Kong Now TV service are not treated as aliases.
@@ -168,6 +168,12 @@ keeps the SVG directory, curated catalogue and demo inventory aligned. `pnpm tes
 every card through the actual desktop renderer and writes `.build/brands-gallery.png` for visual
 review. Like the other smoke scripts, it uses isolated preferences and no TV or real weather API.
 The gallery also runs as part of `pnpm test:smoke`. Asset source/licence details are in [assets.md](assets.md).
+
+Live TV (`com.webos.app.livetv`) and Web Browser (`com.webos.app.browser`) also have dedicated
+SVG-backed demo cards: a blue/cyan TV display with a live indicator, and a matching globe with a
+navigation pointer. Both are original Luma vector artwork. The existing card caption remains available when
+names are visible. `Brand::artwork_size()` sets optical sizing per brand, keeping heavy wordmarks
+such as Hulu, Joyn and Plex closer to the visual weight of Apple TV, YouTube, Das Erste and ARTE.
 
 Text reads the bundled TTF's advances, kerning and line metrics lazily. Only needed glyph outlines
 are tessellated in font-em coordinates. Complete text runs are cached in static GPU buffers,

@@ -637,6 +637,8 @@ fn unrelated_app_ids_and_titles_keep_their_installed_artwork() {
         ("amazon.alexa.view", "Amazon Alexa"),
         ("com.example.spotify", "Spotify tools"),
         ("com.example.media", "Plex"),
+        ("com.example.browser", "Web Browser"),
+        ("com.example.livetv", "Live TV"),
     ] {
         let app = App::new(id, title);
         assert_eq!(

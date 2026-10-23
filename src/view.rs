@@ -497,15 +497,16 @@ fn tile(
         if focused { 14. } else { 9. },
         if focused { 0.4 } else { 0.165 },
     );
-    let logo = crate::branding::for_key(&app.brand).is_some();
-    let artwork = (!logo)
+    let logo = crate::branding::for_key(&app.brand);
+    let artwork = logo
+        .is_none()
         .then(|| {
             app.icon
                 .as_ref()
                 .and_then(|source| assets.artwork.get(source))
         })
         .flatten();
-    let installed = (!logo).then(|| assets.icons.get(&app.id)).flatten();
+    let installed = logo.is_none().then(|| assets.icons.get(&app.id)).flatten();
     if let Some(rgb) = artwork
         .as_ref()
         .map(|image| &image.color)
@@ -522,35 +523,16 @@ fn tile(
             ],
         );
     } else {
-        let brand = if app.brand == "live-tv" {
-            "generic"
-        } else {
-            &app.brand
-        };
         out.image(
-            assets.path(format!("surfaces/{brand}.png")),
+            assets.path(format!("surfaces/{}.png", app.brand)),
             rect,
             19.2,
             false,
         );
     }
     out.border(rect, 19.2, 1., c(0xffffff, 0.063));
-    if logo {
-        let ratio = match app.brand.as_str() {
-            "netflix" => 0.76,
-            "youtube" => 0.74,
-            "apple-tv" => 0.43,
-            "disney-plus" | "prime-video" => 0.72,
-            "jellyfin" => 0.83,
-            "arte" => 0.58,
-            "zdf" => 0.50,
-            _ => 0.70,
-        };
-        let h = if app.brand == "disney-plus" {
-            105.6
-        } else {
-            88.
-        };
+    if let Some(brand) = logo {
+        let (ratio, h) = brand.artwork_size();
         out.image(
             assets.path(format!("logos/{}.lvec", app.brand)),
             Rect::new(

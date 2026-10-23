@@ -125,6 +125,7 @@ await fs.writeFile(
 
 const surfaces = {
   generic: ['#4e5c6b', '#243c4e'],
+  'live-tv': ['#192a43', '#0d1628'],
   netflix: ['#141414', '#141414'],
   youtube: ['#0f0f0f', '#0f0f0f'],
   'apple-tv': ['#252525', '#080808'],
@@ -134,13 +135,13 @@ const surfaces = {
   zdf: ['#121b22', '#121b22'],
   'das-erste': ['#064c84', '#00254e'],
   plex: ['#343434', '#232323'],
-  spotify: ['#191414', '#191414'],
+  spotify: ['#000000', '#121212'],
   jellyfin: ['#25283f', '#101422'],
   homebrew: ['#7c6042', '#3f392d'],
   kodi: ['#0a749b', '#08445e'],
   moonlight: ['#435d8f', '#252e59'],
   gaming: ['#435d8f', '#252e59'],
-  browser: ['#648890', '#2e525b'],
+  browser: ['#192a43', '#0d1628'],
   'hbo-max': ['#181818', '#080808'],
   'paramount-plus': ['#075bda', '#00298e'],
   peacock: ['#171717', '#080808'],
