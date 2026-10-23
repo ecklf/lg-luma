@@ -1,6 +1,6 @@
 [package]
 name = "luma"
-version = "2.0.3"
+version = "2.1.0"
 edition = "2024"
 rust-version = "1.88"
 publish = false
@@ -18,7 +18,7 @@ webos = ["dep:libc"]
 
 [dependencies]
 gl = "0.14"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 libc = { version = "0.2", optional = true }
 luma-vector-geometry = { path = "vector-geometry" }
 owned_ttf_parser = "0.25"

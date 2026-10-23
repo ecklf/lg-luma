@@ -75,6 +75,17 @@ try {
   const searched = await scenario('search', 'apps,type:YouTube,back');
   assert.equal(searched.query, 'YouTube');
   assert.deepEqual(searched.apps, ['youtube.leanback.v4']);
+  for (const [id, title] of [
+    ['coupangplay', 'Coupang Play'],
+    ['com.frograms.watchaplay.webos', 'Watcha Play'],
+    ['pooq', 'Wavve'],
+    ['com.cmb.rainbowtv', 'Rainbow TV'],
+    ['com.lgtvod.kr.app', 'LG TV VOD'],
+  ]) {
+    const koreanApp = await scenario(`korean-${id}`, `apps,type:${title},back`);
+    assert.deepEqual(koreanApp.apps, [id]);
+    assert.ok(koreanApp.ui_text.includes(title));
+  }
   const settings = await scenario('settings', 'settings,down,down,enter,down,enter');
   assert.equal(settings.preferences.background, 'forest');
   const saved = await scenario('saved', 'down,hold,right,back');
@@ -138,6 +149,21 @@ try {
   assert.equal(profiled.render.profile.presented, 24);
   assert.ok(profiled.render.profile.pacing.samples > 0);
   assert.ok(profiled.render.profile.cpu_submission.mean_ms >= 0);
+  const greetingEditor = 'settings,down,enter,down,down,down,down,enter';
+  for (const name of ['Ana', 'Bob']) {
+    const named = await scenario(
+      `greeting-${name}`,
+      `${greetingEditor},type:${name},back,home`,
+      fixedTime,
+    );
+    assert.equal(named.preferences.greeting_name, name);
+    assert.ok(named.ui_text.includes(`Good evening, ${name}.`));
+    assert.equal(
+      JSON.parse(await fs.readFile(preferences, 'utf8')).greeting_name,
+      name,
+      'Keyboard completion must save without waiting for another SDL input event',
+    );
+  }
   console.log(
     'Native smoke checks passed: rendering/alpha, navigation, persistence, SDL pointer input, DPI-aware glyphs, 4K capture and presentation profiling.',
   );

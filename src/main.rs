@@ -1,3 +1,4 @@
+mod app_artwork;
 mod diagnostics;
 mod font;
 mod i18n;
@@ -258,12 +259,16 @@ fn script(
         }
         "wait" => vec![],
         action if action.starts_with("type:") => {
-            let field = if state.subpage == Some(state::Subpage::WeatherLocation) {
+            let field = if state.text_input_active() {
+                state.keyboard_field
+            } else if state.subpage == Some(state::Subpage::WeatherLocation) {
                 state::TextField::Location
             } else {
                 state::TextField::Apps
             };
-            state.open_keyboard(field);
+            if !state.text_input_active() {
+                state.open_keyboard(field);
+            }
             state.text(&action[5..]);
             vec![]
         }
@@ -402,6 +407,10 @@ fn run() -> Result<(), String> {
         eprintln!("Luma webOS surface: {surface_id}");
         sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_BACK", "true");
     }
+    // Resolve the local offset before artwork, HTTP or platform workers start.
+    let local_offset = OffsetDateTime::now_local()
+        .map(|now| now.offset())
+        .unwrap_or(time::UtcOffset::UTC);
     let root = options.assets.clone().unwrap_or_else(|| {
         if webos {
             std::env::current_exe()
@@ -411,7 +420,7 @@ fn run() -> Result<(), String> {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".build/assets")
         }
     });
-    let assets = view::Assets::load(root)?;
+    let assets = view::Assets::load(root, webos)?;
     startup_stage("asset metadata");
     let default_preferences = options
         .preferences
@@ -441,10 +450,6 @@ fn run() -> Result<(), String> {
             preferences_path.display()
         );
     }
-    // Discover the local offset before any HTTP/platform workers start.
-    let local_offset = OffsetDateTime::now_local()
-        .map(|now| now.offset())
-        .unwrap_or(time::UtcOffset::UTC);
     if webos && options.weather_test_server.is_some() {
         return Err("Weather test servers are only available in desktop builds".into());
     }
@@ -576,9 +581,11 @@ fn run() -> Result<(), String> {
             state.dirty = true;
         }
         state.tick();
+        state.dirty |= assets.artwork.poll();
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
                 Response::Inventory(Ok((mut inventory, warning))) => {
+                    assets.artwork.reset();
                     scroll_preview::append(
                         &mut inventory,
                         options.test_extra_apps,
@@ -849,9 +856,6 @@ fn run() -> Result<(), String> {
                 }
                 _ => {}
             }
-            if state.take_greeting_save() {
-                pending.push(Effect::Save);
-            }
             running &= effects(
                 pending,
                 &mut state,
@@ -913,6 +917,16 @@ fn run() -> Result<(), String> {
         {
             press = None;
             state.finish_text_input();
+        }
+        // Completion can happen outside the SDL event loop (or via a script).
+        if state.take_greeting_save() {
+            running &= effects(
+                vec![Effect::Save],
+                &mut state,
+                &platform,
+                &preferences_path,
+                &weather_service,
+            );
         }
         let keyboard = state.text_input_active();
         if keyboard != text_active {

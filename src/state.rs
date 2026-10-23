@@ -150,7 +150,8 @@ pub struct State {
     pub panel_started: Option<Instant>,
     pub weather: weather::Weather,
     pub keyboard_field: TextField,
-    /// Set while the greeting name is edited; the main loop saves preferences once input ends.
+    pub greeting_name_draft: String,
+    /// A committed greeting edit is saved by the main loop, including event-free dismissal.
     pub greeting_edited: bool,
 }
 
@@ -180,6 +181,7 @@ impl State {
             panel_started: None,
             weather: weather::Weather::default(),
             keyboard_field: TextField::Apps,
+            greeting_name_draft: String::new(),
             greeting_edited: false,
         }
     }
@@ -912,13 +914,12 @@ impl State {
                 return;
             }
             if self.keyboard_field == TextField::Name {
-                let name = &mut self.preferences.greeting_name;
+                let name = &mut self.greeting_name_draft;
                 name.extend(
                     text.chars()
                         .filter(|c| !c.is_control())
                         .take(40usize.saturating_sub(name.chars().count())),
                 );
-                self.greeting_edited = true;
                 self.dirty = true;
                 return;
             }
@@ -939,8 +940,7 @@ impl State {
                 query.pop();
                 self.weather.edit(query);
             } else if self.keyboard_field == TextField::Name {
-                self.preferences.greeting_name.pop();
-                self.greeting_edited = true;
+                self.greeting_name_draft.pop();
             } else {
                 self.query.pop();
             }
@@ -962,6 +962,21 @@ impl State {
             self.focus = self.keyboard_return();
             self.pointer = false;
             self.dirty = true;
+            self.commit_greeting_name();
+        }
+    }
+
+    fn commit_greeting_name(&mut self) {
+        if self.keyboard_field != TextField::Name {
+            return;
+        }
+        let name = std::mem::take(&mut self.greeting_name_draft);
+        let name = name.trim();
+        // A dismissed empty TV keyboard preserves the saved value. The reset
+        // row explicitly removes it without relying on keyboard pre-filling.
+        if !name.is_empty() && self.preferences.greeting_name != name {
+            self.preferences.greeting_name = name.into();
+            self.greeting_edited = true;
         }
     }
 
@@ -985,8 +1000,7 @@ impl State {
         if self.keyboard_field == TextField::Location {
             self.weather.edit(query);
         } else if self.keyboard_field == TextField::Name {
-            self.preferences.greeting_name = query;
-            self.greeting_edited = true;
+            self.greeting_name_draft = query;
         } else {
             self.query = query;
             self.scroll = 0.;
@@ -997,7 +1011,7 @@ impl State {
     pub fn editing_text(&self) -> &str {
         match self.keyboard_field {
             TextField::Location => &self.weather.query,
-            TextField::Name => &self.preferences.greeting_name,
+            TextField::Name => &self.greeting_name_draft,
             TextField::Apps => &self.query,
         }
     }
@@ -1011,6 +1025,10 @@ impl State {
     }
     pub fn open_keyboard(&mut self, field: TextField) {
         self.keyboard_field = field;
+        if field == TextField::Name {
+            // SDL-webOS cannot pre-fill the system keyboard's text model.
+            self.greeting_name_draft.clear();
+        }
         if cfg!(all(
             feature = "webos",
             target_os = "linux",
@@ -1161,6 +1179,10 @@ impl State {
                         self.open_keyboard(TextField::Name);
                         return vec![];
                     }
+                    7 => {
+                        self.preferences.greeting_name.clear();
+                        self.focus = Target::Setting(6);
+                    }
                     _ => return vec![Effect::Refresh],
                 }
                 return vec![Effect::Save];
@@ -1295,8 +1317,7 @@ impl State {
                     if self.keyboard_field == TextField::Location {
                         self.weather.edit(String::new());
                     } else if self.keyboard_field == TextField::Name {
-                        self.preferences.greeting_name.clear();
-                        self.greeting_edited = true;
+                        self.greeting_name_draft.clear();
                     } else {
                         self.query.clear();
                     }
@@ -1305,6 +1326,7 @@ impl State {
                     self.overlay = None;
                     self.panel_started = None;
                     self.focus = self.keyboard_return();
+                    self.commit_greeting_name();
                 }
                 key => self.text(key),
             },
@@ -1323,7 +1345,10 @@ impl State {
             self.panel_started = None;
             self.focus = match overlay {
                 Overlay::Options { restore, .. } => restore,
-                Overlay::Keyboard | Overlay::SystemKeyboard => self.keyboard_return(),
+                Overlay::Keyboard | Overlay::SystemKeyboard => {
+                    self.commit_greeting_name();
+                    self.keyboard_return()
+                }
             };
             return vec![];
         }

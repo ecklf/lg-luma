@@ -1,5 +1,5 @@
 use crate::{
-    model::{Input, InputMode, Preferences, demo_inventory},
+    model::{App, Input, InputMode, Preferences, demo_inventory},
     platform::{normalize_apps, normalize_inputs},
     state::{Direction, Effect, Overlay, Page, State, Target},
     storage, view,
@@ -20,6 +20,7 @@ fn controls(state: &State) -> Vec<crate::state::Control> {
         colors: BTreeMap::new(),
         version: "test".into(),
         metrics: BTreeMap::new(),
+        artwork: crate::app_artwork::Service::new(false),
     };
     let navigation = view::navigation(&assets, state.preferences.language);
     view::scene_with_pill(
@@ -154,6 +155,24 @@ fn inventory_filters_system_apps_duplicates_and_unsafe_identifiers() {
     .unwrap();
     assert_eq!(inputs.len(), 2);
     assert_eq!(inputs[1].connected, None);
+}
+
+#[test]
+fn icon_collector_visibility_cases_match_the_launcher_inventory() {
+    let cases: Vec<serde_json::Value> =
+        serde_json::from_str(include_str!("../tests/fixtures/app-visibility.json")).unwrap();
+    let inventory: Vec<_> = cases.iter().map(|case| case["app"].clone()).collect();
+    let actual: std::collections::BTreeSet<_> = normalize_apps(&json!(inventory))
+        .unwrap()
+        .into_iter()
+        .map(|app| app.id)
+        .collect();
+    let expected: std::collections::BTreeSet<_> = cases
+        .iter()
+        .filter(|case| case["include"] == true)
+        .map(|case| case["app"]["id"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(actual, expected);
 }
 
 #[test]
@@ -298,7 +317,8 @@ fn greeting_name_row_opens_the_keyboard_and_saves_when_it_closes() {
     assert!(state.activate().is_empty());
     assert!(state.text_input_active());
     state.text("Ana");
-    assert_eq!(state.preferences.greeting_name, "Ana");
+    assert_eq!(state.editing_text(), "Ana");
+    assert!(state.preferences.greeting_name.is_empty());
     assert!(
         !state.take_greeting_save(),
         "nothing to save while the keyboard is open"
@@ -310,6 +330,63 @@ fn greeting_name_row_opens_the_keyboard_and_saves_when_it_closes() {
     assert_eq!(
         crate::i18n::Language::En.greeting(9, &state.preferences.greeting_name),
         "Good morning, Ana."
+    );
+}
+
+#[test]
+fn greeting_name_replacement_commits_on_every_keyboard_completion_route() {
+    for route in 0..3 {
+        let mut state = ready();
+        state.preferences.greeting_name = "Ana".into();
+        state.open(2);
+        state.focus = Target::Setting(6);
+        state.activate();
+        assert!(state.editing_text().is_empty());
+        state.text("  BobX ");
+        state.delete_surrounding_text(-3, 3);
+        assert_eq!(state.editing_text(), "  Bo");
+        state.text("b  ");
+        assert_eq!(state.preferences.greeting_name, "Ana");
+        match route {
+            0 => {
+                state.overlay = Some(Overlay::SystemKeyboard);
+                state.finish_text_input();
+            }
+            1 => {
+                state.back();
+            }
+            _ => {
+                state.focus = Target::Key(crate::state::KEYS.len() - 1);
+                state.activate();
+            }
+        }
+        assert_eq!(state.preferences.greeting_name, "Bob");
+        assert_eq!(state.focus, Target::Setting(6));
+        assert!(state.take_greeting_save());
+        assert!(!state.take_greeting_save());
+        state.activate();
+        state.text("   ");
+        state.back();
+        assert_eq!(state.preferences.greeting_name, "Bob");
+        assert!(!state.take_greeting_save());
+    }
+}
+
+#[test]
+fn remote_can_reset_a_saved_greeting_name() {
+    let mut state = ready();
+    state.preferences.greeting_name = "Ana".into();
+    state.open(2);
+    state.focus = Target::Setting(6);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Setting(7));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.greeting_name.is_empty());
+    assert_eq!(state.focus, Target::Setting(6));
+    assert!(
+        controls(&state)
+            .iter()
+            .any(|c| c.target == Target::Setting(7))
     );
 }
 
@@ -625,4 +702,80 @@ fn unsupported_language_preferences_recover_without_losing_other_choices() {
     assert_eq!(preferences.language, crate::i18n::Language::En);
     assert!(preferences.show_names);
     assert_eq!(preferences.favorites, Some(vec!["netflix".into()]));
+}
+
+#[test]
+fn brand_keywords_match_whole_words_not_substrings() {
+    for (id, title) in [
+        ("com.tvweb.dashboard", "Glasshouse"),
+        ("com.example.ardent", "Notes"),
+        ("com.example.3ard", "Notes"),
+        ("com.example.ard3", "Notes"),
+        ("com.example.plexus", "Notes"),
+        ("com.example.media", "Standard dashboard"),
+        ("com.example.media", "netflixer"),
+        ("com.example.media", "preNetflix"),
+    ] {
+        let app = App::new(id, title);
+        assert_eq!(
+            (app.brand.as_str(), app.category.as_str()),
+            ("generic", "Utilities"),
+            "A keyword inside an ASCII word must not rebrand {id} / {title}"
+        );
+    }
+}
+
+#[test]
+fn brand_keywords_accept_separators_utf8_and_later_valid_matches() {
+    for (id, title) in [
+        ("ard.mediathek", "ARD Mediathek"),
+        ("com.example.ard_more", "Notes"),
+        ("com.example.more-ard", "Notes"),
+        ("com.example.ARD", "Notes"),
+        ("com.example.media", "ARD"),
+        ("com.example.media", "(ARD)"),
+        ("com.example.media", "ARD미디어테크"),
+        ("com.example.media", "아에르데ARD"),
+        ("com.example.media", "아에르데ARD미디어테크"),
+        ("com.example.dashboard", "ARD"),
+        ("com.example.media", "standard ardent ARD"),
+    ] {
+        let app = App::new(id, title);
+        assert_eq!(
+            (app.brand.as_str(), app.category.as_str()),
+            ("das-erste", "Streaming"),
+            "A delimited keyword must still brand {id} / {title}"
+        );
+    }
+}
+
+#[test]
+fn word_boundaries_preserve_the_known_app_brands_and_categories() {
+    let apps = demo_inventory().apps;
+    let expected = [
+        ("com.webos.app.livetv", "live-tv", "Streaming"),
+        ("netflix", "netflix", "Streaming"),
+        ("youtube.leanback.v4", "youtube", "Streaming"),
+        ("com.apple.appletv", "apple-tv", "Streaming"),
+        ("com.disney.disneyplus-prod", "disney-plus", "Streaming"),
+        ("amazon", "prime-video", "Streaming"),
+        ("plex", "plex", "Streaming"),
+        ("spotify-beehive", "spotify", "Music"),
+        ("org.jellyfin.webos", "jellyfin", "Streaming"),
+        ("org.xbmc.kodi", "kodi", "Streaming"),
+        ("com.limelight.webos", "moonlight", "Gaming"),
+        ("org.webosbrew.hbchannel", "homebrew", "Utilities"),
+        ("com.webos.app.browser", "browser", "Utilities"),
+        ("com.arte.tv", "arte", "Streaming"),
+        ("de.zdf.app.zdfm3", "zdf", "Streaming"),
+        ("ard.mediathek", "das-erste", "Streaming"),
+    ];
+    for (id, brand, category) in expected {
+        let app = apps.iter().find(|app| app.id == id).unwrap();
+        assert_eq!(
+            (app.brand.as_str(), app.category.as_str()),
+            (brand, category),
+            "Known app {id} must retain its curated brand and category"
+        );
+    }
 }
