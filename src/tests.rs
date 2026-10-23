@@ -1,5 +1,5 @@
 use crate::{
-    model::{Input, InputMode, Preferences, demo_inventory},
+    model::{App, Input, InputMode, Preferences, demo_inventory},
     platform::{normalize_apps, normalize_inputs},
     state::{Direction, Effect, Overlay, Page, State, Target},
     storage, view,
@@ -602,4 +602,81 @@ fn unsupported_language_preferences_recover_without_losing_other_choices() {
     assert_eq!(preferences.language, crate::i18n::Language::En);
     assert!(preferences.show_names);
     assert_eq!(preferences.favorites, Some(vec!["netflix".into()]));
+}
+
+#[test]
+fn brand_keywords_match_whole_words_not_substrings() {
+    for (id, title) in [
+        ("com.tvweb.dashboard", "Glasshouse"),
+        ("com.example.ardent", "Notes"),
+        ("com.example.3ard", "Notes"),
+        ("com.example.ard3", "Notes"),
+        ("com.example.plexus", "Notes"),
+        ("com.example.media", "Standard dashboard"),
+        ("com.example.media", "netflixer"),
+        ("com.example.media", "preNetflix"),
+    ] {
+        let app = App::new(id, title);
+        assert_eq!(
+            (app.brand.as_str(), app.category.as_str()),
+            ("generic", "Utilities"),
+            "A keyword inside an ASCII word must not rebrand {id} / {title}"
+        );
+    }
+}
+
+#[test]
+fn brand_keywords_accept_separators_utf8_and_later_valid_matches() {
+    for (id, title) in [
+        ("ard.mediathek", "ARD Mediathek"),
+        ("com.example.ard_more", "Notes"),
+        ("com.example.more-ard", "Notes"),
+        ("com.example.ARD", "Notes"),
+        ("com.example.media", "ARD"),
+        ("com.example.media", "(ARD)"),
+        ("com.example.media", "ARD미디어테크"),
+        ("com.example.media", "아에르데ARD"),
+        ("com.example.media", "아에르데ARD미디어테크"),
+        ("com.example.dashboard", "ARD"),
+        ("com.example.media", "standard ardent ARD"),
+    ] {
+        let app = App::new(id, title);
+        assert_eq!(
+            (app.brand.as_str(), app.category.as_str()),
+            ("das-erste", "Streaming"),
+            "A delimited keyword must still brand {id} / {title}"
+        );
+    }
+}
+
+#[test]
+fn word_boundaries_preserve_the_known_app_brands_and_categories() {
+    let apps = demo_inventory().apps;
+    let expected = [
+        ("com.webos.app.livetv", "live-tv", "Streaming"),
+        ("netflix", "netflix", "Streaming"),
+        ("youtube.leanback.v4", "youtube", "Streaming"),
+        ("com.apple.appletv", "apple-tv", "Streaming"),
+        ("com.disney.disneyplus-prod", "disney-plus", "Streaming"),
+        ("amazon", "prime-video", "Streaming"),
+        ("plex", "plex", "Streaming"),
+        ("spotify-beehive", "spotify", "Music"),
+        ("org.jellyfin.webos", "jellyfin", "Streaming"),
+        ("org.xbmc.kodi", "kodi", "Streaming"),
+        ("com.limelight.webos", "moonlight", "Gaming"),
+        ("org.webosbrew.hbchannel", "homebrew", "Utilities"),
+        ("com.webos.app.browser", "browser", "Utilities"),
+        ("com.arte.tv", "arte", "Streaming"),
+        ("de.zdf.app.zdfm3", "zdf", "Streaming"),
+        ("ard.mediathek", "das-erste", "Streaming"),
+    ];
+    assert_eq!(apps.len(), expected.len());
+    for (id, brand, category) in expected {
+        let app = apps.iter().find(|app| app.id == id).unwrap();
+        assert_eq!(
+            (app.brand.as_str(), app.category.as_str()),
+            (brand, category),
+            "Known app {id} must retain its curated brand and category"
+        );
+    }
 }

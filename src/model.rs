@@ -16,6 +16,33 @@ pub const BACKGROUNDS: [(&str, &str); 9] = [
     ("northern-lights", "Northern lights"),
 ];
 
+// Keyword matching for brand icons: a needle only counts where the bytes
+// immediately around it aren't also ASCII alphanumeric, so "ard" doesn't
+// collide with unrelated apps like "dashboard". Any multi-byte UTF-8 byte
+// (title text in another script) is never ASCII-alphanumeric either, so it
+// reads as a boundary too; matching stays on raw bytes, not chars, which is
+// safe here since only the two single bytes right at the needle's edges are
+// ever inspected.
+//
+// A regex crate (`\bard\b` per needle) was the obvious alternative and isn't
+// ruled out for being slow - reused compiled patterns would match at a
+// comparable cost. It's skipped because: there's no regex dependency in this
+// crate yet, so adding one and the once-compiled-pattern machinery needed to
+// avoid recompiling per App::new() call is more than this fix needs; and
+// `\b` is Unicode-aware by default, treating CJK letters as word characters,
+// which would give different (not obviously better) results right next to
+// titles in another script than the plain "any non-ASCII byte is a
+// boundary" rule used here.
+fn contains_word(haystack: &str, needle: &str) -> bool {
+    let bytes = haystack.as_bytes();
+    haystack.match_indices(needle).any(|(start, matched)| {
+        let end = start + matched.len();
+        let before_ok = start == 0 || !bytes[start - 1].is_ascii_alphanumeric();
+        let after_ok = end == bytes.len() || !bytes[end].is_ascii_alphanumeric();
+        before_ok && after_ok
+    })
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct App {
     pub id: String,
@@ -49,7 +76,7 @@ impl App {
         ]
         .into_iter()
         .find_map(|(needle, brand, category)| {
-            identity.contains(needle).then_some((brand, category))
+            contains_word(&identity, needle).then_some((brand, category))
         })
         .unwrap_or(("generic", "Utilities"));
         Self {
