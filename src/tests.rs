@@ -1,5 +1,5 @@
 use crate::{
-    model::{Input, InputMode, Preferences, demo_inventory},
+    model::{App, Input, InputMode, Preferences, demo_inventory},
     platform::{normalize_apps, normalize_inputs},
     state::{Direction, Effect, Overlay, Page, State, Target},
     storage, view,
@@ -602,4 +602,18 @@ fn unsupported_language_preferences_recover_without_losing_other_choices() {
     assert_eq!(preferences.language, crate::i18n::Language::En);
     assert!(preferences.show_names);
     assert_eq!(preferences.favorites, Some(vec!["netflix".into()]));
+}
+
+#[test]
+fn brand_keywords_match_whole_words_not_substrings() {
+    // "dashboard" contains "ard" as a substring; it must not pick up the
+    // ARD/Das Erste brand meant for actual ARD apps like ard.mediathek.
+    let dashboard = App::new("com.tvweb.dashboard", "Glasshouse");
+    assert_eq!(dashboard.brand, "generic");
+    let ard = App::new("ard.mediathek", "ARD Mediathek");
+    assert_eq!(ard.brand, "das-erste");
+    // A title in another script sits right next to the match; the byte
+    // immediately after "ard" must still read as a boundary, not panic.
+    let ard_localized = App::new("ard.mediathek", "아에르데 미디어테크");
+    assert_eq!(ard_localized.brand, "das-erste");
 }
