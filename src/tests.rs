@@ -157,6 +157,24 @@ fn inventory_filters_system_apps_duplicates_and_unsafe_identifiers() {
 }
 
 #[test]
+fn icon_collector_visibility_cases_match_the_launcher_inventory() {
+    let cases: Vec<serde_json::Value> =
+        serde_json::from_str(include_str!("../tests/fixtures/app-visibility.json")).unwrap();
+    let inventory: Vec<_> = cases.iter().map(|case| case["app"].clone()).collect();
+    let actual: std::collections::BTreeSet<_> = normalize_apps(&json!(inventory))
+        .unwrap()
+        .into_iter()
+        .map(|app| app.id)
+        .collect();
+    let expected: std::collections::BTreeSet<_> = cases
+        .iter()
+        .filter(|case| case["include"] == true)
+        .map(|case| case["app"]["id"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn auto_input_visibility_requires_a_positive_connection_report() {
     let mut preferences = Preferences::default();
     let mut input = Input {

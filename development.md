@@ -49,6 +49,7 @@ including `armv7-unknown-linux-gnueabi` for TV builds. No browser installation i
 | `pnpm check`              | Oxlint and workspace Clippy, without executing tests       |
 | `pnpm format:check`       | Rust and tooling/document formatting checks                |
 | `pnpm test`               | Release-tooling and Rust workspace unit tests              |
+| `pnpm test:icons`         | Mocked TV icon collection and bundled artwork checks       |
 | `pnpm test:smoke`         | Desktop rendering, mocked weather and localization checks  |
 | `pnpm changeset`          | Add a release note and requested version bump to a PR      |
 | `pnpm version:check`      | Check synchronized app release versions                    |

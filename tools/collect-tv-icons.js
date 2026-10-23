@@ -5,44 +5,76 @@ var fs = require('fs'),
   path = require('path'),
   execSync = require('child_process').execSync,
   out = '/tmp/luma-artwork',
-  map = {},
-  seen = {},
-  visible = {};
+  map = Object.create(null),
+  seen = Object.create(null),
+  visible = Object.create(null);
 try {
   fs.mkdirSync(out);
 } catch (error) {
   if (error.code !== 'EEXIST') throw error;
 }
-// normalize_apps() only excludes com.webos./com.palm./com.lge. apps when the
-// live inventory does not report visible: true. appinfo.json alone cannot
-// tell the two apart, so ask the same listApps the running app queries.
+// Match normalize_apps() visibility rules using the live inventory rather
+// than appinfo.json. Explicitly hidden apps are excluded, system apps need
+// visible: true, and Live TV remains available regardless of that flag.
 try {
   var listed = execSync(
     "/usr/bin/luna-send -n 1 -w 4000 luna://com.webos.applicationManager/listApps '{}'",
     { maxBuffer: 10 * 1024 * 1024 },
   );
-  (JSON.parse(listed).apps || []).forEach(function (a) {
-    if (a.id && a.visible === true) visible[a.id] = true;
+  var inventory = JSON.parse(listed);
+  if (
+    inventory.returnValue !== true ||
+    !Array.isArray(inventory.apps) ||
+    inventory.apps.length > 1000
+  )
+    throw new Error('Invalid listApps response');
+  inventory.apps.forEach(function (a) {
+    if (a && validAppId(a.id) && (!(a.id in visible) || !shouldCollect(a.id, visible[a.id])))
+      visible[a.id] = a.visible;
   });
 } catch (error) {
-  console.error(
-    'listApps failed, skipping every com.webos./com.palm./com.lge. app: ' + error.message,
-  );
+  console.error('listApps failed, skipping system apps except Live TV: ' + error.message);
 }
 
 function isFile(p) {
   return fs.existsSync(p) && fs.statSync(p).isFile();
 }
 
+function validAppId(id) {
+  return (
+    typeof id === 'string' &&
+    id.length > 0 &&
+    id.length <= 128 &&
+    id.split(/[._-]/).every(function (part) {
+      return /^[a-zA-Z0-9]+$/.test(part);
+    })
+  );
+}
+
+function shouldCollect(id, visibility) {
+  if (!validAppId(id)) return false;
+  var live = id === 'com.webos.app.livetv';
+  return !(
+    [
+      'com.ecklf.luma',
+      'com.luma.native',
+      'com.luma.launcher',
+      'com.luma.launcher.native',
+      'com.webos.app.home',
+    ].indexOf(id) >= 0 ||
+    id.indexOf('com.webos.app.hdmi') === 0 ||
+    id.indexOf('com.webos.app.externalinput.') === 0 ||
+    (!live && (visibility === false || visibility === 'false')) ||
+    (!live &&
+      ['com.webos.', 'com.palm.', 'com.lge.'].some(function (p) {
+        return id.indexOf(p) === 0;
+      }) &&
+      visibility !== true)
+  );
+}
+
 function collect(dir, a) {
-  if (!a.id || seen[a.id]) return;
-  if (
-    ['com.webos.', 'com.palm.', 'com.lge.'].some(function (p) {
-      return a.id.indexOf(p) === 0;
-    }) &&
-    visible[a.id] !== true
-  )
-    return;
+  if (!shouldCollect(a.id, visible[a.id]) || seen[a.id]) return;
   seen[a.id] = true;
   var src;
   [a.largeIcon, a.icon, 'icon.png'].some(function (i) {
