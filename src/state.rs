@@ -131,7 +131,10 @@ pub enum Direction {
 #[derive(Debug, PartialEq)]
 pub enum Effect {
     Save,
+    /// Read the app inventory again, keeping decoded icons of unchanged apps.
     Refresh,
+    /// Refresh apps: read the inventory and every app icon again.
+    Reload,
     Launch(String),
     Quit,
     Weather(weather::Command),
@@ -157,6 +160,8 @@ pub struct State {
     pub overlay: Option<Overlay>,
     pub moving: Option<String>,
     pub loading: bool,
+    /// Set by Refresh apps: the next inventory also reloads every app icon.
+    pub reload_artwork: bool,
     pub launching: bool,
     pub notice: Option<(String, Instant)>,
     pub error: Option<String>,
@@ -187,6 +192,7 @@ impl State {
             overlay: None,
             moving: None,
             loading: false,
+            reload_artwork: false,
             launching: false,
             notice: None,
             error: None,
@@ -1197,7 +1203,7 @@ impl State {
         match self.focus.clone() {
             Target::Nav(index) => self.open(index),
             Target::Browse => self.open(1),
-            Target::Retry => return vec![Effect::Refresh],
+            Target::Retry => return vec![Effect::Reload],
             Target::DismissNotice => self.notice = None,
             Target::CloseDialog => return self.back(),
             Target::TvSettings => return vec![Effect::Launch("com.palm.app.settings".into())],
@@ -1350,7 +1356,7 @@ impl State {
                         }
                         return vec![];
                     }
-                    _ => return vec![Effect::Refresh],
+                    _ => return vec![Effect::Reload],
                 }
                 return vec![Effect::Save];
             }

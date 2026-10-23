@@ -153,8 +153,10 @@ are supported; runtime SVG parsing is not required. Source files are limited to 
 stay on the SDL thread and share the existing 48 MiB texture cache. Pending/unavailable icons do
 not block input, and failures are cached until inventory is refreshed.
 
-**Refresh apps** (or desktop F5) invalidates artwork, including previous failures; generation IDs
-discard stale replies. Check newly installed/updated apps and both normal tile and Home-takeover
+Inventory also refreshes at startup and whenever the window becomes visible. Decoded icons are
+keyed by app ID, version and icon paths, so those refreshes keep them and retry only previous
+failures; an updated app has a new version and is read again. **Refresh apps** (or desktop F5)
+invalidates all artwork, including previous failures; request tokens discard stale replies. Check newly installed/updated apps and both normal tile and Home-takeover
 launches on a real TV to verify sandbox access. These paths are covered with mocked filesystem
 and worker tests, not live-TV calls in automated checks.
 

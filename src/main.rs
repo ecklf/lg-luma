@@ -186,7 +186,8 @@ fn effects(
                     state.notify(state.preferences.language.t("savedError"));
                 }
             }
-            Effect::Refresh => {
+            effect @ (Effect::Refresh | Effect::Reload) => {
+                state.reload_artwork |= effect == Effect::Reload;
                 if !state.loading {
                     state.loading = true;
                     state.dirty = true;
@@ -595,7 +596,11 @@ fn run() -> Result<(), String> {
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
                 Response::Inventory(Ok((mut inventory, warning))) => {
-                    assets.artwork.reset();
+                    if std::mem::take(&mut state.reload_artwork) {
+                        assets.artwork.reset();
+                    } else {
+                        assets.artwork.refresh();
+                    }
                     scroll_preview::append(
                         &mut inventory,
                         options.test_extra_apps,
@@ -740,7 +745,7 @@ fn run() -> Result<(), String> {
                         press = None;
                         state.options();
                     }
-                    Keycode::F5 if !repeat => pending.push(Effect::Refresh),
+                    Keycode::F5 if !repeat => pending.push(Effect::Reload),
                     key if !repeat
                         && (i32::from(key) == 461
                             || (webos && i32::from(key) == WEBOS_BACK_KEYCODE)) =>

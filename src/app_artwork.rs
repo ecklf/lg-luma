@@ -29,6 +29,9 @@ pub struct Source {
     directory: Option<PathBuf>,
     large_icon: Option<String>,
     icon: Option<String>,
+    // Part of the cache key: an app update changes it, so its icon is read
+    // again, while unchanged apps keep their decoded artwork across refreshes.
+    version: Option<String>,
 }
 
 impl Source {
@@ -47,6 +50,7 @@ impl Source {
             }),
             large_icon: text("largeIcon").map(str::to_owned),
             icon: text("icon").map(str::to_owned),
+            version: text("version").map(str::to_owned),
         }
     }
 
@@ -202,7 +206,6 @@ fn load_local(
 }
 
 struct Request {
-    generation: u64,
     token: u64,
     source: Source,
 }
@@ -218,7 +221,6 @@ struct Entry {
 }
 #[derive(Default)]
 struct Cache {
-    generation: u64,
     clock: u64,
     entries: HashMap<Source, Entry>,
 }
@@ -270,7 +272,6 @@ impl Service {
             return entry.image.clone().flatten();
         }
         let request = Request {
-            generation: cache.generation,
             token: clock,
             source: source.clone(),
         };
@@ -289,10 +290,20 @@ impl Service {
         None
     }
 
+    /// Refresh apps: every icon is read again. Replies to earlier requests
+    /// no longer match an entry's token and are dropped.
     pub fn reset(&self) {
-        let mut cache = self.cache.borrow_mut();
-        cache.generation += 1;
-        cache.entries.clear();
+        self.cache.borrow_mut().entries.clear();
+    }
+
+    /// After an automatic inventory refresh: icons that were unavailable are
+    /// tried again. Decoded and pending icons stay, because a `Source` names
+    /// the app's version and icon paths, so an updated app has a new one.
+    pub fn refresh(&self) {
+        self.cache
+            .borrow_mut()
+            .entries
+            .retain(|_, entry| !matches!(entry.image, Some(None)));
     }
 
     pub fn poll(&self) -> bool {
@@ -300,8 +311,7 @@ impl Service {
         let mut cache = self.cache.borrow_mut();
         while let Ok(reply) = self.receiver.try_recv() {
             changed = true;
-            if reply.request.generation == cache.generation
-                && let Some(entry) = cache.entries.get_mut(&reply.request.source)
+            if let Some(entry) = cache.entries.get_mut(&reply.request.source)
                 && entry.token == reply.request.token
             {
                 entry.image = Some(reply.image);
