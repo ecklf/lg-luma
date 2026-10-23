@@ -697,3 +697,48 @@ fn word_boundaries_preserve_the_known_app_brands_and_categories() {
         );
     }
 }
+
+#[test]
+fn hdmi_plug_in_reports_the_cable_state_when_connected_only_means_present() {
+    let inputs = normalize_inputs(&json!([
+        {"id":"HDMI_1","label":"HDMI 1","port":1,"connected":true,"appId":"com.webos.app.hdmi1","hdmiPlugIn":false},
+        {"id":"HDMI_2","label":"AVR-X1800H","port":2,"connected":true,"appId":"com.webos.app.hdmi2","hdmiPlugIn":true},
+        {"id":"HDMI_3","label":"HDMI 3","port":3,"connected":true,"appId":"com.webos.app.hdmi3","hdmiPlugIn":false},
+        {"id":"HDMI_4","label":"HDMI 4","port":4,"connected":true,"appId":"com.webos.app.hdmi4","hdmiPlugIn":false}
+    ]))
+    .unwrap();
+    let connected: Vec<_> = inputs
+        .iter()
+        .map(|input| (input.id.as_str(), input.connected))
+        .collect();
+    assert_eq!(
+        connected,
+        [
+            ("com.webos.app.hdmi1", Some(false)),
+            ("com.webos.app.hdmi2", Some(true)),
+            ("com.webos.app.hdmi3", Some(false)),
+            ("com.webos.app.hdmi4", Some(false)),
+        ]
+    );
+    assert_eq!(inputs[1].title, "AVR-X1800H");
+    let preferences = Preferences::default();
+    let visible: Vec<_> = inputs
+        .iter()
+        .filter(|input| preferences.input_visible(input))
+        .map(|input| input.id.as_str())
+        .collect();
+    assert_eq!(visible, ["com.webos.app.hdmi2"]);
+}
+
+#[test]
+fn inputs_without_hdmi_plug_in_keep_the_connected_report() {
+    let inputs = normalize_inputs(&json!([
+        {"appId":"com.webos.app.hdmi1","id":"HDMI_1","port":1,"connected":true},
+        {"appId":"com.webos.app.hdmi2","id":"HDMI_2","port":2,"connected":false},
+        {"appId":"com.webos.app.hdmi3","connected":true,"hdmiPlugIn":"yes"},
+        {"appId":"com.webos.app.hdmi4"}
+    ]))
+    .unwrap();
+    let connected: Vec<_> = inputs.iter().map(|input| input.connected).collect();
+    assert_eq!(connected, [Some(true), Some(false), Some(true), None]);
+}

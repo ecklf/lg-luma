@@ -326,7 +326,12 @@ pub fn normalize_inputs(raw: &Value) -> Result<Vec<Input>, String> {
             id: id.into(),
             title: title(entry.get("label").and_then(Value::as_str), &port),
             port,
-            connected: entry.get("connected").and_then(Value::as_bool),
+            // Some firmware reports `connected: true` for every existing port;
+            // `hdmiPlugIn` is the actual cable state where it is provided.
+            connected: entry
+                .get("hdmiPlugIn")
+                .and_then(Value::as_bool)
+                .or_else(|| entry.get("connected").and_then(Value::as_bool)),
         });
     }
     Ok(inputs)
