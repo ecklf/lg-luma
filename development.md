@@ -147,6 +147,28 @@ and worker tests, not live-TV calls in automated checks.
 preview fixtures. The TV package excludes those fixtures and their generated icon/colour maps.
 Adding support for an installed app's icon does not require collecting artwork or changing JSON.
 
+### Curated brand cards and the desktop demo
+
+`src/branding.rs` contains the exact app-ID allowlist for 36 curated brand cards. Titles and
+partial ID matches do not select vector overrides. In particular, Amazon Alexa retains its own
+installed icon rather than receiving Prime Video branding. NOW / Now TV recognizes `now.tv`
+and `nowtv`; WOW, Sky Q and the separate Hong Kong Now TV service are not treated as aliases.
+Unknown regional IDs continue using their installed artwork. Verify additional aliases against
+that TV's inventory before adding them to the allowlist.
+
+The aliases include developer fixtures and community webOS inventories, including
+[FHEM's LGTV app IDs](https://github.com/fhem/LGTV_WebOS/blob/master/lib/FHEM/Devices/LGTV/LGTVWebOS.pm),
+[a UK webOS inventory](https://github.com/chrispab/AutoHome/blob/master/items/CT_LGWebOS_TV.items),
+and the [UK streaming catalogue](https://github.com/tjeffree/webOS-Streaming-Aggregator/blob/main/frontend/src/services/appCatalog.js).
+These sources do not establish that every alias is available on every region/firmware combination.
+
+Every curated logo has an app in `demo_inventory()`, including all 27 expanded streaming/music
+brands. Open them with `pnpm dev --script apps`, then scroll or search the Apps grid. A unit check
+keeps the SVG directory, curated catalogue and demo inventory aligned. `pnpm test:brands` renders
+every card through the actual desktop renderer and writes `.build/brands-gallery.png` for visual
+review. Like the other smoke scripts, it uses isolated preferences and no TV or real weather API.
+The gallery also runs as part of `pnpm test:smoke`. Asset source/licence details are in [assets.md](assets.md).
+
 Text reads the bundled TTF's advances, kerning and line metrics lazily. Only needed glyph outlines
 are tessellated in font-em coordinates. Complete text runs are cached in static GPU buffers,
 independent of position/color/drawable density, avoiding a draw call per letter. CJK fonts open

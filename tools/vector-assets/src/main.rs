@@ -21,6 +21,10 @@ struct Asset {
     output: PathBuf,
     #[serde(default)]
     monochrome: bool,
+    #[serde(default)]
+    light_ink: bool,
+    #[serde(default)]
+    trim: bool,
     reference_size: f32,
 }
 
@@ -49,6 +53,7 @@ struct Painter<'a> {
     inverse: Transform,
     opacity: f32,
     monochrome: bool,
+    light_ink: bool,
 }
 
 impl Painter<'_> {
@@ -131,7 +136,7 @@ impl Painter<'_> {
     }
 
     fn finish(&self, color: usvg::Color, opacity: f32) -> [f32; 4] {
-        if self.monochrome {
+        if self.monochrome || (self.light_ink && color.red.max(color.green).max(color.blue) < 80) {
             [1., 1., 1., opacity]
         } else {
             [
@@ -149,6 +154,7 @@ struct Compiler {
     tolerance: f32,
     reference_scale: f32,
     monochrome: bool,
+    light_ink: bool,
 }
 
 impl Compiler {
@@ -242,6 +248,7 @@ impl Compiler {
             inverse: transform.invert().ok_or("Singular SVG path transform")?,
             opacity,
             monochrome: self.monochrome,
+            light_ink: self.light_ink,
         };
         let data = data
             .clone()
@@ -384,6 +391,7 @@ fn run() -> Result<(), String> {
             tolerance: 0.15 / scale,
             reference_scale: scale,
             monochrome: asset.monochrome,
+            light_ink: asset.light_ink,
         };
         compiler
             .group(tree.root())
@@ -391,10 +399,35 @@ fn run() -> Result<(), String> {
         if compiler.vertices.is_empty() {
             return Err(format!("No vector geometry in {}", asset.source.display()));
         }
+        let (width, height) = if asset.trim {
+            let bounds = compiler.vertices.iter().fold(
+                [
+                    f32::INFINITY,
+                    f32::INFINITY,
+                    f32::NEG_INFINITY,
+                    f32::NEG_INFINITY,
+                ],
+                |b, v| {
+                    [
+                        b[0].min(v[0]),
+                        b[1].min(v[1]),
+                        b[2].max(v[0]),
+                        b[3].max(v[1]),
+                    ]
+                },
+            );
+            for vertex in &mut compiler.vertices {
+                vertex[0] -= bounds[0];
+                vertex[1] -= bounds[1];
+            }
+            (bounds[2] - bounds[0], bounds[3] - bounds[1])
+        } else {
+            (size.width(), size.height())
+        };
         let mut bytes = Vec::with_capacity(20 + compiler.vertices.len() * 36);
         bytes.extend_from_slice(MAGIC);
-        bytes.extend_from_slice(&size.width().to_le_bytes());
-        bytes.extend_from_slice(&size.height().to_le_bytes());
+        bytes.extend_from_slice(&width.to_le_bytes());
+        bytes.extend_from_slice(&height.to_le_bytes());
         bytes.extend_from_slice(&(compiler.vertices.len() as u32).to_le_bytes());
         for vertex in &compiler.vertices {
             for value in vertex {

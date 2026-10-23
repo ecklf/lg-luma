@@ -624,7 +624,7 @@ fn unsupported_language_preferences_recover_without_losing_other_choices() {
 }
 
 #[test]
-fn brand_keywords_match_whole_words_not_substrings() {
+fn unrelated_app_ids_and_titles_keep_their_installed_artwork() {
     for (id, title) in [
         ("com.tvweb.dashboard", "Glasshouse"),
         ("com.example.ardent", "Notes"),
@@ -634,20 +634,22 @@ fn brand_keywords_match_whole_words_not_substrings() {
         ("com.example.media", "Standard dashboard"),
         ("com.example.media", "netflixer"),
         ("com.example.media", "preNetflix"),
+        ("amazon.alexa.view", "Amazon Alexa"),
+        ("com.example.spotify", "Spotify tools"),
+        ("com.example.media", "Plex"),
     ] {
         let app = App::new(id, title);
         assert_eq!(
             (app.brand.as_str(), app.category.as_str()),
             ("generic", "Utilities"),
-            "A keyword inside an ASCII word must not rebrand {id} / {title}"
+            "An unrelated application must not be rebranded: {id} / {title}"
         );
     }
 }
 
 #[test]
-fn brand_keywords_accept_separators_utf8_and_later_valid_matches() {
+fn curated_branding_does_not_use_title_words_or_partial_id_matches() {
     for (id, title) in [
-        ("ard.mediathek", "ARD Mediathek"),
         ("com.example.ard_more", "Notes"),
         ("com.example.more-ard", "Notes"),
         ("com.example.ARD", "Notes"),
@@ -662,14 +664,14 @@ fn brand_keywords_accept_separators_utf8_and_later_valid_matches() {
         let app = App::new(id, title);
         assert_eq!(
             (app.brand.as_str(), app.category.as_str()),
-            ("das-erste", "Streaming"),
-            "A delimited keyword must still brand {id} / {title}"
+            ("generic", "Utilities"),
+            "Only an exact app ID may select curated artwork: {id} / {title}"
         );
     }
 }
 
 #[test]
-fn word_boundaries_preserve_the_known_app_brands_and_categories() {
+fn known_app_ids_preserve_the_curated_brands_and_categories() {
     let apps = demo_inventory().apps;
     let expected = [
         ("com.webos.app.livetv", "live-tv", "Streaming"),

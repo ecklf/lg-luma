@@ -79,6 +79,9 @@ Refresh invalidates cached results. No collected icon map or card-colour JSON is
 on TV. Existing `assets/app-icons*`, `assets/icon-colours.json` and `tools/collect-tv-icons.js`
 are desktop preview fixtures; updating them is optional, not a fix for a missing installed TV icon.
 Do not replace vector logos with PNG exports.
+Curated vectors use the exact app-ID allowlist in `src/branding.rs`, never title/substring matching.
+Every logo in `assets/logos/` must have a desktop demo app. `pnpm test:brands` renders the full
+gallery to `.build/brands-gallery.png`; source restoration via `pnpm assets:brands` is optional.
 
 ## CI and releases
 

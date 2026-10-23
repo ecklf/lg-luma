@@ -497,18 +497,7 @@ fn tile(
         if focused { 14. } else { 9. },
         if focused { 0.4 } else { 0.165 },
     );
-    let logos = [
-        "netflix",
-        "youtube",
-        "apple-tv",
-        "disney-plus",
-        "prime-video",
-        "jellyfin",
-        "arte",
-        "zdf",
-        "das-erste",
-    ];
-    let logo = logos.contains(&app.brand.as_str());
+    let logo = crate::branding::for_key(&app.brand).is_some();
     let artwork = (!logo)
         .then(|| {
             app.icon
