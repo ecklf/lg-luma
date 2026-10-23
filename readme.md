@@ -196,5 +196,6 @@ Weather search/forecast requests go to Open-Meteo, with embedded TLS roots and b
 There is no browser geolocation, IP-based location lookup, telemetry or runtime font download.
 
 ## License
+
 Luma is licensed under MIT.\
 Luma is not affiliated with LG, Apple, Plex or any app brands shown in its UI.
