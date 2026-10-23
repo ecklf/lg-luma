@@ -24,7 +24,7 @@ const configuration = {
   language: 'en',
   background: 'dunes',
   hour_24: false,
-  show_names: false,
+  show_home_names: false,
   show_weather: true,
   weather_location: null,
   hidden: [],

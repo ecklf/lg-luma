@@ -437,12 +437,12 @@ fn remote_can_clear_a_saved_greeting_name_without_moving_the_controls() {
 }
 
 #[test]
-fn app_name_settings_toggle_each_view_independently_and_preserve_old_preferences() {
+fn app_name_settings_use_independent_defaults_including_with_legacy_preferences() {
     let old: Preferences = serde_json::from_value(json!({"show_names": true})).unwrap();
-    assert!(old.show_names);
+    assert!(!old.show_home_names);
     assert!(old.show_app_names);
     let mut state = ready();
-    assert!(!state.preferences.show_names);
+    assert!(!state.preferences.show_home_names);
     assert!(state.preferences.show_app_names);
     state.open(2);
     state.focus = Target::Setting(0);
@@ -454,17 +454,17 @@ fn app_name_settings_toggle_each_view_independently_and_preserve_old_preferences
     assert_eq!(state.subpage, Some(crate::state::Subpage::AppNames));
     assert_eq!(state.focus, Target::AppNamesHome);
     assert_eq!(state.activate(), vec![Effect::Save]);
-    assert!(state.preferences.show_names);
+    assert!(state.preferences.show_home_names);
     assert!(state.preferences.show_app_names);
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::AppNamesApps);
     assert_eq!(state.activate(), vec![Effect::Save]);
-    assert!(state.preferences.show_names);
+    assert!(state.preferences.show_home_names);
     assert!(!state.preferences.show_app_names);
     assert_eq!(state.subpage, Some(crate::state::Subpage::AppNames));
     let restored: Preferences =
         serde_json::from_value(serde_json::to_value(&state.preferences).unwrap()).unwrap();
-    assert!(restored.show_names);
+    assert!(restored.show_home_names);
     assert!(!restored.show_app_names);
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::Setting(0));
@@ -475,7 +475,7 @@ fn app_name_settings_toggle_each_view_independently_and_preserve_old_preferences
 fn home_and_apps_render_only_their_own_caption_preference() {
     let mut state = ready();
     for (home, apps) in [(false, true), (true, false), (true, true), (false, false)] {
-        state.preferences.show_names = home;
+        state.preferences.show_home_names = home;
         state.preferences.show_app_names = apps;
         for (page, expected) in [(0, home), (1, apps)] {
             state.open(page);
@@ -972,11 +972,11 @@ fn remote_can_select_and_restore_every_language() {
 #[test]
 fn unsupported_language_preferences_recover_without_losing_other_choices() {
     let preferences: Preferences = serde_json::from_value(
-        json!({"language":"unknown","favorites":["netflix"],"show_names":true}),
+        json!({"language":"unknown","favorites":["netflix"],"show_home_names":true}),
     )
     .unwrap();
     assert_eq!(preferences.language, crate::i18n::Language::En);
-    assert!(preferences.show_names);
+    assert!(preferences.show_home_names);
     assert_eq!(preferences.favorites, Some(vec!["netflix".into()]));
 }
 

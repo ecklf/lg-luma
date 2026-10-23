@@ -105,7 +105,7 @@ try {
   await run('cargo', ['build', '--locked', '--package', 'luma']);
   await fs.writeFile(
     preferences,
-    JSON.stringify({ language: 'en', show_names: true, reduced_motion: true }),
+    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
   );
   const languages = await scenario('picker-en', picker);
   assert.equal(languages.subpage, 'Language');
@@ -199,7 +199,7 @@ try {
 
   await fs.writeFile(
     preferences,
-    JSON.stringify({ language: 'en', show_names: true, reduced_motion: true }),
+    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
   );
   const portuguese = await scenario('pt-home', `${picker},down,down,down,down,enter,home,down`);
   assert.equal(portuguese.preferences.language, 'pt');

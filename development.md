@@ -101,9 +101,9 @@ or `HH:MM:SS`, defaulting to `HH:MM`). Choosing a format returns to its row in C
 from Clock restores its General row. With seconds shown, the header clock redraws once per second
 instead of once per minute. Existing saved hour and seconds preferences are retained.
 General has an **App names** subpage with independent **Show on Home** and **Show on Apps** toggles.
-Home captions default to off and Apps captions default to on. The existing `show_names` preference
-retains the Home choice; `show_app_names` stores the Apps choice. Hidden captions do not reserve layout
-space.
+Home captions default to off and Apps captions default to on, stored independently in `show_home_names`
+and `show_app_names`. The legacy `show_names` preference does not override these defaults. Hidden
+captions do not reserve layout space.
 The **Greeting** subpage contains **Name** and **Clear name**. Selecting Name opens the text keyboard
 (the system keyboard on the TV) and the name is appended to the Home greeting ("Good evening, Ana.").
 The keyboard starts empty; closing it without a name preserves the saved value. Clear name removes

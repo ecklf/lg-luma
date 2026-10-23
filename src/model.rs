@@ -94,8 +94,7 @@ pub struct Preferences {
     pub favorites: Option<Vec<String>>,
     pub hidden: Vec<String>,
     pub background: String,
-    /// Home captions retain their existing preference key.
-    pub show_names: bool,
+    pub show_home_names: bool,
     pub show_app_names: bool,
     pub hour_24: bool,
     pub reduced_motion: bool,
@@ -121,7 +120,7 @@ impl Default for Preferences {
             favorites: None,
             hidden: vec![],
             background: "dunes".into(),
-            show_names: false,
+            show_home_names: false,
             show_app_names: true,
             hour_24: false,
             reduced_motion: false,

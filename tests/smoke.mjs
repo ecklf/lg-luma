@@ -180,13 +180,13 @@ try {
   assert.equal(appNames.subpage, 'AppNames');
   assert.ok(appNames.ui_text.includes('Show on Home'));
   assert.ok(appNames.ui_text.includes('Show on Apps'));
-  assert.equal(appNames.preferences.show_names, false);
+  assert.equal(appNames.preferences.show_home_names, false);
   assert.equal(appNames.preferences.show_app_names, true);
   const customNames = await scenario(
     'home-names-enabled',
     `${appNamesEditor},enter,down,enter,back,home`,
   );
-  assert.equal(customNames.preferences.show_names, true);
+  assert.equal(customNames.preferences.show_home_names, true);
   assert.equal(customNames.preferences.show_app_names, false);
   assert.ok(customNames.ui_text.includes('Netflix'));
   const hiddenNames = await scenario('app-names-disabled', 'apps');

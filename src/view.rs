@@ -764,7 +764,7 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         );
     }
     let apps = state.apps();
-    let names = state.preferences.show_names;
+    let names = state.preferences.show_home_names;
     let mut grid_height = FACE_HEIGHT;
     if state.loading && state.inventory.apps.is_empty() {
         for index in 0..6 {
@@ -1812,17 +1812,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         0 => {
             for (position, (index, key, icon, value, chevron)) in [
                 (0, "appNames", "type", None, true),
-                (
-                    1,
-                    "clock",
-                    "clock",
-                    Some(if state.preferences.hour_24 {
-                        language.t("hour24")
-                    } else {
-                        language.t("hour12")
-                    }),
-                    true,
-                ),
+                (1, "clock", "clock", None, true),
                 (
                     2,
                     "reducedMotion",
@@ -2101,7 +2091,7 @@ fn app_name_settings(out: &mut Scene, state: &State, assets: &Assets) {
         (
             Target::AppNamesHome,
             "showOnHome",
-            state.preferences.show_names,
+            state.preferences.show_home_names,
         ),
         (
             Target::AppNamesApps,
@@ -2153,7 +2143,7 @@ fn input_name_rows(out: &mut Scene, state: &State, assets: &Assets, id: &str, y:
             value: None,
             description: Some(&description),
             selected: false,
-            chevron: true,
+            chevron: false,
         },
     );
     if custom.is_some() {

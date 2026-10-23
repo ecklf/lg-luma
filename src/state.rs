@@ -1250,7 +1250,7 @@ impl State {
                 return vec![Effect::Save];
             }
             Target::AppNamesHome => {
-                self.preferences.show_names = !self.preferences.show_names;
+                self.preferences.show_home_names = !self.preferences.show_home_names;
                 return vec![Effect::Save];
             }
             Target::AppNamesApps => {
