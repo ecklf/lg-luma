@@ -264,6 +264,7 @@ fn script(
                 state.keyboard_field
             } else {
                 match state.subpage {
+                    Some(state::Subpage::Greeting) => state::TextField::Name,
                     Some(state::Subpage::WeatherLocation) => state::TextField::Location,
                     Some(state::Subpage::Input(_)) => state::TextField::InputName,
                     _ => state::TextField::Apps,

@@ -144,7 +144,7 @@ try {
   assert.ok(chinese.ui_text.includes('10月21日星期三'));
   const chineseSettings = await scenario('zh-settings', 'settings,down');
   contains(chineseSettings, 'language', 'zh');
-  contains(chineseSettings, 'showAppNames', 'zh');
+  contains(chineseSettings, 'appNames', 'zh');
 
   const selected = await scenario(
     'zh-weather',
@@ -225,7 +225,7 @@ try {
     'Portuguese is restored after restart',
   );
   assert.ok(portugueseSettings.ui_text.includes('Português (Brasil)'));
-  for (const key of ['language', 'showAppNames', 'clockFormat'])
+  for (const key of ['language', 'appNames', 'clockFormat'])
     contains(portugueseSettings, key, 'pt');
   assert.equal(JSON.parse(await fs.readFile(preferences, 'utf8')).language, 'pt');
 

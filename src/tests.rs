@@ -13,7 +13,7 @@ fn ready() -> State {
     state
 }
 
-fn controls(state: &State) -> Vec<crate::state::Control> {
+fn scene(state: &State) -> view::Scene {
     let assets = view::Assets {
         root: PathBuf::new(),
         version: "test".into(),
@@ -28,7 +28,10 @@ fn controls(state: &State) -> Vec<crate::state::Control> {
         navigation.items[state.page_index()].w,
         time::OffsetDateTime::UNIX_EPOCH,
     )
-    .controls
+}
+
+fn controls(state: &State) -> Vec<crate::state::Control> {
+    scene(state).controls
 }
 
 #[test]
@@ -340,22 +343,34 @@ fn focused_navigation_tabs_switch_pages_immediately() {
 }
 
 #[test]
-fn greeting_name_row_opens_the_keyboard_and_saves_when_it_closes() {
+fn greeting_subpage_opens_the_keyboard_and_back_restores_its_parent() {
     let mut state = ready();
     state.open(2);
     state.focus = Target::Setting(6);
+    assert!(
+        state
+            .direction(Direction::Right, &controls(&state))
+            .is_empty()
+    );
+    assert_eq!(state.subpage, Some(crate::state::Subpage::Greeting));
+    assert_eq!(state.focus, Target::GreetingName);
+    assert!(!state.text_input_active());
     assert!(state.activate().is_empty());
     assert!(state.text_input_active());
     state.text("Ana");
     assert_eq!(state.editing_text(), "Ana");
     assert!(state.preferences.greeting_name.is_empty());
     assert_eq!(state.finish_text_input(), vec![Effect::Save]);
-    assert_eq!(state.focus, Target::Setting(6));
+    assert_eq!(state.focus, Target::GreetingName);
     assert!(state.finish_text_input().is_empty());
     assert_eq!(
         crate::i18n::Language::En.greeting(9, &state.preferences.greeting_name),
         "Good morning, Ana."
     );
+    assert_eq!(state.subpage, Some(crate::state::Subpage::Greeting));
+    assert!(state.back().is_empty());
+    assert!(state.subpage.is_none());
+    assert_eq!(state.focus, Target::Setting(6));
 }
 
 #[test]
@@ -365,6 +380,7 @@ fn greeting_name_replacement_commits_on_every_keyboard_completion_route() {
         state.preferences.greeting_name = "Ana".into();
         state.open(2);
         state.focus = Target::Setting(6);
+        state.activate();
         state.activate();
         assert!(state.editing_text().is_empty());
         state.text("  BobX ");
@@ -385,7 +401,7 @@ fn greeting_name_replacement_commits_on_every_keyboard_completion_route() {
         };
         assert_eq!(effects, vec![Effect::Save]);
         assert_eq!(state.preferences.greeting_name, "Bob");
-        assert_eq!(state.focus, Target::Setting(6));
+        assert_eq!(state.focus, Target::GreetingName);
         assert!(state.finish_text_input().is_empty());
         state.activate();
         state.text("   ");
@@ -395,21 +411,171 @@ fn greeting_name_replacement_commits_on_every_keyboard_completion_route() {
 }
 
 #[test]
-fn remote_can_reset_a_saved_greeting_name() {
+fn remote_can_clear_a_saved_greeting_name_without_moving_the_controls() {
     let mut state = ready();
     state.preferences.greeting_name = "Ana".into();
     state.open(2);
     state.focus = Target::Setting(6);
+    state.activate();
+    let before: Vec<_> = controls(&state)
+        .iter()
+        .map(|c| (c.target.clone(), c.rect.y))
+        .collect();
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Setting(7));
+    assert_eq!(state.focus, Target::GreetingNameClear);
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert!(state.preferences.greeting_name.is_empty());
+    assert_eq!(state.focus, Target::GreetingName);
+    let after: Vec<_> = controls(&state)
+        .iter()
+        .map(|c| (c.target.clone(), c.rect.y))
+        .collect();
+    assert_eq!(before, after);
+    state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::Setting(6));
+    assert!(state.subpage.is_none());
+}
+
+#[test]
+fn app_name_settings_toggle_each_view_independently_and_preserve_old_preferences() {
+    let old: Preferences = serde_json::from_value(json!({"show_names": true})).unwrap();
+    assert!(old.show_names);
+    assert!(old.show_app_names);
+    let mut state = ready();
+    assert!(!state.preferences.show_names);
+    assert!(state.preferences.show_app_names);
+    state.open(2);
+    state.focus = Target::Setting(0);
     assert!(
-        controls(&state)
-            .iter()
-            .any(|c| c.target == Target::Setting(7))
+        state
+            .direction(Direction::Right, &controls(&state))
+            .is_empty()
     );
+    assert_eq!(state.subpage, Some(crate::state::Subpage::AppNames));
+    assert_eq!(state.focus, Target::AppNamesHome);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.show_names);
+    assert!(state.preferences.show_app_names);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::AppNamesApps);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.show_names);
+    assert!(!state.preferences.show_app_names);
+    assert_eq!(state.subpage, Some(crate::state::Subpage::AppNames));
+    let restored: Preferences =
+        serde_json::from_value(serde_json::to_value(&state.preferences).unwrap()).unwrap();
+    assert!(restored.show_names);
+    assert!(!restored.show_app_names);
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::Setting(0));
+    assert!(state.subpage.is_none());
+}
+
+#[test]
+fn home_and_apps_render_only_their_own_caption_preference() {
+    let mut state = ready();
+    for (home, apps) in [(false, true), (true, false), (true, true), (false, false)] {
+        state.preferences.show_names = home;
+        state.preferences.show_app_names = apps;
+        for (page, expected) in [(0, home), (1, apps)] {
+            state.open(page);
+            let scene = scene(&state);
+            let caption = scene.draw.iter().any(
+                |draw| matches!(draw, crate::renderer::Draw::Text(value, ..) if value == "Netflix"),
+            );
+            assert_eq!(caption, expected, "Home={home}, Apps={apps}, page={page}");
+            let card = scene
+                .controls
+                .iter()
+                .find(|c| c.target == Target::App("netflix".into()))
+                .unwrap();
+            assert_eq!(
+                card.rect.h > 154.4,
+                expected,
+                "Hidden captions must not reserve space"
+            );
+        }
+    }
+}
+
+#[test]
+fn input_name_actions_only_highlight_the_focused_row_and_keep_the_saved_mode() {
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state
+        .preferences
+        .set_input_name("com.webos.app.hdmi1", "Console");
+    state.open(2);
+    state.section = crate::state::INPUTS_SECTION;
+    state.focus = Target::InputMode("com.webos.app.hdmi1".into());
+    state.activate();
+    for target in [Target::InputRename, Target::InputNameReset] {
+        state.pointer_focus(target.clone());
+        let scene = scene(&state);
+        let highlighted: Vec<_> = scene
+            .draw
+            .iter()
+            .filter_map(|draw| match draw {
+                crate::renderer::Draw::RoundedGradient(rect, ..)
+                    if rect.x == 640. && rect.w == 1120. =>
+                {
+                    Some(rect.y)
+                }
+                _ => None,
+            })
+            .collect();
+        let focused = scene.controls.iter().find(|c| c.target == target).unwrap();
+        assert_eq!(highlighted, vec![focused.rect.y]);
+        assert!(scene.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::TintedImage(path, ..) if path.ends_with("check.lvec"))));
+        assert_eq!(
+            state
+                .preferences
+                .input_modes
+                .get("com.webos.app.hdmi1")
+                .copied()
+                .unwrap_or_default(),
+            InputMode::Auto
+        );
+        assert!(scene.draw.iter().any(
+            |draw| matches!(draw, crate::renderer::Draw::Text(value, ..) if value == "Clear name")
+        ));
+    }
+}
+
+#[test]
+fn clock_choices_only_highlight_focus_while_preserving_saved_checkmarks() {
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state.preferences.show_seconds = true;
+    state.open(2);
+    state.focus = Target::Setting(1);
+    state.activate();
+    for index in 0..3 {
+        state.pointer_focus(Target::Choice(index));
+        let scene = scene(&state);
+        let highlighted: Vec<_> = scene
+            .draw
+            .iter()
+            .filter_map(|draw| match draw {
+                crate::renderer::Draw::RoundedGradient(rect, ..)
+                    if rect.x == 640. && rect.w == 1120. =>
+                {
+                    Some(rect.y)
+                }
+                _ => None,
+            })
+            .collect();
+        let focused = scene
+            .controls
+            .iter()
+            .find(|c| c.target == Target::Choice(index))
+            .unwrap();
+        assert_eq!(highlighted, vec![focused.rect.y]);
+        let checks = scene.draw.iter().filter(|draw| matches!(draw, crate::renderer::Draw::TintedImage(path, ..) if path.ends_with("check.lvec"))).count();
+        assert_eq!(checks, 2);
+        assert!(!state.preferences.hour_24);
+        assert!(state.preferences.show_seconds);
+    }
 }
 
 #[test]
