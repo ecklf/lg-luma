@@ -272,6 +272,32 @@ mod tests {
         }
     }
     #[test]
+    fn every_translation_preserves_the_english_message_placeholders() {
+        fn placeholders(message: &str) -> std::collections::BTreeSet<&str> {
+            message
+                .split('{')
+                .skip(1)
+                .map(|part| {
+                    part.split_once('}')
+                        .expect("Unclosed message placeholder")
+                        .0
+                })
+                .collect()
+        }
+
+        for (key, entry) in messages() {
+            let expected = placeholders(&entry["en"]);
+            for language in Language::ALL {
+                assert_eq!(
+                    placeholders(&entry[language.code()]),
+                    expected,
+                    "Mismatched placeholders in {key} / {}",
+                    language.code()
+                );
+            }
+        }
+    }
+    #[test]
     fn localization_keeps_user_provided_names_intact() {
         assert_eq!(
             Language::De.format("favoriteAdded", &[("app", "Netflix")]),
@@ -304,5 +330,17 @@ mod tests {
         assert_eq!(Language::Zh.date(now), "10月21日星期三");
         assert_eq!(Language::Zh.clock(now, false), "下午8:41");
         assert_eq!(Language::En.clock(now, true), "20:41");
+    }
+    #[test]
+    fn portuguese_dates_include_accented_names_and_handle_leap_days() {
+        for (date, expected) in [
+            ("2024-02-29T00:05:00-03:00", "QUINTA-FEIRA, 29 DE FEVEREIRO"),
+            ("2026-03-03T12:00:00-03:00", "TERÇA-FEIRA, 3 DE MARÇO"),
+            ("2026-10-24T20:41:00-03:00", "SÁBADO, 24 DE OUTUBRO"),
+        ] {
+            let now = OffsetDateTime::parse(date, &time::format_description::well_known::Rfc3339)
+                .unwrap();
+            assert_eq!(Language::Pt.date(now), expected);
+        }
     }
 }
