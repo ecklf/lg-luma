@@ -1,5 +1,11 @@
 # lg-luma
 
+## 2.3.0
+
+### Minor Changes
+
+- 3bf0ad6: Show a wallpaper splash at launch and match the saved background when staging the native Home integration.
+
 ## 2.2.2
 
 ### Patch Changes
