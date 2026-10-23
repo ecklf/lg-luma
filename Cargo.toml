@@ -18,7 +18,7 @@ webos = ["dep:libc"]
 
 [dependencies]
 gl = "0.14"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 libc = { version = "0.2", optional = true }
 luma-vector-geometry = { path = "vector-geometry" }
 owned_ttf_parser = "0.25"

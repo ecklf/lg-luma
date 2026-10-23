@@ -1,0 +1,25 @@
+<!-- Original Luma browser artwork, MIT. Filled globe and navigation pointer. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="orb" x1="27" y1="20" x2="87" y2="92" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#78e5fa"/>
+      <stop offset=".42" stop-color="#3299ed"/>
+      <stop offset="1" stop-color="#5143d4"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="32" y1="18" x2="86" y2="94" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#c1f7ff"/>
+      <stop offset="1" stop-color="#6985ed"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="60" cy="108" rx="35" ry="4" fill="#000" fill-opacity=".16"/>
+  <circle cx="58" cy="56" r="43" fill="url(#rim)"/>
+  <circle cx="58" cy="56" r="40" fill="url(#orb)"/>
+  <g fill="none" stroke="#fff" stroke-width="2.4">
+    <ellipse cx="58" cy="56" rx="18" ry="39" stroke-opacity=".65"/>
+    <ellipse cx="58" cy="56" rx="39" ry="15" stroke-opacity=".6"/>
+    <path d="M19 56h78M58 17v78" stroke-opacity=".3"/>
+  </g>
+  <path d="m77 68 33 17-15 6-7 17z" fill="#0e1c44" fill-opacity=".55"/>
+  <path d="m76 64 32 18-15 5-6 17z" fill="#fff"/>
+  <path d="m81 73 17 9-9 3-3 8z" fill="#e7f1ff"/>
+</svg>

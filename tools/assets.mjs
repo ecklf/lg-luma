@@ -8,14 +8,11 @@ const root = path.resolve(import.meta.dirname, '..');
 const source = path.join(root, 'assets');
 const out = path.join(root, '.build/assets');
 const highResolution = process.argv.includes('--4k');
-for (const directory of [
-  'wallpapers',
-  'thumbnails',
-  'logos',
-  'app-icons',
-  'ui-icons',
-  'surfaces',
-]) {
+// Retire generated dumps from older asset caches as well as the source assets.
+for (const legacy of ['app-icons', 'icons.json', 'colors.json']) {
+  await fs.rm(path.join(out, legacy), { recursive: true, force: true });
+}
+for (const directory of ['wallpapers', 'thumbnails', 'logos', 'ui-icons', 'surfaces']) {
   await fs.mkdir(path.join(out, directory), { recursive: true });
 }
 
@@ -104,20 +101,6 @@ for (const file of await fs.readdir(path.join(source, 'wallpapers'))) {
     .jpeg({ quality: 82 })
     .toFile(path.join(out, 'thumbnails', `${id}.jpg`));
 }
-const icons = {};
-const map = JSON.parse(await fs.readFile(path.join(source, 'app-icons.json'), 'utf8'));
-for (const [id, relative] of Object.entries(map)) {
-  const clean = relative.replace(/^\.\//, '');
-  if (!/^app-icons\/[a-zA-Z0-9._-]+\.(png|jpg)$/.test(clean)) continue;
-  try {
-    await fs.copyFile(path.join(source, clean), path.join(out, clean));
-    icons[id] = clean;
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
-}
-await fs.writeFile(path.join(out, 'icons.json'), `${JSON.stringify(icons, null, 2)}\n`);
-await fs.copyFile(path.join(source, 'icon-colours.json'), path.join(out, 'colors.json'));
 await fs.writeFile(
   path.join(out, 'version.txt'),
   JSON.parse(await fs.readFile(path.join(root, 'appinfo.json'), 'utf8')).version,
@@ -125,6 +108,7 @@ await fs.writeFile(
 
 const surfaces = {
   generic: ['#4e5c6b', '#243c4e'],
+  'live-tv': ['#192a43', '#0d1628'],
   netflix: ['#141414', '#141414'],
   youtube: ['#0f0f0f', '#0f0f0f'],
   'apple-tv': ['#252525', '#080808'],
@@ -134,13 +118,38 @@ const surfaces = {
   zdf: ['#121b22', '#121b22'],
   'das-erste': ['#064c84', '#00254e'],
   plex: ['#343434', '#232323'],
-  spotify: ['#192d23', '#101a16'],
+  spotify: ['#000000', '#121212'],
   jellyfin: ['#25283f', '#101422'],
   homebrew: ['#7c6042', '#3f392d'],
   kodi: ['#0a749b', '#08445e'],
   moonlight: ['#435d8f', '#252e59'],
   gaming: ['#435d8f', '#252e59'],
-  browser: ['#648890', '#2e525b'],
+  browser: ['#192a43', '#0d1628'],
+  'hbo-max': ['#181818', '#080808'],
+  'paramount-plus': ['#075bda', '#00298e'],
+  peacock: ['#171717', '#080808'],
+  hulu: ['#152d23', '#091710'],
+  crunchyroll: ['#141414', '#141414'],
+  twitch: ['#6330b8', '#32165c'],
+  dazn: ['#252623', '#10110e'],
+  'rakuten-tv': ['#bf143a', '#620c20'],
+  'apple-music': ['#e9415e', '#a91c38'],
+  'amazon-music': ['#183c4a', '#102128'],
+  'bbc-iplayer': ['#4a162e', '#230b16'],
+  itvx: ['#24341b', '#111a0c'],
+  'channel-4': ['#20362c', '#0c1a14'],
+  'now-tv': ['#064c45', '#001e1a'],
+  'rtl-plus': ['#262029', '#121014'],
+  joyn: ['#000000', '#000000'],
+  'waipu-tv': ['#154e8e', '#0a2544'],
+  zattoo: ['#353031', '#151314'],
+  skyshowtime: ['#24202e', '#100d17'],
+  'coupang-play': ['#143b4a', '#091d25'],
+  tving: ['#3f131d', '#1a090e'],
+  wavve: ['#10399e', '#0a1e53'],
+  watcha: ['#3d1225', '#1e0912'],
+  'movistar-plus': ['#163b35', '#091e1a'],
+  filmin: ['#10372f', '#091c18'],
 };
 for (const [brand, [top, bottom]] of Object.entries(surfaces)) {
   const fill =

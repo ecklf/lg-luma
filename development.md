@@ -49,7 +49,7 @@ including `armv7-unknown-linux-gnueabi` for TV builds. No browser installation i
 | `pnpm check`              | Oxlint and workspace Clippy, without executing tests       |
 | `pnpm format:check`       | Rust and tooling/document formatting checks                |
 | `pnpm test`               | Release-tooling and Rust workspace unit tests              |
-| `pnpm test:icons`         | Mocked TV icon collection and bundled artwork checks       |
+| `pnpm test:icons`         | Mocked runtime icon reads and bundled vector checks        |
 | `pnpm test:smoke`         | Desktop rendering, mocked weather and localization checks  |
 | `pnpm changeset`          | Add a release note and requested version bump to a PR      |
 | `pnpm version:check`      | Check synchronized app release versions                    |
@@ -95,6 +95,8 @@ Backspace deletes while editing. Native Back uses SDL's webOS-specific keycode. 
 the keyboard first; Weather Location then returns to its parent Location row, HDMI choices to
 that HDMI row, and the Background gallery to Background in the sidebar. Back from the sidebar
 focuses the Settings tab, then returns Home. General ends with a vector power-icon Quit app row.
+The Clock format subpage offers 12-hour, 24-hour and a Show seconds toggle (off by default); with
+seconds shown, the header clock redraws once per second instead of once per minute.
 
 Home favorites form one horizontal strip, never a second row. Left/Right follows saved order,
 including reorder mode, and reveals complete cards. Up returns to Home navigation; Down enters
@@ -117,8 +119,65 @@ the shared lyon tessellator to emit `.lvec` geometry. The format contains positi
 vertex colors and coverage; holes, round strokes and the bundled gradients are preserved.
 Gradient colors are adaptively sampled at build time. The TV uploads each mesh lazily once and
 draws with a texture-free GLES2 shader. No SVG parser runs on the TV. The shared tessellator also
-handles font outlines. Collected app PNG/JPEG artwork, wallpaper photos, tile-background images
-and the webOS installation icon remain raster assets. See [assets.md](assets.md) for licenses.
+handles font outlines. Installed app PNG/JPEG/WebP artwork, wallpaper photos, tile-background
+images and the webOS installation icon remain raster assets. See [assets.md](assets.md) for licenses.
+
+### Installed app artwork
+
+TV inventory retains each app's `folderPath`, `largeIcon` and `icon`. Visible cards resolve artwork
+from that metadata and the installed `appinfo.json`, preferring large icons and falling back to
+the regular icon or `icon.png`. Developer, store and system application directories are supported,
+including absolute/`file://` paths and relative resource paths. Curated vector brand logos retain
+their existing display treatment; other apps use their own installed artwork and an automatically
+sampled card colour. Missing, corrupt or unsupported artwork uses the existing generic treatment.
+
+Discovery, bounded file reads, decoding and colour sampling run on a dedicated worker. If the
+jailed app cannot read an asset directly, the native process calls Homebrew Channel's elevated
+`exec` service with the embedded Node 8-compatible `tv/read-app-icon.cjs` reader. It returns bounded
+image bytes without writing collected files or changing filesystem permissions. PNG, JPEG and WebP
+are supported; runtime SVG parsing is not required. Source files are limited to 512 KiB and
+2048×2048 pixels; decoded icons are at most 256×256 with a 16 MiB/256-entry CPU cache. GPU uploads
+stay on the SDL thread and share the existing 48 MiB texture cache. Pending/unavailable icons do
+not block input, and failures are cached until inventory is refreshed.
+
+**Refresh apps** (or desktop F5) invalidates artwork, including previous failures; generation IDs
+discard stale replies. Check newly installed/updated apps and both normal tile and Home-takeover
+launches on a real TV to verify sandbox access. These paths are covered with mocked filesystem
+and worker tests, not live-TV calls in automated checks.
+
+Dumped TV artwork, collected icon/colour maps, and their collection tools have been removed.
+Desktop previews use curated vector logos or generic/category artwork for other demo apps.
+Asset generation clears retired dumped-artwork outputs from older build caches, and packaging
+continues rejecting those legacy files. Adding support for an installed TV app's icon does not
+require collecting artwork or changing JSON.
+
+### Curated brand cards and the desktop demo
+
+`src/branding.rs` contains the exact app-ID allowlist for 38 curated brand and utility cards. Titles and
+partial ID matches do not select vector overrides. In particular, Amazon Alexa retains its own
+installed icon rather than receiving Prime Video branding. NOW / Now TV recognizes `now.tv`
+and `nowtv`; WOW, Sky Q and the separate Hong Kong Now TV service are not treated as aliases.
+Unknown regional IDs continue using their installed artwork. Verify additional aliases against
+that TV's inventory before adding them to the allowlist.
+
+The aliases include developer fixtures and community webOS inventories, including
+[FHEM's LGTV app IDs](https://github.com/fhem/LGTV_WebOS/blob/master/lib/FHEM/Devices/LGTV/LGTVWebOS.pm),
+[a UK webOS inventory](https://github.com/chrispab/AutoHome/blob/master/items/CT_LGWebOS_TV.items),
+and the [UK streaming catalogue](https://github.com/tjeffree/webOS-Streaming-Aggregator/blob/main/frontend/src/services/appCatalog.js).
+These sources do not establish that every alias is available on every region/firmware combination.
+
+Every curated logo has an app in `demo_inventory()`, including all 27 expanded streaming/music
+brands. Open them with `pnpm dev --script apps`, then scroll or search the Apps grid. A unit check
+keeps the SVG directory, curated catalogue and demo inventory aligned. `pnpm test:brands` renders
+every card through the actual desktop renderer and writes `.build/brands-gallery.png` for visual
+review. Like the other smoke scripts, it uses isolated preferences and no TV or real weather API.
+The gallery also runs as part of `pnpm test:smoke`. Asset source/licence details are in [assets.md](assets.md).
+
+Live TV (`com.webos.app.livetv`) and Web Browser (`com.webos.app.browser`) also have dedicated
+SVG-backed demo cards: a blue/cyan TV display with a live indicator, and a matching globe with a
+navigation pointer. Both are original Luma vector artwork. The existing card caption remains available when
+names are visible. `Brand::artwork_size()` sets optical sizing per brand, keeping heavy wordmarks
+such as Hulu, Joyn and Plex closer to the visual weight of Apple TV, YouTube, Das Erste and ARTE.
 
 Text reads the bundled TTF's advances, kerning and line metrics lazily. Only needed glyph outlines
 are tessellated in font-em coordinates. Complete text runs are cached in static GPU buffers,

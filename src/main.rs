@@ -1,3 +1,5 @@
+mod app_artwork;
+mod branding;
 mod diagnostics;
 mod font;
 mod i18n;
@@ -258,10 +260,10 @@ fn script(
         }
         "wait" => vec![],
         action if action.starts_with("type:") => {
-            let field = if state.subpage == Some(state::Subpage::WeatherLocation) {
-                state::TextField::Location
-            } else {
-                state::TextField::Apps
+            let field = match state.subpage {
+                Some(state::Subpage::WeatherLocation) => state::TextField::Location,
+                Some(state::Subpage::Input(_)) => state::TextField::InputName,
+                _ => state::TextField::Apps,
             };
             state.open_keyboard(field);
             state.text(&action[5..]);
@@ -402,6 +404,10 @@ fn run() -> Result<(), String> {
         eprintln!("Luma webOS surface: {surface_id}");
         sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_BACK", "true");
     }
+    // Resolve the local offset before artwork, HTTP or platform workers start.
+    let local_offset = OffsetDateTime::now_local()
+        .map(|now| now.offset())
+        .unwrap_or(time::UtcOffset::UTC);
     let root = options.assets.clone().unwrap_or_else(|| {
         if webos {
             std::env::current_exe()
@@ -411,7 +417,7 @@ fn run() -> Result<(), String> {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".build/assets")
         }
     });
-    let assets = view::Assets::load(root)?;
+    let assets = view::Assets::load(root, webos)?;
     startup_stage("asset metadata");
     let default_preferences = options
         .preferences
@@ -441,10 +447,6 @@ fn run() -> Result<(), String> {
             preferences_path.display()
         );
     }
-    // Discover the local offset before any HTTP/platform workers start.
-    let local_offset = OffsetDateTime::now_local()
-        .map(|now| now.offset())
-        .unwrap_or(time::UtcOffset::UTC);
     if webos && options.weather_test_server.is_some() {
         return Err("Weather test servers are only available in desktop builds".into());
     }
@@ -571,14 +573,22 @@ fn run() -> Result<(), String> {
         let now = options
             .time
             .unwrap_or_else(|| OffsetDateTime::now_utc().to_offset(local_offset));
-        if last_minute != Some(now.unix_timestamp() / 60) {
-            last_minute = Some(now.unix_timestamp() / 60);
+        // Redraw once per minute, or once per second while seconds are shown.
+        let clock_slot = if state.preferences.show_seconds {
+            now.unix_timestamp()
+        } else {
+            now.unix_timestamp() / 60
+        };
+        if last_minute != Some(clock_slot) {
+            last_minute = Some(clock_slot);
             state.dirty = true;
         }
         state.tick();
+        state.dirty |= assets.artwork.poll();
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
                 Response::Inventory(Ok((mut inventory, warning))) => {
+                    assets.artwork.reset();
                     scroll_preview::append(
                         &mut inventory,
                         options.test_extra_apps,
@@ -657,7 +667,7 @@ fn run() -> Result<(), String> {
                         visible = false;
                         press = None;
                         if matches!(state.overlay, Some(Overlay::SystemKeyboard)) {
-                            state.finish_text_input();
+                            pending = state.finish_text_input();
                         }
                         profile.pause();
                     }
@@ -696,7 +706,7 @@ fn run() -> Result<(), String> {
                         if matches!(state.overlay, Some(Overlay::SystemKeyboard)) =>
                     {
                         press = None;
-                        state.finish_text_input();
+                        pending = state.finish_text_input();
                     }
                     Keycode::Return | Keycode::KpEnter if !repeat => {
                         press = Some(Press {
@@ -767,7 +777,7 @@ fn run() -> Result<(), String> {
                         && state.moving.is_none()
                     {
                         if matches!(state.overlay, Some(Overlay::SystemKeyboard)) {
-                            state.finish_text_input();
+                            pending = state.finish_text_input();
                         }
                         // Pointer-down must not normalize scroll and move the clicked control.
                         state.pointer_focus(target);
@@ -909,7 +919,14 @@ fn run() -> Result<(), String> {
             && !video.text_input().is_active()
         {
             press = None;
-            state.finish_text_input();
+            let pending = state.finish_text_input();
+            running &= effects(
+                pending,
+                &mut state,
+                &platform,
+                &preferences_path,
+                &weather_service,
+            );
         }
         let keyboard = state.text_input_active();
         if keyboard != text_active {
@@ -1021,6 +1038,7 @@ fn run() -> Result<(), String> {
         let state = serde_json::json!({ "page": state.page, "focus": state.focus, "query": state.query,
             "filter": state.filter, "preferences": state.preferences, "apps": state.apps().iter().map(|a| &a.id).collect::<Vec<_>>(),
             "error": state.error, "scroll": state.scroll, "home_scroll": state.home_scroll, "subpage": state.subpage, "modal": state.overlay.is_some(), "weather": state.weather,
+            "inventory": state.inventory.apps,
             "ui_text": scene.draw.iter().filter_map(|draw| match draw { renderer::Draw::Text(value, ..) => Some(value), _ => None }).collect::<Vec<_>>() });
         std::fs::write(
             path,

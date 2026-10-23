@@ -16,10 +16,9 @@ fn ready() -> State {
 fn controls(state: &State) -> Vec<crate::state::Control> {
     let assets = view::Assets {
         root: PathBuf::new(),
-        icons: BTreeMap::new(),
-        colors: BTreeMap::new(),
         version: "test".into(),
         metrics: BTreeMap::new(),
+        artwork: crate::app_artwork::Service::new(false),
     };
     let navigation = view::navigation(&assets, state.preferences.language);
     view::scene_with_pill(
@@ -157,7 +156,7 @@ fn inventory_filters_system_apps_duplicates_and_unsafe_identifiers() {
 }
 
 #[test]
-fn icon_collector_visibility_cases_match_the_launcher_inventory() {
+fn inventory_visibility_cases_match_the_launcher_filters() {
     let cases: Vec<serde_json::Value> =
         serde_json::from_str(include_str!("../tests/fixtures/app-visibility.json")).unwrap();
     let inventory: Vec<_> = cases.iter().map(|case| case["app"].clone()).collect();
@@ -172,6 +171,38 @@ fn icon_collector_visibility_cases_match_the_launcher_inventory() {
         .map(|case| case["app"]["id"].as_str().unwrap().to_owned())
         .collect();
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn asset_loading_and_unknown_app_cards_do_not_require_collected_artwork() {
+    let root = std::env::temp_dir().join(format!("luma-assets-no-dumps-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("version.txt"), "test").unwrap();
+    std::fs::write(root.join("font-metrics.json"), "{}").unwrap();
+    for webos in [false, true] {
+        let assets = view::Assets::load(root.clone(), webos).unwrap();
+        let mut state = State::new(Preferences::default());
+        state.set_inventory(
+            crate::model::Inventory {
+                apps: vec![App::new("com.example.regional", "Regional App")],
+                inputs: vec![],
+            },
+            None,
+        );
+        state.open(1);
+        let scene = view::scene_with_pill(
+            &state,
+            &assets,
+            800.,
+            100.,
+            time::OffsetDateTime::UNIX_EPOCH,
+        );
+        assert!(scene.draw.iter().any(|draw| matches!(draw,
+            crate::renderer::Draw::TintedImage(path, ..) if path.ends_with("ui-icons/generic.lvec"))));
+        assert!(scene.draw.iter().any(|draw| matches!(draw,
+            crate::renderer::Draw::Text(value, ..) if value == "Regional App")));
+    }
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -329,6 +360,24 @@ fn clock_format_subpage_saves_and_restores_its_parent_row() {
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::Setting(1));
     assert!(state.subpage.is_none());
+}
+
+#[test]
+fn clock_format_subpage_toggles_seconds_without_changing_the_hour_format() {
+    let mut state = ready();
+    state.open(2);
+    state.focus = Target::Setting(1);
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.subpage, Some(crate::state::Subpage::Clock));
+    assert!(!state.preferences.show_seconds);
+    state.direction(Direction::Down, &controls(&state));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Choice(2));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.show_seconds);
+    assert!(!state.preferences.hour_24);
+    assert!(state.subpage.is_none());
+    assert_eq!(state.focus, Target::Setting(1));
 }
 
 #[test]
@@ -623,7 +672,7 @@ fn unsupported_language_preferences_recover_without_losing_other_choices() {
 }
 
 #[test]
-fn brand_keywords_match_whole_words_not_substrings() {
+fn unrelated_app_ids_and_titles_keep_their_installed_artwork() {
     for (id, title) in [
         ("com.tvweb.dashboard", "Glasshouse"),
         ("com.example.ardent", "Notes"),
@@ -633,20 +682,24 @@ fn brand_keywords_match_whole_words_not_substrings() {
         ("com.example.media", "Standard dashboard"),
         ("com.example.media", "netflixer"),
         ("com.example.media", "preNetflix"),
+        ("amazon.alexa.view", "Amazon Alexa"),
+        ("com.example.spotify", "Spotify tools"),
+        ("com.example.media", "Plex"),
+        ("com.example.browser", "Web Browser"),
+        ("com.example.livetv", "Live TV"),
     ] {
         let app = App::new(id, title);
         assert_eq!(
             (app.brand.as_str(), app.category.as_str()),
             ("generic", "Utilities"),
-            "A keyword inside an ASCII word must not rebrand {id} / {title}"
+            "An unrelated application must not be rebranded: {id} / {title}"
         );
     }
 }
 
 #[test]
-fn brand_keywords_accept_separators_utf8_and_later_valid_matches() {
+fn curated_branding_does_not_use_title_words_or_partial_id_matches() {
     for (id, title) in [
-        ("ard.mediathek", "ARD Mediathek"),
         ("com.example.ard_more", "Notes"),
         ("com.example.more-ard", "Notes"),
         ("com.example.ARD", "Notes"),
@@ -661,14 +714,14 @@ fn brand_keywords_accept_separators_utf8_and_later_valid_matches() {
         let app = App::new(id, title);
         assert_eq!(
             (app.brand.as_str(), app.category.as_str()),
-            ("das-erste", "Streaming"),
-            "A delimited keyword must still brand {id} / {title}"
+            ("generic", "Utilities"),
+            "Only an exact app ID may select curated artwork: {id} / {title}"
         );
     }
 }
 
 #[test]
-fn word_boundaries_preserve_the_known_app_brands_and_categories() {
+fn known_app_ids_preserve_the_curated_brands_and_categories() {
     let apps = demo_inventory().apps;
     let expected = [
         ("com.webos.app.livetv", "live-tv", "Streaming"),
@@ -741,4 +794,133 @@ fn inputs_without_hdmi_plug_in_keep_the_connected_report() {
     .unwrap();
     let connected: Vec<_> = inputs.iter().map(|input| input.connected).collect();
     assert_eq!(connected, [Some(true), Some(false), Some(true), None]);
+}
+
+#[test]
+fn input_names_are_sanitized_and_old_preferences_load_without_them() {
+    let old: Preferences = serde_json::from_value(json!({"background": "forest"})).unwrap();
+    assert!(old.input_names.is_empty());
+    let mut preferences: Preferences = serde_json::from_value(json!({
+        "input_names": {
+            "com.webos.app.hdmi1": "  Play\nStation\t5  ",
+            "com.webos.app.hdmi2": "   ",
+            "bad;id": "Ignored",
+            "com.webos.app.hdmi3": "A".repeat(60),
+        }
+    }))
+    .unwrap();
+    preferences.sanitize();
+    assert_eq!(
+        preferences.input_names,
+        BTreeMap::from([
+            (
+                "com.webos.app.hdmi1".to_string(),
+                "PlayStation5".to_string()
+            ),
+            (
+                "com.webos.app.hdmi3".to_string(),
+                "A".repeat(crate::model::INPUT_NAME_LIMIT)
+            ),
+        ])
+    );
+    assert!(preferences.set_input_name("com.webos.app.hdmi2", " DENON "));
+    assert!(!preferences.set_input_name("com.webos.app.hdmi2", "DENON"));
+    assert_eq!(preferences.input_names["com.webos.app.hdmi2"], "DENON");
+    assert!(preferences.set_input_name("com.webos.app.hdmi2", ""));
+    assert!(!preferences.input_names.contains_key("com.webos.app.hdmi2"));
+    assert!(!preferences.set_input_name("bad;id", "Name"));
+}
+
+#[test]
+fn custom_input_names_keep_the_label_port_and_status_as_detail() {
+    let mut preferences = Preferences::default();
+    let input = Input {
+        id: "com.webos.app.hdmi2".into(),
+        title: "AVR-X1800H".into(),
+        port: "HDMI 2".into(),
+        connected: Some(true),
+    };
+    let language = preferences.language;
+    let status = |preferences: &Preferences| {
+        view::input_status(&input, preferences.input_name(&input).is_some(), language)
+    };
+    assert_eq!(preferences.input_title(&input), "HDMI 2");
+    assert_eq!(status(&preferences), "AVR-X1800H · Connected");
+    preferences.set_input_name(&input.id, "DENON");
+    assert_eq!(preferences.input_title(&input), "DENON");
+    assert_eq!(status(&preferences), "AVR-X1800H · HDMI 2 · Connected");
+    let plain = Input {
+        title: "HDMI 2".into(),
+        ..input.clone()
+    };
+    assert_eq!(
+        view::input_status(&plain, true, language),
+        "HDMI 2 · Connected"
+    );
+    assert_eq!(view::input_status(&plain, false, language), "Connected");
+}
+
+#[test]
+fn remote_renames_and_resets_an_input_from_its_settings_page() {
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::INPUTS_SECTION;
+    let id = "com.webos.app.hdmi2".to_string();
+    state.focus = Target::InputMode(id.clone());
+    state.activate();
+    assert_eq!(state.focus, Target::Choice(2));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::InputRename);
+    assert!(
+        !controls(&state)
+            .iter()
+            .any(|c| c.target == Target::InputNameReset)
+    );
+    state.activate();
+    assert!(matches!(state.overlay, Some(Overlay::Keyboard)));
+    state.text("DENONX");
+    state.delete();
+    assert_eq!(state.back(), vec![Effect::Save]);
+    assert_eq!(state.focus, Target::InputRename);
+    assert_eq!(state.preferences.input_names[&id], "DENON");
+    assert_eq!(
+        state.preferences.input_title(&state.inventory.inputs[1]),
+        "DENON"
+    );
+    // Dismissing an empty keyboard keeps the saved name.
+    state.activate();
+    assert!(state.finish_text_input().is_empty());
+    assert_eq!(state.preferences.input_names[&id], "DENON");
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::InputNameReset);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.input_names.is_empty());
+    assert_eq!(state.focus, Target::InputRename);
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::Choice(2));
+    state.focus = Target::InputRename;
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::InputMode(id));
+    assert!(state.subpage.is_none());
+}
+
+#[test]
+fn keyboard_done_saves_a_typed_input_name() {
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::INPUTS_SECTION;
+    state.focus = Target::InputMode("com.webos.app.hdmi1".into());
+    state.activate();
+    state.focus = Target::InputRename;
+    state.activate();
+    state.text("PS5");
+    state.focus = Target::Key(
+        crate::state::KEYS
+            .iter()
+            .position(|k| *k == "Done")
+            .unwrap(),
+    );
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.input_names["com.webos.app.hdmi1"], "PS5");
+    assert!(state.overlay.is_none());
 }

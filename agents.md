@@ -72,10 +72,16 @@ Match the current native design without on-screen weather credits; attribution r
 
 ## Assets
 
-SVG sources and fonts retain licenses in `assets/`. Collected installed-app artwork can be
-refreshed from the user's rooted TV using `tools/collect-tv-icons.js`; its map goes to
-`assets/app-icons.json` and images to `assets/app-icons/`. Run `node tools/icon-colours.mjs` to
-update `assets/icon-colours.json`, then `pnpm assets`. Do not replace vector logos with PNG exports.
+SVG sources and fonts retain licenses in `assets/`. TV app artwork is resolved at runtime from
+inventory/installed manifests by `src/app_artwork.rs`, with an embedded Node 8-compatible elevated
+reader for jailed installations. Reads/decoding stay on its worker; GPU uploads stay on SDL.
+Refresh invalidates cached results. No collected icon map or card-colour JSON is used or shipped.
+Desktop previews use curated vectors and generic/category fallbacks. Do not add dumped TV images
+or per-TV icon maps to the repository.
+Do not replace vector logos with PNG exports.
+Curated vectors use the exact app-ID allowlist in `src/branding.rs`, never title/substring matching.
+Every logo in `assets/logos/` must have a desktop demo app. `pnpm test:brands` renders the full
+gallery to `.build/brands-gallery.png`; source restoration via `pnpm assets:brands` is optional.
 
 ## CI and releases
 

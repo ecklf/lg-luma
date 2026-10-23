@@ -12,6 +12,7 @@ use std::{
     collections::{HashMap, HashSet},
     ffi::{CStr, CString},
     path::{Path, PathBuf},
+    sync::Arc,
     time::Instant,
 };
 
@@ -66,6 +67,7 @@ pub enum Draw {
     Text(String, Rect, TextStyle, Color, bool),
     Image(String, Rect, f32, bool),
     TintedImage(String, Rect, f32, bool, Color),
+    AppImage(Arc<crate::app_artwork::Artwork>, Rect, Color),
     Clip(Option<Rect>),
     EdgeFade(Option<[f32; 4]>),
 }
@@ -855,6 +857,32 @@ impl Renderer {
         });
     }
 
+    fn app_image(&mut self, image: &crate::app_artwork::Artwork, rect: Rect, tint: Color) {
+        let entry = self.textures.entry(image.key.clone()).or_insert_with(|| {
+            Some(texture(
+                image.pixels.width(),
+                image.pixels.height(),
+                image.pixels.as_raw(),
+            ))
+        });
+        let Some(texture) = entry else {
+            return;
+        };
+        texture.frame = self.frame;
+        let scale = (rect.w / texture.width as f32).min(rect.h / texture.height as f32);
+        let w = texture.width as f32 * scale;
+        let h = texture.height as f32 * scale;
+        let id = texture.id;
+        self.quad(
+            Rect::new(rect.x + (rect.w - w) / 2., rect.y + (rect.h - h) / 2., w, h),
+            [0., 0., 1., 1.],
+            0.,
+            0.,
+            tint,
+            id,
+        );
+    }
+
     pub fn render(&mut self, commands: &[Draw], width: u32, height: u32) {
         let started = Instant::now();
         self.stats = RenderStats::new(Size::new(width, height));
@@ -906,6 +934,7 @@ impl Renderer {
                 Draw::TintedImage(path, rect, radius, contain, tint) => {
                     self.image(path, *rect, *radius, *contain, *tint)
                 }
+                Draw::AppImage(image, rect, tint) => self.app_image(image, *rect, *tint),
                 Draw::Clip(clip) => self.clip = *clip,
                 Draw::EdgeFade(fade) => self.fade = *fade,
             }

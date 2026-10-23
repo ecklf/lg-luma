@@ -1,7 +1,10 @@
 //! Blocking platform work runs on one worker, never in the SDL/UI thread.
 //! TV calls originate from this native executable's LS2 connection, not a CLI
 //! process trying to impersonate its application identity.
-use crate::model::{App, Input, Inventory, demo_inventory, valid_app_id};
+use crate::{
+    app_artwork,
+    model::{App, Input, Inventory, demo_inventory, valid_app_id},
+};
 use serde_json::{Value, json};
 use std::{collections::HashSet, sync::mpsc, thread};
 
@@ -132,6 +135,47 @@ fn inventory_read(uri: &str, field: &str) -> Result<Value, String> {
         eprintln!("Luma TV inventory: {error}");
         error
     })
+}
+
+pub fn read_app_icons(source: &app_artwork::Source) -> Result<Vec<Vec<u8>>, String> {
+    if !cfg!(feature = "webos") {
+        return Err("Installed artwork is only read on TV builds".into());
+    }
+    let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
+    let command = format!(
+        "/usr/bin/node -e {} {}",
+        quote(include_str!("../tv/read-app-icon.cjs")),
+        quote(&serde_json::to_string(source).map_err(|e| e.to_string())?)
+    );
+    let envelope = call(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        json!({"command": command}),
+    )?;
+    let icons = inventory_payload(&envelope, "icons")?;
+    let mut remaining = app_artwork::MAX_FILE;
+    icons
+        .as_array()
+        .ok_or("Invalid installed icon reply")?
+        .iter()
+        .map(|value| {
+            let hex = value.as_str().ok_or("Invalid installed icon data")?;
+            if hex.len() % 2 != 0 || hex.len() / 2 > remaining {
+                return Err("Installed icon reply exceeds its size limit".into());
+            }
+            remaining -= hex.len() / 2;
+            hex.as_bytes()
+                .chunks_exact(2)
+                .map(|pair| {
+                    let digit = |b: u8| {
+                        (b as char)
+                            .to_digit(16)
+                            .ok_or("Invalid installed icon encoding")
+                    };
+                    Ok((digit(pair[0])? * 16 + digit(pair[1])?) as u8)
+                })
+                .collect()
+        })
+        .collect()
 }
 
 fn output_excerpt(output: &str) -> String {
@@ -274,10 +318,9 @@ pub fn normalize_apps(raw: &Value) -> Result<Vec<App>, String> {
         {
             continue;
         }
-        apps.push(App::new(
-            id,
-            &title(entry.get("title").and_then(Value::as_str), id),
-        ));
+        let mut app = App::new(id, &title(entry.get("title").and_then(Value::as_str), id));
+        app.icon = Some(app_artwork::Source::new(id, entry));
+        apps.push(app);
     }
     apps.sort_by_key(|a| a.title.to_lowercase());
     Ok(apps)

@@ -13,10 +13,45 @@ export async function generateVectorAssets() {
   for (const file of await fs.readdir(path.join(root, 'assets/logos'))) {
     if (!file.endsWith('.svg')) continue;
     const name = path.parse(file).name;
+    const expanded = ![
+      'apple-tv',
+      'disney-plus',
+      'prime-video',
+      'das-erste',
+      'netflix',
+      'youtube',
+      'arte',
+      'zdf',
+      'jellyfin',
+    ].includes(name);
     assets.push({
       source: path.join(root, 'assets/logos', file),
       output: path.join(out, 'logos', `${name}.lvec`),
-      monochrome: ['apple-tv', 'disney-plus', 'prime-video', 'das-erste'].includes(name),
+      monochrome: [
+        'apple-tv',
+        'disney-plus',
+        'prime-video',
+        'das-erste',
+        'plex',
+        'hbo-max',
+        'paramount-plus',
+        'twitch',
+        'dazn',
+        'rakuten-tv',
+        'apple-music',
+        'amazon-music',
+        'bbc-iplayer',
+        'itvx',
+        'channel-4',
+        'now-tv',
+        'joyn',
+        'waipu-tv',
+        'zattoo',
+        'skyshowtime',
+        'movistar-plus',
+      ].includes(name),
+      light_ink: expanded && !['live-tv', 'browser'].includes(name),
+      trim: expanded,
       reference_size: 1536,
     });
   }

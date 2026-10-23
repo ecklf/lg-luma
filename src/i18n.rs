@@ -214,7 +214,18 @@ impl Language {
             .to_uppercase(),
         }
     }
-    pub fn clock(self, now: OffsetDateTime, hour24: bool) -> String {
+    pub fn clock(self, now: OffsetDateTime, hour24: bool, seconds: bool) -> String {
+        let base = self.clock_base(now, hour24);
+        if !seconds {
+            return base;
+        }
+        let tail = format!(":{:02}", now.second());
+        match base.find(' ') {
+            Some(space) => format!("{}{tail}{}", &base[..space], &base[space..]),
+            None => format!("{base}{tail}"),
+        }
+    }
+    fn clock_base(self, now: OffsetDateTime, hour24: bool) -> String {
         if hour24 {
             return if self == Self::En {
                 format!("{:02}:{:02}", now.hour(), now.minute())
@@ -328,8 +339,11 @@ mod tests {
         assert_eq!(Language::Es.date(now), "MIÉRCOLES, 21 DE OCTUBRE");
         assert_eq!(Language::Pt.date(now), "QUARTA-FEIRA, 21 DE OUTUBRO");
         assert_eq!(Language::Zh.date(now), "10月21日星期三");
-        assert_eq!(Language::Zh.clock(now, false), "下午8:41");
-        assert_eq!(Language::En.clock(now, true), "20:41");
+        assert_eq!(Language::Zh.clock(now, false, false), "下午8:41");
+        assert_eq!(Language::Zh.clock(now, false, true), "下午8:41:00");
+        assert_eq!(Language::En.clock(now, true, false), "20:41");
+        assert_eq!(Language::En.clock(now, true, true), "20:41:00");
+        assert_eq!(Language::En.clock(now, false, true), "8:41:00 PM");
     }
     #[test]
     fn portuguese_dates_include_accented_names_and_handle_leap_days() {
