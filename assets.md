@@ -88,6 +88,8 @@ clips removed. Coupang Play's static SVG paths are extracted from its source com
 | `watcha.svg`         | [Watcha](https://commons.wikimedia.org/wiki/File:Watcha_logo.svg), xixi pictures                                                                                                            | Public domain logo                              |
 | `movistar-plus.svg`  | [Movistar Plus+](https://commons.wikimedia.org/wiki/File:Movistar_Plus%2B_2022_logo.svg)                                                                                                    | Public domain logo                              |
 | `filmin.svg`         | Filmin, [SVG source preserved by DCueto](https://github.com/DCueto/filmin-svelte-clone/blob/36c977e31ec76abb42473b243584acbaed23579f/src/assets/filmin_logo.svg), originally Brandlogos.net | Filmin brand artwork, used to identify the app  |
+| `nrk-tv.svg`         | [Official NRK TV wordmark](https://tv.nrk.no)                                                                                                                                               | NRK brand artwork, used to identify the app     |
+| `tv2-play.svg`       | [Official TV 2 Play logo](https://play.tv2.no)                                                                                                                                              | TV 2 brand artwork, used to identify the app    |
 
 Simple Icons contributions use [CC0](https://creativecommons.org/publicdomain/zero/1.0/), with
 the notice bundled in `assets/licenses/simple-icons.txt`. Trademark and other underlying brand

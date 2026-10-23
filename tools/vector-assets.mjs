@@ -49,6 +49,7 @@ export async function generateVectorAssets() {
         'zattoo',
         'skyshowtime',
         'movistar-plus',
+        'nrk-tv',
       ].includes(name),
       light_ink: expanded && !['live-tv', 'browser'].includes(name),
       trim: expanded,

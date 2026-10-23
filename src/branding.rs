@@ -23,6 +23,8 @@ impl Brand {
             "zdf" => (0.50, 88.),
             "das-erste" => (0.70, 88.),
             "hulu" | "joyn" | "itvx" => (0.62, 48.),
+            "nrk-tv" => (0.62, 56.),
+            "tv2-play" => (0.56, 80.),
             "plex" => (0.62, 52.),
             "filmin" => (0.62, 46.),
             "hbo-max" | "bbc-iplayer" | "crunchyroll" | "twitch" | "dazn" | "paramount-plus"
@@ -135,6 +137,8 @@ pub const BRANDS: &[Brand] = &[
     video("watcha", "Watcha Play", &["com.frograms.watchaplay.webos"]),
     video("movistar-plus", "Movistar+", &["telefonica"]),
     video("filmin", "Filmin", &["filmin"]),
+    video("nrk-tv", "NRK TV", &["no.nrk.webos.smarttv"]),
+    video("tv2-play", "TV 2 Play", &["tv2sumo"]),
 ];
 
 pub fn for_app(id: &str) -> Option<&'static Brand> {
