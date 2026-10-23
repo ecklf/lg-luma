@@ -126,13 +126,21 @@ fn decode(bytes: &[u8]) -> Option<Artwork> {
 
 fn background(image: &RgbaImage) -> [u8; 3] {
     // Match the icon's opaque edges rather than letting its central logo choose
-    // the card colour. Transparent artwork gets a neutral dark background.
+    // the card colour. Transparent artwork gets a neutral dark background, even
+    // when its logo reaches into the edge band: those few opaque pixels would
+    // otherwise fill the card with the logo's own colour and hide it.
     let sample = image::imageops::resize(image, 48, 48, image::imageops::FilterType::Triangle);
     let mut bins = HashMap::<[u8; 3], (usize, [usize; 3])>::new();
+    let (mut edge, mut opaque) = (0, 0);
     for (x, y, pixel) in sample.enumerate_pixels() {
-        if (6..42).contains(&x) && (6..42).contains(&y) || pixel[3] < 230 {
+        if (6..42).contains(&x) && (6..42).contains(&y) {
             continue;
         }
+        edge += 1;
+        if pixel[3] < 230 {
+            continue;
+        }
+        opaque += 1;
         let bin = bins
             .entry([pixel[0] >> 4, pixel[1] >> 4, pixel[2] >> 4])
             .or_default();
@@ -140,6 +148,9 @@ fn background(image: &RgbaImage) -> [u8; 3] {
         for channel in 0..3 {
             bin.1[channel] += pixel[channel] as usize;
         }
+    }
+    if opaque * 2 < edge {
+        return [20; 3];
     }
     bins.into_iter()
         .max_by_key(|(key, (count, _))| (*count, *key))

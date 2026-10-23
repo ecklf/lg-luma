@@ -18,6 +18,14 @@ fn encoded(format: ImageFormat, width: u32, height: u32, color: [u8; 4]) -> Vec<
     bytes.into_inner()
 }
 
+fn png(image: RgbaImage) -> Vec<u8> {
+    let mut bytes = Cursor::new(Vec::new());
+    DynamicImage::ImageRgba8(image)
+        .write_to(&mut bytes, ImageFormat::Png)
+        .unwrap();
+    bytes.into_inner()
+}
+
 fn poll_until(service: &Service, mut done: impl FnMut() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(3);
     loop {
@@ -83,6 +91,35 @@ fn supported_icons_decode_to_bounded_pixels_and_runtime_card_colours() {
     assert_eq!(transparent.color, [20; 3]);
     assert!(decode(b"not an image").is_none());
     assert!(decode(&encoded(ImageFormat::Png, 2049, 1, [0; 4])).is_none());
+}
+
+#[test]
+fn transparent_logos_reaching_the_edges_keep_the_neutral_card() {
+    // Like Litefin's 130px icon: a ring logo on a transparent background whose
+    // stroke reaches into the sampled edge band.
+    let ring = RgbaImage::from_fn(130, 130, |x, y| {
+        let distance = (x as f32 - 64.5).hypot(y as f32 - 64.5);
+        if (52.0..62.0).contains(&distance) {
+            Rgba([150, 100, 210, 255])
+        } else {
+            Rgba([0; 4])
+        }
+    });
+    assert_eq!(decode(&png(ring)).unwrap().color, [20; 3]);
+    // Opaque artwork with transparent rounded corners still takes its edge colour.
+    let rounded = RgbaImage::from_fn(130, 130, |x, y| {
+        let inset = |v: u32| v.min(129 - v) as f32;
+        let (dx, dy) = (24. - inset(x), 24. - inset(y));
+        if dx > 0. && dy > 0. && dx.hypot(dy) > 24. {
+            Rgba([0; 4])
+        } else {
+            Rgba([40, 90, 160, 255])
+        }
+    });
+    let color = decode(&png(rounded)).unwrap().color;
+    for (actual, expected) in color.into_iter().zip([40u8, 90, 160]) {
+        assert!(actual.abs_diff(expected) <= 2);
+    }
 }
 
 #[test]
