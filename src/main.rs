@@ -258,10 +258,10 @@ fn script(
         }
         "wait" => vec![],
         action if action.starts_with("type:") => {
-            let field = if state.subpage == Some(state::Subpage::WeatherLocation) {
-                state::TextField::Location
-            } else {
-                state::TextField::Apps
+            let field = match state.subpage {
+                Some(state::Subpage::WeatherLocation) => state::TextField::Location,
+                Some(state::Subpage::Input(_)) => state::TextField::InputName,
+                _ => state::TextField::Apps,
             };
             state.open_keyboard(field);
             state.text(&action[5..]);
@@ -657,7 +657,7 @@ fn run() -> Result<(), String> {
                         visible = false;
                         press = None;
                         if matches!(state.overlay, Some(Overlay::SystemKeyboard)) {
-                            state.finish_text_input();
+                            pending = state.finish_text_input();
                         }
                         profile.pause();
                     }
@@ -696,7 +696,7 @@ fn run() -> Result<(), String> {
                         if matches!(state.overlay, Some(Overlay::SystemKeyboard)) =>
                     {
                         press = None;
-                        state.finish_text_input();
+                        pending = state.finish_text_input();
                     }
                     Keycode::Return | Keycode::KpEnter if !repeat => {
                         press = Some(Press {
@@ -767,7 +767,7 @@ fn run() -> Result<(), String> {
                         && state.moving.is_none()
                     {
                         if matches!(state.overlay, Some(Overlay::SystemKeyboard)) {
-                            state.finish_text_input();
+                            pending = state.finish_text_input();
                         }
                         // Pointer-down must not normalize scroll and move the clicked control.
                         state.pointer_focus(target);
@@ -909,7 +909,14 @@ fn run() -> Result<(), String> {
             && !video.text_input().is_active()
         {
             press = None;
-            state.finish_text_input();
+            let pending = state.finish_text_input();
+            running &= effects(
+                pending,
+                &mut state,
+                &platform,
+                &preferences_path,
+                &weather_service,
+            );
         }
         let keyboard = state.text_input_active();
         if keyboard != text_active {

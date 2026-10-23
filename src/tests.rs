@@ -697,3 +697,132 @@ fn word_boundaries_preserve_the_known_app_brands_and_categories() {
         );
     }
 }
+
+#[test]
+fn input_names_are_sanitized_and_old_preferences_load_without_them() {
+    let old: Preferences = serde_json::from_value(json!({"background": "forest"})).unwrap();
+    assert!(old.input_names.is_empty());
+    let mut preferences: Preferences = serde_json::from_value(json!({
+        "input_names": {
+            "com.webos.app.hdmi1": "  Play\nStation\t5  ",
+            "com.webos.app.hdmi2": "   ",
+            "bad;id": "Ignored",
+            "com.webos.app.hdmi3": "A".repeat(60),
+        }
+    }))
+    .unwrap();
+    preferences.sanitize();
+    assert_eq!(
+        preferences.input_names,
+        BTreeMap::from([
+            (
+                "com.webos.app.hdmi1".to_string(),
+                "PlayStation5".to_string()
+            ),
+            (
+                "com.webos.app.hdmi3".to_string(),
+                "A".repeat(crate::model::INPUT_NAME_LIMIT)
+            ),
+        ])
+    );
+    assert!(preferences.set_input_name("com.webos.app.hdmi2", " DENON "));
+    assert!(!preferences.set_input_name("com.webos.app.hdmi2", "DENON"));
+    assert_eq!(preferences.input_names["com.webos.app.hdmi2"], "DENON");
+    assert!(preferences.set_input_name("com.webos.app.hdmi2", ""));
+    assert!(!preferences.input_names.contains_key("com.webos.app.hdmi2"));
+    assert!(!preferences.set_input_name("bad;id", "Name"));
+}
+
+#[test]
+fn custom_input_names_keep_the_label_port_and_status_as_detail() {
+    let mut preferences = Preferences::default();
+    let input = Input {
+        id: "com.webos.app.hdmi2".into(),
+        title: "AVR-X1800H".into(),
+        port: "HDMI 2".into(),
+        connected: Some(true),
+    };
+    let language = preferences.language;
+    let status = |preferences: &Preferences| {
+        view::input_status(&input, preferences.input_name(&input).is_some(), language)
+    };
+    assert_eq!(preferences.input_title(&input), "HDMI 2");
+    assert_eq!(status(&preferences), "AVR-X1800H · Connected");
+    preferences.set_input_name(&input.id, "DENON");
+    assert_eq!(preferences.input_title(&input), "DENON");
+    assert_eq!(status(&preferences), "AVR-X1800H · HDMI 2 · Connected");
+    let plain = Input {
+        title: "HDMI 2".into(),
+        ..input.clone()
+    };
+    assert_eq!(
+        view::input_status(&plain, true, language),
+        "HDMI 2 · Connected"
+    );
+    assert_eq!(view::input_status(&plain, false, language), "Connected");
+}
+
+#[test]
+fn remote_renames_and_resets_an_input_from_its_settings_page() {
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::INPUTS_SECTION;
+    let id = "com.webos.app.hdmi2".to_string();
+    state.focus = Target::InputMode(id.clone());
+    state.activate();
+    assert_eq!(state.focus, Target::Choice(2));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::InputRename);
+    assert!(
+        !controls(&state)
+            .iter()
+            .any(|c| c.target == Target::InputNameReset)
+    );
+    state.activate();
+    assert!(matches!(state.overlay, Some(Overlay::Keyboard)));
+    state.text("DENONX");
+    state.delete();
+    assert_eq!(state.back(), vec![Effect::Save]);
+    assert_eq!(state.focus, Target::InputRename);
+    assert_eq!(state.preferences.input_names[&id], "DENON");
+    assert_eq!(
+        state.preferences.input_title(&state.inventory.inputs[1]),
+        "DENON"
+    );
+    // Dismissing an empty keyboard keeps the saved name.
+    state.activate();
+    assert!(state.finish_text_input().is_empty());
+    assert_eq!(state.preferences.input_names[&id], "DENON");
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::InputNameReset);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.input_names.is_empty());
+    assert_eq!(state.focus, Target::InputRename);
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::Choice(2));
+    state.focus = Target::InputRename;
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::InputMode(id));
+    assert!(state.subpage.is_none());
+}
+
+#[test]
+fn keyboard_done_saves_a_typed_input_name() {
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::INPUTS_SECTION;
+    state.focus = Target::InputMode("com.webos.app.hdmi1".into());
+    state.activate();
+    state.focus = Target::InputRename;
+    state.activate();
+    state.text("PS5");
+    state.focus = Target::Key(
+        crate::state::KEYS
+            .iter()
+            .position(|k| *k == "Done")
+            .unwrap(),
+    );
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.input_names["com.webos.app.hdmi1"], "PS5");
+    assert!(state.overlay.is_none());
+}

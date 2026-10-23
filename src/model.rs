@@ -120,6 +120,8 @@ pub struct Preferences {
     pub hour_24: bool,
     pub reduced_motion: bool,
     pub input_modes: BTreeMap<String, InputMode>,
+    /// Custom names by input app ID; the TV's port and label stay visible as detail.
+    pub input_names: BTreeMap<String, String>,
     #[serde(deserialize_with = "crate::weather::deserialize_enabled")]
     pub show_weather: bool,
     #[serde(deserialize_with = "crate::weather::deserialize_location")]
@@ -140,6 +142,7 @@ impl Default for Preferences {
             hour_24: false,
             reduced_motion: false,
             input_modes: BTreeMap::new(),
+            input_names: BTreeMap::new(),
             show_weather: true,
             weather_location: None,
             temperature_unit: Unit::Celsius,
@@ -184,6 +187,28 @@ impl Preferences {
         }
     }
 
+    pub fn input_name(&self, input: &Input) -> Option<&str> {
+        self.input_names.get(&input.id).map(String::as_str)
+    }
+
+    /// The custom name if one is saved, otherwise the port ("HDMI 2").
+    pub fn input_title<'a>(&'a self, input: &'a Input) -> &'a str {
+        self.input_name(input).unwrap_or(&input.port)
+    }
+
+    /// Saves a cleaned name; an empty name restores the port title.
+    pub fn set_input_name(&mut self, id: &str, name: &str) -> bool {
+        if !valid_app_id(id) {
+            return false;
+        }
+        let name = clean_input_name(name);
+        if name.is_empty() {
+            self.input_names.remove(id).is_some()
+        } else {
+            self.input_names.insert(id.into(), name.clone()) != Some(name)
+        }
+    }
+
     pub fn sanitize(&mut self) {
         if !BACKGROUNDS.iter().any(|(id, _)| *id == self.background) {
             self.background = "dunes".into();
@@ -198,7 +223,22 @@ impl Preferences {
         }
         clean(&mut self.hidden);
         self.input_modes.retain(|id, _| valid_app_id(id));
+        self.input_names = std::mem::take(&mut self.input_names)
+            .into_iter()
+            .filter(|(id, _)| valid_app_id(id))
+            .map(|(id, name)| (id, clean_input_name(&name)))
+            .filter(|(_, name)| !name.is_empty())
+            .take(128)
+            .collect();
     }
+}
+
+pub const INPUT_NAME_LIMIT: usize = 40;
+
+pub fn clean_input_name(name: &str) -> String {
+    let clean: String = name.chars().filter(|c| !c.is_control()).collect();
+    let clean: String = clean.trim().chars().take(INPUT_NAME_LIMIT).collect();
+    clean.trim_end().into()
 }
 
 pub fn valid_app_id(id: &str) -> bool {

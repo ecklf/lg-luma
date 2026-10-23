@@ -911,7 +911,8 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             c(0xd6d6d6, 0.24),
             c(0xa0a0a0, 0.10),
         ));
-        let icon = input_icon(input);
+        let name = state.preferences.input_name(input);
+        let icon = input_icon(input, name);
         let size = if icon == "apple-tv" { 41.6 } else { 35.2 };
         out.icon(
             assets,
@@ -925,14 +926,14 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             c(0xdedede, 1.),
         );
         out.text(
-            &input.port,
+            state.preferences.input_title(input),
             Rect::new(rect.x + 93., rect.y + 24.3, 450., 28.8),
             text(24., 500, -0.03),
             WHITE,
             false,
         );
         out.text(
-            input_status(input, language),
+            input_status(input, name.is_some(), language),
             Rect::new(rect.x + 93., rect.y + 58.7, 450., 20.),
             text(13.12, 400, 0.).leading(1.5),
             c(0xe8e8e8, 0.48),
@@ -1650,7 +1651,9 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     .inputs
                     .iter()
                     .find(|input| &input.id == id)
-                    .map_or(language.t("inputs"), |input| input.port.as_str()),
+                    .map_or(language.t("inputs"), |input| {
+                        state.preferences.input_title(input)
+                    }),
                 Some(Subpage::WeatherLocation) => language.t("location"),
                 Some(Subpage::Temperature) => language.t("temperature"),
                 Some(Subpage::Language) => language.t("language"),
@@ -1774,6 +1777,9 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     chevron: false,
                 },
             );
+        }
+        if let Subpage::Input(id) = subpage {
+            input_name_rows(out, state, assets, id, 164.8 + 3. * 102.7 + 16. - s);
         }
         if let Some(opened) = state.panel_started {
             out.fade(start, (opened.elapsed().as_secs_f32() / 0.15).min(1.), 1.);
@@ -1928,14 +1934,21 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     Row {
                         target: Target::InputMode(input.id.clone()),
                         rect: Rect::new(640., 164.8 + index as f32 * 102.7 - s, 1120., 90.7),
-                        title: &input.port,
-                        icon: Some(&format!("input-{}", input_icon(input))),
+                        title: state.preferences.input_title(input),
+                        icon: Some(&format!(
+                            "input-{}",
+                            input_icon(input, state.preferences.input_name(input))
+                        )),
                         value: Some(language.t(match mode {
                             InputMode::On => "stateOn",
                             InputMode::Off => "stateOff",
                             InputMode::Auto => "stateAuto",
                         })),
-                        description: Some(&input_status(input, language)),
+                        description: Some(&input_status(
+                            input,
+                            state.preferences.input_name(input).is_some(),
+                            language,
+                        )),
                         selected: false,
                         chevron: true,
                     },
@@ -1975,8 +1988,61 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
     }
 }
 
-fn input_icon(input: &Input) -> &'static str {
-    let name = input.title.to_lowercase().replace(' ', "");
+fn input_name_rows(out: &mut Scene, state: &State, assets: &Assets, id: &str, y: f32) {
+    let language = state.preferences.language;
+    let custom = state.preferences.input_names.get(id);
+    let editing = state.text_input_active() && state.keyboard_field == TextField::InputName;
+    let description = if editing {
+        format!("{}|", state.input_name)
+    } else {
+        custom
+            .cloned()
+            .unwrap_or_else(|| language.t("inputNameHint").into())
+    };
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::InputRename,
+            rect: Rect::new(640., y, 1120., 90.7),
+            title: language.t("renameInput"),
+            icon: Some("type"),
+            value: None,
+            description: Some(&description),
+            selected: false,
+            chevron: true,
+        },
+    );
+    if custom.is_some() {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::InputNameReset,
+                rect: Rect::new(640., y + 102.7, 1120., 72.),
+                title: language.t("resetInputName"),
+                icon: Some("refresh"),
+                value: None,
+                description: None,
+                selected: false,
+                chevron: false,
+            },
+        );
+    }
+}
+
+/// A custom name such as "PS5" can choose the icon; otherwise the TV's label.
+fn input_icon(input: &Input, custom: Option<&str>) -> &'static str {
+    custom
+        .map(device_icon)
+        .filter(|icon| *icon != "hdmi")
+        .unwrap_or_else(|| device_icon(&input.title))
+}
+
+fn device_icon(name: &str) -> &'static str {
+    let name = name.to_lowercase().replace(' ', "");
     if name.contains("playstation") || ["ps1", "ps2", "ps3", "ps4", "ps5"].contains(&name.as_str())
     {
         "playstation"
@@ -2003,13 +2069,22 @@ fn input_icon(input: &Input) -> &'static str {
         "hdmi"
     }
 }
-fn input_status(input: &Input, language: Language) -> String {
-    match input.connected {
-        Some(false) => language.t("noDevice").into(),
-        None => language.t("externalInput").into(),
-        Some(true) if input.title == input.port => language.t("connected").into(),
-        Some(true) => format!("{} · {}", input.title, language.t("connected")),
+/// Detail under an input title: the TV's own label (when connected and not just
+/// the port), the port when a custom name replaces it, then the status.
+pub fn input_status(input: &Input, renamed: bool, language: Language) -> String {
+    let mut parts = vec![];
+    if input.connected == Some(true) && input.title != input.port {
+        parts.push(input.title.as_str());
     }
+    if renamed {
+        parts.push(input.port.as_str());
+    }
+    parts.push(match input.connected {
+        Some(false) => language.t("noDevice"),
+        None => language.t("externalInput"),
+        Some(true) => language.t("connected"),
+    });
+    parts.join(" · ")
 }
 
 fn keycap(out: &mut Scene, label: &str, x: f32, y: f32, w: f32, small: bool) {
@@ -2309,10 +2384,10 @@ fn keyboard(out: &mut Scene, state: &State, assets: &Assets) {
     ));
     out.border(panel, 27.2, 1., c(0xffffff, 0.12));
     out.text(
-        if state.keyboard_field == TextField::Location {
-            language.t("cityPostcode")
-        } else {
-            language.t("findApp")
+        match state.keyboard_field {
+            TextField::Location => language.t("cityPostcode"),
+            TextField::InputName => language.t("inputName"),
+            TextField::Apps => language.t("findApp"),
         },
         Rect::new(389., 324., 1000., 44.),
         text(37.6, 500, -0.055).leading(1.1),
