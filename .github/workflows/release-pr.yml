@@ -1,0 +1,78 @@
+name: Release PR
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Maintain Version Packages PR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Create or update the version PR
+        id: changesets
+        uses: changesets/action@v2
+        with:
+          version-script: pnpm version:release
+          pr-title: Version Packages
+          commit-message: Version Packages
+          create-github-releases: false
+          push-git-tags: false
+      - name: Describe the release and run its CI checks
+        if: steps.changesets.outputs.pr-number != ''
+        uses: actions/github-script@v8
+        env:
+          RELEASE_PR_NUMBER: ${{ steps.changesets.outputs.pr-number }}
+        with:
+          script: |
+            const pull_number = Number(process.env.RELEASE_PR_NUMBER);
+            const { data: pull } = await github.rest.pulls.get({ ...context.repo, pull_number });
+            const { data: file } = await github.rest.repos.getContent({
+              ...context.repo,
+              path: 'package.json',
+              ref: pull.head.sha,
+            });
+            const { version } = JSON.parse(Buffer.from(file.content, 'base64').toString('utf8'));
+            await github.rest.pulls.update({
+              ...context.repo,
+              pull_number,
+              body: [
+                '## Problem',
+                '',
+                'Merged changes are waiting for a coordinated app release.',
+                '',
+                '## Solution',
+                '',
+                `Release Luma **${version}** with the accumulated Changesets changelog.`,
+                '',
+                'Synchronize package.json, appinfo.json, the root Cargo.toml, Cargo.lock and the README IPK examples.',
+                'Merging this PR into main publishes the verified IPK and Homebrew feed after CI passes.',
+              ].join('\n'),
+            });
+            // GITHUB_TOKEN-created PRs do not trigger pull_request workflows.
+            // workflow_dispatch is explicitly allowed and checks the version branch's head commit.
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo,
+              workflow_id: 'ci.yml',
+              ref: pull.head.ref,
+            });

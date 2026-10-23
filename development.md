@@ -48,8 +48,10 @@ including `armv7-unknown-linux-gnueabi` for TV builds. No browser installation i
 | `pnpm deploy --device tv` | Build/install/launch through an ares device profile        |
 | `pnpm check`              | Oxlint and workspace Clippy, without executing tests       |
 | `pnpm format:check`       | Rust and tooling/document formatting checks                |
-| `pnpm test`               | Rust workspace unit tests                                  |
+| `pnpm test`               | Release-tooling and Rust workspace unit tests              |
 | `pnpm test:smoke`         | Desktop rendering, mocked weather and localization checks  |
+| `pnpm changeset`          | Add a release note and requested version bump to a PR      |
+| `pnpm version:check`      | Check synchronized app release versions                    |
 
 The TV target is ARMv7 **soft-float calling convention**, `gnueabi`, not `gnueabihf`. Codegen
 uses the NDK's Cortex-A9/VFP baseline with NEON disabled for Rust code. Hardware floating point
@@ -299,10 +301,47 @@ xvfb-run -a pnpm test:smoke
 ```
 
 CI uses this native-only flow, then cross-links with a pinned Linux SDK, inspects/normalizes the
-actual ARM IPK and generates checksums/feed. It uploads release/rendering artifacts. Main release
-publication retains the version/tag guards: a published version is skipped, a draft can be resumed,
-and a tag pointing at another commit requires a new app version. Versions change only on request.
-Host CI cannot prove hardware compatibility, small-text quality or presentation frame rate.
+actual ARM IPK and generates checksums/feed. It uploads release/rendering artifacts on PRs,
+main-branch pushes and manual runs. `pnpm check` also validates synchronized release versions,
+and `pnpm test:release` covers version synchronization and the publish gate, including the real
+Changesets version command in an isolated fixture. Host CI cannot prove hardware compatibility,
+small-text quality or presentation frame rate.
+
+## Releases
+
+Add a changeset to feature/fix PRs that should be included in the next app release:
+
+```sh
+pnpm changeset
+```
+
+Select `lg-luma`, choose patch/minor/major and describe the change. Commit the generated file
+under `.changeset/` with the PR. Documentation-only and maintenance PRs that do not need a release
+can omit it. Keep the existing app version in ordinary PRs.
+
+After changesets merge into `main`, `.github/workflows/release-pr.yml` creates or updates the
+**Version Packages** PR on `changeset-release/main`. Changesets combines the pending notes using
+the highest requested bump. The custom `pnpm version:release` command updates `package.json`
+and `CHANGELOG.md`, then synchronizes `appinfo.json`, the root `Cargo.toml`, the `luma` entry in
+`Cargo.lock`, and the versioned IPK examples in `readme.md`. Dependency pins and supporting Rust
+crate versions are preserved. The package stays private and is never published to npm.
+
+The generated PR receives the same CI build as ordinary PRs. Since PRs created with GitHub's
+built-in token do not trigger `pull_request` workflows, the release workflow explicitly dispatches
+`ci.yml` for the version branch. Enable **Settings → Actions → General → Allow GitHub Actions to
+create and approve pull requests** in the repository. No additional token or npm secret is needed.
+
+Review and merge the version PR when ready to release. Only a main-branch push associated with
+that merged, same-repository PR and a numeric version increase can enter the publish job. It must
+also pass the existing checks, desktop smoke tests and native packaging build. Ordinary merges,
+unmerged PRs and manual CI runs do not publish. To retry a failed publication, rerun the original
+CI run for the merged version PR's main-branch commit.
+
+Publication retains the existing guards: an already-published version is skipped, a draft can be
+resumed, and a tag pointing at another commit requires a new app version. `pnpm version:check`
+checks synchronization without writing files. `pnpm version:sync` repairs metadata from the
+current `package.json` version without calculating a bump. `pnpm version:release` is reserved for
+the automated version PR.
 
 Homebrew Channel's details page reads `packages[].shortDescription` (or `fullDescriptionUrl`),
 not `manifest.appDescription`. The feed generator writes the root app metadata description into
