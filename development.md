@@ -49,7 +49,7 @@ including `armv7-unknown-linux-gnueabi` for TV builds. No browser installation i
 | `pnpm check`              | Oxlint and workspace Clippy, without executing tests       |
 | `pnpm format:check`       | Rust and tooling/document formatting checks                |
 | `pnpm test`               | Release-tooling and Rust workspace unit tests              |
-| `pnpm test:icons`         | Mocked TV icon collection and bundled artwork checks       |
+| `pnpm test:icons`         | Mocked runtime icon reads and bundled vector checks        |
 | `pnpm test:smoke`         | Desktop rendering, mocked weather and localization checks  |
 | `pnpm changeset`          | Add a release note and requested version bump to a PR      |
 | `pnpm version:check`      | Check synchronized app release versions                    |
@@ -143,9 +143,11 @@ discard stale replies. Check newly installed/updated apps and both normal tile a
 launches on a real TV to verify sandbox access. These paths are covered with mocked filesystem
 and worker tests, not live-TV calls in automated checks.
 
-`assets/app-icons.json`, collected images and `assets/icon-colours.json` now serve only desktop
-preview fixtures. The TV package excludes those fixtures and their generated icon/colour maps.
-Adding support for an installed app's icon does not require collecting artwork or changing JSON.
+Dumped TV artwork, collected icon/colour maps, and their collection tools have been removed.
+Desktop previews use curated vector logos or generic/category artwork for other demo apps.
+Asset generation clears retired dumped-artwork outputs from older build caches, and packaging
+continues rejecting those legacy files. Adding support for an installed TV app's icon does not
+require collecting artwork or changing JSON.
 
 ### Curated brand cards and the desktop demo
 

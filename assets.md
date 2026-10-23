@@ -103,10 +103,10 @@ geometry, with no embedded images, runtime fonts, filters or raster effects. Eac
 uses its native app's exact ID.
 
 On TV, installed-app PNG/JPEG/WebP artwork is read from that TV's installed applications at runtime.
-Previously collected PNG/JPEG artwork remains in the repository for desktop previews and is
-excluded from native TV packages. Names and marks remain the property of the respective app
-owners. Luma's folded-light L logo is original artwork; its SVG geometry produces the small/large
-webOS installation icons.
+Desktop previews use curated vector logos or generic/category fallbacks, with no dumped TV artwork
+or collected icon maps in the repository. Names and marks remain the property of the respective
+app owners. Luma's folded-light L logo is original artwork; its SVG geometry produces the
+small/large webOS installation icons.
 
 Weather data: [Open-Meteo](https://open-meteo.com/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 

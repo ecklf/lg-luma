@@ -16,8 +16,6 @@ fn ready() -> State {
 fn controls(state: &State) -> Vec<crate::state::Control> {
     let assets = view::Assets {
         root: PathBuf::new(),
-        icons: BTreeMap::new(),
-        colors: BTreeMap::new(),
         version: "test".into(),
         metrics: BTreeMap::new(),
         artwork: crate::app_artwork::Service::new(false),
@@ -158,7 +156,7 @@ fn inventory_filters_system_apps_duplicates_and_unsafe_identifiers() {
 }
 
 #[test]
-fn icon_collector_visibility_cases_match_the_launcher_inventory() {
+fn inventory_visibility_cases_match_the_launcher_filters() {
     let cases: Vec<serde_json::Value> =
         serde_json::from_str(include_str!("../tests/fixtures/app-visibility.json")).unwrap();
     let inventory: Vec<_> = cases.iter().map(|case| case["app"].clone()).collect();
@@ -173,6 +171,38 @@ fn icon_collector_visibility_cases_match_the_launcher_inventory() {
         .map(|case| case["app"]["id"].as_str().unwrap().to_owned())
         .collect();
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn asset_loading_and_unknown_app_cards_do_not_require_collected_artwork() {
+    let root = std::env::temp_dir().join(format!("luma-assets-no-dumps-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("version.txt"), "test").unwrap();
+    std::fs::write(root.join("font-metrics.json"), "{}").unwrap();
+    for webos in [false, true] {
+        let assets = view::Assets::load(root.clone(), webos).unwrap();
+        let mut state = State::new(Preferences::default());
+        state.set_inventory(
+            crate::model::Inventory {
+                apps: vec![App::new("com.example.regional", "Regional App")],
+                inputs: vec![],
+            },
+            None,
+        );
+        state.open(1);
+        let scene = view::scene_with_pill(
+            &state,
+            &assets,
+            800.,
+            100.,
+            time::OffsetDateTime::UNIX_EPOCH,
+        );
+        assert!(scene.draw.iter().any(|draw| matches!(draw,
+            crate::renderer::Draw::TintedImage(path, ..) if path.ends_with("ui-icons/generic.lvec"))));
+        assert!(scene.draw.iter().any(|draw| matches!(draw,
+            crate::renderer::Draw::Text(value, ..) if value == "Regional App")));
+    }
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

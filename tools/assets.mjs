@@ -8,14 +8,11 @@ const root = path.resolve(import.meta.dirname, '..');
 const source = path.join(root, 'assets');
 const out = path.join(root, '.build/assets');
 const highResolution = process.argv.includes('--4k');
-for (const directory of [
-  'wallpapers',
-  'thumbnails',
-  'logos',
-  'app-icons',
-  'ui-icons',
-  'surfaces',
-]) {
+// Retire generated dumps from older asset caches as well as the source assets.
+for (const legacy of ['app-icons', 'icons.json', 'colors.json']) {
+  await fs.rm(path.join(out, legacy), { recursive: true, force: true });
+}
+for (const directory of ['wallpapers', 'thumbnails', 'logos', 'ui-icons', 'surfaces']) {
   await fs.mkdir(path.join(out, directory), { recursive: true });
 }
 
@@ -104,20 +101,6 @@ for (const file of await fs.readdir(path.join(source, 'wallpapers'))) {
     .jpeg({ quality: 82 })
     .toFile(path.join(out, 'thumbnails', `${id}.jpg`));
 }
-const icons = {};
-const map = JSON.parse(await fs.readFile(path.join(source, 'app-icons.json'), 'utf8'));
-for (const [id, relative] of Object.entries(map)) {
-  const clean = relative.replace(/^\.\//, '');
-  if (!/^app-icons\/[a-zA-Z0-9._-]+\.(png|jpg)$/.test(clean)) continue;
-  try {
-    await fs.copyFile(path.join(source, clean), path.join(out, clean));
-    icons[id] = clean;
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
-}
-await fs.writeFile(path.join(out, 'icons.json'), `${JSON.stringify(icons, null, 2)}\n`);
-await fs.copyFile(path.join(source, 'icon-colours.json'), path.join(out, 'colors.json'));
 await fs.writeFile(
   path.join(out, 'version.txt'),
   JSON.parse(await fs.readFile(path.join(root, 'appinfo.json'), 'utf8')).version,
