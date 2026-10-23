@@ -1,5 +1,11 @@
 # lg-luma
 
+## 2.2.1
+
+### Patch Changes
+
+- d81cb66: Publish the changes from the unreleased 2.2.0 version after improving CI dependency installation and build timeouts.
+
 ## 2.2.0
 
 ### Minor Changes

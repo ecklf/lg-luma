@@ -153,8 +153,10 @@ are supported; runtime SVG parsing is not required. Source files are limited to 
 stay on the SDL thread and share the existing 48 MiB texture cache. Pending/unavailable icons do
 not block input, and failures are cached until inventory is refreshed.
 
-**Refresh apps** (or desktop F5) invalidates artwork, including previous failures; generation IDs
-discard stale replies. Check newly installed/updated apps and both normal tile and Home-takeover
+Inventory also refreshes at startup and whenever the window becomes visible. Decoded icons are
+keyed by app ID, version and icon paths, so those refreshes keep them and retry only previous
+failures; an updated app has a new version and is read again. **Refresh apps** (or desktop F5)
+invalidates all artwork, including previous failures; request tokens discard stale replies. Check newly installed/updated apps and both normal tile and Home-takeover
 launches on a real TV to verify sandbox access. These paths are covered with mocked filesystem
 and worker tests, not live-TV calls in automated checks.
 
@@ -211,6 +213,8 @@ calls and missing/failed artwork/glyphs. Idle screens draw on demand; VSync pace
 
 ## Resolution and profiling
 
+### Rendering requests and captures
+
 The shipping default requests 1920×1080 and retains a 1920×1080 logical layout. Drawable-aware
 vector coverage follows the actual SDL framebuffer. `--resolution 4k` is an **experimental**
 native surface request, not a guaranteed panel-output mode. The TV compositor can constrain or
@@ -227,6 +231,67 @@ separate 3840×2160 offscreen target and leaves the actual window unchanged. Fon
 uses that target's physical coverage rather than enlarging a 1080p image. Optional `@2x` wallpaper
 images need both `pnpm assets --4k` and `node tools/package.mjs --4k`; default packages exclude
 them even if they remain in an old cache. Source photographic detail still limits sharpness.
+
+### 4K TV investigation
+
+Manual testing on 2026-10-23 used an **LG OLED55C57LA (C5), webOS 26, chip `O22A3`, driver
+`lg1kdrm`**. A contributor reported similar corruption on a C3 in
+[#25](https://github.com/ecklf/lg-luma/issues/25). Usable native 4K UI presentation has not been
+established on these tested TVs.
+
+The C5's default EGLFS JSON reported `1920x1080`, and the active DRM state independently confirmed
+a 1080p compositor framebuffer and output mode. The connector advertised `3840x2160`, and
+`/proc/lg/fbdev/drm-helper/check_mode` reported `3840x2160: ok` (`7680x4320: err`). FB0 reported
+`cfg.max_xres = 1920`, `cfg.max_yres = 1080` and virtual size `1920,2160`, consistent with two
+stacked 1080p buffers rather than a 4K framebuffer.
+
+The startup script uses Weston-style arguments and a `weston.ini` with `backend=drm-backend.so`
+and `override-output-from-env=true`. Its product environment also generates the EGLFS JSON.
+Inspect the actual startup path and DRM state; the JSON alone does not establish which output
+configuration is active.
+
+A temporary compositor-level test bind-mounted patched copies of `surface-manager.sh` and
+`eglfs_starfish.env`, requesting matching 3840×2160 compositor and primary output geometry, then
+restarted `surface-manager-daemon.service`. Systemd scheduled restoration after 90 seconds.
+
+| Observation                  | Default            | Forced 4K test                  |
+| ---------------------------- | ------------------ | ------------------------------- |
+| Compositor framebuffer       | 1920×1080          | 3840×2160                       |
+| Format                       | ABGR8888 with AFBC | ABGR8888 with AFBC              |
+| Pitch                        | 7680 bytes         | 15360 bytes                     |
+| Plane source and destination | 1920×1080          | 3840×2160                       |
+| Active DRM mode              | 1920×1080 at 60 Hz | 3840×2160 at 60 Hz              |
+| Visible picture              | Normal             | Flickering lines and corruption |
+
+Restoring the original configuration returned the picture to normal. This was a system compositor
+experiment, not a supported Luma setting or installation procedure.
+
+**Mode acceptance, a 4K drawable or screenshot, and even matching 4K framebuffer/plane/CRTC
+dimensions do not prove correct panel presentation.** Check the visible output and use a
+pixel-resolution test pattern before claiming 1:1 presentation. The corruption's exact cause is
+unresolved: FB0's configured maximum and compatibility metadata alone do not establish a physical
+hardware limit or explain the failure. These results do not prove that 4K graphics are impossible
+on every LG TV; they establish that the tested override does not produce a usable picture on this C5.
+An app-side resolution request alone does not resolve that display-path failure.
+
+For read-only inspection in the TV's root SSH shell (paths depend on firmware):
+
+```sh
+cat /sys/kernel/debug/dri/0/state
+cat /proc/lg/fbdev/status
+cat /proc/lg/fbdev/drm-helper/status
+cat /proc/lg/fbdev/drm-helper/check_mode
+```
+
+**4K video playback is a separate capability.** LG's
+[app resolution specifications](https://webostv.developer.lge.com/develop/specifications/app-resolution)
+distinguish 1080p graphics from 4K video on UHD TVs. Native media players can route decoded video
+through a separate video plane while drawing their UI at 1080p. For example,
+[PlxNative documents its default 1080p UI drawable](https://github.com/GLinnik21/plx-native/blob/13bed25004df4c89f8bcba9558b571b8ed962bd0/rust-modules/base/src/surface.rs#L10-L25)
+alongside 4K video support. That media path does not demonstrate a usable 4K OpenGL graphics path
+for Luma; bypassing the browser does not by itself reconfigure LG's graphics output pipeline.
+
+### Frame profiling
 
 `--profile-frames N` forces redraws and measures swap-to-swap intervals after ten warmup
 presentations. Hidden windows pause profiling. Capture stalls are excluded. CPU submission is

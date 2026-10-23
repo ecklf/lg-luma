@@ -18,6 +18,14 @@ fn encoded(format: ImageFormat, width: u32, height: u32, color: [u8; 4]) -> Vec<
     bytes.into_inner()
 }
 
+fn png(image: RgbaImage) -> Vec<u8> {
+    let mut bytes = Cursor::new(Vec::new());
+    DynamicImage::ImageRgba8(image)
+        .write_to(&mut bytes, ImageFormat::Png)
+        .unwrap();
+    bytes.into_inner()
+}
+
 fn poll_until(service: &Service, mut done: impl FnMut() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(3);
     loop {
@@ -33,9 +41,13 @@ fn poll_until(service: &Service, mut done: impl FnMut() -> bool) {
 #[test]
 fn inventory_metadata_resolves_absolute_relative_and_manifest_fallback_paths() {
     let metadata = json!({"id":"sample", "title":"Regional App", "icon":"regional.png",
-        "largeIcon":"large.png", "folderPath":format!("{}/sample", ROOTS[1])});
+        "largeIcon":"large.png", "folderPath":format!("{}/sample", ROOTS[1]), "version":"3.1.0"});
     let apps = crate::platform::normalize_apps(&json!([metadata.clone()])).unwrap();
     assert_eq!(apps[0].icon, Some(Source::new("sample", &metadata)));
+    assert_eq!(
+        apps[0].icon.as_ref().unwrap().version.as_deref(),
+        Some("3.1.0")
+    );
     let source = Source::new(
         "sample",
         &json!({
@@ -83,6 +95,35 @@ fn supported_icons_decode_to_bounded_pixels_and_runtime_card_colours() {
     assert_eq!(transparent.color, [20; 3]);
     assert!(decode(b"not an image").is_none());
     assert!(decode(&encoded(ImageFormat::Png, 2049, 1, [0; 4])).is_none());
+}
+
+#[test]
+fn transparent_logos_reaching_the_edges_keep_the_neutral_card() {
+    // Like Litefin's 130px icon: a ring logo on a transparent background whose
+    // stroke reaches into the sampled edge band.
+    let ring = RgbaImage::from_fn(130, 130, |x, y| {
+        let distance = (x as f32 - 64.5).hypot(y as f32 - 64.5);
+        if (52.0..62.0).contains(&distance) {
+            Rgba([150, 100, 210, 255])
+        } else {
+            Rgba([0; 4])
+        }
+    });
+    assert_eq!(decode(&png(ring)).unwrap().color, [20; 3]);
+    // Opaque artwork with transparent rounded corners still takes its edge colour.
+    let rounded = RgbaImage::from_fn(130, 130, |x, y| {
+        let inset = |v: u32| v.min(129 - v) as f32;
+        let (dx, dy) = (24. - inset(x), 24. - inset(y));
+        if dx > 0. && dy > 0. && dx.hypot(dy) > 24. {
+            Rgba([0; 4])
+        } else {
+            Rgba([40, 90, 160, 255])
+        }
+    });
+    let color = decode(&png(rounded)).unwrap().color;
+    for (actual, expected) in color.into_iter().zip([40u8, 90, 160]) {
+        assert!(actual.abs_diff(expected) <= 2);
+    }
 }
 
 #[test]
@@ -170,6 +211,51 @@ fn the_worker_keeps_decoding_while_the_ui_is_idle() {
 }
 
 #[test]
+fn a_refresh_keeps_unchanged_icons_and_reads_updated_apps_again() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let worker_calls = calls.clone();
+    let ui_thread = thread::current().id();
+    let service = Service::with_loader(true, move |_| {
+        assert_ne!(thread::current().id(), ui_thread);
+        let number = worker_calls.fetch_add(1, Ordering::SeqCst) + 1;
+        decode(&encoded(ImageFormat::Png, 2, 2, [number as u8, 0, 0, 255]))
+    });
+    let installed = Source::new("sample", &json!({"version": "1.0.0"}));
+    assert!(service.get(&installed).is_none());
+    poll_until(&service, || service.get(&installed).is_some());
+    let image = service.get(&installed).unwrap();
+    service.refresh();
+    // Unchanged after the refresh: the same decoded artwork, not read again.
+    assert!(Arc::ptr_eq(&image, &service.get(&installed).unwrap()));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    // An update changes the version, so its icon is read again.
+    let updated = Source::new("sample", &json!({"version": "1.1.0"}));
+    assert_ne!(installed, updated);
+    assert!(service.get(&updated).is_none());
+    poll_until(&service, || service.get(&updated).is_some());
+    assert_eq!(service.get(&updated).unwrap().pixels.get_pixel(0, 0)[0], 2);
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn a_refresh_during_a_load_keeps_its_result() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let worker_calls = calls.clone();
+    let (release, hold) = mpsc::channel::<()>();
+    let service = Service::with_loader(true, move |_| {
+        worker_calls.fetch_add(1, Ordering::SeqCst);
+        hold.recv().unwrap();
+        decode(&encoded(ImageFormat::Png, 2, 2, [1, 0, 0, 255]))
+    });
+    let source = Source::new("sample", &json!({}));
+    assert!(service.get(&source).is_none());
+    service.refresh();
+    release.send(()).unwrap();
+    poll_until(&service, || service.get(&source).is_some());
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
 fn unavailable_icons_are_not_retried_on_every_redraw() {
     let calls = Arc::new(AtomicUsize::new(0));
     let worker_calls = calls.clone();
@@ -186,12 +272,43 @@ fn unavailable_icons_are_not_retried_on_every_redraw() {
         assert!(service.get(&source).is_none());
     }
     assert_eq!(calls.load(Ordering::SeqCst), 1);
-    service.reset();
+    // Unavailable icons are tried again after a refresh.
+    service.refresh();
     assert!(service.get(&source).is_none());
     poll_until(&service, || {
         service.cache.borrow().entries[&source].image.is_some()
     });
     assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn hundreds_of_apps_stay_within_the_cache_bounds_across_refreshes() {
+    let service = Service::with_loader(true, |_| {
+        Some(Artwork {
+            key: String::new(),
+            pixels: RgbaImage::new(256, 256),
+            color: [20; 3],
+        })
+    });
+    for number in 0..300 {
+        if number % 100 == 0 {
+            service.refresh();
+        }
+        let source = Source::new(&format!("app-{number}"), &json!({"version": "1"}));
+        service.get(&source);
+        poll_until(&service, || {
+            service.cache.borrow().entries[&source].image.is_some()
+        });
+    }
+    let cache = service.cache.borrow();
+    let bytes: usize = cache
+        .entries
+        .values()
+        .filter_map(|entry| entry.image.as_ref()?.as_ref())
+        .map(|image| image.pixels.as_raw().len())
+        .sum();
+    assert!(bytes <= CACHE_BYTES);
+    assert!(cache.entries.len() <= CACHE_ENTRIES);
 }
 
 #[test]

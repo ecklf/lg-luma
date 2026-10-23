@@ -37,7 +37,7 @@ jobs:
   build:
     name: Rust checks, rendering, and native package
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 60
     outputs:
       tag: ${{ steps.package.outputs.tag }}
     steps:
@@ -53,8 +53,17 @@ jobs:
         with:
           components: rustfmt, clippy
           targets: armv7-unknown-linux-gnueabi
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: webos-${{ hashFiles('tools/build-webos.sh', 'tools/setup-webos-sdk.mjs', 'tools/webos-runtime.mjs') }}
       - name: Install desktop and asset dependencies
-        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev pkg-config woff2 python3-fonttools libgl1-mesa-dri xvfb
+        run: |
+          apt_options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+          sudo apt-get "${apt_options[@]}" update
+          # FontTools recommends large optional scientific Python packages. xauth is needed by xvfb-run.
+          sudo apt-get "${apt_options[@]}" install -y --no-install-recommends \
+            libsdl2-dev pkg-config woff2 python3-fonttools libgl1-mesa-dri xvfb xauth
       - name: Check formatting
         run: pnpm format:check
       - name: Lint Rust and packaging tools
