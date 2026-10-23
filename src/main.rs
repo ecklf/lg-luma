@@ -1019,7 +1019,8 @@ fn run() -> Result<(), String> {
             running = false;
         }
         // Block until input instead of polling at frame rate on idle screens.
-        // VSync paces animation; holds and scripted checks need short timed wakes.
+        // VSync paces animation; holds, scripted checks and icons still being
+        // decoded need short timed wakes.
         let timeout = if !visible {
             250
         } else if pill != target
@@ -1028,7 +1029,7 @@ fn run() -> Result<(), String> {
             || options.profile_frames.is_some()
         {
             0
-        } else if press.is_some() || options.frames.is_some() {
+        } else if press.is_some() || options.frames.is_some() || assets.artwork.pending() {
             8
         } else {
             100

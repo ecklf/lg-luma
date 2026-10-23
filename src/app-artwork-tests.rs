@@ -140,6 +140,36 @@ fn refresh_discards_old_worker_results_and_reloads_changed_artwork() {
 }
 
 #[test]
+fn the_worker_keeps_decoding_while_the_ui_is_idle() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let worker_calls = calls.clone();
+    let service = Service::with_loader(true, move |_| {
+        worker_calls.fetch_add(1, Ordering::SeqCst);
+        decode(&encoded(ImageFormat::Png, 2, 2, [1, 2, 3, 255]))
+    });
+    let sources: Vec<_> = (0..5)
+        .map(|number| Source::new(&format!("app-{number}"), &json!({})))
+        .collect();
+    for source in &sources {
+        assert!(service.get(source).is_none());
+    }
+    assert!(service.pending());
+    // No poll yet: an idle UI must not hold the worker to one finished icon.
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while calls.load(Ordering::SeqCst) < sources.len() {
+        assert!(
+            Instant::now() < deadline,
+            "worker stalled until the UI polled"
+        );
+        thread::sleep(Duration::from_millis(1));
+    }
+    poll_until(&service, || {
+        sources.iter().all(|source| service.get(source).is_some())
+    });
+    assert!(!service.pending());
+}
+
+#[test]
 fn unavailable_icons_are_not_retried_on_every_redraw() {
     let calls = Arc::new(AtomicUsize::new(0));
     let worker_calls = calls.clone();

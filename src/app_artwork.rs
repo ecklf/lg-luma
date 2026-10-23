@@ -239,7 +239,9 @@ impl Service {
         loader: impl Fn(&Source) -> Option<Artwork> + Send + 'static,
     ) -> Self {
         let (sender, requests) = mpsc::sync_channel::<Request>(16);
-        let (responses, receiver) = mpsc::sync_channel(1);
+        // Room for a full request queue: an idle UI only polls on its next
+        // wake, and a one-slot reply channel held the worker to one icon each.
+        let (responses, receiver) = mpsc::sync_channel(16);
         if enabled {
             thread::spawn(move || {
                 while let Ok(request) = requests.recv() {
@@ -287,6 +289,16 @@ impl Service {
             );
         }
         None
+    }
+
+    /// Whether a requested icon has not come back yet, so the event loop
+    /// should wake soon to poll for it.
+    pub fn pending(&self) -> bool {
+        self.cache
+            .borrow()
+            .entries
+            .values()
+            .any(|entry| entry.image.is_none())
     }
 
     pub fn reset(&self) {
