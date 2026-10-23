@@ -30,14 +30,16 @@ if (decoded.error || decoded.status !== 0) {
 }
 await fs.rm(font);
 const cjk = path.join(source, 'fonts/noto-sans-sc.ttf');
+const hangul = path.join(source, 'fonts/noto-sans-kr.ttf');
 try {
   await fs.access(cjk);
+  await fs.access(hangul);
 } catch {
-  throw new Error('Prepare the bundled Chinese font with pnpm assets:fonts first.');
+  throw new Error('Prepare the bundled Chinese and Korean fonts with pnpm assets:fonts first.');
 }
 const weights = spawnSync(
   'python3',
-  [path.join(import.meta.dirname, 'font-weights.py'), out, cjk],
+  [path.join(import.meta.dirname, 'font-weights.py'), out, cjk, hangul],
   {
     encoding: 'utf8',
   },

@@ -77,6 +77,7 @@ await fs.cp(path.join(out, 'assets'), path.join(stage, 'assets'), {
   recursive: true,
   filter: (source) =>
     path.basename(source) !== '.DS_Store' &&
+    !['app-icons', 'icons.json', 'colors.json'].includes(path.basename(source)) &&
     (highResolution || !source.endsWith('@2x.jpg')) &&
     !(
       source.endsWith('.png') && ['logos', 'ui-icons'].includes(path.basename(path.dirname(source)))

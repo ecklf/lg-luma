@@ -14,6 +14,26 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  release-gate:
+    name: Identify a merged version PR
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      publish: ${{ steps.gate.outputs.result }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Require a merged Changesets PR and a version increase
+        id: gate
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { isReleaseMerge } = await import(`${process.env.GITHUB_WORKSPACE}/tools/release-gate.mjs`);
+            return isReleaseMerge({ github, context });
+
   build:
     name: Rust checks, rendering, and native package
     runs-on: ubuntu-24.04
@@ -81,8 +101,8 @@ jobs:
 
   release:
     name: Publish release and Homebrew feed
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: build
+    if: needs.release-gate.outputs.publish == 'true'
+    needs: [build, release-gate]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

@@ -16,6 +16,7 @@ const places = {
   en: { name: 'Vienna', region: 'Vienna', country: 'Austria' },
   de: { name: 'Wien', region: 'Wien', country: 'Österreich' },
   zh: { name: '维也纳', region: '维也纳', country: '奥地利' },
+  pt: { name: 'Viena', region: 'Viena', country: 'Áustria' },
 };
 const server = http.createServer((request, response) => {
   const url = new URL(request.url, 'http://127.0.0.1');
@@ -108,7 +109,7 @@ try {
   );
   const languages = await scenario('picker-en', picker);
   assert.equal(languages.subpage, 'Language');
-  for (const name of ['English', 'Deutsch', '简体中文'])
+  for (const name of ['English', 'Deutsch', '简体中文', 'Español', 'Português (Brasil)'])
     assert.ok(languages.ui_text.includes(name));
 
   const german = await scenario('de-home', `${picker},down,enter,home,down`);
@@ -195,8 +196,67 @@ try {
     'Weather credit is not shown in the UI',
   );
   await scenario('zh-4k', 'home,down', ['--capture-scale', '2']);
+
+  await fs.writeFile(
+    preferences,
+    JSON.stringify({ language: 'en', show_names: true, reduced_motion: true }),
+  );
+  const portuguese = await scenario('pt-home', `${picker},down,down,down,down,enter,home,down`);
+  assert.equal(portuguese.preferences.language, 'pt');
+  for (const key of [
+    'home',
+    'apps',
+    'settings',
+    'favorites',
+    'inputsHeading',
+    'evening',
+    'setWeatherLocation',
+  ])
+    contains(portuguese, key, 'pt');
+  assert.ok(portuguese.ui_text.includes('QUARTA-FEIRA, 21 DE OUTUBRO'));
+  assert.ok(
+    portuguese.ui_text.includes('Netflix'),
+    'Installed app names stay intact in Portuguese',
+  );
+  const portugueseSettings = await scenario('pt-settings', 'settings,down');
+  assert.equal(
+    portugueseSettings.preferences.language,
+    'pt',
+    'Portuguese is restored after restart',
+  );
+  assert.ok(portugueseSettings.ui_text.includes('Português (Brasil)'));
+  for (const key of ['language', 'showAppNames', 'clockFormat'])
+    contains(portugueseSettings, key, 'pt');
+  assert.equal(JSON.parse(await fs.readFile(preferences, 'utf8')).language, 'pt');
+
+  const portugueseDialog = await scenario('pt-dialog', 'apps,down,menu');
+  for (const key of ['removeFavorite', 'hideApp', 'categoryStreaming'])
+    contains(portugueseDialog, key, 'pt');
+  const portugueseKeyboard = await scenario('pt-keyboard', 'apps,type:Netflix');
+  for (const key of ['findApp', 'space', 'delete', 'clear', 'done'])
+    contains(portugueseKeyboard, key, 'pt');
+  const portugueseInputs = await scenario(
+    'pt-input-options',
+    'settings,down,down,down,down,enter,enter',
+  );
+  for (const key of ['stateOn', 'stateOff', 'stateAuto', 'inputWhenConnected'])
+    contains(portugueseInputs, key, 'pt');
+
+  const portugueseWeather = await scenario(
+    'pt-weather',
+    `${location},type:Viena,back,enter,await-search,down,enter,home,await-weather`,
+  );
+  assert.equal(portugueseWeather.preferences.language, 'pt');
+  assert.equal(portugueseWeather.preferences.weather_location.name, 'Viena');
+  assert.equal(portugueseWeather.preferences.weather_location.country, 'Áustria');
+  contains(portugueseWeather, 'partlyCloudy', 'pt');
+  assert.equal(
+    requests.filter((request) => request.path === '/v1/search').at(-1).query.language,
+    'pt',
+    'Geocoding must use the Portuguese locale',
+  );
   console.log(
-    'Native translation checks passed: saved language selection, shared labels, locale formatting, localized geocoding/weather, unchanged app names, Chinese glyphs and 4K rendering.',
+    'Native translation checks passed: saved language selection, shared labels, Portuguese locale formatting and accented glyphs, localized geocoding/weather, unchanged app names, Chinese glyphs and 4K rendering.',
   );
 } finally {
   server.closeAllConnections();

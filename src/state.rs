@@ -580,7 +580,7 @@ impl State {
             }
             if let Target::Choice(index) = self.focus {
                 let count = match self.subpage {
-                    Some(Subpage::Clock | Subpage::Temperature) => 2,
+                    Some(Subpage::Temperature) => 2,
                     Some(Subpage::Language) => Language::ALL.len(),
                     _ => 3,
                 };
