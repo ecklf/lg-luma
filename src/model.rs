@@ -233,6 +233,8 @@ pub fn demo_inventory() -> Inventory {
             ("pooq", "Wavve"),
             ("com.cmb.rainbowtv", "Rainbow TV"),
             ("com.lgtvod.kr.app", "LG TV VOD"),
+            ("com.webos.app.igallery", "올레드 갤러리"),
+            ("com.webos.app.roomconnect", "룸투룸 셰어"),
         ]
         .into_iter()
         .map(|(id, title)| App::new(id, title))
