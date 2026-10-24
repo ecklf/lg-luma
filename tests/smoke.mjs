@@ -284,6 +284,34 @@ try {
   assert.deepEqual(system.focus, { Setting: 5 });
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
   assert.ok(system.ui_text.includes('Quit app'));
+  // The exposed card fragments are real pointer targets, including after remote scrolling.
+  const edgeFavorites = [
+    'netflix',
+    'youtube.leanback.v4',
+    'com.apple.appletv',
+    'com.disney.disneyplus-prod',
+    'amazon',
+    'com.arte.tv',
+    'de.zdf.app.zdfm3',
+    'ard.mediathek',
+    'plex',
+  ];
+  await fs.writeFile(
+    preferences,
+    JSON.stringify({ favorites: edgeFavorites, show_weather: false }),
+  );
+  const edgeRight = await scenario('favorites-edge-right', 'home,click:1860:600');
+  assert.deepEqual(edgeRight.focus, { App: edgeFavorites[6] });
+  assert.equal(edgeRight.home_scroll, 0, 'Clicking the fragment must not move it');
+  const edgeLeft = await scenario(
+    'favorites-edge-left',
+    `home,down,${Array(6).fill('right').join(',')},click:40:600`,
+  );
+  assert.deepEqual(edgeLeft.focus, { App: edgeFavorites[0] });
+  assert.ok(
+    Math.abs(edgeLeft.home_scroll - 281.6) < 0.01,
+    'Pointer focus preserves strip position',
+  );
   console.log(
     'Native smoke checks passed: rendering/alpha, navigation, persistence, SDL pointer input, DPI-aware glyphs, 4K capture and presentation profiling.',
   );

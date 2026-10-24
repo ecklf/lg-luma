@@ -540,13 +540,11 @@ fn run() -> Result<(), String> {
     let local_offset = OffsetDateTime::now_local()
         .map(|now| now.offset())
         .unwrap_or(time::UtcOffset::UTC);
-    let root = options.assets.clone().unwrap_or_else(|| {
-        if webos {
-            platform::install_dir().join("assets")
-        } else {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".build/assets")
-        }
-    });
+    let root = match options.assets.clone() {
+        Some(root) => root,
+        None if webos => platform::install_dir()?.join("assets"),
+        None => PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".build/assets"),
+    };
     let assets = view::Assets::load(root, webos)?;
     startup_stage("asset metadata");
     let default_preferences = options
@@ -777,6 +775,16 @@ fn run() -> Result<(), String> {
                         state.preferences.language,
                     );
                     state.set_inventory(inventory, warning);
+                    // Decode every installed icon now, on the artwork worker, rather than when
+                    // the Apps page first shows it: a long-running Home then opens Apps ready.
+                    assets.artwork.prefetch(
+                        state
+                            .inventory
+                            .apps
+                            .iter()
+                            .filter(|app| crate::branding::for_key(&app.brand).is_none())
+                            .filter_map(|app| app.icon.clone()),
+                    );
                     if initial_focus
                         && state.focus == Target::Nav(0)
                         && state.page == state::Page::Home
@@ -1095,37 +1103,14 @@ fn run() -> Result<(), String> {
                     mouse_y,
                     ..
                 } if state.overlay.is_none() => {
-                    let over_favorites = state.page == state::Page::Home
-                        && pointer_position(&window, mouse_x, mouse_y).is_some_and(|(x, y)| {
-                            (64. ..1856.).contains(&x)
-                                && scene.controls.iter().any(|control| {
-                                    matches!(control.target, Target::App(_))
-                                        && control.rect.contains(x, y)
-                                })
-                        });
-                    if state.page == state::Page::Home && (x != 0 || over_favorites) {
-                        state.scroll_favorites(
-                            (if x != 0 { x } else { -y }) as f32 * state::HOME_TILE_PITCH,
-                        );
+                    if state.wheel_scroll(
+                        &scene.controls,
+                        pointer_position(&window, mouse_x, mouse_y),
+                        x,
+                        y,
+                    ) {
                         press = None;
-                    } else {
-                        let max = scene
-                            .controls
-                            .iter()
-                            .filter(|c| c.scrollable)
-                            .map(|c| {
-                                c.rect.y + c.rect.h + state.scroll
-                                    - if state.page == state::Page::Home {
-                                        1041.6
-                                    } else {
-                                        982.4
-                                    }
-                            })
-                            .fold(0., f32::max);
-                        state.scroll = (state.scroll - y as f32 * 90.).clamp(0., max.max(0.));
                     }
-                    state.pointer = true;
-                    state.dirty = true;
                 }
                 _ => {}
             }
@@ -1376,19 +1361,5 @@ fn hit(
     state: &State,
 ) -> Option<Target> {
     let (x, y) = pointer_position(window, x, y)?;
-    controls
-        .iter()
-        .rev()
-        .find(|control| {
-            control.rect.contains(x, y)
-                && (!control.scrollable
-                    || ((64. ..1856.).contains(&x)
-                        && y >= 108.8
-                        && y < if state.page == state::Page::Home && state.moving.is_none() {
-                            1053.6
-                        } else {
-                            994.4
-                        }))
-        })
-        .map(|control| control.target.clone())
+    state.hit_test(controls, x, y)
 }

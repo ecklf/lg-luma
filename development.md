@@ -475,7 +475,13 @@ is bound to that executable path. Luma detects this (`platform::runs_as_lg_home`
   `returnValue: false` (registration lost) quit. SAM keeps the process across Home launches and
   standby (`pause`, reason `keepAlive`) instead of restarting it;
 - resolves `assets/`, `lib/` (extra RPATH) and the splash directory from the installed package,
-  since `current_exe()` names LG's path;
+  since `current_exe()` names LG's path. Production Homebrew Channel installs under
+  `/media/cryptofs`, developer installs under `/media/developer` and system installs under
+  `/usr/palm/applications` share the lookup list in `tv/install-directories.txt`. Library search
+  retains `$ORIGIN/lib` first and includes all three locations before Rust startup. Native
+  discovery validates the package manifest and matches the executable by device/inode, so assets
+  and splash updates use the source package even when developer and production copies both exist.
+  A missing or unrelated source package is an explicit startup error;
 - writes its stderr to `/tmp/luma-home.log`, because SAM discards a system app's output;
 - skips the per-icon elevated-service fallback for installed artwork: as root every file is
   readable, so that fallback would only spend seconds per icon to fail the same way.
@@ -574,6 +580,27 @@ main-branch pushes and manual runs. `pnpm check` also validates synchronized rel
 and `pnpm test:release` covers version synchronization and the publish gate, including the real
 Changesets version command in an isolated fixture. Host CI cannot prove hardware compatibility,
 small-text quality or presentation frame rate.
+
+### PR test IPKs
+
+`.github/workflows/pr-test-ipk.yml` runs **PR Test IPK** whenever a PR is opened, reopened or
+receives new commits, including fork PRs and drafts. It automatically builds the exact PR head
+commit and uploads the verified ARM IPK and `sha256sums`. One bot comment is created or updated
+with the full commit hash, workflow run and artifact download link. Failed or cancelled builds
+update the same comment with their status; superseded commits cannot overwrite the latest head's
+comment. Downloads are GitHub artifact ZIPs, require signing in and expire after 14 days.
+
+The workflow uses only the `opened`, `synchronize` and `reopened` PR events, without a deployment
+environment or required reviewers. Each new commit cancels the previous run. It becomes active
+after it is merged into the PR's base branch; reopen an existing PR to request its first build,
+or rerun a workflow to rebuild the same commit.
+
+Only the build job checks out PR code. It has read-only repository access, no persisted
+checkout credentials and no shared build caches. A separate job with comment-writing permission
+uses the trusted base-branch workflow and GitHub's artifact API without checking out PR code.
+The package keeps the normal `com.ecklf.luma` identity and version, so installing it replaces
+the existing Luma app. These builds are for manual TV verification; the ordinary CI checks still
+run independently.
 
 ## Releases
 

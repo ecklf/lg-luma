@@ -399,3 +399,106 @@ fn visible_cards_switch_from_fallback_to_installed_artwork_without_an_icon_map()
         .unwrap();
     assert_eq!(image.color, [24, 40, 56]);
 }
+
+#[test]
+fn prefetch_decodes_every_icon_although_the_request_queue_is_short() {
+    let (release, gate) = mpsc::channel::<()>();
+    let gate = std::sync::Mutex::new(gate);
+    let service = Service::with_loader(true, move |_| {
+        gate.lock().unwrap().recv().unwrap();
+        None
+    });
+    let sources: Vec<_> = (0..100)
+        .map(|index| Source::new(&format!("sample{index}"), &json!({})))
+        .collect();
+    service.prefetch(sources.clone());
+    // Slots stay free for the cards on screen while the worker is busy.
+    assert!(service.cache.borrow().entries.len() <= PREFETCH_SLOTS);
+    assert!(service.get(&Source::new("visible", &json!({}))).is_none());
+    for _ in 0..101 {
+        release.send(()).unwrap();
+    }
+    poll_until(&service, || !service.pending());
+    let cache = service.cache.borrow();
+    assert!(
+        sources
+            .iter()
+            .all(|source| cache.entries.contains_key(source))
+    );
+    assert!(
+        cache
+            .entries
+            .contains_key(&Source::new("visible", &json!({})))
+    );
+}
+
+#[test]
+fn visible_requests_and_promoted_prefetches_run_before_background_backlog() {
+    let (started, observed) = mpsc::channel();
+    let (release, gate) = mpsc::channel();
+    let service = Service::with_loader(true, move |source| {
+        started.send(source.id.clone()).unwrap();
+        gate.recv().unwrap();
+        None
+    });
+    let sources: Vec<_> = (0..100)
+        .map(|i| Source::new(&format!("background-{i}"), &json!({})))
+        .collect();
+    service.prefetch(sources.clone());
+    assert_eq!(
+        observed.recv_timeout(Duration::from_secs(3)).unwrap(),
+        "background-0"
+    );
+    service.get(&Source::new("visible", &json!({})));
+    service.get(&sources[7]);
+    release.send(()).unwrap();
+    assert_eq!(
+        observed.recv_timeout(Duration::from_secs(3)).unwrap(),
+        "visible"
+    );
+    release.send(()).unwrap();
+    assert_eq!(
+        observed.recv_timeout(Duration::from_secs(3)).unwrap(),
+        "background-7"
+    );
+    for _ in 0..99 {
+        release.send(()).unwrap();
+    }
+    poll_until(&service, || !service.pending());
+    assert!(
+        sources
+            .iter()
+            .all(|source| service.cache.borrow().entries.contains_key(source))
+    );
+    // Promotion reuses the pending request rather than decoding the icon twice.
+    assert_eq!(observed.try_iter().count(), 98);
+}
+
+#[test]
+fn reset_discards_prefetch_backlog_and_queued_requests() {
+    let (started, observed) = mpsc::channel();
+    let (release, gate) = mpsc::channel();
+    let service = Service::with_loader(true, move |source| {
+        started.send(source.id.clone()).unwrap();
+        gate.recv().unwrap();
+        None
+    });
+    service.prefetch((0..100).map(|i| Source::new(&format!("old-{i}"), &json!({}))));
+    assert_eq!(
+        observed.recv_timeout(Duration::from_secs(3)).unwrap(),
+        "old-0"
+    );
+    service.reset();
+    let current = Source::new("current", &json!({}));
+    service.prefetch([current.clone()]);
+    release.send(()).unwrap();
+    assert_eq!(
+        observed.recv_timeout(Duration::from_secs(3)).unwrap(),
+        "current"
+    );
+    release.send(()).unwrap();
+    poll_until(&service, || !service.pending());
+    assert_eq!(service.cache.borrow().entries.len(), 1);
+    assert!(service.cache.borrow().entries.contains_key(&current));
+    assert!(observed.try_recv().is_err());
+}

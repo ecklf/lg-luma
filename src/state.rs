@@ -13,9 +13,13 @@ pub const SYSTEM_SECTION: usize = 4;
 pub const SECTION_COUNT: usize = 5;
 pub const APPS_COLUMNS: usize = 6;
 pub const HOME_STRIP_LEFT: f32 = 84.;
-pub const HOME_STRIP_RIGHT: f32 = 1836.;
-pub const HOME_TILE_WIDTH: f32 = 270.;
-pub const HOME_TILE_PITCH: f32 = 296.4;
+// Six favourites in full and the seventh cut off and fading out at the right (Apple TV rows):
+// the strip ends after the sixth tile, so a focused tile never sits in the fade.
+pub const HOME_STRIP_RIGHT: f32 = 1748.;
+pub const HOME_TILE_WIDTH: f32 = 256.;
+pub const HOME_TILE_PITCH: f32 = 281.6;
+pub const HOME_FADE_LEFT: f32 = 8.;
+pub const HOME_FADE_RIGHT: f32 = 1910.;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum Page {
@@ -340,6 +344,73 @@ impl State {
                 .then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
         });
         apps
+    }
+
+    pub fn content_viewport(&self) -> Rect {
+        let bottom = if self.page == Page::Home && self.moving.is_none() {
+            1053.6
+        } else {
+            994.4
+        };
+        Rect::new(64., 108.8, 1792., bottom - 108.8)
+    }
+
+    pub fn favorites_viewport(&self) -> Rect {
+        let content = self.content_viewport();
+        let left = if self.home_scroll > 0. {
+            HOME_FADE_LEFT
+        } else {
+            0.
+        };
+        Rect::new(left, content.y, HOME_FADE_RIGHT - left, content.h)
+    }
+
+    pub fn hit_test(&self, controls: &[Control], x: f32, y: f32) -> Option<Target> {
+        controls
+            .iter()
+            .rev()
+            .find(|control| {
+                let viewport =
+                    if self.page == Page::Home && matches!(control.target, Target::App(_)) {
+                        self.favorites_viewport()
+                    } else {
+                        self.content_viewport()
+                    };
+                control.rect.contains(x, y) && (!control.scrollable || viewport.contains(x, y))
+            })
+            .map(|control| control.target.clone())
+    }
+
+    /// Returns whether this wheel event scrolled favorites, so a pending card press is cancelled.
+    pub fn wheel_scroll(
+        &mut self,
+        controls: &[Control],
+        position: Option<(f32, f32)>,
+        x: i32,
+        y: i32,
+    ) -> bool {
+        let over_favorites = self.page == Page::Home
+            && position.is_some_and(|(x, y)| {
+                self.favorites_viewport().contains(x, y)
+                    && controls.iter().any(|control| {
+                        matches!(control.target, Target::App(_)) && control.rect.contains(x, y)
+                    })
+            });
+        let favorites = self.page == Page::Home && (x != 0 || over_favorites);
+        if favorites {
+            self.scroll_favorites((if x != 0 { x } else { -y }) as f32 * HOME_TILE_PITCH);
+        } else {
+            let bottom = self.content_viewport().y + self.content_viewport().h - 12.;
+            let max = controls
+                .iter()
+                .filter(|c| c.scrollable)
+                .map(|c| c.rect.y + c.rect.h + self.scroll - bottom)
+                .fold(0., f32::max);
+            self.scroll = (self.scroll - y as f32 * 90.).clamp(0., max.max(0.));
+        }
+        self.pointer = true;
+        self.dirty = true;
+        favorites
     }
 
     pub fn scroll_favorites(&mut self, delta: f32) {

@@ -1,0 +1,151 @@
+name: PR Test IPK
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  group: pr-test-ipk-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build PR test IPK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      # The base-branch workflow is trusted; the PR code is not. Keep this
+      # job read-only, without secrets, persisted credentials, or shared build caches.
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@1.93.0
+        with:
+          targets: armv7-unknown-linux-gnueabi
+      - name: Install asset dependencies
+        run: |
+          apt_options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+          sudo apt-get "${apt_options[@]}" update
+          sudo apt-get "${apt_options[@]}" install -y --no-install-recommends \
+            libsdl2-dev pkg-config woff2 python3-fonttools
+      - name: Generate native assets
+        run: pnpm assets
+      - name: Set up the webOS SDK
+        run: pnpm sdk
+      - name: Cross-build and verify the test IPK
+        run: |
+          export WEBOS_NDK="$GITHUB_WORKSPACE/.build/toolchain/arm-webos-linux-gnueabi_sdk-buildroot"
+          pnpm build
+          node tools/package.mjs
+      - name: Upload test IPK and checksum
+        uses: actions/upload-artifact@v7
+        with:
+          name: luma-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+          path: |
+            dist/*.ipk
+            dist/sha256sums
+
+  comment:
+    name: Update test IPK comment
+    needs: build
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+      # Never check out or execute PR code in this write-enabled job. Obtain artifact
+      # metadata from GitHub, rather than trusting files or outputs from the build.
+      - name: Create or update the PR comment
+        uses: actions/github-script@v8
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          script: |
+            const marker = '<!-- luma-pr-test-ipk -->';
+            const pull_number = Number(process.env.PR_NUMBER);
+            const sha = process.env.PR_HEAD_SHA;
+            const repositoryUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}`;
+            const runUrl = `${repositoryUrl}/actions/runs/${context.runId}`;
+            const artifactName = `luma-pr-${pull_number}-${sha}`;
+            let status;
+
+            if (process.env.BUILD_RESULT === 'success') {
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                ...context.repo,
+                run_id: context.runId,
+                per_page: 100,
+              });
+              const artifact = artifacts.find(item => item.name === artifactName && !item.expired);
+              if (!artifact) {
+                throw new Error(`Successful build did not upload ${artifactName}.`);
+              }
+              const downloadUrl = `${runUrl}/artifacts/${artifact.id}`;
+              status = [
+                `**[Download test IPK + SHA-256 checksum](${downloadUrl})**`,
+                '',
+                'Sign in to GitHub to download the ZIP, then extract the `.ipk` and `sha256sums`.',
+                'Artifacts are retained for 14 days. This test package uses the normal `com.ecklf.luma` app ID and replaces an existing Luma installation.',
+              ].join('\n');
+            } else {
+              status = `Test IPK build **${process.env.BUILD_RESULT}**. See the [workflow run](${runUrl}) for details. No test download is available for this run.`;
+            }
+
+            const body = [
+              marker,
+              '## Luma test IPK',
+              '',
+              `**Commit:** [\`${sha}\`](${repositoryUrl}/commit/${sha})`,
+              `**Build:** [#${context.runNumber}](${runUrl}) (attempt ${process.env.GITHUB_RUN_ATTEMPT})`,
+              '',
+              status,
+              '',
+              'This comment is updated in place after each PR test build.',
+            ].join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo,
+              issue_number: pull_number,
+              per_page: 100,
+            });
+            const existing = comments.find(comment =>
+              comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker)
+            );
+
+            // A superseded run must never replace the download for a newer commit.
+            const { data: pull } = await github.rest.pulls.get({ ...context.repo, pull_number });
+            if (pull.state !== 'open' || pull.head.sha !== sha) {
+              core.info('PR closed or head changed; leaving the test IPK comment untouched.');
+              return;
+            }
+            if (existing) {
+              await github.rest.issues.updateComment({
+                ...context.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: pull_number,
+                body,
+              });
+            }

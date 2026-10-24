@@ -8,10 +8,11 @@ use crate::{
 use serde_json::{Value, json};
 use std::{collections::HashSet, sync::mpsc, thread};
 
+#[path = "platform-install.rs"]
+mod installation;
+
 pub const APP_ID: &str = "com.ecklf.luma";
 pub const HOME_ID: &str = "com.webos.app.home";
-/// Developer-mode installation of this package, used when the executable runs from elsewhere.
-pub const INSTALL_DIR: &str = "/media/developer/apps/usr/palm/applications/com.ecklf.luma";
 /// LG's Home executable. A root integration may bind-mount Luma over it, so sam starts Luma
 /// under LG's own Home manifest and LS2 role (lifecycle v2, keep-alive, no sam restart).
 pub const LG_HOME_EXE: &str = "/usr/bin/com.webos.app.home";
@@ -23,16 +24,15 @@ pub fn runs_as_lg_home() -> bool {
 
 /// Directory holding assets/, lib/ and splash/: next to the executable, or the installed
 /// package when the executable runs in place of LG's Home.
-pub fn install_dir() -> std::path::PathBuf {
-    let beside = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf))
-        .unwrap_or_default();
-    if beside.join("assets").is_dir() {
-        beside
-    } else {
-        std::path::PathBuf::from(INSTALL_DIR)
-    }
+pub fn install_dir() -> Result<std::path::PathBuf, String> {
+    static DIRECTORY: std::sync::OnceLock<Result<std::path::PathBuf, String>> =
+        std::sync::OnceLock::new();
+    DIRECTORY
+        .get_or_init(|| {
+            let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+            installation::find_directory(&executable, installation::directories())
+        })
+        .clone()
 }
 
 pub fn redirect_to_home() -> Result<bool, String> {
@@ -184,7 +184,7 @@ impl Platform {
 }
 
 fn sync_splash(background: &str) -> Result<(), String> {
-    let directory = install_dir();
+    let directory = install_dir()?;
     let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
     let command = format!(
         "/usr/bin/node -e {} {}",
