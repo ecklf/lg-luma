@@ -710,6 +710,16 @@ fn run() -> Result<(), String> {
                         state.preferences.language,
                     );
                     state.set_inventory(inventory, warning);
+                    // Decode every installed icon now, on the artwork worker, rather than when
+                    // the Apps page first shows it: a long-running Home then opens Apps ready.
+                    assets.artwork.prefetch(
+                        state
+                            .inventory
+                            .apps
+                            .iter()
+                            .filter(|app| crate::branding::for_key(&app.brand).is_none())
+                            .filter_map(|app| app.icon.clone()),
+                    );
                     if initial_focus
                         && state.focus == Target::Nav(0)
                         && state.page == state::Page::Home

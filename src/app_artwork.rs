@@ -6,7 +6,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     fs::File,
     io::{Cursor, Read},
     path::{Component, Path, PathBuf},
@@ -24,6 +24,8 @@ const ROOTS: [&str; 5] = [
 pub const MAX_FILE: usize = 512 * 1024;
 const CACHE_BYTES: usize = 16 * 1024 * 1024;
 const CACHE_ENTRIES: usize = 256;
+// Prefetched icons in flight at once: the rest of the request queue stays free for visible cards.
+const PREFETCH_SLOTS: usize = 8;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct Source {
@@ -242,6 +244,7 @@ pub struct Service {
     sender: Option<mpsc::SyncSender<Request>>,
     receiver: mpsc::Receiver<Reply>,
     cache: RefCell<Cache>,
+    prefetch: RefCell<VecDeque<Source>>,
 }
 
 impl Service {
@@ -274,51 +277,89 @@ impl Service {
             sender: enabled.then_some(sender),
             receiver,
             cache: RefCell::default(),
+            prefetch: RefCell::default(),
         }
     }
 
     pub fn get(&self, source: &Source) -> Option<Arc<Artwork>> {
-        let sender = self.sender.as_ref()?;
+        self.request(source).ok().flatten()
+    }
+
+    /// The cached artwork, or a queued request for it. `Err` when the request queue is full:
+    /// a visible card is retried when the next completed request redraws the scene, so
+    /// neither scrolling nor a slow Homebrew service can block input.
+    fn request(&self, source: &Source) -> Result<Option<Arc<Artwork>>, ()> {
+        let sender = self.sender.as_ref().ok_or(())?;
         let mut cache = self.cache.borrow_mut();
         cache.clock += 1;
         let clock = cache.clock;
         if let Some(entry) = cache.entries.get_mut(source) {
             entry.used = clock;
-            return entry.image.clone().flatten();
+            return Ok(entry.image.clone().flatten());
         }
         let request = Request {
             token: clock,
             source: source.clone(),
         };
-        // A full queue is retried when the next completed request redraws the
-        // scene. Neither scrolling nor a slow Homebrew service can block input.
-        if sender.try_send(request).is_ok() {
-            cache.entries.insert(
-                source.clone(),
-                Entry {
-                    token: clock,
-                    used: clock,
-                    image: None,
-                },
-            );
+        sender.try_send(request).map_err(|_| ())?;
+        cache.entries.insert(
+            source.clone(),
+            Entry {
+                token: clock,
+                used: clock,
+                image: None,
+            },
+        );
+        Ok(None)
+    }
+
+    /// Decodes these icons in the background, e.g. every installed app, so pages open with
+    /// their artwork ready. They are fed to the worker a few at a time as replies come in.
+    pub fn prefetch(&self, sources: impl IntoIterator<Item = Source>) {
+        if self.sender.is_none() {
+            return;
         }
-        None
+        *self.prefetch.borrow_mut() = sources.into_iter().collect();
+        self.feed();
+    }
+
+    fn feed(&self) {
+        let mut queue = self.prefetch.borrow_mut();
+        let mut in_flight = self.in_flight();
+        while in_flight < PREFETCH_SLOTS
+            && let Some(source) = queue.front()
+        {
+            let cached = self.cache.borrow().entries.contains_key(source);
+            if !cached {
+                if self.request(source).is_err() {
+                    break;
+                }
+                in_flight += 1;
+            }
+            queue.pop_front();
+        }
+    }
+
+    fn in_flight(&self) -> usize {
+        self.cache
+            .borrow()
+            .entries
+            .values()
+            .filter(|entry| entry.image.is_none())
+            .count()
     }
 
     /// Whether a requested icon has not come back yet, so the event loop
     /// should wake soon to poll for it.
     pub fn pending(&self) -> bool {
-        self.cache
-            .borrow()
-            .entries
-            .values()
-            .any(|entry| entry.image.is_none())
+        self.in_flight() > 0 || !self.prefetch.borrow().is_empty()
     }
 
     /// Refresh apps: every icon is read again. Replies to earlier requests
     /// no longer match an entry's token and are dropped.
     pub fn reset(&self) {
         self.cache.borrow_mut().entries.clear();
+        self.prefetch.borrow_mut().clear();
     }
 
     /// After an automatic inventory refresh: icons that were unavailable are
@@ -368,6 +409,8 @@ impl Service {
                 bytes -= image.pixels.as_raw().len();
             }
         }
+        drop(cache);
+        self.feed();
         changed
     }
 }

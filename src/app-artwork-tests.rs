@@ -399,3 +399,35 @@ fn visible_cards_switch_from_fallback_to_installed_artwork_without_an_icon_map()
         .unwrap();
     assert_eq!(image.color, [24, 40, 56]);
 }
+
+#[test]
+fn prefetch_decodes_every_icon_although_the_request_queue_is_short() {
+    let (release, gate) = mpsc::channel::<()>();
+    let gate = std::sync::Mutex::new(gate);
+    let service = Service::with_loader(true, move |_| {
+        gate.lock().unwrap().recv().unwrap();
+        None
+    });
+    let sources: Vec<_> = (0..100)
+        .map(|index| Source::new(&format!("sample{index}"), &json!({})))
+        .collect();
+    service.prefetch(sources.clone());
+    // Slots stay free for the cards on screen while the worker is busy.
+    assert!(service.cache.borrow().entries.len() <= PREFETCH_SLOTS);
+    assert!(service.get(&Source::new("visible", &json!({}))).is_none());
+    for _ in 0..101 {
+        release.send(()).unwrap();
+    }
+    poll_until(&service, || !service.pending());
+    let cache = service.cache.borrow();
+    assert!(
+        sources
+            .iter()
+            .all(|source| cache.entries.contains_key(source))
+    );
+    assert!(
+        cache
+            .entries
+            .contains_key(&Source::new("visible", &json!({})))
+    );
+}
