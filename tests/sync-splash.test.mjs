@@ -8,7 +8,7 @@ const script = await fs.readFile(new URL('../tv/sync-splash.cjs', import.meta.ur
 const app = 'com.ecklf.luma';
 const state = '/var/lib/luma-home';
 
-function fixture({ production = false, config, failWrite = false } = {}) {
+function fixture({ production = false, config, failWrite = false, stage = true } = {}) {
   const directory = `/media/${production ? 'cryptofs' : 'developer'}/apps/usr/palm/applications/${app}`;
   const files = new Map([
     [
@@ -18,8 +18,13 @@ function fixture({ production = false, config, failWrite = false } = {}) {
     [`${directory}/splash.png`, Buffer.from('dunes')],
     [`${directory}/splash/forest.png`, Buffer.from('forest')],
     [`${directory}/splash/prism.png`, Buffer.from('prism')],
-    [`${state}/app/splash.png`, Buffer.from('old Home splash')],
   ]);
+  // The executable Home method creates no staged app directory.
+  const directories = new Set([directory, `${directory}/splash`, state]);
+  if (stage) {
+    directories.add(`${state}/app`);
+    files.set(`${state}/app/splash.png`, Buffer.from('old Home splash'));
+  }
   if (config) files.set(`${state}/state.json`, Buffer.from(JSON.stringify(config(directory))));
   const writes = [];
   const renames = [];
@@ -33,6 +38,7 @@ function fixture({ production = false, config, failWrite = false } = {}) {
     writeFileSync(file, data, options) {
       assert.ok(file.endsWith('/splash.png.new'));
       assert.equal(options.mode, 0o644);
+      if (!directories.has(path.posix.dirname(file))) throw missing();
       if (failWrite) throw Object.assign(new Error('Read-only filesystem'), { code: 'EROFS' });
       writes.push(file);
       files.set(file, data);
@@ -99,6 +105,22 @@ test('only an enabled Home stage belonging to this installation is refreshed', (
     assert.equal(
       mock.files.get(`${state}/app/splash.png`).toString(),
       enabled && matching ? 'prism' : 'old Home splash',
+    );
+  }
+});
+
+test('the executable Home method has no staged copy, so only the tile splash is updated', () => {
+  for (const method of ['executable', 'manifest', undefined]) {
+    const executable = method === 'executable';
+    const mock = fixture({
+      stage: !executable,
+      config: (directory) => ({ enabled: true, method, appDir: directory }),
+    });
+    mock.sync('prism');
+    assert.equal(mock.files.get(`${mock.directory}/splash.png`).toString(), 'prism');
+    assert.equal(
+      mock.files.get(`${state}/app/splash.png`)?.toString(),
+      executable ? undefined : 'prism',
     );
   }
 });

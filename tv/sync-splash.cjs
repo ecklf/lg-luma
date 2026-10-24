@@ -51,7 +51,9 @@ try {
 } catch (error) {
   if (error.code !== 'ENOENT') throw error;
 }
-if (config && config.enabled && config.appDir === appDir) {
+// Only the manifest method stages a Home copy. The executable method (webOS 5/6)
+// keeps LG's own Home manifest, so there is no staged splash to update.
+if (config && config.enabled && config.method !== 'executable' && config.appDir === appDir) {
   replace(STATE + '/app/splash.png');
 }
 console.log(JSON.stringify({ returnValue: true, background: selected.background }));
