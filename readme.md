@@ -2,10 +2,6 @@
 
 A native launcher for rooted LG webOS TVs, inspired by Apple TV.
 
-> [!NOTE]
-> Tested on **LG OLED55C57** running **webOS 26**.\
-> External testing confirms compatibility with **webOS >=5**.
-
 <table>
   <tr>
     <td width="50%" align="center">
@@ -17,13 +13,23 @@ A native launcher for rooted LG webOS TVs, inspired by Apple TV.
   </tr>
   <tr>
     <td width="50%" align="center">
-      <img src="docs/settings.png" alt="Luma native General settings with Quit app, desktop preview">
+      <img src="docs/settings.png" alt="Luma native General settings, desktop preview">
     </td>
     <td width="50%" align="center">
       <img src="docs/inputs.png" alt="Luma native input settings, desktop preview">
     </td>
   </tr>
 </table>
+
+## Compatibility
+
+The following TV configurations have been reported working with Luma:
+
+| TV    | Model identifier | webOS |
+| ----- | ---------------- | ----- |
+| LG C1 | `OLED48C1KNB`    | 6.5.3 |
+| LG C3 | `OLED65C31LA`    | 26    |
+| LG C5 | `OLED55C57LA`    | 26    |
 
 ## Installation
 
