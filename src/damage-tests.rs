@@ -138,3 +138,43 @@ fn shadows_include_their_blur() {
     let damage = area(tracker.damage(1));
     assert_eq!((damage.x, damage.w), (481., 238.));
 }
+
+#[test]
+fn culling_covers_every_pixel_the_damage_clears() {
+    use crate::renderer::Renderer;
+    let contains = |outer: Rect, inner: Rect| {
+        outer.x <= inner.x + 1e-3
+            && outer.y <= inner.y + 1e-3
+            && outer.x + outer.w >= inner.x + inner.w - 1e-3
+            && outer.y + outer.h >= inner.y + inner.h - 1e-3
+    };
+    let damage = Rect::new(100., 300., 3., 3.);
+    for (width, height) in [
+        (640, 360),
+        (1280, 720),
+        (1366, 768),
+        (1920, 1080),
+        (1920, 1200),
+    ] {
+        let pixels = Renderer::damage_pixels(damage, width, height);
+        assert!(contains(
+            Renderer::damage_area(pixels, width, height),
+            damage
+        ));
+    }
+    // At 640x360 a drawable pixel spans 3 logical units: the cleared pixels reach x 99..105,
+    // so a command at x 104 must still be drawn although it misses the logical damage.
+    let pixels = Renderer::damage_pixels(damage, 640, 360);
+    let neighbour = bounds(&Draw::Shape(
+        Rect::new(104.2, 300., 0.5, 3.),
+        0.,
+        0.,
+        [1., 1., 1., 1.],
+    ))
+    .expect("shape bounds");
+    assert!(!intersects(damage, neighbour));
+    assert!(intersects(
+        Renderer::damage_area(pixels, 640, 360),
+        neighbour
+    ));
+}

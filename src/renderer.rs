@@ -959,20 +959,27 @@ impl Renderer {
         [x0, y0, (x1 - x0).max(0), (y1 - y0).max(0)]
     }
 
-    /// Draws the scene. With `damage` (logical area and its drawable pixels from
-    /// `damage_pixels`), only that area is cleared and drawn; commands entirely outside it are
-    /// skipped, and the rest of the back buffer keeps its earlier contents.
-    pub fn render(
-        &mut self,
-        commands: &[Draw],
-        width: u32,
-        height: u32,
-        damage: Option<(Rect, [i32; 4])>,
-    ) {
-        let (area, damage) = (
-            damage.map(|(area, _)| area),
-            damage.map(|(_, pixels)| pixels),
-        );
+    /// The logical area drawable pixels from `damage_pixels` cover. Grown to whole pixels it
+    /// can exceed the original logical damage; commands are culled against this area, so none
+    /// that paints into the cleared pixels is skipped.
+    pub fn damage_area(pixels: [i32; 4], width: u32, height: u32) -> Rect {
+        let viewport = Viewport::new(Size::new(width, height));
+        let sx = viewport.width as f32 / 1920.;
+        let sy = viewport.height as f32 / 1080.;
+        let [x, y, w, h] = pixels;
+        Rect::new(
+            (x - viewport.x) as f32 / sx,
+            1080. - (y + h - viewport.y) as f32 / sy,
+            w as f32 / sx,
+            h as f32 / sy,
+        )
+    }
+
+    /// Draws the scene. With `damage` (drawable pixels from `damage_pixels`), only those pixels
+    /// are cleared and drawn; commands entirely outside them are skipped, and the rest of the
+    /// back buffer keeps its earlier contents.
+    pub fn render(&mut self, commands: &[Draw], width: u32, height: u32, damage: Option<[i32; 4]>) {
+        let area = damage.map(|pixels| Self::damage_area(pixels, width, height));
         let started = Instant::now();
         self.stats = RenderStats::new(Size::new(width, height));
         // Captures can bind a single-sample FBO even when the actual TV window

@@ -1,7 +1,8 @@
 //! Buffer age and damage regions for partial redraw on EGL window surfaces.
 //! EGL_KHR_partial_update (webOS Mali) also tells the driver which tiles to preserve, so a
 //! small change costs only those tiles; EGL_EXT_buffer_age alone still allows redrawing less.
-//! Without either, or outside Wayland (X11 may be GLX), every frame is drawn in full.
+//! Without either, or without a current EGL context (GLX, CGL, WGL), every frame is drawn in
+//! full.
 use std::ffi::{CStr, c_char, c_void};
 
 type Display = *mut c_void;
@@ -12,6 +13,24 @@ const EGL_BUFFER_AGE: i32 = 0x313D;
 type QuerySurface = unsafe extern "C" fn(Display, Surface, i32, *mut i32) -> u32;
 type SetDamage = unsafe extern "C" fn(Display, Surface, *const i32, i32) -> u32;
 
+#[cfg(target_os = "linux")]
+unsafe extern "C" {
+    fn dlopen(filename: *const c_char, flags: std::ffi::c_int) -> *mut c_void;
+    fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
+}
+
+/// The EGL library SDL already loaded, without loading one. Not loaded: the context isn't EGL.
+#[cfg(target_os = "linux")]
+fn loaded_egl() -> Option<*mut c_void> {
+    const RTLD_LAZY: std::ffi::c_int = 0x1;
+    const RTLD_NOLOAD: std::ffi::c_int = 0x4;
+    [c"libEGL.so.1", c"libEGL.so"].into_iter().find_map(|name| {
+        // SAFETY: a NUL-terminated name; RTLD_NOLOAD only looks up an already loaded library.
+        let handle = unsafe { dlopen(name.as_ptr(), RTLD_LAZY | RTLD_NOLOAD) };
+        (!handle.is_null()).then_some(handle)
+    })
+}
+
 pub struct PartialUpdate {
     display: Display,
     surface: Surface,
@@ -21,26 +40,39 @@ pub struct PartialUpdate {
 
 impl PartialUpdate {
     /// For the current context's draw surface; call after the GL context is current.
-    pub fn load(video: &sdl2::VideoSubsystem) -> Option<Self> {
-        // Only Wayland contexts are EGL here (webOS too). Under X11 the context may be GLX,
-        // whose glXGetProcAddress returns non-null stubs even for EGL names.
-        if video.current_video_driver() != "wayland" {
-            return None;
-        }
-        let proc = |name: &str| {
-            let address = video.gl_get_proc_address(name);
+    #[cfg(not(target_os = "linux"))]
+    pub fn load() -> Option<Self> {
+        None
+    }
+
+    /// For the current context's draw surface; call after the GL context is current.
+    #[cfg(target_os = "linux")]
+    pub fn load() -> Option<Self> {
+        let library = loaded_egl()?;
+        // Symbols come from the EGL library itself, never from the GL backend's resolver:
+        // glXGetProcAddress returns non-null dispatch stubs even for unknown egl* names.
+        let symbol = |name: &CStr| {
+            // SAFETY: a loaded library handle and a NUL-terminated symbol name.
+            let address = unsafe { dlsym(library, name.as_ptr()) };
             (!address.is_null()).then_some(address)
         };
-        // SAFETY: the addresses are EGL entry points with these C signatures, resolved by SDL
-        // from the EGL library it loaded for the current context.
+        // SAFETY: the addresses are EGL 1.4 entry points with these C signatures, from libEGL.
         unsafe {
+            let current_context: unsafe extern "C" fn() -> *mut c_void =
+                std::mem::transmute(symbol(c"eglGetCurrentContext")?);
             let current_display: unsafe extern "C" fn() -> Display =
-                std::mem::transmute(proc("eglGetCurrentDisplay")?);
+                std::mem::transmute(symbol(c"eglGetCurrentDisplay")?);
             let current_surface: unsafe extern "C" fn(i32) -> Surface =
-                std::mem::transmute(proc("eglGetCurrentSurface")?);
+                std::mem::transmute(symbol(c"eglGetCurrentSurface")?);
             let query_string: unsafe extern "C" fn(Display, i32) -> *const c_char =
-                std::mem::transmute(proc("eglQueryString")?);
-            let query_surface: QuerySurface = std::mem::transmute(proc("eglQuerySurface")?);
+                std::mem::transmute(symbol(c"eglQueryString")?);
+            let query_surface: QuerySurface = std::mem::transmute(symbol(c"eglQuerySurface")?);
+            let get_proc_address: unsafe extern "C" fn(*const c_char) -> *mut c_void =
+                std::mem::transmute(symbol(c"eglGetProcAddress")?);
+            // libEGL can be loaded beside a GLX context (libglvnd); then no EGL context is current.
+            if current_context().is_null() {
+                return None;
+            }
             let display = current_display();
             let surface = current_surface(EGL_DRAW);
             if display.is_null() || surface.is_null() {
@@ -53,8 +85,8 @@ impl PartialUpdate {
             let extensions = CStr::from_ptr(extensions).to_string_lossy();
             let has = |name: &str| extensions.split_whitespace().any(|item| item == name);
             let set_damage = if has("EGL_KHR_partial_update") {
-                proc("eglSetDamageRegionKHR")
-                    .map(|address| std::mem::transmute::<*const (), SetDamage>(address))
+                let address = get_proc_address(c"eglSetDamageRegionKHR".as_ptr());
+                (!address.is_null()).then(|| std::mem::transmute::<*mut c_void, SetDamage>(address))
             } else {
                 None
             };

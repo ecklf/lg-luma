@@ -694,7 +694,7 @@ fn run() -> Result<(), String> {
     startup_stage("renderer");
     // Redraw only what changed since the back buffer's frame (LUMA_PARTIAL=0 draws in full).
     let partial = (std::env::var("LUMA_PARTIAL").as_deref() != Ok("0"))
-        .then(|| egl_damage::PartialUpdate::load(&video))
+        .then(egl_damage::PartialUpdate::load)
         .flatten();
     eprintln!(
         "Luma partial redraw: {}",
@@ -1380,8 +1380,8 @@ fn run() -> Result<(), String> {
                     }
                     let damage = damage_tracker
                         .damage(partial.buffer_age())
-                        .map(|rect| (rect, renderer::Renderer::damage_pixels(rect, width, height)));
-                    if let Some((_, pixels)) = damage {
+                        .map(|rect| renderer::Renderer::damage_pixels(rect, width, height));
+                    if let Some(pixels) = damage {
                         partial.set_damage(pixels);
                     }
                     damage

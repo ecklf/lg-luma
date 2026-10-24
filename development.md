@@ -400,9 +400,11 @@ compares consecutive scenes command by command, realigning after inserted or rem
 such as a focus ring; the union of changes since the buffer's frame (EGL buffer age) is the only
 area cleared and drawn, with a scissor intersected with each clip, and commands entirely outside
 it are not laid out. `EGL_KHR_partial_update` also tells the driver which tiles to keep (webOS
-Mali); `EGL_EXT_buffer_age` alone still allows the smaller redraw. Unknown buffer ages, changed
-clip or fade state, a new drawable and screenshot captures draw the whole frame, as does
-`LUMA_PARTIAL=0`. The startup log names the mode (`Luma partial redraw: …`).
+Mali); `EGL_EXT_buffer_age` alone still allows the smaller redraw. The EGL entry points come from
+the libEGL SDL loaded, and only with a current EGL context, so GLX/CGL/WGL contexts always draw in
+full. Unknown buffer ages, changed clip or fade state, a new drawable and screenshot captures draw
+the whole frame, as does `LUMA_PARTIAL=0`. The startup log names the mode
+(`Luma partial redraw: …`).
 
 `LUMA_DAMAGE_VERIFY=1` compares every frame with the same scene drawn in full offscreen at the
 window's sample count and reports differing pixels in the diagnostics (`damage_verify`, with the
