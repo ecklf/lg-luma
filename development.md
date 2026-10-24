@@ -475,7 +475,13 @@ is bound to that executable path. Luma detects this (`platform::runs_as_lg_home`
   `returnValue: false` (registration lost) quit. SAM keeps the process across Home launches and
   standby (`pause`, reason `keepAlive`) instead of restarting it;
 - resolves `assets/`, `lib/` (extra RPATH) and the splash directory from the installed package,
-  since `current_exe()` names LG's path;
+  since `current_exe()` names LG's path. Production Homebrew Channel installs under
+  `/media/cryptofs`, developer installs under `/media/developer` and system installs under
+  `/usr/palm/applications` share the lookup list in `tv/install-directories.txt`. Library search
+  retains `$ORIGIN/lib` first and includes all three locations before Rust startup. Native
+  discovery validates the package manifest and matches the executable by device/inode, so assets
+  and splash updates use the source package even when developer and production copies both exist.
+  A missing or unrelated source package is an explicit startup error;
 - writes its stderr to `/tmp/luma-home.log`, because SAM discards a system app's output;
 - skips the per-icon elevated-service fallback for installed artwork: as root every file is
   readable, so that fallback would only spend seconds per icon to fail the same way.

@@ -540,13 +540,11 @@ fn run() -> Result<(), String> {
     let local_offset = OffsetDateTime::now_local()
         .map(|now| now.offset())
         .unwrap_or(time::UtcOffset::UTC);
-    let root = options.assets.clone().unwrap_or_else(|| {
-        if webos {
-            platform::install_dir().join("assets")
-        } else {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".build/assets")
-        }
-    });
+    let root = match options.assets.clone() {
+        Some(root) => root,
+        None if webos => platform::install_dir()?.join("assets"),
+        None => PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".build/assets"),
+    };
     let assets = view::Assets::load(root, webos)?;
     startup_stage("asset metadata");
     let default_preferences = options
