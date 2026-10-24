@@ -245,10 +245,6 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn enabled(&self) -> bool {
-        self.sender.is_some()
-    }
-
     pub fn new(enabled: bool) -> Self {
         Self::with_loader(enabled, load)
     }

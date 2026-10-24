@@ -183,7 +183,7 @@ Installed icons keep the existing artwork worker and bounded caches. No TV image
 are bundled or saved into preferences. System and OTNCABI installation roots are supported by the
 bounded reader.
 
-Desktop preview uses labeled in-memory sample history and simulated mutations, with no TV calls:
+Desktop preview uses in-memory sample history and simulated mutations, with no TV calls:
 
 ```sh
 pnpm dev --script recents,await-recents

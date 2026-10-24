@@ -631,8 +631,5 @@ fn empty_recents_has_no_explanatory_subtitle() {
             _ => None,
         })
         .collect();
-    assert_eq!(
-        texts,
-        ["No recent apps", "Desktop preview · Sample history"]
-    );
+    assert_eq!(texts, ["No recent apps"]);
 }

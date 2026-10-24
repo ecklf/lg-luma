@@ -116,15 +116,6 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
             true,
         );
     }
-    if !assets.artwork.enabled() {
-        out.text(
-            language.t("recentDesktop"),
-            Rect::new(180., 973., 1560., 24.),
-            text(14., 400, 0.),
-            c(0xffffff, 0.35),
-            true,
-        );
-    }
 }
 
 fn recent_focus(state: &State) -> &Target {
