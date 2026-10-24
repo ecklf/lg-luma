@@ -663,9 +663,16 @@ fn run() -> Result<(), String> {
     };
     let mut opened = None;
     let mut failures = Vec::new();
-    // Prefer true sample coverage of intact glyph outlines. Some TV EGL stacks
-    // have fewer configurations, so retain a usable non-MSAA fallback.
-    for samples in [4, 2, 0] {
+    // On the TV, text and logos stay crisper through the panel's 2x scale-up with their
+    // analytic edge filters than with 4x MSAA coverage, at the same cost. Desktop previews
+    // keep multisampling (LUMA_MSAA=4 or 0 overrides either), with a non-MSAA fallback.
+    let sample_counts: &[u8] = match std::env::var("LUMA_MSAA").as_deref() {
+        Ok("4") => &[4, 2, 0],
+        Ok("0") => &[0],
+        _ if webos => &[0],
+        _ => &[4, 2, 0],
+    };
+    for &samples in sample_counts {
         attributes.set_multisample_buffers(u8::from(samples > 0));
         attributes.set_multisample_samples(samples);
         match create_window() {

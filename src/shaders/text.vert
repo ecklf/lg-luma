@@ -6,6 +6,7 @@ uniform vec4 u_transform;
 uniform vec2 u_pixel_scale;
 uniform vec4 u_tint;
 uniform float u_fringe;
+uniform float u_embolden;
 varying PAINT_PRECISION vec4 v_color;
 varying PAINT_PRECISION float v_coverage;
 varying PAINT_PRECISION float v_logical_y;
@@ -17,7 +18,10 @@ void main() {
     origin = floor(origin * u_pixel_scale + vec2(0.5)) / u_pixel_scale;
     // With MSAA, use the original outline; inward offsets can fold thin stems.
     // Single-sample targets retain a narrower analytic boundary fringe.
-    vec2 position = origin + a_position + a_offset * u_fringe / u_pixel_scale;
+    // Boundary offsets point along the outline normal (inner vertices inward): moving both
+    // sides outward by u_embolden physical pixels thickens small text's stems.
+    vec2 normal = a_offset * (a_coverage > 0.5 ? -2.0 : 2.0);
+    vec2 position = origin + a_position + (a_offset * u_fringe + normal * u_embolden) / u_pixel_scale;
     gl_Position = vec4(position.x / 960.0 - 1.0, 1.0 - position.y / 540.0, 0.0, 1.0);
     v_color = u_tint;
     v_coverage = mix(1.0, a_coverage, step(0.001, u_fringe));

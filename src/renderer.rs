@@ -234,6 +234,20 @@ fn profile_skip(command: &Draw) -> bool {
     skip.iter().any(|entry| entry == kind || entry == "all")
 }
 
+/// Stem emboldening for small text, in physical pixels per edge: thin stems get an opaque
+/// core instead of only grey edge pixels, which a TV's 2x scale-up would soften further.
+/// Full strength up to 16 physical pixels, none from 28. LUMA_EMBOLDEN sets the strength.
+fn embolden(physical_size: f32) -> f32 {
+    static STRENGTH: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
+    let strength = *STRENGTH.get_or_init(|| {
+        std::env::var("LUMA_EMBOLDEN")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(0.25)
+    });
+    strength * ((28. - physical_size) / 12.).clamp(0., 1.)
+}
+
 pub struct Renderer {
     program: GLuint,
     vector_program: GLuint,
@@ -1096,6 +1110,7 @@ impl Renderer {
                             mesh,
                             [rect.w / mesh.width, rect.h / mesh.height, rect.x, rect.y],
                             *tint,
+                            0.,
                         );
                         paint_bound = false;
                     }
@@ -1104,11 +1119,13 @@ impl Renderer {
                         else {
                             continue;
                         };
+                        let size = f32::from_bits(key.layout[0]) * vh as f32 / 1080.;
                         self.draw_mesh(
                             self.text_program,
                             mesh,
                             [1., 1., origin[0], origin[1]],
                             *tint,
+                            embolden(size),
                         );
                         paint_bound = false;
                     }
@@ -1151,7 +1168,14 @@ impl Renderer {
         self.stats.cpu_submission_ms = started.elapsed().as_secs_f64() * 1000.;
     }
 
-    fn draw_mesh(&self, program: GLuint, mesh: &vector::Mesh, transform: [f32; 4], tint: Color) {
+    fn draw_mesh(
+        &self,
+        program: GLuint,
+        mesh: &vector::Mesh,
+        transform: [f32; 4],
+        tint: Color,
+        embolden: f32,
+    ) {
         let viewport = self.stats.viewport;
         unsafe {
             gl::UseProgram(program);
@@ -1163,6 +1187,10 @@ impl Renderer {
                     } else {
                         0.5
                     },
+                );
+                gl::Uniform1f(
+                    gl::GetUniformLocation(program, c"u_embolden".as_ptr()),
+                    embolden,
                 );
             }
             gl::BindBuffer(gl::ARRAY_BUFFER, mesh.buffer);
