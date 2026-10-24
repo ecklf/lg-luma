@@ -1368,3 +1368,40 @@ fn foreground_check_needs_focus_after_a_relaunch_from_the_background() {
     check.relaunched(late, false);
     assert!(check.failed(late + ForegroundCheck::TIMEOUT));
 }
+
+#[test]
+fn prewarm_waits_while_recents_replaces_the_page() {
+    let mut state = ready();
+    let mut jobs = vec![Page::Settings, Page::Apps];
+    state.open_recents();
+    state.recents.visibility = 1.;
+    // As after the frame that showed it.
+    state.dirty = false;
+    // The Apps scene would be Recents only, so preparing it now would be wasted.
+    let apps_controls = |state: &mut State| {
+        let current = std::mem::replace(&mut state.page, Page::Apps);
+        let found = controls(state)
+            .iter()
+            .any(|control| matches!(control.target, Target::App(_)));
+        state.page = current;
+        found
+    };
+    assert!(!apps_controls(&mut state));
+    assert_eq!(crate::next_prewarm(&mut jobs, &state, true), None);
+    assert_eq!(jobs, [Page::Settings, Page::Apps]);
+    // Once Recents is gone the retained jobs run, in order.
+    state.overlay = None;
+    state.recents.visibility = 0.;
+    state.dirty = false;
+    assert!(apps_controls(&mut state));
+    assert_eq!(crate::next_prewarm(&mut jobs, &state, false), None);
+    assert_eq!(
+        crate::next_prewarm(&mut jobs, &state, true),
+        Some(Page::Apps)
+    );
+    assert_eq!(
+        crate::next_prewarm(&mut jobs, &state, true),
+        Some(Page::Settings)
+    );
+    assert_eq!(crate::next_prewarm(&mut jobs, &state, true), None);
+}

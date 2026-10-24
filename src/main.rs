@@ -500,6 +500,19 @@ fn log_home_output() {
     unsafe { sdl2::sys::SDL_LogSetAllPriority(sdl2::sys::SDL_LogPriority::SDL_LOG_PRIORITY_INFO) };
 }
 
+/// The next page to prepare while the screen is idle. Jobs wait while the scene would not
+/// contain their page (fully shown Recents replaces it), rather than preparing Recents again.
+fn next_prewarm(
+    prewarm: &mut Vec<state::Page>,
+    state: &state::State,
+    idle: bool,
+) -> Option<state::Page> {
+    if !idle || state.dirty || view::recents_replaces_page(state) {
+        return None;
+    }
+    prewarm.pop()
+}
+
 fn run() -> Result<(), String> {
     let startup = Instant::now();
     // In place of LG's Home, before parsing, so option errors are kept too.
@@ -1496,12 +1509,10 @@ fn run() -> Result<(), String> {
         }
         // Prepare other pages one at a time once the screen has been still for a while, so
         // their first appearance does not pay for text layout, logo meshes and icon uploads.
-        while visible
-            && !state.dirty
+        let idle = visible
             && (prewarm_now
-                || (!state.animating() && last_present.elapsed() > Duration::from_millis(1500)))
-            && let Some(page) = prewarm.pop()
-        {
+                || (!state.animating() && last_present.elapsed() > Duration::from_millis(1500)));
+        while let Some(page) = next_prewarm(&mut prewarm, &state, idle) {
             if page != state.page {
                 let started = Instant::now();
                 let current = std::mem::replace(&mut state.page, page);

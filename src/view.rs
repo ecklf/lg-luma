@@ -271,6 +271,11 @@ pub fn navigation(assets: &Assets, language: Language) -> Navigation {
     }
 }
 
+/// Fully shown Recents is drawn instead of the page, which is then not part of the scene.
+pub fn recents_replaces_page(state: &State) -> bool {
+    state.recents_open() && state.recents.visibility == 1.
+}
+
 pub fn scene_with_pill(
     state: &State,
     assets: &Assets,
@@ -303,7 +308,7 @@ pub fn scene_with_pill(
         );
     }
     let content_start = out.draw.len();
-    if state.recents_open() && state.recents.visibility == 1. {
+    if recents_replaces_page(state) {
         out.shape(
             Rect::new(0., 0., 1920., 1080.),
             0.,
