@@ -1,5 +1,12 @@
 # lg-luma
 
+## 2.7.0
+
+### Minor Changes
+
+- 9b38438: Support running in place of LG's Home executable on webOS 5, where a root integration bind-mounts Luma over `/usr/bin/com.webos.app.home`. Luma then registers with SAM itself through lifecycle v2, so Home launches bring the running instance back instead of restarting it. Production and developer installations are supported by pre-start library search paths and native package discovery that matches the mounted executable, keeping assets and splash updates tied to its source installation. Registration failures are reported at startup, a lost registration quits so SAM can start Home afresh, and a panic in a subscription handler no longer unwinds into LS2.
+- c6dd60f: Support `home.sh enable` on webOS 5 and 6. There, SAM cannot reread a mounted Home manifest, so the takeover bind-mounts Luma's executable over LG's Home executable instead, keeps LG's manifest and role, and relies on Luma's own lifecycle registration. Enabling, the cold-boot hook, status and restoring LG Home work as on webOS 25/26; a failed launch restores LG Home, package updates are remounted, and a normal tile launch opens the running Home instance.
+
 ## 2.6.0
 
 ### Minor Changes
