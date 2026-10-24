@@ -41,6 +41,15 @@ pub struct App {
 
 impl App {
     pub fn new(id: &str, title: &str) -> Self {
+        if id.starts_with(CUSTOM_TILE_PREFIX) {
+            return Self {
+                id: id.into(),
+                title: title.into(),
+                brand: "custom".into(),
+                category: "Utilities".into(),
+                icon: None,
+            };
+        }
         let identity = format!("{id} {title}").to_lowercase();
         let generic = [
             ("kodi", "kodi", "Streaming"),
