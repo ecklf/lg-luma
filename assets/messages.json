@@ -1,20 +1,4 @@
 {
-  "recentApps": {
-    "en": "Recent apps",
-    "de": "Zuletzt verwendet",
-    "es": "Aplicaciones recientes",
-    "zh": "最近使用的应用",
-    "pt": "Apps recentes",
-    "it": "App recenti"
-  },
-  "recentHint": {
-    "en": "Pick up where you left off.",
-    "de": "Mach dort weiter, wo du aufgehört hast.",
-    "es": "Continúa donde lo dejaste.",
-    "zh": "继续上次的精彩。",
-    "pt": "Continue de onde parou.",
-    "it": "Riprendi da dove avevi lasciato."
-  },
   "recentEmpty": {
     "en": "No recent apps",
     "de": "Keine zuletzt verwendeten Apps",

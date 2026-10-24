@@ -108,6 +108,151 @@ fn back_distinguishes_taps_holds_delayed_releases_and_cancelled_presses() {
     assert_eq!(button.release(webos, start + Duration::from_secs(1)), None);
 }
 
+fn native_key(scancode: u32, keycode: i32, down: bool) -> sdl2::event::Event {
+    use sdl2::sys;
+    // SAFETY: a zeroed SDL event has initialized scalar keyboard fields. Write
+    // the native extension scancode through its integer ABI representation,
+    // without constructing an invalid host SDL_Scancode enum discriminant.
+    let mut raw: sys::SDL_Event = unsafe { std::mem::zeroed() };
+    raw.key.type_ = if down {
+        sys::SDL_EventType::SDL_KEYDOWN
+    } else {
+        sys::SDL_EventType::SDL_KEYUP
+    } as u32;
+    raw.key.keysym.sym = keycode;
+    unsafe {
+        std::ptr::addr_of_mut!(raw.key.keysym.scancode)
+            .cast::<u32>()
+            .write(scancode);
+    }
+    crate::sdl_events::decode(raw, true)
+}
+
+#[test]
+fn native_back_and_exit_survive_an_unmapped_or_layout_dependent_keycode() {
+    use sdl2::{event::Event, keyboard::Keycode};
+    for down in [true, false] {
+        for keycode in [0, crate::WEBOS_BACK_KEYCODE, i32::from(Keycode::A)] {
+            let event = native_key(482, keycode, down);
+            assert!(matches!(
+                event,
+                Event::KeyDown {
+                    keycode: Some(Keycode::AcBack),
+                    ..
+                } | Event::KeyUp {
+                    keycode: Some(Keycode::AcBack),
+                    ..
+                }
+            ));
+        }
+        let event = native_key(505, 0, down);
+        let key = match event {
+            Event::KeyDown { keycode, .. } | Event::KeyUp { keycode, .. } => keycode.unwrap(),
+            _ => panic!("Not a keyboard event"),
+        };
+        assert_eq!(i32::from(key), crate::sdl_events::WEBOS_EXIT_KEYCODE);
+    }
+    for scancode in [484, 485] {
+        assert!(matches!(
+            native_key(scancode, (1 << 30) | scancode as i32, true),
+            Event::KeyDown { keycode: None, .. }
+        ));
+    }
+    assert!(matches!(
+        native_key(41, i32::from(Keycode::Escape), true),
+        Event::KeyDown {
+            keycode: Some(Keycode::Escape),
+            ..
+        }
+    ));
+}
+
+#[test]
+fn back_dismissal_consumes_repeats_native_exit_and_release_without_quitting() {
+    use sdl2::keyboard::Keycode;
+    let mut state = ready();
+    state.open_recents();
+    let start = Instant::now();
+    let mut button = BackButton::default();
+    assert!(
+        button
+            .key_down(&mut state, Keycode::AcBack, start)
+            .is_empty()
+    );
+    assert!(!state.recents_open());
+    // Even a repeat incorrectly marked as a fresh keydown cannot arm Home's
+    // quit path after this same physical press dismissed the switcher.
+    assert!(
+        button
+            .key_down(
+                &mut state,
+                Keycode::AcBack,
+                start + Duration::from_millis(50)
+            )
+            .is_empty()
+    );
+    assert!(!button.native_hold(start + Duration::from_millis(700)));
+    assert!(!button.held(start + Duration::from_millis(800)));
+    assert_eq!(
+        button.release(Keycode::AcBack, start + Duration::from_secs(1)),
+        None
+    );
+    assert_eq!(state.page, Page::Home);
+    assert_eq!(state.focus, Target::Nav(0));
+}
+
+#[test]
+fn native_hold_opens_once_and_the_next_physical_back_press_dismisses() {
+    use sdl2::keyboard::Keycode;
+    let start = Instant::now();
+    let mut state = ready();
+    let mut button = BackButton::default();
+    assert!(
+        button
+            .key_down(&mut state, Keycode::AcBack, start)
+            .is_empty()
+    );
+    assert!(button.held(start + Duration::from_millis(600)));
+    state.open_recents();
+    assert!(
+        button
+            .key_down(
+                &mut state,
+                Keycode::AcBack,
+                start + Duration::from_millis(650)
+            )
+            .is_empty()
+    );
+    assert!(state.recents_open());
+    assert!(!button.native_hold(start + Duration::from_millis(700)));
+    assert_eq!(
+        button.release(Keycode::AcBack, start + Duration::from_secs(1)),
+        None
+    );
+    button.cancel(); // native Exit keyup
+    assert!(state.recents_open());
+    assert!(
+        button
+            .key_down(&mut state, Keycode::AcBack, start + Duration::from_secs(2))
+            .is_empty()
+    );
+    assert!(!state.recents_open());
+    assert_eq!(
+        button.release(Keycode::AcBack, start + Duration::from_secs(3)),
+        None
+    );
+    // Firmware may emit only the already-classified long-Back Exit key.
+    assert!(button.native_hold(start + Duration::from_secs(4)));
+    assert!(!state.open_recents().is_empty());
+    assert!(!button.native_hold(start + Duration::from_secs(5)));
+    button.cancel();
+    assert!(state.recents_open());
+    assert_eq!(
+        button.release(Keycode::AcBack, start + Duration::from_secs(6)),
+        None
+    );
+}
+
 #[test]
 fn recents_is_modal_and_restores_the_exact_settings_parent() {
     let mut state = ready();

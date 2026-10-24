@@ -68,7 +68,9 @@ try {
   assert.deepEqual(recents.focus, { Recent: 'netflix' });
   assert.equal(recents.recents.length, 8);
   assert.equal(recents.recents_error, null);
-  assert.ok(recents.ui_text.includes('Recent apps'));
+  assert.ok(!recents.ui_text.includes('Recent apps'));
+  assert.ok(!recents.ui_text.includes('Pick up where you left off.'));
+  assert.ok(recents.ui_text.includes('Desktop preview · Sample history'));
   const recentClosed = await scenario(
     'recent-closed',
     'recents,await-recents,right,right,up,enter,await-recents',

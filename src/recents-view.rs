@@ -12,24 +12,6 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
         c(0x252c3a, 0.38),
         c(0x0b0e15, 0.50),
     ));
-    out.text(
-        language.t("recentApps"),
-        Rect::new(84., 122., 1450., 65.),
-        text(52., 600, -0.045),
-        WHITE,
-        false,
-    );
-    out.text(
-        language.t(if assets.artwork.enabled() {
-            "recentHint"
-        } else {
-            "recentDesktop"
-        }),
-        Rect::new(86., 199., 1500., 35.),
-        text(22., 400, -0.015),
-        c(0xe8ebf4, 0.62),
-        false,
-    );
     let dismiss = Rect::new(1776., 132., 60., 60.);
     button(
         out,
@@ -232,6 +214,15 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
             Rect::new(660., 945., 600., 30.),
             text(18., 450, 0.),
             c(0xffffff, 0.6),
+            true,
+        );
+    }
+    if !assets.artwork.enabled() {
+        out.text(
+            language.t("recentDesktop"),
+            Rect::new(180., 973., 1560., 24.),
+            text(14., 400, 0.),
+            c(0xffffff, 0.35),
             true,
         );
     }

@@ -12,6 +12,7 @@ mod recents;
 mod renderer;
 #[path = "scroll-preview.rs"]
 mod scroll_preview;
+mod sdl_events;
 mod state;
 mod storage;
 mod vector;
@@ -189,9 +190,39 @@ struct BackButton {
 impl BackButton {
     const HOLD: Duration = Duration::from_millis(600);
 
-    fn down(&mut self, key: Keycode, now: Instant) {
+    fn down(&mut self, key: Keycode, now: Instant) -> bool {
         if self.press.is_none() {
             self.press = Some((i32::from(key), now, false));
+            true
+        } else {
+            false
+        }
+    }
+
+    fn consume(&mut self) {
+        if let Some((_, _, consumed)) = &mut self.press {
+            *consumed = true;
+        }
+    }
+
+    fn native_hold(&mut self, now: Instant) -> bool {
+        self.down(Keycode::AcBack, now);
+        let fresh = self.press.is_some_and(|(_, _, consumed)| !consumed);
+        self.consume();
+        fresh
+    }
+
+    fn key_down(&mut self, state: &mut State, key: Keycode, now: Instant) -> Vec<Effect> {
+        if !self.down(key, now) {
+            return vec![];
+        }
+        if state.overlay.is_some() || state.moving.is_some() {
+            // Dismiss once and consume the whole physical press, including any
+            // subsequent native Exit notification and the final Back release.
+            self.consume();
+            state.back()
+        } else {
+            vec![]
         }
     }
 
@@ -475,6 +506,9 @@ fn run() -> Result<(), String> {
         }
         eprintln!("Luma webOS surface: {surface_id}");
         sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_BACK", "true");
+        // Magic Remotes send the separate Exit key for a long Back press.
+        // Claim it before video init so the compositor does not close Luma.
+        sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_EXIT", "true");
     }
     // Resolve the local offset before artwork, HTTP or platform workers start.
     let local_offset = OffsetDateTime::now_local()
@@ -735,7 +769,11 @@ fn run() -> Result<(), String> {
         if state.dirty {
             scene = compose(&mut state, &assets, pill, pill_width, now);
         }
-        for event in queued_event.take().into_iter().chain(events.poll_iter()) {
+        for event in queued_event
+            .take()
+            .into_iter()
+            .chain(std::iter::from_fn(|| sdl_events::poll(&mut events, webos)))
+        {
             // Window-entry pointer events can arrive after a slow first upload.
             // Bounded scripted captures own input until their final frame; only
             // their explicitly injected SDL clicks may alter pointer focus.
@@ -805,18 +843,21 @@ fn run() -> Result<(), String> {
                     repeat,
                     ..
                 } => {
-                    if !is_back(key, webos) {
+                    let native_hold = webos && i32::from(key) == sdl_events::WEBOS_EXIT_KEYCODE;
+                    if !is_back(key, webos) && !native_hold {
                         back_button.cancel();
                     }
                     match key {
+                        _ if native_hold => {
+                            if !repeat && back_button.native_hold(Instant::now()) {
+                                press = None;
+                                pending = state.open_recents();
+                            }
+                        }
                         key if is_back(key, webos) => {
                             if !repeat {
                                 press = None;
-                                if state.overlay.is_some() || state.moving.is_some() {
-                                    pending = state.back();
-                                } else {
-                                    back_button.down(key, Instant::now());
-                                }
+                                pending = back_button.key_down(&mut state, key, Instant::now());
                             }
                         }
                         Keycode::Up => pending = state.direction(Direction::Up, &scene.controls),
@@ -861,6 +902,11 @@ fn run() -> Result<(), String> {
                         Keycode::F5 if !repeat => pending.push(Effect::Reload),
                         _ => {}
                     }
+                }
+                Event::KeyUp {
+                    keycode: Some(key), ..
+                } if webos && i32::from(key) == sdl_events::WEBOS_EXIT_KEYCODE => {
+                    back_button.cancel();
                 }
                 Event::KeyUp {
                     keycode: Some(key), ..
@@ -1187,7 +1233,7 @@ fn run() -> Result<(), String> {
         } else {
             100
         };
-        queued_event = events.wait_event_timeout(timeout);
+        queued_event = sdl_events::wait(&mut events, timeout, webos);
     }
     if text_active {
         video.text_input().stop();

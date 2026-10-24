@@ -130,8 +130,13 @@ Hold Back (Escape on desktop) for 600 ms, or select the card-stack shortcut besi
 TV settings button. Short Back navigates on release. Back in an overlay, the system keyboard or
 move mode keeps its immediate dismissal behavior; Backspace keeps its editing/navigation role.
 Losing window focus cancels an unfinished hold. This is an app-local shortcut while Luma is focused.
+SDL-webOS Back (scancode 482) and long-Back Exit (505) are normalized before rust-sdl2 decodes the
+event, since the native keymap can leave their keycodes unset and the Rust scancode enum does not
+include them. Both Back and Exit access policies are claimed before video initialization. The
+native Exit signal opens the switcher without waiting for another timer; repeat/dismissal events
+are consumed until release, so the same press cannot dismiss an overlay and then quit from Home.
 
-The switcher uses large landscape cards on a dimmed wallpaper, a 120 ms opening fade and a
+The switcher uses a heading-free landscape-card strip on a dimmed wallpaper, a 120 ms opening fade and a
 non-bouncy, interruptible horizontal transition. Reduced motion makes navigation immediate.
 Pointer hover/down preserves the current card positions and interrupts remote carousel movement.
 
