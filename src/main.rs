@@ -28,6 +28,7 @@ mod view;
 mod wallpaper_cycle;
 mod wallpapers;
 mod weather;
+mod webhook;
 #[path = "weather-service.rs"]
 mod weather_service;
 #[cfg(all(feature = "webos", any(target_os = "linux", test)))]
@@ -279,6 +280,7 @@ fn effects(
     preferences: &std::path::Path,
     weather: &weather_service::Service,
     wallpapers: &wallpapers::Service,
+    webhook: &webhook::Service,
 ) -> bool {
     for effect in effects {
         match effect {
@@ -324,6 +326,7 @@ fn effects(
                     }
                 }
             }
+            Effect::FireWebhook(url) => webhook.send(url),
             Effect::Quit => return false,
             Effect::Uninstall(id) => platform.send(Request::Uninstall(id)),
             Effect::DeleteWallpaper(id) => {
@@ -647,6 +650,7 @@ fn run() -> Result<(), String> {
         webos,
         options.preferences.is_none() && options.test_extra_apps == 0,
     );
+    let webhook_service = webhook::Service::new();
     effects(
         vec![Effect::Refresh],
         &mut state,
@@ -654,6 +658,7 @@ fn run() -> Result<(), String> {
         &preferences_path,
         &weather_service,
         &wallpaper_service,
+        &webhook_service,
     );
     platform.sync_splash(state.preferences.splash_background());
     startup_stage("preferences and workers");
@@ -1065,9 +1070,17 @@ fn run() -> Result<(), String> {
                         &preferences_path,
                         &weather_service,
                         &wallpaper_service,
+                        &webhook_service,
                     );
                 }
             }
+        }
+        while let Ok(webhook::Response::Done { result }) = webhook_service.receiver.try_recv() {
+            if let Err(error) = result {
+                eprintln!("{error}");
+                state.notify(state.preferences.language.t("appOpenError"));
+            }
+            state.dirty = true;
         }
         weather_tick(&mut state, &weather_service, visible);
         // Rebuild hit regions before input whenever inventory/layout changed.
@@ -1412,6 +1425,7 @@ fn run() -> Result<(), String> {
                 &preferences_path,
                 &weather_service,
                 &wallpaper_service,
+                &webhook_service,
             );
             wallpaper_service
                 .set_active(running && wallpaper_upload_active(&state, webos, focused, visible));
@@ -1441,6 +1455,7 @@ fn run() -> Result<(), String> {
                 &preferences_path,
                 &weather_service,
                 &wallpaper_service,
+                &webhook_service,
             );
         }
         if let Some(held) = &mut press
@@ -1476,6 +1491,7 @@ fn run() -> Result<(), String> {
                     &preferences_path,
                     &weather_service,
                     &wallpaper_service,
+                    &webhook_service,
                 );
             }
         }
@@ -1502,6 +1518,7 @@ fn run() -> Result<(), String> {
                 &preferences_path,
                 &weather_service,
                 &wallpaper_service,
+                &webhook_service,
             );
         }
         let keyboard = state.text_input_active();

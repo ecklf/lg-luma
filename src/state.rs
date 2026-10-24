@@ -175,6 +175,8 @@ pub enum Effect {
         generation: u64,
         command: crate::recents::Command,
     },
+    /// Fire-and-forget HTTP request for a custom tile, off the SDL thread.
+    FireWebhook(String),
     Quit,
     Weather(weather::Command),
 }
@@ -504,6 +506,10 @@ impl State {
 
     pub fn set_inventory(&mut self, next: Inventory, warning: Option<String>) {
         self.inventory.apps = next.apps;
+        // Custom webhook tiles are never read from the TV; they are merged
+        // in on every refresh so favoriting/hiding/search treat them like
+        // any other app without touching the real inventory read.
+        self.inventory.apps.extend(self.preferences.custom_apps());
         if let Some(warning) = warning {
             self.notify(warning);
         } else {
@@ -1653,6 +1659,11 @@ impl State {
             }
             Target::TvSettings => return vec![Effect::Launch("com.palm.app.settings".into())],
             Target::App(_) if self.page == Page::Apps && !self.launching => self.options(),
+            Target::App(id) if !self.launching && self.preferences.custom_tile(&id).is_some() => {
+                let url = self.preferences.custom_tile(&id).unwrap().url.clone();
+                self.notify(self.preferences.language.t("opening"));
+                return vec![Effect::FireWebhook(url)];
+            }
             Target::App(id) | Target::Input(id) if !self.launching => {
                 return vec![Effect::Launch(id)];
             }
