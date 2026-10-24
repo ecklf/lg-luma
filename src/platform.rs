@@ -31,6 +31,39 @@ pub fn runs_as_lg_home() -> bool {
 )]
 pub const HOME_LIFECYCLE_OFF: &str = "/var/lib/luma-home/no-lifecycle";
 
+/// Whether a relaunch actually brought a staged Home (webOS 10/11) to the front. Only the
+/// compositor's focus or remote input counts: SDL_ShowWindow emits Shown by itself, so Shown
+/// and Restored say nothing about whether the raise reached the screen.
+#[derive(Debug, Default)]
+pub struct ForegroundCheck {
+    deadline: Option<std::time::Instant>,
+}
+
+impl ForegroundCheck {
+    pub const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+    /// A relaunch arrived. `in_front`: Luma was already focused and visible, so nothing to check.
+    pub fn relaunched(&mut self, now: std::time::Instant, in_front: bool) {
+        if !in_front {
+            self.deadline = Some(now + Self::TIMEOUT);
+        }
+    }
+
+    /// The compositor focused Luma, or remote input reached it.
+    pub fn confirmed(&mut self) {
+        self.deadline = None;
+    }
+
+    /// Whether a pending relaunch has failed by `now`. Reports each failure once.
+    pub fn failed(&mut self, now: std::time::Instant) -> bool {
+        let failed = self.deadline.is_some_and(|deadline| now >= deadline);
+        if failed {
+            self.deadline = None;
+        }
+        failed
+    }
+}
+
 /// What sam asks of a registered Home, from one lifecycle reply. Only TV builds register.
 #[cfg_attr(
     not(all(feature = "webos", target_os = "linux", target_arch = "arm")),

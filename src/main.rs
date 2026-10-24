@@ -1,4 +1,9 @@
 mod app_artwork;
+// Used by the TV build's Home lifecycle; the host build compiles it for its tests.
+#[cfg(all(feature = "webos", target_os = "linux"))]
+#[cfg_attr(not(target_arch = "arm"), allow(dead_code))]
+#[path = "app-subscription.rs"]
+mod app_subscription;
 mod branding;
 mod diagnostics;
 mod font;
@@ -793,8 +798,8 @@ fn run() -> Result<(), String> {
         } else {
             (None, None)
         };
-    // Set when a relaunch arrives while Luma is not in front; cleared once it is.
-    let mut relaunch_deadline: Option<Instant> = None;
+    // Whether a staged Home's relaunch reached the front; see platform::ForegroundCheck.
+    let mut foreground = platform::ForegroundCheck::default();
     let mut focused = true;
     let mut press: Option<Press> = None;
     let mut back_button = BackButton::default();
@@ -943,6 +948,27 @@ fn run() -> Result<(), String> {
             if script_owns_input && external_input {
                 continue;
             }
+            // Remote keys only reach the focused surface.
+            if matches!(event, Event::KeyDown { .. } | Event::KeyUp { .. }) {
+                focused = true;
+                foreground.confirmed();
+            }
+            // As Home, these go to /tmp/luma-home.log and show whether a relaunch reached the
+            // compositor.
+            if options.webos_home
+                && let Event::Window { win_event, .. } = &event
+                && matches!(
+                    win_event,
+                    WindowEvent::Shown
+                        | WindowEvent::Hidden
+                        | WindowEvent::Minimized
+                        | WindowEvent::Restored
+                        | WindowEvent::FocusGained
+                        | WindowEvent::FocusLost
+                )
+            {
+                eprintln!("Luma window: {win_event:?}");
+            }
             let mut pending = vec![];
             match event {
                 Event::Quit { .. } => running = false,
@@ -950,8 +976,8 @@ fn run() -> Result<(), String> {
                     if code == 1 {
                         // A staged Home must come forward itself. If it does not, its
                         // registration would leave the Home key dead: check below.
-                        if end_registration.is_some() && (!focused || !visible) {
-                            relaunch_deadline = Some(Instant::now() + Duration::from_secs(3));
+                        if end_registration.is_some() {
+                            foreground.relaunched(Instant::now(), focused && visible);
                         }
                         // SAFETY: the window outlives the event loop.
                         unsafe {
@@ -988,8 +1014,11 @@ fn run() -> Result<(), String> {
                     }
                     WindowEvent::Shown | WindowEvent::Restored | WindowEvent::FocusGained => {
                         visible = true;
-                        focused = true;
-                        relaunch_deadline = None;
+                        // Shown and Restored can come from SDL itself; only focus confirms.
+                        if matches!(win_event, WindowEvent::FocusGained) {
+                            focused = true;
+                            foreground.confirmed();
+                        }
                         state.dirty = true;
                         if webos {
                             pending.push(Effect::Refresh);
@@ -1363,20 +1392,19 @@ fn run() -> Result<(), String> {
         if final_frame {
             running = false;
         }
-        if relaunch_deadline.is_some_and(|deadline| Instant::now() >= deadline) {
-            relaunch_deadline = None;
-            if let Some(end_registration) = &end_registration {
-                // Fall back to the restart sam does for an unregistered Home: remember that and
-                // end the registration, which quits Luma so sam starts it afresh.
-                eprintln!(
-                    "Luma lifecycle: a relaunch did not bring Luma to the front; creating {}",
-                    platform::HOME_LIFECYCLE_OFF
-                );
-                if let Err(error) = std::fs::write(platform::HOME_LIFECYCLE_OFF, b"") {
-                    eprintln!("Luma lifecycle: {error}");
-                }
-                end_registration();
+        if foreground.failed(Instant::now())
+            && let Some(end_registration) = &end_registration
+        {
+            // Fall back to the restart sam does for an unregistered Home: remember that and
+            // end the registration, which quits Luma so sam starts it afresh.
+            eprintln!(
+                "Luma lifecycle: a relaunch did not bring Luma to the front; creating {}",
+                platform::HOME_LIFECYCLE_OFF
+            );
+            if let Err(error) = std::fs::write(platform::HOME_LIFECYCLE_OFF, b"") {
+                eprintln!("Luma lifecycle: {error}");
             }
+            end_registration();
         }
         // Block until input instead of polling at frame rate on idle screens.
         // VSync paces animation; holds, scripted checks and icons still being

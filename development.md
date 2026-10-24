@@ -513,7 +513,8 @@ role only allows `com.ecklf.luma` or an anonymous name.
 
 The staged Home runs as root, and as root the system-bus `luna-send -a` may act for an app ID.
 So when `options.webos_home` is set outside LG's executable path and the effective user is root,
-Luma calls `luna::subscribe_as_app`: a child `luna-send -a com.webos.app.home -i` holds
+Luma calls `luna::subscribe_as_app`, which runs `app_subscription::subscribe` with a child
+`luna-send -a com.webos.app.home -i` that holds
 `registerNativeApp`. SAM expects lifecycle v1 for this manifest and refuses `registerApp` with
 "unmatched method with nativeLifeCycleInterfaceVersion". v1 names its events in `message` rather
 than `event`; `platform::Lifecycle::from_reply` reads both and feeds the same `relaunch`/`close`
@@ -528,22 +529,32 @@ handling as v2.
   (`PR_SET_PDEATHSIG`, re-checked against the parent PID after arming). A registration left with
   nobody handling its events leaves the Home key dead and a black screen after leaving an app.
 - On `relaunch` Luma restores, shows and raises its window (on both lifecycle paths). If a
-  relaunch arrives while Luma is hidden or unfocused and no `Shown`, `Restored` or `FocusGained`
-  follows within 3 s, Luma assumes it cannot bring itself forward on this firmware. It creates
-  `/var/lib/luma-home/no-lifecycle` and ends the registration, which quits it, so SAM starts Home
-  afresh. While that file exists, Luma does not register and Home behaves as before. Delete it
-  to try again.
+  relaunch arrives while Luma is not both focused and visible, `platform::ForegroundCheck` waits
+  3 s for `FocusGained` or a remote key, which only reach the focused surface. `Shown` and
+  `Restored` do not count, because `SDL_ShowWindow` emits `Shown` itself whether or not the raise
+  reached the screen. Without confirmation, Luma assumes it cannot bring itself forward on this
+  firmware: it creates `/var/lib/luma-home/no-lifecycle` and ends the registration, which quits
+  it, so SAM starts Home afresh. While that file exists, Luma does not register and Home behaves
+  as before. Delete it to try again.
+- A setup error after the child started (e.g. a thread cannot be created) kills and reaps the
+  child before returning the error, so no registration is left behind while Luma keeps running.
 - stderr goes to `/tmp/luma-home.log` in this mode too. Replies are logged as
-  `Luma lifecycle: …` and the helper's end as `Luma app subscription ended (was registered: …)`.
+  `Luma lifecycle: …`, the helper's end as `Luma app subscription ended (was registered: …)`,
+  and window visibility and focus changes as `Luma window: …`.
+- `app_subscription` has no LS2 dependency, so its host tests run it against fake `luna-send`
+  scripts: replies and noise, refusal, silence, an early exit, a registration lost later, and
+  failed thread starts. `ForegroundCheck` has its own tests, including relaunch → `Shown` without
+  focus.
 - SDL's own app registration (`SDL_WEBOS_REGISTER_APP`) is left as it was for the staged
   manifest. It does not register Home there (SAM restarted Luma per Home key with it enabled),
   and disabling it would change startup on a path without a reason seen on a TV.
 
-Measured manually on an LG OLED65C36LC (webOS 26, 11.2.0-3701) before this change: with the same
-`luna-send -a … registerNativeApp` held from a shell, the Luma PID stayed the same across Home
-presses and SAM sent `relaunch` with `launchType: homeKey`, while without it the PID changed on
-every press. Whether Luma's own relaunch handling brings it to the front on webOS 10/11 is still
-to be verified on a TV.
+Verified on an LG OLED65C36LC (webOS 26, 11.2.0-3701): without registration the Luma PID changes
+on every Home key. With it, the PID stays the same across Home presses and Back out of apps, SAM
+sends `relaunch` with `launchType: homeKey`, Luma comes to the front, and it registers again after
+a cold boot. SDL's own registration logs `Failed to register app: Failed to get
+nativeLifeCycleInterfaceVersion` at startup there, without effect. That the compositor sends
+`FocusGained` after such a relaunch, which the watchdog relies on, shows in the `Luma window:` log.
 
 ## Manual extra-app preview
 

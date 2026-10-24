@@ -1337,3 +1337,34 @@ fn home_lifecycle_replies_map_for_both_registration_versions() {
         assert_eq!(Lifecycle::from_reply(&reply), None, "{reply}");
     }
 }
+
+#[test]
+fn foreground_check_needs_focus_after_a_relaunch_from_the_background() {
+    use crate::platform::ForegroundCheck;
+    use std::time::{Duration, Instant};
+    let start = Instant::now();
+    let late = start + ForegroundCheck::TIMEOUT;
+
+    // Relaunch while hidden, then only Shown (SDL emits it for SDL_ShowWindow itself): fails.
+    let mut check = ForegroundCheck::default();
+    check.relaunched(start, false);
+    assert!(!check.failed(start + Duration::from_secs(1)));
+    assert!(check.failed(late));
+    // Reported once.
+    assert!(!check.failed(late + Duration::from_secs(1)));
+
+    // FocusGained or a remote key in time: no failure.
+    let mut check = ForegroundCheck::default();
+    check.relaunched(start, false);
+    check.confirmed();
+    assert!(!check.failed(late));
+
+    // Already focused and visible (Home pressed on Home): nothing to check.
+    let mut check = ForegroundCheck::default();
+    check.relaunched(start, true);
+    assert!(!check.failed(late));
+
+    // A later relaunch from the background is checked again.
+    check.relaunched(late, false);
+    assert!(check.failed(late + ForegroundCheck::TIMEOUT));
+}

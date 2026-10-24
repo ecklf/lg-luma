@@ -3,16 +3,15 @@
 //! luna-send-pub -a path) instead requires an impersonation privilege we lack.
 //! `subscribe_as_app` is the one exception: as root, it holds a subscription
 //! through the system bus `luna-send -a`, which may act for an app ID.
+use crate::app_subscription::{self, AppSubscription};
 use libc::{c_char, c_int, c_ulong, c_void};
 use serde_json::Value;
 use std::{
     ffi::{CStr, CString},
-    io::{BufRead, BufReader},
-    os::unix::process::CommandExt,
     panic::{AssertUnwindSafe, catch_unwind},
-    process::{Child, Command, Stdio},
+    process::Command,
     ptr,
-    sync::{Arc, Mutex, mpsc},
+    sync::mpsc,
     thread,
     time::{Duration, Instant},
 };
@@ -335,118 +334,25 @@ pub fn subscribe(
     }
 }
 
-/// A subscription held by a root `luna-send -a` child; see `subscribe_as_app`.
-#[derive(Clone)]
-pub struct AppSubscription {
-    child: Arc<Mutex<Option<Child>>>,
-}
-
-impl AppSubscription {
-    /// Ends the subscription by killing the child; its reader then reports the end.
-    pub fn end(&self) {
-        end_child(&self.child);
-    }
-}
-
-/// Kills and reaps the child exactly once, whichever side gets here first.
-fn end_child(child: &Mutex<Option<Child>>) {
-    if let Some(mut child) = child.lock().ok().and_then(|mut child| child.take()) {
-        let _ = child.kill();
-        let _ = child.wait();
-    }
-}
-
 /// Like `subscribe`, but the call is made as `app_id` by a root `luna-send -a` child, which the
 /// system bus lets act for an app. For a Home manifest staged under LG's app-ID based role
-/// (webOS 10/11), where Luma's own connection cannot be that app. Requires root.
-///
-/// Does not wait for the service: each reply goes to `on_message` on a reader thread. No first
-/// reply within `timeout`, a refused first reply, a later `returnValue: false` or the child's
-/// output ending all end the child, and then `on_end` runs once with whether the first reply was
-/// accepted. The child gets SIGKILL when the calling thread ends (call this from the main
-/// thread), so the subscription never outlives Luma.
+/// (webOS 10/11), where Luma's own connection cannot be that app. Requires root. Does not wait
+/// for the service; see `app_subscription::subscribe` for how replies and failures are reported.
 pub fn subscribe_as_app(
     app_id: &str,
     uri: &str,
     payload: &Value,
     timeout: Duration,
-    mut on_message: impl FnMut(Value) + Send + 'static,
+    on_message: impl FnMut(Value) + Send + 'static,
     on_end: impl FnOnce(bool) + Send + 'static,
 ) -> Result<AppSubscription, String> {
-    // SAFETY: getpid has no preconditions.
-    let parent = unsafe { libc::getpid() };
     let mut command = Command::new("/usr/bin/luna-send");
-    command
-        .args(["-a", app_id, "-i", uri, &payload.to_string()])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    // SAFETY: prctl, getppid and _exit are async-signal-safe and only affect the forked child.
-    unsafe {
-        command.pre_exec(move || {
-            if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) != 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            // The parent may have ended before the death signal was armed.
-            if libc::getppid() != parent {
-                libc::_exit(1);
-            }
-            Ok(())
-        });
-    }
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("Luna app subscription: {error}"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or("Luna app subscription: no output")?;
-    let child = Arc::new(Mutex::new(Some(child)));
-    let (answered, handshake) = mpsc::sync_channel::<()>(1);
-    let waiting = Arc::clone(&child);
-    thread::Builder::new()
-        .name("luna-app-handshake".into())
-        .spawn(move || {
-            // A disconnect means the reader already finished; only silence ends the child here.
-            if let Err(mpsc::RecvTimeoutError::Timeout) = handshake.recv_timeout(timeout) {
-                eprintln!("Luna app subscription: no reply");
-                end_child(&waiting);
-            }
-        })
-        .map_err(|error| error.to_string())?;
-    let reader = Arc::clone(&child);
-    thread::Builder::new()
-        .name("luna-app-subscription".into())
-        .spawn(move || {
-            let mut answered = Some(answered);
-            let mut registered = false;
-            // luna-send -i prints each reply as one compact JSON line. Skip anything else.
-            for line in BufReader::new(stdout).split(b'\n').map_while(Result::ok) {
-                if line.len() > MAX_REPLY {
-                    continue;
-                }
-                let Ok(value) = serde_json::from_slice::<Value>(&line) else {
-                    continue;
-                };
-                let refused = value.get("returnValue").and_then(Value::as_bool) == Some(false);
-                if let Some(answered) = answered.take() {
-                    let _ = answered.send(());
-                    registered = !refused;
-                }
-                if refused {
-                    eprintln!("Luna app subscription refused: {value}");
-                    break;
-                }
-                if catch_unwind(AssertUnwindSafe(|| on_message(value))).is_err() {
-                    eprintln!("Luna app subscription: handler panicked");
-                }
-            }
-            end_child(&reader);
-            eprintln!("Luna app subscription ended (was registered: {registered})");
-            if catch_unwind(AssertUnwindSafe(|| on_end(registered))).is_err() {
-                eprintln!("Luna app subscription: end handler panicked");
-            }
-        })
-        .map_err(|error| error.to_string())?;
-    Ok(AppSubscription { child })
+    command.args(["-a", app_id, "-i", uri, &payload.to_string()]);
+    app_subscription::subscribe(
+        command,
+        timeout,
+        on_message,
+        on_end,
+        app_subscription::spawn_thread,
+    )
 }
