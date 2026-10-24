@@ -4,9 +4,9 @@ use crate::{
     model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode},
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, Control, HOME_STRIP_LEFT, HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH,
-        KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage, Target, TextField,
-        WEATHER_SECTION,
+        APPS_COLUMNS, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT,
+        HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State,
+        Subpage, Target, TextField, WEATHER_SECTION,
     },
     weather::{self, Unit},
 };
@@ -315,17 +315,9 @@ pub fn scene_with_pill(
         }
         return out;
     }
-    let main_bottom = if state.page == Page::Home && state.moving.is_none() {
-        1053.6
-    } else {
-        994.4
-    };
-    out.draw.push(Draw::Clip(Some(Rect::new(
-        64.,
-        MAIN_TOP,
-        1792.,
-        main_bottom - MAIN_TOP,
-    ))));
+    let viewport = state.content_viewport();
+    let main_bottom = viewport.y + viewport.h;
+    out.draw.push(Draw::Clip(Some(viewport)));
     if state.page == Page::Apps {
         out.draw.push(Draw::EdgeFade(Some([
             MAIN_TOP,
@@ -507,10 +499,15 @@ fn tile(
         Rect::new(rect.x, rect.y, rect.w, rect.h + label_height),
         true,
     );
+    let viewport = if state.page == Page::Home {
+        state.favorites_viewport()
+    } else {
+        state.content_viewport()
+    };
     if rect.y + rect.h + label_height < MAIN_TOP
         || rect.y > 1054.
-        || rect.x + rect.w + 40. < 64.
-        || rect.x - 40. > 1856.
+        || rect.x + rect.w + 40. < viewport.x
+        || rect.x - 40. > viewport.x + viewport.w
     {
         return;
     }
@@ -894,21 +891,11 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     }
     // Like Apple TV's rows, the favourites run to the screen edge: the next tile shows cut off
     // at the right (and a scrolled-away one at the left), so it is clear the row continues.
-    let main_bottom = if state.moving.is_none() {
-        1053.6
-    } else {
-        994.4
-    };
-    out.draw.push(Draw::Clip(Some(Rect::new(
-        0.,
-        MAIN_TOP,
-        1920.,
-        main_bottom - MAIN_TOP,
-    ))));
+    out.draw.push(Draw::Clip(Some(state.favorites_viewport())));
     // Soft edges: out to the right from the end of the sixth tile, and in from the left once
     // the row has scrolled.
     let left = if state.home_scroll > 0. {
-        [8., HOME_STRIP_LEFT]
+        [HOME_FADE_LEFT, HOME_STRIP_LEFT]
     } else {
         [0., 0.]
     };
@@ -916,7 +903,7 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         left[0],
         left[1],
         HOME_STRIP_RIGHT,
-        1910.,
+        HOME_FADE_RIGHT,
     ])));
     for (index, app) in apps.iter().enumerate() {
         tile(
@@ -935,12 +922,7 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         );
     }
     out.draw.push(Draw::EdgeFadeX(None));
-    out.draw.push(Draw::Clip(Some(Rect::new(
-        64.,
-        MAIN_TOP,
-        1792.,
-        main_bottom - MAIN_TOP,
-    ))));
+    out.draw.push(Draw::Clip(Some(state.content_viewport())));
     let input_y = 544.8 + grid_height + 41.6 - s;
     let inputs: Vec<_> = state
         .inventory
