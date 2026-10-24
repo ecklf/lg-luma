@@ -44,13 +44,6 @@ fn actions_match_stock_home_without_synthetic_process_kills() {
         )
     );
     assert_eq!(
-        Command::CloseAll.request().unwrap(),
-        (
-            "luna://com.webos.service.recent/removeAllRecents",
-            json!({})
-        )
-    );
-    assert_eq!(
         Command::Launch("netflix".into()).request().unwrap(),
         (
             "luna://com.webos.service.applicationmanager/launch",
@@ -307,7 +300,7 @@ fn home_header_has_only_navigation_and_tv_settings() {
 }
 
 #[test]
-fn recents_has_compact_top_right_close_all_without_a_dismiss_button_or_footer() {
+fn recents_has_only_cards_without_action_buttons_or_footer() {
     use crate::renderer::Draw;
     let mut state = ready();
     state.preferences.reduced_motion = true;
@@ -320,31 +313,20 @@ fn recents_has_compact_top_right_close_all_without_a_dismiss_button_or_footer() 
             .iter()
             .all(|control| control.target != Target::CloseDialog)
     );
-    let all = scene
-        .controls
-        .iter()
-        .find(|control| control.target == Target::RecentCloseAll)
-        .unwrap()
-        .rect;
-    assert_eq!(all.y, 132.);
-    assert!((all.x + all.w - 1836.).abs() < 0.01);
-    let label = scene
-        .draw
-        .iter()
-        .find_map(|draw| match draw {
-            Draw::Text(value, rect, ..) if value == "Close all" => Some(*rect),
-            _ => None,
-        })
-        .unwrap();
-    assert!((all.x + all.w - label.x - label.w - 20.).abs() < 0.01);
     assert!(scene.draw.iter().all(|draw| !matches!(draw,
         Draw::Text(value, ..) if value == "1 / 8" || value.contains("Close app") || value.contains("OK  Open"))));
-    state.direction(Direction::Up, &scene.controls);
-    assert!(matches!(state.focus, Target::RecentClose(_)));
-    state.direction(Direction::Up, &controls(&state));
-    assert_eq!(state.focus, Target::RecentCloseAll);
-    state.direction(Direction::Down, &controls(&state));
-    assert!(matches!(state.focus, Target::Recent(_)));
+    assert!(
+        scene.draw.iter().all(|draw| !matches!(draw,
+        Draw::Text(value, ..) if value == "Netflix" || value == "YouTube" || value == "Close all"))
+    );
+    assert!(
+        scene
+            .controls
+            .iter()
+            .all(|control| matches!(control.target, Target::Recent(_)))
+    );
+    assert!(state.direction(Direction::Down, &scene.controls).is_empty());
+    assert_eq!(state.focus, Target::Recent("netflix".into()));
 }
 
 #[test]
@@ -402,15 +384,6 @@ fn recents_is_modal_and_restores_the_exact_settings_parent() {
     assert_eq!(state.focus, Target::Recent("netflix".into()));
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::Recent("youtube.leanback.v4".into()));
-    state.direction(Direction::Up, &controls(&state));
-    assert_eq!(
-        state.focus,
-        Target::RecentClose("youtube.leanback.v4".into())
-    );
-    state.direction(Direction::Down, &controls(&state));
-    state.direction(Direction::Up, &controls(&state));
-    state.direction(Direction::Up, &controls(&state));
-    assert_eq!(state.focus, Target::RecentCloseAll);
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Recent("youtube.leanback.v4".into()));
     assert!(state.back().is_empty());
@@ -424,15 +397,15 @@ fn closing_is_serialized_refreshes_on_success_and_keeps_a_neighbor_focused() {
     let mut state = ready();
     state.open_recents();
     accept(&mut state, recents::demo());
-    state.direction(Direction::Up, &controls(&state));
     assert_eq!(
-        state.activate(),
+        state.direction(Direction::Up, &controls(&state)),
         vec![Effect::Recent {
             generation: 2,
             command: Command::Close("netflix".into())
         }]
     );
     assert!(state.activate().is_empty());
+    assert!(state.direction(Direction::Up, &controls(&state)).is_empty());
     assert!(state.recents.entries.iter().any(|e| e.app.id == "netflix"));
     let next = state.recent_response(2, Command::Close("netflix".into()), Ok(None));
     assert_eq!(
@@ -442,19 +415,19 @@ fn closing_is_serialized_refreshes_on_success_and_keeps_a_neighbor_focused() {
             command: Command::List
         }]
     );
-    assert_eq!(
-        state.focus,
-        Target::RecentClose("youtube.leanback.v4".into())
-    );
+    assert_eq!(state.focus, Target::Recent("youtube.leanback.v4".into()));
     let remaining = state.recents.entries.clone();
     accept(&mut state, remaining);
+    assert_eq!(state.focus, Target::Recent("youtube.leanback.v4".into()));
+    state.recents.entries.truncate(1);
     assert_eq!(
-        state.focus,
-        Target::RecentClose("youtube.leanback.v4".into())
+        state.direction(Direction::Up, &controls(&state)),
+        vec![Effect::Recent {
+            generation: 4,
+            command: Command::Close("youtube.leanback.v4".into())
+        }]
     );
-    state.focus = Target::RecentCloseAll;
-    state.activate();
-    let next = state.recent_response(4, Command::CloseAll, Ok(None));
+    let next = state.recent_response(4, Command::Close("youtube.leanback.v4".into()), Ok(None));
     assert_eq!(
         next,
         vec![Effect::Recent {
@@ -463,12 +436,9 @@ fn closing_is_serialized_refreshes_on_success_and_keeps_a_neighbor_focused() {
         }]
     );
     accept(&mut state, vec![]);
-    assert_eq!(state.focus, Target::RecentCloseAll);
-    assert!(
-        controls(&state)
-            .iter()
-            .all(|c| c.target != Target::RecentCloseAll)
-    );
+    assert_eq!(state.focus, Target::RecentEmpty);
+    assert!(controls(&state).is_empty());
+    assert!(state.activate().is_empty());
 }
 
 #[test]
@@ -477,7 +447,6 @@ fn failed_actions_keep_history_and_stale_replies_cannot_reopen_or_replace_a_sess
     state.open_recents();
     accept(&mut state, recents::demo());
     state.direction(Direction::Up, &controls(&state));
-    state.activate();
     state.recent_response(2, Command::Close("netflix".into()), Err("denied".into()));
     assert_eq!(state.recents.entries[0].app.id, "netflix");
     assert!(state.recents.error.is_some());
@@ -522,7 +491,7 @@ fn recents_pointer_focus_never_moves_hit_regions_and_reduced_motion_snaps() {
     let before = controls(&state);
     for target in [
         Target::Recent("youtube.leanback.v4".into()),
-        Target::RecentClose("netflix".into()),
+        Target::Recent("netflix".into()),
     ] {
         state.pointer_focus(target.clone());
         let after = controls(&state);
@@ -530,10 +499,11 @@ fn recents_pointer_focus_never_moves_hit_regions_and_reduced_motion_snaps() {
         let b = after.iter().find(|c| c.target == target).unwrap().rect;
         assert_eq!((a.x, a.y, a.w, a.h), (b.x, b.y, b.w, b.h));
     }
-    assert!(controls(&state).iter().all(|c| matches!(
-        c.target,
-        Target::Recent(_) | Target::RecentClose(_) | Target::RecentCloseAll
-    )));
+    assert!(
+        controls(&state)
+            .iter()
+            .all(|c| matches!(c.target, Target::Recent(_)))
+    );
     state.recents.selected = 3;
     state.recents.position = 1.5;
     state.tick();
@@ -550,5 +520,119 @@ fn recents_pointer_focus_never_moves_hit_regions_and_reduced_motion_snaps() {
         controls(&state)
             .iter()
             .any(|c| matches!(c.target, Target::Recent(_)))
+    );
+}
+
+#[test]
+fn recents_crossfade_reverses_without_jumping_and_restores_parent_input_immediately() {
+    use crate::renderer::Draw;
+    let mut state = ready();
+    state.open(2);
+    state.subpage = Some(crate::state::Subpage::Clock);
+    state.focus = Target::ClockFormat;
+    let parent = controls(&state);
+    state.open_recents();
+    accept(&mut state, recents::demo());
+    let start = Instant::now();
+    state.recents.updated = start;
+    state
+        .recents
+        .animate(true, false, false, start + Duration::from_millis(40));
+    let entering = state.recents.visibility;
+    assert!(entering > 0. && entering < 1.);
+    let incoming = scene(&state);
+    assert!(incoming.modal.is_some());
+    assert!(
+        incoming
+            .controls
+            .iter()
+            .all(|c| matches!(c.target, Target::Recent(_)))
+    );
+    state.back();
+    assert!(!state.recents_open());
+    assert_eq!(state.recents.visibility, entering);
+    assert_eq!(state.focus, Target::ClockFormat);
+    let outgoing = scene(&state);
+    assert!(outgoing.modal.is_none());
+    assert_eq!(
+        outgoing
+            .controls
+            .iter()
+            .map(|c| &c.target)
+            .collect::<Vec<_>>(),
+        parent.iter().map(|c| &c.target).collect::<Vec<_>>()
+    );
+    assert!(outgoing.draw.iter().any(|draw| matches!(draw,
+        Draw::TintedImage(path, _, _, _, tint) if path.ends_with("logos/netflix.lvec") && tint[3] > 0. && tint[3] < 1.)));
+    state.recents.updated = start + Duration::from_millis(40);
+    state
+        .recents
+        .animate(false, false, false, start + Duration::from_millis(56));
+    let leaving = state.recents.visibility;
+    assert!(leaving > 0. && leaving < entering);
+    state.open_recents();
+    assert_eq!(state.recents.visibility, leaving);
+    assert_eq!(
+        state.recents.entries.len(),
+        8,
+        "Reversing dismissal must retain the visible cards"
+    );
+    state.recents.updated = start + Duration::from_millis(56);
+    state
+        .recents
+        .animate(true, false, false, start + Duration::from_millis(72));
+    assert!(state.recents.visibility > leaving);
+    for frame in 1..40 {
+        state.recents.animate(
+            true,
+            false,
+            false,
+            start + Duration::from_millis(72 + frame * 16),
+        );
+    }
+    assert_eq!(state.recents.visibility, 1.);
+    state.back();
+    state.preferences.reduced_motion = true;
+    state.tick();
+    assert_eq!(state.recents.visibility, 0.);
+    assert!(state.recents.closing_focus.is_none());
+    state.open_recents();
+    assert_eq!(state.recents.visibility, 1.);
+    state.back();
+    assert_eq!(state.recents.visibility, 0.);
+}
+
+#[test]
+fn pointer_interruption_freezes_cards_without_freezing_the_crossfade() {
+    let mut recent = recents::Recents::default();
+    let start = Instant::now();
+    recent.updated = start;
+    recent.selected = 3;
+    recent.position = 1.5;
+    for frame in 1..40 {
+        recent.animate(true, false, true, start + Duration::from_millis(frame * 16));
+    }
+    assert_eq!(recent.visibility, 1.);
+    assert_eq!(recent.position, 1.5);
+}
+
+#[test]
+fn empty_recents_has_no_explanatory_subtitle() {
+    use crate::renderer::Draw;
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state.open_recents();
+    accept(&mut state, vec![]);
+    let texts: Vec<_> = scene(&state)
+        .draw
+        .into_iter()
+        .filter_map(|draw| match draw {
+            Draw::Text(value, ..) => Some(value),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        texts,
+        ["No recent apps", "Desktop preview · Sample history"]
     );
 }

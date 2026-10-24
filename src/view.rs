@@ -18,6 +18,7 @@ use time::OffsetDateTime;
 const MAIN_TOP: f32 = 108.8;
 const FACE_HEIGHT: f32 = 154.4;
 const GRID_PITCH: f32 = 296.4;
+const RECENTS_BACKDROP_OPACITY: f32 = 0.86;
 
 #[path = "recents-view.rs"]
 mod recents_view;
@@ -300,13 +301,14 @@ pub fn scene_with_pill(
             false,
         );
     }
-    if state.recents_open() {
-        let start = out.draw.len();
-        out.shape(Rect::new(0., 0., 1920., 1080.), 0., c(0x080b12, 0.92));
+    let content_start = out.draw.len();
+    if state.recents_open() && state.recents.visibility == 1. {
+        out.shape(
+            Rect::new(0., 0., 1920., 1080.),
+            0.,
+            c(0x080b12, RECENTS_BACKDROP_OPACITY),
+        );
         recents_view::render(&mut out, state, assets);
-        if let Some(opened) = state.panel_started {
-            out.fade(start, (opened.elapsed().as_secs_f32() / 0.12).min(1.), 1.);
-        }
         if let Some((notice, _)) = &state.notice {
             toast(&mut out, state, assets, notice);
         }
@@ -387,6 +389,26 @@ pub fn scene_with_pill(
         }
         if let Some(opened) = state.panel_started {
             out.fade(start, (opened.elapsed().as_secs_f32() / 0.12).min(1.), 1.);
+        }
+    }
+    if state.recents_open() || state.recents.visibility > 0. {
+        // Crossfade the actual parent interface as well as the dimmed stage.
+        // Retain outgoing visuals after dismissal, while input immediately
+        // belongs to the restored parent. No geometry or hit targets move.
+        let parent_controls = std::mem::take(&mut out.controls);
+        let parent_modal = out.modal;
+        out.fade(content_start, 1. - state.recents.visibility, 1.);
+        let start = out.draw.len();
+        out.shape(
+            Rect::new(0., 0., 1920., 1080.),
+            0.,
+            c(0x080b12, RECENTS_BACKDROP_OPACITY),
+        );
+        recents_view::render(&mut out, state, assets);
+        out.fade(start, state.recents.visibility, 1.);
+        if !state.recents_open() {
+            out.controls = parent_controls;
+            out.modal = parent_modal;
         }
     }
     if let Some((notice, _)) = &state.notice {

@@ -29,8 +29,7 @@ pub enum Target {
     Nav(usize),
     TvSettings,
     Recent(String),
-    RecentClose(String),
-    RecentCloseAll,
+    RecentEmpty,
     RecentRetry,
     App(String),
     Input(String),
@@ -225,8 +224,14 @@ impl State {
     }
 
     pub fn tick(&mut self) {
-        if self.recents_open() && !self.pointer {
-            self.dirty |= self.recents.animate(self.preferences.reduced_motion);
+        let recents_open = self.recents_open();
+        if recents_open || self.recents.visibility > 0. {
+            self.dirty |= self.recents.animate(
+                recents_open,
+                self.preferences.reduced_motion,
+                self.pointer,
+                Instant::now(),
+            );
         }
         if let Some(start) = self.panel_started {
             self.dirty = true;
@@ -269,9 +274,9 @@ impl State {
     }
 
     pub fn animating(&self) -> bool {
-        (self.recents_open()
-            && !self.pointer
-            && self.recents.position != self.recents.selected as f32)
+        ((self.recents_open() || self.recents.visibility > 0.)
+            && (self.recents.visibility != if self.recents_open() { 1. } else { 0. }
+                || (!self.pointer && self.recents.position != self.recents.selected as f32)))
             || self.previous_background.is_some()
             || self.panel_started.is_some()
             || (!self.preferences.reduced_motion
@@ -558,8 +563,7 @@ impl State {
         self.pointer = false;
         self.dirty = true;
         if self.recents_open() {
-            self.recent_direction(direction);
-            return vec![];
+            return self.recent_direction(direction);
         }
         if matches!(self.overlay, Some(Overlay::SystemKeyboard)) {
             // The TV keyboard owns its arrows until Done/Back dismisses it.
@@ -1218,10 +1222,6 @@ impl State {
             use crate::recents::Command;
             return match self.focus.clone() {
                 Target::Recent(id) => self.recent_request(Command::Launch(id)),
-                Target::RecentClose(id) => self.recent_request(Command::Close(id)),
-                Target::RecentCloseAll if !self.recents.entries.is_empty() => {
-                    self.recent_request(Command::CloseAll)
-                }
                 Target::RecentRetry => self.recent_request(Command::List),
                 _ => vec![],
             };
@@ -1554,6 +1554,15 @@ impl State {
         }
         if let Some(overlay) = self.overlay.take() {
             self.panel_started = None;
+            if matches!(overlay, Overlay::Recents { .. }) {
+                self.recents.closing_focus = Some(self.focus.clone());
+                self.recents.updated = Instant::now();
+                self.pressed = None;
+                if self.preferences.reduced_motion {
+                    self.recents.visibility = 0.;
+                    self.recents.closing_focus = None;
+                }
+            }
             if let Overlay::Options { restore, .. } | Overlay::Recents { restore } = overlay {
                 self.focus = restore;
                 self.recents.pending = None;

@@ -7,14 +7,6 @@
     "pt": "Nenhum app recente",
     "it": "Nessuna app recente"
   },
-  "recentEmptyHint": {
-    "en": "Apps you open will appear here.",
-    "de": "Geöffnete Apps werden hier angezeigt.",
-    "es": "Las aplicaciones que abras aparecerán aquí.",
-    "zh": "打开的应用将显示在这里。",
-    "pt": "Os apps que você abrir aparecerão aqui.",
-    "it": "Le app che apri appariranno qui."
-  },
   "recentError": {
     "en": "Recent apps could not be updated",
     "de": "Zuletzt verwendete Apps konnten nicht aktualisiert werden",
@@ -30,14 +22,6 @@
     "zh": "正在更新最近使用的应用…",
     "pt": "Atualizando apps recentes…",
     "it": "Aggiornamento delle app recenti…"
-  },
-  "recentCloseAll": {
-    "en": "Close all",
-    "de": "Alle schließen",
-    "es": "Cerrar todas",
-    "zh": "全部关闭",
-    "pt": "Fechar todos",
-    "it": "Chiudi tutte"
   },
   "recentDesktop": {
     "en": "Desktop preview · Sample history",

@@ -24,8 +24,8 @@ A native launcher for rooted LG webOS TVs, inspired by Apple TV.
 ### Recent apps
 
 Press **Back** on Home, or hold **Back** for 600 ms while Luma is open.
-Use **Left/Right** to switch cards and **OK** to launch. **Up**, then **OK** closes one app;
-**Up** twice, then **OK** selects the top-right **Close all** button. **Back** returns to your previous screen.
+Use **Left/Right** to switch cards, **OK** to launch and **Up** to close the selected app immediately.
+**Back** returns to your previous screen.
 The switcher uses the TV's recent history and LG's own close behavior, with subtle transitions
 and the same app cards as the Apps view. Reduced motion is supported. Its private TV services
 need verification on each firmware.

@@ -860,7 +860,9 @@ fn run() -> Result<(), String> {
                                 pending = back_button.key_down(&mut state, key, Instant::now());
                             }
                         }
-                        Keycode::Up => pending = state.direction(Direction::Up, &scene.controls),
+                        Keycode::Up if !repeat || !state.recents_open() => {
+                            pending = state.direction(Direction::Up, &scene.controls);
+                        }
                         Keycode::Down => {
                             pending = state.direction(Direction::Down, &scene.controls)
                         }
@@ -999,7 +1001,7 @@ fn run() -> Result<(), String> {
                     press = None;
                     let delta = if x != 0 { x } else { -y };
                     if delta != 0 {
-                        state.recent_direction(if delta > 0 {
+                        pending = state.recent_direction(if delta > 0 {
                             Direction::Right
                         } else {
                             Direction::Left
@@ -1246,7 +1248,7 @@ fn run() -> Result<(), String> {
             "filter": state.filter, "preferences": state.preferences, "apps": state.apps().iter().map(|a| &a.id).collect::<Vec<_>>(),
             "error": state.error, "scroll": state.scroll, "home_scroll": state.home_scroll, "subpage": state.subpage, "modal": state.overlay.is_some(), "weather": state.weather,
             "inventory": state.inventory.apps,
-            "recents": state.recents.entries, "recents_pending": state.recents.pending, "recents_error": state.recents.error,
+            "recents": state.recents.entries, "recents_pending": state.recents.pending, "recents_error": state.recents.error, "recents_visibility": state.recents.visibility,
             "ui_text": scene.draw.iter().filter_map(|draw| match draw { renderer::Draw::Text(value, ..) => Some(value), _ => None }).collect::<Vec<_>>() });
         std::fs::write(
             path,

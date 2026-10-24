@@ -136,22 +136,26 @@ include them. Both Back and Exit access policies are claimed before video initia
 native Exit signal opens the switcher without waiting for another timer; repeat/dismissal events
 are consumed until release, so the same press cannot dismiss an overlay and then reopen it from Home.
 
-The switcher uses a landscape-card strip on a dimmed wallpaper, a 120 ms opening fade and a
-non-bouncy, interruptible horizontal transition. Reduced motion makes navigation immediate.
+The switcher uses a landscape-card strip on a dimmed wallpaper, a short, reversible crossfade to
+and from the actual parent interface, and a non-bouncy, interruptible horizontal transition.
+Reopening during dismissal reverses from the current opacity and keeps the visible cards.
+Dismissal restores parent input immediately while the outgoing cards finish fading. The transition
+does not move card hit targets; pointer interruption pauses only carousel movement, not the fade.
+Reduced motion makes both the crossfade and navigation immediate.
 Pointer hover/down preserves the current card positions and interrupts remote carousel movement.
-Close all is a compact top-right action. There is no heading, separate dismiss button, card count,
-footer instructions or Home header shortcut. Back dismisses the switcher; Quit app remains an
+The backdrop uses 86% opacity so more of the wallpaper shows through. There are no app captions, action buttons,
+empty-state subtitle, heading, separate dismiss button, card count, footer instructions or Home
+header shortcut. Up closes the focused card directly; held-Up repeats are ignored to prevent
+unintentionally closing more apps as the next card becomes focused. Back dismisses the switcher; Quit app remains an
 explicit Settings → System action.
 
-| Input                         | Action                                        |
-| ----------------------------- | --------------------------------------------- |
-| Left / Right or wheel         | Browse recent cards                           |
-| OK on a card                  | Launch the app                                |
-| Up from a card, then OK       | Close that card                               |
-| Up twice from a card, then OK | Close all                                     |
-| Down from Close all           | Return to the selected card                   |
-| Pointer                       | Select a card, its close button, or Close all |
-| Back                          | Return to the exact previous page and focus   |
+| Input                 | Action                                      |
+| --------------------- | ------------------------------------------- |
+| Left / Right or wheel | Browse recent cards                         |
+| OK on a card          | Launch the app                              |
+| Up from a card        | Close that card immediately                 |
+| Pointer               | Select a card                               |
+| Back                  | Return to the exact previous page and focus |
 
 The platform worker uses the stock-Home operations captured on webOS 26:
 
@@ -159,7 +163,6 @@ The platform worker uses the stock-Home operations captured on webOS 26:
 | --------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | History   | `com.webos.service.recent/listRecents`        | `{}`                                                                                               |
 | Close one | `com.webos.service.recent/removeRecent`       | `{"appId":"APP_ID"}`                                                                               |
-| Close all | `com.webos.service.recent/removeAllRecents`   | `{}`                                                                                               |
 | Launch    | `com.webos.service.applicationmanager/launch` | `{"id":"APP_ID","params":{},"reason":"recent","checkUpdateOnLaunch":true,"autoInstallation":true}` |
 
 Service-name capitalization is significant. These fixed calls go through the native process's
@@ -170,11 +173,9 @@ per overlay; generation IDs discard late replies after dismissal or reopening. R
 stay in the overlay with a read-only Retry action and diagnostic details in stderr.
 
 History order is preserved, including input entries, with Luma/Home identities and duplicates
-excluded. The TV's Close all policy is authoritative: stock-Home testing closed Luma, Homebrew
-Channel and Live TV while leaving Netflix, YouTube and some system apps running. Luma does not
-enumerate and kill every process. The native integration still needs manual verification in both
-normal-tile and Home-takeover modes, including whether Close all preserves the invoking instance,
-app/input launching, retained apps, short/long Back, focus restoration and service-denial handling.
+excluded. The native integration still needs manual verification in both normal-tile and
+Home-takeover modes, including app/input launching, closing individual apps, short/long Back,
+focus restoration and service-denial handling.
 
 Cards share the Home/Apps face renderer: the same exact-ID curated vectors, surfaces, relative logo
 proportions, installed icons and generic fallbacks. Recent splash/snapshot artwork is not loaded.
@@ -189,8 +190,8 @@ pnpm dev --script recents,await-recents
 ```
 
 `hold-back` is also a scripted opening action. Desktop smoke scenarios render normal, close-one,
-close-all/empty, launch, pointer and Home Back flows; unit tests cover hold timing, cancelled
-presses, stale responses, failures, navigation, reduced motion and consistent card artwork.
+empty, launch, pointer and Home Back flows; unit tests cover hold timing, cancelled
+presses, stale responses, failures, navigation, reduced motion, reversible crossfades and consistent card artwork.
 
 ## Splash images
 

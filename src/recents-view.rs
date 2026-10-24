@@ -5,6 +5,7 @@ use crate::recents::Command;
 pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let recent = &state.recents;
+    let focus = recent_focus(state);
     out.modal = Some(Rect::new(0., 0., 1920., 1080.));
     out.draw.push(Draw::RoundedGradient(
         Rect::new(0., 0., 1920., 1080.),
@@ -12,20 +13,6 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
         c(0x252c3a, 0.38),
         c(0x0b0e15, 0.50),
     ));
-    if !recent.entries.is_empty() {
-        let label = language.t("recentCloseAll");
-        let width = assets.width(label, text(21., 550, -0.01)) + 74.;
-        button(
-            out,
-            state,
-            assets,
-            Target::RecentCloseAll,
-            Rect::new(1836. - width, 132., width, 60.),
-            "close",
-            Some(label),
-        );
-    }
-
     if recent.entries.is_empty() {
         let loading = recent.pending.is_some();
         out.icon(
@@ -51,15 +38,6 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
             WHITE,
             true,
         );
-        if !loading && recent.error.is_none() {
-            out.text(
-                language.t("recentEmptyHint"),
-                Rect::new(360., 596., 1200., 42.),
-                text(21., 400, -0.01),
-                c(0xffffff, 0.55),
-                true,
-            );
-        }
     } else {
         out.draw
             .push(Draw::Clip(Some(Rect::new(0., 250., 1920., 560.))));
@@ -71,7 +49,7 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
             let start = out.draw.len();
             let rect = Rect::new(x, 336., 680., 382.5);
             let target = Target::Recent(entry.app.id.clone());
-            let focused = state.focus == target;
+            let focused = *focus == target;
             let selected = index == recent.selected;
             out.shadow(rect, 24., 40., 18., if selected { 0.55 } else { 0.30 });
             let app = state
@@ -95,23 +73,7 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
             if state.pressed.as_ref() == Some(&target) {
                 out.fade(start, 1., 0.83);
             }
-            out.text(
-                &entry.app.title,
-                Rect::new(x + 8., 268., 594., 44.),
-                text(27., 550, -0.02),
-                WHITE,
-                false,
-            );
-            button(
-                out,
-                state,
-                assets,
-                Target::RecentClose(entry.app.id.clone()),
-                Rect::new(x + 624., 264., 48., 48.),
-                "close",
-                None,
-            );
-            if !selected && !focused && state.focus != Target::RecentClose(entry.app.id.clone()) {
+            if !selected && !focused {
                 out.fade(start, 0.55, 0.85);
             }
         }
@@ -137,7 +99,7 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
             Target::RecentRetry,
             Rect::new(84., 858., width, 60.),
             "refresh",
-            Some(label),
+            label,
         );
     } else if let Some(command) = &recent.pending
         && !recent.entries.is_empty()
@@ -165,6 +127,14 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
     }
 }
 
+fn recent_focus(state: &State) -> &Target {
+    if state.recents_open() {
+        &state.focus
+    } else {
+        state.recents.closing_focus.as_ref().unwrap_or(&state.focus)
+    }
+}
+
 fn button(
     out: &mut Scene,
     state: &State,
@@ -172,9 +142,9 @@ fn button(
     target: Target,
     rect: Rect,
     icon: &str,
-    label: Option<&str>,
+    label: &str,
 ) {
-    let focused = state.focus == target;
+    let focused = *recent_focus(state) == target;
     let busy = state.recents.pending.is_some();
     out.pill(rect, focused && !busy, false);
     let color = if focused && !busy {
@@ -185,33 +155,21 @@ fn button(
     out.icon(
         assets,
         icon,
-        Rect::new(
-            rect.x
-                + if label.is_some() {
-                    20.
-                } else {
-                    (rect.w - 22.) / 2.
-                },
-            rect.y + (rect.h - 22.) / 2.,
-            22.,
-            22.,
-        ),
+        Rect::new(rect.x + 20., rect.y + (rect.h - 22.) / 2., 22., 22.),
         color,
     );
-    if let Some(label) = label {
-        out.text(
-            label,
-            Rect::new(
-                rect.x + 54.,
-                rect.y + (rect.h - 27.) / 2.,
-                rect.w - 74.,
-                32.,
-            ),
-            text(21., 550, -0.01),
-            color,
-            false,
-        );
-    }
+    out.text(
+        label,
+        Rect::new(
+            rect.x + 54.,
+            rect.y + (rect.h - 27.) / 2.,
+            rect.w - 74.,
+            32.,
+        ),
+        text(21., 550, -0.01),
+        color,
+        false,
+    );
     if state.pressed.as_ref() == Some(&target) {
         out.border(rect.inset(2.), rect.h / 2., 2., c(0xffffff, 0.4));
     }

@@ -90,10 +90,6 @@ impl Platform {
                                     desktop_recents.retain(|entry| &entry.app.id != id);
                                     Ok(None)
                                 }
-                                crate::recents::Command::CloseAll => {
-                                    desktop_recents.clear();
-                                    Ok(None)
-                                }
                                 crate::recents::Command::Launch(_) => Ok(None),
                             }
                         };

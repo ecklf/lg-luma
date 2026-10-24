@@ -14,7 +14,6 @@ pub enum Command {
     List,
     Launch(String),
     Close(String),
-    CloseAll,
 }
 
 impl Command {
@@ -30,10 +29,6 @@ impl Command {
             Self::Close(id) => (
                 "luna://com.webos.service.recent/removeRecent",
                 json!({"appId": id}),
-            ),
-            Self::CloseAll => (
-                "luna://com.webos.service.recent/removeAllRecents",
-                json!({}),
             ),
             Self::Launch(id) => (
                 "luna://com.webos.service.applicationmanager/launch",
@@ -115,6 +110,8 @@ pub struct Recents {
     pub error: Option<String>,
     pub selected: usize,
     pub position: f32,
+    pub visibility: f32,
+    pub closing_focus: Option<Target>,
     pub updated: Instant,
 }
 
@@ -127,21 +124,38 @@ impl Default for Recents {
             error: None,
             selected: 0,
             position: 0.,
+            visibility: 0.,
+            closing_focus: None,
             updated: Instant::now(),
         }
     }
 }
 
 impl Recents {
-    pub fn animate(&mut self, reduced: bool) -> bool {
-        let target = self.selected as f32;
-        let dt = self.updated.elapsed().as_secs_f32().min(0.1);
-        self.updated = Instant::now();
-        let changed = self.position != target;
-        if reduced || (self.position - target).abs() < 0.002 {
-            self.position = target;
-        } else {
-            self.position += (target - self.position) * (1. - (-22. * dt).exp());
+    pub fn animate(&mut self, open: bool, reduced: bool, pointer: bool, now: Instant) -> bool {
+        let dt = now
+            .saturating_duration_since(self.updated)
+            .as_secs_f32()
+            .min(0.1);
+        self.updated = now;
+        let visibility = if open { 1. } else { 0. };
+        let changed =
+            self.visibility != visibility || (!pointer && self.position != self.selected as f32);
+        let approach = |current: &mut f32, target: f32| {
+            if reduced || (*current - target).abs() < 0.002 {
+                *current = target;
+            } else {
+                *current += (target - *current) * (1. - (-24. * dt).exp());
+            }
+        };
+        // Opacity always settles, even after pointer input interrupts carousel
+        // movement. Retargeting starts from the current presentation value.
+        approach(&mut self.visibility, visibility);
+        if !pointer {
+            approach(&mut self.position, self.selected as f32);
+        }
+        if !open && self.visibility == 0. {
+            self.closing_focus = None;
         }
         changed
     }
@@ -159,16 +173,28 @@ impl State {
         self.overlay = Some(Overlay::Recents {
             restore: self.focus.clone(),
         });
-        self.recents.entries.clear();
-        self.recents.selected = 0;
-        self.recents.position = 0.;
+        if self.recents.visibility == 0. {
+            self.recents.entries.clear();
+            self.recents.selected = 0;
+            self.recents.position = 0.;
+            self.recents.closing_focus = None;
+        }
         self.recents.updated = Instant::now();
         self.recents.pending = None;
-        self.focus = Target::RecentRetry;
+        self.focus = self.recents.closing_focus.take().unwrap_or_else(|| {
+            self.recents
+                .entries
+                .get(self.recents.selected)
+                .map(|entry| Target::Recent(entry.app.id.clone()))
+                .unwrap_or(Target::RecentEmpty)
+        });
+        if self.preferences.reduced_motion {
+            self.recents.visibility = 1.;
+        }
         self.pointer = false;
         self.pressed = None;
         self.notice = None;
-        self.panel_started = (!self.preferences.reduced_motion).then(Instant::now);
+        self.panel_started = None;
         self.recent_request(Command::List)
     }
 
@@ -211,7 +237,7 @@ impl State {
             Ok(entries) => match command {
                 Command::List => {
                     let old = match &self.focus {
-                        Target::Recent(id) | Target::RecentClose(id) => Some(id.clone()),
+                        Target::Recent(id) => Some(id.clone()),
                         _ => None,
                     };
                     self.recents.entries = entries.unwrap_or_default();
@@ -219,20 +245,12 @@ impl State {
                         .and_then(|id| self.recents.entries.iter().position(|e| e.app.id == id))
                         .unwrap_or(self.recents.selected)
                         .min(self.recents.entries.len().saturating_sub(1));
-                    if self.focus != Target::RecentCloseAll || self.recents.entries.is_empty() {
-                        self.focus = self
-                            .recents
-                            .entries
-                            .get(self.recents.selected)
-                            .map(|e| {
-                                if matches!(self.focus, Target::RecentClose(_)) {
-                                    Target::RecentClose(e.app.id.clone())
-                                } else {
-                                    Target::Recent(e.app.id.clone())
-                                }
-                            })
-                            .unwrap_or(Target::RecentCloseAll);
-                    }
+                    self.focus = self
+                        .recents
+                        .entries
+                        .get(self.recents.selected)
+                        .map(|e| Target::Recent(e.app.id.clone()))
+                        .unwrap_or(Target::RecentEmpty);
                 }
                 Command::Launch(_) => {
                     return self.back();
@@ -247,14 +265,8 @@ impl State {
                         .recents
                         .entries
                         .get(self.recents.selected)
-                        .map(|e| Target::RecentClose(e.app.id.clone()))
-                        .unwrap_or(Target::RecentCloseAll);
-                    return self.recent_request(Command::List);
-                }
-                Command::CloseAll => {
-                    self.recents.entries.clear();
-                    self.recents.selected = 0;
-                    self.focus = Target::RecentCloseAll;
+                        .map(|e| Target::Recent(e.app.id.clone()))
+                        .unwrap_or(Target::RecentEmpty);
                     return self.recent_request(Command::List);
                 }
             },
@@ -262,16 +274,18 @@ impl State {
         vec![]
     }
 
-    pub fn recent_direction(&mut self, direction: Direction) {
+    pub fn recent_direction(&mut self, direction: Direction) -> Vec<Effect> {
+        if matches!(direction, Direction::Up)
+            && let Target::Recent(id) = &self.focus
+        {
+            return self.recent_request(Command::Close(id.clone()));
+        }
         let entries = &self.recents.entries;
         let index = match &self.focus {
-            Target::Recent(id) | Target::RecentClose(id) => {
-                entries.iter().position(|e| &e.app.id == id)
-            }
+            Target::Recent(id) => entries.iter().position(|e| &e.app.id == id),
             _ => None,
         };
         if let Some(index) = index {
-            let close = matches!(self.focus, Target::RecentClose(_));
             let next = match direction {
                 Direction::Left => index.saturating_sub(1),
                 Direction::Right => (index + 1).min(entries.len() - 1),
@@ -280,28 +294,23 @@ impl State {
             self.recents.selected = next;
             let id = entries[next].app.id.clone();
             self.focus = match direction {
-                Direction::Up if close => Target::RecentCloseAll,
-                Direction::Up => Target::RecentClose(id),
-                Direction::Down if close => Target::Recent(id),
                 Direction::Down if self.recents.error.is_some() => Target::RecentRetry,
-                Direction::Down => Target::Recent(id),
-                _ if close => Target::RecentClose(id),
                 _ => Target::Recent(id),
             };
         } else {
             self.focus = match (&self.focus, direction) {
-                (Target::RecentCloseAll, Direction::Down)
-                | (Target::RecentRetry, Direction::Up | Direction::Right) => entries
+                (Target::RecentRetry, Direction::Up | Direction::Right) => entries
                     .get(self.recents.selected)
                     .map(|e| Target::Recent(e.app.id.clone()))
                     .unwrap_or(if self.recents.error.is_some() {
                         Target::RecentRetry
                     } else {
-                        Target::RecentCloseAll
+                        Target::RecentEmpty
                     }),
                 (_, Direction::Left) if self.recents.error.is_some() => Target::RecentRetry,
                 _ => self.focus.clone(),
             };
         }
+        vec![]
     }
 }
