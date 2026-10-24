@@ -88,10 +88,23 @@ pub enum InputMode {
     Off,
 }
 
+/// A home-screen tile that fires a one-way HTTP request instead of launching
+/// an app. Its id lives in `favorites`/`hidden` like any real app id, so
+/// ordering, favoriting and hiding reuse the existing machinery unchanged.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CustomTile {
+    pub id: String,
+    pub title: String,
+    pub url: String,
+}
+
+pub const CUSTOM_TILE_PREFIX: &str = "custom.";
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
     pub favorites: Option<Vec<String>>,
+    pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
     pub background: String,
     pub show_home_names: bool,
@@ -118,6 +131,7 @@ impl Default for Preferences {
     fn default() -> Self {
         Self {
             favorites: None,
+            custom_tiles: vec![],
             hidden: vec![],
             background: "dunes".into(),
             show_home_names: false,
@@ -164,6 +178,20 @@ impl Preferences {
         })
     }
 
+    /// Synthetic `App` entries for custom tiles, merged into the real
+    /// inventory so favoriting, hiding, search and the Apps grid treat them
+    /// exactly like any installed app.
+    pub fn custom_apps(&self) -> Vec<App> {
+        self.custom_tiles
+            .iter()
+            .map(|tile| App::new(&tile.id, &tile.title))
+            .collect()
+    }
+
+    pub fn custom_tile(&self, id: &str) -> Option<&CustomTile> {
+        self.custom_tiles.iter().find(|tile| tile.id == id)
+    }
+
     pub fn input_visible(&self, input: &Input) -> bool {
         match self.input_modes.get(&input.id).copied().unwrap_or_default() {
             InputMode::On => true,
@@ -207,6 +235,19 @@ impl Preferences {
             clean(ids);
         }
         clean(&mut self.hidden);
+        {
+            let mut seen = HashSet::new();
+            self.custom_tiles.retain(|tile| {
+                valid_app_id(&tile.id)
+                    && tile.id.starts_with(CUSTOM_TILE_PREFIX)
+                    && !tile.title.trim().is_empty()
+                    && !tile.url.trim().is_empty()
+                    && tile.title.chars().count() <= 60
+                    && tile.url.chars().count() <= 512
+                    && seen.insert(tile.id.clone())
+            });
+            self.custom_tiles.truncate(64);
+        }
         self.input_modes.retain(|id, _| valid_app_id(id));
         self.input_names = std::mem::take(&mut self.input_names)
             .into_iter()

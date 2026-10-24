@@ -16,6 +16,7 @@ mod storage;
 mod vector;
 mod view;
 mod weather;
+mod webhook;
 #[path = "weather-service.rs"]
 mod weather_service;
 #[cfg(all(feature = "webos", any(target_os = "linux", test)))]
@@ -177,6 +178,7 @@ fn effects(
     platform: &Platform,
     preferences: &std::path::Path,
     weather: &weather_service::Service,
+    webhook: &webhook::Service,
 ) -> bool {
     for effect in effects {
         match effect {
@@ -222,6 +224,7 @@ fn effects(
                     }
                 }
             }
+            Effect::FireWebhook(url) => webhook.send(url),
             Effect::Quit => return false,
             Effect::Weather(command) => weather.send(command),
         }
@@ -470,12 +473,14 @@ fn run() -> Result<(), String> {
         webos,
         options.preferences.is_none() && options.test_extra_apps == 0,
     );
+    let webhook_service = webhook::Service::new();
     effects(
         vec![Effect::Refresh],
         &mut state,
         &platform,
         &preferences_path,
         &weather_service,
+        &webhook_service,
     );
     platform.sync_splash(&state.preferences.background);
     startup_stage("preferences and workers");
@@ -644,6 +649,13 @@ fn run() -> Result<(), String> {
                     }
                 }
             }
+        }
+        while let Ok(webhook::Response::Done { result }) = webhook_service.receiver.try_recv() {
+            if let Err(error) = result {
+                eprintln!("{error}");
+                state.notify(state.preferences.language.t("appOpenError"));
+            }
+            state.dirty = true;
         }
         weather_tick(&mut state, &weather_service, visible);
         // Rebuild hit regions before input whenever inventory/layout changed.
@@ -883,6 +895,7 @@ fn run() -> Result<(), String> {
                 &platform,
                 &preferences_path,
                 &weather_service,
+                &webhook_service,
             );
             if press
                 .as_ref()
@@ -926,6 +939,7 @@ fn run() -> Result<(), String> {
                     &platform,
                     &preferences_path,
                     &weather_service,
+                    &webhook_service,
                 );
             }
         }
@@ -944,6 +958,7 @@ fn run() -> Result<(), String> {
                 &platform,
                 &preferences_path,
                 &weather_service,
+                &webhook_service,
             );
         }
         let keyboard = state.text_input_active();
