@@ -37,10 +37,13 @@ pub fn install_dir() -> std::path::PathBuf {
 
 pub fn redirect_to_home() -> Result<bool, String> {
     // The root-only integration mounts this marker with its native Home
-    // manifest. A normal tile launch then opens that same instance instead of
-    // starting a second renderer writing the same preferences.
-    if std::fs::read_to_string("/usr/palm/applications/com.webos.app.home/.luma-home")
-        .is_ok_and(|marker| marker.trim() == APP_ID)
+    // manifest, or writes it to /var/run on webOS 5/6, where it mounts this
+    // executable over LG's (a tile's jail sees /usr/bin without that mount).
+    // A normal tile launch then opens that same instance instead of starting
+    // a second renderer writing the same preferences.
+    let marked = |file| std::fs::read_to_string(file).is_ok_and(|marker| marker.trim() == APP_ID);
+    if marked("/usr/palm/applications/com.webos.app.home/.luma-home")
+        || marked("/var/run/luma-home")
     {
         thread::spawn(|| {
             call(

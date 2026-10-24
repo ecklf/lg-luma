@@ -421,7 +421,7 @@ failures preserve the last valid inputs. No failed inventory read substitutes de
 ### Optional native Home integration
 
 `tv/home.sh` and `tv/home.cjs` are packaged beside `luma`. They are a root-only, explicit integration
-for webOS 10/25 and 11/26. `enable` stages a native manifest with ID `com.webos.app.home` and
+for webOS 10/25 and 11/26 (and webOS 5/6, see below). `enable` stages a native manifest with ID `com.webos.app.home` and
 symlinks to the installed executable, libraries and assets under `/var/lib/luma-home/app`, then
 bind-mounts it over `/usr/palm/applications/com.webos.app.home`. SAM rereads that one app through
 `blockSystemApp` followed by `releaseBlockSystemApp`, including `forceBlockSystemApp: false` when
@@ -480,8 +480,19 @@ is bound to that executable path. Luma detects this (`platform::runs_as_lg_home`
 - skips the per-icon elevated-service fallback for installed artwork: as root every file is
   readable, so that fallback would only spend seconds per icon to fail the same way.
 
-The bind mount itself (and restoring LG Home) is left to the integration; LG's file stays
-underneath, and a cold boot without the mount gives LG's Home back. Verified on an LG 49UN7100
+`tv/home.sh` chooses this method (`"method": "executable"` in `state.json`) on webOS 5/6 when LG
+Home's manifest is native, starts `file:///usr/bin/com.webos.app.home` and declares
+`nativeLifeCycleInterfaceVersion: 2`. `enable` and the boot hook bind-mount the installed
+executable over that path, stop the previous Home process and open Home if it was in front (or
+on `enable`). Luma in front within about 15 s is the success condition, with one repeated launch
+after 6 s, because SAM can accept the first launch right after the old process stopped without
+starting anything; otherwise the mount is removed again. A mount whose source is Luma's executable
+counts as its own also after a package update (`//deleted`) and is replaced; any other mount over
+LG's executable is refused. `disable` unmounts (lazily while Home runs), stops Luma and reopens LG
+Home if Home was in front. While mounted, `/var/run/luma-home` names Luma, so a normal
+tile launch redirects to the Home instance: the tile's jail sees `/usr/bin` without the mount but
+shares `/var/run`, which is volatile like the mount itself. LG's file stays underneath, and a cold boot
+without the hook gives LG's Home back. Verified on an LG 49UN7100
 (webOS 5): Home key to Luma in about 0.4 s instead of a restart of about 2 s.
 
 ## Manual extra-app preview
