@@ -78,8 +78,13 @@ impl Options {
             if let Some(argument) = args.next() {
                 let metadata: serde_json::Value =
                     serde_json::from_str(&argument).map_err(|error| error.to_string())?;
+                // Luma's own Home manifest passes "nid"; LG's Home manifest (Luma run in
+                // place of LG's Home executable) passes "appId" with lifecycle v2.
                 result.webos_home = metadata.get("nid").and_then(serde_json::Value::as_str)
-                    == Some(platform::HOME_ID);
+                    == Some(platform::HOME_ID)
+                    || metadata.get("appId").and_then(serde_json::Value::as_str)
+                        == Some(platform::HOME_ID)
+                    || platform::runs_as_lg_home();
             }
             eprintln!("Luma webOS launch parameters accepted");
         }
@@ -475,6 +480,22 @@ fn scripted_click(
 
 fn run() -> Result<(), String> {
     let startup = Instant::now();
+    // sam discards a system app's output. In place of LG's Home, keep it in a small log.
+    #[cfg(all(feature = "webos", unix))]
+    if platform::runs_as_lg_home() {
+        use std::os::unix::io::IntoRawFd;
+        if let Ok(file) = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open("/tmp/luma-home.log")
+        {
+            unsafe { libc::dup2(file.into_raw_fd(), 2) };
+        }
+        unsafe {
+            sdl2::sys::SDL_LogSetAllPriority(sdl2::sys::SDL_LogPriority::SDL_LOG_PRIORITY_INFO)
+        };
+    }
     let mut options = Options::parse()?;
     let webos = cfg!(feature = "webos");
     let startup_stage = |stage: &str| {
@@ -509,20 +530,21 @@ fn run() -> Result<(), String> {
         // Magic Remotes send the separate Exit key for a long Back press.
         // Claim it before video init so the compositor does not close Luma.
         sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_EXIT", "true");
+        // In place of LG's Home executable, SDL's own registration cannot reach the bus under
+        // LG's Home role; Luma registers with sam itself below (lifecycle v2).
+        if platform::runs_as_lg_home() {
+            sdl2::hint::set("SDL_WEBOS_REGISTER_APP", "0");
+        }
     }
     // Resolve the local offset before artwork, HTTP or platform workers start.
     let local_offset = OffsetDateTime::now_local()
         .map(|now| now.offset())
         .unwrap_or(time::UtcOffset::UTC);
-    let root = options.assets.clone().unwrap_or_else(|| {
-        if webos {
-            std::env::current_exe()
-                .unwrap_or_default()
-                .with_file_name("assets")
-        } else {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".build/assets")
-        }
-    });
+    let root = match options.assets.clone() {
+        Some(root) => root,
+        None if webos => platform::install_dir()?.join("assets"),
+        None => PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".build/assets"),
+    };
     let assets = view::Assets::load(root, webos)?;
     startup_stage("asset metadata");
     let default_preferences = options
@@ -659,6 +681,49 @@ fn run() -> Result<(), String> {
     let mut captured = None;
     let mut last_drawable = None;
     let mut events = sdl.event_pump()?;
+    // Lifecycle v2 as LG's Home: sam sends "relaunch" (bring the running Luma to the front)
+    // instead of killing and restarting it, and "close" when it wants Luma to exit.
+    #[cfg(not(all(feature = "webos", target_os = "linux", target_arch = "arm")))]
+    let lifecycle_event: Option<u32> = None;
+    #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
+    let lifecycle_event = if webos && options.webos_home && platform::runs_as_lg_home() {
+        let subsystem = sdl.event()?;
+        // SAFETY: registers one SDL user event type before any are pushed.
+        let event_type = unsafe { subsystem.register_event()? };
+        let sender = subsystem.event_sender();
+        luna::subscribe(
+            Some(platform::HOME_ID),
+            "luna://com.webos.applicationManager/registerApp",
+            &serde_json::json!({"id": platform::HOME_ID}),
+            // sam answers "registered" at once; without it sam would end Home later anyway.
+            Duration::from_secs(10),
+            move |message| {
+                eprintln!("Luma lifecycle: {message}");
+                let refused = message
+                    .get("returnValue")
+                    .and_then(serde_json::Value::as_bool)
+                    == Some(false);
+                let code = match message.get("event").and_then(serde_json::Value::as_str) {
+                    Some("relaunch") => 1,
+                    Some("close") => 2,
+                    // Registration lost (e.g. sam restarted): quit, so sam starts Home afresh.
+                    _ if refused => 2,
+                    _ => return,
+                };
+                let _ = sender.push_event(Event::User {
+                    timestamp: 0,
+                    window_id: 0,
+                    type_: event_type,
+                    code,
+                    data1: std::ptr::null_mut(),
+                    data2: std::ptr::null_mut(),
+                });
+            },
+        )?;
+        Some(event_type)
+    } else {
+        None
+    };
     let mut press: Option<Press> = None;
     let mut back_button = BackButton::default();
     let initial_nav = view::navigation(&assets, state.preferences.language);
@@ -799,6 +864,17 @@ fn run() -> Result<(), String> {
             let mut pending = vec![];
             match event {
                 Event::Quit { .. } => running = false,
+                Event::User { type_, code, .. } if Some(type_) == lifecycle_event => {
+                    if code == 1 {
+                        // SAFETY: the window outlives the event loop.
+                        unsafe { sdl2::sys::SDL_RaiseWindow(window.raw()) };
+                        visible = true;
+                        state.dirty = true;
+                        pending.push(Effect::Refresh);
+                    } else if code == 2 {
+                        running = false;
+                    }
+                }
                 Event::Window {
                     window_id,
                     win_event,

@@ -460,6 +460,36 @@ out of the last app, standby wake with the TV's chosen Quick Start+ setting, a f
 saved preferences and restoring LG Home. The broader webOS 6+ app compatibility statement does
 not establish Home-replacement support on older firmware.
 
+### Running in place of LG's Home executable (webOS 5)
+
+On webOS 5 the manifest takeover above does not apply: SAM restarts a v1 native Home on every
+Home launch. A root integration can instead bind-mount the installed `luma` executable over LG's
+`/usr/bin/com.webos.app.home`. SAM then starts it with LG's own Home manifest and LS2 role, which
+is bound to that executable path. Luma detects this (`platform::runs_as_lg_home`) and:
+
+- disables SDL's own app registration, which cannot reach the bus under LG's Home role, and
+  registers with SAM itself through `registerApp` (lifecycle v2) on its own LS2 connection.
+  `luna::subscribe` waits up to 10 s for SAM's first reply (`registered`); a failed connection,
+  call or refused registration is a startup error, so Luma exits and SAM starts Home afresh.
+  `relaunch` raises the window and refreshes the inventory, `close` and a later
+  `returnValue: false` (registration lost) quit. SAM keeps the process across Home launches and
+  standby (`pause`, reason `keepAlive`) instead of restarting it;
+- resolves `assets/`, `lib/` (extra RPATH) and the splash directory from the installed package,
+  since `current_exe()` names LG's path. Production Homebrew Channel installs under
+  `/media/cryptofs`, developer installs under `/media/developer` and system installs under
+  `/usr/palm/applications` share the lookup list in `tv/install-directories.txt`. Library search
+  retains `$ORIGIN/lib` first and includes all three locations before Rust startup. Native
+  discovery validates the package manifest and matches the executable by device/inode, so assets
+  and splash updates use the source package even when developer and production copies both exist.
+  A missing or unrelated source package is an explicit startup error;
+- writes its stderr to `/tmp/luma-home.log`, because SAM discards a system app's output;
+- skips the per-icon elevated-service fallback for installed artwork: as root every file is
+  readable, so that fallback would only spend seconds per icon to fail the same way.
+
+The bind mount itself (and restoring LG Home) is left to the integration; LG's file stays
+underneath, and a cold boot without the mount gives LG's Home back. Verified on an LG 49UN7100
+(webOS 5): Home key to Luma in about 0.4 s instead of a restart of about 2 s.
+
 ## Manual extra-app preview
 
 ```sh

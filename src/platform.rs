@@ -8,8 +8,32 @@ use crate::{
 use serde_json::{Value, json};
 use std::{collections::HashSet, sync::mpsc, thread};
 
+#[path = "platform-install.rs"]
+mod installation;
+
 pub const APP_ID: &str = "com.ecklf.luma";
 pub const HOME_ID: &str = "com.webos.app.home";
+/// LG's Home executable. A root integration may bind-mount Luma over it, so sam starts Luma
+/// under LG's own Home manifest and LS2 role (lifecycle v2, keep-alive, no sam restart).
+pub const LG_HOME_EXE: &str = "/usr/bin/com.webos.app.home";
+
+/// Whether this process runs in place of LG's Home executable.
+pub fn runs_as_lg_home() -> bool {
+    std::env::current_exe().is_ok_and(|exe| exe == std::path::Path::new(LG_HOME_EXE))
+}
+
+/// Directory holding assets/, lib/ and splash/: next to the executable, or the installed
+/// package when the executable runs in place of LG's Home.
+pub fn install_dir() -> Result<std::path::PathBuf, String> {
+    static DIRECTORY: std::sync::OnceLock<Result<std::path::PathBuf, String>> =
+        std::sync::OnceLock::new();
+    DIRECTORY
+        .get_or_init(|| {
+            let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+            installation::find_directory(&executable, installation::directories())
+        })
+        .clone()
+}
 
 pub fn redirect_to_home() -> Result<bool, String> {
     // The root-only integration mounts this marker with its native Home
@@ -157,10 +181,7 @@ impl Platform {
 }
 
 fn sync_splash(background: &str) -> Result<(), String> {
-    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
-    let directory = executable
-        .parent()
-        .ok_or("Missing installation directory")?;
+    let directory = install_dir()?;
     let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
     let command = format!(
         "/usr/bin/node -e {} {}",
