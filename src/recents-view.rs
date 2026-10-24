@@ -12,16 +12,19 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
         c(0x252c3a, 0.38),
         c(0x0b0e15, 0.50),
     ));
-    let dismiss = Rect::new(1776., 132., 60., 60.);
-    button(
-        out,
-        state,
-        assets,
-        Target::CloseDialog,
-        dismiss,
-        "close",
-        None,
-    );
+    if !recent.entries.is_empty() {
+        let label = language.t("recentCloseAll");
+        let width = assets.width(label, text(21., 550, -0.01)) + 74.;
+        button(
+            out,
+            state,
+            assets,
+            Target::RecentCloseAll,
+            Rect::new(1836. - width, 132., width, 60.),
+            "close",
+            Some(label),
+        );
+    }
 
     if recent.entries.is_empty() {
         let loading = recent.pending.is_some();
@@ -71,61 +74,13 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
             let focused = state.focus == target;
             let selected = index == recent.selected;
             out.shadow(rect, 24., 40., 18., if selected { 0.55 } else { 0.30 });
-            out.draw.push(Draw::RoundedGradient(
-                rect,
-                24.,
-                c(0x303643, 1.),
-                c(0x171c27, 1.),
-            ));
-
-            let preview = entry
-                .preview
-                .as_ref()
-                .and_then(|source| assets.artwork.get(source));
-            if let Some(image) = preview {
-                image_fit(out, image, rect.inset(16.));
-            } else {
-                let app = state
-                    .inventory
-                    .apps
-                    .iter()
-                    .find(|app| app.id == entry.app.id)
-                    .unwrap_or(&entry.app);
-                if let Some(brand) = crate::branding::for_key(&app.brand) {
-                    let (ratio, height) = brand.artwork_size();
-                    out.image(
-                        assets.path(format!("surfaces/{}.png", app.brand)),
-                        rect,
-                        24.,
-                        false,
-                    );
-                    let width = (rect.w * ratio).min(450.);
-                    let height = (height * 1.8).min(160.);
-                    out.image(
-                        assets.path(format!("logos/{}.lvec", app.brand)),
-                        Rect::new(
-                            rect.x + (rect.w - width) / 2.,
-                            rect.y + (rect.h - height) / 2.,
-                            width,
-                            height,
-                        ),
-                        0.,
-                        true,
-                    );
-                } else if let Some(image) = app
-                    .icon
-                    .as_ref()
-                    .and_then(|source| assets.artwork.get(source))
-                {
-                    image_fit(
-                        out,
-                        image,
-                        Rect::new(rect.x + 230., rect.y + 81., 220., 220.),
-                    );
-                } else {
-                    brand_mark(out, assets, app, rect, language);
-                }
-            }
+            let app = state
+                .inventory
+                .apps
+                .iter()
+                .find(|app| app.id == entry.app.id)
+                .unwrap_or(&entry.app);
+            app_face(out, assets, app, rect, language, 24.);
             out.border(
                 rect,
                 24.,
@@ -161,24 +116,6 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
             }
         }
         out.draw.push(Draw::Clip(None));
-        out.text(
-            format!("{} / {}", recent.selected + 1, recent.entries.len()),
-            Rect::new(760., 768., 400., 32.),
-            text(18., 500, 0.04),
-            c(0xffffff, 0.45),
-            true,
-        );
-        let label = language.t("recentCloseAll");
-        let width = (assets.width(label, text(21., 550, -0.01)) + 90.).max(218.);
-        button(
-            out,
-            state,
-            assets,
-            Target::RecentCloseAll,
-            Rect::new(960. - width / 2., 858., width, 60.),
-            "close",
-            Some(label),
-        );
     }
 
     if recent.error.is_some() {
@@ -192,7 +129,7 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
             );
         }
         let label = language.t("retry");
-        let width = assets.width(label, text(21., 550, -0.01)) + 90.;
+        let width = assets.width(label, text(21., 550, -0.01)) + 74.;
         button(
             out,
             state,
@@ -226,24 +163,6 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
             true,
         );
     }
-    out.text(
-        language.t("recentControls"),
-        Rect::new(180., 1010., 1560., 30.),
-        text(17., 450, 0.005),
-        c(0xffffff, 0.48),
-        true,
-    );
-}
-
-fn image_fit(out: &mut Scene, image: std::sync::Arc<crate::app_artwork::Artwork>, rect: Rect) {
-    let scale = (rect.w / image.pixels.width() as f32).min(rect.h / image.pixels.height() as f32);
-    let w = image.pixels.width() as f32 * scale;
-    let h = image.pixels.height() as f32 * scale;
-    out.draw.push(Draw::AppImage(
-        image,
-        Rect::new(rect.x + (rect.w - w) / 2., rect.y + (rect.h - h) / 2., w, h),
-        [1.; 4],
-    ));
 }
 
 fn button(
@@ -256,7 +175,7 @@ fn button(
     label: Option<&str>,
 ) {
     let focused = state.focus == target;
-    let busy = state.recents.pending.is_some() && target != Target::CloseDialog;
+    let busy = state.recents.pending.is_some();
     out.pill(rect, focused && !busy, false);
     let color = if focused && !busy {
         c(0x20232a, 1.)
@@ -269,7 +188,7 @@ fn button(
         Rect::new(
             rect.x
                 + if label.is_some() {
-                    21.
+                    20.
                 } else {
                     (rect.w - 22.) / 2.
                 },
@@ -283,9 +202,9 @@ fn button(
         out.text(
             label,
             Rect::new(
-                rect.x + 56.,
+                rect.x + 54.,
                 rect.y + (rect.h - 27.) / 2.,
-                rect.w - 72.,
+                rect.w - 74.,
                 32.,
             ),
             text(21., 550, -0.01),

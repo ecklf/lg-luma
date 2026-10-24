@@ -39,14 +39,6 @@
     "pt": "Fechar todos",
     "it": "Chiudi tutte"
   },
-  "recentControls": {
-    "en": "← / →  Switch     ↑  Close app     ↓  Close all     OK  Open     Back  Return",
-    "de": "← / →  Wechseln     ↑  App schließen     ↓  Alle schließen     OK  Öffnen     Back  Zurück",
-    "es": "← / →  Cambiar     ↑  Cerrar app     ↓  Cerrar todas     OK  Abrir     Back  Volver",
-    "zh": "← / →  切换     ↑  关闭应用     ↓  全部关闭     OK  打开     Back  返回",
-    "pt": "← / →  Alternar     ↑  Fechar app     ↓  Fechar todos     OK  Abrir     Back  Voltar",
-    "it": "← / →  Cambia     ↑  Chiudi app     ↓  Chiudi tutte     OK  Apri     Back  Indietro"
-  },
   "recentDesktop": {
     "en": "Desktop preview · Sample history",
     "de": "Desktop-Vorschau · Beispielverlauf",

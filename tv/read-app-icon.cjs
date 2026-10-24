@@ -67,37 +67,36 @@ directories.forEach(function (directory) {
       console.error('Invalid app manifest: ' + error.message);
     }
   }
-  (Array.isArray(source.preview)
-    ? source.preview.slice(0, 3)
-    : [source.large_icon, manifest.largeIcon, source.icon, manifest.icon, 'icon.png']
-  ).forEach(function (icon) {
-    if (
-      typeof icon !== 'string' ||
-      !icon ||
-      icon.length > 4096 ||
-      icon.split('').some(function (character) {
-        var code = character.charCodeAt(0);
-        return code < 32 || code === 127;
-      })
-    )
-      return;
-    icon = icon.replace(/^file:\/\//, '');
-    if (icon.indexOf('://') >= 0) return;
-    if (icon.split('/').indexOf('..') >= 0) return;
-    var file = path.resolve(directory, icon);
-    if (['.png', '.jpg', '.jpeg', '.webp'].indexOf(path.extname(file).toLowerCase()) < 0) return;
-    if (
-      !roots.some(function (root) {
-        return file.indexOf(root + '/') === 0;
-      }) ||
-      seen[file]
-    )
-      return;
-    seen[file] = true;
-    var data = read(file, remaining);
-    if (!data || !data.length) return;
-    remaining -= data.length;
-    icons.push(data.toString('hex'));
-  });
+  [source.large_icon, manifest.largeIcon, source.icon, manifest.icon, 'icon.png'].forEach(
+    function (icon) {
+      if (
+        typeof icon !== 'string' ||
+        !icon ||
+        icon.length > 4096 ||
+        icon.split('').some(function (character) {
+          var code = character.charCodeAt(0);
+          return code < 32 || code === 127;
+        })
+      )
+        return;
+      icon = icon.replace(/^file:\/\//, '');
+      if (icon.indexOf('://') >= 0) return;
+      if (icon.split('/').indexOf('..') >= 0) return;
+      var file = path.resolve(directory, icon);
+      if (['.png', '.jpg', '.jpeg', '.webp'].indexOf(path.extname(file).toLowerCase()) < 0) return;
+      if (
+        !roots.some(function (root) {
+          return file.indexOf(root + '/') === 0;
+        }) ||
+        seen[file]
+      )
+        return;
+      seen[file] = true;
+      var data = read(file, remaining);
+      if (!data || !data.length) return;
+      remaining -= data.length;
+      icons.push(data.toString('hex'));
+    }
+  );
 });
 console.log(JSON.stringify({ returnValue: true, icons: icons }));

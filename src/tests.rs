@@ -55,7 +55,14 @@ fn remote_routes_from_header_and_back_through_settings() {
     assert_eq!(state.focus, Target::Nav(2));
     state.back();
     assert_eq!(state.page, Page::Home);
-    assert_eq!(state.back(), vec![Effect::Quit]);
+    assert_eq!(
+        state.back(),
+        vec![Effect::Recent {
+            generation: 1,
+            command: crate::recents::Command::List
+        }]
+    );
+    assert!(state.recents_open());
 }
 
 #[test]

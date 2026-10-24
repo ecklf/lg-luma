@@ -54,8 +54,6 @@ fn excluded(id: &str) -> bool {
 #[derive(Clone, Debug, Serialize)]
 pub struct Entry {
     pub app: App,
-    #[serde(skip)]
-    pub preview: Option<Source>,
 }
 
 pub fn normalize(reply: &Value) -> Result<Vec<Entry>, String> {
@@ -94,10 +92,7 @@ pub fn normalize(reply: &Value) -> Result<Vec<Entry>, String> {
             },
         );
         app.icon = Some(Source::new(id, &json!({})));
-        result.push(Entry {
-            app,
-            preview: Source::recent(id, entry),
-        });
+        result.push(Entry { app });
     }
     Ok(result)
 }
@@ -109,7 +104,7 @@ pub fn demo() -> Vec<Entry> {
         .into_iter()
         .skip(1)
         .take(8)
-        .map(|app| Entry { app, preview: None })
+        .map(|app| Entry { app })
         .collect()
 }
 
@@ -209,6 +204,9 @@ impl State {
             Err(error) => {
                 eprintln!("Luma recent apps: {error}");
                 self.recents.error = Some(error);
+                if self.recents.entries.is_empty() {
+                    self.focus = Target::RecentRetry;
+                }
             }
             Ok(entries) => match command {
                 Command::List => {
@@ -221,9 +219,7 @@ impl State {
                         .and_then(|id| self.recents.entries.iter().position(|e| e.app.id == id))
                         .unwrap_or(self.recents.selected)
                         .min(self.recents.entries.len().saturating_sub(1));
-                    if !matches!(self.focus, Target::RecentCloseAll | Target::CloseDialog)
-                        || self.recents.entries.is_empty()
-                    {
+                    if self.focus != Target::RecentCloseAll || self.recents.entries.is_empty() {
                         self.focus = self
                             .recents
                             .entries
@@ -235,7 +231,7 @@ impl State {
                                     Target::Recent(e.app.id.clone())
                                 }
                             })
-                            .unwrap_or(Target::CloseDialog);
+                            .unwrap_or(Target::RecentCloseAll);
                     }
                 }
                 Command::Launch(_) => {
@@ -252,13 +248,13 @@ impl State {
                         .entries
                         .get(self.recents.selected)
                         .map(|e| Target::RecentClose(e.app.id.clone()))
-                        .unwrap_or(Target::CloseDialog);
+                        .unwrap_or(Target::RecentCloseAll);
                     return self.recent_request(Command::List);
                 }
                 Command::CloseAll => {
                     self.recents.entries.clear();
                     self.recents.selected = 0;
-                    self.focus = Target::CloseDialog;
+                    self.focus = Target::RecentCloseAll;
                     return self.recent_request(Command::List);
                 }
             },
@@ -284,27 +280,26 @@ impl State {
             self.recents.selected = next;
             let id = entries[next].app.id.clone();
             self.focus = match direction {
-                Direction::Up if close => Target::CloseDialog,
+                Direction::Up if close => Target::RecentCloseAll,
                 Direction::Up => Target::RecentClose(id),
                 Direction::Down if close => Target::Recent(id),
-                Direction::Down => Target::RecentCloseAll,
+                Direction::Down if self.recents.error.is_some() => Target::RecentRetry,
+                Direction::Down => Target::Recent(id),
                 _ if close => Target::RecentClose(id),
                 _ => Target::Recent(id),
             };
         } else {
             self.focus = match (&self.focus, direction) {
-                (Target::RecentCloseAll, Direction::Up)
-                | (Target::CloseDialog, Direction::Down) => entries
+                (Target::RecentCloseAll, Direction::Down)
+                | (Target::RecentRetry, Direction::Up | Direction::Right) => entries
                     .get(self.recents.selected)
                     .map(|e| Target::Recent(e.app.id.clone()))
                     .unwrap_or(if self.recents.error.is_some() {
                         Target::RecentRetry
                     } else {
-                        Target::CloseDialog
+                        Target::RecentCloseAll
                     }),
-                (Target::RecentRetry, Direction::Right | Direction::Up) => Target::CloseDialog,
                 (_, Direction::Left) if self.recents.error.is_some() => Target::RecentRetry,
-                (_, Direction::Down) if !entries.is_empty() => Target::RecentCloseAll,
                 _ => self.focus.clone(),
             };
         }

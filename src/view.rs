@@ -462,20 +462,6 @@ fn header(
         },
     );
     out.control(Target::TvSettings, rect, false);
-    let rect = Rect::new(1718.4, 52., 49.6, 49.6);
-    let focused = state.focus == Target::Recents;
-    out.pill(rect, focused, false);
-    out.icon(
-        assets,
-        "recent",
-        Rect::new(rect.x + 13.2, rect.y + 13.2, 23.2, 23.2),
-        if focused {
-            c(0x2c2c2c, 1.)
-        } else {
-            c(0xeeeeee, 0.73)
-        },
-    );
-    out.control(Target::Recents, rect, false);
 }
 
 fn tile(
@@ -514,62 +500,7 @@ fn tile(
         if focused { 14. } else { 9. },
         if focused { 0.4 } else { 0.165 },
     );
-    let logo = crate::branding::for_key(&app.brand);
-    let artwork = logo
-        .is_none()
-        .then(|| {
-            app.icon
-                .as_ref()
-                .and_then(|source| assets.artwork.get(source))
-        })
-        .flatten();
-    if let Some(rgb) = artwork.as_ref().map(|image| &image.color) {
-        out.shape(
-            rect,
-            19.2,
-            [
-                rgb[0] as f32 / 255.,
-                rgb[1] as f32 / 255.,
-                rgb[2] as f32 / 255.,
-                1.,
-            ],
-        );
-    } else {
-        out.image(
-            assets.path(format!("surfaces/{}.png", app.brand)),
-            rect,
-            19.2,
-            false,
-        );
-    }
-    out.border(rect, 19.2, 1., c(0xffffff, 0.063));
-    if let Some(brand) = logo {
-        let (ratio, h) = brand.artwork_size();
-        out.image(
-            assets.path(format!("logos/{}.lvec", app.brand)),
-            Rect::new(
-                rect.x + rect.w * (1. - ratio) / 2.,
-                rect.y + (rect.h - h) / 2.,
-                rect.w * ratio,
-                h,
-            ),
-            0.,
-            true,
-        );
-    } else if let Some(image) = artwork {
-        out.draw.push(Draw::AppImage(
-            image,
-            Rect::new(
-                rect.x + rect.w * 0.16,
-                rect.y + rect.h * 0.16,
-                rect.w * 0.68,
-                rect.h * 0.68,
-            ),
-            [1.; 4],
-        ));
-    } else {
-        brand_mark(out, assets, app, rect, state.preferences.language);
-    }
+    app_face(out, assets, app, rect, state.preferences.language, 19.2);
     if pinned {
         out.icon(
             assets,
@@ -639,6 +570,75 @@ fn tile(
     }
 }
 
+/// Shared card artwork for Home, Apps and Recents. Curated vectors always take
+/// precedence over installed artwork, with the same relative logo proportions.
+fn app_face(
+    out: &mut Scene,
+    assets: &Assets,
+    app: &App,
+    rect: Rect,
+    language: Language,
+    radius: f32,
+) {
+    let logo = crate::branding::for_key(&app.brand);
+    let artwork = logo
+        .is_none()
+        .then(|| {
+            app.icon
+                .as_ref()
+                .and_then(|source| assets.artwork.get(source))
+        })
+        .flatten();
+    if let Some(rgb) = artwork.as_ref().map(|image| &image.color) {
+        out.shape(
+            rect,
+            radius,
+            [
+                rgb[0] as f32 / 255.,
+                rgb[1] as f32 / 255.,
+                rgb[2] as f32 / 255.,
+                1.,
+            ],
+        );
+    } else {
+        out.image(
+            assets.path(format!("surfaces/{}.png", app.brand)),
+            rect,
+            radius,
+            false,
+        );
+    }
+    out.border(rect, radius, 1., c(0xffffff, 0.063));
+    if let Some(brand) = logo {
+        let (ratio, height) = brand.artwork_size();
+        let height = height * rect.h / FACE_HEIGHT;
+        out.image(
+            assets.path(format!("logos/{}.lvec", app.brand)),
+            Rect::new(
+                rect.x + rect.w * (1. - ratio) / 2.,
+                rect.y + (rect.h - height) / 2.,
+                rect.w * ratio,
+                height,
+            ),
+            0.,
+            true,
+        );
+    } else if let Some(image) = artwork {
+        out.draw.push(Draw::AppImage(
+            image,
+            Rect::new(
+                rect.x + rect.w * 0.16,
+                rect.y + rect.h * 0.16,
+                rect.w * 0.68,
+                rect.h * 0.68,
+            ),
+            [1.; 4],
+        ));
+    } else {
+        brand_mark(out, assets, app, rect, language);
+    }
+}
+
 fn caption_height(state: &State, assets: &Assets, app: &App, width: f32) -> f32 {
     let title = format!(
         "{}{}",
@@ -663,6 +663,14 @@ fn caption_height(state: &State, assets: &Assets, app: &App, width: f32) -> f32 
 }
 
 fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language: Language) {
+    let scale = rect.h / FACE_HEIGHT;
+    let rect = Rect::new(
+        rect.x / scale,
+        rect.y / scale,
+        rect.w / scale,
+        rect.h / scale,
+    );
+    let start = out.draw.len();
     let (cx, cy) = rect.center();
     match app.brand.as_str() {
         "plex" => {
@@ -742,6 +750,24 @@ fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language:
                 font,
                 WHITE,
                 false,
+            );
+        }
+    }
+    if scale != 1. {
+        for draw in &mut out.draw[start..] {
+            let rect = match draw {
+                Draw::Text(_, rect, style, _, _) => {
+                    style.size *= scale;
+                    rect
+                }
+                Draw::TintedImage(_, rect, _, _, _) => rect,
+                _ => continue,
+            };
+            *rect = Rect::new(
+                rect.x * scale,
+                rect.y * scale,
+                rect.w * scale,
+                rect.h * scale,
             );
         }
     }

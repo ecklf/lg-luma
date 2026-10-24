@@ -34,8 +34,6 @@ pub struct Source {
     // Part of the cache key: an app update changes it, so its icon is read
     // again, while unchanged apps keep their decoded artwork across refreshes.
     version: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    preview: Option<Vec<String>>,
 }
 
 impl Source {
@@ -55,45 +53,7 @@ impl Source {
             large_icon: text("largeIcon").map(str::to_owned),
             icon: text("icon").map(str::to_owned),
             version: text("version").map(str::to_owned),
-            preview: None,
         }
-    }
-
-    pub fn recent(id: &str, entry: &Value) -> Option<Self> {
-        let paths: Vec<_> = [
-            "cardSnapShotFilePath",
-            "customImageFilePath",
-            "splashBackground",
-        ]
-        .into_iter()
-        .filter_map(|key| entry.get(key).and_then(Value::as_str))
-        .filter_map(|value| icon_path(Path::new("/"), value))
-        .filter(|path| {
-            path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
-                ["png", "jpg", "jpeg", "webp"]
-                    .iter()
-                    .any(|ext| e.eq_ignore_ascii_case(ext))
-            })
-        })
-        .map(|path| path.to_string_lossy().into_owned())
-        .collect();
-        if paths.is_empty() {
-            return None;
-        }
-        let mut source = Self::new(id, &Value::Null);
-        source.preview = Some(paths);
-        Some(source)
-    }
-
-    fn decode(&self, bytes: &[u8]) -> Option<Artwork> {
-        decode_at(
-            bytes,
-            if self.preview.is_some() {
-                (768, 432)
-            } else {
-                (256, 256)
-            },
-        )
     }
 
     fn directories(&self) -> Vec<PathBuf> {
@@ -151,12 +111,7 @@ fn icon_path(directory: &Path, value: &str) -> Option<PathBuf> {
         .then_some(path)
 }
 
-#[cfg(test)]
 fn decode(bytes: &[u8]) -> Option<Artwork> {
-    decode_at(bytes, (256, 256))
-}
-
-fn decode_at(bytes: &[u8], size: (u32, u32)) -> Option<Artwork> {
     let mut reader = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
         .ok()?;
@@ -166,7 +121,7 @@ fn decode_at(bytes: &[u8], size: (u32, u32)) -> Option<Artwork> {
     limits.max_alloc = Some(32 * 1024 * 1024);
     reader.limits(limits);
     let image = reader.decode().ok()?;
-    let pixels = image.thumbnail(size.0, size.1).into_rgba8();
+    let pixels = image.thumbnail(256, 256).into_rgba8();
     let color = background(&pixels);
     Some(Artwork {
         key: String::new(),
@@ -220,7 +175,7 @@ fn load(source: &Source) -> Option<Artwork> {
     // Some jailed installations cannot read other applications' files. Use the
     // same native-authenticated elevated service as inventory, on this worker.
     match crate::platform::read_app_icons(source) {
-        Ok(icons) => icons.iter().find_map(|bytes| source.decode(bytes)),
+        Ok(icons) => icons.iter().find_map(|bytes| decode(bytes)),
         Err(error) => {
             eprintln!("Luma installed icon {}: {error}", source.id);
             None
@@ -232,12 +187,6 @@ fn load_local(
     source: &Source,
     mut read: impl FnMut(&Path, usize) -> Option<Vec<u8>>,
 ) -> Option<Artwork> {
-    if let Some(paths) = &source.preview {
-        return paths
-            .iter()
-            .filter_map(|path| icon_path(Path::new("/"), path))
-            .find_map(|path| read(&path, MAX_FILE).and_then(|bytes| source.decode(&bytes)));
-    }
     for directory in source.directories() {
         let manifest = read(&directory.join("appinfo.json"), 64 * 1024)
             .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
@@ -260,7 +209,7 @@ fn load_local(
         {
             if let Some(artwork) = icon_path(&directory, icon)
                 .and_then(|path| read(&path, MAX_FILE))
-                .and_then(|bytes| source.decode(&bytes))
+                .and_then(|bytes| decode(&bytes))
             {
                 return Some(artwork);
             }

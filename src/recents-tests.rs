@@ -254,6 +254,137 @@ fn native_hold_opens_once_and_the_next_physical_back_press_dismisses() {
 }
 
 #[test]
+fn a_short_back_on_home_opens_recents_and_the_next_press_restores_the_app() {
+    use sdl2::keyboard::Keycode;
+    let mut state = ready();
+    state.focus = Target::App("youtube.leanback.v4".into());
+    let mut button = BackButton::default();
+    let start = Instant::now();
+    assert!(
+        button
+            .key_down(&mut state, Keycode::AcBack, start)
+            .is_empty()
+    );
+    assert_eq!(
+        button.release(Keycode::AcBack, start + Duration::from_millis(100)),
+        Some(false)
+    );
+    assert_eq!(
+        state.back(),
+        vec![Effect::Recent {
+            generation: 1,
+            command: Command::List
+        }]
+    );
+    accept(&mut state, recents::demo());
+    assert!(state.recents_open());
+    assert!(
+        button
+            .key_down(&mut state, Keycode::AcBack, start + Duration::from_secs(1))
+            .is_empty()
+    );
+    assert_eq!(
+        button.release(Keycode::AcBack, start + Duration::from_millis(1100)),
+        None
+    );
+    assert!(!state.recents_open());
+    assert_eq!(state.focus, Target::App("youtube.leanback.v4".into()));
+}
+
+#[test]
+fn home_header_has_only_navigation_and_tv_settings() {
+    let state = ready();
+    let header: Vec<_> = controls(&state)
+        .into_iter()
+        .filter(|control| control.rect.y < 120.)
+        .collect();
+    assert_eq!(header.len(), 4);
+    assert!(
+        header
+            .iter()
+            .all(|control| matches!(control.target, Target::Nav(_) | Target::TvSettings))
+    );
+}
+
+#[test]
+fn recents_has_compact_top_right_close_all_without_a_dismiss_button_or_footer() {
+    use crate::renderer::Draw;
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state.open_recents();
+    accept(&mut state, recents::demo());
+    let scene = scene(&state);
+    assert!(
+        scene
+            .controls
+            .iter()
+            .all(|control| control.target != Target::CloseDialog)
+    );
+    let all = scene
+        .controls
+        .iter()
+        .find(|control| control.target == Target::RecentCloseAll)
+        .unwrap()
+        .rect;
+    assert_eq!(all.y, 132.);
+    assert!((all.x + all.w - 1836.).abs() < 0.01);
+    let label = scene
+        .draw
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Text(value, rect, ..) if value == "Close all" => Some(*rect),
+            _ => None,
+        })
+        .unwrap();
+    assert!((all.x + all.w - label.x - label.w - 20.).abs() < 0.01);
+    assert!(scene.draw.iter().all(|draw| !matches!(draw,
+        Draw::Text(value, ..) if value == "1 / 8" || value.contains("Close app") || value.contains("OK  Open"))));
+    state.direction(Direction::Up, &scene.controls);
+    assert!(matches!(state.focus, Target::RecentClose(_)));
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::RecentCloseAll);
+    state.direction(Direction::Down, &controls(&state));
+    assert!(matches!(state.focus, Target::Recent(_)));
+}
+
+#[test]
+fn youtube_recents_uses_the_apps_vector_and_the_same_relative_logo_geometry() {
+    use crate::renderer::Draw;
+    let bounds = |scene: &view::Scene, suffix: &str| {
+        scene
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Image(path, rect, ..) | Draw::TintedImage(path, rect, ..)
+                    if path.ends_with(suffix) =>
+                {
+                    Some(*rect)
+                }
+                _ => None,
+            })
+            .unwrap()
+    };
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state.open(1);
+    let apps = scene(&state);
+    let app_face = bounds(&apps, "surfaces/youtube.png");
+    let app_logo = bounds(&apps, "logos/youtube.lvec");
+    state.open_recents();
+    accept(&mut state, recents::normalize(&json!({"recentsAppList":[{
+        "appId":"youtube.leanback.v4", "title":"YouTube",
+        "customImageFilePath":"/media/developer/apps/usr/palm/applications/youtube.leanback.v4/imageForRecents.png"
+    }]})).unwrap());
+    let recent = scene(&state);
+    let recent_face = bounds(&recent, "surfaces/youtube.png");
+    let recent_logo = bounds(&recent, "logos/youtube.lvec");
+    assert!((app_logo.w / app_face.w - recent_logo.w / recent_face.w).abs() < 0.0001);
+    assert!((app_logo.h / app_face.h - recent_logo.h / recent_face.h).abs() < 0.0001);
+    assert!((recent_logo.center().0 - recent_face.center().0).abs() < 0.01);
+    assert!((recent_logo.center().1 - recent_face.center().1).abs() < 0.01);
+}
+
+#[test]
 fn recents_is_modal_and_restores_the_exact_settings_parent() {
     let mut state = ready();
     state.open(2);
@@ -277,9 +408,10 @@ fn recents_is_modal_and_restores_the_exact_settings_parent() {
         Target::RecentClose("youtube.leanback.v4".into())
     );
     state.direction(Direction::Down, &controls(&state));
-    state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::RecentCloseAll);
     state.direction(Direction::Up, &controls(&state));
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::RecentCloseAll);
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Recent("youtube.leanback.v4".into()));
     assert!(state.back().is_empty());
     assert_eq!(state.focus, Target::ClockFormat);
@@ -331,7 +463,7 @@ fn closing_is_serialized_refreshes_on_success_and_keeps_a_neighbor_focused() {
         }]
     );
     accept(&mut state, vec![]);
-    assert_eq!(state.focus, Target::CloseDialog);
+    assert_eq!(state.focus, Target::RecentCloseAll);
     assert!(
         controls(&state)
             .iter()
@@ -400,7 +532,7 @@ fn recents_pointer_focus_never_moves_hit_regions_and_reduced_motion_snaps() {
     }
     assert!(controls(&state).iter().all(|c| matches!(
         c.target,
-        Target::Recent(_) | Target::RecentClose(_) | Target::RecentCloseAll | Target::CloseDialog
+        Target::Recent(_) | Target::RecentClose(_) | Target::RecentCloseAll
     )));
     state.recents.selected = 3;
     state.recents.position = 1.5;

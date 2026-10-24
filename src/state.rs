@@ -28,7 +28,6 @@ pub enum Page {
 pub enum Target {
     Nav(usize),
     TvSettings,
-    Recents,
     Recent(String),
     RecentClose(String),
     RecentCloseAll,
@@ -911,7 +910,7 @@ impl State {
                 && matches!(direction, Direction::Left)
                 && !matches!(
                     self.focus,
-                    Target::Nav(_) | Target::Sidebar(_) | Target::TvSettings | Target::Recents
+                    Target::Nav(_) | Target::Sidebar(_) | Target::TvSettings
                 )
             {
                 if let Target::Background(index) = self.focus {
@@ -1224,7 +1223,6 @@ impl State {
                     self.recent_request(Command::CloseAll)
                 }
                 Target::RecentRetry => self.recent_request(Command::List),
-                Target::CloseDialog => self.back(),
                 _ => vec![],
             };
         }
@@ -1236,7 +1234,6 @@ impl State {
         }
         self.dirty = true;
         match self.focus.clone() {
-            Target::Recents => return self.open_recents(),
             Target::Nav(index) => self.open(index),
             Target::Browse => self.open(1),
             Target::Retry => return vec![Effect::Reload],
@@ -1589,7 +1586,7 @@ impl State {
             self.open(0);
             vec![]
         } else {
-            vec![Effect::Quit]
+            self.open_recents()
         }
     }
 }
