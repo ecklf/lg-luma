@@ -978,6 +978,9 @@ fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language:
                 "browser" => ("globe", language.t("browser")),
                 "moonlight" => ("moonlight", "Moonlight"),
                 "gaming" => ("gaming", app.title.as_str()),
+                // Reuses the existing weather-moon icon; no new asset pipeline
+                // for a one-off custom-tile mark.
+                "custom" => ("weather-moon", app.title.as_str()),
                 _ => ("generic", app.title.as_str()),
             };
             let font = if brand == "generic" {
