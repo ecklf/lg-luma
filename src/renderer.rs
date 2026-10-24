@@ -198,6 +198,42 @@ struct Batch {
     fade: Option<[f32; 8]>,
 }
 
+/// Square images skip the rounded-rectangle distance field: a negative radius selects the
+/// shader's plain texture path. Per pixel that field cost as much as the rest of the Home scene
+/// on a webOS 5 Mali for the full-screen wallpaper.
+fn plain_radius(radius: f32) -> f32 {
+    if radius > 0. { radius } else { -1. }
+}
+
+/// Measurement aid: LUMA_PROFILE_SKIP=wallpaper,image,app,shape,gradient,shadow,text or all
+/// leaves those draws out, to find which part of the scene costs the GPU time.
+fn profile_skip(command: &Draw) -> bool {
+    static SKIP: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    let skip = SKIP.get_or_init(|| {
+        std::env::var("LUMA_PROFILE_SKIP")
+            .map(|value| value.split(',').map(str::to_owned).collect())
+            .unwrap_or_default()
+    });
+    if skip.is_empty() {
+        return false;
+    }
+    let kind = match command {
+        Draw::Image(_, rect, ..) | Draw::TintedImage(_, rect, ..)
+            if rect.w >= 1920. && rect.h >= 1080. =>
+        {
+            "wallpaper"
+        }
+        Draw::Image(..) | Draw::TintedImage(..) => "image",
+        Draw::AppImage(..) => "app",
+        Draw::Shape(..) => "shape",
+        Draw::RoundedGradient(..) => "gradient",
+        Draw::Shadow(..) => "shadow",
+        Draw::Text(..) => "text",
+        Draw::Clip(_) | Draw::EdgeFade(_) | Draw::EdgeFadeX(_) => return false,
+    };
+    skip.iter().any(|entry| entry == kind || entry == "all")
+}
+
 pub struct Renderer {
     program: GLuint,
     vector_program: GLuint,
@@ -809,7 +845,7 @@ impl Renderer {
             let h = texture.height as f32 * scale;
             rect = Rect::new(rect.x + (rect.w - w) / 2., rect.y + (rect.h - h) / 2., w, h);
         }
-        self.quad(rect, [0., 0., 1., 1.], radius, 0., tint, id);
+        self.quad(rect, [0., 0., 1., 1.], plain_radius(radius), 0., tint, id);
     }
 
     fn vector_image(&mut self, path: &str, mut rect: Rect, contain: bool, tint: Color) {
@@ -886,7 +922,7 @@ impl Renderer {
         self.quad(
             Rect::new(rect.x + (rect.w - w) / 2., rect.y + (rect.h - h) / 2., w, h),
             [0., 0., 1., 1.],
-            0.,
+            plain_radius(0.),
             0.,
             tint,
             id,
@@ -910,6 +946,9 @@ impl Renderer {
         self.clip = None;
         self.fade = None;
         for command in commands {
+            if profile_skip(command) {
+                continue;
+            }
             match command {
                 Draw::Shape(rect, radius, border, color) => self.quad(
                     *rect,

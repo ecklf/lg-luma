@@ -388,6 +388,10 @@ presentations. Hidden windows pause profiling. Capture stalls are excluded. CPU 
 not a GPU timestamp, and `--frames` counts event-loop iterations, not presentation rate.
 Inspect `window`, `drawable`, `drawable_is_4k`, `last_presented`, `capture` and `profile` in JSON.
 Do not infer 60 fps from a successful VSync request; measure actual TV pacing and transitions.
+`LUMA_PROFILE_SKIP=wallpaper,image,app,shape,gradient,shadow,text` (or `all`) leaves those draws
+out, to find which part of a scene costs GPU time. On an LG webOS 5 TV (Mali-TDVX) the cost
+tracks covered area: a full-screen layer takes about 7 ms at 1080p, and MSAA costs nothing
+measurable.
 
 ## TV startup diagnostics
 
