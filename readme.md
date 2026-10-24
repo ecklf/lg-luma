@@ -34,11 +34,14 @@ https://github.com/user-attachments/assets/9c708bd3-5d38-48fe-a2bc-5587ac0a1a84
 
 The following TV configurations have been reported working with Luma:
 
-| TV    | Model identifier | webOS |
-| ----- | ---------------- | ----- |
-| LG C1 | `OLED48C1KNB`    | 6.5.3 |
-| LG C3 | `OLED65C31LA`    | 26    |
-| LG C5 | `OLED55C57LA`    | 26    |
+| TV        | Model identifier | webOS | Takeover Method |
+| --------- | ---------------- | ----- | --------------- |
+| LG C1     | `OLED48C1KNB`    | 6.5.3 | X               |
+| LG C2     | `OLED42C2PSA`    | 25    | X               |
+| LG C3     | `OLED65C31LA`    | 26    | X               |
+| LG C3     | `OLED65C36LC`    | 26    | X               |
+| LG C5     | `OLED55C57LA`    | 26    | X               |
+| LG UN7100 | `49UN71006LB`    | 5     | X               |
 
 ## Installation
 
