@@ -5,7 +5,9 @@ mod app_artwork;
 #[path = "app-subscription.rs"]
 mod app_subscription;
 mod branding;
+mod damage;
 mod diagnostics;
+mod egl_damage;
 mod font;
 mod i18n;
 #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
@@ -690,6 +692,22 @@ fn run() -> Result<(), String> {
     }
     let mut renderer = renderer::Renderer::new(&assets.root.join("font.ttf"), webos)?;
     startup_stage("renderer");
+    // Redraw only what changed since the back buffer's frame (LUMA_PARTIAL=0 draws in full).
+    let partial = (std::env::var("LUMA_PARTIAL").as_deref() != Ok("0"))
+        .then(|| egl_damage::PartialUpdate::load(&video))
+        .flatten();
+    eprintln!(
+        "Luma partial redraw: {}",
+        partial
+            .as_ref()
+            .map_or("off", egl_damage::PartialUpdate::describe)
+    );
+    let mut damage_tracker = damage::Tracker::default();
+    let verify_damage = std::env::var("LUMA_DAMAGE_VERIFY").as_deref() == Ok("1");
+    // Partial frames: verified, mismatched, worst pixels, largest difference; full frames alike.
+    let mut damage_report = (0usize, 0usize, 0usize, 0u8);
+    let mut full_report = (0usize, 0usize, 0usize, 0u8);
+    let mut redrawn_total = 0.;
     let mut profile = diagnostics::Profile::default();
     let mut presented = 0usize;
     let mut captured = None;
@@ -1339,7 +1357,9 @@ fn run() -> Result<(), String> {
                     .profile_frames
                     .is_some_and(|limit| presented + 1 >= limit));
         if ((state.dirty || options.profile_frames.is_some()) && visible) || final_frame {
+            let compose_started = Instant::now();
             scene = compose(&mut state, &assets, pill, pill_width, now);
+            let compose_ms = compose_started.elapsed().as_secs_f64() * 1000.;
             let (width, height) = window.drawable_size();
             if width > 0 && height > 0 {
                 if final_frame && let Some(path) = &options.screenshot {
@@ -1349,8 +1369,51 @@ fn run() -> Result<(), String> {
                         options.capture_size.unwrap_or(Size::HD),
                     )?);
                 }
-                renderer.render(&scene.draw, width, height);
+                let damage = partial.as_ref().and_then(|partial| {
+                    if last_drawable != Some(Size::new(width, height)) {
+                        damage_tracker.reset();
+                    }
+                    damage_tracker.push(&scene.draw);
+                    // A capture drew this frame already; keep its window frame whole.
+                    if captured.is_some() && final_frame {
+                        return None;
+                    }
+                    let damage = damage_tracker
+                        .damage(partial.buffer_age())
+                        .map(|rect| (rect, renderer::Renderer::damage_pixels(rect, width, height)));
+                    if let Some((_, pixels)) = damage {
+                        partial.set_damage(pixels);
+                    }
+                    damage
+                });
+                renderer.render(&scene.draw, width, height, damage);
+                redrawn_total += renderer.stats().redrawn_fraction;
+                if verify_damage {
+                    // Full frames give the baseline difference of the two drawing paths.
+                    let report = if damage.is_some() {
+                        &mut damage_report
+                    } else {
+                        &mut full_report
+                    };
+                    let save = (damage.is_some() && report.1 == 0)
+                        .then(|| std::path::Path::new("/tmp/luma-damage-check"));
+                    let (differing, largest) =
+                        renderer.verify_window(&scene.draw, width, height, save);
+                    report.0 += 1;
+                    if differing > 0 {
+                        report.1 += 1;
+                        if damage.is_some() {
+                            eprintln!(
+                                "Luma damage check: frame {presented}: {differing} pixels differ (max {largest})"
+                            );
+                        }
+                    }
+                    report.2 = report.2.max(differing);
+                    report.3 = report.3.max(largest);
+                }
+                let swap_started = Instant::now();
                 window.gl_swap_window();
+                let swap_ms = swap_started.elapsed().as_secs_f64() * 1000.;
                 if presented == 0 {
                     startup_stage("first frame");
                     if webos {
@@ -1370,6 +1433,13 @@ fn run() -> Result<(), String> {
                         Instant::now(),
                         renderer.stats().cpu_submission_ms,
                         final_frame && options.screenshot.is_some(),
+                        diagnostics::Frame {
+                            interval_ms: 0.,
+                            compose_ms,
+                            render_ms: renderer.stats().cpu_submission_ms,
+                            swap_ms,
+                            redrawn: renderer.stats().redrawn_fraction,
+                        },
                     );
                 }
                 let drawable = Size::new(width, height);
@@ -1459,6 +1529,14 @@ fn run() -> Result<(), String> {
             "drawable_is_4k": Size::new(dw, dh).is_4k(), "presented_frames": presented,
             "graphics": renderer.info, "last_presented": renderer.stats(), "capture": captured,
             "profile": options.profile_frames.map(|_| profile.summary()),
+            "partial_redraw": partial.as_ref().map(egl_damage::PartialUpdate::describe),
+            "redrawn_fraction_mean": redrawn_total / presented.max(1) as f64,
+            "damage_verify": verify_damage.then(|| serde_json::json!({
+                "verified_frames": damage_report.0, "mismatched_frames": damage_report.1,
+                "worst_pixels": damage_report.2, "largest_difference": damage_report.3,
+                "full_frames": full_report.0, "full_mismatched": full_report.1,
+                "full_worst_pixels": full_report.2, "full_largest_difference": full_report.3,
+            })),
         });
         std::fs::write(
             path,

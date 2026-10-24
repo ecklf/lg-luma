@@ -143,6 +143,8 @@ pub struct RenderStats {
     pub high_resolution_wallpaper: bool,
     pub draw_calls: usize,
     pub cpu_submission_ms: f64,
+    /// Share of the drawable redrawn in the last frame (1 without partial redraw).
+    pub redrawn_fraction: f64,
 }
 impl RenderStats {
     fn new(target: Size) -> Self {
@@ -169,6 +171,7 @@ impl RenderStats {
             high_resolution_wallpaper: false,
             draw_calls: 0,
             cpu_submission_ms: 0.,
+            redrawn_fraction: 1.,
         }
     }
 }
@@ -196,6 +199,14 @@ struct Batch {
     clip: Option<Rect>,
     // [top fade-in, top end, bottom start, bottom fade-out, left ×2, right ×2]; 0 = off.
     fade: Option<[f32; 8]>,
+}
+
+fn intersect(a: [i32; 4], b: [i32; 4]) -> [i32; 4] {
+    let x = a[0].max(b[0]);
+    let y = a[1].max(b[1]);
+    let right = (a[0] + a[2]).min(b[0] + b[2]);
+    let top = (a[1] + a[3]).min(b[1] + b[3]);
+    [x, y, (right - x).max(0), (top - y).max(0)]
 }
 
 /// Square images skip the rounded-rectangle distance field: a negative radius selects the
@@ -514,6 +525,12 @@ impl Renderer {
                 border,
             ]);
         }
+        self.paint_batch(start, 6, texture);
+    }
+
+    /// Appends `count` paint vertices from `start`, merged into the previous batch when it uses
+    /// the same texture, clip and fade.
+    fn paint_batch(&mut self, start: usize, count: usize, texture: GLuint) {
         if let Some(batch) = self.batches.last_mut() {
             let same_clip = match (batch.clip, self.clip) {
                 (None, None) => true,
@@ -524,12 +541,12 @@ impl Renderer {
                 && batch.fade == self.fade
                 && let BatchKind::Paint {
                     texture: previous,
-                    count,
+                    count: batch_count,
                     ..
                 } = &mut batch.kind
                 && *previous == texture
             {
-                *count += 6;
+                *batch_count += count;
                 return;
             }
         }
@@ -537,7 +554,7 @@ impl Renderer {
             kind: BatchKind::Paint {
                 texture,
                 start,
-                count: 6,
+                count,
             },
             clip: self.clip,
             fade: self.fade,
@@ -929,7 +946,33 @@ impl Renderer {
         );
     }
 
-    pub fn render(&mut self, commands: &[Draw], width: u32, height: u32) {
+    /// A logical damage rect in drawable pixels ([x, y, width, height], origin bottom-left),
+    /// grown to whole pixels.
+    pub fn damage_pixels(rect: Rect, width: u32, height: u32) -> [i32; 4] {
+        let viewport = Viewport::new(Size::new(width, height));
+        let sx = viewport.width as f32 / 1920.;
+        let sy = viewport.height as f32 / 1080.;
+        let x0 = (viewport.x as f32 + rect.x.max(0.) * sx).floor() as i32;
+        let x1 = (viewport.x as f32 + (rect.x + rect.w).min(1920.) * sx).ceil() as i32;
+        let y0 = (viewport.y as f32 + (1080. - (rect.y + rect.h).min(1080.)) * sy).floor() as i32;
+        let y1 = (viewport.y as f32 + (1080. - rect.y.max(0.)) * sy).ceil() as i32;
+        [x0, y0, (x1 - x0).max(0), (y1 - y0).max(0)]
+    }
+
+    /// Draws the scene. With `damage` (logical area and its drawable pixels from
+    /// `damage_pixels`), only that area is cleared and drawn; commands entirely outside it are
+    /// skipped, and the rest of the back buffer keeps its earlier contents.
+    pub fn render(
+        &mut self,
+        commands: &[Draw],
+        width: u32,
+        height: u32,
+        damage: Option<(Rect, [i32; 4])>,
+    ) {
+        let (area, damage) = (
+            damage.map(|(area, _)| area),
+            damage.map(|(_, pixels)| pixels),
+        );
         let started = Instant::now();
         self.stats = RenderStats::new(Size::new(width, height));
         // Captures can bind a single-sample FBO even when the actual TV window
@@ -945,8 +988,17 @@ impl Renderer {
         self.batches.clear();
         self.clip = None;
         self.fade = None;
-        for command in commands {
+        let mut index = 0;
+        while index < commands.len() {
+            let command = &commands[index];
+            index += 1;
             if profile_skip(command) {
+                continue;
+            }
+            // Outside the damage the scissor would discard it anyway; skip its layout too.
+            if let (Some(area), Some(bounds)) = (area, crate::damage::bounds(command))
+                && !crate::damage::intersects(area, bounds)
+            {
                 continue;
             }
             match command {
@@ -996,9 +1048,21 @@ impl Renderer {
             height: vh,
             scale,
         } = self.stats.viewport;
+        if let Some([_, _, w, h]) = damage {
+            self.stats.redrawn_fraction = f64::from(w * h) / f64::from((width * height).max(1));
+        }
+        let scissor = |area: Option<[i32; 4]>| unsafe {
+            match area {
+                Some([x, y, w, h]) => {
+                    gl::Enable(gl::SCISSOR_TEST);
+                    gl::Scissor(x, y, w.max(0), h.max(0));
+                }
+                None => gl::Disable(gl::SCISSOR_TEST),
+            }
+        };
         unsafe {
-            gl::Disable(gl::SCISSOR_TEST);
             gl::Viewport(0, 0, width as i32, height as i32);
+            scissor(damage);
             gl::ClearColor(0.04, 0.04, 0.05, 1.);
             gl::Clear(gl::COLOR_BUFFER_BIT);
             gl::Viewport(vx, vy, vw, vh);
@@ -1049,17 +1113,18 @@ impl Renderer {
                     current_fade = Some(batch.fade);
                     paint_bound = false;
                 }
-                if let Some(clip) = batch.clip {
-                    gl::Enable(gl::SCISSOR_TEST);
-                    gl::Scissor(
+                let clip = batch.clip.map(|clip| {
+                    [
                         vx + (clip.x * vw as f32 / 1920.).round() as i32,
                         vy + ((1080. - clip.y - clip.h) * vh as f32 / 1080.).round() as i32,
                         (clip.w * vw as f32 / 1920.).round() as i32,
                         (clip.h * vh as f32 / 1080.).round() as i32,
-                    );
-                } else {
-                    gl::Disable(gl::SCISSOR_TEST);
-                }
+                    ]
+                });
+                scissor(match (clip, damage) {
+                    (Some(a), Some(b)) => Some(intersect(a, b)),
+                    (a, b) => a.or(b),
+                });
                 match &batch.kind {
                     BatchKind::Paint {
                         texture,
@@ -1261,7 +1326,7 @@ impl Renderer {
                 return Err("Screenshot framebuffer is incomplete".into());
             }
         }
-        self.render(commands, size.width, size.height);
+        self.render(commands, size.width, size.height, None);
         let stats = self.stats.clone();
         let result = self.screenshot(path, size.width, size.height);
         unsafe {
@@ -1269,6 +1334,94 @@ impl Renderer {
             gl::DeleteFramebuffers(1, &framebuffer);
         }
         result.map(|_| stats)
+    }
+
+    /// Verification aid (LUMA_DAMAGE_VERIFY=1): compares the window's back buffer after a
+    /// partial redraw with the same scene drawn in full offscreen at the window's sample count.
+    /// Returns the pixels differing by more than 16 in a channel, and the largest difference.
+    pub fn verify_window(
+        &mut self,
+        commands: &[Draw],
+        width: u32,
+        height: u32,
+        save: Option<&Path>,
+    ) -> (usize, u8) {
+        let (w, h) = (width as i32, height as i32);
+        let length = width as usize * height as usize * 4;
+        let mut window = vec![0u8; length];
+        let mut full = vec![0u8; length];
+        let samples = self.stats.multisample_samples as i32;
+        let stats = self.stats.clone();
+        let mut framebuffers = [0; 2];
+        let mut renderbuffers = [0; 2];
+        unsafe {
+            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+            gl::ReadPixels(
+                0,
+                0,
+                w,
+                h,
+                gl::RGBA,
+                gl::UNSIGNED_BYTE,
+                window.as_mut_ptr().cast(),
+            );
+            gl::GenFramebuffers(2, framebuffers.as_mut_ptr());
+            gl::GenRenderbuffers(2, renderbuffers.as_mut_ptr());
+            gl::BindRenderbuffer(gl::RENDERBUFFER, renderbuffers[0]);
+            if samples > 1 {
+                gl::RenderbufferStorageMultisample(gl::RENDERBUFFER, samples, gl::RGBA8, w, h);
+            } else {
+                gl::RenderbufferStorage(gl::RENDERBUFFER, gl::RGBA8, w, h);
+            }
+            gl::BindRenderbuffer(gl::RENDERBUFFER, renderbuffers[1]);
+            gl::RenderbufferStorage(gl::RENDERBUFFER, gl::RGBA8, w, h);
+            for (framebuffer, renderbuffer) in framebuffers.into_iter().zip(renderbuffers) {
+                gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer);
+                gl::FramebufferRenderbuffer(
+                    gl::FRAMEBUFFER,
+                    gl::COLOR_ATTACHMENT0,
+                    gl::RENDERBUFFER,
+                    renderbuffer,
+                );
+            }
+            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffers[0]);
+        }
+        self.render(commands, width, height, None);
+        unsafe {
+            gl::BindFramebuffer(gl::READ_FRAMEBUFFER, framebuffers[0]);
+            gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, framebuffers[1]);
+            gl::BlitFramebuffer(0, 0, w, h, 0, 0, w, h, gl::COLOR_BUFFER_BIT, gl::NEAREST);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffers[1]);
+            gl::ReadPixels(
+                0,
+                0,
+                w,
+                h,
+                gl::RGBA,
+                gl::UNSIGNED_BYTE,
+                full.as_mut_ptr().cast(),
+            );
+            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+            gl::DeleteFramebuffers(2, framebuffers.as_ptr());
+            gl::DeleteRenderbuffers(2, renderbuffers.as_ptr());
+        }
+        self.stats = stats;
+        let mut differing = 0;
+        let mut largest = 0;
+        for (a, b) in window.chunks_exact(4).zip(full.chunks_exact(4)) {
+            let difference = (0..3).map(|i| a[i].abs_diff(b[i])).max().unwrap_or(0);
+            largest = largest.max(difference);
+            differing += usize::from(difference > 16);
+        }
+        if let Some(stem) = save.filter(|_| differing > 0) {
+            for (name, pixels) in [("window", window), ("full", full)] {
+                if let Some(image) = image::RgbaImage::from_raw(width, height, pixels) {
+                    let image = image::imageops::flip_vertical(&image);
+                    let _ = image.save(stem.with_extension(format!("{name}.png")));
+                }
+            }
+        }
+        (differing, largest)
     }
 }
 

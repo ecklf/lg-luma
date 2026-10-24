@@ -11,6 +11,16 @@ pub struct Profile {
     previous: Option<Instant>,
     intervals: Vec<f64>,
     cpu: Vec<f64>,
+    timeline: Vec<Frame>,
+}
+/// One profiled frame: where its time went (milliseconds) and how much of it was redrawn.
+#[derive(Clone, Copy, Serialize)]
+pub struct Frame {
+    pub interval_ms: f64,
+    pub compose_ms: f64,
+    pub render_ms: f64,
+    pub swap_ms: f64,
+    pub redrawn: f64,
 }
 #[derive(Serialize)]
 pub struct Timing {
@@ -25,17 +35,19 @@ pub struct Summary {
     pub warmup_frames: usize,
     pub pacing: Option<Timing>,
     pub cpu_submission: Option<Timing>,
+    pub timeline: Vec<Frame>,
 }
 impl Profile {
-    pub fn record(&mut self, now: Instant, cpu_ms: f64, exclude: bool) {
+    pub fn record(&mut self, now: Instant, cpu_ms: f64, exclude: bool, mut frame: Frame) {
         self.presented += 1;
         if self.presented > WARMUP
             && !exclude
             && let Some(previous) = self.previous
         {
-            self.intervals
-                .push(now.duration_since(previous).as_secs_f64() * 1000.);
+            frame.interval_ms = now.duration_since(previous).as_secs_f64() * 1000.;
+            self.intervals.push(frame.interval_ms);
             self.cpu.push(cpu_ms);
+            self.timeline.push(frame);
         }
         self.previous = Some(now);
     }
@@ -48,6 +60,7 @@ impl Profile {
             warmup_frames: WARMUP,
             pacing: summarize(&self.intervals),
             cpu_submission: summarize(&self.cpu),
+            timeline: self.timeline.clone(),
         }
     }
 }
@@ -74,7 +87,18 @@ mod tests {
         let mut profile = Profile::default();
         let start = Instant::now();
         for index in 0..20 {
-            profile.record(start + Duration::from_millis(index * 16), 2., index == 19);
+            profile.record(
+                start + Duration::from_millis(index * 16),
+                2.,
+                index == 19,
+                Frame {
+                    interval_ms: 0.,
+                    compose_ms: 0.,
+                    render_ms: 2.,
+                    swap_ms: 0.,
+                    redrawn: 1.,
+                },
+            );
         }
         let summary = profile.summary();
         let pacing = summary.pacing.unwrap();

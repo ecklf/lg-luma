@@ -1,0 +1,140 @@
+use super::*;
+use crate::renderer::TextStyle;
+
+fn shape(x: f32) -> Draw {
+    Draw::Shape(Rect::new(x, 300., 100., 100.), 8., 0., [1., 1., 1., 1.])
+}
+fn wallpaper() -> Draw {
+    Draw::Image(
+        "wallpapers/dunes.jpg".into(),
+        Rect::new(0., 0., 1920., 1080.),
+        0.,
+        false,
+    )
+}
+fn ring(x: f32) -> Draw {
+    Draw::Shape(
+        Rect::new(x - 4., 296., 108., 108.),
+        12.,
+        2.,
+        [1., 1., 1., 1.],
+    )
+}
+fn area(damage: Damage) -> Rect {
+    damage.expect("partial damage")
+}
+
+#[test]
+fn the_first_frame_and_unknown_buffer_ages_redraw_everything() {
+    let mut tracker = Tracker::default();
+    tracker.push(&[wallpaper(), shape(100.)]);
+    assert!(tracker.damage(1).is_none());
+    tracker.push(&[wallpaper(), shape(100.)]);
+    assert!(tracker.damage(0).is_none());
+    assert!(
+        tracker.damage(3).is_none(),
+        "older than the recorded history"
+    );
+}
+
+#[test]
+fn an_unchanged_scene_has_no_damage() {
+    let mut tracker = Tracker::default();
+    tracker.push(&[wallpaper(), shape(100.)]);
+    tracker.push(&[wallpaper(), shape(100.)]);
+    let damage = area(tracker.damage(1));
+    assert!(damage.w <= 0. || damage.h <= 0.);
+}
+
+#[test]
+fn a_moved_shape_damages_its_old_and_new_place_only() {
+    let mut tracker = Tracker::default();
+    tracker.push(&[wallpaper(), shape(100.)]);
+    tracker.push(&[wallpaper(), shape(400.)]);
+    let damage = area(tracker.damage(1));
+    assert_eq!((damage.x, damage.w), (99., 402.));
+    assert_eq!((damage.y, damage.h), (299., 102.));
+}
+
+#[test]
+fn an_inserted_focus_ring_realigns_instead_of_redrawing_everything() {
+    let mut tracker = Tracker::default();
+    tracker.push(&[wallpaper(), shape(100.), shape(400.), shape(700.)]);
+    tracker.push(&[
+        wallpaper(),
+        shape(100.),
+        ring(400.),
+        shape(400.),
+        shape(700.),
+    ]);
+    let damage = area(tracker.damage(1));
+    assert_eq!((damage.x, damage.w), (395., 110.));
+    tracker.push(&[wallpaper(), shape(100.), shape(400.), shape(700.)]);
+    let removed = area(tracker.damage(1));
+    assert_eq!((removed.x, removed.w), (395., 110.));
+}
+
+#[test]
+fn older_back_buffers_need_every_change_since_their_frame() {
+    let mut tracker = Tracker::default();
+    tracker.push(&[wallpaper(), shape(100.)]);
+    tracker.push(&[wallpaper(), shape(400.)]);
+    tracker.push(&[wallpaper(), shape(400.), shape(1200.)]);
+    let latest = area(tracker.damage(1));
+    assert_eq!(latest.x, 1199.);
+    let two = area(tracker.damage(2));
+    assert_eq!((two.x, two.x + two.w), (99., 1301.));
+}
+
+#[test]
+fn changed_clip_or_fade_state_redraws_everything() {
+    let mut tracker = Tracker::default();
+    let clip = |y: f32| Draw::Clip(Some(Rect::new(0., y, 1920., 500.)));
+    tracker.push(&[wallpaper(), clip(100.), shape(100.), Draw::Clip(None)]);
+    tracker.push(&[wallpaper(), clip(120.), shape(100.), Draw::Clip(None)]);
+    assert!(tracker.damage(1).is_none());
+    tracker.push(&[
+        wallpaper(),
+        clip(120.),
+        Draw::EdgeFade(Some([0., 1., 2., 3.])),
+        shape(100.),
+    ]);
+    assert!(tracker.damage(1).is_none());
+}
+
+#[test]
+fn text_damages_the_full_width_of_its_line() {
+    let mut tracker = Tracker::default();
+    let style = TextStyle {
+        size: 20.,
+        weight: 400,
+        tracking: 0.,
+        line_height: 1.2,
+        align_right: false,
+    };
+    let clock = |value: &str| {
+        Draw::Text(
+            value.into(),
+            Rect::new(80., 40., 120., 30.),
+            style,
+            [1.; 4],
+            false,
+        )
+    };
+    tracker.push(&[wallpaper(), clock("18:30")]);
+    tracker.push(&[wallpaper(), clock("18:31")]);
+    let damage = area(tracker.damage(1));
+    assert_eq!((damage.x, damage.w), (0., 1920.));
+    assert_eq!((damage.y, damage.h), (20., 70.));
+}
+
+#[test]
+fn shadows_include_their_blur() {
+    let mut tracker = Tracker::default();
+    let shadow =
+        |a: f32| Draw::Shadow(Rect::new(500., 500., 200., 100.), 12., 18., [0., 0., 0., a]);
+    tracker.push(&[wallpaper(), shadow(0.2)]);
+    tracker.push(&[wallpaper(), shadow(0.4)]);
+    let damage = area(tracker.damage(1));
+    assert_eq!((damage.x, damage.w), (481., 238.));
+}

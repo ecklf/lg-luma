@@ -393,6 +393,22 @@ out, to find which part of a scene costs GPU time. On an LG webOS 5 TV (Mali-TDV
 tracks covered area: a full-screen layer takes about 7 ms at 1080p, and MSAA costs nothing
 measurable.
 
+### Partial redraw
+
+Each frame redraws only what changed since the frame its back buffer holds. `src/damage.rs`
+compares consecutive scenes command by command, realigning after inserted or removed commands
+such as a focus ring; the union of changes since the buffer's frame (EGL buffer age) is the only
+area cleared and drawn, with a scissor intersected with each clip, and commands entirely outside
+it are not laid out. `EGL_KHR_partial_update` also tells the driver which tiles to keep (webOS
+Mali); `EGL_EXT_buffer_age` alone still allows the smaller redraw. Unknown buffer ages, changed
+clip or fade state, a new drawable and screenshot captures draw the whole frame, as does
+`LUMA_PARTIAL=0`. The startup log names the mode (`Luma partial redraw: …`).
+
+`LUMA_DAMAGE_VERIFY=1` compares every frame with the same scene drawn in full offscreen at the
+window's sample count and reports differing pixels in the diagnostics (`damage_verify`, with the
+full frames as baseline). `--profile-frames` diagnostics include `redrawn_fraction_mean` and a
+per-frame `timeline` of interval, compose, render and swap time and redrawn share.
+
 ## TV startup diagnostics
 
 SAM passes launch metadata as a JSON object in `argv[1]`. The CLI skips that object while leaving
