@@ -142,7 +142,7 @@ const surfaces = {
   twitch: ['#6330b8', '#32165c'],
   dazn: ['#252623', '#10110e'],
   'rakuten-tv': ['#bf143a', '#620c20'],
-  'apple-music': ['#e9415e', '#a91c38'],
+  'apple-music': ['#252525', '#080808'],
   'amazon-music': ['#183c4a', '#102128'],
   'bbc-iplayer': ['#4a162e', '#230b16'],
   itvx: ['#24341b', '#111a0c'],

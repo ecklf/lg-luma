@@ -103,7 +103,7 @@ pub const BRANDS: &[Brand] = &[
     music(
         "apple-music",
         "Apple Music",
-        &["com.apple.music", "com.apple.ampl"],
+        &["com.apple.applemusic", "com.apple.music", "com.apple.ampl"],
     ),
     music(
         "amazon-music",
