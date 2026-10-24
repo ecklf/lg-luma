@@ -70,7 +70,7 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 
 > [!WARNING]
 > Home replacement is experimental.\
-> Confirmed working on **webOS 26**.\
+> Confirmed working on **webOS 26** and **webOS 5** (executable method below).\
 > Ensure to disable takeover before uninstalling Luma.
 
 Install Luma and verify that it opens normally. Disable any Home mapping e.g.
@@ -98,6 +98,11 @@ Luma updates the launch splash through Homebrew Channel's root service after loa
 settings. Open Luma once after installing or updating so subsequent launches use your saved background.
 LG Home's original files remain underneath, using the same approach as
 [Glasshouse Home](https://github.com/rorygallagher2024/glasshouse/blob/main/server/lib/home-takeover.js).
+
+On **webOS 5 and 6**, SAM cannot reread a mounted Home manifest, so `home.sh enable` instead
+bind-mounts Luma's executable over LG's `/usr/bin/com.webos.app.home`. LG's Home manifest stays
+in place and Luma registers with SAM itself, so the Home key brings the running Luma back instead
+of restarting it. The commands and the cold-boot hook are the same.
 
 To see the status or disable the home override use:
 

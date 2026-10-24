@@ -12,6 +12,13 @@ var STAGE = STATE + '/app';
 var TARGET = '/usr/palm/applications/' + HOME;
 var HOOK = '/var/lib/webosbrew/init.d/64-luma-home';
 var CONFIG = STATE + '/state.json';
+// webOS 5/6 (method "executable"): SAM cannot reread a mounted manifest there, but LG Home is a
+// native lifecycle-v2 program whose LS2 role is bound to this executable path. Mounting Luma's
+// executable over it keeps LG's manifest and role; Luma then registers with SAM itself.
+var EXE = '/usr/bin/' + HOME;
+// Tells a normal tile launch to open the Home instance. The tile's jail sees /usr/bin without
+// this mount but shares /var/run, which is volatile like the mount itself.
+var MARKER = '/var/run/luma-home';
 
 function read(file) {
   return fs.readFileSync(file, 'utf8');
@@ -134,6 +141,58 @@ function foreignMount() {
   );
 }
 
+// The mount source of an active bind mount over LG's Home executable, or null.
+function exeMount() {
+  var root = null;
+  read('/proc/self/mountinfo')
+    .split('\n')
+    .forEach(function (line) {
+      var fields = line.split(' ');
+      if (fields[4] === EXE) root = fields[3];
+    });
+  return root;
+}
+
+// Luma's executable, also after a package update replaced the mounted file.
+function exeOwned(root) {
+  return /\/com\.ecklf\.luma\/luma(\/\/deleted)?$/.test(root || '');
+}
+
+function exeMounted(appDir) {
+  try {
+    var a = fs.statSync(appDir + '/luma');
+    var b = fs.statSync(EXE);
+    return a.dev === b.dev && a.ino === b.ino;
+  } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+function unmountExe() {
+  try {
+    run('/bin/umount', [EXE]);
+  } catch (error) {
+    // The running Home executes the mounted file.
+    console.error('Luma Home: ' + error.message + ', detaching the mount');
+    run('/bin/umount', ['-l', EXE]);
+  }
+  if (exeMount()) throw new Error('The Luma Home mount is still active');
+}
+
+function homeMethod(release, stock) {
+  if (/release\s+(10|11)\./.test(release)) return 'manifest';
+  if (
+    /release\s+[56]\./.test(release) &&
+    stock &&
+    stock.type === 'native' &&
+    stock.main === 'file://' + EXE &&
+    stock.nativeLifeCycleInterfaceVersion === 2
+  )
+    return 'executable';
+  throw new Error('This Home integration currently targets webOS 5/6 and 25/26 (10.x/11.x)');
+}
+
 function releaseHome() {
   var result;
   for (var i = 0; i < 3; i++) {
@@ -250,6 +309,23 @@ function launchHome() {
   accepted(luna('launch', { id: HOME }), 'Open Home');
 }
 
+// SAM may answer a cold native launch late, and right after the previous Home process stopped it
+// can accept a launch without starting anything: Luma in front is the success condition.
+function openExecutableHome() {
+  for (var i = 0; i < 15; i++) {
+    if (i === 0 || i === 6) {
+      try {
+        launchHome();
+      } catch (error) {
+        console.error('Luma Home: ' + error.message);
+      }
+    }
+    if (foreground() === HOME) return;
+    pause();
+  }
+  throw new Error('Home did not come to the front');
+}
+
 function hookOwned() {
   try {
     return fs.readlinkSync(HOOK) === STATE + '/home.sh';
@@ -259,7 +335,47 @@ function hookOwned() {
   }
 }
 
+function restoreExecutable(config) {
+  var wasHome = false;
+  try {
+    wasHome = foreground() === HOME;
+  } catch (error) {
+    console.error('Luma Home: ' + error.message + ', restoring the files first');
+  }
+  var root = exeMount();
+  if (root && !exeOwned(root)) throw new Error('Another integration is mounted over LG Home');
+  if (fs.existsSync(MARKER)) fs.unlinkSync(MARKER);
+  if (root) unmountExe();
+  stopHome(config.appDir);
+  // LG Home on webOS 5/6 is an overlay above the current app, not a foreground app.
+  if (wasHome) launchHome();
+}
+
+function applyExecutable(config, open) {
+  var root = exeMount();
+  if (root && !exeOwned(root)) throw new Error('Another integration is mounted over LG Home');
+  if (!fs.existsSync(config.appDir + '/luma')) throw new Error('Luma is no longer installed');
+  var front = foreground();
+  try {
+    // After a package update the mount still holds the replaced file.
+    if (root && !exeMounted(config.appDir)) unmountExe();
+    if (!exeMounted(config.appDir)) run('/bin/mount', ['--bind', config.appDir + '/luma', EXE]);
+    if (!exeMounted(config.appDir)) throw new Error('The Home bind mount did not take');
+    fs.writeFileSync(MARKER, APP + '\n', { mode: 420 });
+    stopHome(config.appDir);
+    if (open || (front === HOME && foreground() === HOME)) openExecutableHome();
+  } catch (error) {
+    try {
+      restoreExecutable(config);
+    } catch (recovery) {
+      throw new Error(error.message + '\nRestore also failed: ' + recovery.message);
+    }
+    throw error;
+  }
+}
+
 function restore(config) {
+  if (config.method === 'executable') return restoreExecutable(config);
   var wasHome = false;
   try {
     wasHome = foreground() === HOME;
@@ -319,6 +435,7 @@ function stageSplash(appDir) {
 }
 
 function apply(config, open) {
+  if (config.method === 'executable') return applyExecutable(config, open);
   if (foreignMount()) throw new Error('Another integration is mounted over LG Home');
   if (!fs.existsSync(config.appDir + '/luma')) throw new Error('Luma is no longer installed');
   stageSplash(config.appDir);
@@ -341,6 +458,21 @@ function apply(config, open) {
   }
 }
 
+function installScripts() {
+  ['home.sh', 'home.cjs'].forEach(function (name) {
+    var target = STATE + '/' + name;
+    var data = fs.readFileSync(path.join(__dirname, name));
+    fs.writeFileSync(target + '.new', data, { mode: name === 'home.sh' ? 493 : 420 });
+    fs.renameSync(target + '.new', target);
+  });
+}
+
+function installHook() {
+  mkdir('/var/lib/webosbrew');
+  mkdir('/var/lib/webosbrew/init.d');
+  if (!hookOwned()) fs.symlinkSync(STATE + '/home.sh', HOOK);
+}
+
 function install(appDir) {
   appDir = fs.realpathSync(appDir);
   var app = json(appDir + '/appinfo.json');
@@ -348,10 +480,11 @@ function install(appDir) {
     throw new Error('Enable this from an installed native Luma package');
   }
   var release = read('/etc/starfish-release');
-  if (!/release\s+(10|11)\./.test(release)) {
-    throw new Error('This Home integration currently targets webOS 25/26 (10.x/11.x)');
-  }
+  // The executable method never mounts over LG's manifest, so it reads the original directly.
+  var method = homeMethod(release, mounted() ? null : json(TARGET + '/appinfo.json'));
   if (foreignMount()) throw new Error('Another integration is mounted over LG Home');
+  var exeRoot = exeMount();
+  if (exeRoot && !exeOwned(exeRoot)) throw new Error('Another integration is mounted over LG Home');
   if (exists(HOOK) && !hookOwned()) throw new Error('64-luma-home is already in use');
   if (exists('/var/lib/webosbrew/init.d/65-luma')) {
     throw new Error('Disable the standalone cold-boot hook with autostart.sh disable first');
@@ -364,6 +497,17 @@ function install(appDir) {
   // Finish any normal tile instance before the Home identity starts using the
   // same settings. A later tile launch redirects in the native executable.
   closeNormal();
+  if (method === 'executable') {
+    installScripts();
+    var exeConfig = { enabled: false, method: method, appDir: appDir, stock: stock };
+    writeJson(CONFIG, exeConfig);
+    installHook();
+    apply(exeConfig, true);
+    exeConfig.enabled = true;
+    writeJson(CONFIG, exeConfig);
+    console.log('Luma is now Home. Home Auto Launch and Quick Start+ follow the TV settings.');
+    return;
+  }
   mkdir(STAGE);
   // Symlinks keep the executable at its installed path for the dynamic loader
   // and LS2. They also follow ordinary in-place package updates.
@@ -379,17 +523,10 @@ function install(appDir) {
   app.appCategory = ['home'];
   writeJson(STAGE + '/appinfo.json', app);
   fs.writeFileSync(STAGE + '/.luma-home', APP + '\n', { mode: 420 });
-  ['home.sh', 'home.cjs'].forEach(function (name) {
-    var target = STATE + '/' + name;
-    var data = fs.readFileSync(path.join(__dirname, name));
-    fs.writeFileSync(target + '.new', data, { mode: name === 'home.sh' ? 493 : 420 });
-    fs.renameSync(target + '.new', target);
-  });
-  var config = { enabled: false, appDir: appDir, stock: stock };
+  installScripts();
+  var config = { enabled: false, method: method, appDir: appDir, stock: stock };
   writeJson(CONFIG, config);
-  mkdir('/var/lib/webosbrew');
-  mkdir('/var/lib/webosbrew/init.d');
-  if (!hookOwned()) fs.symlinkSync(STATE + '/home.sh', HOOK);
+  installHook();
   apply(config, true);
   config.enabled = true;
   writeJson(CONFIG, config);
@@ -406,7 +543,8 @@ try {
       JSON.stringify(
         {
           enabled: !!(saved && saved.enabled),
-          mounted: mounted(),
+          method: saved ? saved.method || 'manifest' : null,
+          mounted: saved && saved.method === 'executable' ? exeMounted(saved.appDir) : mounted(),
           bootHook: hookOwned(),
           appDir: saved ? saved.appDir : null
         },

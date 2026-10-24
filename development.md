@@ -421,7 +421,7 @@ failures preserve the last valid inputs. No failed inventory read substitutes de
 ### Optional native Home integration
 
 `tv/home.sh` and `tv/home.cjs` are packaged beside `luma`. They are a root-only, explicit integration
-for webOS 10/25 and 11/26. `enable` stages a native manifest with ID `com.webos.app.home` and
+for webOS 10/25 and 11/26 (and webOS 5/6, see below). `enable` stages a native manifest with ID `com.webos.app.home` and
 symlinks to the installed executable, libraries and assets under `/var/lib/luma-home/app`, then
 bind-mounts it over `/usr/palm/applications/com.webos.app.home`. SAM rereads that one app through
 `blockSystemApp` followed by `releaseBlockSystemApp`, including `forceBlockSystemApp: false` when
@@ -459,6 +459,41 @@ Build and script checks cannot establish native Home compatibility. Manually ver
 out of the last app, standby wake with the TV's chosen Quick Start+ setting, a full cold boot,
 saved preferences and restoring LG Home. The broader webOS 6+ app compatibility statement does
 not establish Home-replacement support on older firmware.
+
+### Running in place of LG's Home executable (webOS 5)
+
+On webOS 5 the manifest takeover above does not apply: SAM restarts a v1 native Home on every
+Home launch. A root integration can instead bind-mount the installed `luma` executable over LG's
+`/usr/bin/com.webos.app.home`. SAM then starts it with LG's own Home manifest and LS2 role, which
+is bound to that executable path. Luma detects this (`platform::runs_as_lg_home`) and:
+
+- disables SDL's own app registration, which cannot reach the bus under LG's Home role, and
+  registers with SAM itself through `registerApp` (lifecycle v2) on its own LS2 connection.
+  `luna::subscribe` waits up to 10 s for SAM's first reply (`registered`); a failed connection,
+  call or refused registration is a startup error, so Luma exits and SAM starts Home afresh.
+  `relaunch` raises the window and refreshes the inventory, `close` and a later
+  `returnValue: false` (registration lost) quit. SAM keeps the process across Home launches and
+  standby (`pause`, reason `keepAlive`) instead of restarting it;
+- resolves `assets/`, `lib/` (extra RPATH) and the splash directory from the installed package,
+  since `current_exe()` names LG's path;
+- writes its stderr to `/tmp/luma-home.log`, because SAM discards a system app's output;
+- skips the per-icon elevated-service fallback for installed artwork: as root every file is
+  readable, so that fallback would only spend seconds per icon to fail the same way.
+
+`tv/home.sh` chooses this method (`"method": "executable"` in `state.json`) on webOS 5/6 when LG
+Home's manifest is native, starts `file:///usr/bin/com.webos.app.home` and declares
+`nativeLifeCycleInterfaceVersion: 2`. `enable` and the boot hook bind-mount the installed
+executable over that path, stop the previous Home process and open Home if it was in front (or
+on `enable`). Luma in front within about 15 s is the success condition, with one repeated launch
+after 6 s, because SAM can accept the first launch right after the old process stopped without
+starting anything; otherwise the mount is removed again. A mount whose source is Luma's executable
+counts as its own also after a package update (`//deleted`) and is replaced; any other mount over
+LG's executable is refused. `disable` unmounts (lazily while Home runs), stops Luma and reopens LG
+Home if Home was in front. While mounted, `/var/run/luma-home` names Luma, so a normal
+tile launch redirects to the Home instance: the tile's jail sees `/usr/bin` without the mount but
+shares `/var/run`, which is volatile like the mount itself. LG's file stays underneath, and a cold boot
+without the hook gives LG's Home back. Verified on an LG 49UN7100
+(webOS 5): Home key to Luma in about 0.4 s instead of a restart of about 2 s.
 
 ## Manual extra-app preview
 

@@ -9,7 +9,21 @@ case "$COMMAND" in
 esac
 [ "$(id -u)" = 0 ] || { printf '%s\n' 'Run as root.' >&2; exit 1; }
 [ -x /usr/bin/node ] || { printf '%s\n' 'The TV Node.js runtime is missing.' >&2; exit 1; }
-if [ "$COMMAND" = enable ]; then
+if [ "$COMMAND" = enable ] && grep -q 'release [56]\.' /etc/starfish-release 2>/dev/null; then
+  printf '%s\n' \
+    'Enabling Luma Home (webOS 5/6) will:' \
+    '  1. Close any running normal Luma instance.' \
+    "  2. Create $STATE with integration scripts and saved state." \
+    "  3. Bind-mount Luma's executable over /usr/bin/com.webos.app.home." \
+    "     LG's Home manifest and role stay; Luma registers with SAM itself." \
+    '  4. Stop the previous Home process and launch Luma as Home.' \
+    '  5. Install /var/lib/webosbrew/init.d/64-luma-home to reapply the mount at cold boot.' \
+    '' \
+    "LG Home's original executable remains underneath the mount." \
+    'Home Auto Launch and Quick Start+ retain their current settings.' \
+    "Restore LG Home with: sh $STATE/home.sh disable" \
+    ''
+elif [ "$COMMAND" = enable ]; then
   printf '%s\n' \
     'Enabling Luma Home will:' \
     '  1. Close any running normal Luma instance.' \
@@ -23,6 +37,8 @@ if [ "$COMMAND" = enable ]; then
     'Home Auto Launch and Quick Start+ retain their current settings.' \
     "Restore LG Home with: sh $STATE/home.sh disable" \
     ''
+fi
+if [ "$COMMAND" = enable ]; then
   while :; do
     printf '%s' 'Apply these changes? [y/n]: '
     if ! IFS= read -r answer; then

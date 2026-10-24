@@ -175,6 +175,11 @@ fn load(source: &Source) -> Option<Artwork> {
     if let Some(image) = load_local(source, read_bounded) {
         return Some(image);
     }
+    // Running as root in place of LG's Home every file is readable already; the elevated
+    // service below would only spend seconds per icon to fail the same way.
+    if crate::platform::runs_as_lg_home() {
+        return None;
+    }
     // Some jailed installations cannot read other applications' files. Use the
     // same native-authenticated elevated service as inventory, on this worker.
     match crate::platform::read_app_icons(source) {
