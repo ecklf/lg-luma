@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "cinematic-shot": {
+      "source": "1weiho/cinematic-shot",
+      "sourceType": "github",
+      "skillPath": "skills/cinematic-shot/SKILL.md",
+      "computedHash": "598f146c47580ca71b855a6e5d0443251b0219c241242c32cd32c3b52aefbf3b"
+    }
+  }
+}
