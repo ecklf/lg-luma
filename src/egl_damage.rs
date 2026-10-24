@@ -1,7 +1,7 @@
 //! Buffer age and damage regions for partial redraw on EGL window surfaces.
 //! EGL_KHR_partial_update (webOS Mali) also tells the driver which tiles to preserve, so a
 //! small change costs only those tiles; EGL_EXT_buffer_age alone still allows redrawing less.
-//! Without either, or without EGL (GLX desktops), every frame is drawn in full as before.
+//! Without either, or outside Wayland (X11 may be GLX), every frame is drawn in full.
 use std::ffi::{CStr, c_char, c_void};
 
 type Display = *mut c_void;
@@ -22,6 +22,11 @@ pub struct PartialUpdate {
 impl PartialUpdate {
     /// For the current context's draw surface; call after the GL context is current.
     pub fn load(video: &sdl2::VideoSubsystem) -> Option<Self> {
+        // Only Wayland contexts are EGL here (webOS too). Under X11 the context may be GLX,
+        // whose glXGetProcAddress returns non-null stubs even for EGL names.
+        if video.current_video_driver() != "wayland" {
+            return None;
+        }
         let proc = |name: &str| {
             let address = video.gl_get_proc_address(name);
             (!address.is_null()).then_some(address)
