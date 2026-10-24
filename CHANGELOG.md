@@ -1,5 +1,17 @@
 # lg-luma
 
+## 2.4.0
+
+### Minor Changes
+
+- df483bf: Add Italian (`it`) translation: full `messages.json` catalog, plus locale registration in `i18n.rs` (language list, display name, and localized date formatting).
+- 395cdac: Add curated vector cards for NRK TV and TV 2 Play, with exact app-ID matching, card colours, and desktop demo support.
+
+### Patch Changes
+
+- 5b5c4a3: Recognize Apple Music's verified `com.apple.applemusic` app ID so the installed TV app uses its curated vector card.
+  Match the Apple Music card's dark background gradient to Apple TV.
+
 ## 2.3.1
 
 ### Patch Changes
