@@ -413,7 +413,8 @@ the verified interface/inventory runs. Normal launch/relaunch behavior should be
 The native adapter registers LS2 connections from the executable and calls `LSCallOneReply`.
 Anonymous names avoid collisions with SDL's registration; the hub still applies the executable's
 role. `luna-send-pub -a` app impersonation is rejected on the development webOS 26 TV and is not
-used. Native requests run on one worker's private GLib context with a 6.5-second budget and 2 MiB
+used; the only `-a` use is the root system-bus `luna-send` that holds a staged Home's lifecycle
+registration (see [Home lifecycle on webOS 10/11](#home-lifecycle-on-webos-1011)). Native requests run on one worker's private GLib context with a 6.5-second budget and 2 MiB
 reply limit. Errors include URI and the bus refusal. Fixed inventory commands run via elevated
 Homebrew Channel `exec`, parsing complete multi-line `luna-send -n 1` JSON replies. Input-read
 failures preserve the last valid inputs. No failed inventory read substitutes demo apps on TV.
@@ -500,6 +501,49 @@ tile launch redirects to the Home instance: the tile's jail sees `/usr/bin` with
 shares `/var/run`, which is volatile like the mount itself. LG's file stays underneath, and a cold boot
 without the hook gives LG's Home back. Verified on an LG 49UN7100
 (webOS 5): Home key to Luma in about 0.4 s instead of a restart of about 2 s.
+
+### Home lifecycle on webOS 10/11
+
+With the staged manifest (see [Optional native Home integration](#optional-native-home-integration)), SAM starts Luma's own executable for `com.webos.app.home`, but
+never as a registered app: on every Home key it kills Luma and starts it again. Running in place
+of LG's executable is not an option here, because LG Home's role
+(`/usr/share/luna-service2/roles.d/com.webos.app.home.app.json`) is app-ID based
+(`"appId": "com.webos.app.home"`, names `com.webos.app.home-*`), not bound to a path, and Luma's
+role only allows `com.ecklf.luma` or an anonymous name.
+
+The staged Home runs as root, and as root the system-bus `luna-send -a` may act for an app ID.
+So when `options.webos_home` is set outside LG's executable path and the effective user is root,
+Luma calls `luna::subscribe_as_app`: a child `luna-send -a com.webos.app.home -i` holds
+`registerNativeApp`. SAM expects lifecycle v1 for this manifest and refuses `registerApp` with
+"unmatched method with nativeLifeCycleInterfaceVersion". v1 names its events in `message` rather
+than `event`; `platform::Lifecycle::from_reply` reads both and feeds the same `relaunch`/`close`
+handling as v2.
+
+- Startup does not wait for SAM. Until it answers, Home is simply unregistered.
+- No answer within 10 s, a refused answer or the child ending before an answer kills and reaps
+  the child and leaves Home unregistered, as before this integration: SAM restarts it per Home
+  key. Once SAM has accepted the registration, losing it (a later `returnValue: false` or the
+  child ending) quits Luma, as on the v2 path, so SAM starts Home afresh.
+- The child gets `SIGKILL` when the thread that started it (Luma's main thread) ends
+  (`PR_SET_PDEATHSIG`, re-checked against the parent PID after arming). A registration left with
+  nobody handling its events leaves the Home key dead and a black screen after leaving an app.
+- On `relaunch` Luma restores, shows and raises its window (on both lifecycle paths). If a
+  relaunch arrives while Luma is hidden or unfocused and no `Shown`, `Restored` or `FocusGained`
+  follows within 3 s, Luma assumes it cannot bring itself forward on this firmware. It creates
+  `/var/lib/luma-home/no-lifecycle` and ends the registration, which quits it, so SAM starts Home
+  afresh. While that file exists, Luma does not register and Home behaves as before. Delete it
+  to try again.
+- stderr goes to `/tmp/luma-home.log` in this mode too. Replies are logged as
+  `Luma lifecycle: …` and the helper's end as `Luma app subscription ended (was registered: …)`.
+- SDL's own app registration (`SDL_WEBOS_REGISTER_APP`) is left as it was for the staged
+  manifest. It does not register Home there (SAM restarted Luma per Home key with it enabled),
+  and disabling it would change startup on a path without a reason seen on a TV.
+
+Measured manually on an LG OLED65C36LC (webOS 26, 11.2.0-3701) before this change: with the same
+`luna-send -a … registerNativeApp` held from a shell, the Luma PID stayed the same across Home
+presses and SAM sent `relaunch` with `launchType: homeKey`, while without it the PID changed on
+every press. Whether Luma's own relaunch handling brings it to the front on webOS 10/11 is still
+to be verified on a TV.
 
 ## Manual extra-app preview
 

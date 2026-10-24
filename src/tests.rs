@@ -1301,3 +1301,39 @@ fn keyboard_done_saves_a_typed_input_name() {
     assert_eq!(state.preferences.input_names["com.webos.app.hdmi1"], "PS5");
     assert!(state.overlay.is_none());
 }
+
+#[test]
+fn home_lifecycle_replies_map_for_both_registration_versions() {
+    use crate::platform::Lifecycle;
+    // Lifecycle v2 (registerApp, in place of LG's Home executable) names it in "event".
+    assert_eq!(
+        Lifecycle::from_reply(&json!({"event": "relaunch", "reason": "hotKey"})),
+        Some(Lifecycle::Relaunch)
+    );
+    assert_eq!(
+        Lifecycle::from_reply(&json!({"event": "close"})),
+        Some(Lifecycle::Close)
+    );
+    // Lifecycle v1 (registerNativeApp for a staged Home manifest on webOS 10/11) in "message".
+    assert_eq!(
+        Lifecycle::from_reply(&json!({
+            "parameters": {"launchType": "homeKey", "activateType": "home"},
+            "returnValue": true,
+            "message": "relaunch"
+        })),
+        Some(Lifecycle::Relaunch)
+    );
+    assert_eq!(
+        Lifecycle::from_reply(&json!({"returnValue": true, "message": "close"})),
+        Some(Lifecycle::Close)
+    );
+    // Acknowledgements and keep-alive need no action.
+    for reply in [
+        json!({"returnValue": true, "message": "registered"}),
+        json!({"event": "registered"}),
+        json!({"event": "pause", "reason": "keepAlive"}),
+        json!({"returnValue": false, "errorText": "refused"}),
+    ] {
+        assert_eq!(Lifecycle::from_reply(&reply), None, "{reply}");
+    }
+}
