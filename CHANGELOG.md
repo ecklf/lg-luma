@@ -1,5 +1,18 @@
 # lg-luma
 
+## 2.5.0
+
+### Minor Changes
+
+- 1cc543f: Simplify Recents to bare app cards: remove app captions, close buttons and the empty-state subtitle. Close the focused app directly with Up. Make the overlay more transparent and add a restrained, reversible crossfade between the switcher and its parent screen, with immediate input restoration and reduced-motion support.
+- 1cc543f: Add an Apple TV–inspired recent-app switcher, opened by holding Back for 600 ms or selecting the new header shortcut. Browse the TV's actual recent history, launch an app, close one card, or use LG's own Close all operation. Keep motion restrained, support reduced motion and pointer navigation, and load available recent-card artwork off the UI thread. Include a labeled, isolated desktop preview.
+- 1cc543f: Open Recents with a short Back press on Home and keep long-Back access from other pages. Remove the header shortcut, card counter and instructions, and move a more compact Close all button to the top-right. Reuse the Apps card renderer for consistent vector logos, installed icons and surfaces, fixing mismatched YouTube artwork in Recents.
+
+### Patch Changes
+
+- e084e94: Remove the desktop preview label from the recent-app switcher.
+- 1cc543f: Fix native remote Back dismissal and long-Back handling in the app switcher. Preserve SDL-webOS Back/Exit scancodes, claim the Magic Remote's long-Back Exit key, and consume dismissal presses through release so they cannot also quit Luma. Remove the switcher's heading and subtitle for a quieter card-only layout.
+
 ## 2.4.0
 
 ### Minor Changes
