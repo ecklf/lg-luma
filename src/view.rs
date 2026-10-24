@@ -19,6 +19,9 @@ const MAIN_TOP: f32 = 108.8;
 const FACE_HEIGHT: f32 = 154.4;
 const GRID_PITCH: f32 = 296.4;
 
+#[path = "recents-view.rs"]
+mod recents_view;
+
 pub struct Assets {
     pub root: PathBuf,
     pub version: String,
@@ -297,6 +300,18 @@ pub fn scene_with_pill(
             false,
         );
     }
+    if state.recents_open() {
+        let start = out.draw.len();
+        out.shape(Rect::new(0., 0., 1920., 1080.), 0., c(0x080b12, 0.92));
+        recents_view::render(&mut out, state, assets);
+        if let Some(opened) = state.panel_started {
+            out.fade(start, (opened.elapsed().as_secs_f32() / 0.12).min(1.), 1.);
+        }
+        if let Some((notice, _)) = &state.notice {
+            toast(&mut out, state, assets, notice);
+        }
+        return out;
+    }
     let main_bottom = if state.page == Page::Home && state.moving.is_none() {
         1053.6
     } else {
@@ -368,7 +383,7 @@ pub fn scene_with_pill(
         match overlay {
             Overlay::Options { id, .. } => options(&mut out, state, assets, id),
             Overlay::Keyboard => keyboard(&mut out, state, assets),
-            Overlay::SystemKeyboard => {}
+            Overlay::SystemKeyboard | Overlay::Recents { .. } => {}
         }
         if let Some(opened) = state.panel_started {
             out.fade(start, (opened.elapsed().as_secs_f32() / 0.12).min(1.), 1.);
@@ -447,6 +462,20 @@ fn header(
         },
     );
     out.control(Target::TvSettings, rect, false);
+    let rect = Rect::new(1718.4, 52., 49.6, 49.6);
+    let focused = state.focus == Target::Recents;
+    out.pill(rect, focused, false);
+    out.icon(
+        assets,
+        "recent",
+        Rect::new(rect.x + 13.2, rect.y + 13.2, 23.2, 23.2),
+        if focused {
+            c(0x2c2c2c, 1.)
+        } else {
+            c(0xeeeeee, 0.73)
+        },
+    );
+    out.control(Target::Recents, rect, false);
 }
 
 fn tile(

@@ -8,6 +8,7 @@ mod luna;
 mod model;
 mod platform;
 mod raster;
+mod recents;
 mod renderer;
 #[path = "scroll-preview.rs"]
 mod scroll_preview;
@@ -88,6 +89,9 @@ impl Options {
                 );
                 println!(
                     "\n  --test-extra-apps N  Explicit scroll preview with up to 300 non-launchable extra cards; separate preferences"
+                );
+                println!(
+                    "\n  Hold Back / Escape for 600 ms to open Recent apps.\n  --script recents,await-recents  Open the labeled desktop recent-app preview."
                 );
                 std::process::exit(0);
             }
@@ -171,6 +175,53 @@ const SCRIPT_POINTER: u32 = u32::MAX - 1;
 // Keycode retains the raw value: SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_WEBOS_BACK).
 const WEBOS_BACK_KEYCODE: i32 = (1 << 30) | 482;
 
+fn is_back(key: Keycode, webos: bool) -> bool {
+    matches!(key, Keycode::Escape | Keycode::AcBack)
+        || i32::from(key) == 461
+        || (webos && i32::from(key) == WEBOS_BACK_KEYCODE)
+}
+
+#[derive(Default)]
+struct BackButton {
+    press: Option<(i32, Instant, bool)>,
+}
+
+impl BackButton {
+    const HOLD: Duration = Duration::from_millis(600);
+
+    fn down(&mut self, key: Keycode, now: Instant) {
+        if self.press.is_none() {
+            self.press = Some((i32::from(key), now, false));
+        }
+    }
+
+    fn held(&mut self, now: Instant) -> bool {
+        if let Some((_, start, fired)) = &mut self.press
+            && !*fired
+            && now.duration_since(*start) >= Self::HOLD
+        {
+            *fired = true;
+            return true;
+        }
+        false
+    }
+
+    /// A delayed poll can see release before the hold timer: still classify it
+    /// by elapsed time, and never issue short Back after a fired long press.
+    fn release(&mut self, key: Keycode, now: Instant) -> Option<bool> {
+        let (pressed, start, fired) = self.press?;
+        if pressed != i32::from(key) {
+            return None;
+        }
+        self.press = None;
+        (!fired).then_some(now.duration_since(start) >= Self::HOLD)
+    }
+
+    fn cancel(&mut self) {
+        self.press = None;
+    }
+}
+
 fn effects(
     effects: Vec<Effect>,
     state: &mut State,
@@ -223,6 +274,15 @@ fn effects(
                 }
             }
             Effect::Quit => return false,
+            Effect::Recent {
+                generation,
+                command,
+            } => {
+                platform.send(Request::Recent {
+                    generation,
+                    command,
+                });
+            }
             Effect::Weather(command) => weather.send(command),
         }
     }
@@ -253,6 +313,7 @@ fn script(
         "right" => state.direction(Direction::Right, controls),
         "enter" => state.activate(),
         "back" => state.back(),
+        "recents" | "hold-back" => state.open_recents(),
         "menu" => {
             state.options();
             vec![]
@@ -281,6 +342,7 @@ fn script(
         }
         "await-search" => vec![],
         "await-weather" => vec![],
+        "await-recents" => vec![],
         _ => return Err(format!("Unknown scripted action: {action}")),
     })
 }
@@ -564,6 +626,7 @@ fn run() -> Result<(), String> {
     let mut last_drawable = None;
     let mut events = sdl.event_pump()?;
     let mut press: Option<Press> = None;
+    let mut back_button = BackButton::default();
     let initial_nav = view::navigation(&assets, state.preferences.language);
     let mut pill = initial_nav.items[0].x;
     let mut pill_width = initial_nav.items[0].w;
@@ -643,6 +706,28 @@ fn run() -> Result<(), String> {
                         }
                     }
                 }
+                Response::Recent {
+                    generation,
+                    command,
+                    result,
+                } => {
+                    let preview = !webos
+                        && state.recents_open()
+                        && generation == state.recents.generation
+                        && result.is_ok()
+                        && matches!(command, recents::Command::Launch(_));
+                    let pending = state.recent_response(generation, command, result);
+                    if preview {
+                        state.notify(state.preferences.language.t("recentDesktop"));
+                    }
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                    );
+                }
             }
         }
         weather_tick(&mut state, &weather_service, visible);
@@ -684,12 +769,16 @@ fn run() -> Result<(), String> {
                     WindowEvent::Hidden | WindowEvent::Minimized => {
                         visible = false;
                         press = None;
+                        back_button.cancel();
                         if matches!(state.overlay, Some(Overlay::SystemKeyboard)) {
                             pending = state.finish_text_input();
                         }
                         profile.pause();
                     }
-                    WindowEvent::FocusLost => press = None,
+                    WindowEvent::FocusLost => {
+                        press = None;
+                        back_button.cancel();
+                    }
                     WindowEvent::Shown | WindowEvent::Restored | WindowEvent::FocusGained => {
                         visible = true;
                         state.dirty = true;
@@ -715,52 +804,75 @@ fn run() -> Result<(), String> {
                     keycode: Some(key),
                     repeat,
                     ..
-                } => match key {
-                    Keycode::Up => pending = state.direction(Direction::Up, &scene.controls),
-                    Keycode::Down => pending = state.direction(Direction::Down, &scene.controls),
-                    Keycode::Left => pending = state.direction(Direction::Left, &scene.controls),
-                    Keycode::Right => pending = state.direction(Direction::Right, &scene.controls),
-                    Keycode::Return | Keycode::KpEnter
-                        if matches!(state.overlay, Some(Overlay::SystemKeyboard)) =>
-                    {
-                        press = None;
-                        pending = state.finish_text_input();
+                } => {
+                    if !is_back(key, webos) {
+                        back_button.cancel();
                     }
-                    Keycode::Return | Keycode::KpEnter if !repeat => {
-                        press = Some(Press {
-                            target: state.focus.clone(),
-                            start: Instant::now(),
-                            held: false,
-                            pointer: false,
-                        });
+                    match key {
+                        key if is_back(key, webos) => {
+                            if !repeat {
+                                press = None;
+                                if state.overlay.is_some() || state.moving.is_some() {
+                                    pending = state.back();
+                                } else {
+                                    back_button.down(key, Instant::now());
+                                }
+                            }
+                        }
+                        Keycode::Up => pending = state.direction(Direction::Up, &scene.controls),
+                        Keycode::Down => {
+                            pending = state.direction(Direction::Down, &scene.controls)
+                        }
+                        Keycode::Left => {
+                            pending = state.direction(Direction::Left, &scene.controls)
+                        }
+                        Keycode::Right => {
+                            pending = state.direction(Direction::Right, &scene.controls)
+                        }
+                        Keycode::Return | Keycode::KpEnter
+                            if matches!(state.overlay, Some(Overlay::SystemKeyboard)) =>
+                        {
+                            press = None;
+                            pending = state.finish_text_input();
+                        }
+                        Keycode::Return | Keycode::KpEnter if !repeat => {
+                            press = Some(Press {
+                                target: state.focus.clone(),
+                                start: Instant::now(),
+                                held: false,
+                                pointer: false,
+                            });
+                        }
+                        Keycode::Backspace if state.text_input_active() => state.delete(),
+                        Keycode::Backspace if !repeat => {
+                            press = None;
+                            pending = state.back();
+                        }
+                        Keycode::Clear
+                            if matches!(state.overlay, Some(Overlay::SystemKeyboard)) =>
+                        {
+                            let length = state.editing_text().len() as i32;
+                            state.delete_surrounding_text(-length, length);
+                        }
+                        Keycode::M | Keycode::Menu if !repeat && state.overlay.is_none() => {
+                            press = None;
+                            state.options();
+                        }
+                        Keycode::F5 if !repeat => pending.push(Effect::Reload),
+                        _ => {}
                     }
-                    Keycode::Escape | Keycode::AcBack if !repeat => {
-                        press = None;
-                        pending = state.back();
+                }
+                Event::KeyUp {
+                    keycode: Some(key), ..
+                } if is_back(key, webos) => {
+                    if let Some(long) = back_button.release(key, Instant::now()) {
+                        pending = if long {
+                            state.open_recents()
+                        } else {
+                            state.back()
+                        };
                     }
-                    Keycode::Backspace if state.text_input_active() => state.delete(),
-                    Keycode::Backspace if !repeat => {
-                        press = None;
-                        pending = state.back();
-                    }
-                    Keycode::Clear if matches!(state.overlay, Some(Overlay::SystemKeyboard)) => {
-                        let length = state.editing_text().len() as i32;
-                        state.delete_surrounding_text(-length, length);
-                    }
-                    Keycode::M | Keycode::Menu if !repeat && state.overlay.is_none() => {
-                        press = None;
-                        state.options();
-                    }
-                    Keycode::F5 if !repeat => pending.push(Effect::Reload),
-                    key if !repeat
-                        && (i32::from(key) == 461
-                            || (webos && i32::from(key) == WEBOS_BACK_KEYCODE)) =>
-                    {
-                        press = None;
-                        pending = state.back();
-                    }
-                    _ => {}
-                },
+                }
                 Event::KeyUp {
                     keycode: Some(Keycode::Return | Keycode::KpEnter),
                     ..
@@ -791,6 +903,7 @@ fn run() -> Result<(), String> {
                 Event::MouseButtonDown {
                     mouse_btn, x, y, ..
                 } => {
+                    back_button.cancel();
                     if let Some(target) = hit(&scene.controls, &window, x, y, &state)
                         && state.moving.is_none()
                     {
@@ -836,6 +949,19 @@ fn run() -> Result<(), String> {
                     }
                     _ => {}
                 },
+                Event::MouseWheel { x, y, .. } if state.recents_open() => {
+                    press = None;
+                    let delta = if x != 0 { x } else { -y };
+                    if delta != 0 {
+                        state.recent_direction(if delta > 0 {
+                            Direction::Right
+                        } else {
+                            Direction::Left
+                        });
+                    }
+                    state.pointer = false;
+                    state.dirty = true;
+                }
                 Event::MouseWheel {
                     x,
                     y,
@@ -900,6 +1026,17 @@ fn run() -> Result<(), String> {
                 scene = compose(&mut state, &assets, pill, pill_width, now);
             }
         }
+        if back_button.held(Instant::now()) {
+            press = None;
+            let pending = state.open_recents();
+            running &= effects(
+                pending,
+                &mut state,
+                &platform,
+                &preferences_path,
+                &weather_service,
+            );
+        }
         if let Some(held) = &mut press
             && !held.held
             && held.start.elapsed() >= Duration::from_millis(600)
@@ -913,6 +1050,7 @@ fn run() -> Result<(), String> {
             && !options.script.front().is_some_and(|action| {
                 (action == "await-search" && state.weather.searching)
                     || (action == "await-weather" && state.weather.fetching())
+                    || (action == "await-recents" && state.recents.pending.is_some())
             })
             && let Some(action) = options.script.pop_front()
         {
@@ -1040,7 +1178,11 @@ fn run() -> Result<(), String> {
             || options.profile_frames.is_some()
         {
             0
-        } else if press.is_some() || options.frames.is_some() || assets.artwork.pending() {
+        } else if press.is_some()
+            || back_button.press.is_some()
+            || options.frames.is_some()
+            || assets.artwork.pending()
+        {
             8
         } else {
             100
@@ -1058,6 +1200,7 @@ fn run() -> Result<(), String> {
             "filter": state.filter, "preferences": state.preferences, "apps": state.apps().iter().map(|a| &a.id).collect::<Vec<_>>(),
             "error": state.error, "scroll": state.scroll, "home_scroll": state.home_scroll, "subpage": state.subpage, "modal": state.overlay.is_some(), "weather": state.weather,
             "inventory": state.inventory.apps,
+            "recents": state.recents.entries, "recents_pending": state.recents.pending, "recents_error": state.recents.error,
             "ui_text": scene.draw.iter().filter_map(|draw| match draw { renderer::Draw::Text(value, ..) => Some(value), _ => None }).collect::<Vec<_>>() });
         std::fs::write(
             path,

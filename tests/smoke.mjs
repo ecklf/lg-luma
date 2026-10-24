@@ -63,6 +63,42 @@ try {
   };
   const home = await scenario('home', 'down');
   assert.deepEqual(home.focus, { App: 'netflix' });
+  const recents = await scenario('recents', 'recents,await-recents');
+  assert.equal(recents.modal, true);
+  assert.deepEqual(recents.focus, { Recent: 'netflix' });
+  assert.equal(recents.recents.length, 8);
+  assert.equal(recents.recents_error, null);
+  assert.ok(recents.ui_text.includes('Recent apps'));
+  const recentClosed = await scenario(
+    'recent-closed',
+    'recents,await-recents,right,right,up,enter,await-recents',
+  );
+  assert.equal(recentClosed.recents.length, 7);
+  assert.ok(!recentClosed.recents.some((entry) => entry.app.id === 'com.apple.appletv'));
+  assert.deepEqual(recentClosed.focus, { RecentClose: 'com.disney.disneyplus-prod' });
+  const recentsEmpty = await scenario(
+    'recents-empty',
+    'recents,await-recents,down,enter,await-recents',
+  );
+  assert.deepEqual(recentsEmpty.recents, []);
+  assert.equal(recentsEmpty.focus, 'CloseDialog');
+  assert.ok(recentsEmpty.ui_text.includes('No recent apps'));
+  const recentBack = await scenario('recents-back', 'settings,recents,await-recents,back');
+  assert.equal(recentBack.modal, false);
+  assert.equal(recentBack.page, 'Settings');
+  const recentLaunch = await scenario(
+    'recents-launch',
+    'recents,await-recents,right,enter,await-recents',
+  );
+  assert.equal(recentLaunch.modal, false);
+  const recentPointer = await scenario(
+    'recents-pointer',
+    'recents,await-recents,click:1268:288,await-recents',
+  );
+  assert.equal(recentPointer.recents[0].app.id, 'youtube.leanback.v4');
+  const recentHeader = await scenario('recents-header', 'click:1743:77,await-recents');
+  assert.equal(recentHeader.modal, true);
+  assert.deepEqual(recentHeader.focus, { Recent: 'netflix' });
   const hidden = await scenario('apps', 'apps,down,menu,down,enter');
   assert.ok(hidden.preferences.hidden.includes('netflix'));
   assert.deepEqual(hidden.focus, { App: 'youtube.leanback.v4' });

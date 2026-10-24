@@ -80,16 +80,17 @@ It does not execute the test suites. A desktop display is required; on headless 
 
 ### Input
 
-| Input                     | Action                                                 |
-| ------------------------- | ------------------------------------------------------ |
-| Arrows                    | Move focus, revealing remote-focused content           |
-| OK / Enter                | Activate on release                                    |
-| Hold OK for 600 ms        | Reorder Home favorite or open app options              |
-| OK or Back in move mode   | Finish reordering without launching                    |
-| Escape / Back / Backspace | Parent navigation, overlay dismissal or quit from Home |
-| Menu / M / right-click    | App options                                            |
-| Pointer / wheel           | Hover, click, hold and scrolling                       |
-| F5                        | Refresh inventory                                      |
+| Input                         | Action                                                 |
+| ----------------------------- | ------------------------------------------------------ |
+| Arrows                        | Move focus, revealing remote-focused content           |
+| OK / Enter                    | Activate on release                                    |
+| Hold OK for 600 ms            | Reorder Home favorite or open app options              |
+| OK or Back in move mode       | Finish reordering without launching                    |
+| Escape / Back / Backspace     | Parent navigation, overlay dismissal or quit from Home |
+| Hold Back / Escape for 600 ms | Open Recent apps while Luma is focused                 |
+| Menu / M / right-click        | App options                                            |
+| Pointer / wheel               | Hover, click, hold and scrolling                       |
+| F5                            | Refresh inventory                                      |
 
 Backspace deletes while editing. Native Back uses SDL's webOS-specific keycode. Back dismisses
 the keyboard first; Weather Location then returns to its parent Location row, HDMI choices to
@@ -122,6 +123,66 @@ vector icons/logos and text. The wallpaper/header are unmasked; no blur texture 
 
 TV editing uses the system keyboard through SDL-webOS. Desktop editing uses the custom panel.
 System text events update app/location queries; Done/Back stops editing and restores focus.
+
+### Recent apps
+
+Hold Back (Escape on desktop) for 600 ms, or select the card-stack shortcut beside the header's
+TV settings button. Short Back navigates on release. Back in an overlay, the system keyboard or
+move mode keeps its immediate dismissal behavior; Backspace keeps its editing/navigation role.
+Losing window focus cancels an unfinished hold. This is an app-local shortcut while Luma is focused.
+
+The switcher uses large landscape cards on a dimmed wallpaper, a 120 ms opening fade and a
+non-bouncy, interruptible horizontal transition. Reduced motion makes navigation immediate.
+Pointer hover/down preserves the current card positions and interrupts remote carousel movement.
+
+| Input                          | Action                                        |
+| ------------------------------ | --------------------------------------------- |
+| Left / Right or wheel          | Browse recent cards                           |
+| OK on a card                   | Launch the app                                |
+| Up from a card, then OK        | Close that card                               |
+| Down from a card, then OK      | Close all                                     |
+| Pointer                        | Select a card, its close button, or Close all |
+| Back or top-right close button | Return to the exact previous page and focus   |
+
+The platform worker uses the stock-Home operations captured on webOS 26:
+
+| Operation | Luna endpoint                                 | Payload                                                                                            |
+| --------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| History   | `com.webos.service.recent/listRecents`        | `{}`                                                                                               |
+| Close one | `com.webos.service.recent/removeRecent`       | `{"appId":"APP_ID"}`                                                                               |
+| Close all | `com.webos.service.recent/removeAllRecents`   | `{}`                                                                                               |
+| Launch    | `com.webos.service.applicationmanager/launch` | `{"id":"APP_ID","params":{},"reason":"recent","checkUpdateOnLaunch":true,"autoInstallation":true}` |
+
+Service-name capitalization is significant. These fixed calls go through the native process's
+authenticated Homebrew Channel `exec` connection, using bounded root `luna-send` commands and no
+application impersonation. Mutations are sent once, checked for `returnValue: true`, then history
+is refreshed. They are not automatically retried after an ambiguous timeout. One request is active
+per overlay; generation IDs discard late replies after dismissal or reopening. Read/action errors
+stay in the overlay with a read-only Retry action and diagnostic details in stderr.
+
+History order is preserved, including input entries, with Luma/Home identities and duplicates
+excluded. The TV's Close all policy is authoritative: stock-Home testing closed Luma, Homebrew
+Channel and Live TV while leaving Netflix, YouTube and some system apps running. Luma does not
+enumerate and kill every process. The native integration still needs manual verification in both
+normal-tile and Home-takeover modes, including whether Close all preserves the invoking instance,
+app/input launching, retained apps, short/long Back, focus restoration and service-denial handling.
+
+Available installed PNG/JPEG/WebP recent artwork is read and decoded on the artwork worker,
+preferring an allowed snapshot path, then `customImageFilePath`, then `splashBackground`. Existing
+512 KiB file, 2048-pixel dimension and aggregate cache limits remain; previews are reduced to at
+most 768×432. Unsupported ASTC, unavailable previews and paths outside installed-app roots fall
+back to the app's curated vector or installed icon. No TV images or recent history are bundled or
+saved into preferences. System and OTNCABI installation roots are supported by the bounded reader.
+
+Desktop preview uses labeled in-memory sample history and simulated mutations, with no TV calls:
+
+```sh
+pnpm dev --script recents,await-recents
+```
+
+`hold-back` is also a scripted opening action. Desktop smoke scenarios render normal, close-one,
+close-all/empty, launch, header, pointer and Back flows; unit tests cover hold timing, cancelled
+presses, stale responses, failures, navigation, reduced motion and bounded recent artwork.
 
 ## Splash images
 

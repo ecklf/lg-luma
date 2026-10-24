@@ -28,6 +28,11 @@ pub enum Page {
 pub enum Target {
     Nav(usize),
     TvSettings,
+    Recents,
+    Recent(String),
+    RecentClose(String),
+    RecentCloseAll,
+    RecentRetry,
     App(String),
     Input(String),
     Browse,
@@ -95,6 +100,7 @@ pub struct Control {
 #[derive(Clone, Debug)]
 pub enum Overlay {
     Options { id: String, restore: Target },
+    Recents { restore: Target },
     Keyboard,
     SystemKeyboard,
 }
@@ -136,6 +142,10 @@ pub enum Effect {
     /// Refresh apps: read the inventory and every app icon again.
     Reload,
     Launch(String),
+    Recent {
+        generation: u64,
+        command: crate::recents::Command,
+    },
     Quit,
     Weather(weather::Command),
 }
@@ -174,6 +184,7 @@ pub struct State {
     pub keyboard_field: TextField,
     pub greeting_name_draft: String,
     pub input_name: String,
+    pub recents: crate::recents::Recents,
 }
 
 impl State {
@@ -205,6 +216,7 @@ impl State {
             keyboard_field: TextField::Apps,
             greeting_name_draft: String::new(),
             input_name: String::new(),
+            recents: crate::recents::Recents::default(),
         }
     }
 
@@ -214,6 +226,9 @@ impl State {
     }
 
     pub fn tick(&mut self) {
+        if self.recents_open() && !self.pointer {
+            self.dirty |= self.recents.animate(self.preferences.reduced_motion);
+        }
         if let Some(start) = self.panel_started {
             self.dirty = true;
             let duration = if self.overlay.is_some() { 120 } else { 150 };
@@ -255,7 +270,10 @@ impl State {
     }
 
     pub fn animating(&self) -> bool {
-        self.previous_background.is_some()
+        (self.recents_open()
+            && !self.pointer
+            && self.recents.position != self.recents.selected as f32)
+            || self.previous_background.is_some()
             || self.panel_started.is_some()
             || (!self.preferences.reduced_motion
                 && self
@@ -540,6 +558,10 @@ impl State {
     pub fn direction(&mut self, direction: Direction, controls: &[Control]) -> Vec<Effect> {
         self.pointer = false;
         self.dirty = true;
+        if self.recents_open() {
+            self.recent_direction(direction);
+            return vec![];
+        }
         if matches!(self.overlay, Some(Overlay::SystemKeyboard)) {
             // The TV keyboard owns its arrows until Done/Back dismisses it.
             return vec![];
@@ -889,7 +911,7 @@ impl State {
                 && matches!(direction, Direction::Left)
                 && !matches!(
                     self.focus,
-                    Target::Nav(_) | Target::Sidebar(_) | Target::TvSettings
+                    Target::Nav(_) | Target::Sidebar(_) | Target::TvSettings | Target::Recents
                 )
             {
                 if let Target::Background(index) = self.focus {
@@ -1193,6 +1215,19 @@ impl State {
     }
 
     pub fn activate(&mut self) -> Vec<Effect> {
+        if self.recents_open() {
+            use crate::recents::Command;
+            return match self.focus.clone() {
+                Target::Recent(id) => self.recent_request(Command::Launch(id)),
+                Target::RecentClose(id) => self.recent_request(Command::Close(id)),
+                Target::RecentCloseAll if !self.recents.entries.is_empty() => {
+                    self.recent_request(Command::CloseAll)
+                }
+                Target::RecentRetry => self.recent_request(Command::List),
+                Target::CloseDialog => self.back(),
+                _ => vec![],
+            };
+        }
         if self.moving.take().is_some() {
             // Order was saved at every move. A fresh OK release finishes the
             // mode and keeps the selected favorite, rather than launching it.
@@ -1201,6 +1236,7 @@ impl State {
         }
         self.dirty = true;
         match self.focus.clone() {
+            Target::Recents => return self.open_recents(),
             Target::Nav(index) => self.open(index),
             Target::Browse => self.open(1),
             Target::Retry => return vec![Effect::Reload],
@@ -1521,8 +1557,10 @@ impl State {
         }
         if let Some(overlay) = self.overlay.take() {
             self.panel_started = None;
-            if let Overlay::Options { restore, .. } = overlay {
+            if let Overlay::Options { restore, .. } | Overlay::Recents { restore } = overlay {
                 self.focus = restore;
+                self.recents.pending = None;
+                self.reconcile_focus();
                 return vec![];
             }
             self.focus = self.keyboard_return();

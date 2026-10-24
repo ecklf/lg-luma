@@ -35,10 +35,19 @@ pub enum Request {
     Refresh,
     Launch(String),
     SyncSplash(String),
+    Recent {
+        generation: u64,
+        command: crate::recents::Command,
+    },
 }
 pub enum Response {
     Inventory(Result<(Inventory, Option<String>), String>),
     Launched(Result<(), String>),
+    Recent {
+        generation: u64,
+        command: crate::recents::Command,
+        result: Result<Option<Vec<crate::recents::Entry>>, String>,
+    },
 }
 
 pub struct Platform {
@@ -54,8 +63,46 @@ impl Platform {
         let (responses, receiver) = mpsc::channel();
         thread::spawn(move || {
             let mut splash_background = None;
+            let mut desktop_recents = if webos {
+                vec![]
+            } else {
+                crate::recents::demo()
+            };
             while let Ok(request) = requests.recv() {
                 let response = match request {
+                    Request::Recent {
+                        generation,
+                        command,
+                    } => {
+                        let result = if webos {
+                            recent_call(&command).and_then(|reply| {
+                                if command == crate::recents::Command::List {
+                                    crate::recents::normalize(&reply).map(Some)
+                                } else {
+                                    Ok(None)
+                                }
+                            })
+                        } else {
+                            // Isolated in-memory history; desktop actions never call a TV.
+                            match &command {
+                                crate::recents::Command::List => Ok(Some(desktop_recents.clone())),
+                                crate::recents::Command::Close(id) => {
+                                    desktop_recents.retain(|entry| &entry.app.id != id);
+                                    Ok(None)
+                                }
+                                crate::recents::Command::CloseAll => {
+                                    desktop_recents.clear();
+                                    Ok(None)
+                                }
+                                crate::recents::Command::Launch(_) => Ok(None),
+                            }
+                        };
+                        Response::Recent {
+                            generation,
+                            command,
+                            result,
+                        }
+                    }
                     Request::Refresh => Response::Inventory(if webos {
                         inventory()
                     } else {
@@ -164,7 +211,7 @@ fn checked_response(value: Value) -> Result<Value, String> {
 }
 
 fn inventory_read(uri: &str, field: &str) -> Result<Value, String> {
-    // Only these fixed inventory commands use Homebrew's elevated service.
+    // Fixed inventory commands use Homebrew's elevated service.
     // Use the same one-reply invocation as the web launcher, without guessing
     // CLI behavior from a firmware-version string.
     let command = format!(
@@ -232,6 +279,14 @@ fn output_excerpt(output: &str) -> String {
 }
 
 fn inventory_payload(envelope: &Value, field: &str) -> Result<Value, String> {
+    let response = command_reply(envelope)?;
+    response
+        .get(field)
+        .cloned()
+        .ok_or_else(|| format!("Missing TV inventory field: {field}"))
+}
+
+fn command_reply(envelope: &Value) -> Result<Value, String> {
     let stdout = envelope
         .get("stdoutString")
         .and_then(Value::as_str)
@@ -281,11 +336,24 @@ fn inventory_payload(envelope: &Value, field: &str) -> Result<Value, String> {
     if !response.is_object() || !response.get("returnValue").is_some_and(Value::is_boolean) {
         return Err(failure("Homebrew inventory JSON is not a Luna response"));
     }
-    let response = checked_response(response)?;
-    response
-        .get(field)
-        .cloned()
-        .ok_or_else(|| format!("Missing TV inventory field: {field}"))
+    checked_response(response)
+}
+
+fn recent_call(command: &crate::recents::Command) -> Result<Value, String> {
+    let (uri, payload) = command.request()?;
+    // The native process uses its own authenticated Homebrew connection, as
+    // inventory does. Fixed operations only; no app-ID impersonation or retries
+    // of mutations after an ambiguous timeout. LG owns close/keep-alive policy.
+    let quote = |s: &str| format!("'{}'", s.replace('\'', "'\\''"));
+    let command = format!(
+        "if [ \"$(id -u)\" = 0 ]; then /usr/bin/luna-send -n 1 -w 4000 {uri} {}; else printf '%s\\n' '{{\"returnValue\":false,\"errorText\":\"Homebrew Channel needs root access\"}}'; fi",
+        quote(&payload.to_string())
+    );
+    let envelope = call(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        json!({"command": command}),
+    )?;
+    command_reply(&envelope)
 }
 
 fn inventory() -> Result<(Inventory, Option<String>), String> {

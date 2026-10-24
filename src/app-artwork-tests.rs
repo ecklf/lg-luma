@@ -78,7 +78,7 @@ fn inventory_metadata_resolves_absolute_relative_and_manifest_fallback_paths() {
         assert!(icon_path(&dirs[0], bad).is_none());
     }
     let source = Source::new("sample", &json!({"folderPath":"/etc"}));
-    assert_eq!(source.directories().len(), 3);
+    assert_eq!(source.directories().len(), ROOTS.len());
     assert_eq!(source.directories()[0], Path::new(ROOTS[0]).join("sample"));
 }
 
@@ -95,6 +95,38 @@ fn supported_icons_decode_to_bounded_pixels_and_runtime_card_colours() {
     assert_eq!(transparent.color, [20; 3]);
     assert!(decode(b"not an image").is_none());
     assert!(decode(&encoded(ImageFormat::Png, 2049, 1, [0; 4])).is_none());
+}
+
+#[test]
+fn recent_previews_are_bounded_widescreen_images_with_no_icon_substitution() {
+    let preview = format!("{}/sample/recent.png", ROOTS[4]);
+    let splash = format!("{}/sample/splash.webp", ROOTS[0]);
+    let source = Source::recent(
+        "sample",
+        &json!({
+            "cardSnapShotFilePath": "/etc/private.png",
+            "customImageFilePath": preview,
+            "splashBackground": splash,
+        }),
+    )
+    .unwrap();
+    let bytes = encoded(ImageFormat::Png, 1920, 1080, [24, 30, 40, 255]);
+    let image = load_local(&source, |path, limit| {
+        assert_eq!(limit, MAX_FILE);
+        assert_eq!(path, Path::new(&preview));
+        Some(bytes.clone())
+    })
+    .unwrap();
+    assert_eq!(image.pixels.dimensions(), (768, 432));
+    assert!(load_local(&source, |_, _| None).is_none());
+    for value in [
+        "/etc/private.png",
+        "https://example.com/a.png",
+        "../../private.png",
+        "/usr/palm/applications/sample/splash.astc",
+    ] {
+        assert!(Source::recent("sample", &json!({"splashBackground":value})).is_none());
+    }
 }
 
 #[test]

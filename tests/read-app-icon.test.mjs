@@ -9,6 +9,8 @@ const roots = [
   '/media/developer/apps/usr/palm/applications',
   '/media/cryptofs/apps/usr/palm/applications',
   '/usr/palm/applications',
+  '/media/system/apps/usr/palm/applications',
+  '/mnt/otncabi/usr/palm/applications',
 ];
 const directory = `${roots[0]}/sample`;
 
@@ -170,4 +172,27 @@ test('file names containing shell punctuation are treated as literal local paths
     installations: [{ icons: { [name]: 'literal file' } }],
   });
   assert.equal(icons[0].toString(), 'literal file');
+});
+
+test('recent previews use explicit installed artwork and never substitute manifest icons', () => {
+  const preview = `${roots[4]}/sample/recent.png`;
+  const { icons } = readIcon({
+    metadata: { preview: ['/etc/passwd.png', preview, `${directory}/splash.webp`] },
+    installations: [
+      { directory: `${roots[4]}/sample`, icons: { 'recent.png': 'recent card' } },
+      {
+        manifest: { id: 'sample', icon: 'icon.png' },
+        icons: { 'icon.png': 'app icon', 'splash.webp': 'splash' },
+      },
+    ],
+  });
+  assert.deepEqual(
+    icons.map((bytes) => bytes.toString()),
+    ['recent card', 'splash'],
+  );
+  const missing = readIcon({
+    metadata: { preview: [`${directory}/missing.png`] },
+    installations: [{ icons: { 'icon.png': 'not a preview' } }],
+  });
+  assert.deepEqual(missing.icons, []);
 });
