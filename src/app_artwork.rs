@@ -10,7 +10,7 @@ use std::{
     fs::File,
     io::{Cursor, Read},
     path::{Component, Path, PathBuf},
-    sync::{Arc, mpsc},
+    sync::{Arc, Condvar, Mutex, mpsc},
     thread,
 };
 
@@ -24,6 +24,7 @@ const ROOTS: [&str; 5] = [
 pub const MAX_FILE: usize = 512 * 1024;
 const CACHE_BYTES: usize = 16 * 1024 * 1024;
 const CACHE_ENTRIES: usize = 256;
+const REQUEST_SLOTS: usize = 16;
 // Prefetched icons in flight at once: the rest of the request queue stays free for visible cards.
 const PREFETCH_SLOTS: usize = 8;
 
@@ -224,6 +225,57 @@ struct Request {
     token: u64,
     source: Source,
 }
+
+#[derive(Default)]
+struct Requests {
+    visible: VecDeque<Request>,
+    background: VecDeque<Request>,
+    closed: bool,
+}
+
+struct RequestSender {
+    queue: Arc<(Mutex<Requests>, Condvar)>,
+}
+
+impl RequestSender {
+    fn try_send(&self, request: Request, background: bool) -> Result<(), ()> {
+        let (mutex, ready) = &*self.queue;
+        let mut queue = mutex.lock().unwrap();
+        if queue.closed || queue.visible.len() + queue.background.len() >= REQUEST_SLOTS {
+            return Err(());
+        }
+        if background {
+            queue.background.push_back(request);
+        } else {
+            queue.visible.push_back(request);
+        }
+        ready.notify_one();
+        Ok(())
+    }
+
+    fn promote(&self, token: u64) {
+        let mut queue = self.queue.0.lock().unwrap();
+        if let Some(index) = queue.background.iter().position(|r| r.token == token) {
+            let request = queue.background.remove(index).unwrap();
+            queue.visible.push_back(request);
+        }
+    }
+
+    fn clear(&self) {
+        let mut queue = self.queue.0.lock().unwrap();
+        queue.visible.clear();
+        queue.background.clear();
+    }
+}
+
+impl Drop for RequestSender {
+    fn drop(&mut self) {
+        let (mutex, ready) = &*self.queue;
+        mutex.lock().unwrap().closed = true;
+        ready.notify_one();
+    }
+}
+
 struct Reply {
     request: Request,
     image: Option<Arc<Artwork>>,
@@ -241,7 +293,7 @@ struct Cache {
 }
 
 pub struct Service {
-    sender: Option<mpsc::SyncSender<Request>>,
+    sender: Option<RequestSender>,
     receiver: mpsc::Receiver<Reply>,
     cache: RefCell<Cache>,
     prefetch: RefCell<VecDeque<Source>>,
@@ -256,13 +308,32 @@ impl Service {
         enabled: bool,
         loader: impl Fn(&Source) -> Option<Artwork> + Send + 'static,
     ) -> Self {
-        let (sender, requests) = mpsc::sync_channel::<Request>(16);
+        let queue = Arc::new((Mutex::new(Requests::default()), Condvar::new()));
         // Room for a full request queue: an idle UI only polls on its next
         // wake, and a one-slot reply channel held the worker to one icon each.
         let (responses, receiver) = mpsc::sync_channel(16);
         if enabled {
+            let queue = queue.clone();
             thread::spawn(move || {
-                while let Ok(request) = requests.recv() {
+                loop {
+                    let request = {
+                        let (mutex, ready) = &*queue;
+                        let mut queue = mutex.lock().unwrap();
+                        loop {
+                            if queue.closed {
+                                return;
+                            }
+                            // Visible requests, including promoted prefetches, always go next.
+                            if let Some(request) = queue
+                                .visible
+                                .pop_front()
+                                .or_else(|| queue.background.pop_front())
+                            {
+                                break request;
+                            }
+                            queue = ready.wait(queue).unwrap();
+                        }
+                    };
                     let image = loader(&request.source).map(|mut image| {
                         image.key = format!("installed-icon:{}", request.token);
                         Arc::new(image)
@@ -274,7 +345,7 @@ impl Service {
             });
         }
         Self {
-            sender: enabled.then_some(sender),
+            sender: enabled.then_some(RequestSender { queue }),
             receiver,
             cache: RefCell::default(),
             prefetch: RefCell::default(),
@@ -282,26 +353,29 @@ impl Service {
     }
 
     pub fn get(&self, source: &Source) -> Option<Arc<Artwork>> {
-        self.request(source).ok().flatten()
+        self.request(source, false).ok().flatten()
     }
 
     /// The cached artwork, or a queued request for it. `Err` when the request queue is full:
     /// a visible card is retried when the next completed request redraws the scene, so
     /// neither scrolling nor a slow Homebrew service can block input.
-    fn request(&self, source: &Source) -> Result<Option<Arc<Artwork>>, ()> {
+    fn request(&self, source: &Source, background: bool) -> Result<Option<Arc<Artwork>>, ()> {
         let sender = self.sender.as_ref().ok_or(())?;
         let mut cache = self.cache.borrow_mut();
         cache.clock += 1;
         let clock = cache.clock;
         if let Some(entry) = cache.entries.get_mut(source) {
             entry.used = clock;
+            if !background && entry.image.is_none() {
+                sender.promote(entry.token);
+            }
             return Ok(entry.image.clone().flatten());
         }
         let request = Request {
             token: clock,
             source: source.clone(),
         };
-        sender.try_send(request).map_err(|_| ())?;
+        sender.try_send(request, background)?;
         cache.entries.insert(
             source.clone(),
             Entry {
@@ -331,7 +405,7 @@ impl Service {
         {
             let cached = self.cache.borrow().entries.contains_key(source);
             if !cached {
-                if self.request(source).is_err() {
+                if self.request(source, true).is_err() {
                     break;
                 }
                 in_flight += 1;
@@ -360,6 +434,9 @@ impl Service {
     pub fn reset(&self) {
         self.cache.borrow_mut().entries.clear();
         self.prefetch.borrow_mut().clear();
+        if let Some(sender) = &self.sender {
+            sender.clear();
+        }
     }
 
     /// After an automatic inventory refresh: icons that were unavailable are
