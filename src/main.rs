@@ -28,9 +28,9 @@ mod view;
 mod wallpaper_cycle;
 mod wallpapers;
 mod weather;
-mod webhook;
 #[path = "weather-service.rs"]
 mod weather_service;
+mod webhook;
 #[cfg(all(feature = "webos", any(target_os = "linux", test)))]
 #[path = "webos-compat.rs"]
 mod webos_compat;
