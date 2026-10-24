@@ -1,75 +1,109 @@
-# Shot list example
+# Shot-list examples: readable, fast, real UI
 
-This is a 52 s film, written in the abstract so it maps onto any feature. Replace each subject with the real piece of UI. Keep the rhythm, scales, and angles. It is shot on the dark stage; on the light stage, read "Black" as the ground colour.
+The first example records the approved Luma film after iteration. It is a worked example,
+not a requirement to use a launcher, these apps, or these languages in unrelated products.
+Use [look.md](look.md) for the reusable numeric recipes.
 
-The story shape is:
+## Approved Luma film: 15.7 seconds
 
-1. A close look at the familiar app, where the entry point for the feature appears.
-2. The feature's view opens, and we read its core content up close.
-3. The user asks for something; the product answers while we watch.
-4. A single confirming action.
-5. The payoff, in the film's only wide shot.
-6. A close-up on the result.
-7. Copy, then the logo.
+| Cut    | Length | Setup                                        | Actual action/result                                                                                           |
+| ------ | ------ | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 0.0 s  | 2.1 s  | Frontal Home → Apps, 0.60× → 0.99×           | Zoom for 0.8 s; Apps begins at 0.4 s; scroll the complete SVG-only app list                                    |
+| 2.1 s  | 2.2 s  | Same frontal pose, Recent Apps               | Browse Netflix → YouTube → Apple TV; retain all three entries                                                  |
+| 4.3 s  | 4.0 s  | Closer angled Settings, both columns visible | Enter Background, choose Forest from Slate, return to the sidebar, continue through Weather and Inputs         |
+| 8.3 s  | 5.4 s  | One continuous angled Home setup             | Nine finished configurations, faster with each change, small drift/rotation and brief blur-through transitions |
+| 13.7 s | 2.0 s  | Crisp static end card                        | Original Luma mark plus `Luma for webOS` in Inter                                                              |
 
-Magnification is relative to the UI at its native size, measured at the focal point. Angles are pitch (tilt back) / roll (in-plane, which sets the diagonal) / yaw. Drift is the camera move across the whole shot.
+### Why these choices mattered
 
-| # | Cut | Len | Subject in focus | Mag. | Pitch / roll / yaw | Drift | Action |
-|---|---|---|---|---|---|---|---|
-| 1 | 0.0 | 3.0 | The app's sidebar near the window corner | 4.0 → 4.2× | 35° / −12° / +8° | Track down 5%, push 2% | A new nav item for the feature fades in, then its highlight fills. No cursor. |
-| 2 | 3.0 | 3.5 | The feature's list view, first few rows | 2.8 → 2.9× | 38° / +14° / −6° | Track right 8% along the rows | Rows resolve top to bottom with the stipple reveal. Focus sits on the second row. |
-| 3 | 6.5 | 6.0 | The core content: a diff, a document, or a canvas | 2.0 → 2.1× | 32° / −10° / +10° | Long pan, 25% of frame width, along the reading direction | Content scrolls gently under the camera. A highlighted region passes through the focal band. |
-| 4 | 12.5 | 2.5 | One tab or mode switch | 6.0 → 6.2× | 45° / +16° / −8° | Track sideways 5% | The selection pill slides to the new tab, and its label brightens. |
-| 5 | 15.0 | 8.0 | The composer, then the first lines of the reply | 3.0 → 2.8× | 40° / −14° / +6° | Rise 6% with the reply, slight pull | Type a 40-character prompt at 12 cps; identifiers become chips. Send. The reply starts streaming; rack focus from the input to the reply over 0.6 s. |
-| 6 | 23.0 | 6.0 | The generated result: a list, a plan, a document writing itself | 2.2 → 2.3× | 34° / +10° / −10° | Follow the content down, 10% | Lines stipple in top to bottom, about 0.1 s apart. Headings first, then body, then a table or diagram. |
-| 7 | 29.0 | 2.5 | The primary action button | 6.5 → 6.7× | 48° / −18° / +12° | Track 3% toward the button | The button presses and shows its own pressed colour. Hold. |
-| 8 | **31.5** | 7.0 | The whole window: the **only wide shot** | 0.9 → 0.95× | 10° / 0° / +2° | Push 5%, rise 3% | **Payoff.** Several regions change at once: the document scrolls, a panel updates, a list re-sorts. No shake and no flash. The size of the shot is the impact. |
-| 9 | 38.5 | 4.5 | The single best line of the result | 3.2 → 3.3× | 38° / +12° / −8° | Track right 5% | The last line resolves. Hold on the after state. |
-| — | 43.0 | 4.5 | Black | — | — | — | Blur-and-dim out of shot 9 over 0.4 s. The product name un-blurs at 90 px, then the tagline joins it on the same line. |
-| — | **47.5** | 4.5 | Black | — | — | — | Cut to the still logo. Hold to the end at 52.0. |
+- The recognizable Home screen is already reasonably close at the start. Navigation overlaps
+  the zoom, so the opening doesn't feel like waiting for an animation to finish.
+- Recent Apps belongs immediately after the Apps scroll. Its native parent is the scrolled
+  Apps page on Midnight. A previous capture from Settings/Forest would flash the wrong parent.
+- The recent-app shot is browse-only. No app is removed, launched or replaced, and no fictional
+  Close all button is introduced. Native IDs, focus and entry count confirm the interaction.
+- The Settings category list and the entire right-hand gallery remain in frame. The capture
+  shows a real preference save, not merely a focus ring over Forest. Later categories use Forest.
+- Settings stops on Inputs. System remains an ordinary visible menu item, but it is never focused.
+- The Home looks change directly without showing nine sets of configuration steps. They share
+  one camera function instead of cutting between new angles or resetting rotation each time.
+- The diagonal base pose remains visible, while its animated rotation is restrained. Light edge
+  softness and small transition blur preserve readability instead of obscuring the interface.
+- The silent file has no audio stream. A single two-second title/mark card finishes the short cut.
 
-## Why it works
+## Exact Luma configuration montage
 
-- **Shot length follows the action.** The long shots (3, 5, 6, 8) are where something visibly happens: reading, typing, generating, paying off. The short shots (1, 4, 7) are punctuation, a single selection or press. Long and short alternate, so the film breathes instead of strobing.
-- **Scale rhythm**: macro, macro, medium, **extreme macro**, macro, medium, **extreme macro**, **wide**, macro. The extreme macros are accents between longer reads. Holding the wide shot back until the payoff makes it land like a release.
-- **The diagonal flips on every cut.** Roll alternates between negative and positive, so even two macros in a row read as different camera positions.
-- **The camera is always motivated.** It tracks along a row, rises with a streaming reply, and pushes toward a button. It never moves just to move.
-- **Focus tells the eye where to go.** Only a thin band is sharp. In shot 5, the rack from the input to the reply is the edit inside the shot.
-- **No pointer, no effects.** The UI selects, presses, and writes on its own, so every frame stays about the product.
-- **The ending is quiet.** After the widest, busiest shot, the film settles back into one close line, then one line of type, then a logo that does nothing at all.
+Hold lengths at 30 fps are **30, 27, 24, 21, 18, 15, 12, 9, 6 frames**. These create the
+requested stagger: 1.0 s down to 0.2 s. Incoming transition times also shorten. The first and
+last _complete configurations_ were swapped, not the first and last Settings categories.
 
-## Camera numbers in practice
+| Look | Background      | Language   | Name / weather      | Distinct content                                       |
+| ---- | --------------- | ---------- | ------------------- | ------------------------------------------------------ |
+| 1    | Prism           | English    | No name/weather     | Sports/streaming SVG cards; three inputs               |
+| 2    | San Francisco   | German     | Flo / Munich        | Regional SVG favorites in a different order; one input |
+| 3    | Northern Lights | Chinese    | 珞辰 / Shanghai     | Streaming SVG set; Apple TV and Switch inputs          |
+| 4    | Monument Valley | Portuguese | Lucía / no weather  | Captions enabled; another favorite order               |
+| 5    | Forest          | Italian    | Rafa / no weather   | Music/streaming SVG favorites; one input               |
+| 6    | Yosemite        | English    | Giulia / no weather | Plex/Jellyfin streaming set; three inputs              |
+| 7    | Slate           | German     | Sam / no weather    | Five SVG favorites; one media-player input             |
+| 8    | Summit          | Chinese    | 珞辰 / Shanghai     | Asian streaming SVG set; one input                     |
+| 9    | Midnight        | Portuguese | No name/weather     | Original favorite set; automatic inputs                |
 
-With a CSS-style perspective camera at `perspective: P` looking at a plane `dist` away, the magnification at the focal point is about `P / dist`. At `P = 1300`:
+Language order is **English → German → Chinese → Portuguese → Italian**, then repeat.
+No adjacent looks use the same language. Every native background appears exactly once.
+Names preserve the requested capital **F** in Flo and the exact Chinese characters **珞辰**.
+City names remain the product's saved lookup results; surrounding UI and weather conditions
+use the selected locale.
 
-| Magnification | `dist` |
-|---|---|
-| 6× | 217 |
-| 4× | 325 |
-| 3× | 433 |
-| 2× | 650 |
-| 1× (use P ≈ 2000 for the wide shot) | 1300 |
+## Capture and verification lessons
 
-A 4% push from 2.8× to 2.9× takes `dist` from 464 to 448. With a strong pitch, the near edge of the frame can be several times closer than the far edge, which is exactly where the depth of field comes from.
+1. **Use the renderer that exists.** Luma is Rust/SDL/OpenGL, so the film uses native 5760×3240
+   captures, not a browser reconstruction. A separate capture worktree controls timing and phases.
+2. **Exercise the existing interaction.** Capture the native carousel, wallpaper fade, viewport
+   clipping and scroll masks. Preserve fixed chrome. Verify the final app row was reached.
+3. **Use explicit fixtures.** Preferences are isolated; weather is supplied locally and recent
+   history is a three-entry desktop fixture. This demonstrates UI behavior, not TV verification.
+4. **Enforce SVG-only globally.** Check exact IDs against the native branding registry and require
+   both SVG source and compiled vector asset. Filter fallback cards from Apps and scrolled rows
+   as well as favorites and recents. Kodi/Moonlight-style fallbacks must not leak into a later look.
+5. **Record the state assertions.** Verify saved background, focused category, every favorite order,
+   input visibility, local weather reading, native translated text and retained recent IDs.
+6. **Treat reordering as a context change.** Match the modal's background/parent/scroll and remove
+   all frames that enter a skipped category. Re-encoding only the changed shots makes iteration fast.
+7. **Master from adequate detail.** The approved HQ film is 1920×1080, 30 fps, 471 frames, with
+   eight shutter samples, resolution-aware source filtering, H.264 slow/CRF 16 and no audio.
+   Re-check the approved edit order/timing rather than upscaling the 960×540 preview.
 
-## A still set
+## Adapt the shape to another product
 
-The same story, shot as five stills for a launch post: a hero image, three supporting stills, and a social card. Same stage, grade, and grain throughout. The film's cameras are not reused: each still gets the photographer's camera from Stills in [look.md](look.md), with a perspective of about 2–2.2× the frame width. Angles are pitch / camera roll / in-plane roll / yaw.
+Use this compact template when the next brief has different views:
 
-| # | Format | Subject in focus (all of it sharp) | Mag. | Pitch / cam roll / roll / yaw | Frozen moment | Edge in frame | Negative space |
-|---|---|---|---|---|---|---|---|
-| 1 | 16:9 hero | The generated result's heading and first three lines | 2.4× | 32° / −8° / 0° / 0° | The last line mid-stipple | The panel's left edge | Upper right, clean panel falling into haze |
-| 2 | 16:9 | The composer, with the whole typed prompt | 3.0× | 34° / +8° / 0° / 0° | Two-thirds typed, one identifier already a chip, caret solid | The composer's rounded border | Lower left, the thread deep in the blur |
-| 3 | 16:9 | One tab, with its row of siblings receding | 4.2× | 40° / 0° / −14° / 0° | The pill just landed, its label active | The tab bar's bottom edge | Most of the frame is bokeh |
-| 4 | 16:9 | A list of four rows, as one card | 3.6× | 34° / −9° / 0° / −10° | The fourth row just resolved | The card's corner and its shadow | The slab beyond the card, the neighbouring card yawed into the blur |
-| 5 | 1200 × 630 card | The best single line of the result, with its label | 3.0× | 30° / −7° / 0° / 0° | The line solid; the line below mid-stipple | The slab's left edge and cast shadow | Right half, holding the product name in outro type |
+| Section               | Treatment                                              | Verification                                                 |
+| --------------------- | ------------------------------------------------------ | ------------------------------------------------------------ |
+| Familiar landing view | Short frontal approach; next view may start mid-zoom   | Recognizable start; continuous transform                     |
+| Browse/list view      | Native scrolling or a short meaningful interaction     | Fixed chrome; intended rows; correct real artwork            |
+| Related surface/modal | Browse or act according to the brief                   | Correct parent context; expected retained/changed state      |
+| Settings/detail view  | Restrained angle, necessary context visible            | Real save and subsequent result; requested stopping point    |
+| Finished variants     | Continuous angled setup, optional accelerating cadence | Supported presets, exact variety coverage and language order |
+| Product/platform card | Clean original mark/type, about two seconds            | Approved text/font, complete logo and exact hold             |
 
-Why it works:
+Skip sections the product or brief doesn't need. A typing/generation feature may justify a
+longer process shot; a configuration showcase may need none. Do not invent a streaming reveal
+or add setup steps just to fill a template. Actual product behavior determines the content.
 
-- **No still is a film frame.** Every one has a longer lens, a level plane, and a whole subject inside the frame. Nothing looks caught on its way into the shot.
-- **The whole subject is sharp, and nothing else is.** Camera roll keeps each text line inside the sharp zone, and the zone stops right at the subject's edges.
-- **Each frame shows an object.** A real edge of a panel, a card, or the slab, with its shadow, gives the frame a structural line and makes the UI read as a thing on a set.
-- **The hero is the payoff**, at medium scale, not the whole window: a single still has no cut to make a wide frame land.
-- **Scale still varies** (medium, macro, extreme macro, macro, macro), and the diagonal flips between neighbours, so the set reads as one shoot from several camera positions.
-- **Every still is a moment**: a reply generating, a prompt being typed, a tab just selected. None of them is the UI at rest.
-- **Copy appears once**, on the social card, in the negative space and never over the UI.
+## Review and delivery example
+
+- Render a 960×540 preview at 30 fps with two shutter samples and a labeled contact sheet.
+- Review every interaction peak, first/last scroll row, configuration, transition and title.
+- On edits, record the latest order and use explicit preset IDs to avoid confusing categories
+  with configurations. Keep the prior approved movie for comparison.
+- After approval, inspect source dimensions and projected sampling requirements, render all
+  shots at 1080p with eight samples, then verify frame counts and a complete decode.
+- Promote the verified master to the requested docs video path and compare checksums. If the
+  README uses inline HTML video, verify its renderer preserves the player and controls.
+- Link a contact sheet publicly only if requested. Put existing screenshots behind a simple
+  `<details><summary>Screenshots</summary>…</details>` toggle when that is the chosen presentation.
+
+For stills, choose a whole readable subject and compose deliberately for its output format.
+A clean film frame can be a useful video poster; a dedicated hero/social image may need a
+separate composition. Neither needs compulsory heavy bokeh or a multi-image promotional set.

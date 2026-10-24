@@ -2,9 +2,9 @@
 
 A native launcher for rooted LG webOS TVs, inspired by Apple TV.
 
-<video src="docs/luma-preview.mp4" controls playsinline preload="metadata" style="width: 100%; height: auto;">
-  <a href="docs/luma-preview.mp4">Watch the Luma demo</a>
-</video>
+https://github.com/user-attachments/assets/9c708bd3-5d38-48fe-a2bc-5587ac0a1a84
+
+[Demo video](docs/luma-preview.mp4)
 
 <details>
 <summary>Screenshots</summary>
