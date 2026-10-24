@@ -13,9 +13,11 @@ pub const SYSTEM_SECTION: usize = 4;
 pub const SECTION_COUNT: usize = 5;
 pub const APPS_COLUMNS: usize = 6;
 pub const HOME_STRIP_LEFT: f32 = 84.;
-pub const HOME_STRIP_RIGHT: f32 = 1836.;
-pub const HOME_TILE_WIDTH: f32 = 270.;
-pub const HOME_TILE_PITCH: f32 = 296.4;
+// Six favourites in full and the seventh cut off and fading out at the right (Apple TV rows):
+// the strip ends after the sixth tile, so a focused tile never sits in the fade.
+pub const HOME_STRIP_RIGHT: f32 = 1748.;
+pub const HOME_TILE_WIDTH: f32 = 256.;
+pub const HOME_TILE_PITCH: f32 = 281.6;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum Page {

@@ -4,8 +4,9 @@ use crate::{
     model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode},
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, Control, HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect,
-        SYSTEM_SECTION, State, Subpage, Target, TextField, WEATHER_SECTION,
+        APPS_COLUMNS, Control, HOME_STRIP_LEFT, HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH,
+        KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage, Target, TextField,
+        WEATHER_SECTION,
     },
     weather::{self, Unit},
 };
@@ -232,7 +233,7 @@ impl Scene {
                         [brightness, brightness, brightness, alpha],
                     );
                 }
-                Draw::Clip(_) | Draw::EdgeFade(_) => {}
+                Draw::Clip(_) | Draw::EdgeFade(_) | Draw::EdgeFadeX(_) => {}
             }
         }
     }
@@ -891,6 +892,32 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
                 0.
             };
     }
+    // Like Apple TV's rows, the favourites run to the screen edge: the next tile shows cut off
+    // at the right (and a scrolled-away one at the left), so it is clear the row continues.
+    let main_bottom = if state.moving.is_none() {
+        1053.6
+    } else {
+        994.4
+    };
+    out.draw.push(Draw::Clip(Some(Rect::new(
+        0.,
+        MAIN_TOP,
+        1920.,
+        main_bottom - MAIN_TOP,
+    ))));
+    // Soft edges: out to the right from the end of the sixth tile, and in from the left once
+    // the row has scrolled.
+    let left = if state.home_scroll > 0. {
+        [8., HOME_STRIP_LEFT]
+    } else {
+        [0., 0.]
+    };
+    out.draw.push(Draw::EdgeFadeX(Some([
+        left[0],
+        left[1],
+        HOME_STRIP_RIGHT,
+        1910.,
+    ])));
     for (index, app) in apps.iter().enumerate() {
         tile(
             out,
@@ -907,6 +934,13 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             false,
         );
     }
+    out.draw.push(Draw::EdgeFadeX(None));
+    out.draw.push(Draw::Clip(Some(Rect::new(
+        64.,
+        MAIN_TOP,
+        1792.,
+        main_bottom - MAIN_TOP,
+    ))));
     let input_y = 544.8 + grid_height + 41.6 - s;
     let inputs: Vec<_> = state
         .inventory

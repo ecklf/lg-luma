@@ -8,6 +8,7 @@ uniform vec4 u_tint;
 varying PAINT_PRECISION vec4 v_color;
 varying PAINT_PRECISION float v_coverage;
 varying PAINT_PRECISION float v_logical_y;
+varying PAINT_PRECISION float v_logical_x;
 void main() {
     vec2 position = a_position * u_transform.xy + u_transform.zw;
     // Offsets are centered on the path boundary and stay half a physical pixel
@@ -19,4 +20,5 @@ void main() {
     v_color = a_color * u_tint;
     v_coverage = a_coverage;
     v_logical_y = position.y;
+    v_logical_x = position.x;
 }
