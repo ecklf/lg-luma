@@ -201,6 +201,55 @@ struct Batch {
     fade: Option<[f32; 8]>,
 }
 
+fn full_screen(rect: &Rect) -> bool {
+    rect.x <= 0. && rect.y <= 0. && rect.x + rect.w >= 1920. && rect.y + rect.h >= 1080.
+}
+
+/// An opaque, untinted, square full-screen image: the wallpaper that scrims can fold into.
+fn plain_wallpaper(command: &Draw) -> Option<&str> {
+    match command {
+        Draw::Image(path, rect, radius, false) if full_screen(rect) && *radius <= 0. => Some(path),
+        Draw::TintedImage(path, rect, radius, false, tint)
+            if full_screen(rect) && *radius <= 0. && *tint == [1.; 4] =>
+        {
+            Some(path)
+        }
+        _ => None,
+    }
+}
+
+/// A full-screen translucent fill without corners or border: a flat colour or a vertical
+/// gradient (straight alpha, interpolated like the paint shader's vertex colours).
+enum Scrim {
+    Flat(Color),
+    Gradient(Color, Color),
+}
+impl Scrim {
+    fn of(command: &Draw) -> Option<Self> {
+        match command {
+            Draw::Shape(rect, radius, border, color)
+                if full_screen(rect) && *radius <= 0. && *border <= 0. =>
+            {
+                Some(Self::Flat(*color))
+            }
+            Draw::RoundedGradient(rect, radius, top, bottom)
+                if full_screen(rect) && *radius <= 0. =>
+            {
+                Some(Self::Gradient(*top, *bottom))
+            }
+            _ => None,
+        }
+    }
+    fn at(&self, t: f32) -> Color {
+        match self {
+            Self::Flat(color) => *color,
+            Self::Gradient(top, bottom) => {
+                std::array::from_fn(|i| top[i] + (bottom[i] - top[i]) * t)
+            }
+        }
+    }
+}
+
 fn intersect(a: [i32; 4], b: [i32; 4]) -> [i32; 4] {
     let x = a[0].max(b[0]);
     let y = a[1].max(b[1]);
@@ -590,6 +639,53 @@ impl Renderer {
         });
     }
 
+    /// The wallpaper with full-screen translucent fills folded in: each fill maps a pixel p to
+    /// p * (1 - a) + c * a, so together they are p * m + k, drawn in one pass instead of one
+    /// full-screen layer each. Strips keep gradients' products of colour and alpha exact.
+    fn folded_quad(&mut self, rect: Rect, texture: GLuint, scrims: &[Scrim]) {
+        const STRIPS: usize = 16;
+        let fold = |t: f32| {
+            let (mut m, mut k) = ([1f32; 3], [0f32; 3]);
+            for scrim in scrims {
+                let color = scrim.at(t);
+                for i in 0..3 {
+                    m[i] *= 1. - color[3];
+                    k[i] = k[i] * (1. - color[3]) + color[i] * color[3];
+                }
+            }
+            (m, k)
+        };
+        let start = self.vertices.len() / 14;
+        for strip in 0..STRIPS {
+            let rows = [
+                strip as f32 / STRIPS as f32,
+                (strip + 1) as f32 / STRIPS as f32,
+            ];
+            let folds = rows.map(fold);
+            for (x, row) in [(0., 0), (1., 0), (0., 1), (0., 1), (1., 0), (1., 1)] {
+                let (m, k) = folds[row];
+                let t = rows[row];
+                self.vertices.extend_from_slice(&[
+                    rect.x + x * rect.w,
+                    rect.y + t * rect.h,
+                    x,
+                    t,
+                    m[0],
+                    m[1],
+                    m[2],
+                    1.,
+                    k[0],
+                    k[1],
+                    k[2],
+                    0.,
+                    -2.,
+                    0.,
+                ]);
+            }
+        }
+        self.paint_batch(start, STRIPS * 6, texture);
+    }
+
     fn text(&mut self, text: &str, rect: Rect, style: TextStyle, color: Color, centered: bool) {
         // Layout remains logical. Reuse the same run geometry at every density;
         // its shader snaps insertion origins and computes pixel-sized coverage.
@@ -832,7 +928,19 @@ impl Renderer {
         }
     }
 
-    fn image(&mut self, path: &str, mut rect: Rect, radius: f32, contain: bool, tint: Color) {
+    fn image(&mut self, path: &str, rect: Rect, radius: f32, contain: bool, tint: Color) {
+        self.folded_image(path, rect, radius, contain, tint, &[]);
+    }
+
+    fn folded_image(
+        &mut self,
+        path: &str,
+        mut rect: Rect,
+        radius: f32,
+        contain: bool,
+        tint: Color,
+        scrims: &[Scrim],
+    ) {
         if path.ends_with(".lvec") {
             self.vector_image(path, rect, contain, tint);
             return;
@@ -891,7 +999,11 @@ impl Renderer {
             let h = texture.height as f32 * scale;
             rect = Rect::new(rect.x + (rect.w - w) / 2., rect.y + (rect.h - h) / 2., w, h);
         }
-        self.quad(rect, [0., 0., 1., 1.], plain_radius(radius), 0., tint, id);
+        if scrims.is_empty() {
+            self.quad(rect, [0., 0., 1., 1.], plain_radius(radius), 0., tint, id);
+        } else {
+            self.folded_quad(rect, id, scrims);
+        }
     }
 
     /// Edges on whole drawable pixels. The TV scales its 1080p graphics plane up 2x, which
@@ -1041,6 +1153,27 @@ impl Renderer {
             index += 1;
             if profile_skip(command) {
                 continue;
+            }
+            if let Some(path) = plain_wallpaper(command)
+                && self.clip.is_none()
+                && self.fade.is_none()
+            {
+                let mut scrims = Vec::new();
+                while let Some(next) = commands.get(index) {
+                    if profile_skip(next) {
+                        index += 1;
+                    } else if let Some(scrim) = Scrim::of(next) {
+                        scrims.push(scrim);
+                        index += 1;
+                    } else {
+                        break;
+                    }
+                }
+                if !scrims.is_empty() {
+                    let screen = Rect::new(0., 0., 1920., 1080.);
+                    self.folded_image(path, screen, 0., false, [1.; 4], &scrims);
+                    continue;
+                }
             }
             // Outside the damage the scissor would discard it anyway; skip its layout too.
             if let (Some(area), Some(bounds)) = (area, crate::damage::bounds(command))

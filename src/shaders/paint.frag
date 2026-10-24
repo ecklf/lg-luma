@@ -21,7 +21,11 @@ float edge_coverage() {
 }
 void main() {
     if (v_params.x < 0.0) {
-        gl_FragColor = texture2D(u_texture, v_uv) * v_color * vec4(1.0, 1.0, 1.0, edge_coverage());
+        vec4 color = texture2D(u_texture, v_uv) * v_color;
+        // -2: wallpaper with folded full-screen fills, p * m + k (k in v_shape).
+        if (v_params.x < -1.5)
+            color.rgb += v_shape.rgb;
+        gl_FragColor = color * vec4(1.0, 1.0, 1.0, edge_coverage());
         return;
     }
     float blur = max(-v_params.y, 0.0);

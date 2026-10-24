@@ -399,6 +399,16 @@ pub fn scene_with_pill(
         );
         recents_view::render(&mut out, state, assets);
         out.fade(start, state.recents.visibility, 1.);
+        // Dim the wallpaper beneath the outgoing interface rather than over it. While both
+        // fade, the backdrop and Recents' full-screen gradient then lie directly on the
+        // wallpaper, and the renderer folds them into it instead of two more full-screen
+        // passes per frame of the crossfade.
+        let fills = out.draw[start..]
+            .iter()
+            .take_while(|draw| full_screen_fill(draw))
+            .count();
+        let moved: Vec<_> = out.draw.drain(start..start + fills).collect();
+        out.draw.splice(content_start..content_start, moved);
         if !state.recents_open() {
             out.controls = parent_controls;
             out.modal = parent_modal;
@@ -2706,5 +2716,15 @@ fn toast(out: &mut Scene, state: &State, assets: &Assets, notice: &str) {
         && let Some((_, opened)) = &state.notice
     {
         out.fade(start, (opened.elapsed().as_secs_f32() / 0.12).min(1.), 1.);
+    }
+}
+
+/// A corner-less, borderless fill of the whole logical screen.
+fn full_screen_fill(draw: &Draw) -> bool {
+    let whole = |r: &Rect| r.x <= 0. && r.y <= 0. && r.x + r.w >= 1920. && r.y + r.h >= 1080.;
+    match draw {
+        Draw::Shape(rect, radius, border, _) => whole(rect) && *radius <= 0. && *border <= 0.,
+        Draw::RoundedGradient(rect, radius, ..) => whole(rect) && *radius <= 0.,
+        _ => false,
     }
 }

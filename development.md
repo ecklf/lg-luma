@@ -424,6 +424,12 @@ window's sample count and reports differing pixels in the diagnostics (`damage_v
 full frames as baseline). `--profile-frames` diagnostics include `redrawn_fraction_mean` and a
 per-frame `timeline` of interval, compose, render and swap time and redrawn share.
 
+Full-screen translucent fills drawn straight over the wallpaper (the Recents backdrop and
+gradient) each map a pixel p to p * (1 - a) + c * a, so together they are p * m + k. The renderer
+draws the wallpaper once with m and k per vertex (16 strips keep gradients' colour-alpha products
+exact) instead of one full-screen pass per fill. During the Recents crossfade these fills sit
+beneath the outgoing interface rather than over it, so they fold in while both fade.
+
 ## TV startup diagnostics
 
 SAM passes launch metadata as a JSON object in `argv[1]`. The CLI skips that object while leaving
