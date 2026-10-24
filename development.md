@@ -430,6 +430,14 @@ draws the wallpaper once with m and k per vertex (16 strips keep gradients' colo
 exact) instead of one full-screen pass per fill. During the Recents crossfade these fills sit
 beneath the outgoing interface rather than over it, so they fold in while both fade.
 
+### Idle preparation
+
+The first visit to a page pays for laying out its text, outlining new glyphs, loading logo meshes
+and uploading icons. After each inventory, once the screen has been still for 1.5 s, Luma builds
+the other pages' scenes without drawing them (`Renderer::prepare`), one page per idle wake; the TV
+log reports each (`Luma prewarm: …`). The script action `prewarm` triggers it at once, and the
+profiling timeline records first-use work per frame (`glyph_ms`, `vector_ms`, `image_ms`).
+
 ## TV startup diagnostics
 
 SAM passes launch metadata as a JSON object in `argv[1]`. The CLI skips that object while leaving

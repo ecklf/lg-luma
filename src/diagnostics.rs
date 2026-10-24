@@ -21,6 +21,10 @@ pub struct Frame {
     pub render_ms: f64,
     pub swap_ms: f64,
     pub redrawn: f64,
+    /// First-use work inside render_ms: glyph outlines, logo meshes, images.
+    pub glyph_ms: f64,
+    pub vector_ms: f64,
+    pub image_ms: f64,
 }
 #[derive(Serialize)]
 pub struct Timing {
@@ -97,6 +101,9 @@ mod tests {
                     render_ms: 2.,
                     swap_ms: 0.,
                     redrawn: 1.,
+                    glyph_ms: 0.,
+                    vector_ms: 0.,
+                    image_ms: 0.,
                 },
             );
         }

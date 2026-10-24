@@ -129,6 +129,10 @@ pub struct RenderStats {
     pub max_physical_font_px: f32,
     pub cached_glyphs: usize,
     pub glyph_tessellations: usize,
+    /// Milliseconds this frame spent on first-use work: glyph outlines, logo meshes, images.
+    pub glyph_ms: f64,
+    pub vector_load_ms: f64,
+    pub image_load_ms: f64,
     pub glyph_failures: usize,
     pub missing_glyphs: usize,
     pub missing_images: usize,
@@ -157,6 +161,9 @@ impl RenderStats {
             max_physical_font_px: 0.,
             cached_glyphs: 0,
             glyph_tessellations: 0,
+            glyph_ms: 0.,
+            vector_load_ms: 0.,
+            image_load_ms: 0.,
             glyph_failures: 0,
             missing_glyphs: 0,
             missing_images: 0,
@@ -497,7 +504,9 @@ impl Renderer {
     fn glyph(&mut self, c: char, font: u16) -> Result<&[luma_vector_geometry::Vertex], String> {
         let key = (c, font);
         if !self.glyphs.contains_key(&key) {
+            let started = Instant::now();
             let geometry = self.fonts[&font].geometry(c)?;
+            self.stats.glyph_ms += started.elapsed().as_secs_f64() * 1000.;
             self.glyphs.insert(
                 key,
                 Glyph {
@@ -974,6 +983,8 @@ impl Renderer {
             self.stats.high_resolution_wallpaper = true;
         }
         let frame = self.frame;
+        let started = Instant::now();
+        let loaded = !self.textures.contains_key(&path);
         let entry = self
             .textures
             .entry(path.clone())
@@ -987,6 +998,9 @@ impl Renderer {
                     None
                 }
             });
+        if loaded {
+            self.stats.image_load_ms += started.elapsed().as_secs_f64() * 1000.;
+        }
         let Some(texture) = entry else {
             self.stats.missing_images += 1;
             return;
@@ -1018,6 +1032,8 @@ impl Renderer {
             return;
         }
         let scale = self.stats.viewport.scale;
+        let started = Instant::now();
+        let loaded = !self.vectors.contains_key(path);
         let mesh = self.vectors.entry(path.into()).or_insert_with(|| {
             match vector::Mesh::load(Path::new(path)) {
                 Ok(mesh) => Some(mesh),
@@ -1027,6 +1043,9 @@ impl Renderer {
                 }
             }
         });
+        if loaded {
+            self.stats.vector_load_ms += started.elapsed().as_secs_f64() * 1000.;
+        }
         let Some(mesh) = mesh else {
             self.stats.missing_images += 1;
             return;
@@ -1127,12 +1146,20 @@ impl Renderer {
         )
     }
 
-    /// Draws the scene. With `damage` (drawable pixels from `damage_pixels`), only those pixels
-    /// are cleared and drawn; commands entirely outside them are skipped, and the rest of the
-    /// back buffer keeps its earlier contents.
-    pub fn render(&mut self, commands: &[Draw], width: u32, height: u32, damage: Option<[i32; 4]>) {
-        let area = damage.map(|pixels| Self::damage_area(pixels, width, height));
-        let started = Instant::now();
+    /// Prepares first-use work for a scene without drawing it (text layout and glyph
+    /// outlines, logo meshes, images), e.g. another page while the screen is idle, so its
+    /// first appearance does not pay for it. The visible frame's statistics stay unchanged.
+    pub fn prepare(&mut self, commands: &[Draw], width: u32, height: u32) {
+        let stats = self.stats.clone();
+        self.build(commands, width, height, None);
+        self.vertices.clear();
+        self.batches.clear();
+        self.stats = stats;
+    }
+
+    /// Lays out the scene into vertices and batches; commands entirely outside `area` are
+    /// skipped.
+    fn build(&mut self, commands: &[Draw], width: u32, height: u32, area: Option<Rect>) {
         self.stats = RenderStats::new(Size::new(width, height));
         // Captures can bind a single-sample FBO even when the actual TV window
         // is multisampled, so query the active target rather than assume.
@@ -1221,6 +1248,15 @@ impl Renderer {
                 Draw::EdgeFadeX(fade) => self.set_fade(4, *fade),
             }
         }
+    }
+
+    /// Draws the scene. With `damage` (drawable pixels from `damage_pixels`), only those pixels
+    /// are cleared and drawn; commands entirely outside them are skipped, and the rest of the
+    /// back buffer keeps its earlier contents.
+    pub fn render(&mut self, commands: &[Draw], width: u32, height: u32, damage: Option<[i32; 4]>) {
+        let area = damage.map(|pixels| Self::damage_area(pixels, width, height));
+        let started = Instant::now();
+        self.build(commands, width, height, area);
         let Viewport {
             x: vx,
             y: vy,
