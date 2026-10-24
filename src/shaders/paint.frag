@@ -29,12 +29,14 @@ void main() {
     float radius = min(v_params.x, min(half_size.x, half_size.y));
     vec2 q = abs(v_shape.xy) - half_size + vec2(radius);
     float d = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - radius;
-    float alpha = 1.0 - smoothstep(-u_aa, 0.0, d);
+    // Box-filtered coverage of one drawable pixel (u_aa) centred on the edge: an edge on a
+    // pixel boundary stays one crisp step, and a one-pixel border is fully opaque.
+    float alpha = clamp(0.5 - d / u_aa, 0.0, 1.0);
     if (blur > 0.0) {
         alpha = 1.0 - smoothstep(-blur, blur, d);
     }
     if (v_params.y > 0.0) {
-        alpha *= smoothstep(-v_params.y - u_aa, -v_params.y, d);
+        alpha *= clamp(0.5 + (d + v_params.y) / u_aa, 0.0, 1.0);
     }
     gl_FragColor = texture2D(u_texture, v_uv) * v_color * vec4(1.0, 1.0, 1.0, alpha * edge_coverage());
 }

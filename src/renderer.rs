@@ -248,6 +248,20 @@ fn embolden(physical_size: f32) -> f32 {
     strength * ((28. - physical_size) / 12.).clamp(0., 1.)
 }
 
+fn snap_rect(rect: Rect, scale: f32) -> Rect {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if !*ENABLED.get_or_init(|| std::env::var("LUMA_SNAP").as_deref() != Ok("0")) {
+        return rect;
+    }
+    let scale = scale.max(0.01);
+    let snap = |value: f32| (value * scale).round() / scale;
+    let (x0, y0) = (snap(rect.x), snap(rect.y));
+    // Never collapse a visible hairline.
+    let x1 = snap(rect.x + rect.w).max(x0 + 1. / scale);
+    let y1 = snap(rect.y + rect.h).max(y0 + 1. / scale);
+    Rect::new(x0, y0, x1 - x0, y1 - y0)
+}
+
 pub struct Renderer {
     program: GLuint,
     vector_program: GLuint,
@@ -508,6 +522,7 @@ impl Renderer {
         if rect.w <= 0. || rect.h <= 0. {
             return;
         }
+        let rect = self.snap(rect);
         let start = self.vertices.len() / 14;
         for (x, y) in [(0., 0.), (1., 0.), (0., 1.), (0., 1.), (1., 0.), (1., 1.)] {
             let color = colors[y as usize];
@@ -862,10 +877,18 @@ impl Renderer {
         self.quad(rect, [0., 0., 1., 1.], plain_radius(radius), 0., tint, id);
     }
 
+    /// Edges on whole drawable pixels. The TV scales its 1080p graphics plane up 2x, which
+    /// turns a half-covered edge pixel into a soft 2-pixel band; whole pixels stay crisp.
+    /// LUMA_SNAP=0 keeps logical positions (for comparison).
+    fn snap(&self, rect: Rect) -> Rect {
+        snap_rect(rect, self.stats.viewport.scale)
+    }
+
     fn vector_image(&mut self, path: &str, mut rect: Rect, contain: bool, tint: Color) {
         if rect.w <= 0. || rect.h <= 0. {
             return;
         }
+        let scale = self.stats.viewport.scale;
         let mesh = self.vectors.entry(path.into()).or_insert_with(|| {
             match vector::Mesh::load(Path::new(path)) {
                 Ok(mesh) => Some(mesh),
@@ -890,6 +913,9 @@ impl Renderer {
                 height,
             );
         }
+        // Logos keep their size; only their placement moves onto the pixel grid.
+        let snapped = snap_rect(rect, scale);
+        rect = Rect::new(snapped.x, snapped.y, rect.w, rect.h);
         let clip = if let Some(clip) = self.clip {
             let x = rect.x.max(clip.x);
             let y = rect.y.max(clip.y);
@@ -1027,9 +1053,10 @@ impl Renderer {
                 gl::DYNAMIC_DRAW,
             );
             gl::UseProgram(self.program);
+            // One drawable pixel in logical units: the paint shader's edge filter width.
             gl::Uniform1f(
                 gl::GetUniformLocation(self.program, c"u_aa".as_ptr()),
-                0.85 / scale.max(0.01),
+                1. / scale.max(0.01),
             );
             gl::Uniform1i(
                 gl::GetUniformLocation(self.program, c"u_texture".as_ptr()),

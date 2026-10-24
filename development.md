@@ -231,6 +231,12 @@ at the same cost. Desktop previews keep multisampling; `LUMA_MSAA=4` or `0` over
 Text up to 16 physical pixels is emboldened by 0.25 px per edge (fading out by 28 px) so thin
 stems get an opaque core; `LUMA_EMBOLDEN` sets the strength.
 
+Shape edges use a one-drawable-pixel box filter centred on the edge, and rectangles (and logo
+placement) snap to whole drawable pixels. A straight edge is then a single step, and a one-pixel
+border is fully opaque. On TVs that scale a 1080p graphics plane up to the panel, half-covered
+edge pixels would otherwise become soft two-pixel bands. `LUMA_SNAP=0` keeps logical positions
+for comparison.
+
 ### Installed app artwork
 
 TV inventory retains each app's `folderPath`, `largeIcon` and `icon`. Visible cards resolve artwork
