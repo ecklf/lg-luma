@@ -7,5 +7,5 @@
   "rules": {
     "eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }]
   },
-  "ignorePatterns": ["node_modules/**", "dist/**", ".build/**", "target/**"]
+  "ignorePatterns": [".agents/skills/**", "node_modules/**", "dist/**", ".build/**", "target/**"]
 }
