@@ -3,11 +3,15 @@
 //! small change costs only those tiles; EGL_EXT_buffer_age alone still allows redrawing less.
 //! Without either, or without a current EGL context (GLX, CGL, WGL), every frame is drawn in
 //! full.
-use std::ffi::{CStr, c_char, c_void};
+use std::ffi::c_void;
+#[cfg(target_os = "linux")]
+use std::ffi::{CStr, c_char};
 
 type Display = *mut c_void;
 type Surface = *mut c_void;
+#[cfg(target_os = "linux")]
 const EGL_EXTENSIONS: i32 = 0x3055;
+#[cfg(target_os = "linux")]
 const EGL_DRAW: i32 = 0x3059;
 const EGL_BUFFER_AGE: i32 = 0x313D;
 type QuerySurface = unsafe extern "C" fn(Display, Surface, i32, *mut i32) -> u32;
