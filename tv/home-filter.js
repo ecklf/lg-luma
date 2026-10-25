@@ -2,8 +2,9 @@
  * com.webos.surfacemanager.keyFilters). LG's compositor loads it with Qt.include within seconds of
  * a cold boot, long before the Homebrew hooks (~50 s). While the TV boots it asks luma-early
  * (com.webos.service.lumahome, src/bin/luma-early.rs) to mount Luma over LG's Home executable
- * and then opens Home, at about 20 s. While an app is in front it points Back/Exit at Home
- * instead of Live TV. Keys pass through unchanged. ES5 for LG's QML engine.
+ * and then opens Home, at about 20 s, showing a loading screen until then. While an app is in
+ * front it points Back/Exit at Home instead of Live TV. Keys pass through unchanged. ES5 for LG's
+ * QML engine.
  */
 var lumaHomeBoot = ''; // "" until bootd answers, then "booting" or "done"
 var lumaHomeEarly = ''; // "" until luma-early answers, then "ready" or "failed"
@@ -15,6 +16,75 @@ var lumaHomeLastInput = null; // general/lastInputApp, null until the settings s
 
 function lumaHomeParse(payload) {
   return typeof payload === 'string' ? JSON.parse(payload) : payload;
+}
+
+// Cold-boot loading screen: black, Luma's mark (boot-logo.png beside this file) and after 2 s a
+// spinner. The compositor draws it itself (compositorWindow is a context property of LG's
+// compositor QML), so it shows from the filter's first seconds instead of a dark screen. Gone once
+// an app is in front, on any key, or after 90 s.
+var lumaHomeSplash = null;
+var lumaHomeSplashDone = false;
+var LUMA_HOME_SPLASH_QML =
+  'import QtQuick 2.4\n' +
+  'Rectangle {\n' +
+  '  anchors.fill: parent; z: 100000; color: "black"; opacity: 0\n' +
+  '  Behavior on opacity { NumberAnimation { duration: 400 } }\n' +
+  '  Component.onCompleted: opacity = 1\n' +
+  '  Image {\n' +
+  '    id: logo; source: "file:///var/lib/luma-home/boot-logo.png"\n' +
+  '    anchors.centerIn: parent; anchors.verticalCenterOffset: -40\n' +
+  '  }\n' +
+  '  Item {\n' +
+  '    id: spinner; width: 40; height: 40; opacity: 0\n' +
+  '    anchors.horizontalCenter: parent.horizontalCenter\n' +
+  '    anchors.top: logo.bottom; anchors.topMargin: 90\n' +
+  '    property int step: 0\n' +
+  '    Behavior on opacity { NumberAnimation { duration: 600 } }\n' +
+  '    Timer { interval: 2000; running: true; onTriggered: spinner.opacity = 1 }\n' +
+  '    Timer { interval: 83; running: true; repeat: true; onTriggered: spinner.step = (spinner.step + 1) % 12 }\n' +
+  '    Repeater {\n' +
+  '      model: 12\n' +
+  '      Rectangle {\n' +
+  '        x: 18; width: 4; height: 11; radius: 2; color: "white"; antialiasing: true\n' +
+  '        opacity: 0.12 + 0.88 * (1 - ((spinner.step - index + 12) % 12) / 12)\n' +
+  '        transform: Rotation { origin.x: 2; origin.y: 20; angle: index * 30 }\n' +
+  '      }\n' +
+  '    }\n' +
+  '  }\n' +
+  '}\n';
+
+function lumaHomeSplashShow() {
+  if (lumaHomeSplash || lumaHomeSplashDone || typeof compositorWindow === 'undefined') return;
+  try {
+    lumaHomeSplash = Qt.createQmlObject(
+      LUMA_HOME_SPLASH_QML,
+      compositorWindow.contentItem,
+      'lumaHomeSplash'
+    );
+    genericTimer.set(90000, lumaHomeSplashHide);
+  } catch (error) {
+    console.warn('luma home filter: no loading screen: ' + error);
+  }
+}
+
+function lumaHomeSplashHide() {
+  lumaHomeSplashDone = true;
+  if (!lumaHomeSplash) return;
+  var splash = lumaHomeSplash;
+  lumaHomeSplash = null;
+  try {
+    splash.opacity = 0;
+    genericTimer.set(500, function () {
+      splash.destroy();
+    });
+  } catch (error) {
+    console.warn('luma home filter: ' + error);
+  }
+}
+
+function lumaHomeSplashCheck() {
+  if (lumaHomeFront) lumaHomeSplashHide();
+  else if (lumaHomeBoot === 'booting') lumaHomeSplashShow();
 }
 
 function lumaHomeIsInput(id) {
@@ -101,6 +171,7 @@ function init() {
             : lumaHomeBoot === ''
               ? 'booting'
               : lumaHomeBoot;
+          lumaHomeSplashCheck();
           lumaHomePrepare();
         } catch (error) {
           console.warn('luma home filter: ' + error);
@@ -118,6 +189,7 @@ function init() {
           lumaHomeFront = (r && r.appId) || '';
           if (lumaHomeFront === 'com.webos.app.home' && lumaHomeLaunches) lumaHomeShown = true;
           else lumaHomeOpen();
+          lumaHomeSplashCheck();
           lumaHomePinInput();
         } catch (error) {
           console.warn('luma home filter: ' + error);
@@ -146,8 +218,10 @@ function init() {
   }
 }
 
-// The handler named in the key filter chain (home.cjs); keys pass through.
+// The handler named in the key filter chain (home.cjs). Any key ends the loading screen and
+// passes through.
 // oxlint-disable-next-line no-unused-vars
-function lumaHomeKey() {
+function lumaHomeKey(_key, pressed) {
+  if (pressed) lumaHomeSplashHide();
   return KeyPolicy.NextPolicy;
 }

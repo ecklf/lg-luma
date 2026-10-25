@@ -134,6 +134,10 @@ underneath names Home too, because LG reads it before any hook runs in a cold bo
 also points Back/Exit from an app at Home instead of Live TV. Inputs you choose work as before;
 `home.sh disable` restores the recorded input.
 
+Until Luma's window opens in a cold boot, the key filter shows a loading screen in LG's compositor:
+Luma's mark on black and, after 2 s, a spinner. It ends as soon as an app is in front, on any key,
+or after 90 s.
+
 </details>
 
 <details>

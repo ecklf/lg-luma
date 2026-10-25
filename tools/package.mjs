@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import sharp from 'sharp';
 import { prepareWebosRuntime, verifyWebosSdl } from './webos-runtime.mjs';
 import { normalizeAndVerifyPackage } from './ipk.mjs';
 
@@ -106,6 +107,11 @@ for (const file of ['home.sh', 'home.cjs', 'home-filter.js']) {
   await fs.copyFile(path.join(root, 'tv', file), path.join(stage, file));
   await fs.chmod(path.join(stage, file), file.endsWith('.sh') ? 0o755 : 0o644);
 }
+// The cold-boot loading screen of the webOS 5/6 Home integration (home-filter.js) shows it 1:1.
+await sharp(path.join(root, 'tv/boot-logo.svg'), { density: 72 * (160 / 82) })
+  .resize(160, 160)
+  .png()
+  .toFile(path.join(stage, 'boot-logo.png'));
 await fs.copyFile(path.join(root, 'license'), path.join(stage, 'LICENSE'));
 await fs.copyFile(path.join(root, 'assets.md'), path.join(stage, 'ASSETS.md'));
 await fs.mkdir(path.join(stage, 'lib'));

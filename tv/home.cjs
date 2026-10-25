@@ -480,7 +480,7 @@ function apply(config, open) {
 }
 
 function installScripts() {
-  ['home.sh', 'home.cjs', 'home-filter.js'].forEach(function (name) {
+  ['home.sh', 'home.cjs', 'home-filter.js', 'boot-logo.png'].forEach(function (name) {
     var target = STATE + '/' + name;
     var data = fs.readFileSync(path.join(__dirname, name));
     fs.writeFileSync(target + '.new', data, { mode: name === 'home.sh' ? 493 : 420 });
