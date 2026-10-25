@@ -1813,5 +1813,49 @@
     "ru": "MSAA + привязка к пикселям",
     "pl": "MSAA + hinting pikseli",
     "fr": "MSAA + ajustement aux pixels"
+  },
+  "imageClarity": {
+    "en": "Image sharpness",
+    "de": "Bildschärfe",
+    "zh": "图像锐度",
+    "es": "Nitidez de imagen",
+    "pt": "Nitidez da imagem",
+    "it": "Nitidezza immagine",
+    "ru": "Резкость изображения",
+    "pl": "Ostrość obrazu",
+    "fr": "Netteté de l’image"
+  },
+  "imageClarityOff": {
+    "en": "Off",
+    "de": "Aus",
+    "zh": "关闭",
+    "es": "Desactivada",
+    "pt": "Desligada",
+    "it": "Disattivata",
+    "ru": "Выключено",
+    "pl": "Wyłączona",
+    "fr": "Désactivée"
+  },
+  "imageClarityMild": {
+    "en": "Mild",
+    "de": "Dezent",
+    "zh": "轻度",
+    "es": "Suave",
+    "pt": "Suave",
+    "it": "Leggera",
+    "ru": "Умеренная",
+    "pl": "Delikatna",
+    "fr": "Légère"
+  },
+  "imageClarityStrong": {
+    "en": "Stronger",
+    "de": "Stärker",
+    "zh": "较强",
+    "es": "Más intensa",
+    "pt": "Mais forte",
+    "it": "Più intensa",
+    "ru": "Усиленная",
+    "pl": "Mocniejsza",
+    "fr": "Renforcée"
   }
 }

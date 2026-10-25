@@ -285,7 +285,7 @@ try {
   assert.deepEqual(clockFocus.focus, { Choice: 1 });
   const system = await scenario(
     'system-settings',
-    'settings,down,down,down,down,down,right,down,down',
+    'settings,down,down,down,down,down,right,down,down,down',
   );
   assert.deepEqual(system.focus, { Setting: 5 });
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
@@ -330,6 +330,28 @@ try {
   const msaa = await scenario('text-rendering-msaa', 'home,down');
   assert.equal(msaa.render.text_rendering.mode, 'msaa');
   assert.equal(msaa.render.text_rendering.embolden, 0);
+  const clarityOptions = 'settings,down,down,down,down,down,right,down,down,enter';
+  const clarityPicker = await scenario('image-clarity-options', clarityOptions);
+  assert.equal(clarityPicker.subpage, 'ImageClarity');
+  assert.ok(clarityPicker.ui_text.includes('Mild'));
+  const clarityMild = await scenario('image-clarity-mild', `${clarityOptions},down,enter`);
+  assert.equal(clarityMild.preferences.image_clarity, 'mild');
+  assert.ok(Math.abs(clarityMild.render.last_presented.image_sharpness - 0.35) < 0.001);
+  assert.equal(
+    clarityMild.render.startup_image_sharpness,
+    0,
+    'Changing clarity applies immediately',
+  );
+  assert.ok(clarityMild.render.last_presented.sharpening_bytes > 0);
+  const clarityRestart = await scenario('image-clarity-restart', 'home,down');
+  assert.ok(Math.abs(clarityRestart.render.startup_image_sharpness - 0.35) < 0.001);
+  const clarityStrong = await scenario('image-clarity-strong', `${clarityOptions},down,enter`);
+  assert.equal(clarityStrong.preferences.image_clarity, 'strong');
+  assert.ok(Math.abs(clarityStrong.render.last_presented.image_sharpness - 0.6) < 0.001);
+  const clarityOff = await scenario('image-clarity-off', `${clarityOptions},down,enter`);
+  assert.equal(clarityOff.preferences.image_clarity, 'off');
+  assert.equal(clarityOff.render.last_presented.image_sharpness, 0);
+  assert.equal(clarityOff.render.last_presented.sharpening_bytes, 0);
   // The exposed card fragments are real pointer targets, including after remote scrolling.
   const edgeFavorites = [
     'netflix',

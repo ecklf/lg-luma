@@ -1763,6 +1763,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Temperature) => language.t("temperature"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
+                Some(Subpage::ImageClarity) => language.t("imageClarity"),
                 None => "",
             };
             let parent_width = assets.width(label, text(20.8, 550, -0.02)) + 2.;
@@ -1889,6 +1890,16 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             Subpage::Language => Language::ALL
                 .into_iter()
                 .map(|option| (option.name(), None, option == language))
+                .collect(),
+            Subpage::ImageClarity => crate::image_clarity::ImageClarity::ALL
+                .into_iter()
+                .map(|mode| {
+                    (
+                        language.t(mode.label_key()),
+                        None,
+                        mode == state.preferences.image_clarity,
+                    )
+                })
                 .collect(),
             Subpage::TextRendering => crate::text_rendering::TextRendering::ALL
                 .into_iter()
@@ -2035,6 +2046,13 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     language.t("textRendering"),
                     "type",
                     Some(language.t(state.preferences.text_rendering.label_key())),
+                    true,
+                ),
+                (
+                    9,
+                    language.t("imageClarity"),
+                    "sparkles",
+                    Some(language.t(state.preferences.image_clarity.label_key())),
                     true,
                 ),
                 (5, language.t("quitApp"), "power", None, false),

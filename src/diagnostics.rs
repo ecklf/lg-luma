@@ -25,6 +25,10 @@ pub struct Frame {
     pub glyph_ms: f64,
     pub vector_ms: f64,
     pub image_ms: f64,
+    pub image_sharpness: f32,
+    pub clarity_cached: bool,
+    pub ui_animating: bool,
+    pub ui_changed: bool,
 }
 #[derive(Serialize)]
 pub struct Timing {
@@ -104,6 +108,10 @@ mod tests {
                     glyph_ms: 0.,
                     vector_ms: 0.,
                     image_ms: 0.,
+                    image_sharpness: 0.,
+                    clarity_cached: false,
+                    ui_animating: false,
+                    ui_changed: false,
                 },
             );
         }

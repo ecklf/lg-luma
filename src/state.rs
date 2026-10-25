@@ -123,6 +123,7 @@ pub enum Subpage {
     Temperature,
     Language,
     TextRendering,
+    ImageClarity,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -650,6 +651,7 @@ impl State {
             Some(Subpage::Temperature) => Target::WeatherTemperature,
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
+            Some(Subpage::ImageClarity) => Target::Setting(9),
             None => Target::Sidebar(self.section),
         };
         self.scroll = 0.;
@@ -775,6 +777,7 @@ impl State {
                 let count = match self.subpage {
                     Some(Subpage::ClockFormat | Subpage::TimeFormat | Subpage::Temperature) => 2,
                     Some(Subpage::TextRendering) => TextRendering::ALL.len(),
+                    Some(Subpage::ImageClarity) => crate::image_clarity::ImageClarity::ALL.len(),
                     Some(Subpage::Language) => Language::ALL.len(),
                     _ => 3,
                 };
@@ -843,7 +846,7 @@ impl State {
             }
             if matches!(
                 self.focus,
-                Target::Setting(0 | 1 | 4 | 6 | 7)
+                Target::Setting(0 | 1 | 4 | 6 | 7 | 9)
                     | Target::InputMode(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
@@ -1478,6 +1481,15 @@ impl State {
                         return vec![];
                     }
                     5 => return vec![Effect::Quit],
+                    9 => {
+                        self.subpage = Some(Subpage::ImageClarity);
+                        self.focus = Target::Choice(self.preferences.image_clarity.index());
+                        self.scroll = 0.;
+                        if !self.preferences.reduced_motion {
+                            self.panel_started = Some(Instant::now());
+                        }
+                        return vec![];
+                    }
                     7 => {
                         self.subpage = Some(Subpage::TextRendering);
                         self.focus = Target::Choice(self.preferences.text_rendering.index());
@@ -1548,6 +1560,10 @@ impl State {
                         self.preferences.language =
                             Language::ALL[index.min(Language::ALL.len() - 1)];
                         self.weather.cancel_search();
+                    }
+                    Some(Subpage::ImageClarity) => {
+                        let modes = crate::image_clarity::ImageClarity::ALL;
+                        self.preferences.image_clarity = modes[index.min(modes.len() - 1)];
                     }
                     Some(Subpage::TextRendering) => {
                         let mode = TextRendering::ALL[index.min(TextRendering::ALL.len() - 1)];

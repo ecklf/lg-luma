@@ -796,3 +796,34 @@ geometry byte/entry budgets remain, and each font retains at most eight hinting 
 Outlines are still generated lazily and no glyph bitmap atlas or full-font mesh is built.
 Missing/invalid preferences still default to MSAA; the new choice applies after restart.
 Explicit `LUMA_MSAA=0`/`4` overrides also disable hinting, making comparisons reproducible.
+
+### Optional whole-image clarity
+
+Settings → System → Image sharpness offers Off (default), Mild (0.35) and Stronger (0.6).
+`image_clarity` stores `off`, `mild` or `strong`; unknown values recover to Off without
+losing other preferences. Every choice applies without a restart. Enabled modes sharpen the
+resting image once nothing changed or animated for 120 ms; moving frames keep the ordinary
+rendering path.
+`LUMA_SHARPEN` is a finite 0–0.6 diagnostic override; invalid values retain the preference.
+
+Once the scene settles, a same-size framebuffer blit resolves the MSAA frame to a reusable
+RGBA texture, followed by a five-tap local-contrast filter. Output is bounded by the sampled
+neighbourhood's per-channel minimum/maximum and low-contrast areas are gated out. This is
+edge-contrast enhancement within the existing graphics plane, not increased output resolution.
+It adds no invented detail and does not replace source artwork. Source alpha is preserved.
+Repeated presentations of an unchanged scene reuse the resolved image; diagnostics mark
+these as `clarity_cached`. No repeated MSAA resolve is performed during animation.
+
+The optional pass requires desktop GL 3 / GLES 3 framebuffer blits and highp fragment
+coordinates. Unsupported targets or GL errors disable it once, keeping ordinary rendering.
+Diagnostics expose actual strength, extra submission time and the active sharpening texture
+size (about 8 MiB at 1080p). The resolved texture can remain allocated through movement for
+reuse; turning Off releases these extra resources. With clarity enabled, partial
+redraw is disabled for the session: otherwise filtered backbuffers would be filtered again
+outside the damage region. Idle rendering remains event-driven. Returning to Off restores
+normal visuals immediately; partial redraw becomes eligible again at the next launch.
+
+Compare actual compositor/window captures with identical scenes and text modes. Offscreen
+captures use their own AA target, so they cannot alone establish TV window quality. Mild is
+intended as a small adjustment; Stronger is available for visual comparison, not a universal
+recommendation. Performance and perceived panel sharpness must be checked on the target TV.

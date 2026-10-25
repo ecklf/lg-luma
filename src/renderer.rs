@@ -16,6 +16,9 @@ use std::{
     time::Instant,
 };
 
+#[path = "sharpener.rs"]
+mod sharpener;
+
 pub type Color = [f32; 4];
 pub const WHITE: Color = [0.96, 0.96, 0.96, 1.];
 const GLYPH_GEOMETRY_BUDGET: usize = 8 * 1024 * 1024;
@@ -148,6 +151,10 @@ pub struct RenderStats {
     pub high_resolution_wallpaper: bool,
     pub draw_calls: usize,
     pub cpu_submission_ms: f64,
+    pub image_sharpness: f32,
+    pub sharpening_ms: f64,
+    pub sharpening_bytes: usize,
+    pub clarity_cached: bool,
     /// Share of the drawable redrawn in the last frame (1 without partial redraw).
     pub redrawn_fraction: f64,
 }
@@ -179,6 +186,10 @@ impl RenderStats {
             high_resolution_wallpaper: false,
             draw_calls: 0,
             cpu_submission_ms: 0.,
+            image_sharpness: 0.,
+            sharpening_ms: 0.,
+            sharpening_bytes: 0,
+            clarity_cached: false,
             redrawn_fraction: 1.,
         }
     }
@@ -329,6 +340,9 @@ pub struct Renderer {
     text_program: GLuint,
     text_embolden: f32,
     hint_outlines: bool,
+    image_sharpness: f32,
+    sharpener: Option<sharpener::Sharpener>,
+    sharpening_unavailable: bool,
     buffer: GLuint,
     vao: GLuint,
     white: Texture,
@@ -362,6 +376,7 @@ impl Renderer {
         gles: bool,
         text_embolden: f32,
         hint_outlines: bool,
+        image_sharpness: f32,
     ) -> Result<Self, String> {
         let directory = font.parent().ok_or("Invalid font path")?;
         let mut fonts = HashMap::new();
@@ -456,6 +471,9 @@ impl Renderer {
             text_program,
             text_embolden,
             hint_outlines,
+            image_sharpness,
+            sharpener: None,
+            sharpening_unavailable: false,
             buffer,
             vao,
             white,
@@ -1449,6 +1467,32 @@ impl Renderer {
         self.stats.vector_bytes = self.vectors.values().flatten().map(|mesh| mesh.bytes).sum();
         self.stats.artwork_bytes = bytes + self.stats.vector_bytes;
         self.stats.draw_calls = self.batches.len();
+        if self.image_sharpness > 0. {
+            let sharpen_started = Instant::now();
+            let result = (|| {
+                if self.sharpener.is_none() {
+                    self.sharpener = Some(sharpener::Sharpener::new(&self.info)?);
+                }
+                self.sharpener
+                    .as_mut()
+                    .unwrap()
+                    .apply(width, height, self.image_sharpness)
+            })();
+            match result {
+                Ok(bytes) => {
+                    self.stats.image_sharpness = self.image_sharpness;
+                    self.stats.sharpening_bytes = bytes;
+                    self.stats.draw_calls += 1;
+                }
+                Err(error) => {
+                    eprintln!("Luma image sharpening disabled: {error}");
+                    self.image_sharpness = 0.;
+                    self.sharpening_unavailable = true;
+                    self.sharpener = None;
+                }
+            }
+            self.stats.sharpening_ms = sharpen_started.elapsed().as_secs_f64() * 1000.;
+        }
         self.stats.cpu_submission_ms = started.elapsed().as_secs_f64() * 1000.;
     }
 
@@ -1513,6 +1557,45 @@ impl Renderer {
             );
             gl::DrawArrays(gl::TRIANGLES, 0, mesh.vertices);
         }
+    }
+
+    /// Changes apply to the next full frame, without recreating the GL window.
+    pub fn set_image_sharpness(&mut self, strength: f32, retain_resources: bool) {
+        if !self.sharpening_unavailable {
+            self.image_sharpness = strength;
+        }
+        if !retain_resources {
+            self.sharpener = None;
+        }
+    }
+
+    /// Profiling/exposure can present an unchanged frame again without resolving the UI.
+    pub fn repeat_clarity(&mut self, width: u32, height: u32) -> bool {
+        let Some(sharpener) = &self.sharpener else {
+            return false;
+        };
+        let started = Instant::now();
+        let mut target = 0;
+        unsafe {
+            gl::GetIntegerv(gl::DRAW_FRAMEBUFFER_BINDING, &mut target);
+        }
+        let Ok(bytes) =
+            sharpener.draw_cached(target as GLuint, width, height, self.image_sharpness)
+        else {
+            return false;
+        };
+        self.stats.clarity_cached = true;
+        self.stats.image_sharpness = self.image_sharpness;
+        self.stats.sharpening_bytes = bytes;
+        self.stats.sharpening_ms = started.elapsed().as_secs_f64() * 1000.;
+        self.stats.cpu_submission_ms = self.stats.sharpening_ms;
+        self.stats.glyph_tessellations = 0;
+        self.stats.glyph_ms = 0.;
+        self.stats.vector_load_ms = 0.;
+        self.stats.image_load_ms = 0.;
+        self.stats.draw_calls = 1;
+        self.stats.redrawn_fraction = 1.;
+        true
     }
 
     pub fn stats(&self) -> &RenderStats {
@@ -1711,6 +1794,7 @@ fn load_font(directory: &Path, id: u16) -> Result<Font, String> {
 
 impl Drop for Renderer {
     fn drop(&mut self) {
+        self.sharpener = None;
         unsafe {
             gl::DeleteBuffers(1, &self.buffer);
             gl::DeleteProgram(self.program);

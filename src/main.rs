@@ -10,6 +10,7 @@ mod diagnostics;
 mod egl_damage;
 mod font;
 mod i18n;
+mod image_clarity;
 #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
 mod luna;
 mod model;
@@ -716,17 +717,26 @@ fn run() -> Result<(), String> {
     if let Err(error) = video.gl_set_swap_interval(1) {
         eprintln!("VSync: {error}");
     }
+    let image_sharpness_override = std::env::var("LUMA_SHARPEN").ok();
+    let image_sharpness = image_clarity::configured(
+        state.preferences.image_clarity,
+        image_sharpness_override.as_deref(),
+    );
+    eprintln!("Luma image sharpening: {image_sharpness}");
     let mut renderer = renderer::Renderer::new(
         &assets.root.join("font.ttf"),
         webos,
         text_config.embolden,
         text_config.hint_outlines,
+        image_sharpness,
     )?;
     startup_stage("renderer");
     // Redraw only what changed since the back buffer's frame (LUMA_PARTIAL=0 draws in full).
-    let partial = (std::env::var("LUMA_PARTIAL").as_deref() != Ok("0"))
-        .then(egl_damage::PartialUpdate::load)
-        .flatten();
+    // Filtered backbuffers cannot be partially re-filtered without accumulating sharpening.
+    let mut partial = (image_sharpness == 0.
+        && std::env::var("LUMA_PARTIAL").as_deref() != Ok("0"))
+    .then(egl_damage::PartialUpdate::load)
+    .flatten();
     eprintln!(
         "Luma partial redraw: {}",
         partial
@@ -877,6 +887,9 @@ fn run() -> Result<(), String> {
         pill_width,
         options.time.unwrap_or_else(OffsetDateTime::now_utc),
     );
+    let mut clarity_pending = false;
+    let mut clarity_cached = false;
+    let mut clarity_changed = Instant::now();
     while running {
         let now = options
             .time
@@ -1405,12 +1418,40 @@ fn run() -> Result<(), String> {
                 && options
                     .profile_frames
                     .is_some_and(|limit| presented + 1 >= limit));
-        if ((state.dirty || options.profile_frames.is_some()) && visible) || final_frame {
+        let requested_clarity = image_clarity::configured(
+            state.preferences.image_clarity,
+            image_sharpness_override.as_deref(),
+        );
+        let clarity_due = requested_clarity > 0.
+            && clarity_pending
+            && !state.animating()
+            && clarity_changed.elapsed() >= Duration::from_millis(120);
+        if ((state.dirty || options.profile_frames.is_some() || clarity_due) && visible)
+            || final_frame
+        {
             let compose_started = Instant::now();
             scene = compose(&mut state, &assets, pill, pill_width, now);
             let compose_ms = compose_started.elapsed().as_secs_f64() * 1000.;
             let (width, height) = window.drawable_size();
             if width > 0 && height > 0 {
+                if state.dirty {
+                    clarity_changed = Instant::now();
+                    clarity_pending = requested_clarity > 0.;
+                    clarity_cached = false;
+                }
+                let settled = !state.dirty
+                    && !state.animating()
+                    && clarity_changed.elapsed() >= Duration::from_millis(120);
+                let capture_frame = final_frame && options.screenshot.is_some();
+                let strength = if settled || capture_frame {
+                    requested_clarity
+                } else {
+                    0.
+                };
+                renderer.set_image_sharpness(strength, requested_clarity > 0.);
+                if requested_clarity > 0. && partial.take().is_some() {
+                    damage_tracker.reset();
+                }
                 if final_frame && let Some(path) = &options.screenshot {
                     captured = Some(renderer.capture(
                         &scene.draw,
@@ -1435,7 +1476,17 @@ fn run() -> Result<(), String> {
                     }
                     damage
                 });
-                renderer.render(&scene.draw, width, height, damage);
+                let repeated = clarity_cached
+                    && settled
+                    && !capture_frame
+                    && renderer.repeat_clarity(width, height);
+                if !repeated {
+                    renderer.render(&scene.draw, width, height, damage);
+                    clarity_cached = renderer.stats().image_sharpness > 0.;
+                }
+                if settled || requested_clarity == 0. {
+                    clarity_pending = false;
+                }
                 redrawn_total += renderer.stats().redrawn_fraction;
                 if verify_damage {
                     // Full frames give the baseline difference of the two drawing paths.
@@ -1492,6 +1543,12 @@ fn run() -> Result<(), String> {
                             glyph_ms: renderer.stats().glyph_ms,
                             vector_ms: renderer.stats().vector_load_ms,
                             image_ms: renderer.stats().image_load_ms,
+                            image_sharpness: renderer.stats().image_sharpness,
+                            clarity_cached: renderer.stats().clarity_cached,
+                            ui_animating: state.animating()
+                                || pill != target
+                                || pill_width != target_width,
+                            ui_changed: state.dirty,
                         },
                     );
                 }
@@ -1569,6 +1626,7 @@ fn run() -> Result<(), String> {
             || back_button.press.is_some()
             || options.frames.is_some()
             || assets.artwork.pending()
+            || clarity_pending
         {
             8
         } else if !prewarm.is_empty() {
@@ -1609,6 +1667,7 @@ fn run() -> Result<(), String> {
             "drawable_is_4k": Size::new(dw, dh).is_4k(), "presented_frames": presented,
             "graphics": renderer.info, "last_presented": renderer.stats(), "capture": captured,
             "text_rendering": text_config,
+            "startup_image_sharpness": image_sharpness,
             "profile": options.profile_frames.map(|_| profile.summary()),
             "partial_redraw": partial.as_ref().map(egl_damage::PartialUpdate::describe),
             "redrawn_fraction_mean": redrawn_total / presented.max(1) as f64,

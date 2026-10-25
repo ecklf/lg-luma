@@ -750,6 +750,8 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(7));
     state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Setting(9));
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(5));
     assert_eq!(state.activate(), vec![Effect::Quit]);
     state.back();
@@ -1501,4 +1503,35 @@ fn inventory_success_resets_failures_and_later_failures_show_at_once() {
     assert_eq!(state.inventory_failed("timeout".into()), None);
     assert!(!state.loading && state.error.is_some());
     assert!(!state.inventory.apps.is_empty());
+}
+
+#[test]
+fn image_clarity_choices_persist_and_restore_the_parent_without_restart_notice() {
+    use crate::{image_clarity::ImageClarity, state::Subpage};
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::SYSTEM_SECTION;
+    state.focus = Target::Setting(9);
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.subpage, Some(Subpage::ImageClarity));
+    assert_eq!(state.focus, Target::Choice(0));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.image_clarity, ImageClarity::Mild);
+    assert_eq!(state.focus, Target::Setting(9));
+    let saved = serde_json::to_value(&state.preferences).unwrap();
+    assert_eq!(saved["image_clarity"], "mild");
+    let mut restored = State::new(serde_json::from_value(saved).unwrap());
+    restored.open(2);
+    restored.section = crate::state::SYSTEM_SECTION;
+    restored.focus = Target::Setting(9);
+    restored.activate();
+    assert_eq!(restored.focus, Target::Choice(1));
+    restored.direction(Direction::Down, &controls(&restored));
+    restored.activate();
+    assert_eq!(restored.preferences.image_clarity, ImageClarity::Strong);
+    restored.activate();
+    restored.direction(Direction::Down, &controls(&restored));
+    restored.activate();
+    assert_eq!(restored.preferences.image_clarity, ImageClarity::Off);
 }
