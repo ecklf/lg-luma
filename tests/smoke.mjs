@@ -400,7 +400,7 @@ try {
   // Scenarios share one preferences file, so the tile is removed again here.
   const removed = await scenario(
     'shortcut-removed',
-    'settings,down,down,down,down,down,right,enter,down,down,down,down,down,enter',
+    'settings,down,down,down,down,down,right,enter,down,down,down,down,down,down,enter',
   );
   assert.equal(removed.focus, 'TileAdd');
   assert.equal(removed.subpage, null);

@@ -1,7 +1,7 @@
 use crate::i18n::Language;
 use crate::model::{
     App, BACKGROUNDS, CATEGORIES, CUSTOM_TILE_PREFIX, CustomTile, INPUT_NAME_LIMIT, InputMode,
-    Inventory, Preferences, TILE_LIMIT, TILE_URL_LIMIT, TileMethod, clean_input_name,
+    Inventory, Preferences, TILE_ICONS, TILE_LIMIT, TILE_URL_LIMIT, TileMethod, clean_input_name,
     split_tile_url, valid_tile_url,
 };
 use crate::text_rendering::TextRendering;
@@ -95,6 +95,7 @@ pub enum Target {
     TileName,
     TileScheme,
     TileUrl,
+    TileIcon,
     TileMethod,
     TileSend,
     TileRemove,
@@ -155,6 +156,8 @@ pub enum Subpage {
     TextRendering,
     /// Editor for a saved tile, or `None` for one not yet complete enough to save.
     Tile(Option<String>),
+    /// Icon choices nested in the editor of the same tile.
+    TileIcon(Option<String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -884,6 +887,10 @@ impl State {
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
             Some(Subpage::Tile(id)) => id.map_or(Target::TileAdd, Target::Tile),
+            Some(Subpage::TileIcon(id)) => {
+                self.subpage = Some(Subpage::Tile(id));
+                Target::TileIcon
+            }
             None => Target::Sidebar(self.section),
         };
         self.scroll = 0.;
@@ -1017,6 +1024,7 @@ impl State {
                         | Subpage::TextRendering,
                     ) => 2,
                     Some(Subpage::Language) => Language::ALL.len(),
+                    Some(Subpage::TileIcon(_)) => TILE_ICONS.len(),
                     _ => 3,
                 };
                 match direction {
@@ -1091,6 +1099,7 @@ impl State {
                 Target::TileName
                     | Target::TileScheme
                     | Target::TileUrl
+                    | Target::TileIcon
                     | Target::TileMethod
                     | Target::TileSend
                     | Target::TileRemove
@@ -1109,6 +1118,7 @@ impl State {
                     | Target::TileAdd
                     | Target::TileName
                     | Target::TileUrl
+                    | Target::TileIcon
             ) && matches!(direction, Direction::Right)
             {
                 return self.activate();
@@ -1951,6 +1961,22 @@ impl State {
             }
             Target::TileName => self.open_keyboard(TextField::TileName),
             Target::TileUrl => self.open_keyboard(TextField::TileUrl),
+            Target::TileIcon => {
+                if let Some(Subpage::Tile(id)) = self.subpage.clone() {
+                    let icon = self.tile_draft.icon();
+                    self.subpage = Some(Subpage::TileIcon(id));
+                    self.focus = Target::Choice(
+                        TILE_ICONS
+                            .iter()
+                            .position(|(key, _)| *key == icon)
+                            .unwrap_or(0),
+                    );
+                    self.scroll = 0.;
+                    if !self.preferences.reduced_motion {
+                        self.panel_started = Some(Instant::now());
+                    }
+                }
+            }
             Target::TileScheme => {
                 self.tile_https = !self.tile_https;
                 if let Some((_, rest)) = split_tile_url(&self.tile_draft.url) {
@@ -2141,6 +2167,11 @@ impl State {
             }
             Target::Choice(index) => {
                 match self.subpage.clone() {
+                    Some(Subpage::TileIcon(_)) => {
+                        self.tile_draft.icon = TILE_ICONS[index.min(TILE_ICONS.len() - 1)].0.into();
+                        self.close_subpage();
+                        return self.store_tile();
+                    }
                     Some(Subpage::ClockFormat) => self.preferences.hour_24 = index == 1,
                     Some(Subpage::TimeFormat) => self.preferences.show_seconds = index == 1,
                     Some(Subpage::Input(id)) => {

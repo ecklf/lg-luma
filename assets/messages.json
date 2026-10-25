@@ -2476,6 +2476,134 @@
     "pt": "Endereço sem http://, por exemplo homeassistant.local:8123/api/webhook/…",
     "it": "Indirizzo senza http://, ad es. homeassistant.local:8123/api/webhook/…"
   },
+  "icon": {
+    "en": "Icon",
+    "de": "Symbol",
+    "es": "Icono",
+    "zh": "图标",
+    "pt": "Ícone",
+    "it": "Icona"
+  },
+  "iconMoon": {
+    "en": "Moon",
+    "de": "Mond",
+    "es": "Luna",
+    "zh": "月亮",
+    "pt": "Lua",
+    "it": "Luna"
+  },
+  "iconSun": {
+    "en": "Sun",
+    "de": "Sonne",
+    "es": "Sol",
+    "zh": "太阳",
+    "pt": "Sol",
+    "it": "Sole"
+  },
+  "iconCloud": {
+    "en": "Cloud",
+    "de": "Wolke",
+    "es": "Nube",
+    "zh": "云",
+    "pt": "Nuvem",
+    "it": "Nuvola"
+  },
+  "iconTv": {
+    "en": "TV",
+    "de": "Fernseher",
+    "es": "Televisor",
+    "zh": "电视",
+    "pt": "TV",
+    "it": "TV"
+  },
+  "iconPower": {
+    "en": "Power",
+    "de": "Ein/Aus",
+    "es": "Encendido",
+    "zh": "电源",
+    "pt": "Liga/desliga",
+    "it": "Accensione"
+  },
+  "iconGlobe": {
+    "en": "Globe",
+    "de": "Globus",
+    "es": "Globo",
+    "zh": "地球",
+    "pt": "Globo",
+    "it": "Globo"
+  },
+  "iconClock": {
+    "en": "Clock",
+    "de": "Uhr",
+    "es": "Reloj",
+    "zh": "时钟",
+    "pt": "Relógio",
+    "it": "Orologio"
+  },
+  "iconCoffee": {
+    "en": "Coffee",
+    "de": "Kaffee",
+    "es": "Café",
+    "zh": "咖啡",
+    "pt": "Café",
+    "it": "Caffè"
+  },
+  "iconGaming": {
+    "en": "Controller",
+    "de": "Controller",
+    "es": "Mando",
+    "zh": "手柄",
+    "pt": "Controle",
+    "it": "Controller"
+  },
+  "iconHeart": {
+    "en": "Heart",
+    "de": "Herz",
+    "es": "Corazón",
+    "zh": "爱心",
+    "pt": "Coração",
+    "it": "Cuore"
+  },
+  "iconLocation": {
+    "en": "Location",
+    "de": "Ort",
+    "es": "Ubicación",
+    "zh": "位置",
+    "pt": "Local",
+    "it": "Posizione"
+  },
+  "iconThermometer": {
+    "en": "Thermometer",
+    "de": "Thermometer",
+    "es": "Termómetro",
+    "zh": "温度计",
+    "pt": "Termômetro",
+    "it": "Termometro"
+  },
+  "iconSparkles": {
+    "en": "Sparkles",
+    "de": "Funkeln",
+    "es": "Destellos",
+    "zh": "闪光",
+    "pt": "Brilhos",
+    "it": "Scintille"
+  },
+  "iconAlert": {
+    "en": "Alert",
+    "de": "Hinweis",
+    "es": "Alerta",
+    "zh": "提醒",
+    "pt": "Alerta",
+    "it": "Avviso"
+  },
+  "iconEye": {
+    "en": "Eye",
+    "de": "Auge",
+    "es": "Ojo",
+    "zh": "眼睛",
+    "pt": "Olho",
+    "it": "Occhio"
+  },
   "protocol": {
     "en": "Protocol",
     "de": "Protokoll",

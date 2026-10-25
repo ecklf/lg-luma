@@ -2040,7 +2040,7 @@ fn custom_tiles_are_sanitized_and_get_stable_unique_ids() {
         "custom_tiles": [
             {"id": "custom.lamp", "title": "  Lamp ", "url": " http://ha.local/api/webhook/a "},
             {"id": "custom.lamp", "title": "Duplicate", "url": "http://ha.local/b"},
-            {"id": "custom.get", "title": "Get", "url": "HTTPS://ha.local/c", "method": "GET"},
+            {"id": "custom.get", "title": "Get", "url": "HTTPS://ha.local/c", "method": "GET", "icon": "netflix"},
             {"id": "netflix", "title": "Not custom", "url": "http://ha.local/d"},
             {"id": "custom.ftp", "title": "FTP", "url": "ftp://ha.local/e"},
             {"id": "custom.space", "title": "Space", "url": "http://ha local/f"},
@@ -2074,6 +2074,9 @@ fn custom_tiles_are_sanitized_and_get_stable_unique_ids() {
             ("custom.get", "Get", "HTTPS://ha.local/c", TileMethod::Get),
         ]
     );
+    // Only interface icons from the list are kept.
+    assert!(preferences.custom_tiles[1].icon.is_empty());
+    assert_eq!(preferences.custom_tiles[1].icon(), "weather-moon");
     assert_eq!(preferences.new_tile_id("Lamp"), "custom.lamp-2");
     assert_eq!(
         preferences.new_tile_id("Licht Küche!"),
@@ -2168,6 +2171,24 @@ fn shortcut_tiles_are_created_edited_sent_and_removed_in_settings() {
     );
     state.focus = Target::TileScheme;
     state.activate();
+
+    // The icon list returns to its row and shows the choice on the Home card.
+    state.focus = Target::TileIcon;
+    state.direction(Direction::Right, &controls(&state));
+    assert!(matches!(state.subpage, Some(Subpage::TileIcon(_))));
+    assert_eq!(state.focus, Target::Choice(0));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.focus, Target::TileIcon);
+    assert!(matches!(state.subpage, Some(Subpage::Tile(Some(_)))));
+    assert_eq!(state.preferences.custom_tiles[0].icon, "weather-sun");
+    assert!(
+        state
+            .inventory
+            .apps
+            .iter()
+            .any(|app| app.brand == "custom" && app.mark == "weather-sun")
+    );
     let tile = state.preferences.custom_tiles[0].clone();
     assert_eq!(tile.url, "http://ha.local/api/webhook/xyz");
 

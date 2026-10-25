@@ -1,7 +1,7 @@
 //! Screen geometry and styling mirror the web UI's 1920×1080 / 16px-rem layout.
 use crate::{
     i18n::Language,
-    model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode},
+    model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode, TILE_ICONS},
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
         APPS_COLUMNS, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT,
@@ -978,9 +978,7 @@ fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language:
                 "browser" => ("globe", language.t("browser")),
                 "moonlight" => ("moonlight", "Moonlight"),
                 "gaming" => ("gaming", app.title.as_str()),
-                // Reuses the existing weather-moon icon; no new asset pipeline
-                // for a one-off custom-tile mark.
-                "custom" => ("weather-moon", app.title.as_str()),
+                "custom" => (app.mark, app.title.as_str()),
                 _ => ("generic", app.title.as_str()),
             };
             let font = if brand == "generic" {
@@ -2018,6 +2016,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     language.t("newTile")
                 }
                 Some(Subpage::Tile(_)) => state.tile_draft.title.as_str(),
+                Some(Subpage::TileIcon(_)) => language.t("icon"),
                 None => "",
             };
             let parent_width = assets.width(label, text(20.8, 550, -0.02)) + 2.;
@@ -2083,6 +2082,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::AppNames
                 | Subpage::Clock
                 | Subpage::Tile(_)
+                | Subpage::TileIcon(_)
         ) {
             match subpage {
                 Subpage::WeatherLocation => location_settings(out, state, assets),
@@ -2090,6 +2090,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::AppNames => app_name_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
                 Subpage::Tile(id) => tile_settings(out, state, assets, id.is_some()),
+                Subpage::TileIcon(_) => tile_icon_settings(out, state, assets),
                 _ => unreachable!(),
             }
             if let Some(opened) = state.panel_started {
@@ -2147,7 +2148,8 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::Greeting
             | Subpage::AppNames
             | Subpage::Clock
-            | Subpage::Tile(_) => {
+            | Subpage::Tile(_)
+            | Subpage::TileIcon(_) => {
                 unreachable!()
             }
             Subpage::Language => Language::ALL
@@ -2636,7 +2638,7 @@ fn shortcut_settings(out: &mut Scene, state: &State, assets: &Assets) {
                     90.7,
                 ),
                 title: &tile.title,
-                icon: Some("globe"),
+                icon: Some(tile.icon()),
                 value: None,
                 description: Some(&description),
                 selected: false,
@@ -2709,6 +2711,13 @@ fn tile_settings(out: &mut Scene, state: &State, assets: &Assets, saved: bool) {
         ),
         (Target::TileUrl, "url", "location", None, Some(url)),
         (
+            Target::TileIcon,
+            "icon",
+            draft.icon(),
+            Some(language.t(tile_icon_name(draft.icon()))),
+            None,
+        ),
+        (
             Target::TileMethod,
             "requestMethod",
             "settings",
@@ -2723,7 +2732,10 @@ fn tile_settings(out: &mut Scene, state: &State, assets: &Assets, saved: bool) {
     let mut y = 164.8 - state.scroll;
     for (target, title, icon, value, description) in rows {
         let height = if description.is_some() { 90.7 } else { 72. };
-        let chevron = matches!(target, Target::TileName | Target::TileUrl);
+        let chevron = matches!(
+            target,
+            Target::TileName | Target::TileUrl | Target::TileIcon
+        );
         row(
             out,
             state,
@@ -2741,6 +2753,35 @@ fn tile_settings(out: &mut Scene, state: &State, assets: &Assets, saved: bool) {
         );
         y += height + 12.;
     }
+}
+
+fn tile_icon_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let current = state.tile_draft.icon();
+    for (index, (icon, name)) in TILE_ICONS.iter().enumerate() {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::Choice(index),
+                rect: Rect::new(640., 164.8 + index as f32 * 84. - state.scroll, 1120., 72.),
+                title: language.t(name),
+                icon: Some(icon),
+                value: None,
+                description: None,
+                selected: *icon == current,
+                chevron: false,
+            },
+        );
+    }
+}
+
+fn tile_icon_name(icon: &str) -> &'static str {
+    TILE_ICONS
+        .iter()
+        .find(|(key, _)| *key == icon)
+        .map_or(TILE_ICONS[0].1, |(_, name)| name)
 }
 
 /// URLs have no break opportunities, so long ones are cut to a single line.

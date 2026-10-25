@@ -37,6 +37,9 @@ pub struct App {
     pub category: String,
     #[serde(skip)]
     pub icon: Option<crate::app_artwork::Source>,
+    /// The interface icon a shortcut tile shows; empty for real apps.
+    #[serde(skip)]
+    pub mark: &'static str,
 }
 
 impl App {
@@ -48,6 +51,7 @@ impl App {
                 brand: "custom".into(),
                 category: "Utilities".into(),
                 icon: None,
+                mark: TILE_ICONS[0].0,
             };
         }
         let identity = format!("{id} {title}").to_lowercase();
@@ -71,6 +75,7 @@ impl App {
             brand: brand.into(),
             category: category.into(),
             icon: None,
+            mark: "",
         }
     }
 }
@@ -126,7 +131,38 @@ pub struct CustomTile {
     pub url: String,
     #[serde(default)]
     pub method: TileMethod,
+    /// One of `TILE_ICONS`; empty shows the first.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub icon: String,
 }
+
+impl CustomTile {
+    pub fn icon(&self) -> &'static str {
+        TILE_ICONS
+            .iter()
+            .find(|(icon, _)| *icon == self.icon)
+            .map_or(TILE_ICONS[0].0, |(icon, _)| icon)
+    }
+}
+
+/// Interface icons a shortcut tile can show, with their message keys.
+pub const TILE_ICONS: [(&str, &str); 15] = [
+    ("weather-moon", "iconMoon"),
+    ("weather-sun", "iconSun"),
+    ("weather-cloud", "iconCloud"),
+    ("tv", "iconTv"),
+    ("power", "iconPower"),
+    ("globe", "iconGlobe"),
+    ("clock", "iconClock"),
+    ("coffee", "iconCoffee"),
+    ("gaming", "iconGaming"),
+    ("heart", "iconHeart"),
+    ("location", "iconLocation"),
+    ("thermometer", "iconThermometer"),
+    ("sparkles", "iconSparkles"),
+    ("alert", "iconAlert"),
+    ("eye", "iconEye"),
+];
 
 pub const CUSTOM_TILE_PREFIX: &str = "custom.";
 pub const TILE_LIMIT: usize = 64;
@@ -237,7 +273,10 @@ impl Preferences {
     pub fn custom_apps(&self) -> Vec<App> {
         self.custom_tiles
             .iter()
-            .map(|tile| App::new(&tile.id, &tile.title))
+            .map(|tile| App {
+                mark: tile.icon(),
+                ..App::new(&tile.id, &tile.title)
+            })
             .collect()
     }
 
@@ -343,6 +382,9 @@ impl Preferences {
             for tile in &mut self.custom_tiles {
                 tile.title = clean_input_name(&tile.title);
                 tile.url = tile.url.trim().into();
+                if tile.icon() != tile.icon {
+                    tile.icon.clear();
+                }
             }
             self.custom_tiles.retain(|tile| {
                 valid_app_id(&tile.id)
