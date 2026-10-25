@@ -153,6 +153,7 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
         );
     } else if let Some(command) = &recent.pending
         && !recent.entries.is_empty()
+        && !matches!(command, Command::Close(_))
     {
         out.text(
             language.t(if matches!(command, Command::Launch(_)) {
