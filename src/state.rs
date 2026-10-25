@@ -1,6 +1,6 @@
 use crate::i18n::Language;
 use crate::model::{
-    App, BACKGROUNDS, CATEGORIES, INPUT_NAME_LIMIT, InputMode, Inventory, Preferences, UiSizes,
+    App, BACKGROUNDS, CATEGORIES, INPUT_NAME_LIMIT, InputMode, Inventory, Preferences, UiSize,
     clean_input_name,
 };
 use crate::weather::{self, Unit};
@@ -52,8 +52,6 @@ pub enum Target {
     ClockFormat,
     ClockTimeFormat,
     Background(usize),
-    /// A size row in General › Interface scale, in `UiSizes` order.
-    UiSize(usize),
     InputMode(String),
     InputRename,
     InputNameReset,
@@ -121,7 +119,7 @@ pub enum Subpage {
     WeatherLocation,
     Temperature,
     Language,
-    /// General › Interface scale: per-element sizes with a live preview.
+    /// General › Interface scale: Normal, Large or Extra large, with a live preview.
     Appearance,
 }
 
@@ -755,6 +753,7 @@ impl State {
                 let count = match self.subpage {
                     Some(Subpage::ClockFormat | Subpage::TimeFormat | Subpage::Temperature) => 2,
                     Some(Subpage::Language) => Language::ALL.len(),
+                    Some(Subpage::Appearance) => UiSize::ALL.len(),
                     _ => 3,
                 };
                 match direction {
@@ -775,25 +774,6 @@ impl State {
                     }
                     Direction::Down => self.focus(Target::Choice((index + 1) % count), controls),
                     Direction::Right => {}
-                }
-                return vec![];
-            }
-            if let Target::UiSize(index) = self.focus {
-                match direction {
-                    Direction::Left => self.close_subpage(),
-                    Direction::Up => self.focus(
-                        if index == 0 {
-                            Target::Nav(2)
-                        } else {
-                            Target::UiSize(index - 1)
-                        },
-                        controls,
-                    ),
-                    Direction::Down if index + 1 < UiSizes::ROWS => {
-                        self.focus(Target::UiSize(index + 1), controls)
-                    }
-                    Direction::Right => return self.activate(),
-                    Direction::Down => {}
                 }
                 return vec![];
             }
@@ -1478,7 +1458,7 @@ impl State {
                     5 => return vec![Effect::Quit],
                     7 => {
                         self.subpage = Some(Subpage::Appearance);
-                        self.focus = Target::UiSize(0);
+                        self.focus = Target::Choice(self.preferences.ui_scale.index());
                         self.scroll = 0.;
                         if !self.preferences.reduced_motion {
                             self.panel_started = Some(Instant::now());
@@ -1496,10 +1476,6 @@ impl State {
                     }
                     _ => return vec![Effect::Reload],
                 }
-                return vec![Effect::Save];
-            }
-            Target::UiSize(row) => {
-                self.preferences.sizes.cycle(row);
                 return vec![Effect::Save];
             }
             Target::Background(index) => {
@@ -1546,6 +1522,11 @@ impl State {
                             Unit::Celsius
                         }
                     }
+                    // The scale stays open, so its preview and the screen show the choice.
+                    Some(Subpage::Appearance) => {
+                        self.preferences.ui_scale = UiSize::ALL[index.min(UiSize::ALL.len() - 1)];
+                        return vec![Effect::Save];
+                    }
                     Some(Subpage::Language) => {
                         self.preferences.language =
                             Language::ALL[index.min(Language::ALL.len() - 1)];
@@ -1555,8 +1536,7 @@ impl State {
                         Subpage::WeatherLocation
                         | Subpage::Greeting
                         | Subpage::AppNames
-                        | Subpage::Clock
-                        | Subpage::Appearance,
+                        | Subpage::Clock,
                     ) => {
                         return vec![];
                     }

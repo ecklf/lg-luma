@@ -1410,35 +1410,28 @@ fn prewarm_waits_while_recents_replaces_the_page() {
 }
 
 #[test]
-fn interface_sizes_default_to_normal_and_recover_from_unknown_values() {
-    use crate::model::{UiSize, UiSizes};
-    assert_eq!(Preferences::default().sizes, UiSizes::default());
-    assert_eq!(UiSizes::default().clock, UiSize::Normal);
-    let preferences: Preferences = serde_json::from_value(json!({
-        "sizes": {"clock": "larger", "search": "large", "hints": "huge", "captions": 3},
-        "show_home_names": true
-    }))
-    .unwrap();
-    assert_eq!(preferences.sizes.clock, UiSize::Larger);
-    assert_eq!(preferences.sizes.search, UiSize::Large);
-    assert_eq!(preferences.sizes.hints, UiSize::Normal);
-    assert_eq!(preferences.sizes.captions, UiSize::Normal);
-    assert!(preferences.show_home_names);
-    let broken: Preferences =
-        serde_json::from_value(json!({"sizes": "big", "show_home_names": true})).unwrap();
-    assert_eq!(broken.sizes, UiSizes::default());
-    assert!(broken.show_home_names);
-    let saved = serde_json::to_value(&preferences).unwrap();
-    let restored: Preferences = serde_json::from_value(saved).unwrap();
-    assert_eq!(restored.sizes, preferences.sizes);
+fn interface_scale_defaults_to_normal_and_recovers_from_unknown_values() {
+    use crate::model::UiSize;
+    assert_eq!(Preferences::default().ui_scale, UiSize::Normal);
+    let preferences: Preferences =
+        serde_json::from_value(json!({"ui_scale": "larger", "show_home_names": true})).unwrap();
+    assert_eq!(preferences.ui_scale, UiSize::Larger);
+    for broken in [json!("huge"), json!(3), json!({"clock": "large"})] {
+        let preferences: Preferences =
+            serde_json::from_value(json!({"ui_scale": broken, "show_home_names": true})).unwrap();
+        assert_eq!(preferences.ui_scale, UiSize::Normal);
+        assert!(preferences.show_home_names);
+    }
+    let restored: Preferences =
+        serde_json::from_value(serde_json::to_value(&preferences).unwrap()).unwrap();
+    assert_eq!(restored.ui_scale, UiSize::Larger);
     assert_eq!(UiSize::Normal.scale(), 1.);
     assert_eq!(UiSize::Large.scale(), 1.25);
     assert_eq!(UiSize::Larger.scale(), 1.5);
-    assert_eq!(UiSize::Larger.next(), UiSize::Normal);
 }
 
 #[test]
-fn interface_scale_opens_from_general_and_cycles_sizes_with_ok_and_right() {
+fn interface_scale_is_chosen_like_input_visibility_and_stays_open() {
     use crate::model::UiSize;
     use crate::state::Subpage;
     let mut state = ready();
@@ -1451,38 +1444,25 @@ fn interface_scale_opens_from_general_and_cycles_sizes_with_ok_and_right() {
     assert_eq!(state.focus, Target::Setting(7));
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.subpage, Some(Subpage::Appearance));
-    assert_eq!(state.focus, Target::UiSize(0));
-    assert!(
-        controls(&state)
-            .iter()
-            .any(|c| c.target == Target::UiSize(crate::model::UiSizes::ROWS - 1))
-    );
-    assert_eq!(state.activate(), vec![Effect::Save]);
-    assert_eq!(state.preferences.sizes.clock, UiSize::Large);
-    assert_eq!(state.focus, Target::UiSize(0));
-    assert_eq!(
-        state.direction(Direction::Right, &controls(&state)),
-        vec![Effect::Save]
-    );
-    assert_eq!(state.preferences.sizes.clock, UiSize::Larger);
+    assert_eq!(state.focus, Target::Choice(0));
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::UiSize(1));
-    state.direction(Direction::Up, &controls(&state));
-    state.direction(Direction::Up, &controls(&state));
-    assert_eq!(state.focus, Target::Nav(2));
-    state.focus = Target::UiSize(2);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.ui_scale, UiSize::Larger);
+    assert_eq!(state.subpage, Some(Subpage::Appearance));
+    assert_eq!(state.focus, Target::Choice(2));
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.subpage, None);
     assert_eq!(state.focus, Target::Setting(7));
+    // Reopening starts on the chosen scale; Back returns to the row.
     state.activate();
-    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Choice(2));
     state.back();
     assert_eq!(state.focus, Target::Setting(7));
-    assert_eq!(state.section, 0);
 }
 
 #[test]
-fn interface_sizes_scale_the_clock_and_hints_and_the_sample_is_not_focusable() {
+fn interface_scale_enlarges_the_clock_and_hints_and_the_preview_is_not_focusable() {
     use crate::model::UiSize;
     let text_size = |scene: &view::Scene, needle: &str| {
         scene.draw.iter().find_map(|draw| match draw {
@@ -1495,21 +1475,18 @@ fn interface_sizes_scale_the_clock_and_hints_and_the_sample_is_not_focusable() {
     let mut state = ready();
     state.open(2);
     state.subpage = Some(crate::state::Subpage::Appearance);
-    state.focus = Target::UiSize(1);
+    state.focus = Target::Choice(0);
     let normal = scene(&state);
-    let clock_normal = text_size(&normal, "AM").expect("clock");
-    let hint_normal = text_size(&normal, "Select").expect("hint");
-    state.preferences.sizes.clock = UiSize::Larger;
-    state.preferences.sizes.hints = UiSize::Large;
+    let clock = text_size(&normal, "AM").expect("clock");
+    let hint = text_size(&normal, "Select").expect("hint");
+    state.preferences.ui_scale = UiSize::Larger;
     let larger = scene(&state);
-    assert!((text_size(&larger, "AM").unwrap() - clock_normal * 1.5).abs() < 0.01);
-    assert!((text_size(&larger, "Select").unwrap() - hint_normal * 1.25).abs() < 0.01);
-    // The category sample is drawn, but only the size rows and the shell can take focus.
+    assert!((text_size(&larger, "AM").unwrap() - clock * 1.5).abs() < 0.01);
+    assert!((text_size(&larger, "Select").unwrap() - hint * 1.5).abs() < 0.01);
+    // The preview draws categories and search, but only the options take focus.
     assert!(text_size(&larger, "Streaming").is_some());
-    assert!(
-        !larger
-            .controls
-            .iter()
-            .any(|c| matches!(c.target, Target::Filter(_) | Target::Search))
-    );
+    assert!(!larger.controls.iter().any(|c| matches!(
+        c.target,
+        Target::Filter(_) | Target::Search | Target::App(_)
+    )));
 }

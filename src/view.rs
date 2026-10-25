@@ -1,7 +1,7 @@
 //! Screen geometry and styling mirror the web UI's 1920×1080 / 16px-rem layout.
 use crate::{
     i18n::Language,
-    model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode, UiSizes},
+    model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode, UiSize},
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
         APPS_COLUMNS, BACKGROUND_SECTION, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT,
@@ -439,7 +439,7 @@ fn header(
         state.preferences.hour_24,
         state.preferences.show_seconds,
     );
-    let k = state.preferences.sizes.clock.scale();
+    let k = state.preferences.ui_scale.scale();
     out.text(
         clock,
         Rect::new(84., 76.8 - 12. * k, 300. * k, 24. * k),
@@ -705,7 +705,7 @@ fn caption_height(state: &State, assets: &Assets, app: &App, width: f32) -> f32 
 }
 
 fn caption_scale(state: &State) -> f32 {
-    state.preferences.sizes.captions.scale()
+    state.preferences.ui_scale.scale()
 }
 
 fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language: Language) {
@@ -1029,7 +1029,7 @@ fn input_card(out: &mut Scene, state: &State, assets: &Assets, input: &Input, re
         c(0xdedede, 1.),
     );
     // The status line grows with the setting, the larger title by half as much.
-    let k = state.preferences.sizes.inputs.scale();
+    let k = state.preferences.ui_scale.scale();
     let title_k = 1. + (k - 1.) / 2.;
     let top = (rect.h - (28.8 * title_k + 5.6 + 20. * k)) / 2.;
     out.text(
@@ -1213,7 +1213,7 @@ fn library(out: &mut Scene, state: &State, assets: &Assets) {
     let s = state.scroll;
     let x = category_chips(out, state, assets, 84., 192.8 - s);
     if state.filter != 0 {
-        let k = state.preferences.sizes.categories.scale();
+        let k = state.preferences.ui_scale.scale();
         let rect = Rect::new(x, 192.8 - 16. * k - s, 32. * k, 32. * k);
         out.shape(rect, 16. * k, c(0x23282c, 0.5));
         out.icon(assets, "close", rect.inset(8. * k), c(0xeeeeee, 0.73));
@@ -1293,7 +1293,7 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
 /// The category filter chips from `x`, centred on `y`; returns where the row ends.
 fn category_chips(out: &mut Scene, state: &State, assets: &Assets, mut x: f32, y: f32) -> f32 {
     let language = state.preferences.language;
-    let k = state.preferences.sizes.categories.scale();
+    let k = state.preferences.ui_scale.scale();
     let style = text(16. * k, 400, 0.);
     let h = 42.8 * k;
     for (index, label) in CATEGORIES.into_iter().enumerate() {
@@ -1328,7 +1328,7 @@ fn category_chips(out: &mut Scene, state: &State, assets: &Assets, mut x: f32, y
 /// The app search field, right-aligned at `right` and centred on `y`.
 fn search_field(out: &mut Scene, state: &State, assets: &Assets, right: f32, y: f32) {
     let language = state.preferences.language;
-    let k = state.preferences.sizes.search.scale();
+    let k = state.preferences.ui_scale.scale();
     let search = Rect::new(right - 304. * k, y - 28. * k, 304. * k, 56. * k);
     let focused = matches!(state.focus, Target::Search | Target::ClearSearch);
     out.shape(
@@ -1873,18 +1873,13 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         let start = out.draw.len();
         if matches!(
             subpage,
-            Subpage::WeatherLocation
-                | Subpage::Greeting
-                | Subpage::AppNames
-                | Subpage::Clock
-                | Subpage::Appearance
+            Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames | Subpage::Clock
         ) {
             match subpage {
                 Subpage::WeatherLocation => location_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::AppNames => app_name_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
-                Subpage::Appearance => appearance_settings(out, state, assets),
                 _ => unreachable!(),
             }
             if let Some(opened) = state.panel_started {
@@ -1938,11 +1933,20 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     state.preferences.temperature_unit == Unit::Fahrenheit,
                 ),
             ],
-            Subpage::WeatherLocation
-            | Subpage::Greeting
-            | Subpage::AppNames
-            | Subpage::Clock
-            | Subpage::Appearance => unreachable!(),
+            Subpage::Appearance => UiSize::ALL
+                .into_iter()
+                .map(|size| {
+                    let (name, hint) = size.keys();
+                    (
+                        language.t(name),
+                        Some(language.t(hint)),
+                        size == state.preferences.ui_scale,
+                    )
+                })
+                .collect(),
+            Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames | Subpage::Clock => {
+                unreachable!()
+            }
             Subpage::Language => Language::ALL
                 .into_iter()
                 .map(|option| (option.name(), None, option == language))
@@ -1968,6 +1972,9 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         }
         if let Subpage::Input(id) = subpage {
             input_name_rows(out, state, assets, id, 164.8 + 3. * 102.7 + 16. - s);
+        }
+        if *subpage == Subpage::Appearance {
+            appearance_preview(out, state, assets, 164.8 + 3. * 102.7 + 8. - s);
         }
         if let Some(opened) = state.panel_started {
             out.fade(start, (opened.elapsed().as_secs_f32() / 0.15).min(1.), 1.);
@@ -2002,7 +2009,13 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     }),
                     true,
                 ),
-                (7, "uiScale", "grid", None, true),
+                (
+                    7,
+                    "uiScale",
+                    "grid",
+                    Some(language.t(state.preferences.ui_scale.keys().0)),
+                    true,
+                ),
             ]
             .into_iter()
             .enumerate()
@@ -2406,7 +2419,7 @@ fn keycap(out: &mut Scene, label: &str, x: f32, y: f32, w: f32, small: bool, k: 
 fn footer(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     // Hints are centred on y 1042; larger hints are also less faint.
-    let k = state.preferences.sizes.hints.scale();
+    let k = state.preferences.ui_scale.scale();
     let style = text(14.4 * k, 400, 0.005);
     if state.page == Page::Home && state.moving.is_none() {
         return;
@@ -2798,31 +2811,12 @@ fn full_screen_fill(draw: &Draw) -> bool {
     }
 }
 
-/// General › Interface scale: a size row per group of elements, then a live sample of the
-/// focused row at its real size. The clock and the hints are on this screen already and change in place.
-fn appearance_settings(out: &mut Scene, state: &State, assets: &Assets) {
+/// General › Interface scale: below the options, the chosen scale at its real size, drawn with
+/// the pages' own code (category chips, the search field, favourite tiles with names). The clock
+/// and the hints are on this screen already and change in place.
+fn appearance_preview(out: &mut Scene, state: &State, assets: &Assets, top: f32) {
     let language = state.preferences.language;
-    let s = state.scroll;
-    let sizes = state.preferences.sizes;
-    let icons = ["clock", "grid", "search", "type", "input-hdmi", "more"];
-    for (index, key) in UiSizes::KEYS.into_iter().enumerate() {
-        row(
-            out,
-            state,
-            assets,
-            Row {
-                target: Target::UiSize(index),
-                rect: Rect::new(640., 164.8 + index as f32 * 84. - s, 1120., 72.),
-                title: language.t(key),
-                icon: Some(icons[index]),
-                value: Some(language.t(sizes.get(index).key())),
-                description: None,
-                selected: false,
-                chevron: false,
-            },
-        );
-    }
-    let top = 164.8 + UiSizes::ROWS as f32 * 84. + 8. - s;
+    let k = state.preferences.ui_scale.scale();
     let panel = Rect::new(640., top, 1120., 982.4 - top);
     out.shape(panel, 22., c(0x0a0d12, 0.42));
     out.border(panel, 22., 1., c(0xffffff, 0.12));
@@ -2833,76 +2827,25 @@ fn appearance_settings(out: &mut Scene, state: &State, assets: &Assets) {
         c(0xf0f0f0, 0.55),
         false,
     );
-    let row = match state.focus {
-        Target::UiSize(row) => row,
-        _ => 3,
-    };
-    // The sample reuses the real drawing code; its controls are dropped so it never takes focus.
+    // Its controls are dropped, so the preview never takes focus.
     let controls = out.controls.len();
-    let middle = panel.y + 40. + (panel.h - 40.) / 2.;
-    match row {
-        1 => {
-            category_chips(out, state, assets, panel.x + 32., middle);
-        }
-        2 => {
-            let k = sizes.search.scale();
-            search_field(out, state, assets, panel.x + 32. + 304. * k, middle);
-        }
-        3 => {
-            let favorites = state.preferences.favorites(&state.inventory.apps);
-            let apps = favorites
-                .iter()
-                .filter(|id| !state.preferences.hidden.contains(id))
-                .filter_map(|id| state.inventory.apps.iter().find(|app| &app.id == id))
-                .take(3);
-            for (index, app) in apps.enumerate() {
-                let rect = Rect::new(
-                    panel.x + 32. + index as f32 * HOME_TILE_PITCH,
-                    panel.y + 52.,
-                    HOME_TILE_WIDTH,
-                    FACE_HEIGHT,
-                );
-                tile(out, state, assets, app, rect, true, false);
-            }
-        }
-        4 => {
-            let input = state
-                .inventory
-                .inputs
-                .iter()
-                .find(|input| state.preferences.input_visible(input))
-                .or(state.inventory.inputs.first());
-            if let Some(input) = input {
-                input_card(
-                    out,
-                    state,
-                    assets,
-                    input,
-                    Rect::new(panel.x + 32., middle - 52., 569.1, 104.),
-                );
-            } else {
-                out.text(
-                    language.t("noInputs"),
-                    Rect::new(panel.x + 32., middle - 14., 1000., 28.),
-                    text(20.8, 450, -0.02),
-                    c(0xf0f0f0, 0.7),
-                    false,
-                );
-            }
-        }
-        _ => {
-            out.text(
-                language.t(if row == 0 {
-                    "sampleAbove"
-                } else {
-                    "sampleBelow"
-                }),
-                Rect::new(panel.x + 32., middle - 14., 1000., 28.),
-                text(20.8, 450, -0.02),
-                c(0xf0f0f0, 0.7),
-                false,
-            );
-        }
+    let chips = panel.y + 56. + 32. * k;
+    category_chips(out, state, assets, panel.x + 32., chips);
+    search_field(out, state, assets, panel.x + panel.w - 32., chips);
+    let favorites = state.preferences.favorites(&state.inventory.apps);
+    let apps = favorites
+        .iter()
+        .filter(|id| !state.preferences.hidden.contains(id))
+        .filter_map(|id| state.inventory.apps.iter().find(|app| &app.id == id))
+        .take(3);
+    for (index, app) in apps.enumerate() {
+        let rect = Rect::new(
+            panel.x + 32. + index as f32 * HOME_TILE_PITCH,
+            chips + 32. * k + 28.,
+            HOME_TILE_WIDTH,
+            FACE_HEIGHT,
+        );
+        tile(out, state, assets, app, rect, true, false);
     }
     out.controls.truncate(controls);
 }

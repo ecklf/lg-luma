@@ -1439,24 +1439,6 @@
     "it": "Scheda di test per lo scorrimento; nessuna app da avviare.",
     "ru": "Тестовая карточка для прокрутки; приложение не запускается."
   },
-  "searchField": {
-    "en": "Search",
-    "de": "Suche",
-    "es": "Búsqueda",
-    "zh": "搜索",
-    "pt": "Busca",
-    "it": "Ricerca",
-    "ru": "Поиск"
-  },
-  "buttonHints": {
-    "en": "Button hints",
-    "de": "Tastenhinweise",
-    "es": "Ayudas de botones",
-    "zh": "按键提示",
-    "pt": "Dicas de botões",
-    "it": "Suggerimenti tasti",
-    "ru": "Подсказки внизу"
-  },
   "sizeNormal": {
     "en": "Normal",
     "de": "Normal",
@@ -1493,24 +1475,6 @@
     "it": "Anteprima",
     "ru": "Образец"
   },
-  "sampleAbove": {
-    "en": "The clock at the top left changes as you choose.",
-    "de": "Die Uhr oben links ändert sich bei der Auswahl.",
-    "es": "El reloj de arriba a la izquierda cambia al elegir.",
-    "zh": "左上角的时钟会随选择即时变化。",
-    "pt": "O relógio no canto superior esquerdo muda conforme você escolhe.",
-    "it": "L’orologio in alto a sinistra cambia mentre scegli.",
-    "ru": "Часы вверху слева меняются сразу при выборе."
-  },
-  "sampleBelow": {
-    "en": "The hints at the bottom change as you choose.",
-    "de": "Die Hinweise unten ändern sich bei der Auswahl.",
-    "es": "Las ayudas de abajo cambian al elegir.",
-    "zh": "底部的提示会随选择即时变化。",
-    "pt": "As dicas na parte inferior mudam conforme você escolhe.",
-    "it": "I suggerimenti in basso cambiano mentre scegli.",
-    "ru": "Подсказки внизу меняются сразу при выборе."
-  },
   "uiScale": {
     "en": "Interface scale",
     "de": "Skalierung der Oberfläche",
@@ -1519,5 +1483,32 @@
     "pt": "Escala da interface",
     "it": "Scala dell’interfaccia",
     "ru": "Масштаб элементов интерфейса"
+  },
+  "sizeNormalHint": {
+    "en": "As designed",
+    "de": "Wie vorgesehen",
+    "es": "Como está diseñada",
+    "zh": "按原始设计",
+    "pt": "Como foi projetada",
+    "it": "Come progettata",
+    "ru": "Как задумано"
+  },
+  "sizeLargeHint": {
+    "en": "Text and controls 25% larger",
+    "de": "Text und Bedienelemente 25 % größer",
+    "es": "Texto y controles un 25 % más grandes",
+    "zh": "文字和控件放大 25%",
+    "pt": "Texto e controles 25% maiores",
+    "it": "Testo e controlli più grandi del 25%",
+    "ru": "Текст и элементы на 25% крупнее"
+  },
+  "sizeLargerHint": {
+    "en": "50% larger, for viewing from further away",
+    "de": "50 % größer, für größeren Sitzabstand",
+    "es": "Un 50 % más grande, para ver desde más lejos",
+    "zh": "放大 50%，适合远距离观看",
+    "pt": "50% maior, para ver de mais longe",
+    "it": "Più grande del 50%, per guardare da lontano",
+    "ru": "На 50% крупнее — для просмотра издалека"
   }
 }

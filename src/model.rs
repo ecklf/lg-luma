@@ -88,7 +88,7 @@ pub enum InputMode {
     Off,
 }
 
-/// Size of one group of interface elements, chosen in Settings › Appearance.
+/// The interface scale chosen in General › Interface scale.
 #[derive(Clone, Copy, Debug, Default, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum UiSize {
@@ -105,19 +105,16 @@ impl UiSize {
             Self::Larger => 1.5,
         }
     }
-    /// OK steps through the sizes and wraps around.
-    pub fn next(self) -> Self {
-        match self {
-            Self::Normal => Self::Large,
-            Self::Large => Self::Larger,
-            Self::Larger => Self::Normal,
-        }
+    pub const ALL: [Self; 3] = [Self::Normal, Self::Large, Self::Larger];
+    pub fn index(self) -> usize {
+        Self::ALL.iter().position(|size| *size == self).unwrap_or(0)
     }
-    pub fn key(self) -> &'static str {
+    /// Message keys of the option's name and description.
+    pub fn keys(self) -> (&'static str, &'static str) {
         match self {
-            Self::Normal => "sizeNormal",
-            Self::Large => "sizeLarge",
-            Self::Larger => "sizeLarger",
+            Self::Normal => ("sizeNormal", "sizeNormalHint"),
+            Self::Large => ("sizeLarge", "sizeLargeHint"),
+            Self::Larger => ("sizeLarger", "sizeLargerHint"),
         }
     }
 }
@@ -132,56 +129,6 @@ impl<'de> Deserialize<'de> for UiSize {
             },
         )
     }
-}
-
-/// Per-group sizes; the row order in Settings › Appearance follows `get`.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(default)]
-pub struct UiSizes {
-    pub clock: UiSize,
-    pub categories: UiSize,
-    pub search: UiSize,
-    pub captions: UiSize,
-    pub inputs: UiSize,
-    pub hints: UiSize,
-}
-impl UiSizes {
-    pub const ROWS: usize = 6;
-    /// Message keys of the rows, in order.
-    pub const KEYS: [&'static str; Self::ROWS] = [
-        "clock",
-        "appCategories",
-        "searchField",
-        "appNames",
-        "inputs",
-        "buttonHints",
-    ];
-    pub fn get(&self, row: usize) -> UiSize {
-        match row {
-            0 => self.clock,
-            1 => self.categories,
-            2 => self.search,
-            3 => self.captions,
-            4 => self.inputs,
-            _ => self.hints,
-        }
-    }
-    pub fn cycle(&mut self, row: usize) {
-        let size = match row {
-            0 => &mut self.clock,
-            1 => &mut self.categories,
-            2 => &mut self.search,
-            3 => &mut self.captions,
-            4 => &mut self.inputs,
-            _ => &mut self.hints,
-        };
-        *size = size.next();
-    }
-}
-fn deserialize_sizes<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<UiSizes, D::Error> {
-    Ok(serde_json::from_value(serde_json::Value::deserialize(deserializer)?).unwrap_or_default())
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -208,8 +155,7 @@ pub struct Preferences {
     pub temperature_unit: Unit,
     #[serde(deserialize_with = "crate::i18n::deserialize_language")]
     pub language: Language,
-    #[serde(deserialize_with = "deserialize_sizes")]
-    pub sizes: UiSizes,
+    pub ui_scale: UiSize,
 }
 
 impl Default for Preferences {
@@ -230,7 +176,7 @@ impl Default for Preferences {
             weather_location: None,
             temperature_unit: Unit::Celsius,
             language: Language::En,
-            sizes: UiSizes::default(),
+            ui_scale: UiSize::Normal,
         }
     }
 }
