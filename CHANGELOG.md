@@ -1,5 +1,12 @@
 # lg-luma
 
+## 2.8.4
+
+### Patch Changes
+
+- 2a03caa: Read the app and input inventory directly from the TV when Luma runs in place of LG's Home, so an early root integration shows apps before Homebrew's service has started; other cases still use Homebrew.
+- 945598a: Retry the TV inventory while the TV service starts. Right after a cold boot or when the TV is short of memory, the Homebrew service that reads the app and input inventory can take longer than the 6.5 s Luna timeout. While no apps are shown yet, Luma now keeps loading and retries up to 5 times every 2 s before it shows the error and its Retry button.
+
 ## 2.8.3
 
 ### Patch Changes
