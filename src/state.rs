@@ -607,6 +607,24 @@ impl State {
             .count()
     }
 
+    /// Takes the saved place's names from a lookup in the current language; the coordinates
+    /// matched already. True when anything changed and the preferences need saving.
+    pub fn rename_location(&mut self, place: crate::weather::Location) -> bool {
+        let Some(location) = &mut self.preferences.weather_location else {
+            return false;
+        };
+        if (&location.name, &location.region, &location.country)
+            == (&place.name, &place.region, &place.country)
+        {
+            return false;
+        }
+        location.name = place.name;
+        location.region = place.region;
+        location.country = place.country;
+        self.dirty = true;
+        true
+    }
+
     fn section_entry(&self) -> Target {
         match self.section {
             1 => Target::Background(
@@ -1549,9 +1567,18 @@ impl State {
                         }
                     }
                     Some(Subpage::Language) => {
-                        self.preferences.language =
-                            Language::ALL[index.min(Language::ALL.len() - 1)];
+                        let language = Language::ALL[index.min(Language::ALL.len() - 1)];
+                        let previous = self.preferences.language;
+                        self.preferences.language = language;
                         self.weather.cancel_search();
+                        // Place names come from the search in the language it ran in.
+                        if language != previous
+                            && let Some(location) = &self.preferences.weather_location
+                        {
+                            let command = self.weather.rename(location, previous, language);
+                            self.close_subpage();
+                            return vec![Effect::Save, Effect::Weather(command)];
+                        }
                     }
                     Some(Subpage::TextRendering) => {
                         let mode = TextRendering::ALL[index.min(TextRendering::ALL.len() - 1)];

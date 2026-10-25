@@ -212,6 +212,13 @@ pub enum Command {
         query: String,
         language: Language,
     },
+    /// The saved place's names in `to`, found from its name in `from`.
+    Rename {
+        id: u64,
+        location: Location,
+        from: Language,
+        to: Language,
+    },
     Forecast {
         id: u64,
         location: Location,
@@ -241,6 +248,9 @@ pub struct Weather {
     next_fetch: i64,
     #[serde(skip)]
     active_home: bool,
+    /// A search for the saved place's name in a new interface language, and its key.
+    #[serde(skip)]
+    rename: Option<(u64, String)>,
 }
 impl Weather {
     pub fn generations(&self) -> (u64, u64) {
@@ -279,6 +289,32 @@ impl Weather {
             query,
             language,
         })
+    }
+    /// Looks the saved place up again, so its name follows the interface language.
+    pub fn rename(&mut self, location: &Location, from: Language, to: Language) -> Command {
+        self.cancel_search();
+        self.rename = Some((self.search_id, location.key()));
+        Command::Rename {
+            id: self.search_id,
+            location: location.clone(),
+            from,
+            to,
+        }
+    }
+    /// The result of `rename`: the place at exactly the saved coordinates, if one was found.
+    /// `None` for any other search, which `accept_search` then takes.
+    pub fn accept_rename(
+        &mut self,
+        id: u64,
+        result: &Result<Vec<Location>, String>,
+    ) -> Option<Option<Location>> {
+        let (_, key) = self.rename.take_if(|(rename_id, _)| *rename_id == id)?;
+        Some(
+            result
+                .as_ref()
+                .ok()
+                .and_then(|places| places.iter().find(|place| place.key() == key).cloned()),
+        )
     }
     pub fn accept_search(&mut self, id: u64, result: Result<Vec<Location>, String>) -> bool {
         if id != self.search_id || !self.searching {

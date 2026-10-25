@@ -1500,3 +1500,51 @@ fn inventory_success_resets_failures_and_later_failures_show_at_once() {
     assert!(!state.loading && state.error.is_some());
     assert!(!state.inventory.apps.is_empty());
 }
+
+#[test]
+fn a_language_change_renames_the_saved_place_from_a_matching_lookup() {
+    use crate::weather::Location;
+    let mut state = ready();
+    let place = Location {
+        name: "Cologne".into(),
+        region: "North Rhine-Westphalia".into(),
+        country: "Germany".into(),
+        latitude: 50.93333,
+        longitude: 6.95,
+    };
+    state.preferences.weather_location = Some(place.clone());
+    let command =
+        state
+            .weather
+            .rename(&place, crate::i18n::Language::En, crate::i18n::Language::De);
+    let crate::weather::Command::Rename { id, location, .. } = command else {
+        panic!("expected a rename");
+    };
+    assert_eq!(location.name, "Cologne");
+    let elsewhere = Location {
+        name: "Köln-Porz".into(),
+        latitude: 50.87,
+        ..place.clone()
+    };
+    let german = Location {
+        name: "Köln".into(),
+        region: "Nordrhein-Westfalen".into(),
+        country: "Deutschland".into(),
+        ..place.clone()
+    };
+    let found = state
+        .weather
+        .accept_rename(id, &Ok(vec![elsewhere, german]))
+        .expect("the rename search")
+        .expect("a place at the same coordinates");
+    assert!(state.rename_location(found));
+    let saved = state.preferences.weather_location.as_ref().unwrap();
+    assert_eq!(
+        (saved.name.as_str(), saved.country.as_str()),
+        ("Köln", "Deutschland")
+    );
+    assert!(
+        state.weather.accept_rename(id, &Ok(vec![])).is_none(),
+        "taken once"
+    );
+}
