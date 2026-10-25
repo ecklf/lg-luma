@@ -6,6 +6,7 @@
   "sortPackageJson": false,
   "overrides": [{ "files": ["tv/*.cjs"], "options": { "trailingComma": "none" } }],
   "ignorePatterns": [
+    "**/.changeset/**",
     ".agents/skills/**",
     "node_modules/**",
     "dist/**",

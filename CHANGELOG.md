@@ -1,5 +1,11 @@
 # lg-luma
 
+## 2.8.3
+
+### Patch Changes
+
+- 2abfbdf: Hide the updating status label while closing recent apps and refreshing history afterward, including when closing the last card. Keep loading feedback limited to the initial history read and hide it when dismissing the switcher.
+
 ## 2.8.2
 
 ### Patch Changes

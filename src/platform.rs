@@ -306,6 +306,15 @@ fn checked_response(value: Value) -> Result<Value, String> {
 }
 
 fn inventory_read(uri: &str, field: &str) -> Result<Value, String> {
+    // In place of LG's Home, Luma holds LG Home's LS2 role and asks sam/EIM itself: an early
+    // root integration can bring this Home up long before Homebrew's service starts (~21 s vs
+    // ~51 s into a cold boot). A refused call answers at once and falls back below.
+    if runs_as_lg_home()
+        && let Ok(response) = call(uri, json!({}))
+        && let Some(value) = response.get(field)
+    {
+        return Ok(value.clone());
+    }
     // Fixed inventory commands use Homebrew's elevated service.
     // Use the same one-reply invocation as the web launcher, without guessing
     // CLI behavior from a firmware-version string.

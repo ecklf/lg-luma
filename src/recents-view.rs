@@ -28,30 +28,34 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
         c(0x0b0e15, 0.50),
     ));
     if recent.entries.is_empty() && recent.dismissals.is_empty() {
-        let loading = recent.pending.is_some();
-        out.icon(
-            assets,
-            if recent.error.is_some() {
-                "alert"
-            } else {
-                "recent"
-            },
-            Rect::new(924., 410., 72., 72.),
-            c(0xffffff, 0.40),
-        );
-        out.text(
-            language.t(if recent.error.is_some() {
-                "recentError"
-            } else if loading {
-                "recentLoading"
-            } else {
-                "recentEmpty"
-            }),
-            Rect::new(360., 526., 1200., 60.),
-            text(32., 500, -0.025),
-            WHITE,
-            true,
-        );
+        let message = if recent.error.is_some() {
+            Some("recentError")
+        } else if recent.loaded {
+            Some("recentEmpty")
+        } else if state.recents_open() && recent.pending.is_some() {
+            Some("recentLoading")
+        } else {
+            None
+        };
+        if let Some(message) = message {
+            out.icon(
+                assets,
+                if recent.error.is_some() {
+                    "alert"
+                } else {
+                    "recent"
+                },
+                Rect::new(924., 410., 72., 72.),
+                c(0xffffff, 0.40),
+            );
+            out.text(
+                language.t(message),
+                Rect::new(360., 526., 1200., 60.),
+                text(32., 500, -0.025),
+                WHITE,
+                true,
+            );
+        }
     } else {
         let mut cards: Vec<_> = recent
             .entries
@@ -151,15 +155,11 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
             "refresh",
             label,
         );
-    } else if let Some(command) = &recent.pending
+    } else if let Some(Command::Launch(_)) = &recent.pending
         && !recent.entries.is_empty()
     {
         out.text(
-            language.t(if matches!(command, Command::Launch(_)) {
-                "opening"
-            } else {
-                "recentLoading"
-            }),
+            language.t("opening"),
             Rect::new(660., 945., 600., 30.),
             text(18., 450, 0.),
             c(0xffffff, 0.6),

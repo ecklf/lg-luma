@@ -625,6 +625,77 @@ fn advance_recents(state: &mut State, millis: u64) {
     );
 }
 
+fn shows_recent_message(state: &State, key: &str) -> bool {
+    use crate::renderer::Draw;
+    scene(state).draw.iter().any(
+        |draw| matches!(draw, Draw::Text(value, ..) if value == state.preferences.language.t(key)),
+    )
+}
+
+#[test]
+fn closing_recent_cards_keeps_the_close_and_follow_up_refresh_quiet() {
+    for reduced in [false, true] {
+        for count in [1, 2] {
+            let mut state = ready();
+            state.preferences.reduced_motion = reduced;
+            state.open_recents();
+            assert!(shows_recent_message(&state, "recentLoading"));
+            accept(
+                &mut state,
+                recents::demo().into_iter().take(count).collect(),
+            );
+            state.recents.visibility = 1.;
+            state.direction(Direction::Up, &controls(&state));
+            assert!(!shows_recent_message(&state, "recentLoading"));
+            state.recent_response(2, Command::Close("netflix".into()), Ok(None));
+            assert_eq!(state.recents.pending, Some(Command::List));
+            assert!(state.recents.error.is_none());
+            assert!(!shows_recent_message(&state, "recentLoading"));
+            // Keep the refresh pending longer than the exit animation: the last
+            // card must not be replaced by the initial-loading message either.
+            for _ in 0..50 {
+                advance_recents(&mut state, 16);
+            }
+            assert!(!shows_recent_message(&state, "recentLoading"));
+            assert_eq!(shows_recent_message(&state, "recentEmpty"), count == 1);
+            let remaining = state.recents.entries.clone();
+            accept(&mut state, remaining);
+            assert!(!shows_recent_message(&state, "recentLoading"));
+            if count == 2 {
+                state.activate();
+                assert!(shows_recent_message(&state, "opening"));
+                state.back();
+                assert!(!shows_recent_message(&state, "opening"));
+            }
+        }
+    }
+}
+
+#[test]
+fn dismissing_an_initial_read_does_not_flash_loading_or_an_unconfirmed_empty_state() {
+    let mut state = ready();
+    state.open_recents();
+    state.recents.visibility = 0.5;
+    assert!(shows_recent_message(&state, "recentLoading"));
+    state.back();
+    assert!(!shows_recent_message(&state, "recentLoading"));
+    assert!(!shows_recent_message(&state, "recentEmpty"));
+    state.open_recents();
+    assert!(shows_recent_message(&state, "recentLoading"));
+    accept(&mut state, recents::demo());
+    state.recent_request(Command::List);
+    assert!(!shows_recent_message(&state, "recentLoading"));
+    state.back();
+    for _ in 0..50 {
+        advance_recents(&mut state, 16);
+    }
+    state.open_recents();
+    assert!(shows_recent_message(&state, "recentLoading"));
+    accept(&mut state, vec![]);
+    assert!(!shows_recent_message(&state, "recentLoading"));
+    assert!(shows_recent_message(&state, "recentEmpty"));
+}
+
 fn recent_bounds(state: &State, id: &str) -> crate::state::Rect {
     controls(state)
         .into_iter()

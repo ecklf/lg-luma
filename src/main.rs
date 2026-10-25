@@ -856,6 +856,8 @@ fn run() -> Result<(), String> {
     let mut queued_event = None;
     let mut text_active = false;
     let mut initial_focus = options.script.is_empty();
+    // When to ask for the inventory again after a failed load (State::inventory_failed).
+    let mut inventory_retry: Option<Instant> = None;
     let scripted_input = !options.script.is_empty();
     let mut scene = compose(
         &mut state,
@@ -914,10 +916,14 @@ fn run() -> Result<(), String> {
                     initial_focus = false;
                 }
                 Response::Inventory(Err(error)) => {
-                    state.loading = false;
-                    state.error = Some(error);
-                    state.dirty = true;
-                    if initial_focus {
+                    if let Some(delay) = state.inventory_failed(error) {
+                        eprintln!(
+                            "Luma TV inventory: retry {} in {} s",
+                            state.inventory_failures,
+                            delay.as_secs()
+                        );
+                        inventory_retry = Some(Instant::now() + delay);
+                    } else if initial_focus {
                         state.focus = state.first_content();
                         initial_focus = false;
                     }
@@ -1336,6 +1342,11 @@ fn run() -> Result<(), String> {
                     &weather_service,
                 );
             }
+        }
+        // state.loading stays set meanwhile, so focus/relaunch refreshes do not add requests.
+        if inventory_retry.is_some_and(|at| Instant::now() >= at) {
+            inventory_retry = None;
+            platform.send(Request::Refresh);
         }
         weather_tick(&mut state, &weather_service, visible);
         // SDL-webOS disables text input when its own panel is dismissed, even
