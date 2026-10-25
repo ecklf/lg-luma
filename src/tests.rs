@@ -805,6 +805,8 @@ fn text_rendering_choices_persist_and_back_restores_the_system_row() {
     restored.activate();
     assert_eq!(restored.focus, Target::Choice(1));
     restored.direction(Direction::Down, &controls(&restored));
+    assert_eq!(restored.focus, Target::Choice(2));
+    restored.direction(Direction::Down, &controls(&restored));
     assert_eq!(restored.focus, Target::Choice(0));
     restored.back();
     assert_eq!(restored.focus, Target::Setting(7));

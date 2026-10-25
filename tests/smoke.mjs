@@ -306,7 +306,26 @@ try {
   assert.equal(analytic.render.text_rendering.mode, 'analytic');
   assert.equal(analytic.render.text_rendering.embolden, 0.25);
   assert.equal(analytic.render.last_presented.multisample_samples, 0);
-  const msaaSaved = await scenario('text-rendering-msaa-saved', `${textOptions},up,enter`);
+  const hintedSaved = await scenario('text-rendering-hinted-saved', `${textOptions},down,enter`);
+  assert.equal(hintedSaved.preferences.text_rendering, 'hinted');
+  const hinted = await scenario('text-rendering-hinted', 'home,down');
+  assert.equal(hinted.render.text_rendering.mode, 'hinted');
+  assert.equal(hinted.render.text_rendering.hint_outlines, true);
+  assert.equal(hinted.render.text_rendering.embolden, 0);
+  const hinted4k = await scenario('text-rendering-hinted-4k', 'home,down', ['--resolution', '4k']);
+  assert.equal(hinted4k.render.text_rendering.hint_outlines, true);
+  assert.equal(hinted4k.render.last_presented.viewport.height, 2160);
+  const hintedPreferences = JSON.parse(await fs.readFile(preferences, 'utf8'));
+  await fs.writeFile(
+    preferences,
+    JSON.stringify({ ...hintedPreferences, language: 'zh', greeting_name: '한글' }),
+  );
+  const hintedCjk = await scenario('text-rendering-hinted-cjk', 'settings', ['--resolution', '4k']);
+  assert.equal(hintedCjk.render.text_rendering.hint_outlines, true);
+  const hintedHangul = await scenario('text-rendering-hinted-hangul', 'home');
+  assert.ok(hintedHangul.ui_text.some((label) => label.includes('한글')));
+  await fs.writeFile(preferences, JSON.stringify(hintedPreferences));
+  const msaaSaved = await scenario('text-rendering-msaa-saved', `${textOptions},down,enter`);
   assert.equal(msaaSaved.preferences.text_rendering, 'msaa');
   const msaa = await scenario('text-rendering-msaa', 'home,down');
   assert.equal(msaa.render.text_rendering.mode, 'msaa');

@@ -311,15 +311,17 @@ such as Hulu, Joyn and Plex closer to the visual weight of Apple TV, YouTube, Da
 
 Text reads the bundled TTF's advances, kerning and line metrics lazily. Only needed glyph outlines
 are tessellated in font-em coordinates. Complete text runs are cached in static GPU buffers,
-independent of position/color/drawable density, avoiding a draw call per letter. CJK fonts open
+independent of position/color, avoiding a draw call per letter. Unhinted geometry is also
+independent of drawable density; hinted cache keys include physical font size. CJK fonts open
 only when needed; there are no glyph bitmap atlases or full-font mesh exports.
 
 MSAA mode requests 4× MSAA, with 2×/single-sample fallbacks if EGL rejects a configuration.
 Analytic mode requests a single-sample window. Multisampled text draws
 intact glyph fills without inward offsets/fringe triangles, which can cross on very thin
 small-text strokes. Single-sample targets use a narrower half-pixel boundary fringe. Glyph
-origins/baselines are pixel-aligned per drawable axis. There is no LCD subpixel rendering, font
-hinting or complex-script shaping. Inspect `multisample_samples` and `font_antialiasing`:
+origins/baselines are pixel-aligned per drawable axis. Pixel hinting is optional (see below);
+there is no LCD subpixel rendering or complex-script shaping. Inspect `multisample_samples`
+and `font_antialiasing`:
 offscreen captures can be single-sample while the actual window uses MSAA.
 
 Glyph geometry has an 8 MiB/4096-entry CPU cache target and text runs a 32 MiB/512-entry GPU
@@ -776,3 +778,21 @@ HTML alongside the feed and IPK, so the feed and its description must be publish
 Key modules: `state.rs` focus/preferences, `view.rs` geometry, `renderer.rs` GPU caches/draws,
 `font.rs` lazy metrics/outlines, `vector.rs` GPU mesh upload, `platform.rs` worker/inventory,
 `luna.rs` LS2, `weather*.rs` scheduling/HTTPS/cache, `storage.rs` atomic JSON, and `main.rs` SDL loop.
+
+### Optional pixel hinting
+
+On top of the MSAA/Analytic choice, **MSAA + pixel hinting** (`text_rendering: "hinted"`)
+uses skrifa 0.48 to fit individual outlines to their actual drawable pixel size before
+vector tessellation. Automatic hinting is selected explicitly: bundled Inter has a `prep` stub but no
+usable glyph instructions, which would defeat interpreter-first fallback. Fonts that
+require an interpreter retain it. The grayscale target preserves linear horizontal metrics, so widths, kerning
+and wrapping retain the original layout. It aligns vertical features without LCD colour
+assumptions or synthetic emboldening. This is not native 4K output or a whole-screen filter.
+
+Hinting applies to physical sizes 1–64 px; larger text retains original outlines. Both
+CPU glyph and GPU text-run cache keys include physical size in hinted mode, so 1080p,
+4K and offscreen captures do not reuse an outline fitted to another density. Existing
+geometry byte/entry budgets remain, and each font retains at most eight hinting instances.
+Outlines are still generated lazily and no glyph bitmap atlas or full-font mesh is built.
+Missing/invalid preferences still default to MSAA; the new choice applies after restart.
+Explicit `LUMA_MSAA=0`/`4` overrides also disable hinting, making comparisons reproducible.

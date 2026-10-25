@@ -716,8 +716,12 @@ fn run() -> Result<(), String> {
     if let Err(error) = video.gl_set_swap_interval(1) {
         eprintln!("VSync: {error}");
     }
-    let mut renderer =
-        renderer::Renderer::new(&assets.root.join("font.ttf"), webos, text_config.embolden)?;
+    let mut renderer = renderer::Renderer::new(
+        &assets.root.join("font.ttf"),
+        webos,
+        text_config.embolden,
+        text_config.hint_outlines,
+    )?;
     startup_stage("renderer");
     // Redraw only what changed since the back buffer's frame (LUMA_PARTIAL=0 draws in full).
     let partial = (std::env::var("LUMA_PARTIAL").as_deref() != Ok("0"))

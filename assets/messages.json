@@ -1802,5 +1802,16 @@
     "ru": "Тестовая карточка для прокрутки; приложение не запускается.",
     "pl": "Karta testowa do przewijania; brak aplikacji do uruchomienia.",
     "fr": "Carte de test pour le défilement ; aucune application à lancer."
+  },
+  "textRenderingHinted": {
+    "en": "MSAA + pixel hinting",
+    "de": "MSAA + Pixel-Hinting",
+    "zh": "MSAA + 像素微调",
+    "es": "MSAA + ajuste a píxeles",
+    "pt": "MSAA + ajuste de píxeis",
+    "it": "MSAA + hinting dei pixel",
+    "ru": "MSAA + привязка к пикселям",
+    "pl": "MSAA + hinting pikseli",
+    "fr": "MSAA + ajustement aux pixels"
   }
 }

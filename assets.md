@@ -114,3 +114,6 @@ Weather data: [Open-Meteo](https://open-meteo.com/), [CC BY 4.0](https://creativ
 
 The provided Apple design guidance informed focus, motion and materials. This is not an Apple
 or LG product.
+
+Pixel-hinted vector text uses [Fontations / skrifa](https://github.com/googlefonts/fontations),
+MIT OR Apache-2.0, distributed here under MIT; notice: `assets/licenses/fontations-mit.txt`.

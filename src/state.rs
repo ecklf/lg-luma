@@ -773,12 +773,8 @@ impl State {
             }
             if let Target::Choice(index) = self.focus {
                 let count = match self.subpage {
-                    Some(
-                        Subpage::ClockFormat
-                        | Subpage::TimeFormat
-                        | Subpage::Temperature
-                        | Subpage::TextRendering,
-                    ) => 2,
+                    Some(Subpage::ClockFormat | Subpage::TimeFormat | Subpage::Temperature) => 2,
+                    Some(Subpage::TextRendering) => TextRendering::ALL.len(),
                     Some(Subpage::Language) => Language::ALL.len(),
                     _ => 3,
                 };

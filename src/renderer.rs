@@ -100,6 +100,7 @@ struct TextKey {
     // Logical size, tracking, line height, available width and height.
     layout: [u32; 5],
     flags: u8,
+    hint_size: u32,
 }
 
 struct TextRun {
@@ -327,13 +328,14 @@ pub struct Renderer {
     vector_program: GLuint,
     text_program: GLuint,
     text_embolden: f32,
+    hint_outlines: bool,
     buffer: GLuint,
     vao: GLuint,
     white: Texture,
     font_directory: PathBuf,
     fonts: HashMap<u16, Font>,
     failed_fonts: HashSet<u16>,
-    glyphs: HashMap<(char, u16), Glyph>,
+    glyphs: HashMap<(char, u16, u32), Glyph>,
     text_runs: HashMap<TextKey, TextRun>,
     textures: HashMap<String, Option<Texture>>,
     vectors: HashMap<String, Option<vector::Mesh>>,
@@ -355,7 +357,12 @@ impl Renderer {
         self.fade = (next != [0.; 8]).then_some(next);
     }
 
-    pub fn new(font: &Path, gles: bool, text_embolden: f32) -> Result<Self, String> {
+    pub fn new(
+        font: &Path,
+        gles: bool,
+        text_embolden: f32,
+        hint_outlines: bool,
+    ) -> Result<Self, String> {
         let directory = font.parent().ok_or("Invalid font path")?;
         let mut fonts = HashMap::new();
         // Open only the common face. Metrics and outlines stay lazy even when
@@ -448,6 +455,7 @@ impl Renderer {
             vector_program,
             text_program,
             text_embolden,
+            hint_outlines,
             buffer,
             vao,
             white,
@@ -496,11 +504,16 @@ impl Renderer {
         }
     }
 
-    fn glyph(&mut self, c: char, font: u16) -> Result<&[luma_vector_geometry::Vertex], String> {
-        let key = (c, font);
+    fn glyph(
+        &mut self,
+        c: char,
+        font: u16,
+        hint_size: u32,
+    ) -> Result<&[luma_vector_geometry::Vertex], String> {
+        let key = (c, font, hint_size);
         if !self.glyphs.contains_key(&key) {
             let started = Instant::now();
-            let geometry = self.fonts[&font].geometry(c)?;
+            let geometry = self.fonts.get_mut(&font).unwrap().geometry(c, hint_size)?;
             self.stats.glyph_ms += started.elapsed().as_secs_f64() * 1000.;
             self.glyphs.insert(
                 key,
@@ -691,8 +704,8 @@ impl Renderer {
     }
 
     fn text(&mut self, text: &str, rect: Rect, style: TextStyle, color: Color, centered: bool) {
-        // Layout remains logical. Reuse the same run geometry at every density;
-        // its shader snaps insertion origins and computes pixel-sized coverage.
+        // Layout remains logical. Hinted outlines additionally depend on drawable density;
+        // keep that physical size in both glyph and run cache keys.
         let size_f = style.size;
         let viewport = self.stats.viewport;
         self.stats.max_logical_font_px = self.stats.max_logical_font_px.max(size_f);
@@ -715,7 +728,10 @@ impl Renderer {
             return;
         }
         let origin = [rect.x, rect.y];
+        let physical_size = size_f * viewport.text_scale();
+        let hint_size = crate::font::hint_size(self.hint_outlines, physical_size);
         let key = TextKey {
+            hint_size,
             text: text.into(),
             weight: style.weight,
             layout: [
@@ -864,7 +880,7 @@ impl Renderer {
             if self.fonts[&selected].lookup_glyph_index(c) == 0 && !c.is_whitespace() {
                 missing_glyphs += 1;
             }
-            match self.glyph(c, selected) {
+            match self.glyph(c, selected, hint_size) {
                 Ok(geometry) => {
                     for triangle in geometry.chunks_exact(3) {
                         // True sample coverage needs only the original fill.
