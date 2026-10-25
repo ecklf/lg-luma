@@ -117,6 +117,7 @@ await fs.writeFile(
 
 const surfaces = {
   generic: ['#4e5c6b', '#243c4e'],
+  custom: ['#2f5a63', '#16323a'],
   'live-tv': ['#192a43', '#0d1628'],
   netflix: ['#141414', '#141414'],
   youtube: ['#0f0f0f', '#0f0f0f'],

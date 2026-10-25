@@ -5,8 +5,8 @@ use crate::{
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
         APPS_COLUMNS, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT,
-        HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State,
-        Subpage, Target, TextField, WEATHER_SECTION,
+        HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, SHORTCUTS_SECTION,
+        SYSTEM_SECTION, State, Subpage, Target, TextField, WEATHER_SECTION,
     },
     weather::{self, Unit},
 };
@@ -1961,9 +1961,16 @@ fn location_settings(out: &mut Scene, state: &State, assets: &Assets) {
 fn settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let s = state.scroll;
-    for (index, key) in ["interface", "background", "weather", "inputs", "system"]
-        .into_iter()
-        .enumerate()
+    for (index, key) in [
+        "interface",
+        "background",
+        "weather",
+        "inputs",
+        "shortcuts",
+        "system",
+    ]
+    .into_iter()
+    .enumerate()
     {
         let label = language.t(key);
         let rect = Rect::new(160., 164.8 + index as f32 * 84., 403.2, 72.);
@@ -2007,6 +2014,10 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Temperature) => language.t("temperature"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
+                Some(Subpage::Tile(_)) if state.tile_draft.title.is_empty() => {
+                    language.t("newTile")
+                }
+                Some(Subpage::Tile(_)) => state.tile_draft.title.as_str(),
                 None => "",
             };
             let parent_width = assets.width(label, text(20.8, 550, -0.02)) + 2.;
@@ -2067,13 +2078,18 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         let start = out.draw.len();
         if matches!(
             subpage,
-            Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames | Subpage::Clock
+            Subpage::WeatherLocation
+                | Subpage::Greeting
+                | Subpage::AppNames
+                | Subpage::Clock
+                | Subpage::Tile(_)
         ) {
             match subpage {
                 Subpage::WeatherLocation => location_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::AppNames => app_name_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
+                Subpage::Tile(id) => tile_settings(out, state, assets, id.is_some()),
                 _ => unreachable!(),
             }
             if let Some(opened) = state.panel_started {
@@ -2127,7 +2143,11 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     state.preferences.temperature_unit == Unit::Fahrenheit,
                 ),
             ],
-            Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames | Subpage::Clock => {
+            Subpage::WeatherLocation
+            | Subpage::Greeting
+            | Subpage::AppNames
+            | Subpage::Clock
+            | Subpage::Tile(_) => {
                 unreachable!()
             }
             Subpage::Language => Language::ALL
@@ -2311,6 +2331,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             out.draw.push(Draw::Clip(Some(state.content_viewport())));
         }
         WEATHER_SECTION => weather_settings(out, state, assets),
+        SHORTCUTS_SECTION => shortcut_settings(out, state, assets),
         SYSTEM_SECTION => {
             let version_rect = Rect::new(640., 164.8 - s, 1120., 72.);
             out.shape(version_rect, 48., c(0x171c20, 0.3));
@@ -2594,6 +2615,153 @@ fn input_name_rows(out: &mut Scene, state: &State, assets: &Assets, id: &str, y:
                 chevron: false,
             },
         );
+    }
+}
+
+fn shortcut_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let tiles = &state.preferences.custom_tiles;
+    for (index, tile) in tiles.iter().enumerate() {
+        let description = format!("{} · {}", tile.method.label(), shorten(&tile.url, false));
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::Tile(tile.id.clone()),
+                rect: Rect::new(
+                    640.,
+                    164.8 + index as f32 * 102.7 - state.scroll,
+                    1120.,
+                    90.7,
+                ),
+                title: &tile.title,
+                icon: Some("globe"),
+                value: None,
+                description: Some(&description),
+                selected: false,
+                chevron: true,
+            },
+        );
+    }
+    let mut y = 164.8 + tiles.len() as f32 * 102.7 + 16. - state.scroll;
+    if tiles.is_empty() {
+        out.text(
+            language.t("noTiles"),
+            Rect::new(664., 165. - state.scroll, 1000., 26.),
+            text(16.8, 400, 0.).leading(1.5),
+            c(0xf5f5f5, 0.72),
+            false,
+        );
+        y += 36.;
+    }
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::TileAdd,
+            rect: Rect::new(640., y, 1120., 72.),
+            title: language.t("addTile"),
+            icon: Some("sparkles"),
+            value: None,
+            description: None,
+            selected: false,
+            chevron: true,
+        },
+    );
+}
+
+/// Every row keeps its place while typing, so completing entry cannot move a
+/// clicked control; Remove only exists once the tile is saved.
+fn tile_settings(out: &mut Scene, state: &State, assets: &Assets, saved: bool) {
+    let language = state.preferences.language;
+    let draft = &state.tile_draft;
+    let editing = |field: TextField| state.text_input_active() && state.keyboard_field == field;
+    let name = if editing(TextField::TileName) {
+        format!("{}|", state.tile_text)
+    } else if draft.title.is_empty() {
+        language.t("tileNameHint").into()
+    } else {
+        draft.title.clone()
+    };
+    let url = if editing(TextField::TileUrl) {
+        format!("{}|", shorten(&state.tile_text, true))
+    } else if draft.url.is_empty() {
+        language.t("tileUrlHint").into()
+    } else {
+        shorten(&draft.url, false)
+    };
+    for (y, target, title, icon, description) in [
+        (164.8, Target::TileName, language.t("name"), "type", name),
+        (267.5, Target::TileUrl, language.t("url"), "globe", url),
+    ] {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target,
+                rect: Rect::new(640., y - state.scroll, 1120., 90.7),
+                title,
+                icon: Some(icon),
+                value: None,
+                description: Some(&description),
+                selected: false,
+                chevron: true,
+            },
+        );
+    }
+    let mut actions = vec![
+        (
+            Target::TileMethod,
+            language.t("requestMethod"),
+            Some("settings"),
+            Some(draft.method.label()),
+        ),
+        (Target::TileSend, language.t("sendNow"), Some("arrow"), None),
+    ];
+    if saved {
+        actions.push((
+            Target::TileRemove,
+            language.t("removeTile"),
+            Some("close"),
+            None,
+        ));
+    }
+    for (index, (target, title, icon, value)) in actions.into_iter().enumerate() {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target,
+                rect: Rect::new(640., 370.2 + index as f32 * 84. - state.scroll, 1120., 72.),
+                title,
+                icon,
+                value,
+                description: None,
+                selected: false,
+                chevron: false,
+            },
+        );
+    }
+}
+
+/// URLs have no break opportunities, so long ones are cut to a single line.
+/// While typing, the end stays visible next to the cursor.
+fn shorten(text: &str, keep_end: bool) -> String {
+    const MAX: usize = 96;
+    let count = text.chars().count();
+    if count <= MAX {
+        text.into()
+    } else if keep_end {
+        format!(
+            "…{}",
+            text.chars().skip(count + 1 - MAX).collect::<String>()
+        )
+    } else {
+        format!("{}…", text.chars().take(MAX - 1).collect::<String>())
     }
 }
 
@@ -3018,6 +3186,8 @@ fn keyboard(out: &mut Scene, state: &State, assets: &Assets) {
             TextField::Location => language.t("cityPostcode"),
             TextField::Name => language.t("greetingName"),
             TextField::InputName => language.t("inputName"),
+            TextField::TileName => language.t("tileName"),
+            TextField::TileUrl => language.t("tileUrl"),
             TextField::Apps => language.t("findApp"),
         },
         Rect::new(389., 324., 1000., 44.),

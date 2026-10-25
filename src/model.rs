@@ -97,17 +97,40 @@ pub enum InputMode {
     Off,
 }
 
+/// POST is the default because Home Assistant webhooks accept only POST and PUT
+/// unless GET is enabled on the trigger.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum TileMethod {
+    Get,
+    #[default]
+    Post,
+}
+
+impl TileMethod {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Get => "GET",
+            Self::Post => "POST",
+        }
+    }
+}
+
 /// A home-screen tile that fires a one-way HTTP request instead of launching
 /// an app. Its id lives in `favorites`/`hidden` like any real app id, so
 /// ordering, favoriting and hiding reuse the existing machinery unchanged.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct CustomTile {
     pub id: String,
     pub title: String,
     pub url: String,
+    #[serde(default)]
+    pub method: TileMethod,
 }
 
 pub const CUSTOM_TILE_PREFIX: &str = "custom.";
+pub const TILE_LIMIT: usize = 64;
+pub const TILE_URL_LIMIT: usize = 512;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
@@ -222,6 +245,43 @@ impl Preferences {
         self.custom_tiles.iter().find(|tile| tile.id == id)
     }
 
+    /// Derived from the title once; renaming keeps the id so favorites stay put.
+    pub fn new_tile_id(&self, title: &str) -> String {
+        let slug: String = title
+            .to_lowercase()
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join("-")
+            .chars()
+            .take(48)
+            .collect();
+        let slug = match slug.trim_end_matches('-') {
+            "" => "tile",
+            slug => slug,
+        };
+        let base = format!("{CUSTOM_TILE_PREFIX}{slug}");
+        (1..)
+            .map(|n| {
+                if n == 1 {
+                    base.clone()
+                } else {
+                    format!("{base}-{n}")
+                }
+            })
+            .find(|id| self.custom_tile(id).is_none())
+            .unwrap()
+    }
+
+    pub fn remove_tile(&mut self, id: &str) -> Option<CustomTile> {
+        let index = self.custom_tiles.iter().position(|tile| tile.id == id)?;
+        if let Some(favorites) = &mut self.favorites {
+            favorites.retain(|item| item != id);
+        }
+        self.hidden.retain(|item| item != id);
+        Some(self.custom_tiles.remove(index))
+    }
+
     pub fn input_visible(&self, input: &Input) -> bool {
         match self.input_modes.get(&input.id).copied().unwrap_or_default() {
             InputMode::On => true,
@@ -280,16 +340,18 @@ impl Preferences {
         clean(&mut self.hidden);
         {
             let mut seen = HashSet::new();
+            for tile in &mut self.custom_tiles {
+                tile.title = clean_input_name(&tile.title);
+                tile.url = tile.url.trim().into();
+            }
             self.custom_tiles.retain(|tile| {
                 valid_app_id(&tile.id)
                     && tile.id.starts_with(CUSTOM_TILE_PREFIX)
-                    && !tile.title.trim().is_empty()
-                    && !tile.url.trim().is_empty()
-                    && tile.title.chars().count() <= 60
-                    && tile.url.chars().count() <= 512
+                    && !tile.title.is_empty()
+                    && valid_tile_url(&tile.url)
                     && seen.insert(tile.id.clone())
             });
-            self.custom_tiles.truncate(64);
+            self.custom_tiles.truncate(TILE_LIMIT);
         }
         self.input_modes.retain(|id, _| valid_app_id(id));
         self.input_names = std::mem::take(&mut self.input_names)
@@ -308,6 +370,16 @@ pub fn clean_input_name(name: &str) -> String {
     let clean: String = name.chars().filter(|c| !c.is_control()).collect();
     let clean: String = clean.trim().chars().take(INPUT_NAME_LIMIT).collect();
     clean.trim_end().into()
+}
+
+pub fn valid_tile_url(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    let rest = lower
+        .strip_prefix("http://")
+        .or_else(|| lower.strip_prefix("https://"));
+    rest.is_some_and(|rest| !rest.is_empty())
+        && url.chars().count() <= TILE_URL_LIMIT
+        && !url.chars().any(|c| c.is_whitespace() || c.is_control())
 }
 
 pub fn valid_app_id(id: &str) -> bool {

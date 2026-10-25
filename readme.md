@@ -316,6 +316,8 @@ fallback on the TV. Native caller permissions and lifecycle behavior can differ 
 Favorites, hidden apps, settings, weather location and cached readings stay in local JSON files
 in an app-owned persistent directory outside the installed payload.
 Weather search/forecast requests go to Open-Meteo, with embedded TLS roots and bounded responses.
+Shortcut tiles send one bodiless GET or POST to the URL you enter in Settings › Shortcuts, only
+when selected, with no proxy or redirects; the response is not read.
 There is no browser geolocation, IP-based location lookup, telemetry or runtime font download.
 
 ## License

@@ -326,7 +326,7 @@ fn effects(
                     }
                 }
             }
-            Effect::FireWebhook(url) => webhook.send(url),
+            Effect::FireWebhook(tile) => webhook.send(tile),
             Effect::Quit => return false,
             Effect::Uninstall(id) => platform.send(Request::Uninstall(id)),
             Effect::DeleteWallpaper(id) => {
@@ -389,6 +389,7 @@ fn script(
                     Some(state::Subpage::Greeting) => state::TextField::Name,
                     Some(state::Subpage::WeatherLocation) => state::TextField::Location,
                     Some(state::Subpage::Input(_)) => state::TextField::InputName,
+                    Some(state::Subpage::Tile(_)) => state::TextField::TileName,
                     _ => state::TextField::Apps,
                 }
             };
@@ -1075,12 +1076,17 @@ fn run() -> Result<(), String> {
                 }
             }
         }
-        while let Ok(webhook::Response::Done { result }) = webhook_service.receiver.try_recv() {
-            if let Err(error) = result {
-                eprintln!("{error}");
-                state.notify(state.preferences.language.t("appOpenError"));
-            }
-            state.dirty = true;
+        while let Ok(webhook::Response::Done { title, result }) =
+            webhook_service.receiver.try_recv()
+        {
+            let key = match result {
+                Ok(()) => "tileSent",
+                Err(error) => {
+                    eprintln!("Luma webhook {title}: {error}");
+                    "tileFailed"
+                }
+            };
+            state.notify(state.preferences.language.format(key, &[("tile", &title)]));
         }
         weather_tick(&mut state, &weather_service, visible);
         // Rebuild hit regions before input whenever inventory/layout changed.

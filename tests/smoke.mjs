@@ -355,13 +355,13 @@ try {
   assert.deepEqual(clockFocus.focus, { Choice: 1 });
   const system = await scenario(
     'system-settings',
-    'settings,down,down,down,down,down,right,down,down',
+    'settings,down,down,down,down,down,down,right,down,down',
   );
   assert.deepEqual(system.focus, { Setting: 5 });
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
   assert.ok(system.ui_text.includes('Quit app'));
   assert.ok(system.ui_text.includes('Text rendering'));
-  const textOptions = 'settings,down,down,down,down,down,right,down,enter';
+  const textOptions = 'settings,down,down,down,down,down,down,right,down,enter';
   const textRendering = await scenario('text-rendering-options', textOptions);
   assert.equal(textRendering.subpage, 'TextRendering');
   assert.deepEqual(textRendering.focus, { Choice: 0 });
@@ -381,6 +381,32 @@ try {
   const msaa = await scenario('text-rendering-msaa', 'home,down');
   assert.equal(msaa.render.text_rendering.mode, 'msaa');
   assert.equal(msaa.render.text_rendering.embolden, 0);
+  const shortcut = await scenario(
+    'shortcut-settings',
+    'settings,down,down,down,down,down,right,enter,type:Sandmann,back,down,enter,type:http://127.0.0.1:9/api/webhook/luma,back',
+  );
+  assert.equal(shortcut.focus, 'TileUrl');
+  assert.deepEqual(shortcut.subpage, { Tile: 'custom.sandmann' });
+  assert.deepEqual(shortcut.preferences.custom_tiles, [
+    {
+      id: 'custom.sandmann',
+      title: 'Sandmann',
+      url: 'http://127.0.0.1:9/api/webhook/luma',
+      method: 'POST',
+    },
+  ]);
+  assert.ok(shortcut.preferences.favorites.includes('custom.sandmann'));
+  assert.ok(shortcut.ui_text.includes('Remove shortcut'));
+  // Scenarios share one preferences file, so the tile is removed again here.
+  const removed = await scenario(
+    'shortcut-removed',
+    'settings,down,down,down,down,down,right,enter,down,down,down,down,enter',
+  );
+  assert.equal(removed.focus, 'TileAdd');
+  assert.equal(removed.subpage, null);
+  assert.deepEqual(removed.preferences.custom_tiles, []);
+  assert.ok(!removed.preferences.favorites.includes('custom.sandmann'));
+  assert.ok(!removed.inventory.some((app) => app.id === 'custom.sandmann'));
   // The exposed card fragments are real pointer targets, including after remote scrolling.
   const edgeFavorites = [
     'netflix',

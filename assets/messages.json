@@ -2403,5 +2403,165 @@
     "fr": "Carte de test pour le défilement ; aucune application à lancer.",
     "vi": "Thẻ thử nghiệm cuộn; không có ứng dụng để khởi chạy.",
     "nl": "Testkaart om te scrollen; er is geen app om te starten."
+  },
+  "shortcuts": {
+    "en": "Shortcuts",
+    "de": "Kurzbefehle",
+    "es": "Accesos directos",
+    "zh": "快捷方式",
+    "pt": "Atalhos",
+    "it": "Scorciatoie"
+  },
+  "noTiles": {
+    "en": "Shortcut tiles on Home send a web request, for example to a Home Assistant webhook.",
+    "de": "Kurzbefehl-Kacheln auf Start senden eine Webanfrage, zum Beispiel an einen Home-Assistant-Webhook.",
+    "es": "Los accesos directos en Inicio envían una solicitud web, por ejemplo a un webhook de Home Assistant.",
+    "zh": "主页上的快捷方式会发送网络请求，例如发送到 Home Assistant webhook。",
+    "pt": "Os atalhos no Início enviam uma solicitação web, por exemplo para um webhook do Home Assistant.",
+    "it": "Le scorciatoie nella Home inviano una richiesta web, ad esempio a un webhook di Home Assistant."
+  },
+  "addTile": {
+    "en": "Add shortcut",
+    "de": "Kurzbefehl hinzufügen",
+    "es": "Añadir acceso directo",
+    "zh": "添加快捷方式",
+    "pt": "Adicionar atalho",
+    "it": "Aggiungi scorciatoia"
+  },
+  "newTile": {
+    "en": "New shortcut",
+    "de": "Neuer Kurzbefehl",
+    "es": "Nuevo acceso directo",
+    "zh": "新快捷方式",
+    "pt": "Novo atalho",
+    "it": "Nuova scorciatoia"
+  },
+  "tileName": {
+    "en": "Shortcut name",
+    "de": "Name des Kurzbefehls",
+    "es": "Nombre del acceso directo",
+    "zh": "快捷方式名称",
+    "pt": "Nome do atalho",
+    "it": "Nome della scorciatoia"
+  },
+  "tileNameHint": {
+    "en": "Shown on the tile",
+    "de": "Wird auf der Kachel angezeigt",
+    "es": "Se muestra en el mosaico",
+    "zh": "显示在磁贴上",
+    "pt": "Exibido no bloco",
+    "it": "Mostrato sul riquadro"
+  },
+  "url": {
+    "en": "URL",
+    "de": "URL",
+    "es": "URL",
+    "zh": "网址",
+    "pt": "URL",
+    "it": "URL"
+  },
+  "tileUrl": {
+    "en": "Web address (URL)",
+    "de": "Webadresse (URL)",
+    "es": "Dirección web (URL)",
+    "zh": "网址 (URL)",
+    "pt": "Endereço web (URL)",
+    "it": "Indirizzo web (URL)"
+  },
+  "tileUrlHint": {
+    "en": "http:// or https:// address to call",
+    "de": "Aufzurufende http://- oder https://-Adresse",
+    "es": "Dirección http:// o https:// a la que llamar",
+    "zh": "要调用的 http:// 或 https:// 地址",
+    "pt": "Endereço http:// ou https:// a ser chamado",
+    "it": "Indirizzo http:// o https:// da chiamare"
+  },
+  "requestMethod": {
+    "en": "Request method",
+    "de": "Anfragemethode",
+    "es": "Método de solicitud",
+    "zh": "请求方法",
+    "pt": "Método da solicitação",
+    "it": "Metodo di richiesta"
+  },
+  "sendNow": {
+    "en": "Send now",
+    "de": "Jetzt senden",
+    "es": "Enviar ahora",
+    "zh": "立即发送",
+    "pt": "Enviar agora",
+    "it": "Invia ora"
+  },
+  "removeTile": {
+    "en": "Remove shortcut",
+    "de": "Kurzbefehl entfernen",
+    "es": "Eliminar acceso directo",
+    "zh": "移除快捷方式",
+    "pt": "Remover atalho",
+    "it": "Rimuovi scorciatoia"
+  },
+  "tileAdded": {
+    "en": "{tile} added to Home.",
+    "de": "{tile} zu Start hinzugefügt.",
+    "es": "{tile} añadido a Inicio.",
+    "zh": "已将 {tile} 添加到主页。",
+    "pt": "{tile} adicionado ao Início.",
+    "it": "{tile} aggiunto alla Home."
+  },
+  "tileRemoved": {
+    "en": "{tile} removed.",
+    "de": "{tile} entfernt.",
+    "es": "{tile} eliminado.",
+    "zh": "已移除 {tile}。",
+    "pt": "{tile} removido.",
+    "it": "{tile} rimosso."
+  },
+  "tileSending": {
+    "en": "Sending {tile}…",
+    "de": "{tile} wird gesendet…",
+    "es": "Enviando {tile}…",
+    "zh": "正在发送 {tile}…",
+    "pt": "Enviando {tile}…",
+    "it": "Invio di {tile}…"
+  },
+  "tileSent": {
+    "en": "{tile} sent.",
+    "de": "{tile} gesendet.",
+    "es": "{tile} enviado.",
+    "zh": "{tile} 已发送。",
+    "pt": "{tile} enviado.",
+    "it": "{tile} inviato."
+  },
+  "tileFailed": {
+    "en": "{tile} couldn’t be sent.",
+    "de": "{tile} konnte nicht gesendet werden.",
+    "es": "No se pudo enviar {tile}.",
+    "zh": "无法发送 {tile}。",
+    "pt": "Não foi possível enviar {tile}.",
+    "it": "Impossibile inviare {tile}."
+  },
+  "tileUrlInvalid": {
+    "en": "Enter an address starting with http:// or https://.",
+    "de": "Gib eine Adresse ein, die mit http:// oder https:// beginnt.",
+    "es": "Escribe una dirección que empiece por http:// o https://.",
+    "zh": "请输入以 http:// 或 https:// 开头的地址。",
+    "pt": "Digite um endereço que comece com http:// ou https://.",
+    "it": "Inserisci un indirizzo che inizi con http:// o https://."
+  },
+  "tileIncomplete": {
+    "en": "Add a name and a URL first.",
+    "de": "Gib zuerst einen Namen und eine URL ein.",
+    "es": "Primero añade un nombre y una URL.",
+    "zh": "请先填写名称和网址。",
+    "pt": "Primeiro adicione um nome e uma URL.",
+    "it": "Prima aggiungi un nome e un URL."
+  },
+  "tileLimit": {
+    "en": "No more shortcuts can be added.",
+    "de": "Es können keine weiteren Kurzbefehle hinzugefügt werden.",
+    "es": "No se pueden añadir más accesos directos.",
+    "zh": "无法再添加更多快捷方式。",
+    "pt": "Não é possível adicionar mais atalhos.",
+    "it": "Non è possibile aggiungere altre scorciatoie."
   }
 }
