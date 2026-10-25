@@ -616,6 +616,216 @@ fn pointer_interruption_freezes_cards_without_freezing_the_crossfade() {
     assert_eq!(recent.position, 1.5);
 }
 
+fn advance_recents(state: &mut State, millis: u64) {
+    state.recents.animate(
+        state.recents_open(),
+        state.preferences.reduced_motion,
+        state.pointer,
+        state.recents.updated + Duration::from_millis(millis),
+    );
+}
+
+fn recent_bounds(state: &State, id: &str) -> crate::state::Rect {
+    controls(state)
+        .into_iter()
+        .find(|control| control.target == Target::Recent(id.into()))
+        .unwrap()
+        .rect
+}
+
+fn netflix_logo(state: &State) -> crate::state::Rect {
+    use crate::renderer::Draw;
+    scene(state)
+        .draw
+        .into_iter()
+        .find_map(|draw| match draw {
+            Draw::Image(path, rect, ..) | Draw::TintedImage(path, rect, ..)
+                if path.ends_with("logos/netflix.lvec") =>
+            {
+                Some(rect)
+            }
+            _ => None,
+        })
+        .unwrap()
+}
+
+#[test]
+fn stacked_cards_hit_the_front_card_in_overlaps_and_rear_cards_only_where_exposed() {
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state.open_recents();
+    accept(&mut state, recents::demo());
+    let front = recent_bounds(&state, "netflix");
+    let rear = recent_bounds(&state, "youtube.leanback.v4");
+    assert!(rear.w < front.w && rear.h < front.h);
+    assert!(rear.x < front.x + front.w);
+    let controls = controls(&state);
+    assert_eq!(
+        state.hit_test(&controls, 1200., 540.),
+        Some(Target::Recent("netflix".into()))
+    );
+    assert_eq!(
+        state.hit_test(&controls, 1600., 540.),
+        Some(Target::Recent("youtube.leanback.v4".into()))
+    );
+}
+
+#[test]
+fn closing_lifts_the_card_and_fills_its_slot_without_a_refresh_jump() {
+    let mut state = ready();
+    state.open_recents();
+    accept(&mut state, recents::demo());
+    state.recents.visibility = 1.;
+    let before_logo = netflix_logo(&state);
+    let before_next = recent_bounds(&state, "youtube.leanback.v4");
+    state.direction(Direction::Up, &controls(&state));
+    assert!(state.animating());
+    assert!(
+        controls(&state)
+            .iter()
+            .all(|control| control.target != Target::Recent("netflix".into()))
+    );
+    advance_recents(&mut state, 80);
+    assert!(netflix_logo(&state).y < before_logo.y);
+    assert_eq!(
+        recent_bounds(&state, "youtube.leanback.v4").x,
+        before_next.x,
+        "History remains intact until the service confirms the close"
+    );
+    state.recent_response(2, Command::Close("netflix".into()), Ok(None));
+    let remaining = state.recents.entries.clone();
+    accept(&mut state, remaining);
+    assert_eq!(
+        recent_bounds(&state, "youtube.leanback.v4").x,
+        before_next.x,
+        "Neither removal nor the history refresh may snap presentation slots"
+    );
+    advance_recents(&mut state, 80);
+    let entering = recent_bounds(&state, "youtube.leanback.v4");
+    assert!(entering.x < before_next.x);
+    assert!(entering.w > before_next.w && entering.w < 900.);
+    for _ in 0..50 {
+        advance_recents(&mut state, 16);
+    }
+    let settled = recent_bounds(&state, "youtube.leanback.v4");
+    assert_eq!(settled.center(), (960., 540.));
+    assert_eq!(settled.w, 900.);
+    assert!(state.recents.dismissals.is_empty());
+    assert!(!state.animating());
+}
+
+#[test]
+fn a_failed_close_returns_the_same_card_and_restores_its_hit_target() {
+    let mut state = ready();
+    state.open_recents();
+    accept(&mut state, recents::demo());
+    state.recents.visibility = 1.;
+    let original = netflix_logo(&state);
+    state.direction(Direction::Up, &controls(&state));
+    for _ in 0..3 {
+        advance_recents(&mut state, 80);
+    }
+    let lifted = netflix_logo(&state);
+    assert!(lifted.y < original.y);
+    state.recent_response(2, Command::Close("netflix".into()), Err("denied".into()));
+    advance_recents(&mut state, 60);
+    assert!(netflix_logo(&state).y > lifted.y);
+    for _ in 0..20 {
+        advance_recents(&mut state, 16);
+    }
+    assert_eq!(netflix_logo(&state).y, original.y);
+    assert_eq!(recent_bounds(&state, "netflix").center(), (960., 540.));
+    assert!(state.recents.dismissals.is_empty());
+    assert_eq!(state.recents.entries.len(), 8);
+    assert!(state.recents.error.is_some());
+    assert!(!state.animating());
+}
+
+#[test]
+fn closing_the_last_slot_brings_the_previous_card_forward_and_reduced_motion_snaps() {
+    for reduced in [false, true] {
+        let mut state = ready();
+        state.preferences.reduced_motion = reduced;
+        state.open_recents();
+        accept(&mut state, recents::demo().into_iter().take(2).collect());
+        state.recents.visibility = 1.;
+        state.recents.selected = 1;
+        state.recents.position = 1.;
+        state.focus = Target::Recent("youtube.leanback.v4".into());
+        let before = recent_bounds(&state, "netflix");
+        state.direction(Direction::Up, &controls(&state));
+        state.recent_response(2, Command::Close("youtube.leanback.v4".into()), Ok(None));
+        let remaining = state.recents.entries.clone();
+        accept(&mut state, remaining);
+        assert_eq!(state.focus, Target::Recent("netflix".into()));
+        advance_recents(&mut state, 80);
+        let entering = recent_bounds(&state, "netflix");
+        assert!(entering.center().0 > before.center().0);
+        assert!(entering.w > before.w);
+        assert_eq!(state.recents.position == 0., reduced);
+        if reduced {
+            assert!(state.recents.dismissals.is_empty());
+        }
+        for _ in 0..50 {
+            advance_recents(&mut state, 16);
+        }
+        assert_eq!(recent_bounds(&state, "netflix").center(), (960., 540.));
+        assert!(!state.animating());
+    }
+}
+
+#[test]
+fn close_selects_the_hovered_cards_neighbor_and_preserves_browsing_during_the_request() {
+    let mut state = ready();
+    state.open_recents();
+    accept(&mut state, recents::demo());
+    let neighbor = state.recents.entries[3].app.id.clone();
+    state.pointer_focus(Target::Recent("com.apple.appletv".into()));
+    state.direction(Direction::Up, &controls(&state));
+    state.recent_response(2, Command::Close("com.apple.appletv".into()), Ok(None));
+    assert_eq!(state.focus, Target::Recent(neighbor));
+    let remaining = state.recents.entries.clone();
+    accept(&mut state, remaining);
+
+    state.focus = Target::Recent("netflix".into());
+    state.recents.selected = 0;
+    state.direction(Direction::Up, &controls(&state));
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::Recent("youtube.leanback.v4".into()));
+    state.recent_response(4, Command::Close("netflix".into()), Ok(None));
+    assert_eq!(state.focus, Target::Recent("youtube.leanback.v4".into()));
+    assert_eq!(state.recents.selected, 0);
+}
+
+#[test]
+fn the_last_card_exits_before_the_empty_state_and_reduced_motion_skips_the_exit() {
+    use crate::renderer::Draw;
+    for reduced in [false, true] {
+        let mut state = ready();
+        state.preferences.reduced_motion = reduced;
+        state.open_recents();
+        accept(&mut state, recents::demo().into_iter().take(1).collect());
+        state.recents.visibility = 1.;
+        state.direction(Direction::Up, &controls(&state));
+        state.recent_response(2, Command::Close("netflix".into()), Ok(None));
+        accept(&mut state, vec![]);
+        assert!(controls(&state).is_empty());
+        let empty_visible = |state: &State| {
+            scene(state)
+                .draw
+                .iter()
+                .any(|draw| matches!(draw, Draw::Text(value, ..) if value == "No recent apps"))
+        };
+        assert_eq!(empty_visible(&state), reduced);
+        for _ in 0..30 {
+            advance_recents(&mut state, 16);
+        }
+        assert!(empty_visible(&state));
+        assert!(state.recents.dismissals.is_empty());
+        assert!(!state.animating());
+    }
+}
+
 #[test]
 fn empty_recents_has_no_explanatory_subtitle() {
     use crate::renderer::Draw;

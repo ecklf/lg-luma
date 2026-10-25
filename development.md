@@ -136,16 +136,21 @@ include them. Both Back and Exit access policies are claimed before video initia
 native Exit signal opens the switcher without waiting for another timer; repeat/dismissal events
 are consumed until release, so the same press cannot dismiss an overlay and then reopen it from Home.
 
-The switcher uses a landscape-card strip on a dimmed wallpaper, a short, reversible crossfade to
-and from the actual parent interface, and a non-bouncy, interruptible horizontal transition.
+The switcher uses an overlapping landscape-card stack on a dimmed wallpaper, a short, reversible
+crossfade to and from the actual parent interface, and a non-bouncy, interruptible depth transition.
+The front card is largest; neighboring cards recede in scale and brightness. Cards are painted and
+hit-tested back-to-front, so only exposed portions of rear cards can be selected with the pointer.
 Reopening during dismissal reverses from the current opacity and keeps the visible cards.
 Dismissal restores parent input immediately while the outgoing cards finish fading. The transition
 does not move card hit targets; pointer interruption pauses only carousel movement, not the fade.
-Reduced motion makes both the crossfade and navigation immediate.
+Reduced motion makes the crossfade, navigation and close transitions immediate.
 Pointer hover/down preserves the current card positions and interrupts remote carousel movement.
 The backdrop uses 86% opacity so more of the wallpaper shows through. There are no app captions, action buttons,
 empty-state subtitle, heading, separate dismiss button, card count, footer instructions or Home
-header shortcut. Up closes the focused card directly; held-Up repeats are ignored to prevent
+header shortcut. Up immediately lifts the focused card off the top of the screen; after a successful
+close, the remaining cards slide into the gap and the next card comes forward. A failed close
+returns the card to the stack. Exiting cards have no hit target, and closing the final card finishes
+its exit before showing the empty state. Held-Up repeats are ignored to prevent
 unintentionally closing more apps as the next card becomes focused. Back dismisses the switcher; Quit app remains an
 explicit Settings → System action.
 

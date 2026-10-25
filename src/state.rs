@@ -280,7 +280,7 @@ impl State {
     pub fn animating(&self) -> bool {
         ((self.recents_open() || self.recents.visibility > 0.)
             && (self.recents.visibility != if self.recents_open() { 1. } else { 0. }
-                || (!self.pointer && self.recents.position != self.recents.selected as f32)))
+                || self.recents.cards_animating(self.pointer)))
             || self.previous_background.is_some()
             || self.panel_started.is_some()
             || (!self.preferences.reduced_motion

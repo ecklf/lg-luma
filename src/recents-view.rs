@@ -1,6 +1,20 @@
-//! A quiet, television-distance carousel: no parallax, bounce or moving hit targets.
+//! Overlapping landscape cards, painted back-to-front with a separate upward exit.
 use super::*;
-use crate::recents::Command;
+use crate::recents::{Command, DismissalOutcome};
+
+fn card_rect(offset: f32) -> Rect {
+    let depth = offset.abs();
+    let scale = 1. / (1. + 0.22 * depth);
+    let width = 900. * scale;
+    let height = width * 9. / 16.;
+    let x = 960. + offset.signum() * (400. * depth.min(1.) + 160. * (depth - 1.).max(0.));
+    Rect::new(
+        x - width / 2.,
+        540. + 18. * depth.min(3.) - height / 2.,
+        width,
+        height,
+    )
+}
 
 pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
@@ -13,7 +27,7 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
         c(0x252c3a, 0.38),
         c(0x0b0e15, 0.50),
     ));
-    if recent.entries.is_empty() {
+    if recent.entries.is_empty() && recent.dismissals.is_empty() {
         let loading = recent.pending.is_some();
         out.icon(
             assets,
@@ -39,45 +53,81 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
             true,
         );
     } else {
-        out.draw
-            .push(Draw::Clip(Some(Rect::new(0., 250., 1920., 560.))));
-        for (index, entry) in recent.entries.iter().enumerate() {
-            let x = 620. + (index as f32 - recent.position) * 744.;
-            if x + 712. < 0. || x - 32. > 1920. {
+        let mut cards: Vec<_> = recent
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| {
+                !recent
+                    .dismissals
+                    .iter()
+                    .any(|dismissal| dismissal.entry.app.id == entry.app.id)
+            })
+            .map(|(index, entry)| (entry, recent.offset(index, entry), None))
+            .collect();
+        for dismissal in &recent.dismissals {
+            // Failed closes land at the card's current slot, even if the user
+            // browsed elsewhere while the platform request was in flight.
+            let offset = if dismissal.outcome == DismissalOutcome::Returning {
+                let current = recent
+                    .entries
+                    .iter()
+                    .enumerate()
+                    .find(|(_, entry)| entry.app.id == dismissal.entry.app.id)
+                    .map(|(index, entry)| recent.offset(index, entry))
+                    .unwrap_or(dismissal.offset);
+                current + (dismissal.offset - current) * dismissal.progress
+            } else {
+                dismissal.offset
+            };
+            cards.push((&dismissal.entry, offset, Some(dismissal)));
+        }
+        // Painting and hit testing share this order: only exposed portions of
+        // a rear card can be clicked. Hover never changes depth or geometry.
+        cards.sort_by(|a, b| b.1.abs().total_cmp(&a.1.abs()));
+        for (entry, offset, dismissal) in cards {
+            let depth = offset.abs();
+            if depth > 4. {
+                continue;
+            }
+            let mut rect = card_rect(offset);
+            if let Some(dismissal) = dismissal {
+                rect.y -= 1320. * dismissal.progress.powi(2);
+            }
+            if rect.y + rect.h + 80. < 0. || rect.x + rect.w + 64. < 0. || rect.x - 64. > 1920. {
                 continue;
             }
             let start = out.draw.len();
-            let rect = Rect::new(x, 336., 680., 382.5);
             let target = Target::Recent(entry.app.id.clone());
             let focused = *focus == target;
-            let selected = index == recent.selected;
-            out.shadow(rect, 24., 40., 18., if selected { 0.55 } else { 0.30 });
+            let radius = 26. * rect.w / 900.;
+            let prominence = (1. - depth).clamp(0., 1.);
+            out.shadow(rect, radius, 48., 22., 0.28 + 0.27 * prominence);
             let app = state
                 .inventory
                 .apps
                 .iter()
                 .find(|app| app.id == entry.app.id)
                 .unwrap_or(&entry.app);
-            app_face(out, assets, app, rect, language, 24.);
+            app_face(out, assets, app, rect, language, radius);
             out.border(
                 rect,
-                24.,
+                radius,
                 if focused { 3. } else { 1. },
-                c(0xffffff, if focused { 0.95 } else { 0.13 }),
+                c(0xffffff, if focused { 0.85 } else { 0.16 }),
             );
             if focused {
-                out.border(rect.inset(-6.), 30., 2., c(0xffffff, 0.12));
+                out.border(rect.inset(-6.), radius + 6., 2., c(0xffffff, 0.10));
             }
-            // Geometry depends on carousel position, never pointer hover/down.
-            out.control(target.clone(), rect, false);
+            // An exiting card is presentation-only, never a moving hit target.
+            if dismissal.is_none() {
+                out.control(target.clone(), rect, false);
+            }
             if state.pressed.as_ref() == Some(&target) {
                 out.fade(start, 1., 0.83);
             }
-            if !selected && !focused {
-                out.fade(start, 0.55, 0.85);
-            }
+            out.fade(start, 1., 1. - 0.17 * depth.min(3.));
         }
-        out.draw.push(Draw::Clip(None));
     }
 
     if recent.error.is_some() {

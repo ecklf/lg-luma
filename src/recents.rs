@@ -7,7 +7,10 @@ use crate::{
 };
 use serde::Serialize;
 use serde_json::{Value, json};
-use std::{collections::HashSet, time::Instant};
+use std::{
+    collections::{BTreeMap, HashSet},
+    time::Instant,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum Command {
@@ -103,6 +106,20 @@ pub fn demo() -> Vec<Entry> {
         .collect()
 }
 
+#[derive(PartialEq, Eq)]
+pub enum DismissalOutcome {
+    Pending,
+    Closed,
+    Returning,
+}
+
+pub struct Dismissal {
+    pub entry: Entry,
+    pub offset: f32,
+    pub progress: f32,
+    pub outcome: DismissalOutcome,
+}
+
 pub struct Recents {
     pub entries: Vec<Entry>,
     pub generation: u64,
@@ -110,6 +127,9 @@ pub struct Recents {
     pub error: Option<String>,
     pub selected: usize,
     pub position: f32,
+    /// Presentation slots survive removal so neighbors can fill the gap smoothly.
+    pub slots: BTreeMap<String, f32>,
+    pub dismissals: Vec<Dismissal>,
     pub visibility: f32,
     pub closing_focus: Option<Target>,
     pub updated: Instant,
@@ -124,6 +144,8 @@ impl Default for Recents {
             error: None,
             selected: 0,
             position: 0.,
+            slots: BTreeMap::new(),
+            dismissals: vec![],
             visibility: 0.,
             closing_focus: None,
             updated: Instant::now(),
@@ -132,6 +154,36 @@ impl Default for Recents {
 }
 
 impl Recents {
+    pub fn cards_animating(&self, pointer: bool) -> bool {
+        (!pointer && self.position != self.selected as f32)
+            || self.entries.iter().enumerate().any(|(index, entry)| {
+                self.slots
+                    .get(&entry.app.id)
+                    .is_some_and(|slot| *slot != index as f32)
+            })
+            || self.dismissals.iter().any(|dismissal| {
+                dismissal.outcome != DismissalOutcome::Pending || dismissal.progress < 1.
+            })
+    }
+
+    pub fn offset(&self, index: usize, entry: &Entry) -> f32 {
+        self.slots
+            .get(&entry.app.id)
+            .copied()
+            .unwrap_or(index as f32)
+            - self.position
+    }
+
+    fn sync_slots(&mut self) {
+        self.slots
+            .retain(|id, _| self.entries.iter().any(|entry| &entry.app.id == id));
+        for (index, entry) in self.entries.iter().enumerate() {
+            self.slots
+                .entry(entry.app.id.clone())
+                .or_insert(index as f32);
+        }
+    }
+
     pub fn animate(&mut self, open: bool, reduced: bool, pointer: bool, now: Instant) -> bool {
         let dt = now
             .saturating_duration_since(self.updated)
@@ -139,23 +191,46 @@ impl Recents {
             .min(0.1);
         self.updated = now;
         let visibility = if open { 1. } else { 0. };
-        let changed =
-            self.visibility != visibility || (!pointer && self.position != self.selected as f32);
-        let approach = |current: &mut f32, target: f32| {
+        let changed = self.visibility != visibility || self.cards_animating(pointer);
+        let approach = |current: &mut f32, target: f32, speed: f32| {
             if reduced || (*current - target).abs() < 0.002 {
                 *current = target;
             } else {
-                *current += (target - *current) * (1. - (-24. * dt).exp());
+                *current += (target - *current) * (1. - (-speed * dt).exp());
             }
         };
         // Opacity always settles, even after pointer input interrupts carousel
         // movement. Retargeting starts from the current presentation value.
-        approach(&mut self.visibility, visibility);
+        approach(&mut self.visibility, visibility, 24.);
         if !pointer {
-            approach(&mut self.position, self.selected as f32);
+            approach(&mut self.position, self.selected as f32, 18.);
         }
+        for (index, entry) in self.entries.iter().enumerate() {
+            if let Some(slot) = self.slots.get_mut(&entry.app.id) {
+                approach(slot, index as f32, 18.);
+            }
+        }
+        for dismissal in &mut self.dismissals {
+            dismissal.progress = if reduced {
+                if dismissal.outcome == DismissalOutcome::Returning {
+                    0.
+                } else {
+                    1.
+                }
+            } else if dismissal.outcome == DismissalOutcome::Returning {
+                (dismissal.progress - dt / 0.28).max(0.)
+            } else {
+                (dismissal.progress + dt / 0.38).min(1.)
+            };
+        }
+        self.dismissals.retain(|dismissal| match dismissal.outcome {
+            DismissalOutcome::Pending => true,
+            DismissalOutcome::Closed => dismissal.progress < 1.,
+            DismissalOutcome::Returning => dismissal.progress > 0.,
+        });
         if !open && self.visibility == 0. {
             self.closing_focus = None;
+            self.dismissals.clear();
         }
         changed
     }
@@ -177,10 +252,19 @@ impl State {
             self.recents.entries.clear();
             self.recents.selected = 0;
             self.recents.position = 0.;
+            self.recents.slots.clear();
+            self.recents.dismissals.clear();
             self.recents.closing_focus = None;
         }
         self.recents.updated = Instant::now();
         self.recents.pending = None;
+        // An interrupted mutation is reconciled by the new history read. Return
+        // its presentation card while reversing the overlay fade.
+        for dismissal in &mut self.recents.dismissals {
+            if dismissal.outcome == DismissalOutcome::Pending {
+                dismissal.outcome = DismissalOutcome::Returning;
+            }
+        }
         self.focus = self.recents.closing_focus.take().unwrap_or_else(|| {
             self.recents
                 .entries
@@ -201,6 +285,31 @@ impl State {
     pub fn recent_request(&mut self, command: Command) -> Vec<Effect> {
         if !self.recents_open() || self.recents.pending.is_some() {
             return vec![];
+        }
+        if let Command::Close(id) = &command {
+            if self
+                .recents
+                .dismissals
+                .iter()
+                .any(|dismissal| &dismissal.entry.app.id == id)
+            {
+                return vec![];
+            }
+            if !self.preferences.reduced_motion
+                && let Some((index, entry)) = self
+                    .recents
+                    .entries
+                    .iter()
+                    .enumerate()
+                    .find(|(_, entry)| &entry.app.id == id)
+            {
+                self.recents.dismissals.push(Dismissal {
+                    entry: entry.clone(),
+                    offset: self.recents.offset(index, entry),
+                    progress: 0.,
+                    outcome: DismissalOutcome::Pending,
+                });
+            }
         }
         self.recents.generation += 1;
         self.recents.pending = Some(command.clone());
@@ -229,6 +338,13 @@ impl State {
         match result {
             Err(error) => {
                 eprintln!("Luma recent apps: {error}");
+                if let Command::Close(id) = &command {
+                    for dismissal in &mut self.recents.dismissals {
+                        if &dismissal.entry.app.id == id {
+                            dismissal.outcome = DismissalOutcome::Returning;
+                        }
+                    }
+                }
                 self.recents.error = Some(error);
                 if self.recents.entries.is_empty() {
                     self.focus = Target::RecentRetry;
@@ -241,6 +357,15 @@ impl State {
                         _ => None,
                     };
                     self.recents.entries = entries.unwrap_or_default();
+                    self.recents.sync_slots();
+                    self.recents.dismissals.retain(|dismissal| {
+                        dismissal.outcome != DismissalOutcome::Returning
+                            || self
+                                .recents
+                                .entries
+                                .iter()
+                                .any(|entry| entry.app.id == dismissal.entry.app.id)
+                    });
                     self.recents.selected = old
                         .and_then(|id| self.recents.entries.iter().position(|e| e.app.id == id))
                         .unwrap_or(self.recents.selected)
@@ -256,11 +381,29 @@ impl State {
                     return self.back();
                 }
                 Command::Close(id) => {
-                    self.recents.entries.retain(|e| e.app.id != id);
-                    self.recents.selected = self
+                    let removed = self
                         .recents
-                        .selected
-                        .min(self.recents.entries.len().saturating_sub(1));
+                        .entries
+                        .iter()
+                        .position(|entry| entry.app.id == id)
+                        .unwrap_or(self.recents.selected);
+                    for dismissal in &mut self.recents.dismissals {
+                        if dismissal.entry.app.id == id {
+                            dismissal.outcome = DismissalOutcome::Closed;
+                        }
+                    }
+                    self.recents.entries.retain(|e| e.app.id != id);
+                    self.recents.sync_slots();
+                    self.recents.selected = match &self.focus {
+                        Target::Recent(focused) if focused != &id => self
+                            .recents
+                            .entries
+                            .iter()
+                            .position(|entry| &entry.app.id == focused)
+                            .unwrap_or(removed),
+                        _ => removed,
+                    }
+                    .min(self.recents.entries.len().saturating_sub(1));
                     self.focus = self
                         .recents
                         .entries

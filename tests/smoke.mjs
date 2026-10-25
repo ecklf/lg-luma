@@ -17,7 +17,7 @@ const binary = path.resolve(root, process.env.CARGO_TARGET_DIR ?? 'target', 'deb
 const temporary = await fs.mkdtemp(path.join(out, 'smoke-'));
 try {
   const preferences = path.join(temporary, 'preferences.json');
-  const scenario = async (name, script, extra = []) => {
+  const scenario = async (name, script, extra = [], frames = 90) => {
     const screenshot = path.join(out, `${name}.png`);
     const dump = path.join(temporary, `${name}.json`);
     const diagnostics = path.join(out, `${name}-render.json`);
@@ -27,7 +27,7 @@ try {
       '--script',
       script,
       '--frames',
-      '90',
+      String(frames),
       '--screenshot',
       screenshot,
       '--dump-state',
@@ -101,6 +101,9 @@ try {
   const recentsEmpty = await scenario(
     'recents-empty',
     `recents,await-recents,${Array(8).fill('up,await-recents').join(',')}`,
+    [],
+    // Let the final card finish its upward exit before capturing the empty state.
+    150,
   );
   assert.deepEqual(recentsEmpty.recents, []);
   assert.equal(recentsEmpty.focus, 'RecentEmpty');
