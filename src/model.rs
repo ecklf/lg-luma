@@ -94,6 +94,8 @@ pub struct Preferences {
     pub favorites: Option<Vec<String>>,
     pub hidden: Vec<String>,
     pub background: String,
+    /// Last manually chosen splash, independent of automatic rotation.
+    pub splash_background: Option<String>,
     pub deleted_backgrounds: Vec<String>,
     pub show_home_names: bool,
     pub show_app_names: bool,
@@ -116,6 +118,12 @@ pub struct Preferences {
     /// Applied at launch because MSAA is selected when SDL creates the GL window.
     #[serde(deserialize_with = "crate::text_rendering::deserialize")]
     pub text_rendering: crate::text_rendering::TextRendering,
+    #[serde(deserialize_with = "crate::wallpaper_cycle::deserialize")]
+    pub wallpaper_cycle: crate::wallpaper_cycle::WallpaperCycle,
+    /// Wallpapers left out of the rotation; new ones take part until the owner unticks them.
+    pub wallpaper_skip: Vec<String>,
+    /// Unix seconds of the last automatic or chosen wallpaper change, for the timed modes.
+    pub wallpaper_changed: u64,
 }
 
 impl Default for Preferences {
@@ -124,6 +132,7 @@ impl Default for Preferences {
             favorites: None,
             hidden: vec![],
             background: "dunes".into(),
+            splash_background: None,
             deleted_backgrounds: vec![],
             show_home_names: false,
             show_app_names: true,
@@ -138,11 +147,18 @@ impl Default for Preferences {
             temperature_unit: Unit::Celsius,
             language: Language::En,
             text_rendering: crate::text_rendering::TextRendering::default(),
+            wallpaper_cycle: crate::wallpaper_cycle::WallpaperCycle::default(),
+            wallpaper_skip: vec![],
+            wallpaper_changed: 0,
         }
     }
 }
 
 impl Preferences {
+    pub fn splash_background(&self) -> &str {
+        self.splash_background.as_deref().unwrap_or(&self.background)
+    }
+
     pub fn favorites(&self, apps: &[App]) -> Vec<String> {
         self.favorites.clone().unwrap_or_else(|| {
             let mut ids = Vec::new();
@@ -201,6 +217,9 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
+        if self.splash_background.as_ref().is_some_and(|id| !BACKGROUNDS.iter().any(|(known, _)| *known == id) && !crate::wallpapers::valid_id(id)) {
+            self.splash_background = None;
+        }
         if !BACKGROUNDS.iter().any(|(id, _)| *id == self.background)
             && !crate::wallpapers::valid_id(&self.background)
         {
@@ -229,6 +248,13 @@ impl Preferences {
             .filter(|(_, name)| !name.is_empty())
             .take(128)
             .collect();
+        let mut seen = HashSet::new();
+        self.wallpaper_skip.retain(|id| {
+            (BACKGROUNDS.iter().any(|(bundled, _)| bundled == id)
+                || crate::wallpapers::valid_id(id))
+                && seen.insert(id.clone())
+        });
+        self.wallpaper_skip.truncate(64);
     }
 }
 

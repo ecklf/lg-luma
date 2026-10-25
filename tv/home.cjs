@@ -437,7 +437,8 @@ function stageSplash(appDir) {
   candidates.push(appDir + '/preferences.json');
   for (var i = 0; i < candidates.length; i++) {
     try {
-      var saved = json(candidates[i]).background;
+      var preferences = json(candidates[i]);
+      var saved = preferences.splash_background || preferences.background;
       if (typeof saved === 'string' && /^[a-z0-9-]{1,32}$/.test(saved)) {
         background = saved;
         break;

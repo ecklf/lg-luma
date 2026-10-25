@@ -25,6 +25,7 @@ mod storage;
 mod text_rendering;
 mod vector;
 mod view;
+mod wallpaper_cycle;
 mod wallpapers;
 mod weather;
 #[path = "weather-service.rs"]
@@ -282,7 +283,7 @@ fn effects(
                     eprintln!("{error}");
                     state.notify(state.preferences.language.t("savedError"));
                 } else {
-                    platform.sync_splash(&state.preferences.background);
+                    platform.sync_splash(state.preferences.splash_background());
                 }
             }
             effect @ (Effect::Refresh | Effect::Reload) => {
@@ -640,7 +641,7 @@ fn run() -> Result<(), String> {
         &weather_service,
         &wallpaper_service,
     );
-    platform.sync_splash(&state.preferences.background);
+    platform.sync_splash(state.preferences.splash_background());
     startup_stage("preferences and workers");
 
     let sdl = sdl2::init()?;
@@ -884,6 +885,9 @@ fn run() -> Result<(), String> {
         pill_width,
         options.time.unwrap_or_else(OffsetDateTime::now_utc),
     );
+    let mut launch_cycle = state.preferences.wallpaper_cycle == wallpaper_cycle::WallpaperCycle::Launch;
+    let mut wallpapers_scanned = false;
+    let launched = Instant::now();
     while running {
         let now = options
             .time
@@ -904,7 +908,10 @@ fn run() -> Result<(), String> {
         );
         while let Ok(event) = wallpaper_service.receiver.try_recv() {
             match event {
-                wallpapers::Event::Catalog(items) => state.set_wallpapers(items),
+                wallpapers::Event::Catalog(items) => {
+                    wallpapers_scanned = true;
+                    state.set_wallpapers(items);
+                }
                 wallpapers::Event::Deleted(id, result) => state.wallpaper_deleted(id, result),
                 wallpapers::Event::Session(generation, result)
                     if generation == wallpaper_service.generation()
@@ -927,6 +934,17 @@ fn run() -> Result<(), String> {
             }
         }
         state.dirty |= assets.artwork.poll();
+        let unix = state::unix_now();
+        let launch_due = launch_cycle && (wallpapers_scanned || launched.elapsed() >= Duration::from_secs(3));
+        if focused && visible && state.overlay.is_none() && state.moving.is_none()
+            && state.deleting_wallpaper.is_none() && !state.animating()
+            && (launch_due || state.preferences.wallpaper_cycle.due(state.preferences.wallpaper_changed, unix)) {
+            launch_cycle = false;
+            if state.cycle_wallpaper(unix)
+                && let Err(error) = storage::save(&preferences_path, &state.preferences) {
+                eprintln!("{error}");
+            }
+        }
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
                 Response::Inventory(Ok((mut inventory, warning))) => {
