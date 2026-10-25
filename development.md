@@ -97,7 +97,8 @@ the keyboard first; Weather Location then returns to its parent Location row, HD
 that HDMI row, and the Background gallery to Background in the sidebar. Back from the sidebar
 focuses the Settings tab, then returns Home. **System** in the sidebar groups **Refresh apps & inputs**
 and the vector power-icon **Quit app** action separately from General preferences.
-The **Clock** subpage contains **Clock format** (12-hour or 24-hour) and **Time format** (`HH:MM`
+The **Clock** subpage contains **Clock format** (12-hour or 24-hour; until one is chosen, 12-hour
+for English and 24-hour for the other languages) and **Time format** (`HH:MM`
 or `HH:MM:SS`, defaulting to `HH:MM`). Choosing a format returns to its row in Clock, and Back
 from Clock restores its General row. With seconds shown, the header clock redraws once per second
 instead of once per minute. Existing saved hour and seconds preferences are retained.
