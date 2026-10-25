@@ -5,8 +5,8 @@ use crate::{
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
         APPS_COLUMNS, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT,
-        HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State,
-        Subpage, Target, TextField, WEATHER_SECTION,
+        HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, LANDING_DROP, LANDING_ROW, Overlay, Page, Rect,
+        SYSTEM_SECTION, State, Subpage, Target, TextField, WEATHER_SECTION,
     },
     weather::{self, Unit},
 };
@@ -837,6 +837,8 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     if let Some(summary) = summary {
         weather_summary(out, state, assets, summary, 265. - shift + 94.92 + 18.4 - s);
     }
+    // The wallpaper-first Home lowers the favourites and inputs; the greeting stays.
+    let s = s - state.landing() * LANDING_DROP;
     out.text(
         language.t("favorites"),
         Rect::new(84., 478.5 - s, 1000., 31.),
@@ -939,6 +941,7 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     out.draw.push(Draw::EdgeFadeX(None));
     out.draw.push(Draw::Clip(Some(state.content_viewport())));
     let input_y = 544.8 + grid_height + 41.6 - s;
+    let inputs_start = out.draw.len();
     let inputs: Vec<_> = state
         .inventory
         .inputs
@@ -1028,6 +1031,11 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             out.ring(rect, 18.4);
         }
         out.control(Target::Input(input.id.clone()), rect, true);
+    }
+    // Lowered, the inputs would show cut off at the bottom: they fade in as the row slides up.
+    let landing = state.landing();
+    if landing > 0. {
+        out.fade(inputs_start, 1. - landing, 1.);
     }
 }
 
@@ -1954,6 +1962,17 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                         state.preferences.greeting_name.as_str()
                     }),
                     true,
+                ),
+                (
+                    LANDING_ROW,
+                    "landingLayout",
+                    "eye",
+                    Some(if state.preferences.landing_layout {
+                        language.t("stateOn")
+                    } else {
+                        language.t("stateOff")
+                    }),
+                    false,
                 ),
             ]
             .into_iter()

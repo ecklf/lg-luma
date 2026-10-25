@@ -1802,5 +1802,16 @@
     "ru": "Тестовая карточка для прокрутки; приложение не запускается.",
     "pl": "Karta testowa do przewijania; brak aplikacji do uruchomienia.",
     "fr": "Carte de test pour le défilement ; aucune application à lancer."
+  },
+  "landingLayout": {
+    "en": "Wallpaper-first Home",
+    "de": "Startseite mit Hintergrund",
+    "es": "Inicio con fondo",
+    "zh": "壁纸优先主页",
+    "pt": "Início com plano de fundo",
+    "it": "Home con sfondo",
+    "ru": "Главная с обоями",
+    "pl": "Ekran główny z tapetą",
+    "fr": "Accueil avec fond d’écran"
   }
 }

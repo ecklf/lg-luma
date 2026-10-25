@@ -1500,3 +1500,71 @@ fn inventory_success_resets_failures_and_later_failures_show_at_once() {
     assert!(!state.loading && state.error.is_some());
     assert!(!state.inventory.apps.is_empty());
 }
+
+#[test]
+fn the_wallpaper_first_home_lowers_the_rows_until_focus_moves_into_them() {
+    use crate::state::{LANDING_DROP, LANDING_ROW};
+    let tile_y = |state: &State| {
+        controls(state)
+            .iter()
+            .find(|control| matches!(control.target, Target::App(_)))
+            .map(|control| control.rect.y)
+            .unwrap()
+    };
+    let mut usual = ready();
+    usual.preferences.reduced_motion = true;
+    let usual_y = tile_y(&usual);
+
+    let mut state = State::new(Preferences {
+        landing_layout: true,
+        reduced_motion: true,
+        ..Preferences::default()
+    });
+    state.set_inventory(demo_inventory(), None);
+    assert_eq!(state.focus, Target::Nav(0));
+    assert_eq!(state.landing(), 1.);
+    assert_eq!(tile_y(&state), usual_y + LANDING_DROP);
+    state.direction(Direction::Down, &controls(&state));
+    assert!(matches!(state.focus, Target::App(_)));
+    state.tick();
+    assert_eq!(state.landing(), 0.);
+    assert_eq!(
+        state.scroll, 0.,
+        "the lowered position never scrolls the page"
+    );
+    assert_eq!(tile_y(&state), usual_y);
+    state.direction(Direction::Up, &controls(&state));
+    state.tick();
+    assert_eq!(
+        state.landing(),
+        1.,
+        "back in the header the rows lower again"
+    );
+
+    // It slides when motion is allowed, and stays put on other pages.
+    state.preferences.reduced_motion = false;
+    state.direction(Direction::Down, &controls(&state));
+    state.tick();
+    assert!(state.animating());
+    state.preferences.reduced_motion = true;
+    state.open(2);
+    state.tick();
+    assert_eq!(state.focus, Target::Nav(2));
+    assert_eq!(
+        state.landing(),
+        0.,
+        "the header of another page keeps the usual layout"
+    );
+
+    // General → Wallpaper-first Home switches it.
+    let mut settings = ready();
+    settings.open(2);
+    settings.focus = Target::Setting(LANDING_ROW);
+    assert!(scene(&settings).draw.iter().any(|draw| matches!(draw,
+        crate::renderer::Draw::Text(value, ..) if value == "Wallpaper-first Home")));
+    assert_eq!(settings.activate(), vec![Effect::Save]);
+    assert!(settings.preferences.landing_layout);
+    let saved = serde_json::to_value(&settings.preferences).unwrap();
+    assert_eq!(saved["landing_layout"], true);
+    assert!(!Preferences::default().landing_layout);
+}
