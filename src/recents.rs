@@ -122,6 +122,8 @@ pub struct Dismissal {
 
 pub struct Recents {
     pub entries: Vec<Entry>,
+    /// Distinguish the initial history read from quiet background refreshes.
+    pub loaded: bool,
     pub generation: u64,
     pub pending: Option<Command>,
     pub error: Option<String>,
@@ -139,6 +141,7 @@ impl Default for Recents {
     fn default() -> Self {
         Self {
             entries: vec![],
+            loaded: false,
             generation: 0,
             pending: None,
             error: None,
@@ -250,6 +253,7 @@ impl State {
         });
         if self.recents.visibility == 0. {
             self.recents.entries.clear();
+            self.recents.loaded = false;
             self.recents.selected = 0;
             self.recents.position = 0.;
             self.recents.slots.clear();
@@ -357,6 +361,7 @@ impl State {
                         _ => None,
                     };
                     self.recents.entries = entries.unwrap_or_default();
+                    self.recents.loaded = true;
                     self.recents.sync_slots();
                     self.recents.dismissals.retain(|dismissal| {
                         dismissal.outcome != DismissalOutcome::Returning
