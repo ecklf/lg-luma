@@ -1127,7 +1127,12 @@ impl Renderer {
         let x1 = (viewport.x as f32 + (rect.x + rect.w).min(1920.) * sx).ceil() as i32;
         let y0 = (viewport.y as f32 + (1080. - (rect.y + rect.h).min(1080.)) * sy).floor() as i32;
         let y1 = (viewport.y as f32 + (1080. - rect.y.max(0.)) * sy).ceil() as i32;
-        [x0, y0, (x1 - x0).max(0), (y1 - y0).max(0)]
+        if x1 <= x0 || y1 <= y0 {
+            // No change still names, clears and redraws one pixel inside the drawable. An empty
+            // or off-surface region left the driver nothing to preserve: Mali presented black.
+            return [viewport.x, viewport.y, 1, 1];
+        }
+        [x0, y0, x1 - x0, y1 - y0]
     }
 
     /// The logical area drawable pixels from `damage_pixels` cover. Grown to whole pixels it

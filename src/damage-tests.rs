@@ -178,3 +178,18 @@ fn culling_covers_every_pixel_the_damage_clears() {
         neighbour
     ));
 }
+
+#[test]
+fn an_unchanged_frame_names_a_pixel_inside_the_drawable() {
+    use crate::renderer::Renderer;
+    // EGL_KHR_partial_update is told this rect and the frame is scissored to it. A rect
+    // outside the surface leaves the driver nothing to preserve: Mali presented black.
+    for (width, height) in [(1920, 1080), (1280, 720), (3840, 2160), (1920, 1200)] {
+        let [x, y, w, h] = Renderer::damage_pixels(Rect::default(), width, height);
+        assert!(w >= 1 && h >= 1, "{width}x{height}: empty damage {w}x{h}");
+        assert!(
+            x >= 0 && y >= 0 && x + w <= width as i32 && y + h <= height as i32,
+            "{width}x{height}: [{x}, {y}, {w}, {h}] lies outside the drawable"
+        );
+    }
+}
