@@ -372,12 +372,20 @@ pub fn clean_input_name(name: &str) -> String {
     clean.trim_end().into()
 }
 
+/// Whether the URL uses https, and the address after the scheme.
+pub fn split_tile_url(url: &str) -> Option<(bool, &str)> {
+    let start = url.get(..8).unwrap_or(url).to_ascii_lowercase();
+    if start.starts_with("https://") {
+        Some((true, &url[8..]))
+    } else if start.starts_with("http://") {
+        Some((false, &url[7..]))
+    } else {
+        None
+    }
+}
+
 pub fn valid_tile_url(url: &str) -> bool {
-    let lower = url.to_ascii_lowercase();
-    let rest = lower
-        .strip_prefix("http://")
-        .or_else(|| lower.strip_prefix("https://"));
-    rest.is_some_and(|rest| !rest.is_empty())
+    split_tile_url(url).is_some_and(|(_, rest)| !rest.is_empty())
         && url.chars().count() <= TILE_URL_LIMIT
         && !url.chars().any(|c| c.is_whitespace() || c.is_control())
 }

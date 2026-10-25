@@ -2,7 +2,7 @@ use crate::i18n::Language;
 use crate::model::{
     App, BACKGROUNDS, CATEGORIES, CUSTOM_TILE_PREFIX, CustomTile, INPUT_NAME_LIMIT, InputMode,
     Inventory, Preferences, TILE_LIMIT, TILE_URL_LIMIT, TileMethod, clean_input_name,
-    valid_tile_url,
+    split_tile_url, valid_tile_url,
 };
 use crate::text_rendering::TextRendering;
 use crate::weather::{self, Unit};
@@ -93,6 +93,7 @@ pub enum Target {
     Tile(String),
     TileAdd,
     TileName,
+    TileScheme,
     TileUrl,
     TileMethod,
     TileSend,
@@ -237,6 +238,9 @@ pub struct State {
     pub input_name: String,
     pub tile_draft: CustomTile,
     pub tile_text: String,
+    /// Scheme put in front of an address typed without one, so the TV
+    /// keyboard is only needed for the host and path.
+    pub tile_https: bool,
     pub recents: crate::recents::Recents,
 }
 
@@ -277,6 +281,7 @@ impl State {
             input_name: String::new(),
             tile_draft: CustomTile::default(),
             tile_text: String::new(),
+            tile_https: false,
             recents: crate::recents::Recents::default(),
         }
     }
@@ -1084,6 +1089,7 @@ impl State {
             if matches!(
                 self.focus,
                 Target::TileName
+                    | Target::TileScheme
                     | Target::TileUrl
                     | Target::TileMethod
                     | Target::TileSend
@@ -1625,11 +1631,17 @@ impl State {
             return vec![];
         }
         if self.keyboard_field == TextField::TileUrl {
-            if !valid_tile_url(text) {
+            let url = match split_tile_url(text) {
+                Some(_) => text.to_owned(),
+                None if text.contains("://") => String::new(),
+                None => format!("{}{text}", self.tile_scheme()),
+            };
+            if !valid_tile_url(&url) {
                 self.notify(self.preferences.language.t("tileUrlInvalid"));
                 return vec![];
             }
-            self.tile_draft.url = text.into();
+            self.tile_https = split_tile_url(&url).is_some_and(|(https, _)| https);
+            self.tile_draft.url = url;
         } else {
             self.tile_draft.title = clean_input_name(text);
         }
@@ -1687,9 +1699,18 @@ impl State {
         vec![Effect::FireWebhook(tile)]
     }
 
+    pub fn tile_scheme(&self) -> &'static str {
+        if self.tile_https {
+            "https://"
+        } else {
+            "http://"
+        }
+    }
+
     fn open_tile(&mut self, tile: Option<CustomTile>) {
         self.subpage = Some(Subpage::Tile(tile.as_ref().map(|tile| tile.id.clone())));
         self.tile_draft = tile.unwrap_or_default();
+        self.tile_https = split_tile_url(&self.tile_draft.url).is_some_and(|(https, _)| https);
         self.focus = Target::TileName;
         self.scroll = 0.;
         if !self.preferences.reduced_motion {
@@ -1930,6 +1951,13 @@ impl State {
             }
             Target::TileName => self.open_keyboard(TextField::TileName),
             Target::TileUrl => self.open_keyboard(TextField::TileUrl),
+            Target::TileScheme => {
+                self.tile_https = !self.tile_https;
+                if let Some((_, rest)) = split_tile_url(&self.tile_draft.url) {
+                    self.tile_draft.url = format!("{}{rest}", self.tile_scheme());
+                }
+                return self.store_tile();
+            }
             Target::TileMethod => {
                 self.tile_draft.method = match self.tile_draft.method {
                     TileMethod::Get => TileMethod::Post,

@@ -2469,12 +2469,20 @@
     "it": "Indirizzo web (URL)"
   },
   "tileUrlHint": {
-    "en": "http:// or https:// address to call",
-    "de": "Aufzurufende http://- oder https://-Adresse",
-    "es": "Dirección http:// o https:// a la que llamar",
-    "zh": "要调用的 http:// 或 https:// 地址",
-    "pt": "Endereço http:// ou https:// a ser chamado",
-    "it": "Indirizzo http:// o https:// da chiamare"
+    "en": "Address without http://, e.g. homeassistant.local:8123/api/webhook/…",
+    "de": "Adresse ohne http://, z. B. homeassistant.local:8123/api/webhook/…",
+    "es": "Dirección sin http://, p. ej. homeassistant.local:8123/api/webhook/…",
+    "zh": "不含 http:// 的地址，例如 homeassistant.local:8123/api/webhook/…",
+    "pt": "Endereço sem http://, por exemplo homeassistant.local:8123/api/webhook/…",
+    "it": "Indirizzo senza http://, ad es. homeassistant.local:8123/api/webhook/…"
+  },
+  "protocol": {
+    "en": "Protocol",
+    "de": "Protokoll",
+    "es": "Protocolo",
+    "zh": "协议",
+    "pt": "Protocolo",
+    "it": "Protocollo"
   },
   "requestMethod": {
     "en": "Request method",
@@ -2541,12 +2549,12 @@
     "it": "Impossibile inviare {tile}."
   },
   "tileUrlInvalid": {
-    "en": "Enter an address starting with http:// or https://.",
-    "de": "Gib eine Adresse ein, die mit http:// oder https:// beginnt.",
-    "es": "Escribe una dirección que empiece por http:// o https://.",
-    "zh": "请输入以 http:// 或 https:// 开头的地址。",
-    "pt": "Digite um endereço que comece com http:// ou https://.",
-    "it": "Inserisci un indirizzo che inizi con http:// o https://."
+    "en": "Only http:// and https:// addresses are supported.",
+    "de": "Nur http://- und https://-Adressen werden unterstützt.",
+    "es": "Solo se admiten direcciones http:// y https://.",
+    "zh": "仅支持 http:// 和 https:// 地址。",
+    "pt": "Somente endereços http:// e https:// são suportados.",
+    "it": "Sono supportati solo indirizzi http:// e https://."
   },
   "tileIncomplete": {
     "en": "Add a name and a URL first.",

@@ -2686,65 +2686,60 @@ fn tile_settings(out: &mut Scene, state: &State, assets: &Assets, saved: bool) {
         draft.title.clone()
     };
     let url = if editing(TextField::TileUrl) {
-        format!("{}|", shorten(&state.tile_text, true))
+        let typed = &state.tile_text;
+        let scheme = if typed.contains("://") {
+            ""
+        } else {
+            state.tile_scheme()
+        };
+        format!("{}|", shorten(&format!("{scheme}{typed}"), true))
     } else if draft.url.is_empty() {
         language.t("tileUrlHint").into()
     } else {
         shorten(&draft.url, false)
     };
-    for (y, target, title, icon, description) in [
-        (164.8, Target::TileName, language.t("name"), "type", name),
-        (267.5, Target::TileUrl, language.t("url"), "globe", url),
-    ] {
-        row(
-            out,
-            state,
-            assets,
-            Row {
-                target,
-                rect: Rect::new(640., y - state.scroll, 1120., 90.7),
-                title,
-                icon: Some(icon),
-                value: None,
-                description: Some(&description),
-                selected: false,
-                chevron: true,
-            },
-        );
-    }
-    let mut actions = vec![
+    let mut rows = vec![
+        (Target::TileName, "name", "type", None, Some(name)),
+        (
+            Target::TileScheme,
+            "protocol",
+            "globe",
+            Some(state.tile_scheme()),
+            None,
+        ),
+        (Target::TileUrl, "url", "location", None, Some(url)),
         (
             Target::TileMethod,
-            language.t("requestMethod"),
-            Some("settings"),
+            "requestMethod",
+            "settings",
             Some(draft.method.label()),
+            None,
         ),
-        (Target::TileSend, language.t("sendNow"), Some("arrow"), None),
+        (Target::TileSend, "sendNow", "arrow", None, None),
     ];
     if saved {
-        actions.push((
-            Target::TileRemove,
-            language.t("removeTile"),
-            Some("close"),
-            None,
-        ));
+        rows.push((Target::TileRemove, "removeTile", "close", None, None));
     }
-    for (index, (target, title, icon, value)) in actions.into_iter().enumerate() {
+    let mut y = 164.8 - state.scroll;
+    for (target, title, icon, value, description) in rows {
+        let height = if description.is_some() { 90.7 } else { 72. };
+        let chevron = matches!(target, Target::TileName | Target::TileUrl);
         row(
             out,
             state,
             assets,
             Row {
                 target,
-                rect: Rect::new(640., 370.2 + index as f32 * 84. - state.scroll, 1120., 72.),
-                title,
-                icon,
+                rect: Rect::new(640., y, 1120., height),
+                title: language.t(title),
+                icon: Some(icon),
                 value,
-                description: None,
+                description: description.as_deref(),
                 selected: false,
-                chevron: false,
+                chevron,
             },
         );
+        y += height + 12.;
     }
 }
 

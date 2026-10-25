@@ -2102,6 +2102,8 @@ fn shortcut_tiles_are_created_edited_sent_and_removed_in_settings() {
     assert_eq!(state.subpage, Some(Subpage::Tile(None)));
     assert_eq!(state.focus, Target::TileName);
     state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::TileScheme);
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::TileUrl);
     state.activate();
     state.text("ftp://example");
@@ -2148,6 +2150,26 @@ fn shortcut_tiles_are_created_edited_sent_and_removed_in_settings() {
     state.activate();
     assert!(state.finish_text_input().is_empty());
     assert_eq!(state.preferences.custom_tiles[0].title, "Sandmännchen");
+
+    // The protocol row switches the scheme; an address typed without one gets it.
+    state.focus = Target::TileScheme;
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(
+        state.preferences.custom_tiles[0].url,
+        "https://ha.local:8123/api/webhook/abc"
+    );
+    state.focus = Target::TileUrl;
+    state.activate();
+    state.text("ha.local/api/webhook/xyz");
+    assert_eq!(state.finish_text_input(), vec![Effect::Save]);
+    assert_eq!(
+        state.preferences.custom_tiles[0].url,
+        "https://ha.local/api/webhook/xyz"
+    );
+    state.focus = Target::TileScheme;
+    state.activate();
+    let tile = state.preferences.custom_tiles[0].clone();
+    assert_eq!(tile.url, "http://ha.local/api/webhook/xyz");
 
     state.focus = Target::TileMethod;
     assert_eq!(state.activate(), vec![Effect::Save]);

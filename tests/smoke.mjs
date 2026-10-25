@@ -383,7 +383,7 @@ try {
   assert.equal(msaa.render.text_rendering.embolden, 0);
   const shortcut = await scenario(
     'shortcut-settings',
-    'settings,down,down,down,down,down,right,enter,type:Sandmann,back,down,enter,type:http://127.0.0.1:9/api/webhook/luma,back',
+    'settings,down,down,down,down,down,right,enter,type:Sandmann,back,down,down,enter,type:127.0.0.1:9/api/webhook/luma,back',
   );
   assert.equal(shortcut.focus, 'TileUrl');
   assert.deepEqual(shortcut.subpage, { Tile: 'custom.sandmann' });
@@ -400,7 +400,7 @@ try {
   // Scenarios share one preferences file, so the tile is removed again here.
   const removed = await scenario(
     'shortcut-removed',
-    'settings,down,down,down,down,down,right,enter,down,down,down,down,enter',
+    'settings,down,down,down,down,down,right,enter,down,down,down,down,down,enter',
   );
   assert.equal(removed.focus, 'TileAdd');
   assert.equal(removed.subpage, null);
