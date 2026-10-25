@@ -160,6 +160,8 @@ pub enum Subpage {
     Temperature,
     Language,
     TextRendering,
+    /// System › Luma as Home: on (replace LG Home) or off.
+    HomeTakeover,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -197,6 +199,8 @@ pub enum Effect {
     Quit,
     Weather(weather::Command),
     UpdateDownload(String),
+    /// Replace LG Home with Luma (true) or restore it (false), through Homebrew's root service.
+    HomeTakeover(bool),
 }
 
 pub const KEYS: [&str; 40] = [
@@ -247,6 +251,8 @@ pub struct State {
     pub greeting_name_draft: String,
     pub input_name: String,
     pub recents: crate::recents::Recents,
+    /// Whether this instance runs as the TV's Home (the takeover is enabled).
+    pub home_takeover: bool,
 }
 
 impl State {
@@ -290,6 +296,7 @@ impl State {
             greeting_name_draft: String::new(),
             input_name: String::new(),
             recents: crate::recents::Recents::default(),
+            home_takeover: false,
         }
     }
 
@@ -996,6 +1003,7 @@ impl State {
             }
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
+            Some(Subpage::HomeTakeover) => Target::Setting(8),
             None => Target::Sidebar(self.section),
         };
         self.scroll = 0.;
@@ -1139,7 +1147,8 @@ impl State {
                         Subpage::ClockFormat
                         | Subpage::TimeFormat
                         | Subpage::Temperature
-                        | Subpage::TextRendering,
+                        | Subpage::TextRendering
+                        | Subpage::HomeTakeover,
                     ) => 2,
                     Some(Subpage::Language) => Language::ALL.len(),
                     Some(Subpage::DateFormat) => crate::model::DateFormat::ALL.len(),
@@ -1229,7 +1238,7 @@ impl State {
             }
             if matches!(
                 self.focus,
-                Target::Setting(0 | 1 | 4 | 7)
+                Target::Setting(0 | 1 | 4 | 6 | 7 | 8)
                     | Target::Widget(_)
                     | Target::InputMode(_)
                     | Target::WeatherLocation
@@ -2164,6 +2173,15 @@ impl State {
                         }
                         return vec![];
                     }
+                    8 => {
+                        self.subpage = Some(Subpage::HomeTakeover);
+                        self.focus = Target::Choice(if self.home_takeover { 0 } else { 1 });
+                        self.scroll = 0.;
+                        if !self.preferences.reduced_motion {
+                            self.panel_started = Some(Instant::now());
+                        }
+                        return vec![];
+                    }
                     _ => return vec![Effect::Reload],
                 }
                 return vec![Effect::Save];
@@ -2249,6 +2267,15 @@ impl State {
                         } else {
                             Unit::Celsius
                         }
+                    }
+                    Some(Subpage::HomeTakeover) => {
+                        let enable = index == 0;
+                        self.close_subpage();
+                        return if enable == self.home_takeover {
+                            vec![]
+                        } else {
+                            vec![Effect::HomeTakeover(enable)]
+                        };
                     }
                     Some(Subpage::Language) => {
                         self.preferences.language =

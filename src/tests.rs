@@ -3258,3 +3258,39 @@ fn update_card_shows_progress_restores_retry_and_ignores_presses_while_busy() {
     state.install_response(Response::Finished(Ok(())));
     assert_eq!(state.update_status, Status::Unchecked);
 }
+
+#[test]
+fn home_takeover_is_chosen_in_system_and_only_changes_on_a_new_choice() {
+    use crate::state::Subpage;
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::SYSTEM_SECTION;
+    state.focus = Target::Setting(8);
+    assert!(
+        controls(&state)
+            .iter()
+            .any(|c| c.target == Target::Setting(8))
+    );
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.subpage, Some(Subpage::HomeTakeover));
+    assert_eq!(
+        state.focus,
+        Target::Choice(1),
+        "starts on the current state: off"
+    );
+    // Off again changes nothing.
+    assert_eq!(state.activate(), vec![]);
+    assert_eq!(state.focus, Target::Setting(8));
+    state.activate();
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::Choice(0));
+    assert_eq!(state.activate(), vec![Effect::HomeTakeover(true)]);
+    assert_eq!(state.subpage, None);
+    assert_eq!(state.focus, Target::Setting(8));
+    // Running as Home, the page offers to turn it off.
+    state.home_takeover = true;
+    state.activate();
+    assert_eq!(state.focus, Target::Choice(0));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.activate(), vec![Effect::HomeTakeover(false)]);
+}

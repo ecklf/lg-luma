@@ -3512,5 +3512,83 @@
     "fr": "Session de modification terminée",
     "vi": "Phiên chỉnh sửa đã kết thúc",
     "nl": "Bewerksessie beëindigd"
+  },
+  "homeTakeover": {
+    "en": "Luma as Home screen",
+    "de": "Luma als Startbildschirm",
+    "es": "Luma como pantalla de inicio",
+    "zh": "将 Luma 设为主屏幕",
+    "pt": "Luma como tela inicial",
+    "it": "Luma come schermata Home",
+    "ru": "Luma как главный экран",
+    "pl": "Luma jako ekran główny",
+    "fr": "Luma comme écran d'accueil",
+    "vi": "Luma làm màn hình chính",
+    "nl": "Luma als startscherm"
+  },
+  "homeTakeoverOnHint": {
+    "en": "The remote's Home button opens Luma. Needs root access through Homebrew Channel.",
+    "de": "Die Home-Taste der Fernbedienung öffnet Luma. Erfordert Root-Zugriff über Homebrew Channel.",
+    "es": "El botón Inicio del mando abre Luma. Requiere acceso root mediante Homebrew Channel.",
+    "zh": "遥控器的主页键将打开 Luma。需要通过 Homebrew Channel 获取 root 权限。",
+    "pt": "O botão Início do controle abre o Luma. Requer acesso root pelo Homebrew Channel.",
+    "it": "Il tasto Home del telecomando apre Luma. Richiede l’accesso root tramite Homebrew Channel.",
+    "ru": "Кнопка Home на пульте открывает Luma. Нужен root-доступ через Homebrew Channel.",
+    "pl": "Przycisk Home na pilocie otwiera Lumę. Wymaga dostępu root przez Homebrew Channel.",
+    "fr": "Le bouton Accueil de la télécommande ouvre Luma. Nécessite un accès root via Homebrew Channel.",
+    "vi": "Nút Home trên điều khiển sẽ mở Luma. Cần quyền root qua Homebrew Channel.",
+    "nl": "De Home-knop op de afstandsbediening opent Luma. Hiervoor is root-toegang via Homebrew Channel nodig."
+  },
+  "homeTakeoverOffHint": {
+    "en": "The Home button opens LG's Home screen.",
+    "de": "Die Home-Taste öffnet den LG-Startbildschirm.",
+    "es": "El botón Inicio abre la pantalla de inicio de LG.",
+    "zh": "主页键打开 LG 的主屏幕。",
+    "pt": "O botão Início abre a tela inicial da LG.",
+    "it": "Il tasto Home apre la schermata Home di LG.",
+    "ru": "Кнопка Home открывает стандартный экран LG.",
+    "pl": "Przycisk Home otwiera ekran główny LG.",
+    "fr": "Le bouton Accueil ouvre l'écran d'accueil de LG.",
+    "vi": "Nút Home sẽ mở màn hình chính của LG.",
+    "nl": "De Home-knop opent het startscherm van LG."
+  },
+  "homeTakeoverStarting": {
+    "en": "Making Luma the Home screen… Luma restarts in a moment.",
+    "de": "Luma wird zum Startbildschirm … Luma startet gleich neu.",
+    "es": "Configurando Luma como pantalla de inicio… Luma se reiniciará enseguida.",
+    "zh": "正在将 Luma 设为主屏幕… Luma 即将重启。",
+    "pt": "Definindo o Luma como tela inicial… O Luma reinicia em instantes.",
+    "it": "Imposto Luma come schermata Home… Luma si riavvia tra poco.",
+    "ru": "Делаем Luma главным экраном… Luma сейчас перезапустится.",
+    "pl": "Ustawianie Lumy jako ekranu głównego… Luma uruchomi się ponownie za chwilę.",
+    "fr": "Luma devient l'écran d'accueil… Luma redémarre dans un instant.",
+    "vi": "Đang đặt Luma làm màn hình chính… Luma sẽ khởi động lại trong chút nữa.",
+    "nl": "Luma wordt het startscherm… Luma start zo opnieuw."
+  },
+  "homeTakeoverStopping": {
+    "en": "Restoring LG's Home screen…",
+    "de": "LG-Startbildschirm wird wiederhergestellt …",
+    "es": "Restaurando la pantalla de inicio de LG…",
+    "zh": "正在恢复 LG 主屏幕…",
+    "pt": "Restaurando a tela inicial da LG…",
+    "it": "Ripristino la schermata Home di LG…",
+    "ru": "Возвращаем стандартный экран LG…",
+    "pl": "Przywracanie ekranu głównego LG…",
+    "fr": "Restauration de l'écran d'accueil LG…",
+    "vi": "Đang khôi phục màn hình chính của LG…",
+    "nl": "LG-startscherm wordt hersteld…"
+  },
+  "homeTakeoverError": {
+    "en": "The Home screen couldn't be changed. Luma needs root access through Homebrew Channel.",
+    "de": "Der Startbildschirm konnte nicht geändert werden. Luma benötigt Root-Zugriff über Homebrew Channel.",
+    "es": "No se pudo cambiar la pantalla de inicio. Luma necesita acceso root mediante Homebrew Channel.",
+    "zh": "无法更改主屏幕。Luma 需要通过 Homebrew Channel 获取 root 权限。",
+    "pt": "Não foi possível mudar a tela inicial. O Luma precisa de acesso root pelo Homebrew Channel.",
+    "it": "Impossibile cambiare la schermata Home. Luma richiede l’accesso root tramite Homebrew Channel.",
+    "ru": "Не удалось сменить главный экран. Luma нужен root-доступ через Homebrew Channel.",
+    "pl": "Nie udało się zmienić ekranu głównego. Luma wymaga dostępu root przez Homebrew Channel.",
+    "fr": "Impossible de changer l'écran d'accueil. Luma nécessite un accès root via Homebrew Channel.",
+    "vi": "Không thể thay đổi màn hình chính. Luma cần quyền root qua Homebrew Channel.",
+    "nl": "Het startscherm kon niet worden gewijzigd. Luma heeft root-toegang via Homebrew Channel nodig."
   }
 }
