@@ -1438,5 +1438,86 @@
     "pt": "Card de teste para rolagem; não abre nenhum app.",
     "it": "Scheda di test per lo scorrimento; nessuna app da avviare.",
     "ru": "Тестовая карточка для прокрутки; приложение не запускается."
+  },
+  "searchField": {
+    "en": "Search",
+    "de": "Suche",
+    "es": "Búsqueda",
+    "zh": "搜索",
+    "pt": "Busca",
+    "it": "Ricerca",
+    "ru": "Поиск"
+  },
+  "buttonHints": {
+    "en": "Button hints",
+    "de": "Tastenhinweise",
+    "es": "Ayudas de botones",
+    "zh": "按键提示",
+    "pt": "Dicas de botões",
+    "it": "Suggerimenti tasti",
+    "ru": "Подсказки внизу"
+  },
+  "sizeNormal": {
+    "en": "Normal",
+    "de": "Normal",
+    "es": "Normal",
+    "zh": "标准",
+    "pt": "Normal",
+    "it": "Normale",
+    "ru": "Обычный"
+  },
+  "sizeLarge": {
+    "en": "Large",
+    "de": "Groß",
+    "es": "Grande",
+    "zh": "大",
+    "pt": "Grande",
+    "it": "Grande",
+    "ru": "Крупный"
+  },
+  "sizeLarger": {
+    "en": "Extra large",
+    "de": "Sehr groß",
+    "es": "Muy grande",
+    "zh": "特大",
+    "pt": "Muito grande",
+    "it": "Molto grande",
+    "ru": "Очень крупный"
+  },
+  "sample": {
+    "en": "Preview",
+    "de": "Vorschau",
+    "es": "Vista previa",
+    "zh": "预览",
+    "pt": "Prévia",
+    "it": "Anteprima",
+    "ru": "Образец"
+  },
+  "sampleAbove": {
+    "en": "The clock at the top left changes as you choose.",
+    "de": "Die Uhr oben links ändert sich bei der Auswahl.",
+    "es": "El reloj de arriba a la izquierda cambia al elegir.",
+    "zh": "左上角的时钟会随选择即时变化。",
+    "pt": "O relógio no canto superior esquerdo muda conforme você escolhe.",
+    "it": "L’orologio in alto a sinistra cambia mentre scegli.",
+    "ru": "Часы вверху слева меняются сразу при выборе."
+  },
+  "sampleBelow": {
+    "en": "The hints at the bottom change as you choose.",
+    "de": "Die Hinweise unten ändern sich bei der Auswahl.",
+    "es": "Las ayudas de abajo cambian al elegir.",
+    "zh": "底部的提示会随选择即时变化。",
+    "pt": "As dicas na parte inferior mudam conforme você escolhe.",
+    "it": "I suggerimenti in basso cambiano mentre scegli.",
+    "ru": "Подсказки внизу меняются сразу при выборе."
+  },
+  "uiScale": {
+    "en": "Interface scale",
+    "de": "Skalierung der Oberfläche",
+    "es": "Escala de la interfaz",
+    "zh": "界面元素缩放",
+    "pt": "Escala da interface",
+    "it": "Scala dell’interfaccia",
+    "ru": "Масштаб элементов интерфейса"
   }
 }

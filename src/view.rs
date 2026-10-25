@@ -1,12 +1,12 @@
 //! Screen geometry and styling mirror the web UI's 1920×1080 / 16px-rem layout.
 use crate::{
     i18n::Language,
-    model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode},
+    model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode, UiSizes},
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT,
-        HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State,
-        Subpage, Target, TextField, WEATHER_SECTION,
+        APPS_COLUMNS, BACKGROUND_SECTION, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT,
+        HOME_STRIP_LEFT, HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page,
+        Rect, SYSTEM_SECTION, State, Subpage, Target, TextField, WEATHER_SECTION,
     },
     weather::{self, Unit},
 };
@@ -439,10 +439,11 @@ fn header(
         state.preferences.hour_24,
         state.preferences.show_seconds,
     );
+    let k = state.preferences.sizes.clock.scale();
     out.text(
         clock,
-        Rect::new(84., 64.8, 300., 24.),
-        text(20., 500, -0.03),
+        Rect::new(84., 76.8 - 12. * k, 300. * k, 24. * k),
+        text(20. * k, 500, -0.03),
         WHITE,
         false,
     );
@@ -591,7 +592,12 @@ fn tile(
                 rect.w - 8.,
                 caption_height,
             ),
-            text(17.6, if focused { 550 } else { 450 }, -0.02).leading(1.4),
+            text(
+                17.6 * caption_scale(state),
+                if focused { 550 } else { 450 },
+                -0.02,
+            )
+            .leading(1.4),
             if focused {
                 c(0xffffff, 1.)
             } else {
@@ -685,7 +691,7 @@ fn caption_height(state: &State, assets: &Assets, app: &App, width: f32) -> f32 
         }
     );
     let style = text(
-        17.6,
+        17.6 * caption_scale(state),
         if state.focus == Target::App(app.id.clone()) {
             550
         } else {
@@ -694,7 +700,12 @@ fn caption_height(state: &State, assets: &Assets, app: &App, width: f32) -> f32 
         -0.02,
     )
     .leading(1.4);
-    (assets.lines(&title, style, width - 8.) as f32 * style.size * style.line_height).max(49.28)
+    (assets.lines(&title, style, width - 8.) as f32 * style.size * style.line_height)
+        .max(49.28 * caption_scale(state))
+}
+
+fn caption_scale(state: &State) -> f32 {
+    state.preferences.sizes.captions.scale()
 }
 
 fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language: Language) {
@@ -899,7 +910,7 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
                 18.4 + apps
                     .iter()
                     .map(|app| caption_height(state, assets, app, HOME_TILE_WIDTH))
-                    .fold(49.28, f32::max)
+                    .fold(49.28 * caption_scale(state), f32::max)
             } else {
                 0.
             };
@@ -961,73 +972,87 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             569.1,
             104.,
         );
-        let focused = state.focus == Target::Input(input.id.clone());
-        out.shadow(
-            rect,
-            18.4,
-            if focused { 34. } else { 4. },
-            if focused { 14. } else { 1. },
-            if focused { 0.4 } else { 0.01 },
-        );
-        out.draw.push(Draw::RoundedGradient(
-            rect,
-            18.4,
-            if focused {
-                c(0x30363c, 0.70)
-            } else {
-                c(0x20252b, 0.60)
-            },
-            if focused {
-                c(0x242a30, 0.65)
-            } else {
-                c(0x171c22, 0.55)
-            },
-        ));
-        out.border(
-            rect,
-            18.4,
-            1.,
-            c(0xffffff, if focused { 0.24 } else { 0.063 }),
-        );
-        let art = Rect::new(rect.x + 21., rect.y + 24., 56., 56.);
-        out.draw.push(Draw::RoundedGradient(
-            art,
-            12.8,
-            c(0xd6d6d6, 0.24),
-            c(0xa0a0a0, 0.10),
-        ));
-        let name = state.preferences.input_name(input);
-        let icon = input_icon(input, name);
-        let size = if icon == "apple-tv" { 41.6 } else { 35.2 };
-        out.icon(
-            assets,
-            &format!("input-{icon}"),
-            Rect::new(
-                art.x + (56. - size) / 2.,
-                art.y + (56. - size) / 2.,
-                size,
-                size,
-            ),
-            c(0xdedede, 1.),
-        );
-        out.text(
-            state.preferences.input_title(input),
-            Rect::new(rect.x + 93., rect.y + 24.3, 450., 28.8),
-            text(24., 500, -0.03),
-            WHITE,
-            false,
-        );
-        out.text(
-            input_status(input, name.is_some(), language),
-            Rect::new(rect.x + 93., rect.y + 58.7, 450., 20.),
-            text(13.12, 400, 0.).leading(1.5),
-            c(0xe8e8e8, 0.48),
-            false,
-        );
-        if focused {
-            out.ring(rect, 18.4);
-        }
+        input_card(out, state, assets, input, rect);
         out.control(Target::Input(input.id.clone()), rect, true);
+    }
+}
+
+fn input_card(out: &mut Scene, state: &State, assets: &Assets, input: &Input, rect: Rect) {
+    let language = state.preferences.language;
+    let focused = state.focus == Target::Input(input.id.clone());
+    out.shadow(
+        rect,
+        18.4,
+        if focused { 34. } else { 4. },
+        if focused { 14. } else { 1. },
+        if focused { 0.4 } else { 0.01 },
+    );
+    out.draw.push(Draw::RoundedGradient(
+        rect,
+        18.4,
+        if focused {
+            c(0x30363c, 0.70)
+        } else {
+            c(0x20252b, 0.60)
+        },
+        if focused {
+            c(0x242a30, 0.65)
+        } else {
+            c(0x171c22, 0.55)
+        },
+    ));
+    out.border(
+        rect,
+        18.4,
+        1.,
+        c(0xffffff, if focused { 0.24 } else { 0.063 }),
+    );
+    let art = Rect::new(rect.x + 21., rect.y + 24., 56., 56.);
+    out.draw.push(Draw::RoundedGradient(
+        art,
+        12.8,
+        c(0xd6d6d6, 0.24),
+        c(0xa0a0a0, 0.10),
+    ));
+    let name = state.preferences.input_name(input);
+    let icon = input_icon(input, name);
+    let size = if icon == "apple-tv" { 41.6 } else { 35.2 };
+    out.icon(
+        assets,
+        &format!("input-{icon}"),
+        Rect::new(
+            art.x + (56. - size) / 2.,
+            art.y + (56. - size) / 2.,
+            size,
+            size,
+        ),
+        c(0xdedede, 1.),
+    );
+    // The status line grows with the setting, the larger title by half as much.
+    let k = state.preferences.sizes.inputs.scale();
+    let title_k = 1. + (k - 1.) / 2.;
+    let top = (rect.h - (28.8 * title_k + 5.6 + 20. * k)) / 2.;
+    out.text(
+        state.preferences.input_title(input),
+        Rect::new(rect.x + 93., rect.y + top, 450., 28.8 * title_k),
+        text(24. * title_k, 500, -0.03),
+        WHITE,
+        false,
+    );
+    out.text(
+        input_status(input, name.is_some(), language),
+        Rect::new(
+            rect.x + 93.,
+            rect.y + top + 28.8 * title_k + 5.6,
+            450.,
+            20. * k,
+        ),
+        text(13.12 * k, 400, 0.).leading(1.5),
+        c(0xe8e8e8, if k > 1. { 0.62 } else { 0.48 }),
+        false,
+    );
+    if focused {
+        out.ring(rect, 18.4);
     }
 }
 
@@ -1185,102 +1210,25 @@ fn weather_summary(
 }
 
 fn library(out: &mut Scene, state: &State, assets: &Assets) {
-    let language = state.preferences.language;
     let s = state.scroll;
-    let mut x = 84.;
-    for (index, label) in CATEGORIES.into_iter().enumerate() {
-        let label = language.category(label);
-        let width = assets.width(label, text(16., 400, 0.)) + 35.6;
-        let rect = Rect::new(x, 171.4 - s, width, 42.8);
-        filter(
-            out,
-            state,
-            Target::Filter(index + 1),
-            rect,
-            label,
-            state.filter == index + 1,
-        );
-        x += width + 7.2;
-    }
-    if state.hidden_count() > 0 {
-        let label = language.format("hidden", &[("count", &state.hidden_count().to_string())]);
-        let rect = Rect::new(
-            x,
-            171.4 - s,
-            assets.width(&label, text(16., 400, 0.)) + 35.6,
-            42.8,
-        );
-        filter(
-            out,
-            state,
-            Target::Filter(5),
-            rect,
-            &label,
-            state.filter == 5,
-        );
-        x += rect.w + 7.2;
-    }
+    let x = category_chips(out, state, assets, 84., 192.8 - s);
     if state.filter != 0 {
-        let rect = Rect::new(x, 176.8 - s, 32., 32.);
-        out.shape(rect, 16., c(0x23282c, 0.5));
-        out.icon(assets, "close", rect.inset(8.), c(0xeeeeee, 0.73));
+        let k = state.preferences.sizes.categories.scale();
+        let rect = Rect::new(x, 192.8 - 16. * k - s, 32. * k, 32. * k);
+        out.shape(rect, 16. * k, c(0x23282c, 0.5));
+        out.icon(assets, "close", rect.inset(8. * k), c(0xeeeeee, 0.73));
         if state.focus == Target::ClearFilter {
-            out.border(rect.inset(-2.), 18., 2., WHITE);
+            out.border(rect.inset(-2.), 16. * k + 2., 2., WHITE);
         }
         out.control(Target::ClearFilter, rect, true);
     }
-    let search = Rect::new(1532., 164.8 - s, 304., 56.);
-    let focused = matches!(state.focus, Target::Search | Target::ClearSearch);
-    out.shape(
-        search,
-        48.,
-        if focused {
-            c(0x303438, 1.)
-        } else {
-            c(0x171c20, 0.72)
-        },
-    );
-    out.border(
-        search,
-        48.,
-        1.,
-        c(0xffffff, if focused { 0.70 } else { 0.07 }),
-    );
-    if focused {
-        out.border(search.inset(-3.), 51., 3., c(0xffffff, 0.063));
-    }
-    out.icon(
-        assets,
-        "search",
-        Rect::new(search.x + 19.4, search.y + 18.4, 19.2, 19.2),
-        c(0xeeeeee, 0.73),
-    );
-    out.text(
-        if state.query.is_empty() {
-            language.t("findApp")
-        } else {
-            &state.query
-        },
-        Rect::new(
-            search.x + 49.8,
-            search.y + 17.8,
-            if state.query.is_empty() { 234. } else { 202. },
-            22.,
-        ),
-        text(16.8, 400, -0.02),
-        c(0xeeeeee, if state.query.is_empty() { 0.73 } else { 1. }),
-        false,
-    );
-    out.control(Target::Search, search, true);
-    if !state.query.is_empty() {
-        let clear = Rect::new(search.x + search.w - 45.8, search.y + 14.8, 26.4, 26.4);
-        out.shape(clear, 13.2, c(0xffffff, 0.055));
-        out.icon(assets, "close", clear.inset(5.2), WHITE);
-        if state.focus == Target::ClearSearch {
-            out.border(clear.inset(-2.), 15.2, 2., WHITE);
-        }
-        out.control(Target::ClearSearch, clear, true);
-    }
+    search_field(out, state, assets, 1836., 192.8 - s);
+    library_grid(out, state, assets);
+}
+
+fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let s = state.scroll;
     let favorites = state.preferences.favorites(&state.inventory.apps);
     let apps = state.apps();
     if apps.is_empty() {
@@ -1323,7 +1271,7 @@ fn library(out: &mut Scene, state: &State, assets: &Assets) {
                 18.4 + row
                     .iter()
                     .map(|app| caption_height(state, assets, app, 270.))
-                    .fold(49.28, f32::max)
+                    .fold(49.28 * caption_scale(state), f32::max)
             } else {
                 0.
             };
@@ -1342,7 +1290,110 @@ fn library(out: &mut Scene, state: &State, assets: &Assets) {
     }
 }
 
+/// The category filter chips from `x`, centred on `y`; returns where the row ends.
+fn category_chips(out: &mut Scene, state: &State, assets: &Assets, mut x: f32, y: f32) -> f32 {
+    let language = state.preferences.language;
+    let k = state.preferences.sizes.categories.scale();
+    let style = text(16. * k, 400, 0.);
+    let h = 42.8 * k;
+    for (index, label) in CATEGORIES.into_iter().enumerate() {
+        let label = language.category(label);
+        let width = assets.width(label, style) + 35.6 * k;
+        filter(
+            out,
+            state,
+            Target::Filter(index + 1),
+            Rect::new(x, y - h / 2., width, h),
+            label,
+            state.filter == index + 1,
+        );
+        x += width + 7.2 * k;
+    }
+    if state.hidden_count() > 0 {
+        let label = language.format("hidden", &[("count", &state.hidden_count().to_string())]);
+        let rect = Rect::new(x, y - h / 2., assets.width(&label, style) + 35.6 * k, h);
+        filter(
+            out,
+            state,
+            Target::Filter(5),
+            rect,
+            &label,
+            state.filter == 5,
+        );
+        x += rect.w + 7.2 * k;
+    }
+    x
+}
+
+/// The app search field, right-aligned at `right` and centred on `y`.
+fn search_field(out: &mut Scene, state: &State, assets: &Assets, right: f32, y: f32) {
+    let language = state.preferences.language;
+    let k = state.preferences.sizes.search.scale();
+    let search = Rect::new(right - 304. * k, y - 28. * k, 304. * k, 56. * k);
+    let focused = matches!(state.focus, Target::Search | Target::ClearSearch);
+    out.shape(
+        search,
+        48.,
+        if focused {
+            c(0x303438, 1.)
+        } else {
+            c(0x171c20, 0.72)
+        },
+    );
+    out.border(
+        search,
+        48.,
+        1.,
+        c(0xffffff, if focused { 0.70 } else { 0.07 }),
+    );
+    if focused {
+        out.border(search.inset(-3.), 51., 3., c(0xffffff, 0.063));
+    }
+    out.icon(
+        assets,
+        "search",
+        Rect::new(search.x + 19.4 * k, search.y + 18.4 * k, 19.2 * k, 19.2 * k),
+        c(0xeeeeee, 0.73),
+    );
+    out.text(
+        if state.query.is_empty() {
+            language.t("findApp")
+        } else {
+            &state.query
+        },
+        Rect::new(
+            search.x + 49.8 * k,
+            search.y + 17.8 * k,
+            if state.query.is_empty() {
+                234. * k
+            } else {
+                202. * k
+            },
+            22. * k,
+        ),
+        text(16.8 * k, 400, -0.02),
+        c(0xeeeeee, if state.query.is_empty() { 0.73 } else { 1. }),
+        false,
+    );
+    out.control(Target::Search, search, true);
+    if !state.query.is_empty() {
+        let clear = Rect::new(
+            search.x + search.w - 45.8 * k,
+            search.y + 14.8 * k,
+            26.4 * k,
+            26.4 * k,
+        );
+        out.shape(clear, 13.2 * k, c(0xffffff, 0.055));
+        out.icon(assets, "close", clear.inset(5.2 * k), WHITE);
+        if state.focus == Target::ClearSearch {
+            out.border(clear.inset(-2.), 13.2 * k + 2., 2., WHITE);
+        }
+        out.control(Target::ClearSearch, clear, true);
+    }
+}
+
 fn filter(out: &mut Scene, state: &State, target: Target, rect: Rect, label: &str, selected: bool) {
+    let k = rect.h / 42.8;
     if selected {
         out.shape(rect, 32., c(0xffffff, 0.11));
         out.border(rect, 32., 1., c(0xffffff, 0.07));
@@ -1352,8 +1403,8 @@ fn filter(out: &mut Scene, state: &State, target: Target, rect: Rect, label: &st
     }
     out.text(
         label,
-        Rect::new(rect.x, rect.y + 11.4, rect.w, 20.),
-        text(16., 400, 0.),
+        Rect::new(rect.x, rect.y + 11.4 * k, rect.w, 20. * k),
+        text(16. * k, 400, 0.),
         c(
             if selected { 0xf5f5f5 } else { 0xf0f0f0 },
             if selected { 1. } else { 0.66 },
@@ -1762,6 +1813,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::WeatherLocation) => language.t("location"),
                 Some(Subpage::Temperature) => language.t("temperature"),
                 Some(Subpage::Language) => language.t("language"),
+                Some(Subpage::Appearance) => language.t("uiScale"),
                 None => "",
             };
             let parent_width = assets.width(label, text(20.8, 550, -0.02)) + 2.;
@@ -1780,14 +1832,13 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             );
             let sub_width = rect.w - 24.2 - parent_width - 28. - 24.2;
             let mut sub_style = text(20.8, 550, -0.02);
-            if clock_path.is_some() {
-                sub_style.size *= (sub_width / assets.width(sub, sub_style)).min(1.);
-            }
+            sub_style.size *= (sub_width / assets.width(sub, sub_style)).min(1.);
             out.text(
                 sub,
                 Rect::new(
                     rect.x + 24.2 + parent_width + 28.,
-                    rect.y + 23.5,
+                    // A name shrunk to fit stays centred on the parent's line.
+                    rect.y + 23.5 + (20.8 - sub_style.size) * sub_style.line_height / 2.,
                     sub_width,
                     25.,
                 ),
@@ -1822,13 +1873,18 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         let start = out.draw.len();
         if matches!(
             subpage,
-            Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames | Subpage::Clock
+            Subpage::WeatherLocation
+                | Subpage::Greeting
+                | Subpage::AppNames
+                | Subpage::Clock
+                | Subpage::Appearance
         ) {
             match subpage {
                 Subpage::WeatherLocation => location_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::AppNames => app_name_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
+                Subpage::Appearance => appearance_settings(out, state, assets),
                 _ => unreachable!(),
             }
             if let Some(opened) = state.panel_started {
@@ -1882,9 +1938,11 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     state.preferences.temperature_unit == Unit::Fahrenheit,
                 ),
             ],
-            Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames | Subpage::Clock => {
-                unreachable!()
-            }
+            Subpage::WeatherLocation
+            | Subpage::Greeting
+            | Subpage::AppNames
+            | Subpage::Clock
+            | Subpage::Appearance => unreachable!(),
             Subpage::Language => Language::ALL
                 .into_iter()
                 .map(|option| (option.name(), None, option == language))
@@ -1944,6 +2002,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     }),
                     true,
                 ),
+                (7, "uiScale", "grid", None, true),
             ]
             .into_iter()
             .enumerate()
@@ -1965,7 +2024,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 );
             }
         }
-        1 => {
+        BACKGROUND_SECTION => {
             for (index, (id, _title)) in BACKGROUNDS.iter().enumerate() {
                 let rect = Rect::new(
                     640. + (index % 3) as f32 * 380.,
@@ -2327,8 +2386,8 @@ pub fn input_status(input: &Input, renamed: bool, language: Language) -> String 
     parts.join(" · ")
 }
 
-fn keycap(out: &mut Scene, label: &str, x: f32, y: f32, w: f32, small: bool) {
-    let h = if small { 16. } else { 23.2 };
+fn keycap(out: &mut Scene, label: &str, x: f32, y: f32, w: f32, small: bool, k: f32) {
+    let h = if small { 16. } else { 23.2 } * k;
     out.border(
         Rect::new(x, y, w, h),
         4.8,
@@ -2337,8 +2396,8 @@ fn keycap(out: &mut Scene, label: &str, x: f32, y: f32, w: f32, small: bool) {
     );
     out.text(
         label,
-        Rect::new(x, y + if small { 2. } else { 4.2 }, w, h),
-        text(if small { 8. } else { 11.52 }, 500, 0.),
+        Rect::new(x, y + if small { 2. } else { 4.2 } * k, w, h),
+        text(if small { 8. } else { 11.52 } * k, 500, 0.),
         c(0xf3f3f3, 0.64),
         true,
     );
@@ -2346,26 +2405,30 @@ fn keycap(out: &mut Scene, label: &str, x: f32, y: f32, w: f32, small: bool) {
 
 fn footer(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
-    let style = text(14.4, 400, 0.005);
+    // Hints are centred on y 1042; larger hints are also less faint.
+    let k = state.preferences.sizes.hints.scale();
+    let style = text(14.4 * k, 400, 0.005);
     if state.page == Page::Home && state.moving.is_none() {
         return;
     }
-    let color = c(0xeeeeee, 0.37);
+    let color = c(0xeeeeee, if k > 1. { 0.6 } else { 0.37 });
+    let (cap_y, text_y) = (1041.6 - 11.6 * k, 1042. - 9. * k);
     if state.moving.is_some() {
-        keycap(out, "← →", 84., 1030.4, 42., false);
+        keycap(out, "← →", 84., cap_y, 42. * k, false, k);
+        let label_x = 84. + 50. * k;
         out.text(
             language.t("move"),
-            Rect::new(134., 1033., 100., 20.),
-            text(14.4, 400, 0.005),
+            Rect::new(label_x, text_y, 100. * k, 20. * k),
+            style,
             color,
             false,
         );
-        let second_x = 134. + assets.width(language.t("move"), style) + 25.6;
-        keycap(out, "OK/Back", second_x, 1030.4, 62., false);
+        let second_x = label_x + assets.width(language.t("move"), style) + 25.6 * k;
+        keycap(out, "OK/Back", second_x, cap_y, 62. * k, false, k);
         out.text(
             language.t("done"),
-            Rect::new(second_x + 70., 1033., 150., 20.),
-            text(14.4, 400, 0.005),
+            Rect::new(second_x + 70. * k, text_y, 150. * k, 20. * k),
+            style,
             color,
             false,
         );
@@ -2375,21 +2438,22 @@ fn footer(out: &mut Scene, state: &State, assets: &Assets) {
         } else {
             "open"
         });
-        let second_x = 119. + assets.width(label, style) + 25.6;
-        keycap(out, "OK", 84., 1030.4, 27., false);
+        let label_x = 84. + 35. * k;
+        let second_x = label_x + assets.width(label, style) + 25.6 * k;
+        keycap(out, "OK", 84., cap_y, 27. * k, false, k);
         out.text(
             label,
-            Rect::new(119., 1033., 100., 20.),
-            text(14.4, 400, 0.005),
+            Rect::new(label_x, text_y, 100. * k, 20. * k),
+            style,
             color,
             false,
         );
         if state.page == Page::Settings {
-            keycap(out, "Back", second_x, 1030.4, 39., false);
+            keycap(out, "Back", second_x, cap_y, 39. * k, false, k);
             out.text(
                 language.t("homeLabel"),
-                Rect::new(second_x + 47., 1033., 180., 20.),
-                text(14.4, 400, 0.005),
+                Rect::new(second_x + 47. * k, text_y, 180. * k, 20. * k),
+                style,
                 color,
                 false,
             );
@@ -2404,13 +2468,13 @@ fn footer(out: &mut Scene, state: &State, assets: &Assets) {
             out.icon(
                 assets,
                 "more",
-                Rect::new(second_x, 1032., 19.2, 19.2),
-                c(0xeeeeee, 0.26),
+                Rect::new(second_x, 1042. - 9.6 * k, 19.2 * k, 19.2 * k),
+                c(0xeeeeee, color[3] * 0.7),
             );
             out.text(
                 language.t("options"),
-                Rect::new(second_x + 27.2, 1033., 400., 20.),
-                text(14.4, 400, 0.005),
+                Rect::new(second_x + 27.2 * k, text_y, 400. * k, 20. * k),
+                style,
                 color,
                 false,
             );
@@ -2593,7 +2657,7 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str) {
     let close_width = assets.width(language.t("close"), shortcut);
     let start = 960. - (23. + 6.4 + select_width + 15. + 29. + 6.4 + close_width) / 2.;
     let back = start + 29.4 + select_width + 15.;
-    keycap(out, "OK", start, line_y + 15., 23., true);
+    keycap(out, "OK", start, line_y + 15., 23., true, 1.);
     out.text(
         language.t("selectClose"),
         Rect::new(start + 29.4, line_y + 18., select_width + 1., 13.),
@@ -2601,7 +2665,7 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str) {
         c(0xe0e0e0, 0.35),
         false,
     );
-    keycap(out, "Back", back, line_y + 15., 29., true);
+    keycap(out, "Back", back, line_y + 15., 29., true, 1.);
     out.text(
         language.t("close"),
         Rect::new(back + 35.4, line_y + 18., close_width + 1., 13.),
@@ -2732,4 +2796,113 @@ fn full_screen_fill(draw: &Draw) -> bool {
         Draw::RoundedGradient(rect, radius, ..) => whole(rect) && *radius <= 0.,
         _ => false,
     }
+}
+
+/// General › Interface scale: a size row per group of elements, then a live sample of the
+/// focused row at its real size. The clock and the hints are on this screen already and change in place.
+fn appearance_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let s = state.scroll;
+    let sizes = state.preferences.sizes;
+    let icons = ["clock", "grid", "search", "type", "input-hdmi", "more"];
+    for (index, key) in UiSizes::KEYS.into_iter().enumerate() {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::UiSize(index),
+                rect: Rect::new(640., 164.8 + index as f32 * 84. - s, 1120., 72.),
+                title: language.t(key),
+                icon: Some(icons[index]),
+                value: Some(language.t(sizes.get(index).key())),
+                description: None,
+                selected: false,
+                chevron: false,
+            },
+        );
+    }
+    let top = 164.8 + UiSizes::ROWS as f32 * 84. + 8. - s;
+    let panel = Rect::new(640., top, 1120., 982.4 - top);
+    out.shape(panel, 22., c(0x0a0d12, 0.42));
+    out.border(panel, 22., 1., c(0xffffff, 0.12));
+    out.text(
+        language.t("sample"),
+        Rect::new(panel.x + 26., panel.y + 16., 600., 24.),
+        text(17.6, 500, 0.04),
+        c(0xf0f0f0, 0.55),
+        false,
+    );
+    let row = match state.focus {
+        Target::UiSize(row) => row,
+        _ => 3,
+    };
+    // The sample reuses the real drawing code; its controls are dropped so it never takes focus.
+    let controls = out.controls.len();
+    let middle = panel.y + 40. + (panel.h - 40.) / 2.;
+    match row {
+        1 => {
+            category_chips(out, state, assets, panel.x + 32., middle);
+        }
+        2 => {
+            let k = sizes.search.scale();
+            search_field(out, state, assets, panel.x + 32. + 304. * k, middle);
+        }
+        3 => {
+            let favorites = state.preferences.favorites(&state.inventory.apps);
+            let apps = favorites
+                .iter()
+                .filter(|id| !state.preferences.hidden.contains(id))
+                .filter_map(|id| state.inventory.apps.iter().find(|app| &app.id == id))
+                .take(3);
+            for (index, app) in apps.enumerate() {
+                let rect = Rect::new(
+                    panel.x + 32. + index as f32 * HOME_TILE_PITCH,
+                    panel.y + 52.,
+                    HOME_TILE_WIDTH,
+                    FACE_HEIGHT,
+                );
+                tile(out, state, assets, app, rect, true, false);
+            }
+        }
+        4 => {
+            let input = state
+                .inventory
+                .inputs
+                .iter()
+                .find(|input| state.preferences.input_visible(input))
+                .or(state.inventory.inputs.first());
+            if let Some(input) = input {
+                input_card(
+                    out,
+                    state,
+                    assets,
+                    input,
+                    Rect::new(panel.x + 32., middle - 52., 569.1, 104.),
+                );
+            } else {
+                out.text(
+                    language.t("noInputs"),
+                    Rect::new(panel.x + 32., middle - 14., 1000., 28.),
+                    text(20.8, 450, -0.02),
+                    c(0xf0f0f0, 0.7),
+                    false,
+                );
+            }
+        }
+        _ => {
+            out.text(
+                language.t(if row == 0 {
+                    "sampleAbove"
+                } else {
+                    "sampleBelow"
+                }),
+                Rect::new(panel.x + 32., middle - 14., 1000., 28.),
+                text(20.8, 450, -0.02),
+                c(0xf0f0f0, 0.7),
+                false,
+            );
+        }
+    }
+    out.controls.truncate(controls);
 }
