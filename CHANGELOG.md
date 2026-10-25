@@ -1,5 +1,15 @@
 # lg-luma
 
+## 2.9.0
+
+### Minor Changes
+
+- a1838e6: Restore MSAA text rendering with no emboldening as the default and add Settings → System → Text rendering to choose analytic rendering. The saved choice applies when Luma next starts.
+
+### Patch Changes
+
+- 973ddf7: Add French (`fr`) translation: full `messages.json` catalog and locale registration in `i18n.rs` (language list, display name, and localized date formatting such as « MERCREDI 21 OCTOBRE » with the ordinal « 1ER » for the first day of the month). The bundled Inter subset already covers French accents and ligatures, so no font changes are needed.
+
 ## 2.8.5
 
 ### Patch Changes
