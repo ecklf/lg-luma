@@ -375,6 +375,41 @@ impl Platform {
     }
 }
 
+/// Hands a downloaded, verified update to `tv/self-update.sh`, run as root through Homebrew
+/// Channel's exec in its own systemd unit: exec ends its children when the call returns, and the
+/// install closes Luma.
+pub fn start_update(release: &crate::update::Release) -> Result<(), String> {
+    let directory = install_dir()?;
+    let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
+    let command = format!(
+        "systemd-run --unit=luma-update --collect /bin/sh -c {} self-update {} {} {} {}",
+        quote(include_str!("../tv/self-update.sh")),
+        quote(crate::update::DOWNLOAD),
+        quote(&release.sha256),
+        quote(&release.version),
+        quote(&directory.to_string_lossy()),
+    );
+    let envelope = call(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        json!({"command": command}),
+    )?;
+    // systemd-run prints nothing on stdout once the unit started; only its exit status counts.
+    // An error here must be real: the worker then deletes the IPK the installer would read.
+    for key in ["returnCode", "exitCode"] {
+        if let Some(code) = envelope.get(key)
+            && code != 0
+            && code != "0"
+        {
+            let stderr = envelope.get("stderrString").and_then(Value::as_str);
+            return Err(format!(
+                "The installer could not be started ({key}={code}): {}",
+                output_excerpt(stderr.unwrap_or(""))
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn sync_splash(background: &str) -> Result<(), String> {
     let directory = install_dir()?;
     let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));

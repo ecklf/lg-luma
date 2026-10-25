@@ -296,6 +296,7 @@ fn effects(
     weather: &weather_service::Service,
     wallpapers: &wallpapers::Service,
     webhook: &webhook::Service,
+    updates: &update::Worker,
 ) -> bool {
     for effect in effects {
         match effect {
@@ -342,6 +343,8 @@ fn effects(
                 }
             }
             Effect::FireWebhook(tile) => webhook.send(tile),
+            Effect::UpdateCheck => updates.request(update::Request::Check),
+            Effect::UpdateDownload(release) => updates.request(update::Request::Download(release)),
             Effect::Quit => return false,
             Effect::Uninstall(id) => platform.send(Request::Uninstall(id)),
             Effect::DeleteWallpaper(id) => {
@@ -676,6 +679,7 @@ fn run() -> Result<(), String> {
         weather_service::Client::new(options.weather_test_server.as_deref())?,
         weather_cache,
     );
+    let updates = update::Worker::new();
     let platform = Platform::new(
         webos,
         options.preferences.is_none() && options.test_extra_apps == 0,
@@ -690,6 +694,7 @@ fn run() -> Result<(), String> {
         &weather_service,
         &wallpaper_service,
         &webhook_service,
+        &updates,
     );
     platform.sync_splash(state.preferences.splash_background());
     startup_stage("preferences and workers");
@@ -1050,6 +1055,24 @@ fn run() -> Result<(), String> {
                 eprintln!("{error}");
             }
         }
+        while let Ok(response) = updates.receiver.try_recv() {
+            use update::{Response, Status};
+            state.dirty = true;
+            match response {
+                Response::Checked(Ok(Some(release))) => state.update = Status::Available(release),
+                Response::Checked(Ok(None)) => state.update = Status::Latest,
+                Response::Progress(percent) => state.update = Status::Downloading(percent),
+                Response::Installing(Ok(version)) => {
+                    state.update = Status::Installing(version);
+                    state.notify(state.preferences.language.t("updateRestart"));
+                }
+                Response::Checked(Err(error)) | Response::Installing(Err(error)) => {
+                    eprintln!("Luma update: {error}");
+                    state.update = Status::Failed(error);
+                    state.notify(state.preferences.language.t("updateError"));
+                }
+            }
+        }
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
                 Response::Inventory(Ok((mut inventory, warning))) => {
@@ -1143,6 +1166,7 @@ fn run() -> Result<(), String> {
                         &weather_service,
                         &wallpaper_service,
                         &webhook_service,
+                        &updates,
                     );
                 }
             }
@@ -1523,6 +1547,7 @@ fn run() -> Result<(), String> {
                 &weather_service,
                 &wallpaper_service,
                 &webhook_service,
+                &updates,
             );
             wallpaper_service
                 .set_active(running && wallpaper_upload_active(&state, webos, focused, visible));
@@ -1557,6 +1582,7 @@ fn run() -> Result<(), String> {
                 &weather_service,
                 &wallpaper_service,
                 &webhook_service,
+                &updates,
             );
         }
         if let Some(held) = &mut press
@@ -1596,6 +1622,7 @@ fn run() -> Result<(), String> {
                     &weather_service,
                     &wallpaper_service,
                     &webhook_service,
+                    &updates,
                 );
             }
         }
@@ -1627,6 +1654,7 @@ fn run() -> Result<(), String> {
                 &weather_service,
                 &wallpaper_service,
                 &webhook_service,
+                &updates,
             );
         }
         let keyboard = state.text_input_active();

@@ -192,6 +192,8 @@ pub enum Effect {
     FireWebhook(CustomTile),
     Quit,
     Weather(weather::Command),
+    UpdateCheck,
+    UpdateDownload(crate::update::Release),
 }
 
 pub const KEYS: [&str; 40] = [
@@ -234,6 +236,8 @@ pub struct State {
     pub deleting_wallpaper: Option<String>,
     pub wallpaper_upload: Option<Result<crate::wallpapers::Session, String>>,
     pub tile_editor: Option<Result<crate::companion::Session, String>>,
+    /// Luma update (Settings → System), driven by the update worker.
+    pub update: crate::update::Status,
     pub panel_started: Option<Instant>,
     pub weather: weather::Weather,
     pub keyboard_field: TextField,
@@ -276,6 +280,7 @@ impl State {
             deleting_wallpaper: None,
             wallpaper_upload: None,
             tile_editor: None,
+            update: crate::update::Status::default(),
             panel_started: None,
             weather: weather::Weather::default(),
             keyboard_field: TextField::Apps,
@@ -2085,6 +2090,24 @@ impl State {
                             self.panel_started = Some(Instant::now());
                         }
                         return vec![];
+                    }
+                    8 => {
+                        use crate::update::Status;
+                        return match &self.update {
+                            Status::Available(release) => {
+                                let release = release.clone();
+                                self.update = Status::Downloading(0);
+                                vec![Effect::UpdateDownload(release)]
+                            }
+                            Status::Checking | Status::Downloading(_) | Status::Installing(_) => {
+                                vec![]
+                            }
+                            _ => {
+                                self.update = Status::Checking;
+                                self.dirty = true;
+                                vec![Effect::UpdateCheck]
+                            }
+                        };
                     }
                     _ => return vec![Effect::Reload],
                 }

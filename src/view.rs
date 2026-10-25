@@ -1666,6 +1666,25 @@ fn filter(out: &mut Scene, state: &State, target: Target, rect: Rect, label: &st
     out.control(target, rect, false);
 }
 
+/// The Luma update row's value: the installed version, or where an update stands.
+fn update_value(state: &State) -> String {
+    use crate::update::{CURRENT, Status};
+    let language = state.preferences.language;
+    match &state.update {
+        Status::Idle => CURRENT.to_owned(),
+        Status::Checking => language.t("updateChecking").to_owned(),
+        Status::Latest => language.t("updateLatest").to_owned(),
+        Status::Available(release) => {
+            language.format("updateAvailable", &[("version", &release.version)])
+        }
+        Status::Downloading(percent) => {
+            language.format("updateDownloading", &[("percent", &percent.to_string())])
+        }
+        Status::Installing(_) => language.t("updateInstalling").to_owned(),
+        Status::Failed(_) => language.t("updateFailed").to_owned(),
+    }
+}
+
 struct Row<'a> {
     target: Target,
     rect: Rect,
@@ -2529,11 +2548,13 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     Some(language.t(state.preferences.text_rendering.label_key())),
                     true,
                 ),
+                (8, language.t("lumaUpdate"), "sparkles", None, false),
                 (5, language.t("quitApp"), "power", None, false),
             ]
             .into_iter()
             .enumerate()
             {
+                let update = (index == 8).then(|| update_value(state));
                 row(
                     out,
                     state,
@@ -2543,7 +2564,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                         rect: Rect::new(640., 408.8 + position as f32 * 84. - s, 1120., 72.),
                         title,
                         icon: Some(icon),
-                        value,
+                        value: update.as_deref().or(value),
                         description: None,
                         selected: false,
                         chevron,

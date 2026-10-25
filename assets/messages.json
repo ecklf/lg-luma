@@ -1021,6 +1021,105 @@
     "vi": "Làm mới ứng dụng & đầu vào",
     "nl": "Apps en ingangen vernieuwen"
   },
+  "lumaUpdate": {
+    "en": "Luma update",
+    "de": "Luma-Update",
+    "es": "Actualización de Luma",
+    "zh": "Luma 更新",
+    "pt": "Atualização do Luma",
+    "it": "Aggiornamento di Luma",
+    "ru": "Обновление Luma",
+    "pl": "Aktualizacja Luma",
+    "fr": "Mise à jour de Luma"
+  },
+  "updateChecking": {
+    "en": "Checking…",
+    "de": "Wird geprüft …",
+    "es": "Comprobando…",
+    "zh": "正在检查…",
+    "pt": "Verificando…",
+    "it": "Verifica in corso…",
+    "ru": "Проверка…",
+    "pl": "Sprawdzanie…",
+    "fr": "Vérification…"
+  },
+  "updateLatest": {
+    "en": "Up to date",
+    "de": "Aktuell",
+    "es": "Actualizado",
+    "zh": "已是最新版本",
+    "pt": "Atualizado",
+    "it": "Aggiornato",
+    "ru": "Актуальная версия",
+    "pl": "Aktualna wersja",
+    "fr": "À jour"
+  },
+  "updateAvailable": {
+    "en": "Install {version}",
+    "de": "{version} installieren",
+    "es": "Instalar {version}",
+    "zh": "安装 {version}",
+    "pt": "Instalar {version}",
+    "it": "Installa {version}",
+    "ru": "Установить {version}",
+    "pl": "Zainstaluj {version}",
+    "fr": "Installer {version}"
+  },
+  "updateDownloading": {
+    "en": "Downloading {percent} %",
+    "de": "Wird geladen: {percent} %",
+    "es": "Descargando {percent} %",
+    "zh": "正在下载 {percent}%",
+    "pt": "Baixando {percent}%",
+    "it": "Download {percent}%",
+    "ru": "Загрузка {percent}%",
+    "pl": "Pobieranie {percent}%",
+    "fr": "Téléchargement {percent} %"
+  },
+  "updateInstalling": {
+    "en": "Installing…",
+    "de": "Wird installiert …",
+    "es": "Instalando…",
+    "zh": "正在安装…",
+    "pt": "Instalando…",
+    "it": "Installazione…",
+    "ru": "Установка…",
+    "pl": "Instalowanie…",
+    "fr": "Installation…"
+  },
+  "updateFailed": {
+    "en": "Try again",
+    "de": "Erneut versuchen",
+    "es": "Reintentar",
+    "zh": "重试",
+    "pt": "Tentar novamente",
+    "it": "Riprova",
+    "ru": "Повторить",
+    "pl": "Spróbuj ponownie",
+    "fr": "Réessayer"
+  },
+  "updateError": {
+    "en": "The update did not work. Try again later.",
+    "de": "Das Update hat nicht geklappt. Versuche es später erneut.",
+    "es": "La actualización no funcionó. Inténtalo más tarde.",
+    "zh": "更新未成功，请稍后重试。",
+    "pt": "A atualização não funcionou. Tente novamente mais tarde.",
+    "it": "L'aggiornamento non è riuscito. Riprova più tardi.",
+    "ru": "Не удалось обновить. Повторите попытку позже.",
+    "pl": "Aktualizacja nie powiodła się. Spróbuj ponownie później.",
+    "fr": "La mise à jour a échoué. Réessayez plus tard."
+  },
+  "updateRestart": {
+    "en": "Luma restarts when the update is installed.",
+    "de": "Luma startet neu, sobald das Update installiert ist.",
+    "es": "Luma se reiniciará cuando se instale la actualización.",
+    "zh": "更新安装完成后，Luma 将重新启动。",
+    "pt": "O Luma reinicia quando a atualização for instalada.",
+    "it": "Luma si riavvia al termine dell'installazione.",
+    "ru": "Luma перезапустится после установки обновления.",
+    "pl": "Luma uruchomi się ponownie po zainstalowaniu aktualizacji.",
+    "fr": "Luma redémarre une fois la mise à jour installée."
+  },
   "quitApp": {
     "zh-tw": "結束應用程式",
     "en": "Quit app",

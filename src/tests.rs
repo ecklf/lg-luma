@@ -923,6 +923,8 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(7));
     state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Setting(8));
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(5));
     assert_eq!(state.activate(), vec![Effect::Quit]);
     state.back();
@@ -3090,4 +3092,45 @@ fn tiles_edited_elsewhere_join_and_leave_home_like_tv_edits() {
         .find(|app| app.id == "custom.gate")
         .unwrap();
     assert_eq!(app.title, "Garage");
+}
+
+#[test]
+fn the_update_row_checks_installs_and_ignores_presses_while_busy() {
+    use crate::update::{CURRENT, Release, Status};
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::SYSTEM_SECTION;
+    state.focus = Target::Setting(8);
+    let value = |state: &State| {
+        scene(state)
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, crate::renderer::Draw::Text(text, ..) if text == CURRENT))
+    };
+    assert!(value(&state), "the installed version shows before a check");
+    assert_eq!(state.activate(), vec![Effect::UpdateCheck]);
+    assert_eq!(state.update, Status::Checking);
+    assert!(
+        state.activate().is_empty(),
+        "no second check while one runs"
+    );
+    let release = Release {
+        version: "9.9.9".into(),
+        url: "https://github.com/ecklf/lg-luma/releases/download/v9.9.9/x_arm.ipk".into(),
+        sha256: "a".repeat(64),
+        size: 1,
+    };
+    state.update = Status::Available(release.clone());
+    assert!(scene(&state).draw.iter().any(|draw| {
+        matches!(draw, crate::renderer::Draw::Text(text, ..) if text == "Install 9.9.9")
+    }));
+    assert_eq!(state.activate(), vec![Effect::UpdateDownload(release)]);
+    assert_eq!(state.update, Status::Downloading(0));
+    assert!(state.activate().is_empty());
+    state.update = Status::Failed("offline".into());
+    assert_eq!(
+        state.activate(),
+        vec![Effect::UpdateCheck],
+        "a failure can be retried"
+    );
 }

@@ -25,6 +25,7 @@ libc = { version = "0.2", optional = true }
 luma-vector-geometry = { path = "vector-geometry" }
 owned_ttf_parser = "0.25"
 qrcodegen = "1.8"
+ring = "0.17"
 sdl2 = { version = "0.38", features = ["use-pkgconfig"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

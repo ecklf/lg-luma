@@ -300,6 +300,7 @@ dependencies = [
  "luma-vector-geometry",
  "owned_ttf_parser",
  "qrcodegen",
+ "ring",
  "sdl2",
  "serde",
  "serde_json",

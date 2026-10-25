@@ -363,6 +363,7 @@ try {
   );
   assert.deepEqual(system.focus, { Setting: 5 });
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
+  assert.ok(system.ui_text.includes('Luma update'));
   assert.ok(system.ui_text.includes('Quit app'));
   assert.ok(system.ui_text.includes('Text rendering'));
   const updatePreview = await scenario('update-preview', 'settings,down,down,down,down,right', [

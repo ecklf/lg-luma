@@ -130,6 +130,14 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
   '{"id":"com.ecklf.luma","ipkUrl":"/tmp/luma.ipk","subscribe":true}'
 ```
 
+### Updating from the TV
+
+**Settings → System → Luma update** checks the latest GitHub release. If it is newer, select the row
+again to install it: Luma downloads the IPK, verifies its size and SHA-256 against the release's
+Homebrew Channel feed, and installs it through Homebrew Channel's root service. Luma restarts when
+the update is installed (as Home, the integration remounts the new executable first). A log is
+kept in `/tmp/luma-update.log`.
+
 ## Replacing LG Home
 
 ### Takeover Method
