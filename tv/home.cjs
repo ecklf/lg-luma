@@ -553,21 +553,39 @@ function installEarly(appDir) {
   }
 }
 
+// Best effort as well: a failed step is reported and must not keep disable from restoring LG Home.
 function removeEarly() {
-  try {
-    setKeyFilters(false);
-  } catch (error) {
-    console.error('Luma Home: ' + error.message);
+  function attempt(step) {
+    try {
+      step();
+    } catch (error) {
+      console.error('Luma Home: early start cleanup: ' + error.message);
+    }
   }
+  attempt(function () {
+    setKeyFilters(false);
+  });
   var changed = false;
   Object.keys(earlyFiles()).forEach(function (file) {
-    if (exists(file)) {
-      fs.unlinkSync(file);
-      changed = true;
-    }
+    attempt(function () {
+      if (exists(file)) {
+        fs.unlinkSync(file);
+        changed = true;
+      }
+    });
   });
-  if (changed) rescanLs2();
-  if (exists(EARLY_EXE)) fs.unlinkSync(EARLY_EXE);
+  attempt(function () {
+    if (exists(EARLY_EXE)) fs.unlinkSync(EARLY_EXE);
+  });
+  if (changed) attempt(rescanLs2);
+}
+
+function disable(config) {
+  config.enabled = false;
+  writeJson(CONFIG, config);
+  if (config.method === 'executable') removeEarly();
+  restore(config);
+  if (hookOwned()) fs.unlinkSync(HOOK);
 }
 
 function installHook() {
@@ -665,11 +683,7 @@ try {
     if (command === 'apply' && config.enabled) {
       apply(config, false);
     } else {
-      config.enabled = false;
-      writeJson(CONFIG, config);
-      if (config.method === 'executable') removeEarly();
-      restore(config);
-      if (hookOwned()) fs.unlinkSync(HOOK);
+      disable(config);
       console.log('LG Home restored. Luma Home boot integration disabled.');
     }
   } else {

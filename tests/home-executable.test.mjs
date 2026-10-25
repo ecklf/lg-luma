@@ -219,3 +219,29 @@ test('the key filter is appended once to LG filter chain and removed again', () 
   assert.deepEqual(plain(keyFilters([...lg, ours], true)), [...lg, ours]);
   assert.deepEqual(plain(keyFilters([ours, ...lg], false)), lg);
 });
+
+test('disable restores LG Home and removes the hook and helper even when LS2 cleanup fails', () => {
+  const context = load();
+  const removed = [];
+  const steps = [];
+  Object.assign(context, {
+    fs: {
+      unlinkSync: (file) => removed.push(file),
+    },
+    exists: () => true,
+    hookOwned: () => true,
+    writeJson: () => steps.push('save'),
+    setKeyFilters() {
+      throw new Error('config service unavailable');
+    },
+    run() {
+      throw new Error('ls-control failed');
+    },
+    restore: () => steps.push('restore'),
+  });
+  context.disable({ enabled: true, method: 'executable', appDir });
+  assert.deepEqual(steps, ['save', 'restore']);
+  assert.ok(removed.includes('/var/lib/luma-home/luma-early'));
+  assert.ok(removed.includes('/var/lib/webosbrew/init.d/64-luma-home'));
+  assert.equal(removed.filter((file) => file.startsWith('/var/luna-service2/')).length, 4);
+});

@@ -95,6 +95,27 @@ test('Home opens over Live TV, not over an app the owner opened, and at most twi
   assert.deepEqual(owner.calls, []);
 });
 
+test('Home opens when Live TV replaces the snapshot Home after the mount is ready', () => {
+  const tv = compositor();
+  tv.boot(false);
+  tv.front('com.webos.app.home');
+  tv.early(true);
+  assert.deepEqual(tv.calls, []);
+  tv.front('com.webos.app.livetv');
+  assert.deepEqual(tv.calls, ['/launch com.webos.app.home']);
+});
+
+test('once Home was shown, later inputs and retries leave the owner alone', () => {
+  const tv = compositor();
+  tv.boot(false);
+  tv.front('');
+  tv.early(true);
+  tv.front('com.webos.app.home');
+  tv.front('com.webos.app.hdmi1');
+  tv.timers.find(([ms]) => ms === 8000)[1]();
+  assert.deepEqual(tv.calls, ['/launch com.webos.app.home']);
+});
+
 test('keys pass through unchanged', () => {
   const tv = compositor();
   assert.equal(tv.context.lumaHomeKey(1, true, false), 0);

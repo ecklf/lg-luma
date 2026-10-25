@@ -9,6 +9,7 @@ var lumaHomeEarly = ''; // "" until luma-early answers, then "ready" or "failed"
 var lumaHomeTries = 0;
 var lumaHomeFront = '';
 var lumaHomeLaunches = 0;
+var lumaHomeShown = false; // Home came to the front after a launch from here
 
 function lumaHomeParse(payload) {
   return typeof payload === 'string' ? JSON.parse(payload) : payload;
@@ -34,9 +35,15 @@ function lumaHomePrepare() {
 
 // Home is a system app: SAM takes its launch at once, while normal apps wait for
 // minimal-boot-done (~25-35 s). Only over an empty screen or the input bootd opened, so a choice
-// the owner made meanwhile stays.
+// the owner made meanwhile stays. Called again on every foreground change until Home is shown:
+// the snapshot's LG Home can still be in front when the mount is ready, and Live TV follows it.
 function lumaHomeOpen() {
-  if (lumaHomeEarly !== 'ready' || lumaHomeFront === 'com.webos.app.home' || lumaHomeLaunches >= 2)
+  if (
+    lumaHomeEarly !== 'ready' ||
+    lumaHomeShown ||
+    lumaHomeFront === 'com.webos.app.home' ||
+    lumaHomeLaunches >= 2
+  )
     return;
   if (lumaHomeFront && !/^com\.webos\.app\.(livetv|hdmi\d|externalinput\..*)$/.test(lumaHomeFront))
     return;
@@ -84,6 +91,8 @@ function init() {
         try {
           var r = lumaHomeParse(payload);
           lumaHomeFront = (r && r.appId) || '';
+          if (lumaHomeFront === 'com.webos.app.home' && lumaHomeLaunches) lumaHomeShown = true;
+          else lumaHomeOpen();
         } catch (error) {
           console.warn('luma home filter: ' + error);
         }
