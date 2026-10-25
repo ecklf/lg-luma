@@ -19,6 +19,17 @@ var EXE = '/usr/bin/' + HOME;
 // Tells a normal tile launch to open the Home instance. The tile's jail sees /usr/bin without
 // this mount but shares /var/run, which is volatile like the mount itself.
 var MARKER = '/var/run/luma-home';
+// Early cold-boot start for the executable method (src/bin/luma-early.rs, home-filter.js). ls-hubd
+// reads these volatile LS2 directories at core-boot-done and starts dynamic services as root, so
+// the compositor key filter can have Luma mounted ~30 s before the Homebrew hook runs.
+var EARLY = 'com.webos.service.lumahome';
+// A copy beside home.sh: ls-hubd treats programs under /media/developer as developer-mode
+// services and does not deliver the system key filter's calls to them.
+var EARLY_EXE = STATE + '/luma-early';
+var LS2 = '/var/luna-service2';
+var FILTER = STATE + '/home-filter.js';
+var KEY_FILTERS = 'com.webos.surfacemanager.keyFilters';
+var FILTER_HANDLER = 'lumaHomeKey';
 
 function read(file) {
   return fs.readFileSync(file, 'utf8');
@@ -61,18 +72,15 @@ function excerpt(output) {
 }
 
 function luna(method, payload) {
+  return lunaUri('com.webos.applicationManager/' + method, payload);
+}
+
+function lunaUri(uri, payload) {
   // -n prints one JSON reply to stdout. -t is timing mode and logs the
   // payload to stderr instead, leaving timing summaries on stdout.
   var result = spawnSync(
     '/usr/bin/luna-send',
-    [
-      '-n',
-      '1',
-      '-w',
-      '4000',
-      'luna://com.webos.applicationManager/' + method,
-      JSON.stringify(payload)
-    ],
+    ['-n', '1', '-w', '4000', 'luna://' + uri, JSON.stringify(payload)],
     {
       encoding: 'utf8',
       timeout: 8000,
@@ -85,7 +93,7 @@ function luna(method, payload) {
   if (result.error || result.status !== 0) {
     throw new Error(
       'Luna ' +
-        method +
+        uri +
         ' failed (' +
         (result.error
           ? result.error.message
@@ -94,12 +102,12 @@ function luna(method, payload) {
         diagnostics
     );
   }
-  if (!stdout) throw new Error('No Luna JSON reply from ' + method + diagnostics);
+  if (!stdout) throw new Error('No Luna JSON reply from ' + uri + diagnostics);
   var reply;
   try {
     reply = JSON.parse(stdout);
   } catch (error) {
-    throw new Error('Invalid Luna JSON reply from ' + method + ': ' + error.message + diagnostics);
+    throw new Error('Invalid Luna JSON reply from ' + uri + ': ' + error.message + diagnostics);
   }
   if (
     !reply ||
@@ -107,7 +115,7 @@ function luna(method, payload) {
     Array.isArray(reply) ||
     typeof reply.returnValue !== 'boolean'
   ) {
-    throw new Error('Invalid Luna response from ' + method + diagnostics);
+    throw new Error('Invalid Luna response from ' + uri + diagnostics);
   }
   return reply;
 }
@@ -459,12 +467,107 @@ function apply(config, open) {
 }
 
 function installScripts() {
-  ['home.sh', 'home.cjs'].forEach(function (name) {
+  ['home.sh', 'home.cjs', 'home-filter.js'].forEach(function (name) {
     var target = STATE + '/' + name;
     var data = fs.readFileSync(path.join(__dirname, name));
     fs.writeFileSync(target + '.new', data, { mode: name === 'home.sh' ? 493 : 420 });
     fs.renameSync(target + '.new', target);
   });
+}
+
+// The LS2 definitions of luma-early: dynamic service, role bound to its executable, the one
+// method in API group "all" (the only group LG grants com.webos.starfish.keyfilters), callable
+// by the key filter alone.
+function earlyFiles() {
+  var exe = EARLY_EXE;
+  var files = {};
+  files[LS2 + '/services.d/' + EARLY + '.service'] =
+    '[D-BUS Service]\nName=' + EARLY + '\nExec=' + exe + '\nType=dynamic\n';
+  files[LS2 + '/roles.d/' + EARLY + '.json'] =
+    JSON.stringify({
+      exeName: exe,
+      type: 'regular',
+      allowedNames: [EARLY],
+      permissions: [{ service: EARLY, inbound: ['com.webos.starfish.keyfilters'], outbound: [] }]
+    }) + '\n';
+  files[LS2 + '/api-permissions.d/' + EARLY + '.json'] =
+    JSON.stringify({ all: [EARLY + '/prepare'] }) + '\n';
+  files[LS2 + '/manifests.d/' + EARLY + '.json'] =
+    JSON.stringify({
+      id: EARLY,
+      // ls-hubd silently drops a manifest whose version is not x.y.z.
+      version: '1.0.0',
+      serviceFiles: [LS2 + '/services.d/' + EARLY + '.service'],
+      roleFiles: [LS2 + '/roles.d/' + EARLY + '.json'],
+      apiPermissionFiles: [LS2 + '/api-permissions.d/' + EARLY + '.json']
+    }) + '\n';
+  return files;
+}
+
+// LG's filter chain with ours removed, and appended again when `on`. Keys pass through it.
+function keyFilters(list, on) {
+  var rest = list.filter(function (entry) {
+    return !entry || entry.file !== FILTER;
+  });
+  if (on) rest.push({ file: FILTER, handler: FILTER_HANDLER });
+  return rest;
+}
+
+function setKeyFilters(on) {
+  var reply = accepted(
+    lunaUri('com.webos.service.config/getConfigs', { configNames: [KEY_FILTERS] }),
+    'Read key filters'
+  );
+  var list = reply.configs && reply.configs[KEY_FILTERS];
+  if (!Array.isArray(list)) throw new Error('Missing ' + KEY_FILTERS);
+  var next = keyFilters(list, on);
+  if (JSON.stringify(next) === JSON.stringify(list)) return;
+  var configs = {};
+  configs[KEY_FILTERS] = next;
+  accepted(
+    lunaUri('com.webos.service.config/setConfigs', { configs: configs }),
+    'Write key filters'
+  );
+}
+
+function rescanLs2() {
+  run('/usr/sbin/ls-control', ['scan-volatile-dirs']);
+}
+
+// Best effort: without it a cold boot still reaches Luma through the Homebrew hook.
+function installEarly(appDir) {
+  if (!fs.existsSync(appDir + '/luma-early')) return;
+  try {
+    fs.writeFileSync(EARLY_EXE + '.new', fs.readFileSync(appDir + '/luma-early'), { mode: 493 });
+    fs.renameSync(EARLY_EXE + '.new', EARLY_EXE);
+    var files = earlyFiles();
+    Object.keys(files).forEach(function (file) {
+      mkdir(path.dirname(file));
+      fs.writeFileSync(file + '.new', files[file], { mode: 420 });
+      fs.renameSync(file + '.new', file);
+    });
+    rescanLs2();
+    setKeyFilters(true);
+  } catch (error) {
+    console.error('Luma Home: early start not installed: ' + error.message);
+  }
+}
+
+function removeEarly() {
+  try {
+    setKeyFilters(false);
+  } catch (error) {
+    console.error('Luma Home: ' + error.message);
+  }
+  var changed = false;
+  Object.keys(earlyFiles()).forEach(function (file) {
+    if (exists(file)) {
+      fs.unlinkSync(file);
+      changed = true;
+    }
+  });
+  if (changed) rescanLs2();
+  if (exists(EARLY_EXE)) fs.unlinkSync(EARLY_EXE);
 }
 
 function installHook() {
@@ -505,6 +608,7 @@ function install(appDir) {
     apply(exeConfig, true);
     exeConfig.enabled = true;
     writeJson(CONFIG, exeConfig);
+    installEarly(appDir);
     console.log('Luma is now Home. Home Auto Launch and Quick Start+ follow the TV settings.');
     return;
   }
@@ -546,6 +650,9 @@ try {
           method: saved ? saved.method || 'manifest' : null,
           mounted: saved && saved.method === 'executable' ? exeMounted(saved.appDir) : mounted(),
           bootHook: hookOwned(),
+          earlyStart:
+            !!(saved && saved.method === 'executable') &&
+            exists(LS2 + '/services.d/' + EARLY + '.service'),
           appDir: saved ? saved.appDir : null
         },
         null,
@@ -560,6 +667,7 @@ try {
     } else {
       config.enabled = false;
       writeJson(CONFIG, config);
+      if (config.method === 'executable') removeEarly();
       restore(config);
       if (hookOwned()) fs.unlinkSync(HOOK);
       console.log('LG Home restored. Luma Home boot integration disabled.');

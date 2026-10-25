@@ -4,7 +4,7 @@ STATE=/var/lib/luma-home
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd) || exit 1
 COMMAND=${1:-boot}
 case "$COMMAND" in
-  enable|disable|restore|status|apply|boot) ;;
+  enable|disable|restore|status|apply|boot|early) ;;
   *) printf '%s\n' 'Usage: home.sh enable [APP_DIR] | disable | restore | status' >&2; exit 1 ;;
 esac
 [ "$(id -u)" = 0 ] || { printf '%s\n' 'Run as root.' >&2; exit 1; }
@@ -18,6 +18,8 @@ if [ "$COMMAND" = enable ] && grep -q 'release [56]\.' /etc/starfish-release 2>/
     "     LG's Home manifest and role stay; Luma registers with SAM itself." \
     '  4. Stop the previous Home process and launch Luma as Home.' \
     '  5. Install /var/lib/webosbrew/init.d/64-luma-home to reapply the mount at cold boot.' \
+    '  6. Register the LS2 service com.webos.service.lumahome (luma-early) and a compositor key' \
+    '     filter, so a cold boot opens Luma at about 20 s instead of after the Homebrew hooks.' \
     '' \
     "LG Home's original executable remains underneath the mount." \
     'Home Auto Launch and Quick Start+ retain their current settings.' \
@@ -55,7 +57,37 @@ fi
 [ ! -L "$STATE" ] || exit 1
 if [ ! -d "$STATE" ]; then mkdir -m 755 "$STATE" || exit 1; fi
 [ "$(stat -c %u "$STATE")" = 0 ] || exit 1
+EXE=/usr/bin/com.webos.app.home
+MARKER=/var/run/luma-home
+if [ "$COMMAND" = early ]; then
+  # From luma-early, ~18 s into a cold boot (see src/bin/luma-early.rs): the executable method's
+  # mount without Node, which would cost seconds under boot load. Opens nothing; the key filter
+  # launches Home once this succeeded. Any failure leaves the boot hook below to do it.
+  exec 9>"$STATE/lock"
+  flock -w 10 9 || exit 1
+  config=$(cat "$STATE/state.json" 2>/dev/null) || exit 1
+  case "$config" in *'"enabled": true'*) ;; *) exit 1 ;; esac
+  case "$config" in *'"method": "executable"'*) ;; *) exit 1 ;; esac
+  app=$(printf '%s\n' "$config" | sed -n 's/^  "appDir": "\([^"]*\)".*/\1/p')
+  [ -x "$app/luma" ] || exit 1
+  if ! grep -q " $EXE " /proc/mounts; then
+    # LG's Home, restored from the boot snapshot, still runs LG's program.
+    old=$(pgrep -f "^$EXE( |\$)")
+    mount --bind "$app/luma" "$EXE" || exit 1
+    for pid in $old; do kill "$pid" 2>/dev/null; done
+    i=0
+    for pid in $old; do
+      while [ -d "/proc/$pid" ] && [ $i -lt 20 ]; do i=$((i + 1)); usleep 250000; done
+    done
+  fi
+  [ "$(stat -c '%d %i' "$app/luma")" = "$(stat -c '%d %i' "$EXE")" ] || exit 1
+  printf '%s\n' com.ecklf.luma >"$MARKER"
+  printf '%s early: Luma is Home (uptime %s)\n' "$(date)" "$(cut -d' ' -f1 /proc/uptime)" >>"$STATE/boot.log"
+  exit 0
+fi
 if [ "$COMMAND" = boot ]; then
+  # The early helper has already mounted Luma during this boot.
+  if [ -f "$MARKER" ] && grep -q " $EXE " /proc/mounts; then exit 0; fi
   (
     sleep 5
     exec sh "$STATE/home.sh" apply

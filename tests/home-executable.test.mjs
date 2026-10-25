@@ -169,3 +169,53 @@ test('restore unmounts, stops Luma and reopens LG Home only if Home was in front
     assert.deepEqual(calls, ['unmark', `umount ${exe}`, 'stop', ...(reopened ? ['launch'] : [])]);
   }
 });
+
+test('the early helper is a dynamic LS2 service only the key filter may call', () => {
+  const { earlyFiles } = load();
+  const files = earlyFiles();
+  const ls2 = '/var/luna-service2';
+  const name = 'com.webos.service.lumahome';
+  assert.deepEqual(Object.keys(files).sort(), [
+    `${ls2}/api-permissions.d/${name}.json`,
+    `${ls2}/manifests.d/${name}.json`,
+    `${ls2}/roles.d/${name}.json`,
+    `${ls2}/services.d/${name}.service`,
+  ]);
+  assert.equal(
+    files[`${ls2}/services.d/${name}.service`],
+    `[D-BUS Service]\nName=${name}\nExec=/var/lib/luma-home/luma-early\nType=dynamic\n`,
+  );
+  const role = JSON.parse(files[`${ls2}/roles.d/${name}.json`]);
+  // Not under /media/developer: ls-hubd would treat it as a developer-mode service.
+  assert.equal(role.exeName, '/var/lib/luma-home/luma-early');
+  assert.deepEqual(role.allowedNames, [name]);
+  assert.deepEqual(JSON.parse(JSON.stringify(role.permissions)), [
+    { service: name, inbound: ['com.webos.starfish.keyfilters'], outbound: [] },
+  ]);
+  // "all" is the only API group LG grants the key filter.
+  assert.deepEqual(JSON.parse(files[`${ls2}/api-permissions.d/${name}.json`]), {
+    all: [`${name}/prepare`],
+  });
+  const manifest = JSON.parse(files[`${ls2}/manifests.d/${name}.json`]);
+  // ls-hubd ignores the whole manifest unless its version is x.y.z.
+  assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
+  assert.deepEqual(
+    [...manifest.serviceFiles, ...manifest.roleFiles, ...manifest.apiPermissionFiles].sort(),
+    Object.keys(files)
+      .filter((file) => !file.includes('/manifests.d/'))
+      .sort(),
+  );
+});
+
+test('the key filter is appended once to LG filter chain and removed again', () => {
+  const { keyFilters } = load();
+  const ours = { file: '/var/lib/luma-home/home-filter.js', handler: 'lumaHomeKey' };
+  const lg = [
+    { file: '/usr/lib/qml/filters/screensaver.js', handler: 'handleScreenSaver' },
+    { file: '/usr/lib/qml/filters/magic.js', handler: 'handleMagic' },
+  ];
+  const plain = (value) => JSON.parse(JSON.stringify(value));
+  assert.deepEqual(plain(keyFilters(lg, true)), [...lg, ours]);
+  assert.deepEqual(plain(keyFilters([...lg, ours], true)), [...lg, ours]);
+  assert.deepEqual(plain(keyFilters([ours, ...lg], false)), lg);
+});
