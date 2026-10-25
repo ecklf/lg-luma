@@ -1405,3 +1405,40 @@ fn prewarm_waits_while_recents_replaces_the_page() {
     );
     assert_eq!(crate::next_prewarm(&mut jobs, &state, true), None);
 }
+
+#[test]
+fn failed_first_inventory_keeps_loading_until_retries_are_used_up() {
+    let mut state = State::new(Preferences::default());
+    state.loading = true;
+    for attempt in 1..=crate::state::INVENTORY_RETRIES {
+        assert_eq!(
+            state.inventory_failed("The TV service timed out".into()),
+            Some(crate::state::INVENTORY_RETRY_DELAY)
+        );
+        assert_eq!(state.inventory_failures, attempt);
+        assert!(state.loading && state.error.is_none());
+    }
+    assert_eq!(
+        state.inventory_failed("The TV service timed out".into()),
+        None
+    );
+    assert!(!state.loading);
+    assert_eq!(state.error.as_deref(), Some("The TV service timed out"));
+    assert_eq!(state.first_content(), Target::Retry);
+    // Retry by hand starts a fresh round of automatic retries.
+    assert_eq!(state.inventory_failures, 0);
+}
+
+#[test]
+fn inventory_success_resets_failures_and_later_failures_show_at_once() {
+    let mut state = State::new(Preferences::default());
+    state.loading = true;
+    assert!(state.inventory_failed("timeout".into()).is_some());
+    state.set_inventory(demo_inventory(), None);
+    assert_eq!(state.inventory_failures, 0);
+    state.loading = true;
+    // Apps are on screen already: a failed refresh is reported, not retried behind them.
+    assert_eq!(state.inventory_failed("timeout".into()), None);
+    assert!(!state.loading && state.error.is_some());
+    assert!(!state.inventory.apps.is_empty());
+}

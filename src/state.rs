@@ -12,6 +12,9 @@ pub const INPUTS_SECTION: usize = 3;
 pub const SYSTEM_SECTION: usize = 4;
 pub const SECTION_COUNT: usize = 5;
 pub const APPS_COLUMNS: usize = 6;
+/// Automatic inventory retries before the error shows: with the 6.5 s Luna timeout about 50 s.
+pub const INVENTORY_RETRIES: u32 = 5;
+pub const INVENTORY_RETRY_DELAY: Duration = Duration::from_secs(2);
 pub const HOME_STRIP_LEFT: f32 = 84.;
 // Six favourites in full and the seventh cut off and fading out at the right (Apple TV rows):
 // the strip ends after the sixth tile, so a focused tile never sits in the fade.
@@ -177,6 +180,8 @@ pub struct State {
     pub launching: bool,
     pub notice: Option<(String, Instant)>,
     pub error: Option<String>,
+    /// Inventory loads that failed in a row while no apps were shown yet.
+    pub inventory_failures: u32,
     pub dirty: bool,
     pub pointer: bool,
     pub pressed: Option<Target>,
@@ -209,6 +214,7 @@ impl State {
             launching: false,
             notice: None,
             error: None,
+            inventory_failures: 0,
             dirty: true,
             pointer: false,
             pressed: None,
@@ -445,8 +451,25 @@ impl State {
         }
         self.loading = false;
         self.error = None;
+        self.inventory_failures = 0;
         self.dirty = true;
         self.reconcile_focus();
+    }
+
+    /// A failed inventory load. Right after a cold boot, or when the TV is short of memory, the
+    /// Homebrew service that reads the inventory can take longer than one request allows. While
+    /// no apps are shown yet, the screen keeps loading and the caller retries after the returned
+    /// delay; the error and its Retry button only appear once those retries are used up.
+    pub fn inventory_failed(&mut self, error: String) -> Option<Duration> {
+        self.dirty = true;
+        if self.inventory.apps.is_empty() && self.inventory_failures < INVENTORY_RETRIES {
+            self.inventory_failures += 1;
+            return Some(INVENTORY_RETRY_DELAY);
+        }
+        self.inventory_failures = 0;
+        self.loading = false;
+        self.error = Some(error);
+        None
     }
 
     pub fn reconcile_focus(&mut self) {
