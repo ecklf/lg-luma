@@ -31,8 +31,9 @@ bumps to the automated Version Packages PR. Its `pnpm version:release` command s
 IPK examples. Supporting Rust crates retain independent versions. `pnpm version:check` checks
 consistency without writing files. Code or behavior changes should use semantic versioning:
 patch for backward-compatible fixes, minor for backward-compatible features, and major for
-breaking changes. Documentation-only or maintenance changes that do not need a release can omit
-a changeset.
+breaking changes. Translation updates and additional UI languages, including required font glyph
+coverage, are patch changes. Documentation-only or maintenance changes that do not need a release
+can omit a changeset.
 
 ## Build and identity
 
