@@ -1500,3 +1500,97 @@ fn inventory_success_resets_failures_and_later_failures_show_at_once() {
     assert!(!state.loading && state.error.is_some());
     assert!(!state.inventory.apps.is_empty());
 }
+
+#[test]
+fn custom_wallpapers_follow_the_bundled_ones_and_can_be_selected() {
+    let mut state = ready();
+    state.preferences_path = PathBuf::from("/data/luma/preferences.json");
+    state.custom_wallpapers = vec!["custom:Beach.jpg".into(), "custom:Lake.png".into()];
+    state.open(2);
+    state.section = 1;
+    let bundled = crate::model::BACKGROUNDS.len();
+    assert_eq!(state.background_ids().len(), bundled + 2);
+    state.focus = Target::Background(bundled - 1);
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::Background(bundled));
+    state.focus = Target::Background(bundled + 2);
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(
+        state.focus,
+        Target::Background(bundled + 2),
+        "nothing after the folder tile"
+    );
+    assert!(state.activate().is_empty());
+    assert!(
+        state
+            .notice
+            .as_ref()
+            .is_some_and(|(text, _)| text.contains("/data/luma/wallpapers")),
+        "the folder tile names the folder"
+    );
+    state.focus = Target::Background(bundled + 1);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.background, "custom:Lake.png");
+    let scene = scene(&state);
+    let images: Vec<&String> = scene
+        .draw
+        .iter()
+        .filter_map(|draw| match draw {
+            crate::renderer::Draw::Image(path, ..)
+            | crate::renderer::Draw::TintedImage(path, ..) => Some(path),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        images
+            .iter()
+            .any(|path| *path == "/data/luma/wallpaper-cache/Lake.png.jpg")
+    );
+    assert!(
+        images
+            .iter()
+            .any(|path| *path == "/data/luma/wallpaper-cache/Beach.jpg.thumb.jpg")
+    );
+    assert!(scene.draw.iter().any(|draw| matches!(draw,
+        crate::renderer::Draw::Text(value, ..) if value.contains("/data/luma/wallpapers"))));
+    assert!(scene.draw.iter().any(|draw| matches!(draw,
+        crate::renderer::Draw::Text(value, ..) if value == "Lake")));
+}
+
+#[test]
+fn a_custom_wallpaper_that_is_not_ready_shows_the_default_and_survives_loading() {
+    let mut state = ready();
+    state.preferences.background = "custom:Gone.jpg".into();
+    let scene = scene(&state);
+    assert!(scene.draw.iter().any(|draw| matches!(draw,
+        crate::renderer::Draw::Image(path, ..) if path.ends_with("wallpapers/dunes.jpg"))));
+    let mut preferences = Preferences {
+        background: "custom:Gone.jpg".into(),
+        ..Preferences::default()
+    };
+    preferences.sanitize();
+    assert_eq!(preferences.background, "custom:Gone.jpg");
+    preferences.background = "custom:../../etc/passwd.jpg".into();
+    preferences.sanitize();
+    assert_eq!(preferences.background, "dunes");
+}
+
+#[test]
+fn a_fourth_gallery_row_of_custom_wallpapers_scrolls_into_view() {
+    let mut state = ready();
+    state.custom_wallpapers = vec!["custom:a.jpg".into(), "custom:b.jpg".into()];
+    state.open(2);
+    state.section = 1;
+    state.focus = Target::Background(6);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Background(9));
+    let tile = controls(&state)
+        .into_iter()
+        .find(|control| control.target == Target::Background(9))
+        .unwrap();
+    assert!(state.scroll > 0., "the fourth row scrolls up");
+    assert!(
+        tile.rect.y + tile.rect.h <= 1080.,
+        "the focused tile is on screen"
+    );
+}

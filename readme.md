@@ -74,6 +74,19 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
   '{"id":"com.ecklf.luma","ipkUrl":"/tmp/luma.ipk","subscribe":true}'
 ```
 
+## Your own wallpapers
+
+Copy JPEG, PNG or WebP images (up to 40 MB each, 30 images) into the folder shown on the last tile of
+**Settings → Background**, for example over SSH:
+
+```sh
+scp -O holiday.jpg root@TV_IP:/media/developer/com.ecklf.luma/wallpapers/
+```
+
+Luma picks them up when it comes back to the front, prepares a screen-sized copy with the same
+shading as the bundled wallpapers, and lists them after the bundled ones. LG's launch splash keeps
+the last bundled wallpaper.
+
 ## Replacing LG Home
 
 ### Takeover Method

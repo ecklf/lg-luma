@@ -188,6 +188,11 @@ pub struct State {
     pub pointer: bool,
     pub pressed: Option<Target>,
     pub previous_background: Option<(String, Instant)>,
+    /// Custom wallpapers (`custom:<file>`) whose cached images are ready, from the wallpaper
+    /// worker; shown after the bundled backgrounds.
+    pub custom_wallpapers: Vec<String>,
+    /// The preferences file; custom wallpapers and their cache live beside it.
+    pub preferences_path: std::path::PathBuf,
     pub panel_started: Option<Instant>,
     pub weather: weather::Weather,
     pub keyboard_field: TextField,
@@ -221,6 +226,8 @@ impl State {
             pointer: false,
             pressed: None,
             previous_background: None,
+            custom_wallpapers: Vec::new(),
+            preferences_path: std::path::PathBuf::new(),
             panel_started: None,
             weather: weather::Weather::default(),
             keyboard_field: TextField::Apps,
@@ -599,6 +606,15 @@ impl State {
         self.dirty = true;
     }
 
+    /// The bundled backgrounds, then the ready custom wallpapers: Target::Background indexes this.
+    pub fn background_ids(&self) -> Vec<String> {
+        BACKGROUNDS
+            .iter()
+            .map(|(id, _)| (*id).to_owned())
+            .chain(self.custom_wallpapers.iter().cloned())
+            .collect()
+    }
+
     pub fn hidden_count(&self) -> usize {
         self.inventory
             .apps
@@ -610,9 +626,9 @@ impl State {
     fn section_entry(&self) -> Target {
         match self.section {
             1 => Target::Background(
-                BACKGROUNDS
+                self.background_ids()
                     .iter()
-                    .position(|(id, _)| *id == self.preferences.background)
+                    .position(|id| *id == self.preferences.background)
                     .unwrap_or(3),
             ),
             WEATHER_SECTION => Target::WeatherToggle,
@@ -993,10 +1009,14 @@ impl State {
             }
             if let Target::Background(index) = self.focus {
                 match direction {
-                    Direction::Right if index + 1 < BACKGROUNDS.len() => {
+                    // The tile after the backgrounds explains where custom wallpapers go.
+                    Direction::Right if index < self.background_ids().len() => {
                         self.focus(Target::Background(index + 1), controls);
                         return vec![];
                     }
+                    // The last tile: with custom wallpapers the last row can be partial, and the
+                    // nearest control to the right would be a tile in the row above.
+                    Direction::Right => return vec![],
                     Direction::Left if index % 3 != 0 => {
                         self.focus(Target::Background(index - 1), controls);
                         return vec![];
@@ -1505,13 +1525,20 @@ impl State {
                 return vec![Effect::Save];
             }
             Target::Background(index) => {
-                if !self.preferences.reduced_motion
-                    && self.preferences.background != BACKGROUNDS[index].0
-                {
+                let Some(id) = self.background_ids().get(index).cloned() else {
+                    let folder = crate::custom_wallpapers::folder(&self.preferences_path);
+                    let hint = self.preferences.language.format(
+                        "customWallpapersHint",
+                        &[("folder", &folder.to_string_lossy())],
+                    );
+                    self.notify(hint);
+                    return vec![];
+                };
+                if !self.preferences.reduced_motion && self.preferences.background != id {
                     self.previous_background =
                         Some((self.preferences.background.clone(), Instant::now()));
                 }
-                self.preferences.background = BACKGROUNDS[index].0.into();
+                self.preferences.background = id;
                 return vec![Effect::Save];
             }
             Target::InputMode(id) => {

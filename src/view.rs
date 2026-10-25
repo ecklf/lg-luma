@@ -1,7 +1,8 @@
 //! Screen geometry and styling mirror the web UI's 1920×1080 / 16px-rem layout.
 use crate::{
+    custom_wallpapers,
     i18n::Language,
-    model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode},
+    model::{App, CATEGORIES, Input, InputMode},
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
         APPS_COLUMNS, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT,
@@ -120,6 +121,21 @@ impl Assets {
             }
         }
         lines
+    }
+}
+
+/// The full-screen image of a background: a bundled wallpaper, or the cached screen-sized copy
+/// of a custom one. A custom wallpaper that is not ready (removed, or not prepared yet) shows the
+/// default instead.
+fn wallpaper(state: &State, assets: &Assets, id: &str) -> String {
+    match custom_wallpapers::name(id) {
+        Some(name) if state.custom_wallpapers.iter().any(|ready| ready == id) => {
+            custom_wallpapers::wallpaper(&state.preferences_path, name)
+                .to_string_lossy()
+                .into_owned()
+        }
+        Some(_) => assets.path("wallpapers/dunes.jpg"),
+        None => assets.path(format!("wallpapers/{id}.jpg")),
     }
 }
 
@@ -286,14 +302,14 @@ pub fn scene_with_pill(
     let mut out = Scene::new();
     if let Some((previous, start)) = &state.previous_background {
         out.image(
-            assets.path(format!("wallpapers/{previous}.jpg")),
+            wallpaper(state, assets, previous),
             Rect::new(0., 0., 1920., 1080.),
             0.,
             false,
         );
         let alpha = (start.elapsed().as_secs_f32() / 0.4).min(1.);
         out.draw.push(Draw::TintedImage(
-            assets.path(format!("wallpapers/{}.jpg", state.preferences.background)),
+            wallpaper(state, assets, &state.preferences.background),
             Rect::new(0., 0., 1920., 1080.),
             0.,
             false,
@@ -301,7 +317,7 @@ pub fn scene_with_pill(
         ));
     } else {
         out.image(
-            assets.path(format!("wallpapers/{}.jpg", state.preferences.background)),
+            wallpaper(state, assets, &state.preferences.background),
             Rect::new(0., 0., 1920., 1080.),
             0.,
             false,
@@ -1977,7 +1993,8 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             }
         }
         1 => {
-            for (index, (id, _title)) in BACKGROUNDS.iter().enumerate() {
+            let ids = state.background_ids();
+            for (index, id) in ids.iter().enumerate() {
                 let rect = Rect::new(
                     640. + (index % 3) as f32 * 380.,
                     164.8 + (index / 3) as f32 * 264.3 - s,
@@ -1985,14 +2002,15 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     202.5,
                 );
                 out.shadow(rect, 16., 15., 3., 0.13);
-                out.image(
-                    assets.path(format!("thumbnails/{id}.jpg")),
-                    rect,
-                    16.,
-                    false,
-                );
+                let thumbnail = match custom_wallpapers::name(id) {
+                    Some(name) => custom_wallpapers::thumbnail(&state.preferences_path, name)
+                        .to_string_lossy()
+                        .into_owned(),
+                    None => assets.path(format!("thumbnails/{id}.jpg")),
+                };
+                out.image(thumbnail, rect, 16., false);
                 out.border(rect, 16., 1., c(0xffffff, 0.086));
-                if state.preferences.background == *id {
+                if state.preferences.background == **id {
                     out.border(rect.inset(-2.), 18., 2., c(0xdedede, 1.));
                     out.border(rect.inset(-7.), 23., 3., c(0xdedede, 0.10));
                     let check = Rect::new(rect.x + rect.w - 28., rect.y + rect.h - 28., 21.6, 21.6);
@@ -2002,8 +2020,13 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 if state.focus == Target::Background(index) {
                     out.ring(rect, 16.);
                 }
+                let title = if custom_wallpapers::name(id).is_some() {
+                    custom_wallpapers::title(id)
+                } else {
+                    language.wallpaper(id)
+                };
                 out.text(
-                    language.wallpaper(id),
+                    title,
                     Rect::new(rect.x + 4., rect.y + rect.h + 12., 352., 26.),
                     text(18.4, 500, -0.02).leading(1.4),
                     c(0xf0f0f0, 0.87),
@@ -2015,6 +2038,55 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     true,
                 );
             }
+            // A last tile says where the owner's own images go: the folder beside the
+            // preferences file. Selecting it repeats that as a notice.
+            let index = ids.len();
+            let rect = Rect::new(
+                640. + (index % 3) as f32 * 380.,
+                164.8 + (index / 3) as f32 * 264.3 - s,
+                360.,
+                202.5,
+            );
+            out.shape(rect, 16., c(0xffffff, 0.06));
+            out.border(rect, 16., 1., c(0xffffff, 0.16));
+            out.icon(
+                assets,
+                "sparkles",
+                Rect::new(rect.x + 24., rect.y + 24., 28., 28.),
+                c(0xf0f0f0, 0.8),
+            );
+            out.text(
+                language.t("customWallpapersCopy"),
+                Rect::new(rect.x + 24., rect.y + 66., rect.w - 48., 52.),
+                text(16., 450, -0.01).leading(1.45),
+                c(0xf0f0f0, 0.78),
+                false,
+            );
+            // The path on its own lines: it has no spaces to wrap at.
+            out.text(
+                custom_wallpapers::folder(&state.preferences_path)
+                    .to_string_lossy()
+                    .into_owned(),
+                Rect::new(rect.x + 24., rect.y + 124., rect.w - 48., 60.),
+                text(14.4, 500, 0.).leading(1.4),
+                c(0xf0f0f0, 0.94),
+                false,
+            );
+            if state.focus == Target::Background(index) {
+                out.ring(rect, 16.);
+            }
+            out.text(
+                language.t("customWallpapers"),
+                Rect::new(rect.x + 4., rect.y + rect.h + 12., 352., 26.),
+                text(18.4, 500, -0.02).leading(1.4),
+                c(0xf0f0f0, 0.87),
+                false,
+            );
+            out.control(
+                Target::Background(index),
+                Rect::new(rect.x, rect.y, rect.w, rect.h + 37.8),
+                true,
+            );
         }
         WEATHER_SECTION => weather_settings(out, state, assets),
         SYSTEM_SECTION => {

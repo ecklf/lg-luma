@@ -199,7 +199,9 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
-        if !BACKGROUNDS.iter().any(|(id, _)| *id == self.background) {
+        if !BACKGROUNDS.iter().any(|(id, _)| *id == self.background)
+            && crate::custom_wallpapers::name(&self.background).is_none()
+        {
             self.background = "dunes".into();
         }
         fn clean(ids: &mut Vec<String>) {

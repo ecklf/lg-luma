@@ -5,6 +5,8 @@ mod app_artwork;
 #[path = "app-subscription.rs"]
 mod app_subscription;
 mod branding;
+#[path = "custom-wallpapers.rs"]
+mod custom_wallpapers;
 mod damage;
 mod diagnostics;
 mod egl_damage;
@@ -272,6 +274,7 @@ fn effects(
     platform: &Platform,
     preferences: &std::path::Path,
     weather: &weather_service::Service,
+    wallpapers: &custom_wallpapers::Worker,
 ) -> bool {
     for effect in effects {
         match effect {
@@ -279,12 +282,16 @@ fn effects(
                 if let Err(error) = storage::save(preferences, &state.preferences) {
                     eprintln!("{error}");
                     state.notify(state.preferences.language.t("savedError"));
-                } else {
+                } else if custom_wallpapers::name(&state.preferences.background).is_none() {
+                    // LG's splash is a static PNG per bundled background; a custom wallpaper
+                    // leaves the last bundled one in place.
                     platform.sync_splash(&state.preferences.background);
                 }
             }
             effect @ (Effect::Refresh | Effect::Reload) => {
                 state.reload_artwork |= effect == Effect::Reload;
+                // Returning to Luma or Retry also picks up images copied into the folder.
+                wallpapers.request();
                 if !state.loading {
                     state.loading = true;
                     state.dirty = true;
@@ -602,6 +609,15 @@ fn run() -> Result<(), String> {
         storage::load(&preferences_path)?
     };
     let mut state = State::new(initial_preferences);
+    state.preferences_path = preferences_path.clone();
+    // Show a selected custom wallpaper from the first frame if its cache exists; the worker's
+    // scan then replaces this list.
+    if let Some(name) = custom_wallpapers::name(&state.preferences.background)
+        && custom_wallpapers::wallpaper(&preferences_path, name).is_file()
+    {
+        state.custom_wallpapers = vec![state.preferences.background.clone()];
+    }
+    let wallpapers = custom_wallpapers::Worker::new(preferences_path.clone());
     if options.test_extra_apps > 0 {
         eprintln!(
             "Luma scroll preview: explicit {}-app expansion; preferences {}",
@@ -628,8 +644,11 @@ fn run() -> Result<(), String> {
         &platform,
         &preferences_path,
         &weather_service,
+        &wallpapers,
     );
-    platform.sync_splash(&state.preferences.background);
+    if custom_wallpapers::name(&state.preferences.background).is_none() {
+        platform.sync_splash(&state.preferences.background);
+    }
     startup_stage("preferences and workers");
 
     let sdl = sdl2::init()?;
@@ -889,6 +908,12 @@ fn run() -> Result<(), String> {
         }
         state.tick();
         state.dirty |= assets.artwork.poll();
+        while let Ok(ready) = wallpapers.receiver.try_recv() {
+            if ready != state.custom_wallpapers {
+                state.custom_wallpapers = ready;
+                state.dirty = true;
+            }
+        }
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
                 Response::Inventory(Ok((mut inventory, warning))) => {
@@ -968,6 +993,7 @@ fn run() -> Result<(), String> {
                         &platform,
                         &preferences_path,
                         &weather_service,
+                        &wallpapers,
                     );
                 }
             }
@@ -1290,6 +1316,7 @@ fn run() -> Result<(), String> {
                 &platform,
                 &preferences_path,
                 &weather_service,
+                &wallpapers,
             );
             if press
                 .as_ref()
@@ -1316,6 +1343,7 @@ fn run() -> Result<(), String> {
                 &platform,
                 &preferences_path,
                 &weather_service,
+                &wallpapers,
             );
         }
         if let Some(held) = &mut press
@@ -1347,6 +1375,7 @@ fn run() -> Result<(), String> {
                     &platform,
                     &preferences_path,
                     &weather_service,
+                    &wallpapers,
                 );
             }
         }
@@ -1370,6 +1399,7 @@ fn run() -> Result<(), String> {
                 &platform,
                 &preferences_path,
                 &weather_service,
+                &wallpapers,
             );
         }
         let keyboard = state.text_input_active();

@@ -1528,6 +1528,39 @@
     "pl": "Zorza polarna",
     "fr": "Aurores boréales"
   },
+  "customWallpapers": {
+    "en": "Your own images",
+    "de": "Eigene Bilder",
+    "es": "Tus imágenes",
+    "zh": "自定义图片",
+    "pt": "Suas imagens",
+    "it": "Le tue immagini",
+    "ru": "Свои изображения",
+    "pl": "Własne obrazy",
+    "fr": "Vos images"
+  },
+  "customWallpapersCopy": {
+    "en": "Copy JPEG, PNG or WebP files into this folder:",
+    "de": "JPEG-, PNG- oder WebP-Dateien in diesen Ordner kopieren:",
+    "es": "Copia archivos JPEG, PNG o WebP en esta carpeta:",
+    "zh": "将 JPEG、PNG 或 WebP 文件复制到此文件夹：",
+    "pt": "Copie arquivos JPEG, PNG ou WebP para esta pasta:",
+    "it": "Copia file JPEG, PNG o WebP in questa cartella:",
+    "ru": "Скопируйте файлы JPEG, PNG или WebP в эту папку:",
+    "pl": "Skopiuj pliki JPEG, PNG lub WebP do tego folderu:",
+    "fr": "Copiez des fichiers JPEG, PNG ou WebP dans ce dossier :"
+  },
+  "customWallpapersHint": {
+    "en": "Copy JPEG, PNG or WebP files to {folder}",
+    "de": "JPEG-, PNG- oder WebP-Dateien nach {folder} kopieren",
+    "es": "Copia archivos JPEG, PNG o WebP en {folder}",
+    "zh": "将 JPEG、PNG 或 WebP 文件复制到 {folder}",
+    "pt": "Copie arquivos JPEG, PNG ou WebP para {folder}",
+    "it": "Copia file JPEG, PNG o WebP in {folder}",
+    "ru": "Скопируйте файлы JPEG, PNG или WebP в {folder}",
+    "pl": "Skopiuj pliki JPEG, PNG lub WebP do {folder}",
+    "fr": "Copiez des fichiers JPEG, PNG ou WebP dans {folder}"
+  },
   "liveTV": {
     "en": "Live TV",
     "de": "Live-TV",
