@@ -19,6 +19,8 @@ function compositor() {
     lunaCall: {
       send(service, method, payload, callback) {
         if (method === '/prepare') prepares.push(callback);
+        else if (method === '/setSystemSettings')
+          calls.push(`lastInputApp ${JSON.parse(payload).settings.lastInputApp}`);
         else calls.push(`${method} ${JSON.parse(payload).id}`);
       },
       subscribe(service, method, payload, callback) {
@@ -36,6 +38,8 @@ function compositor() {
     timers,
     boot: (done) => emit('/getBootStatus', { returnValue: true, signals: { 'boot-done': done } }),
     front: (appId) => emit('/getForegroundAppInfo', { returnValue: true, appId }),
+    lastInput: (id) =>
+      emit('/getSystemSettings', { returnValue: true, settings: { lastInputApp: id } }),
     early: (ok) => prepares.at(-1)(JSON.stringify({ returnValue: ok, exitCode: ok ? 0 : 1 })),
   };
 }
@@ -119,4 +123,30 @@ test('once Home was shown, later inputs and retries leave the owner alone', () =
 test('keys pass through unchanged', () => {
   const tv = compositor();
   assert.equal(tv.context.lumaHomeKey(1, true, false), 0);
+});
+
+test('an app in front points Back/Exit at Home, once', () => {
+  const tv = compositor();
+  tv.boot(true);
+  tv.lastInput('com.webos.app.livetv');
+  tv.front('youtube.leanback.v4');
+  tv.front('netflix');
+  assert.deepEqual(tv.calls, ['lastInputApp com.webos.app.home']);
+});
+
+test('an input in front keeps its own lastInputApp', () => {
+  const tv = compositor();
+  tv.boot(true);
+  tv.front('com.webos.app.hdmi1');
+  tv.lastInput('com.webos.app.hdmi1');
+  assert.deepEqual(tv.calls, []);
+});
+
+test('lastInputApp is only written once the settings service has answered', () => {
+  const tv = compositor();
+  tv.boot(true);
+  tv.front('youtube.leanback.v4');
+  assert.deepEqual(tv.calls, []);
+  tv.lastInput('com.webos.app.livetv');
+  assert.deepEqual(tv.calls, ['lastInputApp com.webos.app.home']);
 });

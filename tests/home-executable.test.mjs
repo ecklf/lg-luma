@@ -68,6 +68,7 @@ function tv({ root = null, same = false, front = ['com.webos.app.home'] } = {}) 
     },
     foreground: () => (state.fronts.length > 1 ? state.fronts.shift() : state.fronts[0]),
     stopHome: () => calls.push('stop'),
+    lastInput: (command) => calls.push(command),
     launchHome: () => calls.push('launch'),
     pause() {},
   });
@@ -102,13 +103,19 @@ test('only a mount of Luma executable counts as this integration, also after an 
 test('apply mounts the executable, stops the old Home and opens Luma', () => {
   const { context, calls } = tv({ front: ['some.app', 'com.webos.app.home'] });
   context.applyExecutable({ method: 'executable', appDir }, true);
-  assert.deepEqual(calls, [`mount --bind ${appDir}/luma ${exe}`, 'mark', 'stop', 'launch']);
+  assert.deepEqual(calls, [`mount --bind ${appDir}/luma ${exe}`, 'mark', 'stop', 'pin', 'launch']);
 });
 
 test('a boot apply does not take the screen from another app', () => {
   const { context, calls } = tv({ front: ['com.webos.app.livetv'] });
   context.applyExecutable({ method: 'executable', appDir }, false);
-  assert.deepEqual(calls, [`mount --bind ${appDir}/luma ${exe}`, 'mark', 'stop']);
+  assert.deepEqual(calls, [`mount --bind ${appDir}/luma ${exe}`, 'mark', 'stop', 'pin']);
+});
+
+test('a boot apply opens Home over an empty screen, as lastinput no longer opens Live TV', () => {
+  const { context, calls } = tv({ front: ['', 'com.webos.app.home'] });
+  context.applyExecutable({ method: 'executable', appDir }, false);
+  assert.deepEqual(calls, [`mount --bind ${appDir}/luma ${exe}`, 'mark', 'stop', 'pin', 'launch']);
 });
 
 test('after a package update the replaced file is unmounted before mounting the new one', () => {
@@ -121,6 +128,7 @@ test('after a package update the replaced file is unmounted before mounting the 
     `mount --bind ${appDir}/luma ${exe}`,
     'mark',
     'stop',
+    'pin',
     'launch',
   ]);
 });
@@ -144,9 +152,11 @@ test('Home is launched again once and LG Home restored when Luma never comes to 
     `mount --bind ${appDir}/luma ${exe}`,
     'mark',
     'stop',
+    'pin',
     'launch',
     'launch',
     'unmark',
+    'unpin',
     `umount ${exe}`,
     'stop',
   ]);
@@ -166,7 +176,13 @@ test('restore unmounts, stops Luma and reopens LG Home only if Home was in front
     });
     state.marker = true;
     context.restore({ method: 'executable', appDir });
-    assert.deepEqual(calls, ['unmark', `umount ${exe}`, 'stop', ...(reopened ? ['launch'] : [])]);
+    assert.deepEqual(calls, [
+      'unmark',
+      'unpin',
+      `umount ${exe}`,
+      'stop',
+      ...(reopened ? ['launch'] : []),
+    ]);
   }
 });
 

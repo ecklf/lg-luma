@@ -2,7 +2,8 @@
  * com.webos.surfacemanager.keyFilters). LG's compositor loads it with Qt.include within seconds of
  * a cold boot, long before the Homebrew hooks (~50 s). While the TV boots it asks luma-early
  * (com.webos.service.lumahome, src/bin/luma-early.rs) to mount Luma over LG's Home executable
- * and then opens Home, at about 20 s. Keys pass through unchanged. ES5 for LG's QML engine.
+ * and then opens Home, at about 20 s. While an app is in front it points Back/Exit at Home
+ * instead of Live TV. Keys pass through unchanged. ES5 for LG's QML engine.
  */
 var lumaHomeBoot = ''; // "" until bootd answers, then "booting" or "done"
 var lumaHomeEarly = ''; // "" until luma-early answers, then "ready" or "failed"
@@ -10,9 +11,34 @@ var lumaHomeTries = 0;
 var lumaHomeFront = '';
 var lumaHomeLaunches = 0;
 var lumaHomeShown = false; // Home came to the front after a launch from here
+var lumaHomeLastInput = null; // general/lastInputApp, null until the settings service answers
 
 function lumaHomeParse(payload) {
   return typeof payload === 'string' ? JSON.parse(payload) : payload;
+}
+
+function lumaHomeIsInput(id) {
+  return /^com\.webos\.app\.(livetv|hdmi\d|externalinput\..*)$/.test(id);
+}
+
+// Back/Exit from an app: LG's compositor closes it and opens setting lastInputApp, normally the
+// input watched last (Live TV). While an app other than an input is in front it names Home, so
+// Back returns to Luma; LG's input apps set it to themselves again when chosen.
+function lumaHomePinInput() {
+  if (
+    lumaHomeLastInput === null ||
+    lumaHomeLastInput === 'com.webos.app.home' ||
+    !lumaHomeFront ||
+    lumaHomeIsInput(lumaHomeFront)
+  )
+    return;
+  lumaHomeLastInput = 'com.webos.app.home';
+  lunaCall.send(
+    'com.webos.settingsservice',
+    '/setSystemSettings',
+    JSON.stringify({ category: 'general', settings: { lastInputApp: 'com.webos.app.home' } }),
+    function () {}
+  );
 }
 
 function lumaHomePrepare() {
@@ -45,8 +71,7 @@ function lumaHomeOpen() {
     lumaHomeLaunches >= 2
   )
     return;
-  if (lumaHomeFront && !/^com\.webos\.app\.(livetv|hdmi\d|externalinput\..*)$/.test(lumaHomeFront))
-    return;
+  if (lumaHomeFront && !lumaHomeIsInput(lumaHomeFront)) return;
   lumaHomeLaunches++;
   lunaCall.send(
     'com.webos.applicationManager',
@@ -93,6 +118,23 @@ function init() {
           lumaHomeFront = (r && r.appId) || '';
           if (lumaHomeFront === 'com.webos.app.home' && lumaHomeLaunches) lumaHomeShown = true;
           else lumaHomeOpen();
+          lumaHomePinInput();
+        } catch (error) {
+          console.warn('luma home filter: ' + error);
+        }
+      },
+      true
+    );
+    lunaCall.subscribe(
+      'com.webos.settingsservice',
+      '/getSystemSettings',
+      JSON.stringify({ category: 'general', keys: ['lastInputApp'], subscribe: true }),
+      function (payload) {
+        try {
+          var r = lumaHomeParse(payload);
+          if (r && r.settings && typeof r.settings.lastInputApp === 'string')
+            lumaHomeLastInput = r.settings.lastInputApp;
+          lumaHomePinInput();
         } catch (error) {
           console.warn('luma home filter: ' + error);
         }

@@ -128,6 +128,12 @@ a copy of the package's `luma-early` in `/var/lib/luma-home`) and adds a composi
 then opens Home. If this fails, the cold-boot hook mounts Luma as before. Keys pass through the
 filter unchanged, and `home.sh disable` removes both.
 
+At every power-on LG opens the last input from `/var/lib/eim/lastinput`, so Live TV showed before
+Luma. The integration pins that entry to Home: a read-only copy is mounted over it, and the file
+underneath names Home too, because LG reads it before any hook runs in a cold boot. The key filter
+also points Back/Exit from an app at Home instead of Live TV. Inputs you choose work as before;
+`home.sh disable` restores the recorded input.
+
 </details>
 
 <details>

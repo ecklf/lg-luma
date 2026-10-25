@@ -58,6 +58,16 @@ function run(file, args) {
   return String(execFileSync(file, args, { timeout: 8000, encoding: 'utf8' }));
 }
 
+// lastinput pinning lives in home.sh, which also runs it early in a cold boot without Node.
+// Best effort: without it LG still opens Live TV first at power-on.
+function lastInput(command) {
+  try {
+    execFileSync('/bin/sh', [STATE + '/home.sh', command], { timeout: 20000, stdio: 'ignore' });
+  } catch (error) {
+    console.error('Luma Home: lastinput ' + command + ' failed: ' + error.message);
+  }
+}
+
 function pause() {
   run('/bin/sleep', ['1']);
 }
@@ -353,6 +363,7 @@ function restoreExecutable(config) {
   var root = exeMount();
   if (root && !exeOwned(root)) throw new Error('Another integration is mounted over LG Home');
   if (fs.existsSync(MARKER)) fs.unlinkSync(MARKER);
+  lastInput('unpin');
   if (root) unmountExe();
   stopHome(config.appDir);
   // LG Home on webOS 5/6 is an overlay above the current app, not a foreground app.
@@ -371,7 +382,9 @@ function applyExecutable(config, open) {
     if (!exeMounted(config.appDir)) throw new Error('The Home bind mount did not take');
     fs.writeFileSync(MARKER, APP + '\n', { mode: 420 });
     stopHome(config.appDir);
-    if (open || (front === HOME && foreground() === HOME)) openExecutableHome();
+    lastInput('pin');
+    // With lastinput pinned, a cold boot whose early start failed has nothing in front.
+    if (open || !front || (front === HOME && foreground() === HOME)) openExecutableHome();
   } catch (error) {
     try {
       restoreExecutable(config);
