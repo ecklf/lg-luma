@@ -1,5 +1,16 @@
 # lg-luma
 
+## 2.8.1
+
+### Patch Changes
+
+- a0eddd9: Draw crisp shape edges. The paint shader's edge filter ran from 0.85 px inside a shape to its edge, so every edge had a half-covered pixel and one-pixel borders never became opaque. Coverage is now a one-pixel box filter centred on the edge, and rectangles and logo placement snap to whole drawable pixels, so straight edges stay a single step through a TV's 2x scale-up of its 1080p graphics plane.
+- 3359618: Render crisper text and logos on the TV. The webOS window is created without MSAA so text and logos use their analytic edge filters, which keep stems sharper through the panel's 2x scale-up of a 1080p graphics plane than 4x sample coverage, at the same cost. Small text is emboldened by 0.25 physical pixels per edge so thin stems get an opaque core. Desktop previews keep multisampling.
+- 7b413b0: Fold full-screen translucent fills into the wallpaper. The Recents backdrop and gradient each cost a full screen of fill per frame; the wallpaper is now drawn once with their combined effect, and during the Recents crossfade they sit beneath the outgoing interface so they fold in as well. On an LG webOS 5 TV the Recents carousel runs at 48 instead of 37 fps and opening or closing Recents drops from 100 to 63 ms at the 95th percentile.
+- 55f8b9c: Prepare the Apps and Settings pages while the screen is idle, so their first visit does not pay for text layout, new glyph outlines, logo meshes and icon uploads. On an LG webOS 5 TV the worst frame of the first Apps visit drops from 179 to 40 ms.
+- 8592248: Redraw only what changed since the back buffer's frame. Consecutive scenes are compared command by command and only the changed area is cleared and drawn, using EGL buffer age with `EGL_KHR_partial_update` where available. On an LG webOS 5 TV, focus moves on Home run at 60 instead of 39 fps at 1080p (p95 17 instead of 34 ms) and mixed navigation redraws a fifth of the screen on average.
+- 32086d9: Stop the launch splash update failing when Luma is Home on webOS 5 and 6. The executable takeover method stages no Home app copy, so the update now leaves out the staged splash and only refreshes the normal tile's splash.
+
 ## 2.8.0
 
 ### Minor Changes
