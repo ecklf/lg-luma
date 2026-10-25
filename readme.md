@@ -34,15 +34,15 @@ https://github.com/user-attachments/assets/9c708bd3-5d38-48fe-a2bc-5587ac0a1a84
 
 The following TV configurations have been reported working with Luma:
 
-| TV        | Model identifier | webOS | Takeover Method |
-| --------- | ---------------- | ----- | --------------- |
-| LG C1     | `OLED48C1KNB`    | 6.5.3 | X               |
-| LG C2     | `OLED42C2PSA`    | 25    | X               |
-| LG C2     | `OLED65C2PSA`    | 26    | X               |
-| LG C3     | `OLED65C31LA`    | 26    | X               |
-| LG C3     | `OLED65C36LC`    | 26    | X               |
-| LG C5     | `OLED55C57LA`    | 26    | X               |
-| LG UN7100 | `49UN71006LB`    | 5     | X               |
+| TV        | Model identifier | webOS | Takeover Support |
+| --------- | ---------------- | ----- | ---------------- |
+| LG UN7100 | `49UN71006LB`    | 5     | ✅               |
+| LG C1     | `OLED48C1KNB`    | 6     | ✅               |
+| LG C2     | `OLED42C2PSA`    | 25    | ✅               |
+| LG C2     | `OLED65C2PSA`    | 26    | ✅               |
+| LG C3     | `OLED65C31LA`    | 26    | ✅               |
+| LG C3     | `OLED65C36LC`    | 26    | ✅               |
+| LG C5     | `OLED55C57LA`    | 26    | ✅               |
 
 ## Installation
 
@@ -72,10 +72,9 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 
 ### Takeover Method
 
-> [!WARNING]
-> Home replacement is experimental.\
-> Confirmed working on **webOS 26** and **webOS 5** (executable method below).\
-> Ensure to disable takeover before uninstalling Luma.
+> [!NOTE]
+> Takeover is supported on **webOS 5, 6, 25 and 26**.\
+> Disable takeover before uninstalling Luma.
 
 Install Luma and verify that it opens normally. Disable any Home mapping e.g.
 [LG Input Hook](https://repo.webosbrew.org/apps/org.webosbrew.inputhook/) and any other Home
@@ -95,19 +94,6 @@ APP=/media/developer/apps/usr/palm/applications/com.ecklf.luma
 sh "$APP/home.sh" enable
 ```
 
-Takeover mounts Luma over the system Home app and reapplies the mount at cold boot. The LG splash
-shown before Luma's window opens is the wallpaper you selected in **Settings → Background**, staged
-from the saved preferences at each boot. Normal app launches also use your selected wallpaper:
-Luma updates the launch splash through Homebrew Channel's root service after loading or saving your
-settings. Open Luma once after installing or updating so subsequent launches use your saved background.
-LG Home's original files remain underneath, using the same approach as
-[Glasshouse Home](https://github.com/rorygallagher2024/glasshouse/blob/main/server/lib/home-takeover.js).
-
-On **webOS 5 and 6**, SAM cannot reread a mounted Home manifest, so `home.sh enable` instead
-bind-mounts Luma's executable over LG's `/usr/bin/com.webos.app.home`. LG's Home manifest stays
-in place and Luma registers with SAM itself, so the Home key brings the running Luma back instead
-of restarting it. The commands and the cold-boot hook are the same.
-
 To see the status or disable the home override use:
 
 ```sh
@@ -119,6 +105,29 @@ sh /var/lib/luma-home/home.sh disable
 
 Boot log: `/var/lib/luma-home/boot.log`. See the
 [development guide](development.md#optional-native-home-integration) for implementation details.
+
+<details>
+<summary>Method for webOS 5 / 6</summary>
+
+On **webOS 5 and 6**, SAM cannot reread a mounted Home manifest, so `home.sh enable` instead
+bind-mounts Luma's executable over LG's `/usr/bin/com.webos.app.home`. LG's Home manifest stays
+in place and Luma registers with SAM itself, so the Home key brings the running Luma back instead
+of restarting it. The commands and the cold-boot hook are the same.
+
+</details>
+
+<details>
+<summary>Method for webOS 25 / 26</summary>
+
+Mounts Luma over the system Home app and reapplies the mount at cold boot. The LG splash
+shown before Luma's window opens is the wallpaper you selected in **Settings → Background**, staged
+from the saved preferences at each boot. Normal app launches also use your selected wallpaper:
+Luma updates the launch splash through Homebrew Channel's root service after loading or saving your
+settings. Open Luma once after installing or updating so subsequent launches use your saved background.
+LG Home's original files remain underneath, using the same approach as
+[Glasshouse Home](https://github.com/rorygallagher2024/glasshouse/blob/main/server/lib/home-takeover.js).
+
+</details>
 
 ### Autostart Method
 
@@ -221,5 +230,6 @@ There is no browser geolocation, IP-based location lookup, telemetry or runtime 
 
 ## License
 
-Luma is licensed under MIT.\
-Luma is not affiliated with LG, Apple, Plex or any app brands shown in its UI.
+Luma is licensed under MIT.
+
+Luma is not affiliated with LG, Apple, or any other brands shown in its UI.
