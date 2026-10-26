@@ -318,6 +318,7 @@ fn effects(
                 }
             }
             Effect::Quit => return false,
+            Effect::Uninstall(id) => platform.send(Request::Uninstall(id)),
             Effect::Recent {
                 generation,
                 command,
@@ -947,6 +948,16 @@ fn run() -> Result<(), String> {
                             state.dirty = true;
                         }
                     }
+                }
+                Response::Uninstalled { id, result } => {
+                    let pending = state.uninstall_response(id, result);
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                    );
                 }
                 Response::Recent {
                     generation,
