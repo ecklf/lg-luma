@@ -293,19 +293,31 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
             let size = (session.qr_size + 8) as f32 * scale;
             let x = (1920. - size) / 2.;
             let y = 354.;
-            out.shape(Rect::new(x, y, size, size), 0., WHITE);
+            let paper = c(0xf5f4ef, 1.);
+            let ink = c(0x17191c, 1.);
+            out.shape(Rect::new(x, y, size, size), 0., paper);
             for row in 0..session.qr_size {
                 // Merge contiguous modules so QR rendering stays a few hundred quads.
                 let mut column = 0;
                 while column < session.qr_size {
+                    let mark_start = (session.qr_size - 11) / 2;
+                    let in_mark = (mark_start..mark_start + 11).contains(&row)
+                        && (mark_start..mark_start + 11).contains(&column);
+                    if in_mark {
+                        column += 1;
+                        continue;
+                    }
                     if !session.qr[(row * session.qr_size + column) as usize] {
                         column += 1;
                         continue;
                     }
                     let start = column;
-                    while column < session.qr_size
-                        && session.qr[(row * session.qr_size + column) as usize]
-                    {
+                    while column < session.qr_size {
+                        let in_mark = (mark_start..mark_start + 11).contains(&row)
+                            && (mark_start..mark_start + 11).contains(&column);
+                        if in_mark || !session.qr[(row * session.qr_size + column) as usize] {
+                            break;
+                        }
                         column += 1;
                     }
                     out.shape(
@@ -316,10 +328,25 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
                             scale,
                         ),
                         0.,
-                        c(0, 1.),
+                        ink,
                     );
                 }
             }
+            let mark_start = (session.qr_size - 11) / 2;
+            let mark_plate = Rect::new(
+                x + (mark_start + 4) as f32 * scale,
+                y + (mark_start + 4) as f32 * scale,
+                11. * scale,
+                11. * scale,
+            );
+            out.shape(mark_plate, 1.1 * scale, ink);
+            let mark = Rect::new(
+                mark_plate.x + 1.25 * scale,
+                mark_plate.y + 1.25 * scale,
+                8.5 * scale,
+                8.5 * scale,
+            );
+            out.icon(assets, "luma-mark", mark, WHITE);
             out.text(
                 &session.url,
                 Rect::new(568., 734., 784., 36.),

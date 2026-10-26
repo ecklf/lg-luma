@@ -420,7 +420,8 @@ fn listen(loopback_only: bool) -> Result<TcpListener, String> {
 
 fn session(address: SocketAddr, token: &str) -> Result<Session, String> {
     let url = format!("http://{address}/{token}/");
-    let qr = qrcodegen::QrCode::encode_text(&url, qrcodegen::QrCodeEcc::Medium)
+    // Highest correction reserves capacity for the small branded center mark.
+    let qr = qrcodegen::QrCode::encode_text(&url, qrcodegen::QrCodeEcc::High)
         .map_err(|e| e.to_string())?;
     let size = qr.size();
     Ok(Session {
@@ -602,7 +603,7 @@ fn request(
 }
 
 fn response(stream: &mut TcpStream, status: &str, kind: &str, body: &[u8]) -> Result<(), String> {
-    write!(stream, "HTTP/1.1 {status}\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src blob: data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\r\n\r\n", body.len())
+    write!(stream, "HTTP/1.1 {status}\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\r\n\r\n", body.len())
         .and_then(|_| stream.write_all(body)).map_err(|e| e.to_string())
 }
 
@@ -701,6 +702,7 @@ fn serve(
                 "text/javascript; charset=utf-8",
                 include_bytes!("../assets/wallpaper-upload/crop.js"),
             ),
+            "luma-mark.svg" => ("image/svg+xml", include_bytes!("../assets/app-icon.svg")),
             _ => {
                 error_response(stream, "404 Not Found", "Not found")?;
                 return Ok(false);

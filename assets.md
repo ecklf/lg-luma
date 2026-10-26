@@ -23,9 +23,10 @@
   `assets/fonts/noto-ofl.txt`). Pinned the same way. Google Fonts ships Hangul only in this family,
   not in Noto Sans SC; generated Hangul-only regular/medium subsets are renamed Luma KR.
 - Lucide interface icons: exported standalone SVG sources in `assets/ui-icons/`, ISC license
-  bundled at `assets/licenses/lucide.txt`. PlayStation/Apple TV input paths were supplied by the
-  user; the brand marks belong to Sony/Apple. Spotify/Kodi symbol treatments use the original
-  native artwork. Logos identify third-party apps; Luma is unaffiliated with their owners.
+  bundled at `assets/licenses/lucide.txt`. The Luma upload icon and the small `luma-mark.svg` reuse
+  original project artwork under MIT. PlayStation/Apple TV input paths were supplied by the user;
+  the brand marks belong to Sony/Apple. Spotify/Kodi symbol treatments use the original native
+  artwork. Logos identify third-party apps; Luma is unaffiliated with their owners.
 - SDL-webOS 2.30.12 (`release-2.30.12-webos.5`, standard SDL ABI), zlib license.
   `tools/webos-runtime.mjs` records archive/library SHA-256. Notice at `assets/licenses/sdl2.txt`.
 - QR Code generator (`qrcodegen`): Project Nayuki, MIT; `assets/licenses/qrcodegen.txt`.

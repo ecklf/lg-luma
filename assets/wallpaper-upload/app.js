@@ -7,13 +7,13 @@ const editor = element('editor');
 const name = element('name');
 const canvas = element('preview');
 const zoom = element('zoom');
-const horizontal = element('horizontal');
-const vertical = element('vertical');
 const status = element('status');
 let image;
 let loading = 0;
 let drag;
 let busy = false;
+let horizontal = 0.5;
+let vertical = 0.5;
 
 function message(text, error = false) {
   status.textContent = text;
@@ -21,13 +21,7 @@ function message(text, error = false) {
 }
 
 function crop() {
-  return cropRect(
-    image.width,
-    image.height,
-    Number(zoom.value),
-    Number(horizontal.value),
-    Number(vertical.value),
-  );
+  return cropRect(image.width, image.height, Number(zoom.value), horizontal, vertical);
 }
 
 function draw(target = canvas) {
@@ -60,8 +54,9 @@ file.addEventListener('change', async () => {
     image?.close();
     image = next;
     name.value = cleanName(selected.name.replace(/\.[^.]+$/, ''));
+    element('picker-title').textContent = selected.name;
     zoom.value = '1';
-    horizontal.value = vertical.value = '0.5';
+    horizontal = vertical = 0.5;
     picker.hidden = true;
     editor.hidden = false;
     draw();
@@ -73,10 +68,9 @@ file.addEventListener('change', async () => {
   file.value = '';
 });
 
-for (const slider of [zoom, horizontal, vertical])
-  slider.addEventListener('input', () => {
-    if (!busy) draw();
-  });
+zoom.addEventListener('input', () => {
+  if (!busy) draw();
+});
 element('change').addEventListener('click', () => file.click());
 canvas.addEventListener('pointerdown', (event) => {
   if (!image || busy) return;
@@ -87,24 +81,8 @@ canvas.addEventListener('pointermove', (event) => {
   if (!drag || busy) return;
   const rect = canvas.getBoundingClientRect();
   const current = crop();
-  horizontal.value = String(
-    panPosition(
-      Number(horizontal.value),
-      event.clientX - drag.x,
-      image.width,
-      current.w,
-      rect.width,
-    ),
-  );
-  vertical.value = String(
-    panPosition(
-      Number(vertical.value),
-      event.clientY - drag.y,
-      image.height,
-      current.h,
-      rect.height,
-    ),
-  );
+  horizontal = panPosition(horizontal, event.clientX - drag.x, image.width, current.w, rect.width);
+  vertical = panPosition(vertical, event.clientY - drag.y, image.height, current.h, rect.height);
   drag = { x: event.clientX, y: event.clientY };
   draw();
 });

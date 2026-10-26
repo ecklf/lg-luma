@@ -258,6 +258,10 @@ the upload modal is open and focused, with a fixed ten-minute session lifetime. 
 losing focus, hiding Luma or exiting invalidates the session. An unpredictable 128-bit capability
 URL, exact Host/Origin checks, a custom upload header, no CORS, and restrictive browser security
 headers limit access. HTTP is **not encrypted**; use a trusted local network. The URL is not logged.
+The branded code follows the small center-logo approach shown in
+[Vercel's QR example](https://github.com/vercel/examples/tree/main/container-images/demo/apps/qr):
+Luma uses high error correction, keeps the standard dark-on-light modules and quiet zone, and
+clears a compact center patch for its mark so phone cameras can still scan it in the dark-themed modal.
 Requests are serialized and bounded by header/body sizes and a deadline, with cancellation checks
 while reading and before committing. No user-controlled path is opened by the server. No privileged
 helper or permanent system service is installed. Networks with client isolation, IPv6-only access
