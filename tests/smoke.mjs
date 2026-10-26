@@ -233,14 +233,27 @@ try {
   assert.ok(profiled.render.profile.pacing.samples > 0);
   assert.ok(profiled.render.profile.cpu_submission.mean_ms >= 0);
   const greetingEditor = 'settings,down,enter,down,down,down,down,enter,enter';
-  for (const name of ['Ana', 'Bob']) {
+  for (const [id, name] of [
+    ['Ana', 'Ana'],
+    ['Bob', 'Bob'],
+    ['long', 'Alexandra Catherine Elizabeth Montgomery'],
+    ['wide', 'W'.repeat(40)],
+    ['cjk', '小明'.repeat(20)],
+    ['korean', '한글'.repeat(20)],
+  ]) {
     const named = await scenario(
-      `greeting-${name}`,
+      `greeting-${id}`,
       `${greetingEditor},type:${name},back,home`,
       fixedTime,
     );
     assert.equal(named.preferences.greeting_name, name);
     assert.ok(named.ui_text.includes(`Good evening, ${name}.`));
+    if (name.length > 30) {
+      assert.ok(
+        named.render.capture.max_logical_font_px < 90.4,
+        'Long greetings must shrink instead of wrapping into a cropped second line',
+      );
+    }
     assert.equal(
       JSON.parse(await fs.readFile(preferences, 'utf8')).greeting_name,
       name,
