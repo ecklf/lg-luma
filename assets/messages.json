@@ -2677,12 +2677,15 @@
     "it": "Impossibile inviare {tile}."
   },
   "tileUrlInvalid": {
-    "en": "Only http:// and https:// addresses are supported.",
-    "de": "Nur http://- und https://-Adressen werden unterstützt.",
-    "es": "Solo se admiten direcciones http:// y https://.",
-    "zh": "仅支持 http:// 和 https:// 地址。",
-    "pt": "Somente endereços http:// e https:// são suportados.",
-    "it": "Sono supportati solo indirizzi http:// e https://."
+    "en": "Enter a valid http:// or https:// address with a host name.",
+    "de": "Gib eine gültige http://- oder https://-Adresse mit Hostnamen ein.",
+    "es": "Introduce una dirección http:// o https:// válida con un nombre de host.",
+    "zh": "请输入包含主机名的有效 http:// 或 https:// 地址。",
+    "pt": "Insira um endereço http:// ou https:// válido com um nome de host.",
+    "it": "Inserisci un indirizzo http:// o https:// valido con un nome host.",
+    "ru": "Введите корректный адрес http:// или https:// с именем хоста.",
+    "pl": "Wpisz prawidłowy adres http:// lub https:// z nazwą hosta.",
+    "fr": "Saisissez une adresse http:// ou https:// valide avec un nom d’hôte."
   },
   "tileIncomplete": {
     "en": "Add a name and a URL first.",

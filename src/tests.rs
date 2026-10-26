@@ -2034,6 +2034,50 @@ fn inventory_success_resets_failures_and_later_failures_show_at_once() {
 }
 
 #[test]
+fn tile_urls_need_a_host_the_request_client_accepts() {
+    use crate::model::valid_tile_url;
+    for url in [
+        "http://homeassistant.local:8123/api/webhook/lamp",
+        "http://ha/api/webhook/lamp",
+        "http://my_nas.lan/hook",
+        "https://example.com",
+        "HTTPS://example.com/",
+        "http://192.168.188.10:8123/api/webhook/lamp?on=1",
+        "http://[::1]:8123/api/webhook/lamp",
+        "http://[fd00::10]/hook",
+        "http://user:secret@ha.local/hook",
+        "http://ha.local:65535/",
+    ] {
+        assert!(valid_tile_url(url), "{url} should be valid");
+    }
+    for url in [
+        "http://",
+        "http:///",
+        "http:////api",
+        "http://:8123/foo",
+        "http://user@/foo",
+        "http://ha.local:/foo",
+        "http://ha.local:0/foo",
+        "http://ha.local:65536/foo",
+        "http://ha.local:80a/foo",
+        "http://ha.local:+80/foo",
+        "http://ha.local:80:81/foo",
+        "http://ha..local/foo",
+        "http://-ha.local/foo",
+        "http://ha%2elocal/foo",
+        "http://999.1.1.1/foo",
+        "http://192.168.1/foo",
+        "http://[::1/foo",
+        "http://[not-ip]/foo",
+        "http://::1/foo",
+        "http://ha.local/a b",
+        "ftp://ha.local/foo",
+    ] {
+        assert!(!valid_tile_url(url), "{url} should be invalid");
+    }
+}
+
+#[test]
 fn custom_tiles_are_sanitized_and_get_stable_unique_ids() {
     use crate::model::{TileMethod, valid_app_id};
     let mut preferences: Preferences = serde_json::from_value(json!({
@@ -2113,6 +2157,16 @@ fn shortcut_tiles_are_created_edited_sent_and_removed_in_settings() {
     assert!(state.finish_text_input().is_empty());
     assert!(state.preferences.custom_tiles.is_empty());
     assert!(state.notice.is_some());
+    // Without a host the address is refused here, not saved to fail on every press.
+    for typed in ["/", ":8123/api/webhook/abc", "http:///"] {
+        state.notice = None;
+        state.activate();
+        state.text(typed);
+        assert!(state.finish_text_input().is_empty(), "{typed}");
+        assert!(state.tile_draft.url.is_empty(), "{typed}");
+        assert!(state.notice.is_some(), "{typed}");
+    }
+    assert!(state.preferences.custom_tiles.is_empty());
     state.activate();
     state.text("http://ha.local:8123/api/webhook/abc");
     assert_eq!(state.finish_text_input(), vec![Effect::Save]);

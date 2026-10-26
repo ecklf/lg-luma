@@ -426,10 +426,60 @@ pub fn split_tile_url(url: &str) -> Option<(bool, &str)> {
     }
 }
 
+/// Whether the URL can be sent as typed. It must parse with the request
+/// client's URI rules and name a host, so a tile never saves with an address
+/// that only fails once it is pressed.
 pub fn valid_tile_url(url: &str) -> bool {
-    split_tile_url(url).is_some_and(|(_, rest)| !rest.is_empty())
+    split_tile_url(url).is_some()
         && url.chars().count() <= TILE_URL_LIMIT
         && !url.chars().any(|c| c.is_whitespace() || c.is_control())
+        && url.parse::<ureq::http::Uri>().is_ok_and(|uri| {
+            uri.authority()
+                .is_some_and(|authority| valid_tile_authority(authority.as_str()))
+        })
+}
+
+/// Host and optional port after any user info: a host name, an IPv4 address
+/// or a bracketed IPv6 address, then a port from 1 to 65535.
+fn valid_tile_authority(authority: &str) -> bool {
+    let address = authority.rsplit('@').next().unwrap_or_default();
+    let (host, port) = match address.strip_prefix('[') {
+        Some(rest) => match rest.split_once(']') {
+            Some((ip, port)) if ip.parse::<std::net::Ipv6Addr>().is_ok() => (None, port),
+            _ => return false,
+        },
+        None => match address.find(':') {
+            Some(colon) => (Some(&address[..colon]), &address[colon..]),
+            None => (Some(address), ""),
+        },
+    };
+    let valid_port = port.is_empty()
+        || port.strip_prefix(':').is_some_and(|digits| {
+            !digits.is_empty()
+                && digits.bytes().all(|b| b.is_ascii_digit())
+                && digits.parse::<u16>().is_ok_and(|port| port != 0)
+        });
+    valid_port && host.is_none_or(valid_host_name)
+}
+
+/// DNS-style labels, or a dotted IPv4 address when every label is a number.
+fn valid_host_name(host: &str) -> bool {
+    let labels: Vec<_> = host.split('.').collect();
+    if labels
+        .iter()
+        .all(|label| !label.is_empty() && label.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return host.parse::<std::net::Ipv4Addr>().is_ok();
+    }
+    host.len() <= 253
+        && labels.iter().all(|label| {
+            (1..=63).contains(&label.len())
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+        })
 }
 
 pub fn valid_app_id(id: &str) -> bool {
