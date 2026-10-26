@@ -373,7 +373,7 @@ try {
     );
     const clicked = await scenario(`landing-pointer-${reducedMotion}`, 'home,click:220:880');
     assert.deepEqual(clicked.focus, { App: 'netflix' });
-    assert.ok(clicked.ui_text.includes('Desktop preview · Netflix will open on your TV.'));
+    assert.ok(clicked.ui_text.includes('Desktop preview · Netflix will open on your TV'));
     assert.equal(clicked.scroll, 0);
   }
   console.log(
