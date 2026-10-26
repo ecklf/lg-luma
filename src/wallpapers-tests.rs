@@ -76,6 +76,17 @@ fn generated_ids_are_safe_and_selection_survives_preferences_reload() {
 }
 
 #[test]
+fn upload_tokens_are_eight_unbiased_alphanumeric_characters() {
+    let tokens: Vec<_> = (0..256).map(|_| random_token().unwrap()).collect();
+    for token in &tokens {
+        assert_eq!(token.len(), 8);
+        assert!(token.bytes().all(|byte| TOKEN_ALPHABET.contains(&byte)));
+    }
+    let distinct: std::collections::HashSet<_> = tokens.iter().collect();
+    assert_eq!(distinct.len(), tokens.len());
+}
+
+#[test]
 fn uploads_are_named_normalized_immutable_and_discoverable_after_restart() {
     let fixture = Fixture::new();
     let bytes = image(1920, 1080);
@@ -340,19 +351,12 @@ fn symlink_storage_and_gallery_entries_are_never_followed() {
 #[test]
 fn qr_generation_is_deterministic_and_has_a_reasonable_size() {
     let address = "192.168.1.2:12345".parse().unwrap();
-    let info = session(address, "0123456789abcdef0123456789abcdef").unwrap();
-    assert_eq!(
-        info.url,
-        "http://192.168.1.2:12345/0123456789abcdef0123456789abcdef/"
-    );
+    let token = random_token().unwrap();
+    let info = session(address, &token).unwrap();
+    assert_eq!(info.url, format!("http://192.168.1.2:12345/{token}/"));
     assert_eq!(info.qr.len(), (info.qr_size * info.qr_size) as usize);
     assert!(info.qr_size <= 65);
-    assert_eq!(
-        info.qr,
-        session(address, "0123456789abcdef0123456789abcdef")
-            .unwrap()
-            .qr
-    );
+    assert_eq!(info.qr, session(address, &token).unwrap().qr);
 }
 
 #[test]

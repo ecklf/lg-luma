@@ -19,8 +19,11 @@ use std::{
 const MAX_BODY: usize = 12 * 1024 * 1024;
 const MAX_WALLPAPERS: usize = 20;
 const SESSION_TIME: Duration = Duration::from_secs(600);
+const SESSION_REQUEST_LIMIT: usize = 64;
 const REQUEST_TIME: Duration = Duration::from_secs(20);
 const STOP: u64 = u64::MAX;
+// Base58 excludes easily confused 0/O and I/l while staying URL-safe.
+const TOKEN_ALPHABET: &[u8; 58] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Wallpaper {
@@ -133,6 +136,23 @@ fn random_id() -> Result<String, String> {
     getrandom::getrandom(&mut bytes)
         .map_err(|e| format!("Secure random source unavailable: {e}"))?;
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+fn random_token() -> Result<String, String> {
+    let mut token = String::with_capacity(8);
+    while token.len() < 8 {
+        let mut bytes = [0; 16];
+        getrandom::getrandom(&mut bytes)
+            .map_err(|e| format!("Secure random source unavailable: {e}"))?;
+        // 232 is the largest multiple of 58 below 256, avoiding modulo bias.
+        for byte in bytes.into_iter().filter(|byte| *byte < 232) {
+            token.push(TOKEN_ALPHABET[(byte % 58) as usize] as char);
+            if token.len() == 8 {
+                break;
+            }
+        }
+    }
+    Ok(token)
 }
 
 fn real_directory(path: &Path) -> bool {
@@ -459,7 +479,7 @@ fn worker(
         handled = generation;
         let opened = (|| {
             let listener = listen(loopback_only)?;
-            let token = random_id()?;
+            let token = random_token()?;
             let address = listener.local_addr().map_err(|e| e.to_string())?;
             let info = session(address, &token)?;
             Ok::<_, String>((listener, token, address, info))
@@ -475,7 +495,11 @@ fn worker(
             break;
         }
         let deadline = Instant::now() + SESSION_TIME;
-        while desired.load(Ordering::Acquire) == generation && Instant::now() < deadline {
+        let mut requests = 0;
+        while desired.load(Ordering::Acquire) == generation
+            && Instant::now() < deadline
+            && requests < SESSION_REQUEST_LIMIT
+        {
             match listener.accept() {
                 Ok((mut stream, peer)) => {
                     if !peer.ip().is_loopback()
@@ -483,6 +507,7 @@ fn worker(
                     {
                         continue;
                     }
+                    requests += 1;
                     let valid = || {
                         desired.load(Ordering::Acquire) == generation && Instant::now() < deadline
                     };

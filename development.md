@@ -258,7 +258,9 @@ The native process binds an ephemeral port on one private/link-local IPv4 interf
 the upload modal is open and focused, with a fixed ten-minute session lifetime. Closing the modal,
 losing focus, hiding Luma or exiting invalidates the session. An unpredictable 128-bit capability
 URL, exact Host/Origin checks, a custom upload header, no CORS, and restrictive browser security
-headers limit access. HTTP is **not encrypted**; use a trusted local network. The URL is not logged.
+headers limit access. The 8-character case-sensitive base-58 token has about 47 bits of entropy;
+each session accepts at most 64 local requests and expires after ten minutes. HTTP is **not
+encrypted**; use a trusted local network. The URL is not logged.
 The branded code follows the small center-logo approach shown in
 [Vercel's QR example](https://github.com/vercel/examples/tree/main/container-images/demo/apps/qr):
 Luma uses high error correction, keeps the standard dark-on-light modules and quiet zone, and
