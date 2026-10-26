@@ -629,6 +629,7 @@ fn run() -> Result<(), String> {
         &preferences_path,
         &weather_service,
     );
+    platform.send(Request::Clock);
     platform.sync_splash(&state.preferences.background);
     startup_stage("preferences and workers");
 
@@ -934,6 +935,10 @@ fn run() -> Result<(), String> {
                         state.focus = state.first_content();
                         initial_focus = false;
                     }
+                }
+                Response::Clock(hour_24) => {
+                    state.preferences.tv_hour_24 = hour_24;
+                    state.dirty = true;
                 }
                 Response::Launched(result) => {
                     state.launching = false;

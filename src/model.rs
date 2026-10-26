@@ -99,6 +99,9 @@ pub struct Preferences {
     /// The chosen clock format; until one is chosen, the interface language decides.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hour_24: Option<bool>,
+    /// The TV's own clock format, read at start and never saved.
+    #[serde(skip)]
+    pub tv_hour_24: Option<bool>,
     pub reduced_motion: bool,
     pub show_seconds: bool,
     /// Optional name appended to the Home greeting ("Good evening, Ana."). Empty = plain greeting.
@@ -128,6 +131,7 @@ impl Default for Preferences {
             show_home_names: false,
             show_app_names: true,
             hour_24: None,
+            tv_hour_24: None,
             reduced_motion: false,
             show_seconds: false,
             greeting_name: String::new(),
@@ -200,10 +204,12 @@ impl Preferences {
         }
     }
 
-    /// Whether the clock shows 24 hours: the chosen format, or else 12 hours for English
-    /// and 24 for the other interface languages, which all use it by convention.
+    /// Whether the clock shows 24 hours: the chosen format, else the TV's, else 12 hours
+    /// for English and 24 for the other interface languages, which all use it by convention.
     pub fn hour_24_clock(&self) -> bool {
-        self.hour_24.unwrap_or(self.language != Language::En)
+        self.hour_24
+            .or(self.tv_hour_24)
+            .unwrap_or(self.language != Language::En)
     }
 
     pub fn sanitize(&mut self) {
@@ -304,4 +310,28 @@ pub fn demo_inventory() -> Inventory {
         }
     }
     inventory
+}
+
+/// Regions whose clocks conventionally show 12 hours.
+const TWELVE_HOUR_REGIONS: [&str; 9] = ["US", "CA", "AU", "NZ", "IN", "PH", "PK", "EG", "SA"];
+
+/// The clock format in the TV's `localeInfo` setting: webOS's own 12/24 choice, else the
+/// region of the formatting locale (`FMT`, which can differ from the menu language), else
+/// of the menu locale. None when the TV names no region.
+pub fn tv_hour_24(locale_info: &serde_json::Value) -> Option<bool> {
+    match locale_info.get("clock").and_then(|clock| clock.as_str()) {
+        Some("12") => return Some(false),
+        Some("24") => return Some(true),
+        _ => {}
+    }
+    let locales = locale_info.get("locales")?;
+    let locale = ["FMT", "UI"]
+        .iter()
+        .find_map(|key| locales.get(key).and_then(|locale| locale.as_str()))?;
+    // "en-GB", "zh-Hans-CN": the region is the last subtag, two capital letters.
+    let region = locale
+        .rsplit(['-', '_'])
+        .next()
+        .filter(|region| region.len() == 2 && region.bytes().all(|b| b.is_ascii_uppercase()))?;
+    Some(!TWELVE_HOUR_REGIONS.contains(&region))
 }

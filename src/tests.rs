@@ -1523,3 +1523,53 @@ fn the_clock_follows_the_language_until_a_format_is_chosen() {
     assert!(fresh.hour_24.is_none() && fresh.hour_24_clock());
     assert!(!serde_json::to_string(&fresh).unwrap().contains("hour_24"));
 }
+
+#[test]
+fn the_clock_follows_the_tv_region_before_the_language() {
+    use crate::model::{Preferences, tv_hour_24};
+    use serde_json::json;
+    let locales =
+        |fmt: &str, ui: &str| json!({"clock": "locale", "locales": {"FMT": fmt, "UI": ui}});
+    assert_eq!(tv_hour_24(&locales("en-GB", "de-DE")), Some(true));
+    assert_eq!(tv_hour_24(&locales("en-US", "en-US")), Some(false));
+    assert_eq!(
+        tv_hour_24(&locales("en-AU", "de-DE")),
+        Some(false),
+        "FMT wins over UI"
+    );
+    assert_eq!(tv_hour_24(&locales("zh-Hans-CN", "zh-Hans-CN")), Some(true));
+    assert_eq!(
+        tv_hour_24(&json!({"locales": {"UI": "en-CA"}})),
+        Some(false)
+    );
+    assert_eq!(
+        tv_hour_24(&json!({"clock": "24", "locales": {"FMT": "en-US"}})),
+        Some(true)
+    );
+    assert_eq!(
+        tv_hour_24(&json!({"clock": "12", "locales": {"FMT": "de-DE"}})),
+        Some(false)
+    );
+    assert_eq!(
+        tv_hour_24(&json!({"locales": {"FMT": "en"}})),
+        None,
+        "no region"
+    );
+    assert_eq!(tv_hour_24(&json!({})), None);
+
+    let mut preferences = Preferences {
+        tv_hour_24: Some(true),
+        ..Default::default()
+    };
+    assert!(
+        preferences.hour_24_clock(),
+        "an English UI on a British TV: 24 hours"
+    );
+    preferences.hour_24 = Some(false);
+    assert!(!preferences.hour_24_clock(), "a chosen format still wins");
+    assert!(
+        !serde_json::to_string(&preferences)
+            .unwrap()
+            .contains("tv_hour_24")
+    );
+}
