@@ -1,4 +1,4 @@
-//! Bundled English, German, Spanish, Chinese, Brazilian Portuguese, Italian, Russian, Polish and French message catalog.
+//! Bundled English, German, Spanish, Chinese, Brazilian Portuguese, Italian, Russian, Polish, French and Vietnamese message catalog.
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::BTreeMap, sync::OnceLock};
 use time::OffsetDateTime;
@@ -25,9 +25,10 @@ pub enum Language {
     Ru,
     Pl,
     Fr,
+    Vi,
 }
 impl Language {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::En,
         Self::De,
         Self::Zh,
@@ -37,6 +38,7 @@ impl Language {
         Self::Ru,
         Self::Pl,
         Self::Fr,
+        Self::Vi,
     ];
     pub fn code(self) -> &'static str {
         match self {
@@ -49,6 +51,7 @@ impl Language {
             Self::Ru => "ru",
             Self::Pl => "pl",
             Self::Fr => "fr",
+            Self::Vi => "vi",
         }
     }
     pub fn name(self) -> &'static str {
@@ -62,6 +65,7 @@ impl Language {
             Self::Ru => "Русский",
             Self::Pl => "Polski",
             Self::Fr => "Français",
+            Self::Vi => "Tiếng Việt",
         }
     }
     pub fn index(self) -> usize {
@@ -75,6 +79,7 @@ impl Language {
             Self::Ru => 6,
             Self::Pl => 7,
             Self::Fr => 8,
+            Self::Vi => 9,
         }
     }
     pub fn t(self, key: &str) -> &str {
@@ -353,6 +358,34 @@ impl Language {
                 ][month]
             )
             .to_uppercase(),
+            Self::Vi => format!(
+                "{}, {} {}",
+                [
+                    "thứ hai",
+                    "thứ ba",
+                    "thứ tư",
+                    "thứ năm",
+                    "thứ sáu",
+                    "thứ bảy",
+                    "chủ nhật"
+                ][weekday],
+                now.day(),
+                [
+                    "tháng 1",
+                    "tháng 2",
+                    "tháng 3",
+                    "tháng 4",
+                    "tháng 5",
+                    "tháng 6",
+                    "tháng 7",
+                    "tháng 8",
+                    "tháng 9",
+                    "tháng 10",
+                    "tháng 11",
+                    "tháng 12"
+                ][month]
+            )
+            .to_uppercase(),
         }
     }
     pub fn clock(self, now: OffsetDateTime, hour24: bool, seconds: bool) -> String {
@@ -406,6 +439,7 @@ pub fn deserialize_language<'de, D: Deserializer<'de>>(
             Some("ru") => Language::Ru,
             Some("pl") => Language::Pl,
             Some("fr") => Language::Fr,
+            Some("vi") => Language::Vi,
             _ => Language::En,
         },
     )
@@ -484,6 +518,11 @@ mod tests {
             "Netflix fait maintenant partie de vos favoris."
         );
         assert_eq!(Language::Fr.greeting(2, "Ana"), "Toujours debout, Ana ?");
+        assert_eq!(
+            Language::Vi.format("favoriteAdded", &[("app", "Netflix")]),
+            "Đã thêm Netflix vào mục ưa thích."
+        );
+        assert_eq!(Language::Vi.greeting(2, "Ana"), "Vẫn chưa ngủ sao, Ana?");
         assert_eq!(Language::De.category("Gaming"), "Spiele");
         assert_eq!(Language::En.greeting(15, ""), "Good afternoon.");
         assert_eq!(Language::En.greeting(15, "  Ana "), "Good afternoon, Ana.");
@@ -507,6 +546,8 @@ mod tests {
         assert_eq!(Language::Pl.clock(now, true, false), "20:41");
         assert_eq!(Language::Fr.date(now), "MERCREDI 21 OCTOBRE");
         assert_eq!(Language::Fr.clock(now, true, false), "20:41");
+        assert_eq!(Language::Vi.date(now), "THỨ TƯ, 21 THÁNG 10");
+        assert_eq!(Language::Vi.clock(now, true, false), "20:41");
         assert_eq!(Language::Zh.clock(now, false, false), "下午8:41");
         assert_eq!(Language::Zh.clock(now, false, true), "下午8:41:00");
         assert_eq!(Language::En.clock(now, true, false), "20:41");
@@ -535,6 +576,19 @@ mod tests {
             let now = OffsetDateTime::parse(date, &time::format_description::well_known::Rfc3339)
                 .unwrap();
             assert_eq!(Language::Fr.date(now), expected);
+        }
+    }
+
+    #[test]
+    fn vietnamese_dates_cover_leap_days_and_weekend_names() {
+        for (date, expected) in [
+            ("2024-02-29T00:05:00+07:00", "THỨ NĂM, 29 THÁNG 2"),
+            ("2026-10-24T12:00:00+07:00", "THỨ BẢY, 24 THÁNG 10"),
+            ("2026-11-01T20:41:00+07:00", "CHỦ NHẬT, 1 THÁNG 11"),
+        ] {
+            let now = OffsetDateTime::parse(date, &time::format_description::well_known::Rfc3339)
+                .unwrap();
+            assert_eq!(Language::Vi.date(now), expected);
         }
     }
 }
