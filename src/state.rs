@@ -548,9 +548,15 @@ impl State {
     /// Homebrew service that reads the inventory can take longer than one request allows. While
     /// no apps are shown yet, the screen keeps loading and the caller retries after the returned
     /// delay; the error and its Retry button only appear once those retries are used up.
+    /// Custom tiles come from preferences, not the TV, so they don't count as loaded apps.
     pub fn inventory_failed(&mut self, error: String) -> Option<Duration> {
         self.dirty = true;
-        if self.inventory.apps.is_empty() && self.inventory_failures < INVENTORY_RETRIES {
+        let no_tv_apps = self
+            .inventory
+            .apps
+            .iter()
+            .all(|app| app.id.starts_with(CUSTOM_TILE_PREFIX));
+        if no_tv_apps && self.inventory_failures < INVENTORY_RETRIES {
             self.inventory_failures += 1;
             return Some(INVENTORY_RETRY_DELAY);
         }

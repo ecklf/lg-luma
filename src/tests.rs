@@ -2232,3 +2232,21 @@ fn shortcut_tiles_are_created_edited_sent_and_removed_in_settings() {
     assert_eq!(state.subpage, None);
     assert_eq!(state.focus, Target::TileAdd);
 }
+
+#[test]
+fn shortcut_tiles_alone_do_not_stop_inventory_retries() {
+    let mut preferences: Preferences = serde_json::from_value(json!({
+        "custom_tiles": [{"id": "custom.lamp", "title": "Lamp", "url": "http://ha.local/hook"}]
+    }))
+    .unwrap();
+    preferences.sanitize();
+    let mut state = State::new(preferences);
+    state.loading = true;
+    state.sync_custom_tiles();
+    assert!(!state.inventory.apps.is_empty());
+    assert_eq!(
+        state.inventory_failed("timeout".into()),
+        Some(crate::state::INVENTORY_RETRY_DELAY)
+    );
+    assert!(state.loading && state.error.is_none());
+}
