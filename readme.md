@@ -36,20 +36,20 @@ https://github.com/user-attachments/assets/0c3061bf-c158-417e-85a4-da3eb84ecf08
 > Luma should start on any TV running webOS 4 or newer. The following configurations have been
 > confirmed to work by the community. Home takeover support varies, as noted below:
 
-| TV        | Model identifier | webOS  | Takeover Support |
-| --------- | ---------------- | ------ | ---------------- |
-| LG C8     | `OLED??C8*`      | 4      | ❌               |
-| LG UM7450 | `UM74507LA`      | 4      | ❌               |
-| LG UN7100 | `49UN71006LB`    | 5      | ✅               |
-| LG C1     | `OLED48C1KNB`    | 6      | ✅               |
-| LG B2     | `OLED65B29LA`    | 24     | ✅               |
-| LG C2     | `OLED42C2PSA`    | 25     | ✅               |
-| LG C2     | `OLED65C2PSA`    | 26     | ✅               |
-| LG C3     | `OLED65C31LA`    | 26     | ✅               |
-| LG C3     | `OLED65C36LC`    | 26     | ✅               |
-| LG C4     | `OLED42C4*`      | 25     | —                |
-| LG C5     | `OLED55C57LA`    | 26     | ✅               |
-| LG G3     | `OLED??G3*`      | 25     | —                |
+| TV        | Model identifier | webOS | Takeover Support |
+| --------- | ---------------- | ----- | ---------------- |
+| LG C8     | `OLED??C8*`      | 4     | ❌               |
+| LG UM7450 | `UM74507LA`      | 4     | ❌               |
+| LG UN7100 | `49UN71006LB`    | 5     | ✅               |
+| LG C1     | `OLED48C1KNB`    | 6     | ✅               |
+| LG B2     | `OLED65B29LA`    | 24    | ✅               |
+| LG C2     | `OLED42C2PSA`    | 25    | ✅               |
+| LG C2     | `OLED65C2PSA`    | 26    | ✅               |
+| LG C3     | `OLED65C31LA`    | 26    | ✅               |
+| LG C3     | `OLED65C36LC`    | 26    | ✅               |
+| LG C4     | `OLED42C4*`      | 25    | —                |
+| LG C5     | `OLED55C57LA`    | 26    | ✅               |
+| LG G3     | `OLED??G3*`      | 25    | —                |
 
 > [!NOTE]
 > Model identifiers containing wildcards are inferred: `??` is an unknown screen size and `*` is an
@@ -262,3 +262,19 @@ There is no browser geolocation, IP-based location lookup, telemetry or runtime 
 Luma is licensed under MIT.
 
 Luma is not affiliated with LG, Apple, or any other brands shown in its UI.
+
+### Optional power-on and Back/Exit policy (webOS 5/6)
+
+Home takeover alone preserves the TV's input policy. After enabling Home takeover, owners who
+want Luma instead of the last TV input at power-on and after leaving apps can explicitly run:
+
+```sh
+sh /var/lib/luma-home/home.sh startup-home on
+# Restore the saved power-on and Back/Exit input while keeping Home takeover:
+sh /var/lib/luma-home/home.sh startup-home off
+```
+
+Select the desired fallback TV input before opting in. This experimental policy pins EIM's
+last-input file read-only; tested on webOS 5.6.2 only. Disabling takeover also restores the saved
+input. Existing draft installations without a saved prior setting use the input recorded in
+EIM's `appId` as their migration fallback.
