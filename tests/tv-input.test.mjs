@@ -3,7 +3,13 @@ import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 const source = fs.readFileSync(new URL('../tv/tv-input.cjs', import.meta.url), 'utf8');
-function fixture({ supports = true, visible = true, malformed = false } = {}) {
+function fixture({
+  supports = true,
+  visible = true,
+  malformed = false,
+  verificationFails = false,
+  removeFails = false,
+} = {}) {
   const calls = [];
   let registered = false;
   const context = vm.createContext({
@@ -21,7 +27,9 @@ function fixture({ supports = true, visible = true, malformed = false } = {}) {
           const method = args[4].split('/').at(-1);
           calls.push([method, JSON.parse(args[5])]);
           if (method === 'addDevice') registered = true;
+          if (method === 'deleteDevice' && removeFails) return '{"returnValue":false}';
           if (method === 'deleteDevice') registered = false;
+          if (method === 'getAllInputStatus' && registered && verificationFails) return 'malformed';
           return malformed
             ? 'not JSON'
             : JSON.stringify({
@@ -54,4 +62,12 @@ test('an accepted but unlisted registration is rolled back', () => {
 test('unsupported manifests and malformed replies cannot report success', () => {
   assert.throws(() => fixture({ supports: false }).context.configure('enable'), /supportGIP/);
   assert.throws(() => fixture({ malformed: true }).context.configure('enable'));
+});
+
+test('verification errors roll back newly added inputs and cleanup failures remain visible', () => {
+  const tv = fixture({ verificationFails: true });
+  assert.throws(() => tv.context.configure('enable'), /registration removed/);
+  assert.equal(tv.calls.at(-1)[0], 'deleteDevice');
+  const failed = fixture({ visible: false, removeFails: true });
+  assert.throws(() => failed.context.configure('enable'), /cleanup failed.*retry disable/);
 });

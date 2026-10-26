@@ -243,12 +243,6 @@ in an app-owned persistent directory outside the installed payload.
 Weather search/forecast requests go to Open-Meteo, with embedded TLS roots and bounded responses.
 There is no browser geolocation, IP-based location lookup, telemetry or runtime font download.
 
-## License
-
-Luma is licensed under MIT.
-
-Luma is not affiliated with LG, Apple, or any other brands shown in its UI.
-
 ### Optional TV input
 
 After installing this package, run `node /media/developer/apps/usr/palm/applications/com.ecklf.luma/tv-input.cjs enable`
@@ -258,8 +252,16 @@ Use `status` to inspect it or `disable` to remove it. This is separate from Home
 never changes Home Auto Launch, HDMI selection, or the power-on preference automatically.
 
 Select Luma from LG's input picker and use the TV's last-input startup option where available.
-Whether the firmware restores a virtual input after standby or a cold boot needs device testing;
-registration success alone does not prove startup support. Luma is hidden from its own input row.
+On an LG 49UN71006LB (webOS 5.6.2), Luma returned after standby and a full software reboot, with
+Home takeover and Home Auto Launch disabled. Other firmware remains untested; registration alone
+does not prove startup support. Select HDMI or Live TV before removing the entry. Luma is hidden
+from its own input row.
 Thanks to phranklins in [#79](https://github.com/ecklf/lg-luma/issues/79#issuecomment-6416333882)
 and [Hearth](https://github.com/rudra-avatar/Hearth/blob/b9f0a1c8240303b7cd52fdc820e2f840ac6d3a0e/src/lib/tvinput.ts)
 for the suggestion and API reference.
+
+## License
+
+Luma is licensed under MIT.
+
+Luma is not affiliated with LG, Apple, or any other brands shown in its UI.

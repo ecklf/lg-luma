@@ -30,16 +30,24 @@ function configure(command) {
     if (listed()) return { registered: true };
     // Both empty image fields are required by older EIM implementations.
     // Idea: phranklins, issue #79; API shape verified against Hearth's tvinput.ts.
-    eim('addDevice', {
-      appId: APP,
-      pigImage: '',
-      mvpdIcon: '',
-      label: 'Luma',
-      description: 'Luma Home'
-    });
-    if (!listed()) {
-      eim('deleteDevice', { appId: APP });
-      throw new Error('This firmware did not list Luma as an input; registration removed');
+    try {
+      eim('addDevice', {
+        appId: APP,
+        pigImage: '',
+        mvpdIcon: '',
+        label: 'Luma',
+        description: 'Luma Home'
+      });
+      if (!listed()) throw new Error('This firmware did not list Luma as an input');
+    } catch (error) {
+      // We verified that this input was absent before adding it. Also roll back a malformed
+      // verification reply or an ambiguous add timeout, without deleting a pre-existing input.
+      try {
+        eim('deleteDevice', { appId: APP });
+      } catch (cleanup) {
+        throw new Error(error.message + '; cleanup failed: ' + cleanup.message + '; retry disable');
+      }
+      throw new Error(error.message + '; registration removed');
     }
   } else {
     eim('deleteDevice', { appId: APP });
