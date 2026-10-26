@@ -36,6 +36,8 @@ The following TV configurations have been reported working with Luma:
 
 | TV        | Model identifier | webOS | Takeover Support |
 | --------- | ---------------- | ----- | ---------------- |
+| LG C8     | `OLED??C8*`      | 4     | ❌               |
+| LG UM7450 | `UM74507LA`      | 4     | ❌               |
 | LG UN7100 | `49UN71006LB`    | 5     | ✅               |
 | LG C1     | `OLED48C1KNB`    | 6     | ✅               |
 | LG C2     | `OLED42C2PSA`    | 25    | ✅               |
@@ -48,7 +50,8 @@ The following TV configurations have been reported working with Luma:
 
 > [!NOTE]
 > Model identifiers containing wildcards are inferred: `??` is an unknown screen size and `*` is an
-> unconfirmed regional suffix. `—` indicates information that has not been reported.
+> unconfirmed regional suffix. `—` indicates information that has not been reported. `❌` means
+> Luma runs on the TV, but Home takeover was reported not to work.
 
 ## Installation
 
@@ -80,11 +83,14 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 
 > [!NOTE]
 > Takeover is supported on **webOS 5, 6, 25 and 26**.\
-> Disable takeover before uninstalling Luma.
+> The takeover does not delete LG Home: it remains underneath a temporary mount, which is cleared by
+> a reboot. If Luma is uninstalled first, LG Home returns on reboot, but the separate takeover boot
+> hook remains and logs an error because it can no longer find Luma. No TV reset is needed. For
+> clean removal, disable takeover before uninstalling.
 
-Install Luma and verify that it opens normally. Disable any Home mapping e.g.
-[LG Input Hook](https://repo.webosbrew.org/apps/org.webosbrew.inputhook/) and any other Home
-replacement, then run in the TV's root SSH shell:
+Install Luma and verify that it opens normally. Disable any Home-button mapping in
+[LG Input Hook](https://github.com/Simon34545/lginputhook) (remove its Home-key action) and any
+other Home replacement, then run in the TV's root SSH shell:
 
 If you enabled Lumas autostart method earlier, disable it first:
 

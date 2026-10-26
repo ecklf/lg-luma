@@ -248,6 +248,7 @@ impl State {
         let target = self.landing_target();
         if target != self.landing.1 {
             self.landing = (self.landing(), target, Instant::now());
+            self.dirty = true;
         }
         if self.landing() != self.landing.1 {
             self.dirty = true;
@@ -374,6 +375,16 @@ impl State {
     /// With the wallpaper-first Home on, the favourites sit lower while focus is in the header
     /// of Home; moving down into them slides them up to their usual place.
     fn landing_target(&self) -> f32 {
+        // Pointer focus must not slide its hit target away. Remote navigation resumes the
+        // focus-led transition; overlays and move mode still use the normal layout.
+        if self.preferences.landing_layout
+            && self.page == Page::Home
+            && self.overlay.is_none()
+            && self.moving.is_none()
+            && self.pointer
+        {
+            return self.landing.1;
+        }
         let lowered = self.preferences.landing_layout
             && self.page == Page::Home
             && self.overlay.is_none()
@@ -625,6 +636,10 @@ impl State {
 
     /// Hover and pointer-down must not move the control before pointer-up.
     pub fn pointer_focus(&mut self, target: Target) {
+        // Stop an in-flight landing slide at the geometry used for this pointer event,
+        // before changing focus. Keep that geometry for hover, down and release.
+        let landing = self.landing();
+        self.landing = (landing, landing, Instant::now());
         if !self.pointer {
             self.dirty = true;
         }

@@ -1568,3 +1568,70 @@ fn the_wallpaper_first_home_lowers_the_rows_until_focus_moves_into_them() {
     assert_eq!(saved["landing_layout"], true);
     assert!(!Preferences::default().landing_layout);
 }
+
+#[test]
+fn wallpaper_first_pointer_hover_and_press_preserve_card_geometry() {
+    for reduced_motion in [false, true] {
+        let mut state = State::new(Preferences {
+            landing_layout: true,
+            reduced_motion,
+            ..Preferences::default()
+        });
+        state.set_inventory(demo_inventory(), None);
+        let card = controls(&state)
+            .into_iter()
+            .find(|control| matches!(control.target, Target::App(_)))
+            .unwrap();
+        let (x, y) = (
+            card.rect.x + card.rect.w / 2.,
+            card.rect.y + card.rect.h / 2.,
+        );
+        for target in [card.target.clone(), Target::Nav(0), card.target.clone()] {
+            state.pointer_focus(target);
+            state.tick();
+            let current = controls(&state);
+            let hovered = current
+                .iter()
+                .find(|control| control.target == card.target)
+                .unwrap();
+            assert_eq!(hovered.rect.y, card.rect.y);
+            assert_eq!(state.hit_test(&current, x, y), Some(card.target.clone()));
+        }
+        state.pressed = Some(card.target.clone());
+        state.pointer_focus(card.target.clone());
+        state.tick();
+        assert_eq!(state.hit_test(&controls(&state), x, y), state.pressed);
+        state.pressed = None;
+        assert_eq!(state.activate(), vec![Effect::Launch("netflix".into())]);
+        state.tick();
+        assert_eq!(state.landing(), 1.);
+        // Switching back to the remote resumes expansion, with no page scroll.
+        state.direction(Direction::Right, &controls(&state));
+        state.tick();
+        state.preferences.reduced_motion = true;
+        assert_eq!(state.landing(), 0.);
+        assert_eq!(state.scroll, 0.);
+    }
+}
+
+#[test]
+fn pointer_interrupts_a_landing_slide_until_remote_navigation_resumes() {
+    let mut state = State::new(Preferences {
+        landing_layout: true,
+        ..Preferences::default()
+    });
+    state.set_inventory(demo_inventory(), None);
+    state.direction(Direction::Down, &controls(&state));
+    state.tick();
+    assert!(state.animating());
+    let target = state.focus.clone();
+    state.pointer_focus(target);
+    let frozen = state.landing();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    state.tick();
+    assert_eq!(state.landing(), frozen);
+    state.direction(Direction::Up, &controls(&state));
+    state.tick();
+    state.preferences.reduced_motion = true;
+    assert_eq!(state.landing(), 1.);
+}

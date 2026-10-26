@@ -624,17 +624,19 @@ fn app_face(
                 .and_then(|source| assets.artwork.get(source))
         })
         .flatten();
-    if let Some(rgb) = artwork.as_ref().map(|image| &image.color) {
-        out.shape(
-            rect,
-            radius,
-            [
-                rgb[0] as f32 / 255.,
-                rgb[1] as f32 / 255.,
-                rgb[2] as f32 / 255.,
-                1.,
-            ],
-        );
+    if let Some([top, bottom]) = artwork.as_ref().map(|image| image.backdrop) {
+        let color = |rgb: [u8; 3]| rgb.map(|c| c as f32 / 255.);
+        let [top, bottom] = [color(top), color(bottom)];
+        if top == bottom {
+            out.shape(rect, radius, [top[0], top[1], top[2], 1.]);
+        } else {
+            out.draw.push(Draw::RoundedGradient(
+                rect,
+                radius,
+                [top[0], top[1], top[2], 1.],
+                [bottom[0], bottom[1], bottom[2], 1.],
+            ));
+        }
     } else {
         out.image(
             assets.path(format!("surfaces/{}.png", app.brand)),

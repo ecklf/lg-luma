@@ -352,6 +352,16 @@ try {
   const landingDown = await scenario('landing-down', 'home,down');
   assert.deepEqual(landingDown.focus, { App: 'netflix' });
   assert.equal(landingDown.scroll, 0);
+  for (const reducedMotion of [false, true]) {
+    await fs.writeFile(
+      preferences,
+      JSON.stringify({ show_weather: false, landing_layout: true, reduced_motion: reducedMotion }),
+    );
+    const clicked = await scenario(`landing-pointer-${reducedMotion}`, 'home,click:220:880');
+    assert.deepEqual(clicked.focus, { App: 'netflix' });
+    assert.ok(clicked.ui_text.includes('Desktop preview · Netflix will open on your TV.'));
+    assert.equal(clicked.scroll, 0);
+  }
   console.log(
     'Native smoke checks passed: rendering/alpha, navigation, persistence, SDL pointer input, DPI-aware glyphs, 4K capture and presentation profiling.',
   );
