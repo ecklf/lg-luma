@@ -1,5 +1,29 @@
 # lg-luma
 
+## 2.9.0
+
+### Minor Changes
+
+- a1838e6: Restore MSAA text rendering with no emboldening as the default and add Settings → System → Text rendering to choose analytic rendering. The saved choice applies when Luma next starts.
+
+### Patch Changes
+
+- 973ddf7: Add French (`fr`) translation: full `messages.json` catalog and locale registration in `i18n.rs` (language list, display name, and localized date formatting such as « MERCREDI 21 OCTOBRE » with the ordinal « 1ER » for the first day of the month). The bundled Inter subset already covers French accents and ligatures, so no font changes are needed.
+
+## 2.8.5
+
+### Patch Changes
+
+- b1dcbcf: Let LG's screen saver start while Luma is in front. SDL-webOS answers the TV's screen saver requests on Luma's behalf and declined them, because SDL suspends the screen saver unless `SDL_VIDEO_ALLOW_SCREENSAVER` allows it.
+- e353196: Add Polish (`pl`) translation: full `messages.json` catalog, locale registration in `i18n.rs` (language list, display name, and localized date formatting with genitive month names), and Latin Extended-A glyphs in the bundled Inter font so Polish letters such as ą, ę, ł, ś and ż no longer fall back to the CJK font.
+
+## 2.8.4
+
+### Patch Changes
+
+- 2a03caa: Read the app and input inventory directly from the TV when Luma runs in place of LG's Home, so an early root integration shows apps before Homebrew's service has started; other cases still use Homebrew.
+- 945598a: Retry the TV inventory while the TV service starts. Right after a cold boot or when the TV is short of memory, the Homebrew service that reads the app and input inventory can take longer than the 6.5 s Luna timeout. While no apps are shown yet, Luma now keeps loading and retries up to 5 times every 2 s before it shows the error and its Retry button.
+
 ## 2.8.3
 
 ### Patch Changes

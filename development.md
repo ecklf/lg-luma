@@ -230,11 +230,19 @@ draws with a texture-free GLES2 shader. No SVG parser runs on the TV. The shared
 handles font outlines. Installed app PNG/JPEG/WebP artwork, wallpaper photos, tile-background
 images and the webOS installation icon remain raster assets. See [assets.md](assets.md) for licenses.
 
-On webOS the window is created without MSAA, so text and logos use their analytic edge filters,
-which stay sharper through a TV's 2x scale-up of a 1080p graphics plane than 4x sample coverage
-at the same cost. Desktop previews keep multisampling; `LUMA_MSAA=4` or `0` overrides either.
-Text up to 16 physical pixels is emboldened by 0.25 px per edge (fading out by 28 px) so thin
-stems get an opaque core; `LUMA_EMBOLDEN` sets the strength.
+TV and desktop windows default to 4× MSAA with 2×/single-sample fallbacks and no text
+emboldening, restoring the text treatment used in v2.8.0. **Settings → System → Text rendering**
+offers **MSAA (default)** and **Analytic**. The `text_rendering` preference (`msaa` or `analytic`)
+is saved immediately and applies when Luma next starts because SDL selects MSAA when it creates
+the window. Missing or invalid preferences use MSAA. The setting shows a restart reminder.
+
+Analytic mode uses a single-sample window and analytic text/logo edge filters. Text up to 16
+physical pixels is emboldened by 0.25 px per edge, fading out by 28 px. The choice is visual:
+analytic rendering was preferred on a contributor's webOS 5 TV, while MSAA was preferred in
+manual Mali-G52 TV comparisons. `LUMA_MSAA=4` or `0` overrides the saved mode and its default
+emboldening. `LUMA_EMBOLDEN` overrides the strength independently. Diagnostics report the
+startup `text_rendering` configuration, and `last_presented.multisample_samples` reports the
+actual window's samples. Offscreen captures can still be single-sample.
 
 Shape edges use a one-drawable-pixel box filter centred on the edge, and rectangles (and logo
 placement) snap to whole drawable pixels. A straight edge is then a single step, and a one-pixel
@@ -306,8 +314,8 @@ are tessellated in font-em coordinates. Complete text runs are cached in static 
 independent of position/color/drawable density, avoiding a draw call per letter. CJK fonts open
 only when needed; there are no glyph bitmap atlases or full-font mesh exports.
 
-Desktop windows request 4× MSAA, with 2×/single-sample fallbacks if EGL rejects a configuration;
-webOS windows are single-sample unless `LUMA_MSAA=4` asks for samples. Multisampled text draws
+MSAA mode requests 4× MSAA, with 2×/single-sample fallbacks if EGL rejects a configuration.
+Analytic mode requests a single-sample window. Multisampled text draws
 intact glyph fills without inward offsets/fringe triangles, which can cross on very thin
 small-text strokes. Single-sample targets use a narrower half-pixel boundary fringe. Glyph
 origins/baselines are pixel-aligned per drawable axis. There is no LCD subpixel rendering, font

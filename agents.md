@@ -21,6 +21,9 @@ pnpm test:smoke
 pnpm run package
 ```
 
+When only Markdown (`.md`) files are updated, do not run checks, including formatting, lint,
+builds or tests.
+
 `pnpm check` does not execute tests. `pnpm test` is workspace unit tests; smoke scripts render
 desktop OpenGL and mock weather HTTP. Linux can use `xvfb-run -a pnpm test:smoke`. Tests must not
 contact real weather APIs or a TV. Respect any user instruction to use manual TV verification

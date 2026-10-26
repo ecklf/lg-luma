@@ -15,7 +15,7 @@
   Resized to a 2560px JPEG; generated wallpapers/thumbnails retain the source license.
 - `assets/wallpapers/northern-lights.jpg`: Unsplash photo `1531366936337-7c912a4589a7`,
   https://images.unsplash.com/photo-1531366936337-7c912a4589a7, Unsplash License.
-- Inter variable font (Latin + Cyrillic subset, `opsz` pinned at 14): Rasmus Andersson, SIL Open Font License 1.1, `assets/fonts/ofl.txt`.
+- Inter variable font (Latin, Latin Extended-A + Cyrillic subset, `opsz` pinned at 14): Rasmus Andersson, SIL Open Font License 1.1, `assets/fonts/ofl.txt`.
 - Noto Sans SC: copyright 2014–2021 Adobe, SIL OFL 1.1. Source/license in `assets/fonts/`;
   `tools/font-assets.mjs` pins the Google Fonts revision and checksums. Generated regular/medium
   subsets are renamed Luma CJK and retain copyright/license tables.

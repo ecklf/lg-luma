@@ -630,17 +630,19 @@ fn app_face(
                 .and_then(|source| assets.artwork.get(source))
         })
         .flatten();
-    if let Some(rgb) = artwork.as_ref().map(|image| &image.color) {
-        out.shape(
-            rect,
-            radius,
-            [
-                rgb[0] as f32 / 255.,
-                rgb[1] as f32 / 255.,
-                rgb[2] as f32 / 255.,
-                1.,
-            ],
-        );
+    if let Some([top, bottom]) = artwork.as_ref().map(|image| image.backdrop) {
+        let color = |rgb: [u8; 3]| rgb.map(|c| c as f32 / 255.);
+        let [top, bottom] = [color(top), color(bottom)];
+        if top == bottom {
+            out.shape(rect, radius, [top[0], top[1], top[2], 1.]);
+        } else {
+            out.draw.push(Draw::RoundedGradient(
+                rect,
+                radius,
+                [top[0], top[1], top[2], 1.],
+                [bottom[0], bottom[1], bottom[2], 1.],
+            ));
+        }
     } else {
         out.image(
             assets.path(format!("surfaces/{}.png", app.brand)),
@@ -1814,6 +1816,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Temperature) => language.t("temperature"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::Appearance) => language.t("uiScale"),
+                Some(Subpage::TextRendering) => language.t("textRendering"),
                 None => "",
             };
             let parent_width = assets.width(label, text(20.8, 550, -0.02)) + 2.;
@@ -1951,6 +1954,16 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 .into_iter()
                 .map(|option| (option.name(), None, option == language))
                 .collect(),
+            Subpage::TextRendering => crate::text_rendering::TextRendering::ALL
+                .into_iter()
+                .map(|mode| {
+                    (
+                        language.t(mode.label_key()),
+                        Some(language.t("textRenderingRestart")),
+                        mode == state.preferences.text_rendering,
+                    )
+                })
+                .collect(),
         };
         for (index, (title, description, selected)) in options.into_iter().enumerate() {
             let h = if description.is_some() { 90.7 } else { 72. };
@@ -2010,7 +2023,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     true,
                 ),
                 (
-                    7,
+                    crate::state::INTERFACE_SCALE_ROW,
                     "uiScale",
                     "grid",
                     Some(language.t(state.preferences.ui_scale.keys().0)),
@@ -2079,7 +2092,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         }
         WEATHER_SECTION => weather_settings(out, state, assets),
         SYSTEM_SECTION => {
-            for (position, (index, title, icon)) in [
+            for (position, (index, title, icon, value, chevron)) in [
                 (
                     3,
                     language.t(if state.loading {
@@ -2088,8 +2101,17 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                         "refreshApps"
                     }),
                     "refresh",
+                    None,
+                    false,
                 ),
-                (5, language.t("quitApp"), "power"),
+                (
+                    7,
+                    language.t("textRendering"),
+                    "type",
+                    Some(language.t(state.preferences.text_rendering.label_key())),
+                    true,
+                ),
+                (5, language.t("quitApp"), "power", None, false),
             ]
             .into_iter()
             .enumerate()
@@ -2103,10 +2125,10 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                         rect: Rect::new(640., 164.8 + position as f32 * 84. - s, 1120., 72.),
                         title,
                         icon: Some(icon),
-                        value: None,
+                        value,
                         description: None,
                         selected: false,
-                        chevron: false,
+                        chevron,
                     },
                 );
             }

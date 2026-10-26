@@ -22,6 +22,7 @@ mod scroll_preview;
 mod sdl_events;
 mod state;
 mod storage;
+mod text_rendering;
 mod vector;
 mod view;
 mod weather;
@@ -559,6 +560,10 @@ fn run() -> Result<(), String> {
         // Magic Remotes send the separate Exit key for a long Back press.
         // Claim it before video init so the compositor does not close Luma.
         sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_EXIT", "true");
+        // SDL-webOS answers tvpower's screen saver requests with `ack: !suspend_screensaver`, and
+        // SDL suspends the screen saver unless this hint allows it: LG's screen saver never
+        // started while Luma was in front. A launcher has no video to protect.
+        sdl2::hint::set("SDL_VIDEO_ALLOW_SCREENSAVER", "1");
         // In place of LG's Home executable, SDL's own registration cannot reach the bus under
         // LG's Home role; Luma registers with sam itself below (lifecycle v2).
         if platform::runs_as_lg_home() {
@@ -678,16 +683,17 @@ fn run() -> Result<(), String> {
     };
     let mut opened = None;
     let mut failures = Vec::new();
-    // On the TV, text and logos stay crisper through the panel's 2x scale-up with their
-    // analytic edge filters than with 4x MSAA coverage, at the same cost. Desktop previews
-    // keep multisampling (LUMA_MSAA=4 or 0 overrides either), with a non-MSAA fallback.
-    let sample_counts: &[u8] = match std::env::var("LUMA_MSAA").as_deref() {
-        Ok("4") => &[4, 2, 0],
-        Ok("0") => &[0],
-        _ if webos => &[0],
-        _ => &[4, 2, 0],
-    };
-    for &samples in sample_counts {
+    // MSAA is the default on TV and desktop. The System setting is applied only at launch.
+    let text_config = text_rendering::Configuration::new(
+        state.preferences.text_rendering,
+        std::env::var("LUMA_MSAA").ok().as_deref(),
+        std::env::var("LUMA_EMBOLDEN").ok().as_deref(),
+    );
+    eprintln!(
+        "Luma text rendering: {:?}, embolden {} px",
+        text_config.mode, text_config.embolden
+    );
+    for &samples in text_config.sample_counts {
         attributes.set_multisample_buffers(u8::from(samples > 0));
         attributes.set_multisample_samples(samples);
         match create_window() {
@@ -710,7 +716,8 @@ fn run() -> Result<(), String> {
     if let Err(error) = video.gl_set_swap_interval(1) {
         eprintln!("VSync: {error}");
     }
-    let mut renderer = renderer::Renderer::new(&assets.root.join("font.ttf"), webos)?;
+    let mut renderer =
+        renderer::Renderer::new(&assets.root.join("font.ttf"), webos, text_config.embolden)?;
     startup_stage("renderer");
     // Redraw only what changed since the back buffer's frame (LUMA_PARTIAL=0 draws in full).
     let partial = (std::env::var("LUMA_PARTIAL").as_deref() != Ok("0"))
@@ -1597,6 +1604,7 @@ fn run() -> Result<(), String> {
             "display_mode": display_mode,
             "drawable_is_4k": Size::new(dw, dh).is_4k(), "presented_frames": presented,
             "graphics": renderer.info, "last_presented": renderer.stats(), "capture": captured,
+            "text_rendering": text_config,
             "profile": options.profile_frames.map(|_| profile.summary()),
             "partial_redraw": partial.as_ref().map(egl_damage::PartialUpdate::describe),
             "redrawn_fraction_mean": redrawn_total / presented.max(1) as f64,

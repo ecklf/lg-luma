@@ -283,10 +283,47 @@ try {
   const clockFocus = await scenario('clock-format-focus', `${clockEditor},enter,down`);
   assert.equal(clockFocus.subpage, 'ClockFormat');
   assert.deepEqual(clockFocus.focus, { Choice: 1 });
-  const system = await scenario('system-settings', 'settings,down,down,down,down,down,right,down');
+  const system = await scenario(
+    'system-settings',
+    'settings,down,down,down,down,down,right,down,down',
+  );
   assert.deepEqual(system.focus, { Setting: 5 });
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
   assert.ok(system.ui_text.includes('Quit app'));
+  const scale = await scenario(
+    'interface-scale',
+    'settings,down,right,down,down,down,down,down,right,down,down,enter',
+  );
+  assert.equal(scale.subpage, 'Appearance');
+  assert.equal(scale.preferences.ui_scale, 'larger');
+  assert.ok(scale.ui_text.includes('Extra large'));
+  const scaleBack = await scenario(
+    'interface-scale-back',
+    'settings,down,right,down,down,down,down,down,right,back',
+  );
+  assert.deepEqual(scaleBack.focus, { Setting: 8 });
+  await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
+  assert.ok(system.ui_text.includes('Text rendering'));
+  const textOptions = 'settings,down,down,down,down,down,right,down,enter';
+  const textRendering = await scenario('text-rendering-options', textOptions);
+  assert.equal(textRendering.subpage, 'TextRendering');
+  assert.deepEqual(textRendering.focus, { Choice: 0 });
+  assert.ok(textRendering.ui_text.includes('MSAA (default)'));
+  assert.ok(textRendering.ui_text.includes('Analytic'));
+  assert.ok(textRendering.ui_text.includes('Restart Luma to apply changes.'));
+  const analyticSaved = await scenario('text-rendering-saved', `${textOptions},down,enter`);
+  assert.equal(analyticSaved.preferences.text_rendering, 'analytic');
+  assert.deepEqual(analyticSaved.focus, { Setting: 7 });
+  assert.equal(analyticSaved.render.text_rendering.mode, 'msaa', 'Mode changes apply next launch');
+  const analytic = await scenario('text-rendering-analytic', 'home,down');
+  assert.equal(analytic.render.text_rendering.mode, 'analytic');
+  assert.equal(analytic.render.text_rendering.embolden, 0.25);
+  assert.equal(analytic.render.last_presented.multisample_samples, 0);
+  const msaaSaved = await scenario('text-rendering-msaa-saved', `${textOptions},up,enter`);
+  assert.equal(msaaSaved.preferences.text_rendering, 'msaa');
+  const msaa = await scenario('text-rendering-msaa', 'home,down');
+  assert.equal(msaa.render.text_rendering.mode, 'msaa');
+  assert.equal(msaa.render.text_rendering.embolden, 0);
   // The exposed card fragments are real pointer targets, including after remote scrolling.
   const edgeFavorites = [
     'netflix',
