@@ -32,23 +32,29 @@ https://github.com/user-attachments/assets/0c3061bf-c158-417e-85a4-da3eb84ecf08
 
 ## Compatibility
 
-The following TV configurations have been reported working with Luma:
+> [!NOTE]
+> Luma should start on any TV running webOS 4 or newer. The following configurations have been
+> confirmed to work by the community. Home takeover support varies, as noted below:
 
-| TV        | Model identifier | webOS | Takeover Support |
-| --------- | ---------------- | ----- | ---------------- |
-| LG UN7100 | `49UN71006LB`    | 5     | ✅               |
-| LG C1     | `OLED48C1KNB`    | 6     | ✅               |
-| LG C2     | `OLED42C2PSA`    | 25    | ✅               |
-| LG C2     | `OLED65C2PSA`    | 26    | ✅               |
-| LG C3     | `OLED65C31LA`    | 26    | ✅               |
-| LG C3     | `OLED65C36LC`    | 26    | ✅               |
-| LG C4     | `OLED42C4*`      | 25    | —                |
-| LG C5     | `OLED55C57LA`    | 26    | ✅               |
-| LG G3     | `OLED??G3*`      | 25    | —                |
+| TV        | Model identifier | webOS  | Takeover Support |
+| --------- | ---------------- | ------ | ---------------- |
+| LG C8     | `OLED??C8*`      | 4      | ❌               |
+| LG UM7450 | `UM74507LA`      | 4      | ❌               |
+| LG UN7100 | `49UN71006LB`    | 5      | ✅               |
+| LG C1     | `OLED48C1KNB`    | 6      | ✅               |
+| LG B2     | `OLED65B29LA`    | 24     | ✅               |
+| LG C2     | `OLED42C2PSA`    | 25     | ✅               |
+| LG C2     | `OLED65C2PSA`    | 26     | ✅               |
+| LG C3     | `OLED65C31LA`    | 26     | ✅               |
+| LG C3     | `OLED65C36LC`    | 26     | ✅               |
+| LG C4     | `OLED42C4*`      | 25     | —                |
+| LG C5     | `OLED55C57LA`    | 26     | ✅               |
+| LG G3     | `OLED??G3*`      | 25     | —                |
 
 > [!NOTE]
 > Model identifiers containing wildcards are inferred: `??` is an unknown screen size and `*` is an
-> unconfirmed regional suffix. `—` indicates information that has not been reported.
+> unconfirmed regional suffix. `—` indicates information that has not been reported. `❌` means
+> Luma runs on the TV, but Home takeover was reported not to work.
 
 ## Installation
 
@@ -63,7 +69,7 @@ https://github.com/ecklf/lg-luma/releases/latest/download/repo.json
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_2.8.5_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_2.10.1_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -80,11 +86,14 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 
 > [!NOTE]
 > Takeover is supported on **webOS 5, 6, 25 and 26**.\
-> Disable takeover before uninstalling Luma.
+> The takeover does not delete LG Home: it remains underneath a temporary mount, which is cleared by
+> a reboot. If Luma is uninstalled first, LG Home returns on reboot, but the separate takeover boot
+> hook remains and logs an error because it can no longer find Luma. No TV reset is needed. For
+> clean removal, disable takeover before uninstalling.
 
-Install Luma and verify that it opens normally. Disable any Home mapping e.g.
-[LG Input Hook](https://repo.webosbrew.org/apps/org.webosbrew.inputhook/) and any other Home
-replacement, then run in the TV's root SSH shell:
+Install Luma and verify that it opens normally. Disable any Home-button mapping in
+[LG Input Hook](https://github.com/Simon34545/lginputhook) (remove its Home-key action) and any
+other Home replacement, then run in the TV's root SSH shell:
 
 If you enabled Lumas autostart method earlier, disable it first:
 
@@ -189,7 +198,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_2.8.5_arm.ipk
+dist/com.ecklf.luma_2.10.1_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png
