@@ -303,15 +303,8 @@ fn profile_skip(command: &Draw) -> bool {
 
 /// Stem emboldening for small text, in physical pixels per edge: thin stems get an opaque
 /// core instead of only grey edge pixels, which a TV's 2x scale-up would soften further.
-/// Full strength up to 16 physical pixels, none from 28. LUMA_EMBOLDEN sets the strength.
-fn embolden(physical_size: f32) -> f32 {
-    static STRENGTH: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
-    let strength = *STRENGTH.get_or_init(|| {
-        std::env::var("LUMA_EMBOLDEN")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(0.25)
-    });
+/// Full strength up to 16 physical pixels, none from 28. Zero in the default MSAA mode.
+fn embolden(physical_size: f32, strength: f32) -> f32 {
     strength * ((28. - physical_size) / 12.).clamp(0., 1.)
 }
 
@@ -333,6 +326,7 @@ pub struct Renderer {
     program: GLuint,
     vector_program: GLuint,
     text_program: GLuint,
+    text_embolden: f32,
     buffer: GLuint,
     vao: GLuint,
     white: Texture,
@@ -361,7 +355,7 @@ impl Renderer {
         self.fade = (next != [0.; 8]).then_some(next);
     }
 
-    pub fn new(font: &Path, gles: bool) -> Result<Self, String> {
+    pub fn new(font: &Path, gles: bool, text_embolden: f32) -> Result<Self, String> {
         let directory = font.parent().ok_or("Invalid font path")?;
         let mut fonts = HashMap::new();
         // Open only the common face. Metrics and outlines stay lazy even when
@@ -453,6 +447,7 @@ impl Renderer {
             program,
             vector_program,
             text_program,
+            text_embolden,
             buffer,
             vao,
             white,
@@ -1398,7 +1393,7 @@ impl Renderer {
                             mesh,
                             [1., 1., origin[0], origin[1]],
                             *tint,
-                            embolden(size),
+                            embolden(size, self.text_embolden),
                         );
                         paint_bound = false;
                     }

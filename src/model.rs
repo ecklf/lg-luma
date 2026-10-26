@@ -112,6 +112,9 @@ pub struct Preferences {
     pub temperature_unit: Unit,
     #[serde(deserialize_with = "crate::i18n::deserialize_language")]
     pub language: Language,
+    /// Applied at launch because MSAA is selected when SDL creates the GL window.
+    #[serde(deserialize_with = "crate::text_rendering::deserialize")]
+    pub text_rendering: crate::text_rendering::TextRendering,
 }
 
 impl Default for Preferences {
@@ -132,6 +135,7 @@ impl Default for Preferences {
             weather_location: None,
             temperature_unit: Unit::Celsius,
             language: Language::En,
+            text_rendering: crate::text_rendering::TextRendering::default(),
         }
     }
 }

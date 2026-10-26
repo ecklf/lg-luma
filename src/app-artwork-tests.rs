@@ -87,14 +87,111 @@ fn supported_icons_decode_to_bounded_pixels_and_runtime_card_colours() {
     for format in [ImageFormat::Png, ImageFormat::Jpeg, ImageFormat::WebP] {
         let artwork = decode(&encoded(format, 400, 200, [48, 80, 112, 255])).unwrap();
         assert_eq!(artwork.pixels.dimensions(), (256, 128));
-        for (actual, expected) in artwork.color.into_iter().zip([48u8, 80, 112]) {
-            assert!(actual.abs_diff(expected) <= 2);
+        for stop in artwork.backdrop {
+            for (actual, expected) in stop.into_iter().zip([48u8, 80, 112]) {
+                assert!(actual.abs_diff(expected) <= 2);
+            }
         }
     }
+    // Nothing visible at all: the neutral slate backdrop.
     let transparent = decode(&encoded(ImageFormat::Png, 32, 32, [255, 0, 0, 0])).unwrap();
-    assert_eq!(transparent.color, [20; 3]);
+    assert!(
+        transparent
+            .backdrop
+            .iter()
+            .all(|stop| luminance(*stop) < 0.2)
+    );
     assert!(decode(b"not an image").is_none());
     assert!(decode(&encoded(ImageFormat::Png, 2049, 1, [0; 4])).is_none());
+}
+
+fn luminance(rgb: [u8; 3]) -> f32 {
+    let linear = |c: u8| {
+        let c = c as f32 / 255.;
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * linear(rgb[0]) + 0.7152 * linear(rgb[1]) + 0.0722 * linear(rgb[2])
+}
+fn contrast(a: [u8; 3], b: [u8; 3]) -> f32 {
+    let (a, b) = (luminance(a), luminance(b));
+    (a.max(b) + 0.05) / (a.min(b) + 0.05)
+}
+/// A logo of one colour on a transparent background: a centred block plus text-like bars.
+fn logo(rgb: [u8; 3]) -> RgbaImage {
+    RgbaImage::from_fn(200, 200, |x, y| {
+        let block = (60..140).contains(&x) && (40..110).contains(&y);
+        let bars = (30..170).contains(&x) && (130..160).contains(&y) && x % 12 < 7;
+        if block || bars {
+            Rgba([rgb[0], rgb[1], rgb[2], 255])
+        } else {
+            Rgba([0; 4])
+        }
+    })
+}
+
+#[test]
+fn transparent_logos_get_a_contrasting_gradient_in_their_own_hue() {
+    for (rgb, light_backdrop) in [
+        ([255, 255, 255], false),
+        ([235, 235, 240], false),
+        ([20, 20, 24], true),
+        ([200, 30, 40], true),
+        ([30, 80, 200], true),
+        ([250, 210, 40], false),
+        ([40, 200, 120], false),
+    ] {
+        let backdrop = decode(&png(logo(rgb))).unwrap().backdrop;
+        for stop in backdrop {
+            assert!(
+                contrast(stop, rgb) >= 3.,
+                "{rgb:?} on {stop:?}: contrast {}",
+                contrast(stop, rgb)
+            );
+            assert_eq!(luminance(stop) > 0.3, light_backdrop, "{rgb:?} on {stop:?}");
+        }
+        assert_ne!(
+            backdrop[0], backdrop[1],
+            "{rgb:?}: a gradient, not a flat fill"
+        );
+        assert!(
+            luminance(backdrop[0]) > luminance(backdrop[1]),
+            "{rgb:?}: lighter at the top"
+        );
+        let saturated = rgb.iter().max().unwrap() - rgb.iter().min().unwrap() > 100;
+        if saturated {
+            // The backdrop leans to the logo's strongest channel.
+            let strongest = (0..3).max_by_key(|&i| rgb[i]).unwrap();
+            for stop in backdrop {
+                let lean = (0..3).max_by_key(|&i| stop[i]).unwrap();
+                assert_eq!(lean, strongest, "{rgb:?} on {stop:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn transparent_edges_keep_the_logo_colour_when_scaled() {
+    // White on fully transparent black, as many PNG exporters write it: scaling must not
+    // pull the transparent black into the antialiased edge, and the GPU's linear filter
+    // must find the logo's colour in the transparent texels next to it.
+    let image = RgbaImage::from_fn(600, 600, |x, y| {
+        if (150..450).contains(&x) && (250..350).contains(&y) {
+            Rgba([255, 255, 255, 255])
+        } else {
+            Rgba([0, 0, 0, 0])
+        }
+    });
+    let pixels = decode(&png(image)).unwrap().pixels;
+    for pixel in pixels.pixels().filter(|pixel| pixel[3] > 0) {
+        assert!(pixel[0].min(pixel[1]).min(pixel[2]) >= 245, "{pixel:?}");
+    }
+    let beside = pixels.get_pixel(128, 103);
+    assert_eq!(beside[3], 0);
+    assert!(beside[0] >= 245, "transparent neighbour {beside:?}");
 }
 
 #[test]
@@ -109,7 +206,10 @@ fn transparent_logos_reaching_the_edges_keep_the_neutral_card() {
             Rgba([0; 4])
         }
     });
-    assert_eq!(decode(&png(ring)).unwrap().color, [20; 3]);
+    let backdrop = decode(&png(ring)).unwrap().backdrop;
+    for stop in backdrop {
+        assert!(contrast(stop, [150, 100, 210]) >= 3., "{stop:?}");
+    }
     // Opaque artwork with transparent rounded corners still takes its edge colour.
     let rounded = RgbaImage::from_fn(130, 130, |x, y| {
         let inset = |v: u32| v.min(129 - v) as f32;
@@ -120,9 +220,10 @@ fn transparent_logos_reaching_the_edges_keep_the_neutral_card() {
             Rgba([40, 90, 160, 255])
         }
     });
-    let color = decode(&png(rounded)).unwrap().color;
-    for (actual, expected) in color.into_iter().zip([40u8, 90, 160]) {
-        assert!(actual.abs_diff(expected) <= 2);
+    for stop in decode(&png(rounded)).unwrap().backdrop {
+        for (actual, expected) in stop.into_iter().zip([40u8, 90, 160]) {
+            assert!(actual.abs_diff(expected) <= 2);
+        }
     }
 }
 
@@ -287,7 +388,7 @@ fn hundreds_of_apps_stay_within_the_cache_bounds_across_refreshes() {
         Some(Artwork {
             key: String::new(),
             pixels: RgbaImage::new(256, 256),
-            color: [20; 3],
+            backdrop: [[20; 3]; 2],
         })
     });
     for number in 0..300 {
@@ -317,7 +418,7 @@ fn decoded_cache_evicts_old_icons_when_scrolling_through_many_apps() {
         Some(Artwork {
             key: String::new(),
             pixels: RgbaImage::new(256, 256),
-            color: [20; 3],
+            backdrop: [[20; 3]; 2],
         })
     });
     for number in 0..80 {
@@ -397,7 +498,7 @@ fn visible_cards_switch_from_fallback_to_installed_artwork_without_an_icon_map()
             _ => None,
         })
         .unwrap();
-    assert_eq!(image.color, [24, 40, 56]);
+    assert_eq!(image.backdrop, [[24, 40, 56]; 2]);
 }
 
 #[test]
