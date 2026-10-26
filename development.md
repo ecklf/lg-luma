@@ -663,7 +663,13 @@ payload. Startup probes `/media/developer/<appid>/`, `/media/developer/temp/<app
 `/media/internal/.<appid>/`, selecting a directory the jailed app can actually create and write.
 Production `/media/cryptofs` installations prefer internal storage. `/media/developer/temp` is
 on the persistent developer partition, not the reboot-cleared `/tmp`. No settings are placed
-in `/tmp` and no system/app-payload permissions are widened. Existing JSON preferences and a
+in `/tmp` and no system/app-payload permissions are widened. Root Home takeover reuses these
+same app-owned directories, preferring existing app-owned preferences over root-owned fallback
+files left by an earlier takeover. It does not merge or delete duplicate preferences. Preference
+and weather-cache saves retain the directory owner's UID/GID so the normal app can still read
+them after Home is disabled. Symlink storage directories remain rejected. The executable Home
+method uses its source installation for storage precedence and legacy migration, not LG's
+`/usr/bin` executable path. Existing JSON preferences and a
 valid weather cache from beside this installation's old executable are imported once, without
 overwriting the chosen destination. Invalid existing preferences still report an error.
 Startup prints `Luma persistent storage:` with the chosen path. Desktop preview retains the legacy
