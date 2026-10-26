@@ -96,12 +96,10 @@ pub struct Preferences {
     pub background: String,
     pub show_home_names: bool,
     pub show_app_names: bool,
-    /// The chosen clock format; until one is chosen, the interface language decides.
+    /// The chosen clock format, else the TV's where it names one (`tv_hour_24`); while
+    /// neither, the interface language decides.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hour_24: Option<bool>,
-    /// The TV's own clock format, read at start and never saved.
-    #[serde(skip)]
-    pub tv_hour_24: Option<bool>,
     pub reduced_motion: bool,
     pub show_seconds: bool,
     /// Optional name appended to the Home greeting ("Good evening, Ana."). Empty = plain greeting.
@@ -131,7 +129,6 @@ impl Default for Preferences {
             show_home_names: false,
             show_app_names: true,
             hour_24: None,
-            tv_hour_24: None,
             reduced_motion: false,
             show_seconds: false,
             greeting_name: String::new(),
@@ -204,12 +201,10 @@ impl Preferences {
         }
     }
 
-    /// Whether the clock shows 24 hours: the chosen format, else the TV's, else 12 hours
-    /// for English and 24 for the other interface languages, which all use it by convention.
+    /// Whether the clock shows 24 hours: the format set, or else 12 hours for English
+    /// and 24 for the other interface languages, which all use it by convention.
     pub fn hour_24_clock(&self) -> bool {
-        self.hour_24
-            .or(self.tv_hour_24)
-            .unwrap_or(self.language != Language::En)
+        self.hour_24.unwrap_or(self.language != Language::En)
     }
 
     pub fn sanitize(&mut self) {

@@ -937,8 +937,10 @@ fn run() -> Result<(), String> {
                     }
                 }
                 Response::Clock(hour_24) => {
-                    state.preferences.tv_hour_24 = hour_24;
-                    state.dirty = true;
+                    if state.preferences.hour_24.is_none() {
+                        state.preferences.hour_24 = hour_24;
+                        state.dirty = true;
+                    }
                 }
                 Response::Launched(result) => {
                     state.launching = false;

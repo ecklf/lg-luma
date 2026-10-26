@@ -1557,19 +1557,14 @@ fn the_clock_follows_the_tv_region_before_the_language() {
     );
     assert_eq!(tv_hour_24(&json!({})), None);
 
-    let mut preferences = Preferences {
-        tv_hour_24: Some(true),
-        ..Default::default()
-    };
+    // An unset format takes the TV's; a chosen one is kept.
+    let mut preferences: Preferences = serde_json::from_str(r#"{"language": "en"}"#).unwrap();
+    assert!(!preferences.hour_24_clock());
+    preferences.hour_24 = preferences
+        .hour_24
+        .or(tv_hour_24(&locales("en-GB", "en-GB")));
     assert!(
         preferences.hour_24_clock(),
         "an English UI on a British TV: 24 hours"
-    );
-    preferences.hour_24 = Some(false);
-    assert!(!preferences.hour_24_clock(), "a chosen format still wins");
-    assert!(
-        !serde_json::to_string(&preferences)
-            .unwrap()
-            .contains("tv_hour_24")
     );
 }
