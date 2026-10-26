@@ -132,6 +132,8 @@ and `show_app_names`. The legacy `show_names` preference does not override these
 captions do not reserve layout space.
 The **Greeting** subpage contains **Name** and **Clear name**. Selecting Name opens the text keyboard
 (the system keyboard on the TV) and the name is appended to the Home greeting ("Good evening, Ana.").
+Long greetings scale down to fit their existing single-line area, centred vertically without
+moving the weather summary or favorite cards. Short greetings retain their original size.
 The keyboard starts empty; closing it without a name preserves the saved value. Clear name removes
 it. Preferences are saved when the keyboard closes, including automatic system-keyboard dismissal.
 Back from either subpage restores its General row. Input name removal also uses **Clear name**.
