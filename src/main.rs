@@ -6,6 +6,7 @@ mod app_artwork;
 mod app_subscription;
 mod branding;
 mod damage;
+mod design;
 mod diagnostics;
 mod egl_damage;
 mod feeds;

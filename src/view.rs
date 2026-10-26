@@ -1,5 +1,6 @@
 //! Screen geometry and styling mirror the web UI's 1920×1080 / 16px-rem layout.
 use crate::{
+    design,
     home_grid::BlockKind,
     i18n::Language,
     model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode},
@@ -222,7 +223,8 @@ impl Scene {
                 | Draw::Shadow(_, _, _, color)
                 | Draw::Text(_, _, _, color, _)
                 | Draw::TintedImage(_, _, _, _, color)
-                | Draw::AppImage(_, _, color) => apply(color),
+                | Draw::AppImage(_, _, color)
+                | Draw::Picture(_, _, _, color) => apply(color),
                 Draw::RoundedGradient(_, _, a, b) => {
                     apply(a);
                     apply(b);
@@ -963,10 +965,9 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             BlockKind::Greeting => greeting_block(out, state, assets, now, rect),
             BlockKind::Weather => weather_block(out, state, assets, theme, rect),
             BlockKind::Favorites => favorites_block(out, state, assets, rect),
-            BlockKind::Inputs => inputs_block(out, state, assets, rect),
-            BlockKind::Crypto | BlockKind::Premieres => {
-                widget_block(out, state, assets, theme, block.kind, rect, now)
-            }
+            BlockKind::Inputs => inputs_block(out, state, assets, theme, block, rect),
+            BlockKind::Crypto => crypto_block(out, state, assets, theme, rect),
+            BlockKind::Premieres => premieres_block(out, state, assets, theme, block, rect, now),
         }
         // Blocks without controls of their own are still focusable, to edit them.
         if out.controls.len() == controls {
@@ -1098,10 +1099,177 @@ fn greeting_block(
     );
 }
 
-/// The card behind widgets, in the theme's surface.
+/// The card behind a glance widget (weather, crypto) in themes with cards, in the theme's
+/// surface; see docs/design.md.
 fn widget_card(out: &mut Scene, theme: &crate::themes::Theme, rect: Rect) {
-    out.shape(rect, theme.radius, c(theme.surface, theme.surface_alpha));
-    out.border(rect, theme.radius, 1., c(0xffffff, 0.07));
+    out.shape(rect, design::RADIUS, c(theme.surface, theme.surface_alpha));
+    out.border(rect, design::RADIUS, 1., c(0xffffff, 0.07));
+}
+
+/// A row's header (docs/design.md): its title at the block's top-left and, at its right, meta
+/// such as how fresh the data is or which cards show.
+fn row_header(out: &mut Scene, assets: &Assets, rect: Rect, title: &str, meta: &[String]) {
+    let mut right = rect.x + rect.w;
+    for part in meta.iter().rev() {
+        let style = design::meta();
+        let w = assets.width(part, style) + 4.;
+        out.text(
+            part,
+            Rect::new(right - w, rect.y + 7., w, 20.),
+            style,
+            design::ink(0.55),
+            false,
+        );
+        right -= w + 20.;
+    }
+    let style = design::section();
+    let w = right - rect.x - 12.;
+    out.text(
+        fit(assets, title, style, w),
+        Rect::new(rect.x, rect.y, w, 31.),
+        style,
+        WHITE,
+        false,
+    );
+}
+
+/// Every card in a row (docs/design.md): a soft shadow, the theme's surface with a highlight
+/// at the top and a hairline edge. Focus brightens it and rings it; `edge` colours the hairline
+/// for a state such as live.
+fn card(
+    out: &mut Scene,
+    theme: &crate::themes::Theme,
+    rect: Rect,
+    focused: bool,
+    edge: Option<Color>,
+) {
+    let radius = design::RADIUS;
+    out.shadow(
+        rect,
+        radius,
+        if focused { 34. } else { 22. },
+        if focused { 14. } else { 9. },
+        if focused { 0.4 } else { 0.16 },
+    );
+    out.shape(
+        rect,
+        radius,
+        c(theme.surface, (theme.surface_alpha + 0.08).min(0.92)),
+    );
+    out.draw.push(Draw::RoundedGradient(
+        rect,
+        radius,
+        c(0xffffff, if focused { 0.16 } else { 0.07 }),
+        c(0xffffff, if focused { 0.07 } else { 0.015 }),
+    ));
+    out.border(
+        rect,
+        radius,
+        1.,
+        edge.unwrap_or(c(0xffffff, if focused { 0.24 } else { 0.08 })),
+    );
+    if focused {
+        out.ring(rect, radius);
+    }
+}
+
+/// A row with nothing to show yet: one ghost card with the message, where its cards go.
+fn ghost(out: &mut Scene, assets: &Assets, rect: Rect, message: &str) {
+    out.shape(rect, design::RADIUS, c(0xffffff, 0.04));
+    out.border(rect, design::RADIUS, 1., c(0xffffff, 0.1));
+    let style = design::body().leading(1.4);
+    out.text(
+        message,
+        Rect::new(
+            rect.x + 28.,
+            rect.y
+                + (rect.h
+                    - style.size * 1.4 * assets.lines(message, style, rect.w - 56.).min(2) as f32)
+                    / 2.,
+            rect.w - 56.,
+            style.size * 2.8,
+        ),
+        style,
+        design::ink(0.62),
+        false,
+    );
+}
+
+/// Draws a row's cards (docs/design.md): the whole ones in view and the ones cut off at either
+/// edge, each clipped to itself, under the edge fades, with a control for each visible card.
+/// Returns the first card in view.
+fn track_cards(
+    out: &mut Scene,
+    state: &State,
+    track: design::Track,
+    kind: BlockKind,
+    count: usize,
+    mut draw: impl FnMut(&mut Scene, usize, Rect) -> Target,
+) -> usize {
+    let first = track.first(state.row_scroll.get(&kind).copied().unwrap_or(0), count);
+    // Like the favourites, a row reaches past the content's margins to the screen's edge.
+    let viewport = state.content_viewport();
+    let clip = overlap(
+        Rect::new(
+            track.clip_left,
+            track.y - 16.,
+            track.clip_right - track.clip_left,
+            track.height + 32.,
+        ),
+        Rect::new(0., viewport.y, 1920., viewport.h),
+    );
+    let (left, right) = (first > 0, count > first + track.columns);
+    if left || right {
+        let end = track.x + track.columns as f32 * track.pitch - design::GAP;
+        out.draw.push(Draw::EdgeFadeX(Some([
+            if left { track.clip_left } else { 0. },
+            if left { track.x } else { 0. },
+            if right { end } else { 4000. },
+            if right { track.clip_right } else { 4001. },
+        ])));
+    }
+    for index in first.saturating_sub(1)..count.min(first + track.columns + 1) {
+        let card = track.card(index, first);
+        let shown = overlap(card, clip);
+        if shown.w <= 0. {
+            continue;
+        }
+        out.draw
+            .push(Draw::Clip(Some(overlap(card.inset(-10.), clip))));
+        let target = draw(out, index, card);
+        if shown.w > 40. {
+            out.control(target, shown, true);
+        }
+    }
+    if left || right {
+        out.draw.push(Draw::EdgeFadeX(None));
+    }
+    out.draw.push(Draw::Clip(Some(state.content_viewport())));
+    first
+}
+
+/// The part of `a` inside `b`, empty when they do not meet.
+fn overlap(a: Rect, b: Rect) -> Rect {
+    let x = a.x.max(b.x);
+    let y = a.y.max(b.y);
+    Rect::new(
+        x,
+        y,
+        ((a.x + a.w).min(b.x + b.w) - x).max(0.),
+        ((a.y + a.h).min(b.y + b.h) - y).max(0.),
+    )
+}
+
+/// "3–5 / 12" (or "3 / 12" for one whole card) once a row has more cards than show.
+fn row_position(track: &design::Track, first: usize, count: usize) -> Option<String> {
+    (count > track.columns).then(|| {
+        let last = (first + track.columns).min(count);
+        if last == first + 1 {
+            format!("{last} / {count}")
+        } else {
+            format!("{}–{last} / {count}", first + 1)
+        }
+    })
 }
 
 fn weather_block(
@@ -1226,30 +1394,38 @@ fn favorites_block(out: &mut Scene, state: &State, assets: &Assets, rect: Rect) 
 }
 
 /// Input cards in rows, as many across as whole cards fit the block.
-fn inputs_block(out: &mut Scene, state: &State, assets: &Assets, rect: Rect) {
-    let inputs: Vec<_> = state
-        .inventory
-        .inputs
-        .iter()
-        .filter(|input| state.preferences.input_visible(input))
-        .collect();
-    let columns = crate::home_grid::input_columns(rect.w);
-    let gap = crate::home_grid::INPUT_GAP;
-    let width = (rect.w - (columns - 1) as f32 * gap) / columns as f32;
-    let pitch = crate::home_grid::CELL_H + crate::home_grid::GAP;
-    for (index, input) in inputs.iter().enumerate() {
-        let card = Rect::new(
-            rect.x + (index % columns) as f32 * (width + gap),
-            rect.y + (index / columns) as f32 * pitch,
-            width,
-            crate::home_grid::CELL_H,
+/// The inputs as a row of wide cards; a one-cell block is a compact row without a header.
+fn inputs_block(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    theme: &crate::themes::Theme,
+    block: &crate::home_grid::Block,
+    rect: Rect,
+) {
+    let inputs = state.home_inputs();
+    let mut track = design::track(block, rect, design::WIDE_W);
+    track.height = track.height.min(design::INPUT_H);
+    if track.header {
+        row_header(
+            out,
+            assets,
+            rect,
+            state.preferences.language.t("inputsHeading"),
+            &[],
         );
-        if card.y + card.h > rect.y + rect.h + 0.5 {
-            break;
-        }
-        input_card(out, state, assets, input, card);
-        out.control(Target::Input(input.id.clone()), card, true);
     }
+    track_cards(
+        out,
+        state,
+        track,
+        BlockKind::Inputs,
+        inputs.len(),
+        |out, index, card| {
+            input_card(out, state, assets, theme, inputs[index], card);
+            Target::Input(inputs[index].id.clone())
+        },
+    );
 }
 
 /// A price with the language's separators: `80 378 $`, `$80,378`, `2,31 $`.
@@ -1309,22 +1485,6 @@ fn short_date(date: &str, now: OffsetDateTime, language: Language) -> String {
     }
 }
 
-/// Data widgets: crypto prices and season premieres.
-fn widget_block(
-    out: &mut Scene,
-    state: &State,
-    assets: &Assets,
-    theme: &crate::themes::Theme,
-    kind: BlockKind,
-    rect: Rect,
-    now: OffsetDateTime,
-) {
-    match kind {
-        BlockKind::Crypto => crypto_block(out, state, assets, theme, rect),
-        _ => premieres_block(out, state, assets, theme, rect, now),
-    }
-}
-
 /// Coins side by side, as many as fit; a second row of cells adds each coin's 24 h range.
 fn crypto_block(
     out: &mut Scene,
@@ -1334,7 +1494,14 @@ fn crypto_block(
     rect: Rect,
 ) {
     let language = state.preferences.language;
-    widget_card(out, theme, rect);
+    // A glance widget (docs/design.md): on the theme's card exactly when the weather is.
+    let pad = if theme.cards {
+        widget_card(out, theme, rect);
+        24.
+    } else {
+        0.
+    };
+    let line_style = text(23.2, 400, -0.025);
     let quotes = &state.feeds.quotes;
     if quotes.is_empty() {
         out.text(
@@ -1343,38 +1510,43 @@ fn crypto_block(
             } else {
                 "cryptoLoading"
             }),
-            Rect::new(rect.x + 24., rect.y + rect.h / 2. - 14., rect.w - 48., 28.),
-            text(20., 450, -0.02),
-            c(0xf5f5f5, 0.62),
+            Rect::new(
+                rect.x + pad,
+                rect.y + rect.h / 2. - 15.,
+                rect.w - 2. * pad,
+                30.,
+            ),
+            line_style,
+            design::ink(0.58),
             false,
         );
         return;
     }
     let tall = rect.h > 150.;
-    let columns = (((rect.w - 48. + 24.) / 272.).floor() as usize).max(1);
+    let columns = (((rect.w - 2. * pad + 24.) / 272.).floor() as usize).max(1);
     let rows = if tall { 2 } else { 1 };
-    let width = (rect.w - 48.) / columns as f32;
+    let width = (rect.w - 2. * pad) / columns as f32;
     let row_h = (rect.h - 32.) / rows as f32;
     for (index, quote) in quotes.iter().take(columns * rows).enumerate() {
-        let x = rect.x + 24. + (index % columns) as f32 * width;
+        let x = rect.x + pad + (index % columns) as f32 * width;
         let y = rect.y + 16. + (index / columns) as f32 * row_h;
-        let line = y + (row_h - if tall { 52. } else { 26. }) / 2.;
-        let coin = text(21., 650, -0.01);
+        let line = y + (row_h - if tall { 56. } else { 30. }) / 2.;
+        let coin = line_style.weight(450);
         out.text(
             quote.coin,
-            Rect::new(x, line, 70., 26.),
+            Rect::new(x, line, 80., 30.),
             coin,
-            c(0xf5f5f5, 0.6),
+            design::ink(0.72),
             false,
         );
         let value = price(quote.last, language);
-        let value_style = text(21., 550, -0.02);
+        let value_style = line_style.weight(550);
         let coin_width = assets.width(quote.coin, coin) + 10.;
         out.text(
             &value,
-            Rect::new(x + coin_width, line, width, 26.),
+            Rect::new(x + coin_width, line, width, 30.),
             value_style,
-            WHITE,
+            design::ink(0.91),
             false,
         );
         let change = format!(
@@ -1386,16 +1558,19 @@ fn crypto_block(
             change,
             Rect::new(
                 x + coin_width + assets.width(&value, value_style) + 10.,
-                line + 2.,
-                90.,
+                line + 4.,
+                100.,
                 24.,
             ),
-            text(17.6, 550, 0.),
-            if quote.change >= 0. {
-                c(0x4ade80, 1.)
-            } else {
-                c(0xf87171, 1.)
-            },
+            text(18.4, 550, 0.),
+            design::color(
+                if quote.change >= 0. {
+                    design::UP
+                } else {
+                    design::DOWN
+                },
+                1.,
+            ),
             false,
         );
         if tall {
@@ -1405,157 +1580,138 @@ fn crypto_block(
                     price(quote.low, language),
                     price(quote.high, language)
                 ),
-                Rect::new(x, line + 30., width, 22.),
-                text(15., 400, 0.),
-                c(0xf5f5f5, 0.5),
+                Rect::new(x, line + 34., width, 22.),
+                design::meta(),
+                design::ink(0.5),
                 false,
             );
         }
     }
 }
 
-/// Portrait posters sized by the block's height, each with its title, season and date.
+/// Season premieres as a row of wide cards: the poster at the left, the title large beside it,
+/// then the season and its date.
 fn premieres_block(
     out: &mut Scene,
     state: &State,
     assets: &Assets,
     theme: &crate::themes::Theme,
+    block: &crate::home_grid::Block,
     rect: Rect,
     now: OffsetDateTime,
 ) {
     let language = state.preferences.language;
-    out.text(
-        language.t("premieresWidget"),
-        Rect::new(rect.x, rect.y, 1000., 31.),
-        text(23.2, 550, -0.035).leading(1.3),
-        WHITE,
-        false,
-    );
     let premieres = &state.feeds.premieres;
+    let track = design::track(block, rect, design::WIDE_W);
+    let first = track.first(
+        state
+            .row_scroll
+            .get(&BlockKind::Premieres)
+            .copied()
+            .unwrap_or(0),
+        premieres.len(),
+    );
+    if track.header {
+        let meta: Vec<String> = row_position(&track, first, premieres.len())
+            .into_iter()
+            .collect();
+        row_header(out, assets, rect, language.t("premieresWidget"), &meta);
+    }
     if premieres.is_empty() {
-        let area = Rect::new(rect.x, rect.y + 46., rect.w, rect.h - 46.);
-        widget_card(out, theme, area);
-        out.text(
+        ghost(
+            out,
+            assets,
+            Rect::new(track.x, track.y, rect.w, track.height),
             language.t(if state.feeds.premieres_failed {
                 "premieresUnavailable"
             } else {
                 "premieresLoading"
             }),
-            Rect::new(area.x + 24., area.y + area.h / 2. - 14., area.w - 48., 28.),
-            text(20., 450, -0.02),
-            c(0xf5f5f5, 0.62),
-            false,
         );
         return;
     }
-    let height = rect.h - 46.;
-    let width = (height * 2. / 3.).round();
-    let gap = 18.;
-    let count = (((rect.w + gap) / (width + gap)).floor() as usize).max(1);
-    let radius = theme.radius.min(14.);
-    for (index, premiere) in premieres.iter().take(count).enumerate() {
-        let poster = Rect::new(
-            rect.x + index as f32 * (width + gap),
-            rect.y + 46.,
-            width,
-            height,
-        );
-        let focused = state.focus == Target::Poster(index) && !state.pointer;
-        out.shadow(poster, radius, if focused { 30. } else { 12. }, 8., 0.35);
-        out.draw.push(Draw::RoundedGradient(
-            poster,
-            radius,
-            c(0x3a4250, 1.),
-            c(0x161a22, 1.),
-        ));
-        if let Some(image) = premiere
-            .poster
-            .as_ref()
-            .and_then(|url| state.feeds.posters.get(url))
-        {
-            out.draw
-                .push(Draw::AppImage(image.clone(), poster, [1.; 4]));
-        }
-        // A dark band keeps the caption readable over any poster: up to two lines of title,
-        // then the season and date, shrunk to the poster's width.
-        let band = Rect::new(poster.x, poster.y + poster.h - 96., poster.w, 96.);
-        out.draw.push(Draw::RoundedGradient(
-            band,
-            0.,
-            c(0x05070a, 0.),
-            c(0x05070a, 0.92),
-        ));
-        let title = text(if poster.w < 160. { 14.4 } else { 16.8 }, 600, -0.01).leading(1.15);
-        let lines = assets.lines(&premiere.title, title, poster.w - 20.).min(2) as f32;
-        let info = language.format(
-            "seasonPremiere",
-            &[
-                ("season", &premiere.season.to_string()),
-                ("date", &short_date(&premiere.date, now, language)),
-            ],
-        );
-        let mut info_style = text(13.6, 450, 0.);
-        let info_width = assets.width(&info, info_style);
-        if info_width > poster.w - 20. {
-            info_style.size *= (poster.w - 20.) / info_width;
-        }
-        let info_y = poster.y + poster.h - 26.;
-        out.text(
-            &premiere.title,
-            Rect::new(
-                poster.x + 10.,
-                info_y - 4. - lines * title.size * 1.15,
-                poster.w - 20.,
-                lines * title.size * 1.15 + 2.,
-            ),
-            title,
-            WHITE,
-            false,
-        );
-        out.text(
-            info,
-            Rect::new(poster.x + 10., info_y, poster.w - 20., 18.),
-            info_style,
-            c(0xf5f5f5, 0.78),
-            false,
-        );
-        if focused {
-            out.ring(poster, radius);
-        }
-        out.control(Target::Poster(index), poster, true);
-    }
+    track_cards(
+        out,
+        state,
+        track,
+        BlockKind::Premieres,
+        premieres.len(),
+        |out, index, rect| {
+            let premiere = &premieres[index];
+            let focused = state.focus == Target::Poster(index) && !state.pointer;
+            card(out, theme, rect, focused, None);
+            let poster = Rect::new(rect.x, rect.y, (rect.h * 2. / 3.).round(), rect.h);
+            match premiere
+                .poster
+                .as_ref()
+                .and_then(|url| state.feeds.posters.get(url))
+            {
+                Some(image) => out.draw.push(Draw::Picture(
+                    image.clone(),
+                    poster,
+                    design::RADIUS,
+                    [1.; 4],
+                )),
+                None => {
+                    out.draw.push(Draw::RoundedGradient(
+                        poster,
+                        design::RADIUS,
+                        alpha(name_tint(&premiere.title), 0.45),
+                        alpha(name_tint(&premiere.title), 0.15),
+                    ));
+                    out.icon(assets, "tv", poster.inset(poster.w * 0.3), design::ink(0.5));
+                }
+            }
+            let tall = rect.h > 200.;
+            let x = poster.x + poster.w + design::PAD;
+            let w = rect.x + rect.w - design::PAD - x;
+            let title = design::card_title(tall).leading(1.18);
+            let lines = assets
+                .lines(&premiere.title, title, w)
+                .min(if tall { 3 } else { 2 }) as f32;
+            out.text(
+                &premiere.title,
+                Rect::new(
+                    x,
+                    rect.y + design::PAD - 2.,
+                    w,
+                    lines * title.size * 1.18 + 2.,
+                ),
+                title,
+                WHITE,
+                false,
+            );
+            let info = language.format(
+                "seasonPremiere",
+                &[
+                    ("season", &premiere.season.to_string()),
+                    ("date", &short_date(&premiere.date, now, language)),
+                ],
+            );
+            let style = design::body();
+            out.text(
+                fit(assets, &info, style, w),
+                Rect::new(x, rect.y + rect.h - design::PAD - 24., w, 24.),
+                style,
+                design::ink(0.7),
+                false,
+            );
+            Target::Poster(index)
+        },
+    );
 }
 
-fn input_card(out: &mut Scene, state: &State, assets: &Assets, input: &Input, rect: Rect) {
+fn input_card(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    theme: &crate::themes::Theme,
+    input: &Input,
+    rect: Rect,
+) {
     let language = state.preferences.language;
-    let focused = state.focus == Target::Input(input.id.clone());
-    out.shadow(
-        rect,
-        18.4,
-        if focused { 34. } else { 4. },
-        if focused { 14. } else { 1. },
-        if focused { 0.4 } else { 0.01 },
-    );
-    out.draw.push(Draw::RoundedGradient(
-        rect,
-        18.4,
-        if focused {
-            c(0x30363c, 0.70)
-        } else {
-            c(0x20252b, 0.60)
-        },
-        if focused {
-            c(0x242a30, 0.65)
-        } else {
-            c(0x171c22, 0.55)
-        },
-    ));
-    out.border(
-        rect,
-        18.4,
-        1.,
-        c(0xffffff, if focused { 0.24 } else { 0.063 }),
-    );
+    let focused = state.focus == Target::Input(input.id.clone()) && !state.pointer;
+    card(out, theme, rect, focused, None);
     let art = Rect::new(rect.x + 21., rect.y + (rect.h - 56.) / 2., 56., 56.);
     out.draw.push(Draw::RoundedGradient(
         art,
@@ -1577,7 +1733,7 @@ fn input_card(out: &mut Scene, state: &State, assets: &Assets, input: &Input, re
         ),
         c(0xdedede, 1.),
     );
-    let top = (rect.h - (28.8 + 5.6 + 20.)) / 2.;
+    let top = (rect.h - (28.8 + 5.6 + 22.8)) / 2.;
     out.text(
         state.preferences.input_title(input),
         Rect::new(rect.x + 93., rect.y + top, rect.w - 114., 28.8),
@@ -1587,14 +1743,11 @@ fn input_card(out: &mut Scene, state: &State, assets: &Assets, input: &Input, re
     );
     out.text(
         input_status(input, name.is_some(), language),
-        Rect::new(rect.x + 93., rect.y + top + 34.4, rect.w - 114., 20.),
-        text(13.12, 400, 0.).leading(1.5),
-        c(0xe8e8e8, 0.48),
+        Rect::new(rect.x + 93., rect.y + top + 34.4, rect.w - 114., 22.8),
+        design::meta().leading(1.5),
+        design::ink(0.55),
         false,
     );
-    if focused {
-        out.ring(rect, 18.4);
-    }
 }
 
 struct WeatherSummary {
@@ -3527,4 +3680,34 @@ fn menu(
         out.control(target(index), rect, false);
     }
     let _ = assets;
+}
+
+/// One of a few calm colours, always the same for the same name.
+fn name_tint(name: &str) -> Color {
+    const TINTS: [u32; 8] = [
+        0x5b7cfa, 0xe5484d, 0x2fb67c, 0xf5a524, 0x9b6cf6, 0x17b3c7, 0xe0609f, 0x8a94a6,
+    ];
+    let hash = name.bytes().fold(0u32, |hash, byte| {
+        hash.wrapping_mul(31).wrapping_add(byte as u32)
+    });
+    c(TINTS[hash as usize % TINTS.len()], 1.)
+}
+
+fn alpha(color: Color, alpha: f32) -> Color {
+    [color[0], color[1], color[2], alpha]
+}
+
+/// `value`, shortened with an ellipsis to fit `width`.
+fn fit(assets: &Assets, value: &str, style: TextStyle, width: f32) -> String {
+    if assets.width(value, style) <= width {
+        return value.to_owned();
+    }
+    let mut chars: Vec<char> = value.chars().collect();
+    while chars.pop().is_some() {
+        let shorter = format!("{}…", chars.iter().collect::<String>().trim_end());
+        if assets.width(&shorter, style) <= width {
+            return shorter;
+        }
+    }
+    String::new()
 }

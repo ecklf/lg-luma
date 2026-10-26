@@ -1,6 +1,6 @@
 use crate::i18n::Language;
 use crate::model::{
-    App, BACKGROUNDS, CATEGORIES, INPUT_NAME_LIMIT, InputMode, Inventory, Preferences,
+    App, BACKGROUNDS, CATEGORIES, INPUT_NAME_LIMIT, Input, InputMode, Inventory, Preferences,
     clean_input_name,
 };
 use crate::text_rendering::TextRendering;
@@ -256,6 +256,8 @@ pub struct State {
     pub subpage: Option<Subpage>,
     pub scroll: f32,
     pub home_scroll: f32,
+    /// The first card each row of cards shows (premieres, inputs); see design::Track.
+    pub row_scroll: std::collections::HashMap<crate::home_grid::BlockKind, usize>,
     pub overlay: Option<Overlay>,
     pub moving: Option<String>,
     pub loading: bool,
@@ -294,6 +296,7 @@ impl State {
             subpage: None,
             scroll: 0.,
             home_scroll: 0.,
+            row_scroll: Default::default(),
             overlay: None,
             moving: None,
             loading: false,
@@ -451,6 +454,46 @@ impl State {
             994.4
         };
         Rect::new(64., 108.8, 1792., bottom - 108.8)
+    }
+
+    /// The visible inputs, in Home's order.
+    pub fn home_inputs(&self) -> Vec<&Input> {
+        self.inventory
+            .inputs
+            .iter()
+            .filter(|input| self.preferences.input_visible(input))
+            .collect()
+    }
+
+    /// A card in a row of cards: its block, its place in the row and how many cards the row
+    /// has. The favourites scroll on their own.
+    pub fn row_of(&self, target: &Target) -> Option<(crate::home_grid::Block, usize, usize)> {
+        use crate::home_grid::BlockKind;
+        let (kind, index, count) = match target {
+            Target::Poster(index) => (BlockKind::Premieres, *index, self.feeds.premieres.len()),
+            Target::Input(id) => {
+                let inputs = self.home_inputs();
+                let index = inputs.iter().position(|input| &input.id == id)?;
+                (BlockKind::Inputs, index, inputs.len())
+            }
+            _ => return None,
+        };
+        let block = *self.home_blocks().iter().find(|block| block.kind == kind)?;
+        Some((block, index, count))
+    }
+
+    /// The card at `index` of the row `target` is in.
+    fn row_target(&self, target: &Target, index: usize) -> Option<Target> {
+        Some(match target {
+            Target::Poster(_) => Target::Poster(index),
+            Target::Input(_) => Target::Input(self.home_inputs().get(index)?.id.clone()),
+            _ => return None,
+        })
+    }
+
+    /// A row's track, for the cards of `block`.
+    pub fn row_track(block: &crate::home_grid::Block) -> crate::design::Track {
+        crate::design::track(block, crate::home_grid::rect(block), crate::design::WIDE_W)
     }
 
     /// Home's blocks as drawn: the saved layout repaired for the current content.
@@ -809,10 +852,24 @@ impl State {
         if self.page == Page::Home {
             self.scroll_favorites(0.);
         }
-        if self.scroll != previous || self.home_scroll != previous_home {
+        let carousel = self.reveal_row();
+        if self.scroll != previous || self.home_scroll != previous_home || carousel {
             self.dirty = true;
         }
-        self.scroll != previous || self.home_scroll != previous_home
+        self.scroll != previous || self.home_scroll != previous_home || carousel
+    }
+
+    /// Scrolls a focused card of a row fully into view, however focus got there (the card cut
+    /// off at the edge is a control too); true when the row moved.
+    fn reveal_row(&mut self) -> bool {
+        let Some((block, index, _)) = self.row_of(&self.focus) else {
+            return false;
+        };
+        let track = Self::row_track(&block);
+        let first = self.row_scroll.get(&block.kind).copied().unwrap_or(0);
+        let wanted = track.reveal(first, index);
+        self.row_scroll.insert(block.kind, wanted);
+        wanted != first
     }
 
     /// Hover and pointer-down must not move the control before pointer-up.
@@ -1217,6 +1274,36 @@ impl State {
                         return vec![];
                     }
                     _ => {}
+                }
+            }
+            // Rows of cards scroll: Left and Right step a card, past the row's edge too.
+            if matches!(direction, Direction::Left | Direction::Right)
+                && let Some((block, index, count)) = self.row_of(&self.focus)
+            {
+                let next = match direction {
+                    Direction::Left => index.checked_sub(1),
+                    _ => Some(index + 1).filter(|next| *next < count),
+                };
+                if let Some(next) = next.and_then(|next| self.row_target(&self.focus, next)) {
+                    self.focus(next, controls);
+                    return vec![];
+                }
+                // The row ends at its last card: Right goes on only to a block beside it,
+                // never up to the TV settings button.
+                let here = controls.iter().find(|c| c.target == self.focus);
+                let beside = here.is_some_and(|here| {
+                    let a = here.rect;
+                    controls.iter().any(|c| {
+                        self.row_of(&c.target)
+                            .is_none_or(|(other, ..)| other.kind != block.kind)
+                            && c.rect.y >= 150.
+                            && c.rect.x >= a.x + a.w
+                            && c.rect.y < a.y + a.h
+                            && c.rect.y + c.rect.h > a.y
+                    })
+                });
+                if matches!(direction, Direction::Right) && !beside {
+                    return vec![];
                 }
             }
             if matches!(self.focus, Target::Nav(_)) && matches!(direction, Direction::Down) {

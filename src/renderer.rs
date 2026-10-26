@@ -68,6 +68,8 @@ pub enum Draw {
     Image(String, Rect, f32, bool),
     TintedImage(String, Rect, f32, bool, Color),
     AppImage(Arc<crate::app_artwork::Artwork>, Rect, Color),
+    /// An image filling `rect`, cropped to its shape, with rounded corners: posters on cards.
+    Picture(Arc<crate::app_artwork::Artwork>, Rect, f32, Color),
     Clip(Option<Rect>),
     EdgeFade(Option<[f32; 4]>),
     /// Horizontal counterpart: [left fade-in start, end, right fade-out start, end].
@@ -291,7 +293,7 @@ fn profile_skip(command: &Draw) -> bool {
             "wallpaper"
         }
         Draw::Image(..) | Draw::TintedImage(..) => "image",
-        Draw::AppImage(..) => "app",
+        Draw::AppImage(..) | Draw::Picture(..) => "app",
         Draw::Shape(..) => "shape",
         Draw::RoundedGradient(..) => "gradient",
         Draw::Shadow(..) => "shadow",
@@ -1086,6 +1088,39 @@ impl Renderer {
         });
     }
 
+    /// Fills `rect` with the middle of the image, as CSS `object-fit: cover` does.
+    fn picture(
+        &mut self,
+        image: &crate::app_artwork::Artwork,
+        rect: Rect,
+        radius: f32,
+        tint: Color,
+    ) {
+        let entry = self.textures.entry(image.key.clone()).or_insert_with(|| {
+            Some(texture(
+                image.pixels.width(),
+                image.pixels.height(),
+                image.pixels.as_raw(),
+            ))
+        });
+        let Some(texture) = entry else {
+            return;
+        };
+        texture.frame = self.frame;
+        let (width, height) = (texture.width as f32, texture.height as f32);
+        let scale = (rect.w / width).max(rect.h / height);
+        let (u, v) = (rect.w / scale / width, rect.h / scale / height);
+        let id = texture.id;
+        self.quad(
+            rect,
+            [(1. - u) / 2., (1. - v) / 2., (1. + u) / 2., (1. + v) / 2.],
+            plain_radius(radius),
+            0.,
+            tint,
+            id,
+        );
+    }
+
     fn app_image(&mut self, image: &crate::app_artwork::Artwork, rect: Rect, tint: Color) {
         let entry = self.textures.entry(image.key.clone()).or_insert_with(|| {
             Some(texture(
@@ -1243,6 +1278,9 @@ impl Renderer {
                     self.image(path, *rect, *radius, *contain, *tint)
                 }
                 Draw::AppImage(image, rect, tint) => self.app_image(image, *rect, *tint),
+                Draw::Picture(image, rect, radius, tint) => {
+                    self.picture(image, *rect, *radius, *tint)
+                }
                 Draw::Clip(clip) => self.clip = *clip,
                 Draw::EdgeFade(fade) => self.set_fade(0, *fade),
                 Draw::EdgeFadeX(fade) => self.set_fade(4, *fade),

@@ -10,9 +10,6 @@ pub const CELL_H: f32 = 100.;
 pub const GAP: f32 = 24.;
 pub const LEFT: f32 = 84.;
 pub const TOP: f32 = 150.;
-/// Input cards keep their width; a block holds as many as round to whole cards.
-pub const INPUT_PITCH: f32 = 591.45;
-pub const INPUT_GAP: f32 = 22.35;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -52,7 +49,7 @@ impl BlockKind {
             Self::Greeting => (8, 2),
             Self::Weather => (8, 1),
             Self::Favorites => (12, 2),
-            Self::Inputs => (12, 1),
+            Self::Inputs => (12, 2),
             Self::Crypto => (4, 1),
             Self::Premieres => (12, 2),
         }
@@ -119,11 +116,6 @@ pub fn rect(block: &Block) -> Rect {
     )
 }
 
-/// Input cards per row in a block of this width.
-pub fn input_columns(width: f32) -> usize {
-    ((width / INPUT_PITCH).round() as usize).max(1)
-}
-
 /// The first row below every block.
 pub fn bottom(blocks: &[Block]) -> u8 {
     blocks.iter().map(|b| b.y + b.h).max().unwrap_or(0)
@@ -171,13 +163,12 @@ pub fn first_free(blocks: &[Block], w: u8, h: u8) -> (u8, u8) {
     (0, bottom(blocks))
 }
 
-/// The smallest height this block's content needs: names under the favourites, one row per
-/// row of input cards.
-fn min_height(block: &Block, names: bool, inputs: usize) -> u8 {
+/// The smallest height this block's content needs: names under the favourites. Inputs scroll
+/// like every row, so any number of them fits one line of cards.
+fn min_height(block: &Block, names: bool, _inputs: usize) -> u8 {
     let ((_, min), (_, max)) = block.kind.limits();
     let needed = match block.kind {
         BlockKind::Favorites if names => 3,
-        BlockKind::Inputs => inputs.div_ceil(input_columns(rect(block).w)).max(1) as u8,
         _ => min,
     };
     needed.clamp(min, max)

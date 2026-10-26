@@ -74,6 +74,14 @@ separate workers/cache and generation IDs. Cache Celsius and convert units witho
 Only configured/enabled/visible Home starts forecasts. Shared translations are bundled locally.
 Match the current native design without on-screen weather credits; attribution remains in docs.
 
+## Home design standard
+
+Every Home widget follows `docs/design.md`: the page title and glance widgets (weather, crypto)
+on the wallpaper or all on the theme's cards together, and everything else as a row: the
+standard header, then a carousel of tile or wide cards drawn by `card()` from `src/design.rs`
+tokens, with Left/Right stepping through `State::row_of`. Read it before adding or restyling a
+widget; add missing tokens to `src/design.rs` and the page instead of local sizes or colours.
+
 ## Assets
 
 SVG sources and fonts retain licenses in `assets/`. TV app artwork is resolved at runtime from

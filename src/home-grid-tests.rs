@@ -127,14 +127,9 @@ fn content_rules_grow_blocks_that_need_more_rows() {
     ];
     normalize(&mut blocks, false, 3);
     let inputs = blocks.iter().find(|b| b.kind == BlockKind::Inputs).unwrap();
-    assert_eq!(inputs.h, 3, "one card per row in four columns");
     assert_eq!(
-        input_columns(rect(&block(BlockKind::Inputs, 0, 0, 12, 1)).w),
-        3
-    );
-    assert_eq!(
-        input_columns(rect(&block(BlockKind::Inputs, 0, 0, 8, 1)).w),
-        2
+        inputs.h, 1,
+        "inputs scroll in one line, however many there are"
     );
 }
 
