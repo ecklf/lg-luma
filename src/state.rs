@@ -55,6 +55,7 @@ pub enum Target {
     ClockFormat,
     ClockTimeFormat,
     Background(usize),
+    UploadWallpaper,
     InputMode(String),
     InputRename,
     InputNameReset,
@@ -113,6 +114,7 @@ pub enum Overlay {
     Recents { restore: Target },
     Keyboard,
     SystemKeyboard,
+    WallpaperUpload,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -194,6 +196,8 @@ pub struct State {
     pub pointer: bool,
     pub pressed: Option<Target>,
     pub previous_background: Option<(String, Instant)>,
+    pub wallpapers: Vec<crate::wallpapers::Wallpaper>,
+    pub wallpaper_upload: Option<Result<crate::wallpapers::Session, String>>,
     pub panel_started: Option<Instant>,
     pub weather: weather::Weather,
     pub keyboard_field: TextField,
@@ -228,6 +232,8 @@ impl State {
             pointer: false,
             pressed: None,
             previous_background: None,
+            wallpapers: vec![],
+            wallpaper_upload: None,
             panel_started: None,
             weather: weather::Weather::default(),
             keyboard_field: TextField::Apps,
@@ -616,12 +622,46 @@ impl State {
             .count()
     }
 
+    pub fn background_count(&self) -> usize {
+        BACKGROUNDS.len() + self.wallpapers.len()
+    }
+
+    pub fn background_id(&self, index: usize) -> Option<&str> {
+        if index < BACKGROUNDS.len() {
+            Some(BACKGROUNDS[index].0)
+        } else {
+            self.wallpapers
+                .get(index - BACKGROUNDS.len())
+                .map(|item| item.id.as_str())
+        }
+    }
+
+    pub fn set_wallpapers(&mut self, wallpapers: Vec<crate::wallpapers::Wallpaper>) {
+        // A newly uploaded title can sort before existing entries. Keep the focused
+        // image, rather than moving the pointer's target to a different photograph.
+        let focused_id = if let Target::Background(index) = self.focus {
+            self.background_id(index).map(str::to_owned)
+        } else {
+            None
+        };
+        self.wallpapers = wallpapers;
+        if let Some(id) = focused_id {
+            self.focus = Target::Background(
+                (0..self.background_count())
+                    .find(|&i| self.background_id(i) == Some(id.as_str()))
+                    .unwrap_or(3),
+            );
+        }
+        self.dirty = true;
+    }
+
     fn section_entry(&self) -> Target {
         match self.section {
             1 => Target::Background(
-                BACKGROUNDS
-                    .iter()
-                    .position(|(id, _)| *id == self.preferences.background)
+                (0..self.background_count())
+                    .position(|index| {
+                        self.background_id(index) == Some(self.preferences.background.as_str())
+                    })
                     .unwrap_or(3),
             ),
             WEATHER_SECTION => Target::WeatherToggle,
@@ -673,6 +713,9 @@ impl State {
         }
         if matches!(self.overlay, Some(Overlay::SystemKeyboard)) {
             // The TV keyboard owns its arrows until Done/Back dismisses it.
+            return vec![];
+        }
+        if matches!(self.overlay, Some(Overlay::WallpaperUpload)) {
             return vec![];
         }
         if let Some(id) = self.moving.clone() {
@@ -1002,16 +1045,46 @@ impl State {
             }
             if let Target::Background(index) = self.focus {
                 match direction {
-                    Direction::Right if index + 1 < BACKGROUNDS.len() => {
+                    Direction::Right if index + 1 < self.background_count() => {
                         self.focus(Target::Background(index + 1), controls);
                         return vec![];
                     }
+                    Direction::Right => return vec![],
                     Direction::Left if index % 3 != 0 => {
                         self.focus(Target::Background(index - 1), controls);
                         return vec![];
                     }
+                    Direction::Up => {
+                        self.focus(
+                            if index < 3 {
+                                Target::UploadWallpaper
+                            } else {
+                                Target::Background(index - 3)
+                            },
+                            controls,
+                        );
+                        return vec![];
+                    }
+                    Direction::Down => {
+                        if (index / 3 + 1) * 3 < self.background_count() {
+                            self.focus(
+                                Target::Background((index + 3).min(self.background_count() - 1)),
+                                controls,
+                            );
+                        }
+                        return vec![];
+                    }
                     _ => {}
                 }
+            }
+            if self.focus == Target::UploadWallpaper {
+                match direction {
+                    Direction::Down => self.focus(Target::Background(0), controls),
+                    Direction::Up => self.focus(Target::Nav(2), controls),
+                    Direction::Left => self.focus(Target::Sidebar(1), controls),
+                    Direction::Right => {}
+                }
+                return vec![];
             }
             if matches!(self.focus, Target::Nav(_)) && matches!(direction, Direction::Down) {
                 if self.page == Page::Settings {
@@ -1402,6 +1475,12 @@ impl State {
             Target::Retry => return vec![Effect::Reload],
             Target::DismissNotice => self.notice = None,
             Target::CloseDialog => return self.back(),
+            Target::UploadWallpaper => {
+                self.wallpaper_upload = None;
+                self.overlay = Some(Overlay::WallpaperUpload);
+                self.focus = Target::CloseDialog;
+                self.pressed = None;
+            }
             Target::TvSettings => return vec![Effect::Launch("com.palm.app.settings".into())],
             Target::App(_) if self.page == Page::Apps && !self.launching => self.options(),
             Target::App(id) | Target::Input(id) if !self.launching => {
@@ -1576,13 +1655,14 @@ impl State {
                 return vec![Effect::Save];
             }
             Target::Background(index) => {
-                if !self.preferences.reduced_motion
-                    && self.preferences.background != BACKGROUNDS[index].0
-                {
+                let Some(id) = self.background_id(index).map(str::to_owned) else {
+                    return vec![];
+                };
+                if !self.preferences.reduced_motion && self.preferences.background != id {
                     self.previous_background =
                         Some((self.preferences.background.clone(), Instant::now()));
                 }
-                self.preferences.background = BACKGROUNDS[index].0.into();
+                self.preferences.background = id;
                 return vec![Effect::Save];
             }
             Target::InputMode(id) => {
@@ -1772,6 +1852,12 @@ impl State {
         }
         if let Some(overlay) = self.overlay.take() {
             self.panel_started = None;
+            if matches!(overlay, Overlay::WallpaperUpload) {
+                self.wallpaper_upload = None;
+                self.focus = Target::UploadWallpaper;
+                self.pressed = None;
+                return vec![];
+            }
             if let Overlay::Delete { id, restore } = overlay {
                 self.overlay = Some(Overlay::Options { id, restore });
                 self.focus = Target::Option(2);

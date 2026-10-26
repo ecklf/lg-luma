@@ -50,6 +50,18 @@ impl Assets {
         self.root.join(path).to_string_lossy().into_owned()
     }
 
+    fn background(&self, state: &State, id: &str) -> String {
+        if let Some(item) = state.wallpapers.iter().find(|item| item.id == id) {
+            return item.image();
+        }
+        let id = if BACKGROUNDS.iter().any(|(known, _)| *known == id) {
+            id
+        } else {
+            "dunes"
+        };
+        self.path(format!("wallpapers/{id}.jpg"))
+    }
+
     fn width(&self, value: &str, style: TextStyle) -> f32 {
         let key = format!(
             "{}{}",
@@ -254,6 +266,102 @@ impl Scene {
     }
 }
 
+fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let panel = Rect::new(520., 144., 880., 792.);
+    out.modal = Some(panel);
+    out.shadow(panel, 24., 40., 12., 0.3);
+    out.shape(panel, 24., c(0x1b2023, 1.));
+    out.border(panel, 24., 1., c(0xffffff, 0.09));
+    out.text(
+        language.t("uploadWallpaper"),
+        Rect::new(584., 198., 752., 48.),
+        text(32., 550, -0.02),
+        WHITE,
+        true,
+    );
+    out.text(
+        language.t("wallpaperUploadHint"),
+        Rect::new(604., 264., 712., 68.),
+        text(19., 400, 0.).leading(1.5),
+        c(0xffffff, 0.65),
+        true,
+    );
+    match &state.wallpaper_upload {
+        Some(Ok(session)) => {
+            let scale = (336. / (session.qr_size + 8) as f32).floor();
+            let size = (session.qr_size + 8) as f32 * scale;
+            let x = (1920. - size) / 2.;
+            let y = 354.;
+            out.shape(Rect::new(x, y, size, size), 0., WHITE);
+            for row in 0..session.qr_size {
+                // Merge contiguous modules so QR rendering stays a few hundred quads.
+                let mut column = 0;
+                while column < session.qr_size {
+                    if !session.qr[(row * session.qr_size + column) as usize] {
+                        column += 1;
+                        continue;
+                    }
+                    let start = column;
+                    while column < session.qr_size
+                        && session.qr[(row * session.qr_size + column) as usize]
+                    {
+                        column += 1;
+                    }
+                    out.shape(
+                        Rect::new(
+                            x + (start + 4) as f32 * scale,
+                            y + (row + 4) as f32 * scale,
+                            (column - start) as f32 * scale,
+                            scale,
+                        ),
+                        0.,
+                        c(0, 1.),
+                    );
+                }
+            }
+            out.text(
+                &session.url,
+                Rect::new(568., 734., 784., 36.),
+                assets.fit_text(&session.url, text(20., 450, 0.), 784.),
+                WHITE,
+                true,
+            );
+            out.text(
+                language.t("wallpaperUploadPrivate"),
+                Rect::new(604., 786., 712., 28.),
+                text(15., 400, 0.),
+                c(0xffffff, 0.5),
+                true,
+            );
+        }
+        result => {
+            let key = if result.is_some() {
+                "wallpaperUploadError"
+            } else {
+                "wallpaperUploadStarting"
+            };
+            out.text(
+                language.t(key),
+                Rect::new(604., 470., 712., 90.),
+                text(22., 450, 0.).leading(1.5),
+                c(0xffffff, 0.75),
+                true,
+            );
+        }
+    }
+    let close = Rect::new(812., 842., 296., 56.);
+    out.pill(close, state.focus == Target::CloseDialog, false);
+    out.text(
+        language.t("close"),
+        Rect::new(close.x, close.y + 15., close.w, 28.),
+        text(20., 550, 0.),
+        c(0x171c20, 1.),
+        true,
+    );
+    out.control(Target::CloseDialog, close, false);
+}
+
 fn c(rgb: u32, alpha: f32) -> Color {
     [
         ((rgb >> 16) & 255) as f32 / 255.,
@@ -301,14 +409,14 @@ pub fn scene_with_pill(
     let mut out = Scene::new();
     if let Some((previous, start)) = &state.previous_background {
         out.image(
-            assets.path(format!("wallpapers/{previous}.jpg")),
+            assets.background(state, previous),
             Rect::new(0., 0., 1920., 1080.),
             0.,
             false,
         );
         let alpha = (start.elapsed().as_secs_f32() / 0.4).min(1.);
         out.draw.push(Draw::TintedImage(
-            assets.path(format!("wallpapers/{}.jpg", state.preferences.background)),
+            assets.background(state, &state.preferences.background),
             Rect::new(0., 0., 1920., 1080.),
             0.,
             false,
@@ -316,7 +424,7 @@ pub fn scene_with_pill(
         ));
     } else {
         out.image(
-            assets.path(format!("wallpapers/{}.jpg", state.preferences.background)),
+            assets.background(state, &state.preferences.background),
             Rect::new(0., 0., 1920., 1080.),
             0.,
             false,
@@ -387,8 +495,12 @@ pub fn scene_with_pill(
     out.draw.push(Draw::Clip(None));
     header(&mut out, state, assets, now, pill_x, pill_width);
     footer(&mut out, state, assets);
-    if let Some(overlay @ (Overlay::Options { .. } | Overlay::Delete { .. } | Overlay::Keyboard)) =
-        &state.overlay
+    if let Some(
+        overlay @ (Overlay::Options { .. }
+        | Overlay::Delete { .. }
+        | Overlay::Keyboard
+        | Overlay::WallpaperUpload),
+    ) = &state.overlay
     {
         let anchor = match overlay {
             Overlay::Options { id, .. } => out
@@ -427,6 +539,7 @@ pub fn scene_with_pill(
             Overlay::Options { id, .. } => options(&mut out, state, assets, id, anchor),
             Overlay::Delete { id, .. } => delete_confirmation(&mut out, state, assets, id),
             Overlay::Keyboard => keyboard(&mut out, state, assets),
+            Overlay::WallpaperUpload => wallpaper_upload(&mut out, state, assets),
             Overlay::SystemKeyboard | Overlay::Recents { .. } => {}
         }
         if !matches!(overlay, Overlay::Options { .. })
@@ -2028,22 +2141,44 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             }
         }
         1 => {
-            for (index, (id, _title)) in BACKGROUNDS.iter().enumerate() {
+            row(
+                out,
+                state,
+                assets,
+                Row {
+                    target: Target::UploadWallpaper,
+                    rect: Rect::new(640., 164.8 - s, 1120., 64.),
+                    title: language.t("uploadWallpaper"),
+                    icon: Some("upload"),
+                    value: None,
+                    description: None,
+                    selected: false,
+                    chevron: false,
+                },
+            );
+            for index in 0..state.background_count() {
+                let id = state.background_id(index).unwrap();
+                let custom = index
+                    .checked_sub(BACKGROUNDS.len())
+                    .and_then(|index| state.wallpapers.get(index));
                 let rect = Rect::new(
                     640. + (index % 3) as f32 * 380.,
-                    164.8 + (index / 3) as f32 * 264.3 - s,
+                    252.8 + (index / 3) as f32 * 264.3 - s,
                     360.,
                     202.5,
                 );
                 out.shadow(rect, 16., 15., 3., 0.13);
                 out.image(
-                    assets.path(format!("thumbnails/{id}.jpg")),
+                    custom.map_or_else(
+                        || assets.path(format!("thumbnails/{id}.jpg")),
+                        |item| item.thumbnail(),
+                    ),
                     rect,
                     16.,
                     false,
                 );
                 out.border(rect, 16., 1., c(0xffffff, 0.086));
-                if state.preferences.background == *id {
+                if state.preferences.background == id {
                     out.border(rect.inset(-2.), 18., 2., c(0xdedede, 1.));
                     out.border(rect.inset(-7.), 23., 3., c(0xdedede, 0.10));
                     let check = Rect::new(rect.x + rect.w - 28., rect.y + rect.h - 28., 21.6, 21.6);
@@ -2053,10 +2188,12 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 if state.focus == Target::Background(index) {
                     out.ring(rect, 16.);
                 }
+                let title =
+                    custom.map_or_else(|| language.wallpaper(id), |item| item.name.as_str());
                 out.text(
-                    language.wallpaper(id),
+                    title,
                     Rect::new(rect.x + 4., rect.y + rect.h + 12., 352., 26.),
-                    text(18.4, 500, -0.02).leading(1.4),
+                    assets.fit_text(title, text(18.4, 500, -0.02).leading(1.4), 352.),
                     c(0xf0f0f0, 0.87),
                     false,
                 );

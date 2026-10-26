@@ -25,6 +25,7 @@ mod storage;
 mod text_rendering;
 mod vector;
 mod view;
+mod wallpapers;
 mod weather;
 #[path = "weather-service.rs"]
 mod weather_service;
@@ -388,6 +389,7 @@ fn script(
         "await-search" => vec![],
         "await-weather" => vec![],
         "await-recents" => vec![],
+        "await-upload" => vec![],
         _ => return Err(format!("Unknown scripted action: {action}")),
     })
 }
@@ -603,6 +605,9 @@ fn run() -> Result<(), String> {
         storage::load(&preferences_path)?
     };
     let mut state = State::new(initial_preferences);
+    // Scripted desktop captures must never open a server on the real LAN.
+    let mut wallpaper_service =
+        wallpapers::Service::new(&preferences_path, !webos && !options.script.is_empty())?;
     if options.test_extra_apps > 0 {
         eprintln!(
             "Luma scroll preview: explicit {}-app expansion; preferences {}",
@@ -889,6 +894,32 @@ fn run() -> Result<(), String> {
             state.dirty = true;
         }
         state.tick();
+        wallpaper_service.set_active(
+            focused && visible && matches!(state.overlay, Some(Overlay::WallpaperUpload)),
+        );
+        while let Ok(event) = wallpaper_service.receiver.try_recv() {
+            match event {
+                wallpapers::Event::Catalog(items) => state.set_wallpapers(items),
+                wallpapers::Event::Session(generation, result)
+                    if generation == wallpaper_service.generation()
+                        && matches!(state.overlay, Some(Overlay::WallpaperUpload)) =>
+                {
+                    if let Err(error) = &result {
+                        eprintln!("Luma wallpaper upload: {error}");
+                    }
+                    state.wallpaper_upload = Some(result);
+                    state.dirty = true;
+                }
+                wallpapers::Event::Ended(generation)
+                    if generation == wallpaper_service.generation()
+                        && matches!(state.overlay, Some(Overlay::WallpaperUpload)) =>
+                {
+                    state.back();
+                    state.notify(state.preferences.language.t("wallpaperUploadEnded"));
+                }
+                _ => {}
+            }
+        }
         state.dirty |= assets.artwork.poll();
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
@@ -1065,6 +1096,10 @@ fn run() -> Result<(), String> {
                     ..
                 } if window_id == window.id() => match win_event {
                     WindowEvent::Hidden | WindowEvent::Minimized => {
+                        if matches!(state.overlay, Some(Overlay::WallpaperUpload)) {
+                            state.back();
+                        }
+                        wallpaper_service.set_active(false);
                         visible = false;
                         focused = false;
                         press = None;
@@ -1075,6 +1110,10 @@ fn run() -> Result<(), String> {
                         profile.pause();
                     }
                     WindowEvent::FocusLost => {
+                        if matches!(state.overlay, Some(Overlay::WallpaperUpload)) {
+                            state.back();
+                        }
+                        wallpaper_service.set_active(false);
                         focused = false;
                         press = None;
                         back_button.cancel();
@@ -1302,6 +1341,12 @@ fn run() -> Result<(), String> {
                 &preferences_path,
                 &weather_service,
             );
+            wallpaper_service.set_active(
+                running
+                    && focused
+                    && visible
+                    && matches!(state.overlay, Some(Overlay::WallpaperUpload)),
+            );
             if press
                 .as_ref()
                 .is_some_and(|p| !p.held && p.target != state.focus)
@@ -1343,6 +1388,9 @@ fn run() -> Result<(), String> {
                 (action == "await-search" && state.weather.searching)
                     || (action == "await-weather" && state.weather.fetching())
                     || (action == "await-recents" && state.recents.pending.is_some())
+                    || (action == "await-upload"
+                        && matches!(state.overlay, Some(Overlay::WallpaperUpload))
+                        && state.wallpaper_upload.is_none())
             })
             && let Some(action) = options.script.pop_front()
         {
@@ -1361,6 +1409,12 @@ fn run() -> Result<(), String> {
                 );
             }
         }
+        wallpaper_service.set_active(
+            running
+                && focused
+                && visible
+                && matches!(state.overlay, Some(Overlay::WallpaperUpload)),
+        );
         // state.loading stays set meanwhile, so focus/relaunch refreshes do not add requests.
         if inventory_retry.is_some_and(|at| Instant::now() >= at) {
             inventory_retry = None;

@@ -225,6 +225,49 @@ pnpm dev --script recents,await-recents
 empty, launch, pointer and Home Back flows; unit tests cover hold timing, cancelled
 presses, stale responses, failures, navigation, reduced motion, reversible crossfades and consistent card artwork.
 
+## Custom wallpaper uploads
+
+**Settings → Background → Upload a wallpaper** opens a native modal with a QR code and a
+temporary HTTP URL. On a phone or computer on the same network, choose a JPEG, PNG or WebP,
+enter a name, then drag the preview or use the zoom/position sliders to compose a 16:9 crop.
+**Add to TV** adds the named image to the gallery without selecting it. Close the TV modal
+and choose its thumbnail to use it. The upload page is currently English; the TV modal is localized.
+
+The phone accepts files up to 16 MiB and 32 megapixels, applies image orientation, and exports
+only the selected 1920×1080 JPEG crop. The native worker independently verifies the image format,
+exact output dimensions, a 12 MiB transport cap and a 32 MiB decoder allocation limit. It strips
+source metadata by re-encoding, generates a 480×270 thumbnail, and applies the same base opacity
+and readability gradients as bundled wallpapers. Processing and discovery run off the SDL thread;
+GPU uploads remain on SDL. Nothing is fetched from external services.
+
+The gallery holds up to 20 uploaded images under `wallpapers/custom-<random-id>/` beside the
+selected preferences file. Names are trimmed, control-free and limited to 40 characters; they
+never become file paths. Files and metadata are committed in a new directory by atomic rename,
+with immutable paths so existing GPU texture caches cannot show an older upload. Root Home
+preserves the app storage owner's UID/GID for new directories and files. Preferences retain only
+the generated selected ID. Invalid metadata and entries with missing files are skipped; an unavailable selected image
+renders the bundled default without destroying the saved selection. These files survive app
+updates, and normal/takeover launches using the shared preferences location use the same gallery.
+Custom images are not used as LG's launch splash: runtime splash updates are skipped for them,
+and takeover boot staging uses a bundled fallback.
+
+The native process binds an ephemeral port on one private/link-local IPv4 interface only while
+the upload modal is open and focused, with a fixed ten-minute session lifetime. Closing the modal,
+losing focus, hiding Luma or exiting invalidates the session. An unpredictable 128-bit capability
+URL, exact Host/Origin checks, a custom upload header, no CORS, and restrictive browser security
+headers limit access. HTTP is **not encrypted**; use a trusted local network. The URL is not logged.
+Requests are serialized and bounded by header/body sizes and a deadline, with cancellation checks
+while reading and before committing. No user-controlled path is opened by the server. No privileged
+helper or permanent system service is installed. Networks with client isolation, IPv6-only access
+or an inbound firewall may prevent the phone reaching the server; this needs manual TV verification.
+
+`pnpm test:wallpapers` checks browser crop/name math. Rust wallpaper tests use generated images,
+isolated temporary storage and loopback HTTP only. Scripted desktop runs bind the upload server
+to loopback rather than the real LAN; `await-upload` waits for the modal's link or error state.
+Verify the QR code, phone drag/zoom, upload,
+TV selection/restart, normal/takeover access, cancellation and timeout on real hardware; desktop
+checks do not establish webOS jail networking permissions or TV/browser behavior.
+
 ## Splash images
 
 `pnpm assets` renders one 1920×1080 PNG per background into `.build/assets/splash/` from the shaded

@@ -172,6 +172,45 @@ try {
   const saved = await scenario('saved', 'down,hold,right,back');
   assert.equal(saved.preferences.background, 'forest');
   assert.deepEqual(saved.preferences.favorites.slice(0, 2), ['youtube.leanback.v4', 'netflix']);
+  const upload = await scenario(
+    'wallpaper-upload',
+    'settings,down,down,enter,up,up,up,enter,await-upload',
+  );
+  assert.equal(upload.modal, true);
+  assert.equal(upload.focus, 'CloseDialog');
+  assert.ok(upload.ui_text.includes('Upload a wallpaper'));
+  assert.ok(
+    upload.ui_text.some((text) => /^http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]{32}\/$/.test(text)),
+  );
+  const uploadClosed = await scenario(
+    'wallpaper-upload-closed',
+    'settings,down,down,enter,up,up,up,enter,await-upload,back',
+  );
+  assert.equal(uploadClosed.modal, false);
+  assert.equal(uploadClosed.focus, 'UploadWallpaper');
+  const customId = `custom-${'1'.repeat(32)}`;
+  const customDirectory = path.join(temporary, 'wallpapers', customId);
+  await fs.mkdir(customDirectory, { recursive: true });
+  await sharp({ create: { width: 1920, height: 1080, channels: 3, background: '#263832' } })
+    .jpeg()
+    .toFile(path.join(customDirectory, 'wallpaper.jpg'));
+  await sharp({ create: { width: 480, height: 270, channels: 3, background: '#749788' } })
+    .jpeg()
+    .toFile(path.join(customDirectory, 'thumbnail.jpg'));
+  await fs.writeFile(
+    path.join(customDirectory, 'metadata.json'),
+    JSON.stringify({ id: customId, name: 'Smoke wallpaper' }),
+  );
+  const custom = await scenario('wallpaper-custom', 'settings,down,down,enter,down,enter');
+  assert.equal(custom.preferences.background, customId);
+  assert.ok(custom.ui_text.includes('Smoke wallpaper'));
+  const customRestored = await scenario('wallpaper-custom-restored', 'home,down');
+  assert.equal(customRestored.preferences.background, customId);
+  const bundledRestored = await scenario(
+    'wallpaper-bundled-restored',
+    'settings,down,down,enter,up,enter',
+  );
+  assert.equal(bundledRestored.preferences.background, 'forest');
   const clock = await scenario('clock', 'settings,click:900:284');
   assert.equal(clock.subpage, 'Clock');
   assert.equal(clock.focus, 'ClockFormat');

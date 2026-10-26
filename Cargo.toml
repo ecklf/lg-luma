@@ -17,11 +17,14 @@ default = []
 webos = ["dep:libc"]
 
 [dependencies]
+getrandom = "0.2"
 gl = "0.14"
+if-addrs = "0.14"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 libc = { version = "0.2", optional = true }
 luma-vector-geometry = { path = "vector-geometry" }
 owned_ttf_parser = "0.25"
+qrcodegen = "1.8"
 sdl2 = { version = "0.38", features = ["use-pkgconfig"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

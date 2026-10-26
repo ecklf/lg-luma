@@ -1,4 +1,70 @@
 {
+  "uploadWallpaper": {
+    "en": "Upload a wallpaper",
+    "de": "Hintergrund hochladen",
+    "zh": "上传壁纸",
+    "es": "Subir un fondo",
+    "pt": "Enviar um papel de parede",
+    "it": "Carica uno sfondo",
+    "ru": "Загрузить обои",
+    "pl": "Prześlij tapetę",
+    "fr": "Importer un fond d’écran"
+  },
+  "wallpaperUploadHint": {
+    "en": "Scan the QR code or open this address on a phone or computer connected to the same network.",
+    "de": "Scanne den QR-Code oder öffne diese Adresse auf einem Handy oder Computer im selben Netzwerk.",
+    "zh": "使用连接到同一网络的手机或电脑扫描二维码或打开此地址。",
+    "es": "Escanea el código QR o abre esta dirección en un teléfono u ordenador conectado a la misma red.",
+    "pt": "Leia o código QR ou abra este endereço em um celular ou computador conectado à mesma rede.",
+    "it": "Scansiona il codice QR o apri questo indirizzo su un telefono o computer connesso alla stessa rete.",
+    "ru": "Отсканируй QR-код или открой этот адрес на телефоне или компьютере в той же сети.",
+    "pl": "Zeskanuj kod QR lub otwórz ten adres na telefonie albo komputerze w tej samej sieci.",
+    "fr": "Scannez le code QR ou ouvrez cette adresse sur un téléphone ou ordinateur connecté au même réseau."
+  },
+  "wallpaperUploadPrivate": {
+    "en": "Local upload · This link expires in 10 minutes",
+    "de": "Lokaler Upload · Dieser Link läuft in 10 Minuten ab",
+    "zh": "本地上传 · 链接将在 10 分钟后失效",
+    "es": "Subida local · Este enlace caduca en 10 minutos",
+    "pt": "Envio local · Este link expira em 10 minutos",
+    "it": "Caricamento locale · Il link scade tra 10 minuti",
+    "ru": "Локальная загрузка · Ссылка действует 10 минут",
+    "pl": "Przesyłanie lokalne · Link wygasa po 10 minutach",
+    "fr": "Import local · Ce lien expire dans 10 minutes"
+  },
+  "wallpaperUploadStarting": {
+    "en": "Preparing your upload link…",
+    "de": "Upload-Link wird vorbereitet…",
+    "zh": "正在准备上传链接…",
+    "es": "Preparando el enlace de subida…",
+    "pt": "Preparando o link de envio…",
+    "it": "Preparazione del link di caricamento…",
+    "ru": "Подготовка ссылки для загрузки…",
+    "pl": "Przygotowywanie linku do przesyłania…",
+    "fr": "Préparation du lien d’import…"
+  },
+  "wallpaperUploadError": {
+    "en": "Couldn’t start local upload. Check your network connection, then close and reopen this dialog.",
+    "de": "Lokaler Upload konnte nicht gestartet werden. Prüfe die Netzwerkverbindung und öffne diesen Dialog erneut.",
+    "zh": "无法启动本地上传。请检查网络连接，然后关闭并重新打开此对话框。",
+    "es": "No se pudo iniciar la subida local. Comprueba la red y vuelve a abrir este diálogo.",
+    "pt": "Não foi possível iniciar o envio local. Verifique a rede e reabra esta janela.",
+    "it": "Impossibile avviare il caricamento locale. Controlla la rete e riapri questa finestra.",
+    "ru": "Не удалось начать загрузку. Проверь подключение к сети и открой это окно снова.",
+    "pl": "Nie udało się uruchomić przesyłania. Sprawdź połączenie z siecią i otwórz to okno ponownie.",
+    "fr": "Impossible de démarrer l’import local. Vérifiez le réseau, puis rouvrez cette fenêtre."
+  },
+  "wallpaperUploadEnded": {
+    "en": "Upload session ended",
+    "de": "Upload-Sitzung beendet",
+    "zh": "上传会话已结束",
+    "es": "La sesión de subida ha terminado",
+    "pt": "Sessão de envio encerrada",
+    "it": "Sessione di caricamento terminata",
+    "ru": "Сеанс загрузки завершён",
+    "pl": "Sesja przesyłania zakończona",
+    "fr": "Session d’import terminée"
+  },
   "textRendering": {
     "en": "Text rendering",
     "de": "Textdarstellung",
