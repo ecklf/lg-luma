@@ -1,4 +1,4 @@
-//! Bundled English, German, Spanish, Chinese, Brazilian Portuguese, Italian, Russian, Polish, French and Vietnamese message catalog.
+//! Bundled English, German, Spanish, Chinese, Brazilian Portuguese, Italian, Russian, Polish, French, Vietnamese and Dutch message catalog.
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::BTreeMap, sync::OnceLock};
 use time::OffsetDateTime;
@@ -26,9 +26,10 @@ pub enum Language {
     Pl,
     Fr,
     Vi,
+    Nl,
 }
 impl Language {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::En,
         Self::De,
         Self::Zh,
@@ -39,6 +40,7 @@ impl Language {
         Self::Pl,
         Self::Fr,
         Self::Vi,
+        Self::Nl,
     ];
     pub fn code(self) -> &'static str {
         match self {
@@ -52,6 +54,7 @@ impl Language {
             Self::Pl => "pl",
             Self::Fr => "fr",
             Self::Vi => "vi",
+            Self::Nl => "nl",
         }
     }
     pub fn name(self) -> &'static str {
@@ -66,6 +69,7 @@ impl Language {
             Self::Pl => "Polski",
             Self::Fr => "Français",
             Self::Vi => "Tiếng Việt",
+            Self::Nl => "Nederlands",
         }
     }
     pub fn index(self) -> usize {
@@ -80,6 +84,7 @@ impl Language {
             Self::Pl => 7,
             Self::Fr => 8,
             Self::Vi => 9,
+            Self::Nl => 10,
         }
     }
     pub fn t(self, key: &str) -> &str {
@@ -386,6 +391,34 @@ impl Language {
                 ][month]
             )
             .to_uppercase(),
+            Self::Nl => format!(
+                "{} {} {}",
+                [
+                    "maandag",
+                    "dinsdag",
+                    "woensdag",
+                    "donderdag",
+                    "vrijdag",
+                    "zaterdag",
+                    "zondag"
+                ][weekday],
+                now.day(),
+                [
+                    "januari",
+                    "februari",
+                    "maart",
+                    "april",
+                    "mei",
+                    "juni",
+                    "juli",
+                    "augustus",
+                    "september",
+                    "oktober",
+                    "november",
+                    "december"
+                ][month]
+            )
+            .to_uppercase(),
         }
     }
     pub fn clock(self, now: OffsetDateTime, hour24: bool, seconds: bool) -> String {
@@ -440,6 +473,7 @@ pub fn deserialize_language<'de, D: Deserializer<'de>>(
             Some("pl") => Language::Pl,
             Some("fr") => Language::Fr,
             Some("vi") => Language::Vi,
+            Some("nl") => Language::Nl,
             _ => Language::En,
         },
     )
@@ -523,6 +557,12 @@ mod tests {
             "Đã thêm Netflix vào mục ưa thích."
         );
         assert_eq!(Language::Vi.greeting(2, "Ana"), "Vẫn chưa ngủ sao, Ana?");
+        assert_eq!(
+            Language::Nl.format("favoriteAdded", &[("app", "Netflix")]),
+            "Netflix toegevoegd aan favorieten."
+        );
+        assert_eq!(Language::Nl.greeting(2, "Ana"), "Nog wakker, Ana?");
+        assert_eq!(Language::Nl.category("Gaming"), "Games");
         assert_eq!(Language::De.category("Gaming"), "Spiele");
         assert_eq!(Language::En.greeting(15, ""), "Good afternoon.");
         assert_eq!(Language::En.greeting(15, "  Ana "), "Good afternoon, Ana.");
@@ -548,6 +588,8 @@ mod tests {
         assert_eq!(Language::Fr.clock(now, true, false), "20:41");
         assert_eq!(Language::Vi.date(now), "THỨ TƯ, 21 THÁNG 10");
         assert_eq!(Language::Vi.clock(now, true, false), "20:41");
+        assert_eq!(Language::Nl.date(now), "WOENSDAG 21 OKTOBER");
+        assert_eq!(Language::Nl.clock(now, true, false), "20:41");
         assert_eq!(Language::Zh.clock(now, false, false), "下午8:41");
         assert_eq!(Language::Zh.clock(now, false, true), "下午8:41:00");
         assert_eq!(Language::En.clock(now, true, false), "20:41");
@@ -589,6 +631,19 @@ mod tests {
             let now = OffsetDateTime::parse(date, &time::format_description::well_known::Rfc3339)
                 .unwrap();
             assert_eq!(Language::Vi.date(now), expected);
+        }
+    }
+
+    #[test]
+    fn dutch_dates_cover_leap_days_and_month_boundaries() {
+        for (date, expected) in [
+            ("2024-02-29T00:05:00+01:00", "DONDERDAG 29 FEBRUARI"),
+            ("2026-05-01T12:00:00+02:00", "VRIJDAG 1 MEI"),
+            ("2026-12-27T20:41:00+01:00", "ZONDAG 27 DECEMBER"),
+        ] {
+            let now = OffsetDateTime::parse(date, &time::format_description::well_known::Rfc3339)
+                .unwrap();
+            assert_eq!(Language::Nl.date(now), expected);
         }
     }
 }
