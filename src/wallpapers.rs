@@ -685,6 +685,16 @@ fn serve(
         return Err("Upload session ended".into());
     }
     if request.method == "GET" && request.length == 0 {
+        if route == "info.json" {
+            let body = serde_json::json!({"path": directory.to_string_lossy()}).to_string();
+            response(
+                stream,
+                "200 OK",
+                "application/json; charset=utf-8",
+                body.as_bytes(),
+            )?;
+            return Ok(false);
+        }
         let (kind, body): (&str, &[u8]) = match route {
             "" => (
                 "text/html; charset=utf-8",

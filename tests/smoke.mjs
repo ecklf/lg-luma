@@ -178,7 +178,7 @@ try {
   );
   assert.equal(upload.modal, true);
   assert.equal(upload.focus, 'CloseDialog');
-  assert.ok(upload.ui_text.includes('Upload a wallpaper'));
+  assert.ok(upload.ui_text.includes('Add a background'));
   assert.ok(
     upload.ui_text.some((text) => /^http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]{32}\/$/.test(text)),
   );

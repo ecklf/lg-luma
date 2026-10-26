@@ -15,6 +15,18 @@ let busy = false;
 let horizontal = 0.5;
 let vertical = 0.5;
 
+fetch('info.json', { cache: 'no-store' })
+  .then((response) => {
+    if (!response.ok) throw new Error('Storage location unavailable');
+    return response.json();
+  })
+  .then((info) => {
+    element('storage-path').textContent = info.path;
+  })
+  .catch(() => {
+    element('storage-path').textContent = 'Available on the TV';
+  });
+
 function message(text, error = false) {
   status.textContent = text;
   status.classList.toggle('error', error);
@@ -96,7 +108,7 @@ editor.addEventListener('submit', async (event) => {
   if (busy || !image) return;
   const title = cleanName(name.value);
   if (!title) {
-    message('Give your wallpaper a name.', true);
+    message('Give your background a name.', true);
     name.focus();
     return;
   }
@@ -104,7 +116,7 @@ editor.addEventListener('submit', async (event) => {
   busy = true;
   for (const input of editor.querySelectorAll('input, button')) input.disabled = true;
   file.disabled = true;
-  message('Preparing your wallpaper…');
+  message('Preparing your background…');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45000);
   try {
@@ -123,9 +135,9 @@ editor.addEventListener('submit', async (event) => {
       signal: controller.signal,
     });
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'The TV could not save this wallpaper.');
+    if (!response.ok) throw new Error(result.error || 'The TV could not save this background.');
     message(
-      `“${result.name}” is on your TV. Close the upload dialog and select it in Background settings.`,
+      `“${result.name}” was added to your TV’s backgrounds. Close the upload dialog to finish.`,
     );
   } catch (error) {
     message(

@@ -232,23 +232,24 @@ input:focus-visible {
   color: #e8a99d;
 }
 footer {
-  display: flex;
-  align-items: center;
+  display: grid;
+  justify-items: center;
   justify-content: center;
-  flex-wrap: wrap;
-  gap: 7px;
+  gap: 6px;
   margin-top: 27px;
   color: #737d78;
   font-size: 11px;
 }
-.storage-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #8fa794;
-}
-.separator {
-  color: #4d5651;
+footer code {
+  max-width: 100%;
+  color: #929b96;
+  font:
+    11px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 [hidden] {
   display: none !important;

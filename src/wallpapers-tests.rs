@@ -263,7 +263,14 @@ fn only_the_session_origin_host_token_and_upload_header_allow_writes() {
 #[test]
 fn browser_assets_are_local_and_a_real_http_upload_persists_the_name() {
     let fixture = Fixture::new();
-    for route in ["", "app.js", "crop.js", "app.css", "luma-mark.svg"] {
+    for route in [
+        "",
+        "app.js",
+        "crop.js",
+        "app.css",
+        "luma-mark.svg",
+        "info.json",
+    ] {
         let (response, changed) = http(&fixture.wallpapers(), |host| {
             format!("GET /secret/{route} HTTP/1.1\r\nHost: {host}\r\n\r\n").into_bytes()
         });
@@ -275,6 +282,10 @@ fn browser_assets_are_local_and_a_real_http_upload_persists_the_name() {
             assert!(response.starts_with("HTTP/1.1 200"));
             assert!(response.contains("image/svg+xml"));
             assert!(response.contains("<svg"));
+        }
+        if route == "info.json" {
+            assert!(response.starts_with("HTTP/1.1 200"));
+            assert!(response.contains(&fixture.wallpapers().to_string_lossy().to_string()));
         }
     }
     let bytes = image(1920, 1080);

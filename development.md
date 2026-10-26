@@ -229,7 +229,7 @@ presses, stale responses, failures, navigation, reduced motion, reversible cross
 
 ## Custom wallpaper uploads
 
-**Settings → Background → Upload a wallpaper** opens a native modal with a QR code and a
+**Settings → Background → Add a background** opens a native modal with a QR code and a
 temporary HTTP URL. On a phone or computer on the same network, choose a JPEG, PNG or WebP,
 enter a name, then drag the preview or use the zoom/position sliders to compose a 16:9 crop.
 **Add to TV** adds the named image to the gallery without selecting it. Close the TV modal
@@ -243,7 +243,8 @@ and readability gradients as bundled wallpapers. Processing and discovery run of
 GPU uploads remain on SDL. Nothing is fetched from external services.
 
 The gallery holds up to 20 uploaded images under `wallpapers/custom-<random-id>/` beside the
-selected preferences file. Names are trimmed, control-free and limited to 40 characters; they
+selected preferences file. The phone page shows this resolved absolute directory path. Names are
+trimmed, control-free and limited to 40 characters; they
 never become file paths. Files and metadata are committed in a new directory by atomic rename,
 with immutable paths so existing GPU texture caches cannot show an older upload. Root Home
 preserves the app storage owner's UID/GID for new directories and files. Preferences retain only

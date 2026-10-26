@@ -1,14 +1,14 @@
 {
   "uploadWallpaper": {
-    "en": "Upload a wallpaper",
-    "de": "Hintergrund hochladen",
-    "zh": "上传壁纸",
-    "es": "Subir un fondo",
-    "pt": "Enviar um papel de parede",
-    "it": "Carica uno sfondo",
-    "ru": "Загрузить обои",
-    "pl": "Prześlij tapetę",
-    "fr": "Importer un fond d’écran"
+    "en": "Add a background",
+    "de": "Hintergrund hinzufügen",
+    "zh": "添加背景",
+    "es": "Añadir un fondo",
+    "pt": "Adicionar um fundo",
+    "it": "Aggiungi uno sfondo",
+    "ru": "Добавить фон",
+    "pl": "Dodaj tło",
+    "fr": "Ajouter un arrière-plan"
   },
   "wallpaperUploadHint": {
     "en": "Scan the QR code or open this address on a phone or computer connected to the same network.",

@@ -291,11 +291,12 @@ See [Releases](development.md#releases) for the workflow and repository setup.
 
 ## Custom wallpapers
 
-Open **Settings → Background → Upload a wallpaper**, then scan the QR code or open the shown
+Open **Settings → Background → Add a background**, then scan the QR code or open the shown
 address on a phone or computer on the same network. Choose a JPEG, PNG or WebP, give it a name,
 and adjust its 16:9 crop before uploading. Close the TV dialog and select the new thumbnail.
 Images stay beside Luma's shared preferences and survive updates. The gallery supports 20 uploads;
-LG's launch splash remains bundled when a custom wallpaper is selected.
+the upload page shows the exact TV folder path. LG's launch splash remains bundled when a custom
+background is selected.
 
 The upload link works only while its TV dialog is open and focused, for at most ten minutes.
 Use a trusted local network: the temporary local upload uses HTTP, not encrypted HTTPS.
