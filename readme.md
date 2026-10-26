@@ -40,7 +40,7 @@ The following TV configurations have been reported working with Luma:
 | LG UM7450 | `UM74507LA`      | 4      | ❌               |
 | LG UN7100 | `49UN71006LB`    | 5      | ✅               |
 | LG C1     | `OLED48C1KNB`    | 6      | ✅               |
-| LG B2     | `OLED65B29LA`    | 24 (25)| ✅               |
+| LG B2     | `OLED65B29LA`    | 24     | ✅               |
 | LG C2     | `OLED42C2PSA`    | 25     | ✅               |
 | LG C2     | `OLED65C2PSA`    | 26     | ✅               |
 | LG C3     | `OLED65C31LA`    | 26     | ✅               |
