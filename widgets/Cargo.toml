@@ -1,0 +1,27 @@
+[package]
+name = "luma-widgets"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+license = "MIT"
+description = "Data-only Luma widgets: manifests, documents, the catalog and jq transforms"
+
+[dependencies]
+base64 = "0.22"
+ed25519-compact = { version = "2.6", default-features = false, features = ["std"] }
+jaq-core = "3.1"
+jaq-json = "2.0"
+jaq-std = "3.0"
+regex-lite = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+ureq = { version = "3.4", default-features = false, features = ["rustls"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[[bin]]
+name = "luma-widget"
+path = "src/bin/luma-widget.rs"
