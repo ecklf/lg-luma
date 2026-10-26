@@ -681,7 +681,14 @@ Invalid preference files report an error rather than being overwritten. Writes u
 temporary-file renames; use one instance per preferences file. Browser local storage is not
 migrated into native JSON preferences.
 
-Weather Location searches cities/postcodes only on explicit Search. Forecasts run when Home is
+Weather Location searches cities/postcodes only on explicit Search, in the interface language, which
+names the result. The city is saved with Open-Meteo's id, and with the weather on, changing the
+language looks that id up in the new language; with the weather off, no request is made. A city
+saved without an id is first found by name, in the language it was saved in (then the new one, then
+English) at the same coordinates, since search only matches a name in its own language. The
+lookup has its own worker and generation: leaving Settings does not drop it, a newer language
+change or choosing or clearing the city does, and a reply is applied only to a city still at its
+coordinates. A failed lookup keeps the saved names. Forecasts run when Home is
 visible, the widget enabled and a city configured. ureq/rustls uses embedded certificate roots,
 an eight-second timeout, no redirects/proxy and 256 KiB reply limits. Search/forecast/cache writes
 have separate workers and generation IDs, avoiding stale responses overwriting current state.

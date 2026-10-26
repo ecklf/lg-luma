@@ -8,6 +8,7 @@ fn place() -> Location {
         country: "Austria".into(),
         latitude: 48.2085,
         longitude: 16.3721,
+        id: None,
     }
 }
 fn reading() -> Reading {

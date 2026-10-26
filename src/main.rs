@@ -414,7 +414,9 @@ fn compose(
     }
 }
 
-fn weather_tick(state: &mut State, service: &weather_service::Service, visible: bool) {
+/// True when a renamed place needs the preferences saved.
+fn weather_tick(state: &mut State, service: &weather_service::Service, visible: bool) -> bool {
+    let mut save = false;
     let now = OffsetDateTime::now_utc().unix_timestamp();
     let (command, changed) = state.weather.sync(
         &state.preferences,
@@ -431,6 +433,11 @@ fn weather_tick(state: &mut State, service: &weather_service::Service, visible: 
             weather_service::Response::Search { id, result } => {
                 state.dirty |= state.weather.accept_search(id, result)
             }
+            weather_service::Response::Renamed { id, result } => {
+                if let Some(place) = state.weather.accept_rename(id, result) {
+                    save |= state.rename_location(place);
+                }
+            }
             weather_service::Response::Forecast { id, key, result } => {
                 let (changed, command) = state.weather.accept_forecast(id, &key, result, now);
                 state.dirty |= changed;
@@ -440,6 +447,7 @@ fn weather_tick(state: &mut State, service: &weather_service::Service, visible: 
             }
         }
     }
+    save
 }
 
 fn scripted_click(
@@ -983,7 +991,15 @@ fn run() -> Result<(), String> {
                 }
             }
         }
-        weather_tick(&mut state, &weather_service, visible);
+        if weather_tick(&mut state, &weather_service, visible) {
+            running &= effects(
+                vec![Effect::Save],
+                &mut state,
+                &platform,
+                &preferences_path,
+                &weather_service,
+            );
+        }
         // Rebuild hit regions before input whenever inventory/layout changed.
         if state.dirty {
             scene = compose(&mut state, &assets, pill, pill_width, now);
@@ -1366,7 +1382,15 @@ fn run() -> Result<(), String> {
             inventory_retry = None;
             platform.send(Request::Refresh);
         }
-        weather_tick(&mut state, &weather_service, visible);
+        if weather_tick(&mut state, &weather_service, visible) {
+            running &= effects(
+                vec![Effect::Save],
+                &mut state,
+                &platform,
+                &preferences_path,
+                &weather_service,
+            );
+        }
         // SDL-webOS disables text input when its own panel is dismissed, even
         // if it did not forward a Back/Return key to the application.
         if text_active

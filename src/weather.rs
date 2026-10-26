@@ -17,6 +17,10 @@ pub struct Location {
     pub country: String,
     pub latitude: f64,
     pub longitude: f64,
+    /// Open-Meteo's id for the place, which looks it up in another language. Places saved
+    /// before it was kept have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<u64>,
 }
 impl Location {
     pub fn parse(value: &Value) -> Option<Self> {
@@ -37,6 +41,7 @@ impl Location {
             country: label(value.get("country")),
             latitude,
             longitude,
+            id: value.get("id").and_then(Value::as_u64),
         })
     }
     pub fn key(&self) -> String {
@@ -212,6 +217,13 @@ pub enum Command {
         query: String,
         language: Language,
     },
+    /// The saved place's names in `to`, found from its name in `from`.
+    Rename {
+        id: u64,
+        location: Location,
+        from: Language,
+        to: Language,
+    },
     Forecast {
         id: u64,
         location: Location,
@@ -241,10 +253,16 @@ pub struct Weather {
     next_fetch: i64,
     #[serde(skip)]
     active_home: bool,
+    #[serde(skip)]
+    rename_id: u64,
+    /// The pending lookup of the saved place in a new interface language: its id, the
+    /// place's key, and the language its saved name is in.
+    #[serde(skip)]
+    rename: Option<(u64, String, Language)>,
 }
 impl Weather {
-    pub fn generations(&self) -> (u64, u64) {
-        (self.search_id, self.forecast_id)
+    pub fn generations(&self) -> (u64, u64, u64) {
+        (self.search_id, self.forecast_id, self.rename_id)
     }
     pub fn fetching(&self) -> bool {
         self.pending.is_some()
@@ -280,6 +298,38 @@ impl Weather {
             language,
         })
     }
+    /// Looks the saved place up again, so its name follows the interface language. Separate
+    /// from the city search, so leaving Settings does not drop it. A newer rename replaces a
+    /// pending one; the saved name is still in the language before both.
+    pub fn rename(&mut self, location: &Location, from: Language, to: Language) -> Command {
+        let from = self.rename.as_ref().map_or(from, |(_, _, from)| *from);
+        self.cancel_rename();
+        self.rename = Some((self.rename_id, location.key(), from));
+        Command::Rename {
+            id: self.rename_id,
+            location: location.clone(),
+            from,
+            to,
+        }
+    }
+    /// Drops a pending rename, whose reply is then ignored.
+    pub fn cancel_rename(&mut self) {
+        self.rename_id += 1;
+        self.rename = None;
+    }
+    /// The result of the current `rename`: the place, if found at exactly the coordinates it
+    /// was asked for. A failed lookup (offline) keeps the saved names.
+    pub fn accept_rename(
+        &mut self,
+        id: u64,
+        result: Result<Option<Location>, String>,
+    ) -> Option<Location> {
+        let current = self.rename_id;
+        let (_, key, _) = self
+            .rename
+            .take_if(|(rename_id, ..)| *rename_id == id && id == current)?;
+        result.ok().flatten().filter(|place| place.key() == key)
+    }
     pub fn accept_search(&mut self, id: u64, result: Result<Vec<Location>, String>) -> bool {
         if id != self.search_id || !self.searching {
             return false;
@@ -306,6 +356,7 @@ impl Weather {
     }
     pub fn remove_location(&mut self) {
         self.cancel_search();
+        self.cancel_rename();
         self.invalidate_forecast();
         self.cache = None;
     }
