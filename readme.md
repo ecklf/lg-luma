@@ -136,7 +136,8 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 again to install it: Luma downloads the IPK, verifies its size and SHA-256 against the release's
 Homebrew Channel feed, and installs it through Homebrew Channel's root service. Luma restarts when
 the update is installed (as Home, the integration remounts the new executable first). A log is
-kept in `/tmp/luma-update.log`.
+kept in `/var/lib/luma-update/update.log`. Installer outcomes persist across Luma restarts;
+failed installs become retryable, and a failed Home takeover attempts verified LG Home recovery.
 
 ## Replacing LG Home
 
