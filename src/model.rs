@@ -94,6 +94,8 @@ pub struct Preferences {
     pub favorites: Option<Vec<String>>,
     pub hidden: Vec<String>,
     pub background: String,
+    /// Last manually selected bundled wallpaper, independent of custom images and rotation.
+    pub splash_background: Option<String>,
     pub show_home_names: bool,
     pub show_app_names: bool,
     pub hour_24: bool,
@@ -123,6 +125,7 @@ impl Default for Preferences {
             favorites: None,
             hidden: vec![],
             background: "dunes".into(),
+            splash_background: None,
             show_home_names: false,
             show_app_names: true,
             hour_24: false,
@@ -141,6 +144,19 @@ impl Default for Preferences {
 }
 
 impl Preferences {
+    pub fn splash_background(&self) -> &str {
+        self.splash_background
+            .as_deref()
+            .filter(|value| BACKGROUNDS.iter().any(|(id, _)| id == value))
+            .or_else(|| {
+                BACKGROUNDS
+                    .iter()
+                    .any(|(id, _)| *id == self.background)
+                    .then_some(self.background.as_str())
+            })
+            .unwrap_or("dunes")
+    }
+
     pub fn favorites(&self, apps: &[App]) -> Vec<String> {
         self.favorites.clone().unwrap_or_else(|| {
             let mut ids = Vec::new();
@@ -199,6 +215,7 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
+        self.splash_background = Some(self.splash_background().to_owned());
         if !BACKGROUNDS.iter().any(|(id, _)| *id == self.background)
             && crate::custom_wallpapers::name(&self.background).is_none()
         {

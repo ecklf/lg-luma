@@ -1948,3 +1948,15 @@ fn a_fourth_gallery_row_of_custom_wallpapers_scrolls_into_view() {
         "the focused tile is on screen"
     );
 }
+
+#[test]
+fn manual_splash_survives_custom_images_save_and_reload() {
+    let mut prefs: Preferences = serde_json::from_str(r#"{"background":"forest"}"#).unwrap();
+    prefs.sanitize();
+    assert_eq!(prefs.splash_background(), "forest");
+    prefs.background = "custom:photo.jpg".into();
+    let mut restored: Preferences =
+        serde_json::from_str(&serde_json::to_string(&prefs).unwrap()).unwrap();
+    restored.sanitize();
+    assert_eq!(restored.splash_background(), "forest");
+}

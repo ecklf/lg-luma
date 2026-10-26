@@ -7,6 +7,8 @@ use image::{
 };
 use std::{
     fs,
+    hash::{DefaultHasher, Hasher},
+    io::Read,
     path::{Path, PathBuf},
     sync::mpsc::{self, Receiver, Sender},
     thread,
@@ -107,6 +109,7 @@ fn write_jpeg(image: &RgbImage, path: &Path) -> Result<(), String> {
     fs::rename(&temporary, path).map_err(|e| e.to_string())
 }
 
+#[cfg(test)]
 fn modified(path: &Path) -> Option<std::time::SystemTime> {
     fs::metadata(path).and_then(|meta| meta.modified()).ok()
 }
@@ -114,18 +117,20 @@ fn modified(path: &Path) -> Option<std::time::SystemTime> {
 /// Crops like `tools/assets.mjs` does for the bundled photos: scale to cover 1920x1080, keep the
 /// centre horizontally and 45% from the top vertically.
 fn cover(image: &DynamicImage) -> RgbImage {
-    let (width, height) = (image.width().max(1) as f32, image.height().max(1) as f32);
-    let scale = (1920. / width).max(1080. / height);
-    let (scaled_width, scaled_height) = (
-        (width * scale).round().max(1920.) as u32,
-        (height * scale).round().max(1080.) as u32,
-    );
-    let scaled = image
-        .resize_exact(scaled_width, scaled_height, FilterType::Triangle)
-        .into_rgb8();
-    let left = (scaled_width - 1920) / 2;
-    let top = ((scaled_height - 1080) as f32 * 0.45).round() as u32;
-    image::imageops::crop_imm(&scaled, left, top, 1920, 1080).to_image()
+    // Crop in source coordinates first: resizing a 1x12000 image to cover the screen
+    // before cropping would otherwise allocate a 1920x23040000 intermediate.
+    let (width, height) = (image.width(), image.height());
+    let (crop_width, crop_height) = if u64::from(width) * 1080 > u64::from(height) * 1920 {
+        (((u64::from(height) * 1920 / 1080) as u32).max(1), height)
+    } else {
+        (width, ((u64::from(width) * 1080 / 1920) as u32).max(1))
+    };
+    let left = (width - crop_width) / 2;
+    let top = ((height - crop_height) as f32 * 0.45).round() as u32;
+    image
+        .crop_imm(left, top, crop_width, crop_height)
+        .resize_exact(1920, 1080, FilterType::Triangle)
+        .into_rgb8()
 }
 
 /// The shading `tools/assets.mjs` gives the bundled wallpapers, so the clock, rows and text stay
@@ -187,14 +192,35 @@ fn shade(image: &mut RgbImage) {
 }
 
 /// Writes the cached wallpaper and thumbnail for one image, unless they are newer than it.
-pub fn prepare(preferences: &Path, name: &str) -> Result<(), String> {
+pub fn prepare(preferences: &Path, name: &str) -> Result<bool, String> {
     let source = folder(preferences).join(name);
     let (full, thumb) = (wallpaper(preferences, name), thumbnail(preferences, name));
-    if let (Some(source_time), Some(full_time), Some(_)) =
-        (modified(&source), modified(&full), modified(&thumb))
-        && full_time >= source_time
+    // Content fingerprint also catches SCP preserving timestamps and coarse filesystem mtimes.
+    // This is cache invalidation, not a security/authenticity check.
+    let mut input = fs::File::open(&source)
+        .map_err(|e| e.to_string())?
+        .take(MAX_FILE_BYTES + 1);
+    let mut fingerprint = DefaultHasher::new();
+    let mut buffer = [0u8; 65536];
+    let mut size = 0u64;
+    loop {
+        let count = input.read(&mut buffer).map_err(|e| e.to_string())?;
+        if count == 0 {
+            break;
+        }
+        size += count as u64;
+        fingerprint.write(&buffer[..count]);
+    }
+    if size > MAX_FILE_BYTES {
+        return Err("Wallpaper file too large".into());
+    }
+    let signature = format!("v2-{size}-{:016x}", fingerprint.finish());
+    let stamp = cache(preferences).join(format!("{name}.stamp"));
+    if full.is_file()
+        && thumb.is_file()
+        && fs::read_to_string(&stamp).ok().as_deref() == Some(&signature)
     {
-        return Ok(());
+        return Ok(false);
     }
     let image = decode(&source)?;
     let mut screen = cover(&image);
@@ -206,17 +232,32 @@ pub fn prepare(preferences: &Path, name: &str) -> Result<(), String> {
         .into_rgb8();
     write_jpeg(&small, &thumb)?;
     shade(&mut screen);
-    write_jpeg(&screen, &full)
+    write_jpeg(&screen, &full)?;
+    fs::write(stamp, signature).map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
 /// Prepares every image in the folder, removes cache files of images that are gone, and returns
 /// the IDs of those ready to show.
-pub fn refresh(preferences: &Path) -> Vec<String> {
+#[derive(Debug, Default)]
+pub struct Refresh {
+    pub ready: Vec<String>,
+    pub changed: Vec<PathBuf>,
+}
+
+pub fn refresh(preferences: &Path) -> Refresh {
     let names = scan(&folder(preferences));
-    let mut ready = Vec::new();
+    let mut result = Refresh::default();
     for name in &names {
         match prepare(preferences, name) {
-            Ok(()) => ready.push(id(name)),
+            Ok(changed) => {
+                result.ready.push(id(name));
+                if changed {
+                    result
+                        .changed
+                        .extend([wallpaper(preferences, name), thumbnail(preferences, name)]);
+                }
+            }
             Err(error) => eprintln!("Luma wallpaper {name}: {error}"),
         }
     }
@@ -225,19 +266,20 @@ pub fn refresh(preferences: &Path) -> Vec<String> {
             let file = entry.file_name().to_string_lossy().into_owned();
             let source = file
                 .strip_suffix(".thumb.jpg")
-                .or_else(|| file.strip_suffix(".jpg"));
+                .or_else(|| file.strip_suffix(".jpg"))
+                .or_else(|| file.strip_suffix(".stamp"));
             if source.is_some_and(|source| !names.iter().any(|name| name == source)) {
                 let _ = fs::remove_file(entry.path());
             }
         }
     }
-    ready
+    result
 }
 
 /// Runs `refresh` on its own thread; one scan at a time, results arrive on `receiver`.
 pub struct Worker {
     requests: Sender<()>,
-    pub receiver: Receiver<Vec<String>>,
+    pub receiver: Receiver<Refresh>,
 }
 
 impl Worker {
@@ -291,6 +333,43 @@ mod tests {
     }
 
     #[test]
+    fn extreme_aspect_ratios_have_screen_sized_output() {
+        for (w, h) in [(1, 12000), (12000, 1), (1, 1)] {
+            let source =
+                DynamicImage::ImageRgb8(RgbImage::from_pixel(w, h, image::Rgb([20, 40, 60])));
+            let result = cover(&source);
+            assert_eq!(result.dimensions(), (1920, 1080));
+            assert_eq!(result.get_pixel(960, 540).0, [20, 40, 60]);
+        }
+    }
+
+    #[test]
+    fn same_name_replacement_invalidates_both_cached_images() {
+        let dir = temporary();
+        let prefs = dir.join("preferences.json");
+        let source = dir.join("wallpapers/photo.png");
+        photo(&source, 16, 9);
+        let first = refresh(&prefs);
+        let old = fs::read(wallpaper(&prefs, "photo.png")).unwrap();
+        assert_eq!(first.changed.len(), 2);
+        assert!(refresh(&prefs).changed.is_empty());
+        RgbImage::from_pixel(16, 9, image::Rgb([255, 0, 0]))
+            .save(&source)
+            .unwrap();
+        let next = refresh(&prefs);
+        assert_eq!(first.ready, next.ready);
+        assert_eq!(
+            next.changed,
+            [
+                wallpaper(&prefs, "photo.png"),
+                thumbnail(&prefs, "photo.png")
+            ]
+        );
+        assert_ne!(old, fs::read(wallpaper(&prefs, "photo.png")).unwrap());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn only_plain_image_names_inside_the_folder_are_valid() {
         for name in ["Beach.JPG", "my photo.webp", "a.jpeg", "x.png"] {
             assert!(valid_name(name), "{name}");
@@ -336,7 +415,7 @@ mod tests {
         let preferences = dir.join("preferences.json");
         photo(&dir.join("wallpapers/wide.png"), 3000, 1000);
         fs::write(dir.join("wallpapers/broken.jpg"), b"not an image").unwrap();
-        assert_eq!(refresh(&preferences), [id("wide.png")]);
+        assert_eq!(refresh(&preferences).ready, [id("wide.png")]);
         let full = image::open(wallpaper(&preferences, "wide.png")).unwrap();
         assert_eq!((full.width(), full.height()), (1920, 1080));
         let small = image::open(thumbnail(&preferences, "wide.png")).unwrap();
@@ -350,7 +429,7 @@ mod tests {
         );
         // Removing the image removes its cache files.
         fs::remove_file(dir.join("wallpapers/wide.png")).unwrap();
-        assert!(refresh(&preferences).is_empty());
+        assert!(refresh(&preferences).ready.is_empty());
         assert!(!wallpaper(&preferences, "wide.png").exists());
         assert!(!thumbnail(&preferences, "wide.png").exists());
         fs::remove_dir_all(dir).unwrap();

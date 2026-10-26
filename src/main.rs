@@ -282,10 +282,8 @@ fn effects(
                 if let Err(error) = storage::save(preferences, &state.preferences) {
                     eprintln!("{error}");
                     state.notify(state.preferences.language.t("savedError"));
-                } else if custom_wallpapers::name(&state.preferences.background).is_none() {
-                    // LG's splash is a static PNG per bundled background; a custom wallpaper
-                    // leaves the last bundled one in place.
-                    platform.sync_splash(&state.preferences.background);
+                } else {
+                    platform.sync_splash(state.preferences.splash_background());
                 }
             }
             effect @ (Effect::Refresh | Effect::Reload) => {
@@ -647,9 +645,7 @@ fn run() -> Result<(), String> {
         &weather_service,
         &wallpapers,
     );
-    if custom_wallpapers::name(&state.preferences.background).is_none() {
-        platform.sync_splash(&state.preferences.background);
-    }
+    platform.sync_splash(state.preferences.splash_background());
     startup_stage("preferences and workers");
 
     let sdl = sdl2::init()?;
@@ -909,9 +905,17 @@ fn run() -> Result<(), String> {
         }
         state.tick();
         state.dirty |= assets.artwork.poll();
-        while let Ok(ready) = wallpapers.receiver.try_recv() {
-            if ready != state.custom_wallpapers {
-                state.custom_wallpapers = ready;
+        while let Ok(result) = wallpapers.receiver.try_recv() {
+            if !result.changed.is_empty() {
+                for path in &result.changed {
+                    renderer.invalidate_image(path);
+                }
+                // Draw commands still name the same paths, so force damage for changed pixels.
+                damage_tracker.reset();
+                state.dirty = true;
+            }
+            if result.ready != state.custom_wallpapers {
+                state.custom_wallpapers = result.ready;
                 state.dirty = true;
             }
         }
@@ -982,6 +986,7 @@ fn run() -> Result<(), String> {
                         &platform,
                         &preferences_path,
                         &weather_service,
+                        &wallpapers,
                     );
                 }
                 Response::Recent {

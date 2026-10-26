@@ -1609,6 +1609,9 @@ impl State {
                     self.previous_background =
                         Some((self.preferences.background.clone(), Instant::now()));
                 }
+                if crate::custom_wallpapers::name(&id).is_none() {
+                    self.preferences.splash_background = Some(id.clone());
+                }
                 self.preferences.background = id;
                 return vec![Effect::Save];
             }

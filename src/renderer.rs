@@ -349,6 +349,13 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    /// A worker replaced an image at a stable path. Drop even a cached load failure.
+    pub fn invalidate_image(&mut self, path: &Path) {
+        let key = path.to_string_lossy();
+        self.textures.remove(key.as_ref());
+        self.artwork_variants.remove(key.as_ref());
+    }
+
     fn set_fade(&mut self, offset: usize, fade: Option<[f32; 4]>) {
         let mut next = self.fade.unwrap_or([0.; 8]);
         next[offset..offset + 4].copy_from_slice(&fade.unwrap_or([0.; 4]));

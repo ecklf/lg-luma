@@ -204,3 +204,14 @@ test('takeover stops waiting after five seconds if the normal instance stays run
   assert.throws(() => mock.context.closeNormal(), /Close Luma before enabling Home integration/);
   assert.equal(mock.pauses(), 5);
 });
+
+test('a custom or cycled background keeps the saved manual splash across restaging', () => {
+  for (const background of ['custom:photo.jpg', 'prism']) {
+    assert.equal(
+      fixture({
+        preferences: { [internal]: { background, splash_background: 'forest' } },
+      }).splash(),
+      'forest',
+    );
+  }
+});
