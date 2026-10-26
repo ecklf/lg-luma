@@ -1030,7 +1030,8 @@
     "it": "Aggiornamento di Luma",
     "ru": "Обновление Luma",
     "pl": "Aktualizacja Luma",
-    "fr": "Mise à jour de Luma"
+    "fr": "Mise à jour de Luma",
+    "vi": "Cập nhật Luma"
   },
   "updateChecking": {
     "en": "Checking…",
@@ -1041,7 +1042,8 @@
     "it": "Verifica in corso…",
     "ru": "Проверка…",
     "pl": "Sprawdzanie…",
-    "fr": "Vérification…"
+    "fr": "Vérification…",
+    "vi": "Đang kiểm tra…"
   },
   "updateLatest": {
     "en": "Up to date",
@@ -1052,7 +1054,8 @@
     "it": "Aggiornato",
     "ru": "Актуальная версия",
     "pl": "Aktualna wersja",
-    "fr": "À jour"
+    "fr": "À jour",
+    "vi": "Đã cập nhật"
   },
   "updateAvailable": {
     "en": "Install {version}",
@@ -1063,7 +1066,8 @@
     "it": "Installa {version}",
     "ru": "Установить {version}",
     "pl": "Zainstaluj {version}",
-    "fr": "Installer {version}"
+    "fr": "Installer {version}",
+    "vi": "Cài đặt {version}"
   },
   "updateDownloading": {
     "en": "Downloading {percent} %",
@@ -1074,7 +1078,8 @@
     "it": "Download {percent}%",
     "ru": "Загрузка {percent}%",
     "pl": "Pobieranie {percent}%",
-    "fr": "Téléchargement {percent} %"
+    "fr": "Téléchargement {percent} %",
+    "vi": "Đang tải {percent} %"
   },
   "updateInstalling": {
     "en": "Installing…",
@@ -1085,7 +1090,8 @@
     "it": "Installazione…",
     "ru": "Установка…",
     "pl": "Instalowanie…",
-    "fr": "Installation…"
+    "fr": "Installation…",
+    "vi": "Đang cài đặt…"
   },
   "updateFailed": {
     "en": "Try again",
@@ -1096,7 +1102,8 @@
     "it": "Riprova",
     "ru": "Повторить",
     "pl": "Spróbuj ponownie",
-    "fr": "Réessayer"
+    "fr": "Réessayer",
+    "vi": "Thử lại"
   },
   "updateError": {
     "en": "The update did not work. Try again later.",
@@ -1107,7 +1114,8 @@
     "it": "L'aggiornamento non è riuscito. Riprova più tardi.",
     "ru": "Не удалось обновить. Повторите попытку позже.",
     "pl": "Aktualizacja nie powiodła się. Spróbuj ponownie później.",
-    "fr": "La mise à jour a échoué. Réessayez plus tard."
+    "fr": "La mise à jour a échoué. Réessayez plus tard.",
+    "vi": "Cập nhật không thành công. Hãy thử lại sau."
   },
   "updateRestart": {
     "en": "Luma restarts when the update is installed.",
@@ -1118,7 +1126,8 @@
     "it": "Luma si riavvia al termine dell'installazione.",
     "ru": "Luma перезапустится после установки обновления.",
     "pl": "Luma uruchomi się ponownie po zainstalowaniu aktualizacji.",
-    "fr": "Luma redémarre une fois la mise à jour installée."
+    "fr": "Luma redémarre une fois la mise à jour installée.",
+    "vi": "Luma sẽ khởi động lại sau khi cài đặt bản cập nhật."
   },
   "quitApp": {
     "zh-tw": "結束應用程式",
