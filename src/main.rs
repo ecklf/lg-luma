@@ -430,10 +430,11 @@ fn weather_tick(state: &mut State, service: &weather_service::Service, visible: 
     while let Ok(response) = service.receiver.try_recv() {
         match response {
             weather_service::Response::Search { id, result } => {
-                if let Some(place) = state.weather.accept_rename(id, &result) {
-                    save |= place.is_some_and(|place| state.rename_location(place));
-                } else {
-                    state.dirty |= state.weather.accept_search(id, result)
+                state.dirty |= state.weather.accept_search(id, result)
+            }
+            weather_service::Response::Renamed { id, result } => {
+                if let Some(place) = state.weather.accept_rename(id, result) {
+                    save |= state.rename_location(place);
                 }
             }
             weather_service::Response::Forecast { id, key, result } => {

@@ -996,6 +996,7 @@ fn weather_units_save_without_replacing_celsius_cache_and_hide_keeps_city() {
         country: "Austria".into(),
         latitude: 48.2085,
         longitude: 16.3721,
+        id: None,
     };
     state.preferences.weather_location = Some(place.clone());
     state.weather.cache = Some(crate::weather::Cache {
@@ -1503,48 +1504,154 @@ fn inventory_success_resets_failures_and_later_failures_show_at_once() {
 
 #[test]
 fn a_language_change_renames_the_saved_place_from_a_matching_lookup() {
-    use crate::weather::Location;
-    let mut state = ready();
-    let place = Location {
+    use crate::i18n::Language;
+    use crate::weather::{Command, Location};
+    let cologne = Location {
         name: "Cologne".into(),
         region: "North Rhine-Westphalia".into(),
         country: "Germany".into(),
         latitude: 50.93333,
         longitude: 6.95,
-    };
-    state.preferences.weather_location = Some(place.clone());
-    let command =
-        state
-            .weather
-            .rename(&place, crate::i18n::Language::En, crate::i18n::Language::De);
-    let crate::weather::Command::Rename { id, location, .. } = command else {
-        panic!("expected a rename");
-    };
-    assert_eq!(location.name, "Cologne");
-    let elsewhere = Location {
-        name: "Köln-Porz".into(),
-        latitude: 50.87,
-        ..place.clone()
+        id: None,
     };
     let german = Location {
         name: "Köln".into(),
         region: "Nordrhein-Westfalen".into(),
         country: "Deutschland".into(),
-        ..place.clone()
+        id: Some(2886242),
+        ..cologne.clone()
     };
+    let berlin = Location {
+        name: "Berlin".into(),
+        region: "Berlin".into(),
+        latitude: 52.52437,
+        longitude: 13.41053,
+        id: Some(2950159),
+        ..cologne.clone()
+    };
+    let rename_id = |command: Command| match command {
+        Command::Rename { id, .. } => id,
+        _ => panic!("expected a rename"),
+    };
+
+    let mut state = ready();
+    state.preferences.weather_location = Some(cologne.clone());
+    let id = rename_id(state.weather.rename(&cologne, Language::En, Language::De));
+    // Leaving Settings cancels a city search, not the rename.
+    state.weather.cancel_search();
     let found = state
         .weather
-        .accept_rename(id, &Ok(vec![elsewhere, german]))
-        .expect("the rename search")
-        .expect("a place at the same coordinates");
+        .accept_rename(id, Ok(Some(german.clone())))
+        .expect("the place at the saved coordinates");
     assert!(state.rename_location(found));
     let saved = state.preferences.weather_location.as_ref().unwrap();
     assert_eq!(
-        (saved.name.as_str(), saved.country.as_str()),
-        ("Köln", "Deutschland")
+        (saved.name.as_str(), saved.country.as_str(), saved.id),
+        ("Köln", "Deutschland", Some(2886242)),
+        "names and the id are kept"
     );
     assert!(
-        state.weather.accept_rename(id, &Ok(vec![])).is_none(),
+        state
+            .weather
+            .accept_rename(id, Ok(Some(german.clone())))
+            .is_none(),
         "taken once"
     );
+
+    // A reply queued before the city changed is rejected, by the rename and by the state.
+    state.preferences.weather_location = Some(cologne.clone());
+    let id = rename_id(state.weather.rename(&cologne, Language::En, Language::De));
+    state.preferences.weather_location = Some(berlin.clone());
+    state.weather.cancel_rename();
+    assert!(
+        state
+            .weather
+            .accept_rename(id, Ok(Some(german.clone())))
+            .is_none()
+    );
+    assert!(
+        !state.rename_location(german.clone()),
+        "not the saved place"
+    );
+    assert_eq!(state.preferences.weather_location.as_ref(), Some(&berlin));
+
+    // Removing the city drops the rename too.
+    state.preferences.weather_location = Some(cologne.clone());
+    let id = rename_id(state.weather.rename(&cologne, Language::En, Language::De));
+    state.preferences.weather_location = None;
+    state.weather.remove_location();
+    assert!(
+        state
+            .weather
+            .accept_rename(id, Ok(Some(german.clone())))
+            .is_none()
+    );
+    assert!(!state.rename_location(german.clone()));
+
+    // Quick language changes: only the last rename counts, still searched from the saved
+    // name's language.
+    state.preferences.weather_location = Some(cologne.clone());
+    let first = rename_id(state.weather.rename(&cologne, Language::En, Language::De));
+    let Command::Rename {
+        id: last, from, to, ..
+    } = state.weather.rename(&cologne, Language::De, Language::Fr)
+    else {
+        panic!("expected a rename");
+    };
+    assert_eq!((from, to), (Language::En, Language::Fr));
+    assert!(
+        state
+            .weather
+            .accept_rename(first, Ok(Some(german.clone())))
+            .is_none()
+    );
+    // Offline: the saved names stay.
+    assert!(
+        state
+            .weather
+            .accept_rename(last, Err("offline".into()))
+            .is_none()
+    );
+    assert_eq!(state.preferences.weather_location.as_ref(), Some(&cologne));
+}
+
+#[test]
+fn a_language_change_with_the_weather_off_contacts_no_service() {
+    use crate::i18n::Language;
+    let mut state = ready();
+    state.preferences.show_weather = false;
+    state.preferences.weather_location = Some(crate::weather::Location {
+        name: "Cologne".into(),
+        region: String::new(),
+        country: "Germany".into(),
+        latitude: 50.93333,
+        longitude: 6.95,
+        id: Some(2886242),
+    });
+    state.open(2);
+    state.subpage = Some(crate::state::Subpage::Language);
+    let index = Language::ALL
+        .iter()
+        .position(|l| *l == Language::De)
+        .unwrap();
+    state.focus = Target::Choice(index);
+    let effects = state.activate();
+    assert_eq!(state.preferences.language, Language::De);
+    assert!(
+        !effects
+            .iter()
+            .any(|effect| matches!(effect, Effect::Weather(_)))
+    );
+
+    state.preferences.show_weather = true;
+    state.subpage = Some(crate::state::Subpage::Language);
+    state.focus = Target::Choice(0);
+    let effects = state.activate();
+    assert!(effects.iter().any(|effect| matches!(
+        effect,
+        Effect::Weather(crate::weather::Command::Rename {
+            from: Language::De,
+            ..
+        })
+    )));
 }

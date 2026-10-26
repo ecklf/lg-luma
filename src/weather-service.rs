@@ -114,16 +114,19 @@ impl Client {
             ],
         )?)
     }
-    /// The saved place named in `to`. Geocoding only matches a name in the language it is
-    /// written in (a German spelling can find nothing in an English search), so the place is first found by its
-    /// saved name in `from`, then `to` or English, at the same coordinates, and its id is then
-    /// looked up in `to`. Empty when no search finds the same coordinates.
+    /// The saved place named in `to`, looked up by its Open-Meteo id. A place saved without
+    /// one is first found by name: geocoding only matches a name in the language it is written
+    /// in (a German spelling can find nothing in an English search), so it searches in `from`,
+    /// then `to` or English, for the same coordinates. None when no search finds them.
     pub fn rename(
         &self,
         location: &Location,
         from: Language,
         to: Language,
-    ) -> Result<Vec<Location>, String> {
+    ) -> Result<Option<Location>, String> {
+        if let Some(id) = location.id {
+            return self.lookup(id, to);
+        }
         let key = location.key();
         let mut tried = Vec::new();
         for language in [from, to, Language::En] {
@@ -147,14 +150,17 @@ impl Client {
                     .and_then(|place| place["id"].as_u64())
             });
             if let Some(id) = id {
-                let place = self.request(
-                    &self.lookup,
-                    &[("id", &id.to_string()), ("language", to.code())],
-                )?;
-                return Ok(Location::parse(&place).into_iter().collect());
+                return self.lookup(id, to);
             }
         }
-        Ok(Vec::new())
+        Ok(None)
+    }
+    fn lookup(&self, id: u64, language: Language) -> Result<Option<Location>, String> {
+        let place = self.request(
+            &self.lookup,
+            &[("id", &id.to_string()), ("language", language.code())],
+        )?;
+        Ok(Location::parse(&place))
     }
     pub fn forecast(&self, location: &Location) -> Result<Reading, String> {
         let latitude = location.latitude.to_string();
@@ -176,6 +182,10 @@ pub enum Response {
     Search {
         id: u64,
         result: Result<Vec<Location>, String>,
+    },
+    Renamed {
+        id: u64,
+        result: Result<Option<Location>, String>,
     },
     Forecast {
         id: u64,
@@ -211,6 +221,7 @@ impl Queue {
 pub struct Service {
     search: Arc<Queue>,
     forecast: Arc<Queue>,
+    rename: Arc<Queue>,
     pub receiver: mpsc::Receiver<Response>,
     cache: Option<mpsc::Sender<Option<Cache>>>,
     cache_worker: Option<JoinHandle<()>>,
@@ -256,7 +267,7 @@ impl Service {
                             location,
                             from,
                             to,
-                        } => Response::Search {
+                        } => Response::Renamed {
                             id,
                             result: client.rename(&location, from, to),
                         },
@@ -277,6 +288,7 @@ impl Service {
             queue
         };
         let search = spawn(client.clone(), sender.clone());
+        let rename = spawn(client.clone(), sender.clone());
         let forecast = spawn(client, sender);
         let (cache, writes) = mpsc::channel::<Option<Cache>>();
         let cache_worker = thread::spawn(move || {
@@ -292,20 +304,21 @@ impl Service {
         Self {
             search,
             forecast,
+            rename,
             receiver,
             cache: Some(cache),
             cache_worker: Some(cache_worker),
         }
     }
-    pub fn generations(&self, (search, forecast): (u64, u64)) {
+    pub fn generations(&self, (search, forecast, rename): (u64, u64, u64)) {
         self.search.generation.store(search, Ordering::SeqCst);
         self.forecast.generation.store(forecast, Ordering::SeqCst);
+        self.rename.generation.store(rename, Ordering::SeqCst);
     }
     pub fn send(&self, command: Command) {
         match command {
-            job @ (Command::Search { id, .. } | Command::Rename { id, .. }) => {
-                self.search.submit(id, job)
-            }
+            job @ Command::Search { id, .. } => self.search.submit(id, job),
+            job @ Command::Rename { id, .. } => self.rename.submit(id, job),
             job @ Command::Forecast { id, .. } => self.forecast.submit(id, job),
             Command::Persist(cache) => {
                 if let Some(sender) = &self.cache {
@@ -324,6 +337,7 @@ impl Drop for Service {
     fn drop(&mut self) {
         self.search.close();
         self.forecast.close();
+        self.rename.close();
         self.cache.take();
         if let Some(worker) = self.cache_worker.take() {
             let _ = worker.join();
@@ -456,27 +470,47 @@ mod tests {
             country: "Deutschland".into(),
             latitude: 50.93333,
             longitude: 6.95,
+            id: None,
         };
-        let renamed = client.rename(&saved, Language::De, Language::En).unwrap();
-        assert_eq!(renamed.len(), 1);
+        let renamed = client
+            .rename(&saved, Language::De, Language::En)
+            .unwrap()
+            .expect("found by name");
         assert_eq!(
             (
-                renamed[0].name.as_str(),
-                renamed[0].region.as_str(),
-                renamed[0].country.as_str()
+                renamed.name.as_str(),
+                renamed.region.as_str(),
+                renamed.country.as_str(),
+                renamed.id
             ),
-            ("Cologne", "North Rhine-Westphalia", "Germany")
+            (
+                "Cologne",
+                "North Rhine-Westphalia",
+                "Germany",
+                Some(2886242)
+            )
         );
-        assert_eq!(renamed[0].key(), saved.key());
+        assert_eq!(renamed.key(), saved.key());
         let elsewhere = Location {
             latitude: 50.,
-            ..saved
+            ..saved.clone()
         };
         assert!(
             client
                 .rename(&elsewhere, Language::De, Language::En)
                 .unwrap()
-                .is_empty()
+                .is_none()
         );
+        // With the id saved, no name search: a name no search finds still renames.
+        let unsearchable = Location {
+            name: "nowhere".into(),
+            id: Some(2886242),
+            ..saved
+        };
+        let renamed = client
+            .rename(&unsearchable, Language::De, Language::En)
+            .unwrap()
+            .expect("looked up by id");
+        assert_eq!(renamed.name, "Cologne");
     }
 }
