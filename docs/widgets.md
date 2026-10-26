@@ -112,7 +112,7 @@ when the widget is checked rather than silently ignored.
 | `sources`             | 1–4 sources (section 3.3).                                                                                                                                                                 |
 
 **Localised text** is an object from Luma's language codes (`en`, `de`, `zh`, `es`, `pt`, `it`,
-`ru`) to strings, the same shape as `assets/messages.json`. `en` is required; a missing language
+`ru`, `pl`, `fr`, `vi`) to strings, the same shape as `assets/messages.json`. `en` is required; a missing language
 falls back to it.
 
 ### 3.1 Settings

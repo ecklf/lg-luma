@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const MANIFEST_LIMIT: usize = 256 * 1024;
 pub const PROGRAM_LIMIT: usize = 64 * 1024;
 pub const REPLY_LIMIT: usize = 1024 * 1024;
-const LANGUAGES: [&str; 7] = ["en", "de", "zh", "es", "pt", "it", "ru"];
+const LANGUAGES: [&str; 10] = ["en", "de", "zh", "es", "pt", "it", "ru", "pl", "fr", "vi"];
 /// Luma's bundled UI icons a widget may show in the store.
 pub const ICONS: [&str; 14] = [
     "alert",
