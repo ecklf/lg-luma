@@ -17,6 +17,7 @@ const places = {
   de: { name: 'Wien', region: 'Wien', country: 'Österreich' },
   zh: { name: '维也纳', region: '维也纳', country: '奥地利' },
   pt: { name: 'Viena', region: 'Viena', country: 'Áustria' },
+  vi: { name: 'Viên', region: 'Viên', country: 'Áo' },
 };
 const server = http.createServer((request, response) => {
   const url = new URL(request.url, 'http://127.0.0.1');
@@ -254,8 +255,68 @@ try {
     'pt',
     'Geocoding must use the Portuguese locale',
   );
+
+  await fs.writeFile(
+    preferences,
+    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
+  );
+  const vietnamesePicker = `${picker},${Array(9).fill('down').join(',')}`;
+  const vietnameseFocused = await scenario('vi-picker', vietnamesePicker);
+  assert.deepEqual(vietnameseFocused.focus, { Choice: 9 });
+  assert.ok(vietnameseFocused.scroll > 0, 'The tenth language must scroll fully into view');
+  assert.ok(vietnameseFocused.ui_text.includes('Tiếng Việt'));
+  const vietnamese = await scenario('vi-home', `${vietnamesePicker},enter,home,down`);
+  assert.equal(vietnamese.preferences.language, 'vi');
+  for (const key of [
+    'home',
+    'apps',
+    'settings',
+    'favorites',
+    'inputsHeading',
+    'evening',
+    'setWeatherLocation',
+  ])
+    contains(vietnamese, key, 'vi');
+  assert.ok(vietnamese.ui_text.includes('THỨ TƯ, 21 THÁNG 10'));
+  assert.ok(vietnamese.ui_text.includes('Netflix'), 'Installed app names stay intact');
+  assert.equal(JSON.parse(await fs.readFile(preferences, 'utf8')).language, 'vi');
+
+  const vietnameseSettings = await scenario('vi-settings', 'settings,down');
+  assert.equal(vietnameseSettings.preferences.language, 'vi', 'Vietnamese survives a restart');
+  assert.ok(vietnameseSettings.ui_text.includes('Tiếng Việt'));
+  for (const key of ['language', 'appNames', 'clock']) contains(vietnameseSettings, key, 'vi');
+  const vietnameseOptions = await scenario('vi-app-options', 'apps,down,enter');
+  for (const key of ['open', 'removeFavorite', 'hideApp', 'deleteApp'])
+    contains(vietnameseOptions, key, 'vi');
+  const deleteConfirmation = 'apps,down,enter,down,down,down,enter';
+  const vietnameseDelete = await scenario('vi-delete-confirm', deleteConfirmation);
+  assert.equal(vietnameseDelete.focus, 'CancelDelete');
+  contains(vietnameseDelete, 'cancel', 'vi');
+  contains(vietnameseDelete, 'deleteApp', 'vi');
+  assert.ok(
+    vietnameseDelete.ui_text.includes(messages.deleteAppWarning.vi.replace('{app}', 'Netflix')),
+    'The deletion warning must be Vietnamese and preserve the installed app name',
+  );
+  const vietnameseCancel = await scenario('vi-delete-cancel', `${deleteConfirmation},enter`);
+  assert.deepEqual(vietnameseCancel.focus, { Option: 2 });
+  assert.ok(vietnameseCancel.apps.includes('netflix'), 'Cancel must not delete the app');
+  const vietnameseKeyboard = await scenario('vi-keyboard', 'apps,type:Netflix');
+  for (const key of ['findApp', 'space', 'delete', 'clear', 'done'])
+    contains(vietnameseKeyboard, key, 'vi');
+
+  const vietnameseWeather = await scenario(
+    'vi-weather',
+    `${location},type:Viên,back,enter,await-search,down,enter,home,await-weather`,
+  );
+  assert.equal(vietnameseWeather.preferences.weather_location.name, 'Viên');
+  assert.equal(vietnameseWeather.preferences.weather_location.country, 'Áo');
+  contains(vietnameseWeather, 'partlyCloudy', 'vi');
+  const vietnameseSearch = requests.filter((request) => request.path === '/v1/search').at(-1);
+  assert.equal(vietnameseSearch.query.language, 'vi', 'Geocoding must use the Vietnamese locale');
+  assert.equal(vietnameseSearch.query.name, 'Viên', 'Accented queries must round-trip unchanged');
+  await scenario('vi-4k', 'home,down', ['--capture-scale', '2']);
   console.log(
-    'Native translation checks passed: saved language selection, shared labels, Portuguese locale formatting and accented glyphs, localized geocoding/weather, unchanged app names, Chinese glyphs and 4K rendering.',
+    'Native translation checks passed: saved language selection, shared labels, Portuguese and Vietnamese locale formatting and accented glyphs, Vietnamese deletion/cancel UI, localized geocoding/weather, unchanged app names, Chinese glyphs and 4K rendering.',
   );
 } finally {
   server.closeAllConnections();

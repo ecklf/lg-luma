@@ -88,7 +88,7 @@ It does not execute the test suites. A desktop display is required; on headless 
 | OK or Back in move mode       | Finish reordering without launching                           |
 | Escape / Back / Backspace     | Parent navigation, overlay dismissal or Recent apps from Home |
 | Hold Back / Escape for 600 ms | Open Recent apps while Luma is focused                        |
-| Menu / M / right-click        | App options                                                   |
+| Menu / M / right-click        | App options side popup                                        |
 | Pointer / wheel               | Hover, click, hold and scrolling                              |
 | F5                            | Refresh inventory                                             |
 
@@ -97,6 +97,31 @@ the keyboard first; Weather Location then returns to its parent Location row, HD
 that HDMI row, and the Background gallery to Background in the sidebar. Back from the sidebar
 focuses the Settings tab, then returns Home. **System** in the sidebar groups **Refresh apps & inputs**
 and the vector power-icon **Quit app** action separately from General preferences.
+On Apps, OK or a normal pointer click on an app opens its side popup, with **Open** first and focused by
+default, followed by favorite, hide/show and **Delete app** actions. A second OK launches the app.
+Home favorites, Inputs and Recent apps launch directly. Hold OK on Home still reorders favorites.
+LG's Settings and More buttons retain their system menus, with no custom key interception.
+Deletion opens a separate confirmation with **Cancel** focused by default. Cancel or Back returns
+to the side popup. Once deletion is sent, dismissal does not cancel the platform operation.
+The popup has action icons on the far right, without a title, close button or embedded shortcut hints. The
+confirmation has no heading and identifies the app in its warning text.
+Luma (including former app IDs and the Home identity), Homebrew Channel, test-preview cards and
+all apps in the `com.webos.*`, `com.palm.*` and `com.lge.*` namespaces cannot be deleted. This
+conservative vendor protection includes Live TV, Web Browser, Settings and potentially removable
+LG apps, rather than relying on firmware to reject unsafe removals. The worker calls
+`org.webosbrew.hbchannel.service/exec` once to run the embedded Node 8-compatible
+`tv/uninstall-app.cjs` helper. It sends one `com.webos.appInstallService/remove` subscription with
+`{"id":"APP_ID","subscribe":true}` and waits for status 31, not the initial acceptance reply.
+The normal endpoint was manually verified removing Content Store DAZN on webOS 26, whereas
+Homebrew's `uninstall` endpoint (`dev/remove`) returned `FAILED_REMOVE` for that app. The helper
+rechecks protected IDs, bounds output to 64 KiB/64 replies, terminates luna-send after completion
+or a 15-second deadline and has a separate 20-second native transport budget. Luma refreshes inventory after
+success. After a failed or timed-out request the worker makes up to three bounded, read-only
+inventory checks. An app absent from a complete inventory confirms removal even if its completion
+reply was lost. Otherwise the error closes the popup and refreshes inventory without deleting
+preferences. Uninstall mutations are never automatically retried. Desktop deletion changes only
+in-memory sample inventory. Verify app opening, real deletion, denial and focus restoration
+manually on a TV, including Home-takeover mode.
 The **Clock** subpage contains **Clock format** (12-hour or 24-hour; until one is chosen, the TV's
 format: webOS's `localeInfo.clock`, else the region of `localeInfo.locales.FMT`, else 12-hour for
 English and 24-hour for the other languages) and **Time format** (`HH:MM`
@@ -109,6 +134,8 @@ and `show_app_names`. The legacy `show_names` preference does not override these
 captions do not reserve layout space.
 The **Greeting** subpage contains **Name** and **Clear name**. Selecting Name opens the text keyboard
 (the system keyboard on the TV) and the name is appended to the Home greeting ("Good evening, Ana.").
+Long greetings scale down to fit their existing single-line area, centred vertically without
+moving the weather summary or favorite cards. Short greetings retain their original size.
 The keyboard starts empty; closing it without a name preserves the saved value. Clear name removes
 it. Preferences are saved when the keyboard closes, including automatic system-keyboard dismissal.
 Back from either subpage restores its General row. Input name removal also uses **Clear name**.
@@ -640,7 +667,13 @@ payload. Startup probes `/media/developer/<appid>/`, `/media/developer/temp/<app
 `/media/internal/.<appid>/`, selecting a directory the jailed app can actually create and write.
 Production `/media/cryptofs` installations prefer internal storage. `/media/developer/temp` is
 on the persistent developer partition, not the reboot-cleared `/tmp`. No settings are placed
-in `/tmp` and no system/app-payload permissions are widened. Existing JSON preferences and a
+in `/tmp` and no system/app-payload permissions are widened. Root Home takeover reuses these
+same app-owned directories, preferring existing app-owned preferences over root-owned fallback
+files left by an earlier takeover. It does not merge or delete duplicate preferences. Preference
+and weather-cache saves retain the directory owner's UID/GID so the normal app can still read
+them after Home is disabled. Symlink storage directories remain rejected. The executable Home
+method uses its source installation for storage precedence and legacy migration, not LG's
+`/usr/bin` executable path. Existing JSON preferences and a
 valid weather cache from beside this installation's old executable are imported once, without
 overwriting the chosen destination. Invalid existing preferences still report an error.
 Startup prints `Luma persistent storage:` with the chosen path. Desktop preview retains the legacy

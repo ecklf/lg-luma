@@ -63,6 +63,9 @@ pub enum Target {
     Retry,
     DismissNotice,
     Option(usize),
+    OpenApp,
+    ConfirmDelete,
+    CancelDelete,
     Key(usize),
     WeatherConfigure,
     WeatherToggle,
@@ -106,6 +109,7 @@ pub struct Control {
 #[derive(Clone, Debug)]
 pub enum Overlay {
     Options { id: String, restore: Target },
+    Delete { id: String, restore: Target },
     Recents { restore: Target },
     Keyboard,
     SystemKeyboard,
@@ -149,6 +153,7 @@ pub enum Effect {
     /// Refresh apps: read the inventory and every app icon again.
     Reload,
     Launch(String),
+    Uninstall(String),
     Recent {
         generation: u64,
         command: crate::recents::Command,
@@ -180,6 +185,7 @@ pub struct State {
     /// Set by Refresh apps: the next inventory also reloads every app icon.
     pub reload_artwork: bool,
     pub launching: bool,
+    pub uninstalling: Option<String>,
     pub notice: Option<(String, Instant)>,
     pub error: Option<String>,
     /// Inventory loads that failed in a row while no apps were shown yet.
@@ -214,6 +220,7 @@ impl State {
             loading: false,
             reload_artwork: false,
             launching: false,
+            uninstalling: None,
             notice: None,
             error: None,
             inventory_failures: 0,
@@ -355,7 +362,9 @@ impl State {
     }
 
     pub fn content_viewport(&self) -> Rect {
-        let bottom = if self.page == Page::Home && self.moving.is_none() {
+        let bottom = if self.page == Page::Apps {
+            1080.
+        } else if self.page == Page::Home && self.moving.is_none() {
             1053.6
         } else {
             994.4
@@ -1099,12 +1108,64 @@ impl State {
                 id: id.clone(),
                 restore: self.focus.clone(),
             });
-            self.focus = Target::Option(0);
+            self.focus = Target::OpenApp;
             if !self.preferences.reduced_motion {
                 self.panel_started = Some(Instant::now());
             }
             self.dirty = true;
         }
+    }
+
+    pub fn uninstall_response(&mut self, id: String, result: Result<(), String>) -> Vec<Effect> {
+        if self.uninstalling.as_ref() != Some(&id) {
+            return vec![];
+        }
+        self.uninstalling = None;
+        self.dirty = true;
+        if let Err(error) = result {
+            eprintln!("Luma uninstall: {error}");
+            self.notify(self.preferences.language.t("deleteAppError"));
+            if matches!(&self.overlay, Some(Overlay::Delete { id: current, .. } | Overlay::Options { id: current, .. }) if current == &id)
+            {
+                if let Some(Overlay::Delete { restore, .. } | Overlay::Options { restore, .. }) =
+                    self.overlay.take()
+                {
+                    self.focus = restore;
+                }
+                self.panel_started = None;
+                self.pressed = None;
+                self.reconcile_focus();
+            }
+            // Even an uncertain/failed mutation may have changed TV inventory.
+            // Refresh is read-only, and also clears a stale card after late removal.
+            return vec![Effect::Refresh];
+        }
+        let old_ids: Vec<_> = self.apps().iter().map(|app| app.id.clone()).collect();
+        let index = old_ids.iter().position(|item| item == &id).unwrap_or(0);
+        let mut favorites = self.preferences.favorites(&self.inventory.apps);
+        favorites.retain(|item| item != &id);
+        self.preferences.favorites = Some(favorites);
+        self.preferences.hidden.retain(|item| item != &id);
+        self.inventory.apps.retain(|app| app.id != id);
+        if self.filter == 5 && self.hidden_count() == 0 {
+            self.filter = 0;
+        }
+        if matches!(&self.overlay, Some(Overlay::Delete { id: current, .. } | Overlay::Options { id: current, .. }) if current == &id)
+        {
+            self.overlay = None;
+            self.panel_started = None;
+            self.focus = Target::App(id.clone());
+        }
+        if self.focus == Target::App(id) {
+            self.focus = self
+                .apps()
+                .get(index.min(self.apps().len().saturating_sub(1)))
+                .map(|app| Target::App(app.id.clone()))
+                .unwrap_or_else(|| self.first_content());
+        }
+        self.reconcile_focus();
+        self.notify(self.preferences.language.t("appDeleted"));
+        vec![Effect::Save, Effect::Refresh]
     }
 
     pub fn hold(&mut self) {
@@ -1342,8 +1403,18 @@ impl State {
             Target::DismissNotice => self.notice = None,
             Target::CloseDialog => return self.back(),
             Target::TvSettings => return vec![Effect::Launch("com.palm.app.settings".into())],
+            Target::App(_) if self.page == Page::Apps && !self.launching => self.options(),
             Target::App(id) | Target::Input(id) if !self.launching => {
                 return vec![Effect::Launch(id)];
+            }
+            Target::OpenApp if !self.launching => {
+                if let Some(Overlay::Options { id, .. }) = &self.overlay
+                    && self.inventory.apps.iter().any(|app| &app.id == id)
+                {
+                    let id = id.clone();
+                    self.back();
+                    return vec![Effect::Launch(id)];
+                }
             }
             Target::Filter(index) => {
                 self.filter = if self.filter == index { 0 } else { index };
@@ -1574,6 +1645,23 @@ impl State {
                 return vec![Effect::Save];
             }
             Target::Option(index) => {
+                if index == 2 {
+                    if let Some(Overlay::Options { id, restore }) = &self.overlay
+                        && crate::platform::can_uninstall(id)
+                        && self.uninstalling.is_none()
+                        && self.inventory.apps.iter().any(|app| &app.id == id)
+                    {
+                        self.overlay = Some(Overlay::Delete {
+                            id: id.clone(),
+                            restore: restore.clone(),
+                        });
+                        self.focus = Target::CancelDelete;
+                        self.pointer = false;
+                        self.pressed = None;
+                        self.panel_started = None;
+                    }
+                    return vec![];
+                }
                 let Some(Overlay::Options { id, restore }) = self.overlay.take() else {
                     return vec![];
                 };
@@ -1642,6 +1730,18 @@ impl State {
                     vec![]
                 };
             }
+            Target::CancelDelete => return self.back(),
+            Target::ConfirmDelete => {
+                if let Some(Overlay::Delete { id, .. }) = &self.overlay
+                    && self.uninstalling.is_none()
+                    && crate::platform::can_uninstall(id)
+                    && self.inventory.apps.iter().any(|app| &app.id == id)
+                {
+                    self.uninstalling = Some(id.clone());
+                    self.focus = Target::CancelDelete;
+                    return vec![Effect::Uninstall(id.clone())];
+                }
+            }
             Target::Key(index) => match KEYS[index] {
                 "Space" => self.text(" "),
                 "Delete" => self.delete(),
@@ -1672,6 +1772,12 @@ impl State {
         }
         if let Some(overlay) = self.overlay.take() {
             self.panel_started = None;
+            if let Overlay::Delete { id, restore } = overlay {
+                self.overlay = Some(Overlay::Options { id, restore });
+                self.focus = Target::Option(2);
+                self.pressed = None;
+                return vec![];
+            }
             if matches!(overlay, Overlay::Recents { .. }) {
                 self.recents.closing_focus = Some(self.focus.clone());
                 self.recents.updated = Instant::now();

@@ -129,13 +129,27 @@ try {
   assert.deepEqual(recentHomeBack.focus, { Recent: 'netflix' });
   const recentYoutube = await scenario('recents-youtube', 'recents,await-recents,right');
   assert.deepEqual(recentYoutube.focus, { Recent: 'youtube.leanback.v4' });
-  const hidden = await scenario('apps', 'apps,down,menu,down,enter');
+  const appOptions = await scenario('app-options', 'apps,down,enter');
+  assert.deepEqual(appOptions.focus, 'OpenApp');
+  assert.ok(appOptions.ui_text.includes('Delete app'));
+  const deleteFocused = await scenario('delete-focused', 'apps,down,enter,down,down,down');
+  assert.deepEqual(deleteFocused.focus, { Option: 2 });
+  const deleteConfirm = await scenario('delete-confirm', 'apps,down,enter,down,down,down,enter');
+  assert.deepEqual(deleteConfirm.focus, 'CancelDelete');
+  assert.ok(deleteConfirm.ui_text.some((value) => value.includes('uninstall “Netflix”')));
+  const deleteCancel = await scenario(
+    'delete-cancel',
+    'apps,down,enter,down,down,down,enter,enter',
+  );
+  assert.deepEqual(deleteCancel.focus, { Option: 2 });
+  assert.ok(deleteCancel.apps.includes('netflix'));
+  const hidden = await scenario('apps', 'apps,down,enter,down,down,enter');
   assert.ok(hidden.preferences.hidden.includes('netflix'));
   assert.deepEqual(hidden.focus, { App: 'youtube.leanback.v4' });
   // Reload from disk, find Netflix in Hidden, and restore it.
   const restored = await scenario(
     'restored',
-    'apps,down,up,right,right,right,right,enter,down,menu,down,enter',
+    'apps,down,up,right,right,right,right,enter,down,enter,down,down,enter',
   );
   assert.deepEqual(restored.preferences.hidden, []);
   const searched = await scenario('search', 'apps,type:YouTube,back');
@@ -219,14 +233,27 @@ try {
   assert.ok(profiled.render.profile.pacing.samples > 0);
   assert.ok(profiled.render.profile.cpu_submission.mean_ms >= 0);
   const greetingEditor = 'settings,down,enter,down,down,down,down,enter,enter';
-  for (const name of ['Ana', 'Bob']) {
+  for (const [id, name] of [
+    ['Ana', 'Ana'],
+    ['Bob', 'Bob'],
+    ['long', 'Alexandra Catherine Elizabeth Montgomery'],
+    ['wide', 'W'.repeat(40)],
+    ['cjk', '小明'.repeat(20)],
+    ['korean', '한글'.repeat(20)],
+  ]) {
     const named = await scenario(
-      `greeting-${name}`,
+      `greeting-${id}`,
       `${greetingEditor},type:${name},back,home`,
       fixedTime,
     );
     assert.equal(named.preferences.greeting_name, name);
     assert.ok(named.ui_text.includes(`Good evening, ${name}.`));
+    if (name.length > 30) {
+      assert.ok(
+        named.render.capture.max_logical_font_px < 90.4,
+        'Long greetings must shrink instead of wrapping into a cropped second line',
+      );
+    }
     assert.equal(
       JSON.parse(await fs.readFile(preferences, 'utf8')).greeting_name,
       name,
