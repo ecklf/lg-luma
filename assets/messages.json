@@ -8,7 +8,8 @@
     "it": "Rendering del testo",
     "ru": "Отрисовка текста",
     "pl": "Renderowanie tekstu",
-    "fr": "Rendu du texte"
+    "fr": "Rendu du texte",
+    "vi": "Hiển thị văn bản"
   },
   "textRenderingMsaa": {
     "en": "MSAA (default)",
@@ -19,7 +20,8 @@
     "it": "MSAA (predefinito)",
     "ru": "MSAA (по умолчанию)",
     "pl": "MSAA (domyślne)",
-    "fr": "MSAA (par défaut)"
+    "fr": "MSAA (par défaut)",
+    "vi": "MSAA (mặc định)"
   },
   "textRenderingAnalytic": {
     "en": "Analytic",
@@ -30,7 +32,8 @@
     "it": "Analitico",
     "ru": "Аналитическая",
     "pl": "Analityczne",
-    "fr": "Analytique"
+    "fr": "Analytique",
+    "vi": "Giải tích"
   },
   "textRenderingRestart": {
     "en": "Restart Luma to apply changes.",
@@ -41,7 +44,8 @@
     "it": "Riavvia Luma per applicare le modifiche.",
     "ru": "Перезапустите Luma, чтобы применить изменения.",
     "pl": "Uruchom ponownie Luma, aby zastosować zmiany.",
-    "fr": "Redémarrez Luma pour appliquer les modifications."
+    "fr": "Redémarrez Luma pour appliquer les modifications.",
+    "vi": "Khởi động lại Luma để áp dụng thay đổi."
   },
   "recentEmpty": {
     "en": "No recent apps",
@@ -52,7 +56,8 @@
     "it": "Nessuna app recente",
     "ru": "Нет недавних приложений",
     "pl": "Brak ostatnio używanych aplikacji",
-    "fr": "Aucune application récente"
+    "fr": "Aucune application récente",
+    "vi": "Không có ứng dụng gần đây"
   },
   "recentError": {
     "en": "Recent apps could not be updated",
@@ -63,7 +68,8 @@
     "it": "Impossibile aggiornare le app recenti",
     "ru": "Не удалось обновить недавние приложения",
     "pl": "Nie udało się zaktualizować ostatnio używanych aplikacji",
-    "fr": "Impossible de mettre à jour les applications récentes"
+    "fr": "Impossible de mettre à jour les applications récentes",
+    "vi": "Không thể cập nhật ứng dụng gần đây"
   },
   "recentLoading": {
     "en": "Updating recent apps…",
@@ -74,7 +80,8 @@
     "it": "Aggiornamento delle app recenti…",
     "ru": "Обновление недавних приложений…",
     "pl": "Aktualizowanie ostatnio używanych aplikacji…",
-    "fr": "Mise à jour des applications récentes…"
+    "fr": "Mise à jour des applications récentes…",
+    "vi": "Đang cập nhật ứng dụng gần đây…"
   },
   "recentDesktop": {
     "en": "Desktop preview · Sample history",
@@ -85,7 +92,8 @@
     "it": "Anteprima desktop · Cronologia di esempio",
     "ru": "Предпросмотр на компьютере · Пример истории",
     "pl": "Podgląd na komputerze · Przykładowa historia",
-    "fr": "Aperçu sur ordinateur · Historique d’exemple"
+    "fr": "Aperçu sur ordinateur · Historique d’exemple",
+    "vi": "Bản xem trước trên máy tính · Lịch sử mẫu"
   },
   "home": {
     "en": "Home",
@@ -96,7 +104,8 @@
     "it": "Home",
     "ru": "Главная",
     "pl": "Start",
-    "fr": "Accueil"
+    "fr": "Accueil",
+    "vi": "Trang chính"
   },
   "apps": {
     "en": "Apps",
@@ -107,7 +116,8 @@
     "it": "App",
     "ru": "Приложения",
     "pl": "Aplikacje",
-    "fr": "Applications"
+    "fr": "Applications",
+    "vi": "Ứng dụng"
   },
   "inputs": {
     "en": "Inputs",
@@ -118,7 +128,8 @@
     "it": "Ingressi",
     "ru": "Входы",
     "pl": "Wejścia",
-    "fr": "Entrées"
+    "fr": "Entrées",
+    "vi": "Đầu vào"
   },
   "settings": {
     "en": "Settings",
@@ -129,7 +140,8 @@
     "it": "Impostazioni",
     "ru": "Настройки",
     "pl": "Ustawienia",
-    "fr": "Paramètres"
+    "fr": "Paramètres",
+    "vi": "Cài đặt"
   },
   "settingsRegion": {
     "en": "Luma settings",
@@ -140,7 +152,8 @@
     "it": "Impostazioni Luma",
     "ru": "Настройки Luma",
     "pl": "Ustawienia Luma",
-    "fr": "Paramètres de Luma"
+    "fr": "Paramètres de Luma",
+    "vi": "Cài đặt Luma"
   },
   "mainNavigation": {
     "en": "Main navigation",
@@ -151,7 +164,8 @@
     "it": "Navigazione principale",
     "ru": "Основная навигация",
     "pl": "Nawigacja główna",
-    "fr": "Navigation principale"
+    "fr": "Navigation principale",
+    "vi": "Điều hướng chính"
   },
   "settingsSections": {
     "en": "Settings sections",
@@ -162,7 +176,8 @@
     "it": "Sezioni impostazioni",
     "ru": "Разделы настроек",
     "pl": "Sekcje ustawień",
-    "fr": "Sections des paramètres"
+    "fr": "Sections des paramètres",
+    "vi": "Mục cài đặt"
   },
   "stateOn": {
     "en": "On",
@@ -173,7 +188,8 @@
     "it": "Attivato",
     "ru": "Вкл.",
     "pl": "Wł.",
-    "fr": "Activé"
+    "fr": "Activé",
+    "vi": "Bật"
   },
   "stateOff": {
     "en": "Off",
@@ -184,7 +200,8 @@
     "it": "Disattivato",
     "ru": "Выкл.",
     "pl": "Wył.",
-    "fr": "Désactivé"
+    "fr": "Désactivé",
+    "vi": "Tắt"
   },
   "stateAuto": {
     "en": "Auto",
@@ -195,7 +212,8 @@
     "it": "Automatico",
     "ru": "Авто",
     "pl": "Automatycznie",
-    "fr": "Automatique"
+    "fr": "Automatique",
+    "vi": "Tự động"
   },
   "inputAlways": {
     "en": "Always show",
@@ -206,7 +224,8 @@
     "it": "Mostra sempre",
     "ru": "Показывать всегда",
     "pl": "Zawsze pokazuj",
-    "fr": "Toujours afficher"
+    "fr": "Toujours afficher",
+    "vi": "Luôn hiển thị"
   },
   "inputNever": {
     "en": "Never show",
@@ -217,7 +236,8 @@
     "it": "Non mostrare mai",
     "ru": "Никогда не показывать",
     "pl": "Nigdy nie pokazuj",
-    "fr": "Ne jamais afficher"
+    "fr": "Ne jamais afficher",
+    "vi": "Không bao giờ hiển thị"
   },
   "inputWhenConnected": {
     "en": "Only show when connected",
@@ -228,7 +248,8 @@
     "it": "Mostra solo se connesso",
     "ru": "Только при подключении",
     "pl": "Pokazuj tylko po podłączeniu",
-    "fr": "Afficher uniquement si connecté"
+    "fr": "Afficher uniquement si connecté",
+    "vi": "Chỉ hiển thị khi kết nối"
   },
   "renameInput": {
     "en": "Rename",
@@ -239,7 +260,8 @@
     "it": "Rinomina",
     "ru": "Переименовать",
     "pl": "Zmień nazwę",
-    "fr": "Renommer"
+    "fr": "Renommer",
+    "vi": "Đổi tên"
   },
   "inputName": {
     "en": "Input name",
@@ -250,7 +272,8 @@
     "it": "Nome ingresso",
     "ru": "Название входа",
     "pl": "Nazwa wejścia",
-    "fr": "Nom de l’entrée"
+    "fr": "Nom de l’entrée",
+    "vi": "Tên đầu vào"
   },
   "inputNameHint": {
     "en": "Show a custom name instead of the port",
@@ -261,7 +284,8 @@
     "it": "Mostra un nome personalizzato invece della porta",
     "ru": "Показывать своё название вместо порта",
     "pl": "Pokazuj własną nazwę zamiast nazwy portu",
-    "fr": "Afficher un nom personnalisé au lieu du port"
+    "fr": "Afficher un nom personnalisé au lieu du port",
+    "vi": "Hiển thị tên tùy chỉnh thay vì cổng"
   },
   "clearName": {
     "en": "Clear name",
@@ -272,7 +296,8 @@
     "it": "Cancella nome",
     "ru": "Очистить название",
     "pl": "Wyczyść nazwę",
-    "fr": "Effacer le nom"
+    "fr": "Effacer le nom",
+    "vi": "Xóa tên"
   },
   "back": {
     "en": "Back",
@@ -283,7 +308,8 @@
     "it": "Indietro",
     "ru": "Назад",
     "pl": "Wstecz",
-    "fr": "Retour"
+    "fr": "Retour",
+    "vi": "Quay lại"
   },
   "background": {
     "en": "Background",
@@ -294,7 +320,8 @@
     "it": "Sfondo",
     "ru": "Фон",
     "pl": "Tło",
-    "fr": "Fond d’écran"
+    "fr": "Fond d’écran",
+    "vi": "Hình nền"
   },
   "interface": {
     "en": "General",
@@ -305,7 +332,8 @@
     "it": "Generale",
     "ru": "Общие",
     "pl": "Ogólne",
-    "fr": "Général"
+    "fr": "Général",
+    "vi": "Chung"
   },
   "system": {
     "en": "System",
@@ -316,7 +344,8 @@
     "it": "Sistema",
     "ru": "Система",
     "pl": "System",
-    "fr": "Système"
+    "fr": "Système",
+    "vi": "Hệ thống"
   },
   "favorites": {
     "en": "Favorites",
@@ -327,7 +356,8 @@
     "it": "Preferiti",
     "ru": "Избранное",
     "pl": "Ulubione",
-    "fr": "Favoris"
+    "fr": "Favoris",
+    "vi": "Mục ưa thích"
   },
   "weather": {
     "en": "Weather",
@@ -338,7 +368,8 @@
     "it": "Meteo",
     "ru": "Погода",
     "pl": "Pogoda",
-    "fr": "Météo"
+    "fr": "Météo",
+    "vi": "Thời tiết"
   },
   "location": {
     "en": "Location",
@@ -349,7 +380,8 @@
     "it": "Posizione",
     "ru": "Местоположение",
     "pl": "Lokalizacja",
-    "fr": "Lieu"
+    "fr": "Lieu",
+    "vi": "Vị trí"
   },
   "manageWeatherLocation": {
     "en": "Set up location",
@@ -360,7 +392,8 @@
     "it": "Configura posizione",
     "ru": "Указать местоположение",
     "pl": "Ustaw lokalizację",
-    "fr": "Définir le lieu"
+    "fr": "Définir le lieu",
+    "vi": "Thiết lập vị trí"
   },
   "locationResults": {
     "en": "Location results",
@@ -371,7 +404,8 @@
     "it": "Risultati posizione",
     "ru": "Найденные места",
     "pl": "Wyniki wyszukiwania",
-    "fr": "Lieux trouvés"
+    "fr": "Lieux trouvés",
+    "vi": "Kết quả vị trí"
   },
   "appNames": {
     "en": "App names",
@@ -382,7 +416,8 @@
     "it": "Nomi app",
     "ru": "Названия приложений",
     "pl": "Nazwy aplikacji",
-    "fr": "Noms des applications"
+    "fr": "Noms des applications",
+    "vi": "Tên ứng dụng"
   },
   "showOnHome": {
     "en": "Show on Home",
@@ -393,7 +428,8 @@
     "it": "Mostra nella Home",
     "ru": "Показывать на главной",
     "pl": "Pokazuj na ekranie Start",
-    "fr": "Afficher sur l’Accueil"
+    "fr": "Afficher sur l’Accueil",
+    "vi": "Hiển thị trên Trang chính"
   },
   "showOnApps": {
     "en": "Show on Apps",
@@ -404,7 +440,8 @@
     "it": "Mostra in App",
     "ru": "Показывать в приложениях",
     "pl": "Pokazuj w Aplikacjach",
-    "fr": "Afficher dans Applications"
+    "fr": "Afficher dans Applications",
+    "vi": "Hiển thị trong Ứng dụng"
   },
   "clock24": {
     "en": "24-hour clock",
@@ -415,7 +452,8 @@
     "it": "Orologio 24 ore",
     "ru": "24-часовой формат",
     "pl": "Zegar 24-godzinny",
-    "fr": "Horloge 24 heures"
+    "fr": "Horloge 24 heures",
+    "vi": "Đồng hồ 24 giờ"
   },
   "clockFormat": {
     "en": "Clock format",
@@ -426,7 +464,8 @@
     "it": "Formato orologio",
     "ru": "Формат часов",
     "pl": "Format zegara",
-    "fr": "Format de l’horloge"
+    "fr": "Format de l’horloge",
+    "vi": "Định dạng đồng hồ"
   },
   "clock": {
     "en": "Clock",
@@ -437,7 +476,8 @@
     "it": "Orologio",
     "ru": "Часы",
     "pl": "Zegar",
-    "fr": "Horloge"
+    "fr": "Horloge",
+    "vi": "Đồng hồ"
   },
   "timeFormat": {
     "en": "Time format",
@@ -448,7 +488,8 @@
     "it": "Formato ora",
     "ru": "Формат времени",
     "pl": "Format czasu",
-    "fr": "Format de l’heure"
+    "fr": "Format de l’heure",
+    "vi": "Định dạng thời gian"
   },
   "hour12": {
     "en": "12-hour",
@@ -459,7 +500,8 @@
     "it": "12 ore",
     "ru": "12-часовой",
     "pl": "12-godzinny",
-    "fr": "12 heures"
+    "fr": "12 heures",
+    "vi": "12 giờ"
   },
   "hour24": {
     "en": "24-hour",
@@ -470,7 +512,8 @@
     "it": "24 ore",
     "ru": "24-часовой",
     "pl": "24-godzinny",
-    "fr": "24 heures"
+    "fr": "24 heures",
+    "vi": "24 giờ"
   },
   "reducedMotion": {
     "en": "Reduced motion",
@@ -481,7 +524,8 @@
     "it": "Animazioni ridotte",
     "ru": "Меньше анимации",
     "pl": "Ograniczenie ruchu",
-    "fr": "Animations réduites"
+    "fr": "Animations réduites",
+    "vi": "Giảm chuyển động"
   },
   "refreshApps": {
     "en": "Refresh apps & inputs",
@@ -492,7 +536,8 @@
     "it": "Aggiorna app e ingressi",
     "ru": "Обновить приложения и входы",
     "pl": "Odśwież aplikacje i wejścia",
-    "fr": "Actualiser les applications et entrées"
+    "fr": "Actualiser les applications et entrées",
+    "vi": "Làm mới ứng dụng & đầu vào"
   },
   "quitApp": {
     "en": "Quit app",
@@ -503,7 +548,8 @@
     "it": "Chiudi app",
     "ru": "Закрыть приложение",
     "pl": "Zamknij aplikację",
-    "fr": "Quitter l’application"
+    "fr": "Quitter l’application",
+    "vi": "Thoát ứng dụng"
   },
   "language": {
     "en": "Language",
@@ -514,7 +560,8 @@
     "it": "Lingua",
     "ru": "Язык",
     "pl": "Język",
-    "fr": "Langue"
+    "fr": "Langue",
+    "vi": "Ngôn ngữ"
   },
   "greetingName": {
     "en": "Greeting name",
@@ -525,7 +572,8 @@
     "it": "Nome per il saluto",
     "ru": "Имя для приветствия",
     "pl": "Imię w powitaniu",
-    "fr": "Nom pour le message d’accueil"
+    "fr": "Nom pour le message d’accueil",
+    "vi": "Tên lời chào"
   },
   "greeting": {
     "en": "Greeting",
@@ -536,7 +584,8 @@
     "it": "Saluto",
     "ru": "Приветствие",
     "pl": "Powitanie",
-    "fr": "Message d’accueil"
+    "fr": "Message d’accueil",
+    "vi": "Lời chào"
   },
   "name": {
     "en": "Name",
@@ -547,7 +596,8 @@
     "it": "Nome",
     "ru": "Имя",
     "pl": "Imię",
-    "fr": "Nom"
+    "fr": "Nom",
+    "vi": "Tên"
   },
   "greetingNightNamed": {
     "en": "Still up, {name}?",
@@ -558,7 +608,8 @@
     "it": "Ancora in piedi, {name}?",
     "ru": "{name}, ещё не спите?",
     "pl": "Jeszcze nie śpisz, {name}?",
-    "fr": "Toujours debout, {name} ?"
+    "fr": "Toujours debout, {name} ?",
+    "vi": "Vẫn chưa ngủ sao, {name}?"
   },
   "morningNamed": {
     "en": "Good morning, {name}.",
@@ -569,7 +620,8 @@
     "it": "Buongiorno, {name}.",
     "ru": "Доброе утро, {name}.",
     "pl": "Dzień dobry, {name}.",
-    "fr": "Bonjour, {name}."
+    "fr": "Bonjour, {name}.",
+    "vi": "Chào buổi sáng, {name}."
   },
   "afternoonNamed": {
     "en": "Good afternoon, {name}.",
@@ -580,7 +632,8 @@
     "it": "Buon pomeriggio, {name}.",
     "ru": "Добрый день, {name}.",
     "pl": "Dzień dobry, {name}.",
-    "fr": "Bon après-midi, {name}."
+    "fr": "Bon après-midi, {name}.",
+    "vi": "Chào buổi chiều, {name}."
   },
   "eveningNamed": {
     "en": "Good evening, {name}.",
@@ -591,7 +644,8 @@
     "it": "Buonasera, {name}.",
     "ru": "Добрый вечер, {name}.",
     "pl": "Dobry wieczór, {name}.",
-    "fr": "Bonsoir, {name}."
+    "fr": "Bonsoir, {name}.",
+    "vi": "Chào buổi tối, {name}."
   },
   "english": {
     "en": "English",
@@ -602,7 +656,8 @@
     "it": "English",
     "ru": "English",
     "pl": "English",
-    "fr": "English"
+    "fr": "English",
+    "vi": "English"
   },
   "german": {
     "en": "Deutsch",
@@ -613,7 +668,8 @@
     "it": "Deutsch",
     "ru": "Deutsch",
     "pl": "Deutsch",
-    "fr": "Deutsch"
+    "fr": "Deutsch",
+    "vi": "Deutsch"
   },
   "chinese": {
     "en": "简体中文",
@@ -624,7 +680,8 @@
     "it": "简体中文",
     "ru": "简体中文",
     "pl": "简体中文",
-    "fr": "简体中文"
+    "fr": "简体中文",
+    "vi": "简体中文"
   },
   "showWidget": {
     "en": "Show widget",
@@ -635,7 +692,8 @@
     "it": "Mostra widget",
     "ru": "Показывать виджет",
     "pl": "Pokazuj widżet",
-    "fr": "Afficher le widget"
+    "fr": "Afficher le widget",
+    "vi": "Hiển thị tiện ích"
   },
   "temperature": {
     "en": "Temperature",
@@ -646,7 +704,8 @@
     "it": "Temperatura",
     "ru": "Температура",
     "pl": "Temperatura",
-    "fr": "Température"
+    "fr": "Température",
+    "vi": "Nhiệt độ"
   },
   "celsius": {
     "en": "Celsius",
@@ -657,7 +716,8 @@
     "it": "Celsius",
     "ru": "Цельсий",
     "pl": "Celsjusz",
-    "fr": "Celsius"
+    "fr": "Celsius",
+    "vi": "Độ C"
   },
   "fahrenheit": {
     "en": "Fahrenheit",
@@ -668,7 +728,8 @@
     "it": "Fahrenheit",
     "ru": "Фаренгейт",
     "pl": "Fahrenheit",
-    "fr": "Fahrenheit"
+    "fr": "Fahrenheit",
+    "vi": "Độ F"
   },
   "cityPostcode": {
     "en": "City or postcode",
@@ -679,7 +740,8 @@
     "it": "Città o CAP",
     "ru": "Город или индекс",
     "pl": "Miasto lub kod pocztowy",
-    "fr": "Ville ou code postal"
+    "fr": "Ville ou code postal",
+    "vi": "Thành phố hoặc mã bưu chính"
   },
   "searchLocations": {
     "en": "Search locations",
@@ -690,7 +752,8 @@
     "it": "Cerca località",
     "ru": "Поиск мест",
     "pl": "Szukaj lokalizacji",
-    "fr": "Rechercher un lieu"
+    "fr": "Rechercher un lieu",
+    "vi": "Tìm kiếm vị trí"
   },
   "removeWeatherLocation": {
     "en": "Remove weather location",
@@ -701,7 +764,8 @@
     "it": "Rimuovi posizione meteo",
     "ru": "Удалить местоположение погоды",
     "pl": "Usuń lokalizację pogody",
-    "fr": "Supprimer le lieu météo"
+    "fr": "Supprimer le lieu météo",
+    "vi": "Xóa vị trí thời tiết"
   },
   "enterCity": {
     "en": "Enter a city or postcode with at least two characters.",
@@ -712,7 +776,8 @@
     "it": "Inserisci una città o un CAP di almeno due caratteri.",
     "ru": "Введите город или индекс — не менее двух символов.",
     "pl": "Wpisz co najmniej dwa znaki nazwy miasta lub kodu pocztowego.",
-    "fr": "Saisissez une ville ou un code postal d’au moins deux caractères."
+    "fr": "Saisissez une ville ou un code postal d’au moins deux caractères.",
+    "vi": "Nhập thành phố hoặc mã bưu chính với ít nhất 2 ký tự."
   },
   "noLocations": {
     "en": "No locations found. Try another city or postcode.",
@@ -723,7 +788,8 @@
     "it": "Nessuna località trovata. Prova con un'altra città o CAP.",
     "ru": "Ничего не найдено. Попробуйте другой город или индекс.",
     "pl": "Nie znaleziono lokalizacji. Spróbuj innego miasta lub kodu pocztowego.",
-    "fr": "Aucun lieu trouvé. Essayez une autre ville ou un autre code postal."
+    "fr": "Aucun lieu trouvé. Essayez une autre ville ou un autre code postal.",
+    "vi": "Không tìm thấy vị trí. Hãy thử thành phố hoặc mã bưu chính khác."
   },
   "searchUnavailable": {
     "en": "Location search is unavailable. Check your connection and try again.",
@@ -734,7 +800,8 @@
     "it": "Ricerca località non disponibile. Controlla la connessione e riprova.",
     "ru": "Поиск мест недоступен. Проверьте подключение и повторите попытку.",
     "pl": "Wyszukiwanie lokalizacji jest niedostępne. Sprawdź połączenie i spróbuj ponownie.",
-    "fr": "La recherche de lieu est indisponible. Vérifiez votre connexion et réessayez."
+    "fr": "La recherche de lieu est indisponible. Vérifiez votre connexion et réessayez.",
+    "vi": "Tìm kiếm vị trí hiện không khả dụng. Kiểm tra kết nối mạng và thử lại."
   },
   "findApp": {
     "en": "Find an app",
@@ -745,7 +812,8 @@
     "it": "Trova un'app",
     "ru": "Найти приложение",
     "pl": "Znajdź aplikację",
-    "fr": "Rechercher une application"
+    "fr": "Rechercher une application",
+    "vi": "Tìm ứng dụng"
   },
   "clearCategory": {
     "en": "Clear category filter",
@@ -756,7 +824,8 @@
     "it": "Rimuovi filtro categoria",
     "ru": "Сбросить фильтр категории",
     "pl": "Wyczyść filtr kategorii",
-    "fr": "Effacer le filtre de catégorie"
+    "fr": "Effacer le filtre de catégorie",
+    "vi": "Xóa bộ lọc danh mục"
   },
   "appCategories": {
     "en": "App categories",
@@ -767,7 +836,8 @@
     "it": "Categorie app",
     "ru": "Категории приложений",
     "pl": "Kategorie aplikacji",
-    "fr": "Catégories d’applications"
+    "fr": "Catégories d’applications",
+    "vi": "Danh mục ứng dụng"
   },
   "hidden": {
     "en": "Hidden ({count})",
@@ -778,7 +848,8 @@
     "it": "Nascoste ({count})",
     "ru": "Скрытые ({count})",
     "pl": "Ukryte ({count})",
-    "fr": "Masquées ({count})"
+    "fr": "Masquées ({count})",
+    "vi": "Đã ẩn ({count})"
   },
   "noMatches": {
     "en": "Nothing here. Yet.",
@@ -789,7 +860,8 @@
     "it": "Qui non c'è niente. Per ora.",
     "ru": "Здесь пока пусто.",
     "pl": "Na razie nic tu nie ma.",
-    "fr": "Rien ici. Pour l’instant."
+    "fr": "Rien ici. Pour l’instant.",
+    "vi": "Chưa có gì ở đây."
   },
   "noHidden": {
     "en": "No hidden apps.",
@@ -800,7 +872,8 @@
     "it": "Nessuna app nascosta.",
     "ru": "Нет скрытых приложений.",
     "pl": "Brak ukrytych aplikacji.",
-    "fr": "Aucune application masquée."
+    "fr": "Aucune application masquée.",
+    "vi": "Không có ứng dụng nào bị ẩn."
   },
   "roomForNew": {
     "en": "A little room for something new.",
@@ -811,7 +884,8 @@
     "it": "Un po' di spazio per qualcosa di nuovo.",
     "ru": "Немного места для чего-то нового.",
     "pl": "Trochę miejsca na coś nowego.",
-    "fr": "Un peu de place pour quelque chose de nouveau."
+    "fr": "Un peu de place pour quelque chose de nouveau.",
+    "vi": "Một chút không gian cho điều mới mẻ."
   },
   "findingApps": {
     "en": "Finding your apps…",
@@ -822,7 +896,8 @@
     "it": "Ricerca delle tue app…",
     "ru": "Ищем ваши приложения…",
     "pl": "Wyszukiwanie aplikacji…",
-    "fr": "Recherche de vos applications…"
+    "fr": "Recherche de vos applications…",
+    "vi": "Đang tìm ứng dụng của bạn…"
   },
   "noCategoryApps": {
     "en": "Apps in this category will appear here.",
@@ -833,7 +908,8 @@
     "it": "Le app di questa categoria appariranno qui.",
     "ru": "Здесь появятся приложения этой категории.",
     "pl": "Tutaj pojawią się aplikacje z tej kategorii.",
-    "fr": "Les applications de cette catégorie apparaîtront ici."
+    "fr": "Les applications de cette catégorie apparaîtront ici.",
+    "vi": "Ứng dụng trong danh mục này sẽ xuất hiện ở đây."
   },
   "hiddenHint": {
     "en": "Apps you hide will appear here.",
@@ -844,7 +920,8 @@
     "it": "Le app che nascondi appariranno qui.",
     "ru": "Здесь появятся скрытые вами приложения.",
     "pl": "Tutaj pojawią się ukryte aplikacje.",
-    "fr": "Les applications que vous masquez apparaîtront ici."
+    "fr": "Les applications que vous masquez apparaîtront ici.",
+    "vi": "Ứng dụng bạn ẩn sẽ xuất hiện ở đây."
   },
   "noMatchesHint": {
     "en": "No apps match “{query}”. Try another name.",
@@ -855,7 +932,8 @@
     "it": "Nessuna app corrisponde a “{query}”. Prova un altro nome.",
     "ru": "Нет приложений по запросу «{query}». Попробуйте другое название.",
     "pl": "Brak aplikacji pasujących do „{query}”. Spróbuj innej nazwy.",
-    "fr": "Aucune application ne correspond à « {query} ». Essayez un autre nom."
+    "fr": "Aucune application ne correspond à « {query} ». Essayez un autre nom.",
+    "vi": "Không có ứng dụng nào khớp với “{query}”. Hãy thử tên khác."
   },
   "greetingNight": {
     "en": "One more moment.",
@@ -866,7 +944,8 @@
     "it": "Ancora un momento.",
     "ru": "Ещё немного.",
     "pl": "Jeszcze chwila.",
-    "fr": "Encore un petit moment."
+    "fr": "Encore un petit moment.",
+    "vi": "Thêm một khoảnh khắc nữa."
   },
   "morning": {
     "en": "Good morning.",
@@ -877,7 +956,8 @@
     "it": "Buongiorno.",
     "ru": "Доброе утро.",
     "pl": "Dzień dobry.",
-    "fr": "Bonjour."
+    "fr": "Bonjour.",
+    "vi": "Chào buổi sáng."
   },
   "afternoon": {
     "en": "Good afternoon.",
@@ -888,7 +968,8 @@
     "it": "Buon pomeriggio.",
     "ru": "Добрый день.",
     "pl": "Dzień dobry.",
-    "fr": "Bon après-midi."
+    "fr": "Bon après-midi.",
+    "vi": "Chào buổi chiều."
   },
   "evening": {
     "en": "Good evening.",
@@ -899,7 +980,8 @@
     "it": "Buonasera.",
     "ru": "Добрый вечер.",
     "pl": "Dobry wieczór.",
-    "fr": "Bonsoir."
+    "fr": "Bonsoir.",
+    "vi": "Chào buổi tối."
   },
   "aLittleHelp": {
     "en": "A little help from your TV.",
@@ -910,7 +992,8 @@
     "it": "Un piccolo aiuto dalla tua TV.",
     "ru": "Немного помощи от вашего телевизора.",
     "pl": "Przyda się pomoc telewizora.",
-    "fr": "Un petit coup de main de votre TV."
+    "fr": "Un petit coup de main de votre TV.",
+    "vi": "Một chút trợ giúp từ TV của bạn."
   },
   "makeFavorites": {
     "en": "Make room for your favorites.",
@@ -921,7 +1004,8 @@
     "it": "Fai spazio ai tuoi preferiti.",
     "ru": "Освободите место для избранного.",
     "pl": "Zrób miejsce na ulubione.",
-    "fr": "Faites de la place à vos favoris."
+    "fr": "Faites de la place à vos favoris.",
+    "vi": "Dành chỗ cho các mục ưa thích của bạn."
   },
   "pinHint": {
     "en": "Find an app you love. Hold OK to pin it here.",
@@ -932,7 +1016,8 @@
     "it": "Trova un'app che ami. Tieni premuto OK per fissarla qui.",
     "ru": "Найдите любимое приложение и удерживайте OK, чтобы закрепить его здесь.",
     "pl": "Znajdź ulubioną aplikację i przytrzymaj OK, aby ją tu przypiąć.",
-    "fr": "Trouvez une application que vous aimez. Maintenez OK pour l’épingler ici."
+    "fr": "Trouvez une application que vous aimez. Maintenez OK pour l’épingler ici.",
+    "vi": "Tìm ứng dụng bạn thích. Giữ OK để ghim vào đây."
   },
   "exploreApps": {
     "en": "Explore your apps",
@@ -943,7 +1028,8 @@
     "it": "Esplora le tue app",
     "ru": "Посмотреть приложения",
     "pl": "Przeglądaj aplikacje",
-    "fr": "Explorer vos applications"
+    "fr": "Explorer vos applications",
+    "vi": "Khám phá ứng dụng của bạn"
   },
   "moveApps": {
     "en": "Move apps",
@@ -954,7 +1040,8 @@
     "it": "Sposta app",
     "ru": "Переместить приложения",
     "pl": "Przenieś aplikacje",
-    "fr": "Déplacer les applications"
+    "fr": "Déplacer les applications",
+    "vi": "Di chuyển ứng dụng"
   },
   "inputsHeading": {
     "en": "Inputs",
@@ -965,7 +1052,8 @@
     "it": "Ingressi",
     "ru": "Входы",
     "pl": "Wejścia",
-    "fr": "Entrées"
+    "fr": "Entrées",
+    "vi": "Đầu vào"
   },
   "noInputs": {
     "en": "No inputs to show.",
@@ -976,7 +1064,8 @@
     "it": "Nessun ingresso da mostrare.",
     "ru": "Нет входов для отображения.",
     "pl": "Brak wejść do wyświetlenia.",
-    "fr": "Aucune entrée à afficher."
+    "fr": "Aucune entrée à afficher.",
+    "vi": "Không có đầu vào nào để hiển thị."
   },
   "findingInputs": {
     "en": "Finding your inputs…",
@@ -987,7 +1076,8 @@
     "it": "Ricerca dei tuoi ingressi…",
     "ru": "Ищем ваши входы…",
     "pl": "Wyszukiwanie wejść…",
-    "fr": "Recherche de vos entrées…"
+    "fr": "Recherche de vos entrées…",
+    "vi": "Đang tìm đầu vào của bạn…"
   },
   "physicalInputs": {
     "en": "Your TV’s physical HDMI inputs will appear here.",
@@ -998,7 +1088,8 @@
     "it": "Gli ingressi HDMI fisici della tua TV appariranno qui.",
     "ru": "Здесь появятся физические HDMI-входы телевизора.",
     "pl": "Tutaj pojawią się fizyczne wejścia HDMI telewizora.",
-    "fr": "Les entrées HDMI physiques de votre TV apparaîtront ici."
+    "fr": "Les entrées HDMI physiques de votre TV apparaîtront ici.",
+    "vi": "Các cổng đầu vào HDMI vật lý của TV sẽ xuất hiện ở đây."
   },
   "refreshInputs": {
     "en": "Refresh inputs",
@@ -1009,7 +1100,8 @@
     "it": "Aggiorna ingressi",
     "ru": "Обновить входы",
     "pl": "Odśwież wejścia",
-    "fr": "Actualiser les entrées"
+    "fr": "Actualiser les entrées",
+    "vi": "Làm mới đầu vào"
   },
   "retry": {
     "en": "Try again",
@@ -1020,7 +1112,8 @@
     "it": "Riprova",
     "ru": "Повторить",
     "pl": "Spróbuj ponownie",
-    "fr": "Réessayer"
+    "fr": "Réessayer",
+    "vi": "Thử lại"
   },
   "open": {
     "en": "Open",
@@ -1031,7 +1124,8 @@
     "it": "Apri",
     "ru": "Открыть",
     "pl": "Otwórz",
-    "fr": "Ouvrir"
+    "fr": "Ouvrir",
+    "vi": "Mở"
   },
   "select": {
     "en": "Select",
@@ -1042,7 +1136,8 @@
     "it": "Seleziona",
     "ru": "Выбрать",
     "pl": "Wybierz",
-    "fr": "Sélectionner"
+    "fr": "Sélectionner",
+    "vi": "Chọn"
   },
   "move": {
     "en": "Move",
@@ -1053,7 +1148,8 @@
     "it": "Sposta",
     "ru": "Переместить",
     "pl": "Przenieś",
-    "fr": "Déplacer"
+    "fr": "Déplacer",
+    "vi": "Di chuyển"
   },
   "done": {
     "en": "Done",
@@ -1064,7 +1160,8 @@
     "it": "Fatto",
     "ru": "Готово",
     "pl": "Gotowe",
-    "fr": "Terminé"
+    "fr": "Terminé",
+    "vi": "Xong"
   },
   "close": {
     "en": "Close",
@@ -1075,7 +1172,8 @@
     "it": "Chiudi",
     "ru": "Закрыть",
     "pl": "Zamknij",
-    "fr": "Fermer"
+    "fr": "Fermer",
+    "vi": "Đóng"
   },
   "homeLabel": {
     "en": "Home",
@@ -1086,7 +1184,8 @@
     "it": "Home",
     "ru": "Главная",
     "pl": "Start",
-    "fr": "Accueil"
+    "fr": "Accueil",
+    "vi": "Trang chính"
   },
   "options": {
     "en": "Options",
@@ -1097,7 +1196,8 @@
     "it": "Opzioni",
     "ru": "Параметры",
     "pl": "Opcje",
-    "fr": "Options"
+    "fr": "Options",
+    "vi": "Tùy chọn"
   },
   "deleteApp": {
     "en": "Delete app",
@@ -1108,7 +1208,8 @@
     "it": "Elimina app",
     "ru": "Удалить приложение",
     "pl": "Usuń aplikację",
-    "fr": "Supprimer l’app"
+    "fr": "Supprimer l’app",
+    "vi": "Xóa ứng dụng"
   },
   "deleteAppWarning": {
     "en": "This will uninstall “{app}” from your TV and may delete its data. This cannot be undone.",
@@ -1119,7 +1220,8 @@
     "it": "“{app}” verrà disinstallata dalla TV e i suoi dati potrebbero essere eliminati. L’operazione non può essere annullata.",
     "ru": "«{app}» будет удалено с телевизора вместе с возможными данными. Это действие нельзя отменить.",
     "pl": "„{app}” zostanie odinstalowana z telewizora, a jej dane mogą zostać usunięte. Tej operacji nie można cofnąć.",
-    "fr": "« {app} » sera désinstallée du téléviseur et ses données pourront être supprimées. Cette action est irréversible."
+    "fr": "« {app} » sera désinstallée du téléviseur et ses données pourront être supprimées. Cette action est irréversible.",
+    "vi": "Thao tác này sẽ gỡ cài đặt “{app}” khỏi TV và có thể xóa dữ liệu của ứng dụng. Không thể hoàn tác thao tác này."
   },
   "cancel": {
     "en": "Cancel",
@@ -1130,7 +1232,8 @@
     "it": "Annulla",
     "ru": "Отмена",
     "pl": "Anuluj",
-    "fr": "Annuler"
+    "fr": "Annuler",
+    "vi": "Hủy"
   },
   "deletingApp": {
     "en": "Deleting app…",
@@ -1141,7 +1244,8 @@
     "it": "Eliminazione dell’app…",
     "ru": "Удаление приложения…",
     "pl": "Usuwanie aplikacji…",
-    "fr": "Suppression de l’app…"
+    "fr": "Suppression de l’app…",
+    "vi": "Đang xóa ứng dụng…"
   },
   "deleteAppError": {
     "en": "Could not confirm app deletion. Refresh apps to check before trying again.",
@@ -1152,7 +1256,8 @@
     "it": "Impossibile confermare l’eliminazione. Aggiorna le app prima di riprovare.",
     "ru": "Не удалось подтвердить удаление. Обновите список приложений перед повторной попыткой.",
     "pl": "Nie udało się potwierdzić usunięcia. Odśwież aplikacje przed ponowną próbą.",
-    "fr": "Impossible de confirmer la suppression. Actualisez les apps avant de réessayer."
+    "fr": "Impossible de confirmer la suppression. Actualisez les apps avant de réessayer.",
+    "vi": "Không thể xác nhận việc xóa ứng dụng. Hãy làm mới danh sách ứng dụng để kiểm tra trước khi thử lại."
   },
   "appDeleted": {
     "en": "App deleted.",
@@ -1163,7 +1268,8 @@
     "it": "App eliminata.",
     "ru": "Приложение удалено.",
     "pl": "Aplikacja usunięta.",
-    "fr": "App supprimée."
+    "fr": "App supprimée.",
+    "vi": "Đã xóa ứng dụng."
   },
   "connected": {
     "en": "Connected",
@@ -1174,7 +1280,8 @@
     "it": "Connesso",
     "ru": "Подключено",
     "pl": "Podłączono",
-    "fr": "Connecté"
+    "fr": "Connecté",
+    "vi": "Đã kết nối"
   },
   "noDevice": {
     "en": "No device connected",
@@ -1185,7 +1292,8 @@
     "it": "Nessun dispositivo connesso",
     "ru": "Устройство не подключено",
     "pl": "Brak podłączonego urządzenia",
-    "fr": "Aucun appareil connecté"
+    "fr": "Aucun appareil connecté",
+    "vi": "Chưa có thiết bị nào được kết nối"
   },
   "externalInput": {
     "en": "External input",
@@ -1196,7 +1304,8 @@
     "it": "Ingresso esterno",
     "ru": "Внешний вход",
     "pl": "Wejście zewnętrzne",
-    "fr": "Entrée externe"
+    "fr": "Entrée externe",
+    "vi": "Đầu vào ngoài"
   },
   "addFavorite": {
     "en": "Add favorite",
@@ -1207,7 +1316,8 @@
     "it": "Aggiungi ai preferiti",
     "ru": "Добавить в избранное",
     "pl": "Dodaj do ulubionych",
-    "fr": "Ajouter aux favoris"
+    "fr": "Ajouter aux favoris",
+    "vi": "Thêm vào mục ưa thích"
   },
   "removeFavorite": {
     "en": "Remove favorite",
@@ -1218,7 +1328,8 @@
     "it": "Rimuovi dai preferiti",
     "ru": "Удалить из избранного",
     "pl": "Usuń z ulubionych",
-    "fr": "Retirer des favoris"
+    "fr": "Retirer des favoris",
+    "vi": "Xóa khỏi mục ưa thích"
   },
   "hideApp": {
     "en": "Hide app",
@@ -1229,7 +1340,8 @@
     "it": "Nascondi app",
     "ru": "Скрыть приложение",
     "pl": "Ukryj aplikację",
-    "fr": "Masquer l’application"
+    "fr": "Masquer l’application",
+    "vi": "Ẩn ứng dụng"
   },
   "showApp": {
     "en": "Show app",
@@ -1240,7 +1352,8 @@
     "it": "Mostra app",
     "ru": "Показать приложение",
     "pl": "Pokaż aplikację",
-    "fr": "Afficher l’application"
+    "fr": "Afficher l’application",
+    "vi": "Hiện ứng dụng"
   },
   "favorite": {
     "en": "Favorite",
@@ -1251,7 +1364,8 @@
     "it": "Preferito",
     "ru": "Избранное",
     "pl": "Ulubiona",
-    "fr": "Favori"
+    "fr": "Favori",
+    "vi": "Mục ưa thích"
   },
   "tvSettings": {
     "en": "TV settings",
@@ -1262,7 +1376,8 @@
     "it": "Impostazioni TV",
     "ru": "Настройки ТВ",
     "pl": "Ustawienia telewizora",
-    "fr": "Paramètres de la TV"
+    "fr": "Paramètres de la TV",
+    "vi": "Cài đặt TV"
   },
   "loadingWeather": {
     "en": "Loading weather…",
@@ -1273,7 +1388,8 @@
     "it": "Caricamento meteo…",
     "ru": "Загрузка погоды…",
     "pl": "Wczytywanie pogody…",
-    "fr": "Chargement de la météo…"
+    "fr": "Chargement de la météo…",
+    "vi": "Đang tải thời tiết…"
   },
   "weatherUnavailable": {
     "en": "Weather unavailable",
@@ -1284,7 +1400,8 @@
     "it": "Meteo non disponibile",
     "ru": "Погода недоступна",
     "pl": "Pogoda niedostępna",
-    "fr": "Météo indisponible"
+    "fr": "Météo indisponible",
+    "vi": "Thời tiết không khả dụng"
   },
   "setWeatherLocation": {
     "en": "Set weather location",
@@ -1295,7 +1412,8 @@
     "it": "Imposta posizione meteo",
     "ru": "Указать место для погоды",
     "pl": "Ustaw lokalizację pogody",
-    "fr": "Définir le lieu météo"
+    "fr": "Définir le lieu météo",
+    "vi": "Đặt vị trí thời tiết"
   },
   "configureWeather": {
     "en": "Configure weather location",
@@ -1306,7 +1424,8 @@
     "it": "Configura posizione meteo",
     "ru": "Настроить место для погоды",
     "pl": "Skonfiguruj lokalizację pogody",
-    "fr": "Configurer le lieu météo"
+    "fr": "Configurer le lieu météo",
+    "vi": "Cấu hình vị trí thời tiết"
   },
   "weatherInLocation": {
     "en": "Weather in {city}. Configure weather location.",
@@ -1317,7 +1436,8 @@
     "it": "Meteo a {city}. Configura posizione meteo.",
     "ru": "Погода: {city}. Настроить место для погоды.",
     "pl": "Pogoda: {city}. Skonfiguruj lokalizację pogody.",
-    "fr": "Météo à {city}. Configurer le lieu météo."
+    "fr": "Météo à {city}. Configurer le lieu météo.",
+    "vi": "Thời tiết tại {city}. Cấu hình vị trí thời tiết."
   },
   "lastReading": {
     "en": "Last saved reading",
@@ -1328,7 +1448,8 @@
     "it": "Ultima lettura salvata",
     "ru": "Последние сохранённые данные",
     "pl": "Ostatni zapisany odczyt",
-    "fr": "Dernier relevé enregistré"
+    "fr": "Dernier relevé enregistré",
+    "vi": "Số liệu lưu gần nhất"
   },
   "selectClose": {
     "en": "Select",
@@ -1339,7 +1460,8 @@
     "it": "Seleziona",
     "ru": "Выбрать",
     "pl": "Wybierz",
-    "fr": "Sélectionner"
+    "fr": "Sélectionner",
+    "vi": "Chọn"
   },
   "closeDialog": {
     "en": "Close",
@@ -1350,7 +1472,8 @@
     "it": "Chiudi",
     "ru": "Закрыть",
     "pl": "Zamknij",
-    "fr": "Fermer"
+    "fr": "Fermer",
+    "vi": "Đóng"
   },
   "dismissNotification": {
     "en": "Dismiss notification",
@@ -1361,7 +1484,8 @@
     "it": "Ignora notifica",
     "ru": "Закрыть уведомление",
     "pl": "Odrzuć powiadomienie",
-    "fr": "Ignorer la notification"
+    "fr": "Ignorer la notification",
+    "vi": "Bỏ qua thông báo"
   },
   "opening": {
     "en": "Opening…",
@@ -1372,7 +1496,8 @@
     "it": "Apertura…",
     "ru": "Открываем…",
     "pl": "Otwieranie…",
-    "fr": "Ouverture…"
+    "fr": "Ouverture…",
+    "vi": "Đang mở…"
   },
   "desktopPreview": {
     "en": "Desktop preview · {app} will open on your TV.",
@@ -1383,7 +1508,8 @@
     "it": "Anteprima desktop · {app} si aprirà sulla tua TV.",
     "ru": "Предпросмотр на компьютере · {app} откроется на телевизоре.",
     "pl": "Podgląd na komputerze · {app} otworzy się na telewizorze.",
-    "fr": "Aperçu sur ordinateur · {app} s’ouvrira sur votre TV."
+    "fr": "Aperçu sur ordinateur · {app} s’ouvrira sur votre TV.",
+    "vi": "Bản xem trước trên máy tính · {app} sẽ mở trên TV của bạn."
   },
   "favoriteRemoved": {
     "en": "{app} removed from favorites.",
@@ -1394,7 +1520,8 @@
     "it": "{app} rimossa dai preferiti.",
     "ru": "{app}: удалено из избранного.",
     "pl": "Usunięto {app} z ulubionych.",
-    "fr": "{app} ne fait plus partie de vos favoris."
+    "fr": "{app} ne fait plus partie de vos favoris.",
+    "vi": "Đã xóa {app} khỏi mục ưa thích."
   },
   "favoriteAdded": {
     "en": "{app} added to favorites.",
@@ -1405,7 +1532,8 @@
     "it": "{app} aggiunta ai preferiti.",
     "ru": "{app}: добавлено в избранное.",
     "pl": "Dodano {app} do ulubionych.",
-    "fr": "{app} fait maintenant partie de vos favoris."
+    "fr": "{app} fait maintenant partie de vos favoris.",
+    "vi": "Đã thêm {app} vào mục ưa thích."
   },
   "appRestored": {
     "en": "{app} is back in your library.",
@@ -1416,7 +1544,8 @@
     "it": "{app} è di nuovo nella tua libreria.",
     "ru": "{app}: снова в вашей библиотеке.",
     "pl": "{app} jest z powrotem w bibliotece.",
-    "fr": "{app} est de retour dans votre bibliothèque."
+    "fr": "{app} est de retour dans votre bibliothèque.",
+    "vi": "{app} đã trở lại thư viện của bạn."
   },
   "appHidden": {
     "en": "{app} hidden. You can restore it from Apps.",
@@ -1427,7 +1556,8 @@
     "it": "{app} nascosta. Puoi ripristinarla da App.",
     "ru": "{app}: скрыто. Вернуть можно в разделе «Приложения».",
     "pl": "Ukryto {app}. Możesz ją przywrócić w Aplikacjach.",
-    "fr": "Application {app} masquée. Vous pouvez la restaurer depuis Applications."
+    "fr": "Application {app} masquée. Vous pouvez la restaurer depuis Applications.",
+    "vi": "Đã ẩn {app}. Bạn có thể khôi phục từ Ứng dụng."
   },
   "refreshNotice": {
     "en": "Refreshing your apps and inputs…",
@@ -1438,7 +1568,8 @@
     "it": "Aggiornamento di app e ingressi…",
     "ru": "Обновляем приложения и входы…",
     "pl": "Odświeżanie aplikacji i wejść…",
-    "fr": "Actualisation de vos applications et entrées…"
+    "fr": "Actualisation de vos applications et entrées…",
+    "vi": "Đang làm mới ứng dụng và đầu vào của bạn…"
   },
   "savedError": {
     "en": "Your changes couldn’t be saved.",
@@ -1449,7 +1580,8 @@
     "it": "Impossibile salvare le modifiche.",
     "ru": "Не удалось сохранить изменения.",
     "pl": "Nie udało się zapisać zmian.",
-    "fr": "Impossible d’enregistrer vos modifications."
+    "fr": "Impossible d’enregistrer vos modifications.",
+    "vi": "Không thể lưu các thay đổi của bạn."
   },
   "tvUnreachable": {
     "en": "Your TV couldn’t be reached.",
@@ -1460,7 +1592,8 @@
     "it": "Impossibile raggiungere la TV.",
     "ru": "Не удалось связаться с телевизором.",
     "pl": "Nie można połączyć się z telewizorem.",
-    "fr": "Impossible de joindre votre TV."
+    "fr": "Impossible de joindre votre TV.",
+    "vi": "Không thể kết nối với TV của bạn."
   },
   "appOpenError": {
     "en": "This app couldn’t be opened.",
@@ -1471,7 +1604,8 @@
     "it": "Impossibile aprire questa app.",
     "ru": "Не удалось открыть приложение.",
     "pl": "Nie udało się otworzyć tej aplikacji.",
-    "fr": "Impossible d’ouvrir cette application."
+    "fr": "Impossible d’ouvrir cette application.",
+    "vi": "Không thể mở ứng dụng này."
   },
   "dismissSearch": {
     "en": "Clear search",
@@ -1482,7 +1616,8 @@
     "it": "Cancella ricerca",
     "ru": "Очистить поиск",
     "pl": "Wyczyść wyszukiwanie",
-    "fr": "Effacer la recherche"
+    "fr": "Effacer la recherche",
+    "vi": "Xóa tìm kiếm"
   },
   "languageMenu": {
     "en": "Language",
@@ -1493,7 +1628,8 @@
     "it": "Lingua",
     "ru": "Язык",
     "pl": "Język",
-    "fr": "Langue"
+    "fr": "Langue",
+    "vi": "Ngôn ngữ"
   },
   "slate": {
     "en": "Slate",
@@ -1504,7 +1640,8 @@
     "it": "Ardesia",
     "ru": "Сланец",
     "pl": "Łupek",
-    "fr": "Ardoise"
+    "fr": "Ardoise",
+    "vi": "Đá phiến"
   },
   "midnight": {
     "en": "Midnight",
@@ -1515,7 +1652,8 @@
     "it": "Mezzanotte",
     "ru": "Полночь",
     "pl": "Północ",
-    "fr": "Minuit"
+    "fr": "Minuit",
+    "vi": "Nửa đêm"
   },
   "prism": {
     "en": "Prism",
@@ -1526,7 +1664,8 @@
     "it": "Prisma",
     "ru": "Призма",
     "pl": "Pryzmat",
-    "fr": "Prisme"
+    "fr": "Prisme",
+    "vi": "Lăng kính"
   },
   "monumentValley": {
     "en": "Monument Valley",
@@ -1537,7 +1676,8 @@
     "it": "Monument Valley",
     "ru": "Долина монументов",
     "pl": "Monument Valley",
-    "fr": "Monument Valley"
+    "fr": "Monument Valley",
+    "vi": "Monument Valley"
   },
   "sanFrancisco": {
     "en": "San Francisco",
@@ -1548,7 +1688,8 @@
     "it": "San Francisco",
     "ru": "Сан-Франциско",
     "pl": "San Francisco",
-    "fr": "San Francisco"
+    "fr": "San Francisco",
+    "vi": "San Francisco"
   },
   "summit": {
     "en": "Summit",
@@ -1559,7 +1700,8 @@
     "it": "Vetta",
     "ru": "Вершина",
     "pl": "Szczyt",
-    "fr": "Sommet"
+    "fr": "Sommet",
+    "vi": "Đỉnh núi"
   },
   "forest": {
     "en": "Forest",
@@ -1570,7 +1712,8 @@
     "it": "Foresta",
     "ru": "Лес",
     "pl": "Las",
-    "fr": "Forêt"
+    "fr": "Forêt",
+    "vi": "Rừng già"
   },
   "yosemite": {
     "en": "Yosemite",
@@ -1581,7 +1724,8 @@
     "it": "Yosemite",
     "ru": "Йосемити",
     "pl": "Yosemite",
-    "fr": "Yosemite"
+    "fr": "Yosemite",
+    "vi": "Yosemite"
   },
   "northernLights": {
     "en": "Northern lights",
@@ -1592,7 +1736,8 @@
     "it": "Aurora boreale",
     "ru": "Северное сияние",
     "pl": "Zorza polarna",
-    "fr": "Aurores boréales"
+    "fr": "Aurores boréales",
+    "vi": "Cực quang"
   },
   "liveTV": {
     "en": "Live TV",
@@ -1603,7 +1748,8 @@
     "it": "TV in diretta",
     "ru": "Эфирное ТВ",
     "pl": "Telewizja na żywo",
-    "fr": "TV en direct"
+    "fr": "TV en direct",
+    "vi": "TV trực tiếp"
   },
   "homebrew": {
     "en": "Homebrew",
@@ -1614,7 +1760,8 @@
     "it": "Homebrew",
     "ru": "Homebrew",
     "pl": "Homebrew",
-    "fr": "Homebrew"
+    "fr": "Homebrew",
+    "vi": "Homebrew"
   },
   "browser": {
     "en": "Browser",
@@ -1625,7 +1772,8 @@
     "it": "Browser",
     "ru": "Браузер",
     "pl": "Przeglądarka",
-    "fr": "Navigateur"
+    "fr": "Navigateur",
+    "vi": "Trình duyệt"
   },
   "categoryStreaming": {
     "en": "Streaming",
@@ -1636,7 +1784,8 @@
     "it": "Streaming",
     "ru": "Стриминг",
     "pl": "Streaming",
-    "fr": "Streaming"
+    "fr": "Streaming",
+    "vi": "Phát trực tuyến"
   },
   "categoryMusic": {
     "en": "Music",
@@ -1647,7 +1796,8 @@
     "it": "Musica",
     "ru": "Музыка",
     "pl": "Muzyka",
-    "fr": "Musique"
+    "fr": "Musique",
+    "vi": "Âm nhạc"
   },
   "categoryGaming": {
     "en": "Gaming",
@@ -1658,7 +1808,8 @@
     "it": "Giochi",
     "ru": "Игры",
     "pl": "Gry",
-    "fr": "Jeux"
+    "fr": "Jeux",
+    "vi": "Trò chơi"
   },
   "categoryUtilities": {
     "en": "Utilities",
@@ -1669,7 +1820,8 @@
     "it": "Utilità",
     "ru": "Утилиты",
     "pl": "Narzędzia",
-    "fr": "Utilitaires"
+    "fr": "Utilitaires",
+    "vi": "Tiện ích"
   },
   "clearSkies": {
     "en": "Clear skies",
@@ -1680,7 +1832,8 @@
     "it": "Cielo sereno",
     "ru": "Ясно",
     "pl": "Bezchmurnie",
-    "fr": "Ciel dégagé"
+    "fr": "Ciel dégagé",
+    "vi": "Trời quang đãng"
   },
   "clearNight": {
     "en": "Clear night",
@@ -1691,7 +1844,8 @@
     "it": "Notte serena",
     "ru": "Ясная ночь",
     "pl": "Pogodna noc",
-    "fr": "Nuit claire"
+    "fr": "Nuit claire",
+    "vi": "Đêm quang đãng"
   },
   "mostlyClear": {
     "en": "Mostly clear",
@@ -1702,7 +1856,8 @@
     "it": "Perlopiù sereno",
     "ru": "Преимущественно ясно",
     "pl": "Przeważnie bezchmurnie",
-    "fr": "Plutôt dégagé"
+    "fr": "Plutôt dégagé",
+    "vi": "Trời hầu như quang đãng"
   },
   "partlyCloudy": {
     "en": "Partly cloudy",
@@ -1713,7 +1868,8 @@
     "it": "Parzialmente nuvoloso",
     "ru": "Переменная облачность",
     "pl": "Częściowe zachmurzenie",
-    "fr": "Partiellement nuageux"
+    "fr": "Partiellement nuageux",
+    "vi": "Có mây từng đợt"
   },
   "overcast": {
     "en": "Overcast",
@@ -1724,7 +1880,8 @@
     "it": "Coperto",
     "ru": "Пасмурно",
     "pl": "Pochmurno",
-    "fr": "Couvert"
+    "fr": "Couvert",
+    "vi": "Nhiều mây"
   },
   "fog": {
     "en": "Fog",
@@ -1735,7 +1892,8 @@
     "it": "Nebbia",
     "ru": "Туман",
     "pl": "Mgła",
-    "fr": "Brouillard"
+    "fr": "Brouillard",
+    "vi": "Sương mù"
   },
   "drizzle": {
     "en": "Drizzle",
@@ -1746,7 +1904,8 @@
     "it": "Pioviggine",
     "ru": "Морось",
     "pl": "Mżawka",
-    "fr": "Bruine"
+    "fr": "Bruine",
+    "vi": "Mưa phùn"
   },
   "rain": {
     "en": "Rain",
@@ -1757,7 +1916,8 @@
     "it": "Pioggia",
     "ru": "Дождь",
     "pl": "Deszcz",
-    "fr": "Pluie"
+    "fr": "Pluie",
+    "vi": "Mưa"
   },
   "snow": {
     "en": "Snow",
@@ -1768,7 +1928,8 @@
     "it": "Neve",
     "ru": "Снег",
     "pl": "Śnieg",
-    "fr": "Neige"
+    "fr": "Neige",
+    "vi": "Tuyết"
   },
   "thunderstorms": {
     "en": "Thunderstorms",
@@ -1779,7 +1940,8 @@
     "it": "Temporali",
     "ru": "Гроза",
     "pl": "Burze",
-    "fr": "Orages"
+    "fr": "Orages",
+    "vi": "Dông bão"
   },
   "currentWeather": {
     "en": "Current weather",
@@ -1790,7 +1952,8 @@
     "it": "Meteo attuale",
     "ru": "Текущая погода",
     "pl": "Aktualna pogoda",
-    "fr": "Météo actuelle"
+    "fr": "Météo actuelle",
+    "vi": "Thời tiết hiện tại"
   },
   "searching": {
     "en": "Searching…",
@@ -1801,7 +1964,8 @@
     "it": "Ricerca…",
     "ru": "Поиск…",
     "pl": "Wyszukiwanie…",
-    "fr": "Recherche…"
+    "fr": "Recherche…",
+    "vi": "Đang tìm kiếm…"
   },
   "space": {
     "en": "Space",
@@ -1812,7 +1976,8 @@
     "it": "Spazio",
     "ru": "Пробел",
     "pl": "Spacja",
-    "fr": "Espace"
+    "fr": "Espace",
+    "vi": "Dấu cách"
   },
   "delete": {
     "en": "Delete",
@@ -1823,7 +1988,8 @@
     "it": "Elimina",
     "ru": "Удалить",
     "pl": "Usuń",
-    "fr": "Supprimer"
+    "fr": "Supprimer",
+    "vi": "Xóa"
   },
   "clear": {
     "en": "Clear",
@@ -1834,7 +2000,8 @@
     "it": "Cancella",
     "ru": "Очистить",
     "pl": "Wyczyść",
-    "fr": "Effacer"
+    "fr": "Effacer",
+    "vi": "Xóa sạch"
   },
   "hiddenLabel": {
     "en": "Hidden",
@@ -1845,7 +2012,8 @@
     "it": "Nascoste",
     "ru": "Скрыто",
     "pl": "Ukryte",
-    "fr": "Masquées"
+    "fr": "Masquées",
+    "vi": "Đã ẩn"
   },
   "scrollTestApp": {
     "en": "Scroll test",
@@ -1856,7 +2024,8 @@
     "it": "Test scorrimento",
     "ru": "Тест прокрутки",
     "pl": "Test przewijania",
-    "fr": "Test de défilement"
+    "fr": "Test de défilement",
+    "vi": "Kiểm tra cuộn"
   },
   "scrollTestOnly": {
     "en": "Test card for scrolling; no app to launch.",
@@ -1867,6 +2036,7 @@
     "it": "Scheda di test per lo scorrimento; nessuna app da avviare.",
     "ru": "Тестовая карточка для прокрутки; приложение не запускается.",
     "pl": "Karta testowa do przewijania; brak aplikacji do uruchomienia.",
-    "fr": "Carte de test pour le défilement ; aucune application à lancer."
+    "fr": "Carte de test pour le défilement ; aucune application à lancer.",
+    "vi": "Thẻ thử nghiệm cuộn; không có ứng dụng để khởi chạy."
   }
 }
