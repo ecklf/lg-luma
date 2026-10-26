@@ -756,6 +756,8 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(7));
     state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Setting(crate::state::TV_INPUT_ROW));
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(5));
     assert_eq!(state.activate(), vec![Effect::Quit]);
     state.back();
@@ -1864,4 +1866,40 @@ fn lumas_virtual_input_is_hidden_from_its_own_input_row() {
     .unwrap();
     assert_eq!(inputs.len(), 1);
     assert_eq!(inputs[0].id, "com.webos.app.hdmi1");
+}
+
+#[test]
+fn tv_input_row_reads_once_toggles_and_rereads_after_a_failed_change() {
+    use crate::state::{TV_INPUT_ROW, TvInput};
+    let mut state = ready();
+    assert_eq!(state.tv_input_due(), None);
+    state.open(2);
+    state.section = crate::state::SYSTEM_SECTION;
+    assert_eq!(state.tv_input_due(), Some(Effect::TvInput(None)));
+    assert_eq!(state.tv_input_due(), None);
+    assert!(
+        controls(&state)
+            .iter()
+            .any(|c| c.target == Target::Setting(TV_INPUT_ROW))
+    );
+    state.focus = Target::Setting(TV_INPUT_ROW);
+    assert_eq!(state.activate(), vec![]);
+    assert!(state.tv_input_response(None, Ok(false)).is_empty());
+    assert_eq!(state.activate(), vec![Effect::TvInput(Some(true))]);
+    assert_eq!(state.tv_input, TvInput::Busy);
+    assert!(state.tv_input_response(Some(true), Ok(true)).is_empty());
+    assert_eq!(state.tv_input, TvInput::Known(true));
+    assert_eq!(state.activate(), vec![Effect::TvInput(Some(false))]);
+    assert_eq!(
+        state.tv_input_response(Some(false), Err("denied".into())),
+        vec![Effect::TvInput(None)]
+    );
+    assert!(state.notice.is_some());
+    assert!(
+        state
+            .tv_input_response(None, Err("no root".into()))
+            .is_empty()
+    );
+    assert_eq!(state.tv_input, TvInput::Unavailable);
+    assert_eq!(state.activate(), vec![Effect::TvInput(Some(true))]);
 }

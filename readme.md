@@ -255,8 +255,9 @@ There is no browser geolocation, IP-based location lookup, telemetry or runtime 
 
 ### Optional TV input
 
-After installing this package, run `node /media/developer/apps/usr/palm/applications/com.ecklf.luma/tv-input.cjs enable`
-as root (use `/media/cryptofs/apps/usr/palm/applications/com.ecklf.luma` for Homebrew installs).
+Turn on **Settings → System → Luma as TV input**. Luma runs `tv-input.cjs` through Homebrew Channel's
+root service; over SSH, `node /media/developer/apps/usr/palm/applications/com.ecklf.luma/tv-input.cjs enable`
+does the same (use `/media/cryptofs/apps/usr/palm/applications/com.ecklf.luma` for Homebrew installs).
 The helper verifies that LG actually lists Luma, and undoes registration if it does not.
 Use `status` to inspect it or `disable` to remove it. This is separate from Home takeover and
 never changes Home Auto Launch, HDMI selection, or the power-on preference automatically.

@@ -329,6 +329,7 @@ fn effects(
                 });
             }
             Effect::Weather(command) => weather.send(command),
+            Effect::TvInput(request) => platform.send(Request::TvInput(request)),
         }
     }
     true
@@ -889,6 +890,15 @@ fn run() -> Result<(), String> {
             state.dirty = true;
         }
         state.tick();
+        if let Some(effect) = state.tv_input_due() {
+            running &= effects(
+                vec![effect],
+                &mut state,
+                &platform,
+                &preferences_path,
+                &weather_service,
+            );
+        }
         state.dirty |= assets.artwork.poll();
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
@@ -948,6 +958,16 @@ fn run() -> Result<(), String> {
                             state.dirty = true;
                         }
                     }
+                }
+                Response::TvInput { request, result } => {
+                    let pending = state.tv_input_response(request, result);
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                    );
                 }
                 Response::Uninstalled { id, result } => {
                     let pending = state.uninstall_response(id, result);

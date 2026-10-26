@@ -312,12 +312,21 @@ try {
   assert.deepEqual(clockFocus.focus, { Choice: 1 });
   const system = await scenario(
     'system-settings',
-    'settings,down,down,down,down,down,right,down,down',
+    'settings,down,down,down,down,down,right,down,down,down',
   );
   assert.deepEqual(system.focus, { Setting: 5 });
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
   assert.ok(system.ui_text.includes('Quit app'));
   assert.ok(system.ui_text.includes('Text rendering'));
+  assert.ok(system.ui_text.includes('Luma as TV input'));
+  assert.ok(!system.ui_text.includes('On'));
+  // Desktop previews keep the registration in memory, so the row can be toggled safely.
+  const tvInput = await scenario(
+    'tv-input',
+    'settings,down,down,down,down,down,right,down,down,enter',
+  );
+  assert.deepEqual(tvInput.focus, { Setting: 12 });
+  assert.ok(tvInput.ui_text.includes('On'));
   const textOptions = 'settings,down,down,down,down,down,right,down,enter';
   const textRendering = await scenario('text-rendering-options', textOptions);
   assert.equal(textRendering.subpage, 'TextRendering');

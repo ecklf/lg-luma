@@ -6,7 +6,7 @@ use crate::{
     state::{
         APPS_COLUMNS, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT,
         HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State,
-        Subpage, Target, TextField, WEATHER_SECTION,
+        Subpage, TV_INPUT_ROW, Target, TextField, TvInput, WEATHER_SECTION,
     },
     weather::{self, Unit},
 };
@@ -2087,6 +2087,18 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     "type",
                     Some(language.t(state.preferences.text_rendering.label_key())),
                     true,
+                ),
+                (
+                    TV_INPUT_ROW,
+                    language.t("tvInput"),
+                    "tv",
+                    match state.tv_input {
+                        TvInput::Known(true) => Some(language.t("stateOn")),
+                        TvInput::Known(false) => Some(language.t("stateOff")),
+                        TvInput::Unknown | TvInput::Busy => Some("…"),
+                        TvInput::Unavailable => None,
+                    },
+                    false,
                 ),
                 (5, language.t("quitApp"), "power", None, false),
             ]

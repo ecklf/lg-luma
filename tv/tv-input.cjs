@@ -56,7 +56,9 @@ function configure(command) {
   return { registered: command === 'enable' };
 }
 try {
-  console.log(JSON.stringify(configure(process.argv[2] || 'status')));
+  // Luna-style reply: Luma reads it through Homebrew's exec like sync-splash.cjs.
+  var result = configure(process.argv[2] || 'status');
+  console.log(JSON.stringify({ returnValue: true, registered: result.registered }));
 } catch (error) {
   console.error('Luma TV input: ' + error.message);
   process.exitCode = 1;
