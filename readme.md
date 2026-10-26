@@ -32,7 +32,9 @@ https://github.com/user-attachments/assets/0c3061bf-c158-417e-85a4-da3eb84ecf08
 
 ## Compatibility
 
-The following TV configurations have been reported working with Luma:
+> [!NOTE]
+> Luma should start on any TV running webOS 4 or newer. The following configurations have been
+> confirmed to work by the community. Home takeover support varies, as noted below:
 
 | TV        | Model identifier | webOS | Takeover Support |
 | --------- | ---------------- | ----- | ---------------- |
@@ -40,6 +42,7 @@ The following TV configurations have been reported working with Luma:
 | LG UM7450 | `UM74507LA`      | 4     | ❌               |
 | LG UN7100 | `49UN71006LB`    | 5     | ✅               |
 | LG C1     | `OLED48C1KNB`    | 6     | ✅               |
+| LG B2     | `OLED65B29LA`    | 24    | ✅               |
 | LG C2     | `OLED42C2PSA`    | 25    | ✅               |
 | LG C2     | `OLED65C2PSA`    | 26    | ✅               |
 | LG C3     | `OLED65C31LA`    | 26    | ✅               |
@@ -66,7 +69,7 @@ https://github.com/ecklf/lg-luma/releases/latest/download/repo.json
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_2.9.0_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_2.10.0_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -187,7 +190,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_2.9.0_arm.ipk
+dist/com.ecklf.luma_2.10.0_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png
