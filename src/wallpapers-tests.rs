@@ -132,7 +132,12 @@ fn validation_and_cancellation_leave_no_partial_gallery_entries() {
 fn cancellation_before_commit_cleans_only_the_new_staging_files() {
     let fixture = Fixture::new();
     let checks = AtomicUsize::new(0);
-    let result = store(&fixture.wallpapers(), "Cancelled", &image(1920,1080), || checks.fetch_add(1, Ordering::Relaxed) == 0);
+    let result = store(
+        &fixture.wallpapers(),
+        "Cancelled",
+        &image(1920, 1080),
+        || checks.fetch_add(1, Ordering::Relaxed) == 0,
+    );
     assert!(result.is_err());
     assert_eq!(checks.load(Ordering::Relaxed), 2);
     assert!(fs::read_dir(fixture.wallpapers()).unwrap().next().is_none());
@@ -146,25 +151,48 @@ fn gallery_capacity_is_checked_before_decoding_or_creating_another_upload() {
         let id = format!("custom-{index:032x}");
         let directory = fixture.wallpapers().join(&id);
         create_directory(&directory).unwrap();
-        write_new(&directory.join("metadata.json"), &serde_json::to_vec(&Wallpaper { id, name: format!("Photo {index}"), directory: directory.clone() }).unwrap()).unwrap();
+        write_new(
+            &directory.join("metadata.json"),
+            &serde_json::to_vec(&Wallpaper {
+                id,
+                name: format!("Photo {index}"),
+                directory: directory.clone(),
+            })
+            .unwrap(),
+        )
+        .unwrap();
         write_new(&directory.join("wallpaper.jpg"), b"fixture").unwrap();
         write_new(&directory.join("thumbnail.jpg"), b"fixture").unwrap();
     }
     assert_eq!(catalog(&fixture.wallpapers()).len(), MAX_WALLPAPERS);
-    assert!(store(&fixture.wallpapers(), "Another", b"not decoded", || true).unwrap_err().contains("full"));
-    assert_eq!(fs::read_dir(fixture.wallpapers()).unwrap().count(), MAX_WALLPAPERS);
+    assert!(
+        store(&fixture.wallpapers(), "Another", b"not decoded", || true)
+            .unwrap_err()
+            .contains("full")
+    );
+    assert_eq!(
+        fs::read_dir(fixture.wallpapers()).unwrap().count(),
+        MAX_WALLPAPERS
+    );
 }
 
 #[test]
 fn decoder_enforces_transport_dimensions_and_composites_transparent_pngs() {
     assert!(decode(&vec![0; MAX_BODY + 1]).is_err());
-    let rgba = image::RgbaImage::from_pixel(1920,1080,image::Rgba([255,0,0,0]));
+    let rgba = image::RgbaImage::from_pixel(1920, 1080, image::Rgba([255, 0, 0, 0]));
     let mut png = Cursor::new(Vec::new());
-    image::DynamicImage::ImageRgba8(rgba).write_to(&mut png, image::ImageFormat::Png).unwrap();
-    assert_eq!(decode(png.get_ref()).unwrap().get_pixel(0,0).0, [23,25,28]);
-    let too_tall = image::RgbaImage::new(1,12000);
+    image::DynamicImage::ImageRgba8(rgba)
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
+    assert_eq!(
+        decode(png.get_ref()).unwrap().get_pixel(0, 0).0,
+        [23, 25, 28]
+    );
+    let too_tall = image::RgbaImage::new(1, 12000);
     let mut png = Cursor::new(Vec::new());
-    image::DynamicImage::ImageRgba8(too_tall).write_to(&mut png, image::ImageFormat::Png).unwrap();
+    image::DynamicImage::ImageRgba8(too_tall)
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
     assert!(decode(png.get_ref()).is_err());
 }
 

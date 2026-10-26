@@ -16,9 +16,11 @@ dist/                        Generated ARM IPK, checksum and Homebrew feed
 .build/                      Generated assets, SDK/runtime caches and rendering diagnostics
 ```
 
-React, JSX, Vite, browser tests and web rendering are no longer part of the project. Node/pnpm
+The launcher is rendered natively, without React, JSX, Vite or a browser runtime. Node/pnpm
 remain build/deployment tools for Sharp, the webOS CLI and formatting/linting. The installed app
-is the Rust executable `luma`, with app ID `com.ecklf.luma`.
+is the Rust executable `luma`, with app ID `com.ecklf.luma`. The companion wallpaper-upload page
+in `assets/wallpaper-upload/` is plain HTML/CSS/JavaScript, embedded in the native executable
+and served temporarily to the owner's phone or computer; it does not render the TV interface.
 
 ## Toolchain and commands
 
