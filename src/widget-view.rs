@@ -250,8 +250,7 @@ fn scoreboard(
     let top = rect.y + if compact { 13. } else { 18. };
     let mut x = rect.x + pad;
     if found.live {
-        live_badge(out, language, Rect::new(x, top, 52., 22.), 13.);
-        x += 52. + 12.;
+        x += badge(out, assets, language, Rect::new(x, top, 0., 22.), 13.) + 12.;
     } else {
         let status = say(&found.status);
         if !status.is_empty() {
@@ -437,10 +436,11 @@ fn media(
         }
     }
     if found.live {
-        live_badge(
+        badge(
             out,
+            assets,
             language,
-            Rect::new(poster.x + 12., poster.y + 12., 52., 22.),
+            Rect::new(poster.x + 12., poster.y + 12., 0., 22.),
             13.,
         );
     }
@@ -765,8 +765,9 @@ pub(super) fn dialog(
             .map(|line| show(line, language, now, data_time))
             .collect();
         if hero.live {
-            live_badge(
+            badge(
                 out,
+                assets,
                 language,
                 Rect::new(middle.x, rect.y + 134., middle.w, 30.),
                 15.2,
@@ -1871,21 +1872,6 @@ fn chip(
     x + w + 10.
 }
 
-/// The red LIVE badge centred in `rect`'s width at its top.
-fn live_badge(out: &mut Scene, language: Language, rect: Rect, size: f32) {
-    let w = (size * 4.).max(52.);
-    let h = size * 1.7;
-    let badge = Rect::new(rect.x + (rect.w - w) / 2., rect.y, w, h);
-    out.shape(badge, h * 0.28, c(0xe5484d, 1.));
-    out.text(
-        language.t("live"),
-        Rect::new(badge.x, badge.y + (h - size * 1.25) / 2., w, size * 1.25),
-        text(size, 650, 0.06),
-        WHITE,
-        true,
-    );
-}
-
 /// The local time of an RFC 3339 instant, with the day when it is not today.
 fn match_time(begin_at: &str, now: OffsetDateTime, language: Language) -> String {
     OffsetDateTime::parse(begin_at, &time::format_description::well_known::Rfc3339)
@@ -1997,4 +1983,30 @@ pub(super) fn phone_key_dialog(out: &mut Scene, state: &State, assets: &Assets) 
         WHITE,
         false,
     );
+}
+
+/// The red LIVE badge, as wide as the word in the TV's language: centred in `rect` when it is
+/// wider, else at its left. Returns its width.
+fn badge(out: &mut Scene, assets: &Assets, language: Language, rect: Rect, size: f32) -> f32 {
+    let label = language.t("live");
+    let style = text(size, 650, 0.06);
+    let w = (assets.width(label, style) + size * 1.4)
+        .max(size * 4.)
+        .max(52.);
+    let h = size * 1.7;
+    let x = if rect.w > w {
+        rect.x + (rect.w - w) / 2.
+    } else {
+        rect.x
+    };
+    let badge = Rect::new(x, rect.y, w, h);
+    out.shape(badge, h * 0.28, c(0xe5484d, 1.));
+    out.text(
+        label,
+        Rect::new(badge.x, badge.y + (h - size * 1.25) / 2., w, size * 1.25),
+        style,
+        WHITE,
+        true,
+    );
+    w
 }
