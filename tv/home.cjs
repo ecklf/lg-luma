@@ -409,9 +409,31 @@ function stageSplash(appDir) {
     '/media/developer/temp/' + APP + '/preferences.json',
     '/media/internal/.' + APP + '/preferences.json'
   ];
-  // Match storage.rs: production native jails prefer internal storage. Reads
-  // skip absent files, preserving an existing destination before migration.
+  // Match storage.rs: production native jails prefer internal storage, but
+  // root Home reuses app-owned settings before a root-owned takeover fallback.
   if (appDir.indexOf('/media/cryptofs/') === 0) candidates.unshift(candidates.pop());
+  candidates = candidates
+    .map(function (file, index) {
+      try {
+        var directory = fs.lstatSync(path.dirname(file));
+        if (directory.isDirectory() && fs.existsSync(file)) {
+          return { file: file, rank: directory.uid === 0 ? 1 : 0, index: index };
+        }
+      } catch (error) {
+        if (error.code !== 'ENOENT') console.log('home: storage unreadable: ' + error.message);
+      }
+      return null;
+    })
+    .filter(function (candidate) {
+      return candidate !== null;
+    })
+    .sort(function (a, b) {
+      // Node 8's Array.sort is not guaranteed to be stable.
+      return a.rank - b.rank || a.index - b.index;
+    })
+    .map(function (candidate) {
+      return candidate.file;
+    });
   candidates.push(appDir + '/preferences.json');
   for (var i = 0; i < candidates.length; i++) {
     try {

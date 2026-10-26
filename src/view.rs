@@ -77,6 +77,21 @@ impl Assets {
             .sum()
     }
 
+    fn fit_text(&self, value: &str, mut style: TextStyle, width: f32) -> TextStyle {
+        // Leave a pixel for floating-point differences from the renderer's
+        // font advances. Re-measure if shrinking crosses the display-font
+        // threshold at 32px, where a different optical font is selected.
+        let available = width - 1.;
+        for _ in 0..2 {
+            let measured = self.width(value, style);
+            if measured <= available {
+                break;
+            }
+            style.size *= available / measured;
+        }
+        style
+    }
+
     fn lines(&self, value: &str, style: TextStyle, width: f32) -> usize {
         let key = format!(
             "{}{}",
@@ -1053,7 +1068,7 @@ fn greeting_block(
     let language = state.preferences.language;
     let greeting = language.greeting(now.hour(), &state.preferences.greeting_name);
     let compact = rect.h < 150.;
-    let mut style = text(
+    let style = text(
         if compact {
             46.
         } else if rect.h < 300. {
@@ -1065,10 +1080,9 @@ fn greeting_block(
         -0.065,
     )
     .leading(1.05);
-    let width = assets.width(&greeting, style);
-    if width > rect.w {
-        style.size *= rect.w / width;
-    }
+    // A long greeting shrinks to the block's width; the block's layout stays as for the full
+    // size, with the smaller line centred where the full one would be.
+    let fitted = assets.fit_text(&greeting, style, rect.w);
     let date_style = text(if compact { 12.8 } else { 14.4 }, 600, 0.12);
     let gap = if compact { 6. } else { 20.8 };
     let height = 17. + gap + style.size * 1.05;
@@ -1085,15 +1099,17 @@ fn greeting_block(
         c(0xf5f5f5, 0.72),
         false,
     );
+    let full = style.size * 1.05 + 4.;
+    let line = fitted.size * 1.05 + 4.;
     out.text(
         &greeting,
         Rect::new(
             rect.x,
-            top + 17. + gap,
+            top + 17. + gap + (full - line) / 2.,
             rect.w + 24.,
-            style.size * 1.05 + 4.,
+            line,
         ),
-        style,
+        fitted,
         WHITE,
         false,
     );
@@ -3710,4 +3726,143 @@ fn fit(assets: &Assets, value: &str, style: TextStyle, width: f32) -> String {
         }
     }
     String::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Preferences, demo_inventory};
+
+    fn assets() -> Assets {
+        Assets {
+            root: PathBuf::new(),
+            version: "test".into(),
+            metrics: BTreeMap::from([
+                ("display-500".into(), BTreeMap::from([('W', 1.)])),
+                ("500".into(), BTreeMap::from([('W', 1.2)])),
+                (
+                    "fallback-500".into(),
+                    BTreeMap::from([('界', 1.), ('한', 1.)]),
+                ),
+            ]),
+            artwork: crate::app_artwork::Service::new(false),
+        }
+    }
+
+    #[test]
+    fn short_greetings_keep_their_original_style_and_geometry() {
+        let assets = assets();
+        for name in ["", "Ana"] {
+            let state = State::new(Preferences {
+                greeting_name: name.into(),
+                show_weather: false,
+                ..Preferences::default()
+            });
+            let mut scene = Scene::new();
+            home(&mut scene, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+            let greeting = state.preferences.language.greeting(0, name);
+            let (rect, style) = scene
+                .draw
+                .iter()
+                .find_map(|draw| match draw {
+                    Draw::Text(value, rect, style, ..) if value == &greeting => Some((rect, style)),
+                    _ => None,
+                })
+                .unwrap();
+            // The Classic layout's greeting block, at its full size.
+            let block = crate::home_grid::rect(&crate::home_grid::classic_layout()[0]);
+            assert_eq!((rect.x, rect.w), (block.x, block.w + 24.));
+            assert_eq!(rect.h, 90.4 * 1.05 + 4.);
+            assert_eq!(style.size, 90.4);
+            assert_eq!(style.weight, 500);
+            assert_eq!(style.tracking, -0.065);
+        }
+    }
+
+    #[test]
+    fn long_localized_greetings_fit_on_one_line_without_changing_the_name() {
+        let assets = assets();
+        let base = text(90.4, 500, -0.065).leading(1.05);
+        for language in Language::ALL {
+            for hour in [2, 9, 15, 20] {
+                for name in [
+                    "W".repeat(40),
+                    "界".repeat(40),
+                    "한".repeat(40),
+                    "Alexandra Catherine Elizabeth Montgomery".into(),
+                ] {
+                    let greeting = language.greeting(hour, &name);
+                    let fitted = assets.fit_text(&greeting, base, 1500.);
+                    assert!(fitted.size > 0. && fitted.size < base.size);
+                    assert!(assets.width(&greeting, fitted) < 1500.);
+                    assert_eq!(assets.lines(&greeting, fitted, 1500.), 1);
+                    assert!(greeting.contains(&name));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fitting_remeasures_when_shrinking_changes_the_optical_font() {
+        let assets = assets();
+        let greeting = "W".repeat(100);
+        let fitted = assets.fit_text(&greeting, text(90.4, 500, -0.065), 1500.);
+        assert!(fitted.size < 32.);
+        assert!(assets.width(&greeting, fitted) < 1500.);
+        assert_eq!(assets.lines(&greeting, fitted, 1500.), 1);
+    }
+
+    #[test]
+    fn shrinking_a_greeting_preserves_weather_favorites_and_control_positions() {
+        let assets = assets();
+        for show_weather in [false, true] {
+            let mut state = State::new(Preferences {
+                greeting_name: "Ana".into(),
+                show_weather,
+                ..Preferences::default()
+            });
+            state.set_inventory(demo_inventory(), None);
+            let mut original = Scene::new();
+            home(&mut original, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+            state.preferences.greeting_name = "W".repeat(40);
+            let mut fitted = Scene::new();
+            home(&mut fitted, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+            for (before, after) in original.draw.iter().zip(&fitted.draw) {
+                if let (
+                    Draw::Text(old, rect, old_style, ..),
+                    Draw::Text(new, fitted_rect, style, ..),
+                ) = (before, after)
+                {
+                    if old == new {
+                        assert_eq!(
+                            (rect.x, rect.y, rect.w, rect.h),
+                            (fitted_rect.x, fitted_rect.y, fitted_rect.w, fitted_rect.h)
+                        );
+                        assert_eq!(old_style.size, style.size);
+                    } else {
+                        assert_eq!(
+                            new,
+                            &state
+                                .preferences
+                                .language
+                                .greeting(0, &state.preferences.greeting_name)
+                        );
+                        assert!(
+                            (rect.y + rect.h / 2. - fitted_rect.y - fitted_rect.h / 2.).abs()
+                                < 0.001
+                        );
+                        assert!(style.size * style.line_height <= fitted_rect.h);
+                    }
+                }
+            }
+            assert_eq!(original.controls.len(), fitted.controls.len());
+            for (before, after) in original.controls.iter().zip(&fitted.controls) {
+                assert_eq!(before.target, after.target);
+                assert_eq!(
+                    (before.rect.x, before.rect.y, before.rect.w, before.rect.h),
+                    (after.rect.x, after.rect.y, after.rect.w, after.rect.h)
+                );
+            }
+        }
+    }
 }
