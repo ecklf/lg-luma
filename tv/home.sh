@@ -20,8 +20,7 @@ if [ "$COMMAND" = enable ] && grep -q 'release [56]\.' /etc/starfish-release 2>/
     '  5. Install /var/lib/webosbrew/init.d/64-luma-home to reapply the mount at cold boot.' \
     '  6. Register the LS2 service com.webos.service.lumahome (luma-early) and a compositor key' \
     '     filter, so a cold boot opens Luma at about 20 s instead of after the Homebrew hooks.' \
-    '  7. Pin the last input LG opens at power-on (/var/lib/eim/lastinput) to Home, and point' \
-    '     Back/Exit from apps to Home, so Luma opens instead of Live TV.' \
+    '  Power-on and Back/Exit keep the TV input policy unless startup-home is explicitly enabled.' \
     '' \
     "LG Home's original executable remains underneath the mount." \
     'Home Auto Launch and Quick Start+ retain their current settings.' \

@@ -328,3 +328,24 @@ test('input restoration failure still detaches Home so recovery can be retried',
   assert.equal(state.root, null);
   assert.ok(calls.includes('stop'));
 });
+
+test('changing the input policy replaces the live QML context even if the filter chain was unchanged', () => {
+  const context = load();
+  const calls = [];
+  let source = 'var lumaHomeInputOverride = true;';
+  Object.assign(context, {
+    fs: {
+      existsSync: () => false,
+      writeFileSync: (_file, data) => {
+        source = data;
+      },
+      renameSync() {},
+    },
+    read: () => source,
+    setKeyFilters: (enabled) => calls.push(enabled),
+    pause: () => calls.push('settle'),
+  });
+  context.writeInputFilter();
+  assert.deepEqual(calls, [false, 'settle', true]);
+  assert.equal(source, 'var lumaHomeInputOverride = false;');
+});

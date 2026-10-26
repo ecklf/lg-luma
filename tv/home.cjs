@@ -133,6 +133,10 @@ function restoreInputPolicy() {
   });
 }
 function writeInputFilter() {
+  // configd may suppress unchanged filter lists. Remove our entry before replacing/readding it,
+  // otherwise the old live QML context can immediately overwrite restored settings.
+  setKeyFilters(false);
+  pause();
   var file = STATE + '/home-filter.js';
   var source = read(file).replace(
     /var lumaHomeInputOverride = (true|false);/,
@@ -680,6 +684,7 @@ function installEarly(appDir) {
       fs.renameSync(file + '.new', file);
     });
     rescanLs2();
+    setKeyFilters(false);
     setKeyFilters(true);
   } catch (error) {
     console.error('Luma Home: early start not installed: ' + error.message);
