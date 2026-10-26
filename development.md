@@ -88,7 +88,7 @@ It does not execute the test suites. A desktop display is required; on headless 
 | OK or Back in move mode       | Finish reordering without launching                           |
 | Escape / Back / Backspace     | Parent navigation, overlay dismissal or Recent apps from Home |
 | Hold Back / Escape for 600 ms | Open Recent apps while Luma is focused                        |
-| Menu / M / right-click        | App options                                                   |
+| Menu / M / right-click        | App options side popup                                        |
 | Pointer / wheel               | Hover, click, hold and scrolling                              |
 | F5                            | Refresh inventory                                             |
 
@@ -97,6 +97,31 @@ the keyboard first; Weather Location then returns to its parent Location row, HD
 that HDMI row, and the Background gallery to Background in the sidebar. Back from the sidebar
 focuses the Settings tab, then returns Home. **System** in the sidebar groups **Refresh apps & inputs**
 and the vector power-icon **Quit app** action separately from General preferences.
+On Apps, OK or a normal pointer click on an app opens its side popup, with **Open** first and focused by
+default, followed by favorite, hide/show and **Delete app** actions. A second OK launches the app.
+Home favorites, Inputs and Recent apps launch directly. Hold OK on Home still reorders favorites.
+LG's Settings and More buttons retain their system menus, with no custom key interception.
+Deletion opens a separate confirmation with **Cancel** focused by default. Cancel or Back returns
+to the side popup. Once deletion is sent, dismissal does not cancel the platform operation.
+The popup has action icons on the far right, without a title, close button or embedded shortcut hints. The
+confirmation has no heading and identifies the app in its warning text.
+Luma (including former app IDs and the Home identity), Homebrew Channel, test-preview cards and
+all apps in the `com.webos.*`, `com.palm.*` and `com.lge.*` namespaces cannot be deleted. This
+conservative vendor protection includes Live TV, Web Browser, Settings and potentially removable
+LG apps, rather than relying on firmware to reject unsafe removals. The worker calls
+`org.webosbrew.hbchannel.service/exec` once to run the embedded Node 8-compatible
+`tv/uninstall-app.cjs` helper. It sends one `com.webos.appInstallService/remove` subscription with
+`{"id":"APP_ID","subscribe":true}` and waits for status 31, not the initial acceptance reply.
+The normal endpoint was manually verified removing Content Store DAZN on webOS 26, whereas
+Homebrew's `uninstall` endpoint (`dev/remove`) returned `FAILED_REMOVE` for that app. The helper
+rechecks protected IDs, bounds output to 64 KiB/64 replies, terminates luna-send after completion
+or a 15-second deadline and has a separate 20-second native transport budget. Luma refreshes inventory after
+success. After a failed or timed-out request the worker makes up to three bounded, read-only
+inventory checks. An app absent from a complete inventory confirms removal even if its completion
+reply was lost. Otherwise the error closes the popup and refreshes inventory without deleting
+preferences. Uninstall mutations are never automatically retried. Desktop deletion changes only
+in-memory sample inventory. Verify app opening, real deletion, denial and focus restoration
+manually on a TV, including Home-takeover mode.
 The **Clock** subpage contains **Clock format** (12-hour or 24-hour) and **Time format** (`HH:MM`
 or `HH:MM:SS`, defaulting to `HH:MM`). Choosing a format returns to its row in Clock, and Back
 from Clock restores its General row. With seconds shown, the header clock redraws once per second
@@ -230,11 +255,19 @@ draws with a texture-free GLES2 shader. No SVG parser runs on the TV. The shared
 handles font outlines. Installed app PNG/JPEG/WebP artwork, wallpaper photos, tile-background
 images and the webOS installation icon remain raster assets. See [assets.md](assets.md) for licenses.
 
-On webOS the window is created without MSAA, so text and logos use their analytic edge filters,
-which stay sharper through a TV's 2x scale-up of a 1080p graphics plane than 4x sample coverage
-at the same cost. Desktop previews keep multisampling; `LUMA_MSAA=4` or `0` overrides either.
-Text up to 16 physical pixels is emboldened by 0.25 px per edge (fading out by 28 px) so thin
-stems get an opaque core; `LUMA_EMBOLDEN` sets the strength.
+TV and desktop windows default to 4× MSAA with 2×/single-sample fallbacks and no text
+emboldening, restoring the text treatment used in v2.8.0. **Settings → System → Text rendering**
+offers **MSAA (default)** and **Analytic**. The `text_rendering` preference (`msaa` or `analytic`)
+is saved immediately and applies when Luma next starts because SDL selects MSAA when it creates
+the window. Missing or invalid preferences use MSAA. The setting shows a restart reminder.
+
+Analytic mode uses a single-sample window and analytic text/logo edge filters. Text up to 16
+physical pixels is emboldened by 0.25 px per edge, fading out by 28 px. The choice is visual:
+analytic rendering was preferred on a contributor's webOS 5 TV, while MSAA was preferred in
+manual Mali-G52 TV comparisons. `LUMA_MSAA=4` or `0` overrides the saved mode and its default
+emboldening. `LUMA_EMBOLDEN` overrides the strength independently. Diagnostics report the
+startup `text_rendering` configuration, and `last_presented.multisample_samples` reports the
+actual window's samples. Offscreen captures can still be single-sample.
 
 Shape edges use a one-drawable-pixel box filter centred on the edge, and rectangles (and logo
 placement) snap to whole drawable pixels. A straight edge is then a single step, and a one-pixel
@@ -306,8 +339,8 @@ are tessellated in font-em coordinates. Complete text runs are cached in static 
 independent of position/color/drawable density, avoiding a draw call per letter. CJK fonts open
 only when needed; there are no glyph bitmap atlases or full-font mesh exports.
 
-Desktop windows request 4× MSAA, with 2×/single-sample fallbacks if EGL rejects a configuration;
-webOS windows are single-sample unless `LUMA_MSAA=4` asks for samples. Multisampled text draws
+MSAA mode requests 4× MSAA, with 2×/single-sample fallbacks if EGL rejects a configuration.
+Analytic mode requests a single-sample window. Multisampled text draws
 intact glyph fills without inward offsets/fringe triangles, which can cross on very thin
 small-text strokes. Single-sample targets use a narrower half-pixel boundary fringe. Glyph
 origins/baselines are pixel-aligned per drawable axis. There is no LCD subpixel rendering, font

@@ -129,13 +129,27 @@ try {
   assert.deepEqual(recentHomeBack.focus, { Recent: 'netflix' });
   const recentYoutube = await scenario('recents-youtube', 'recents,await-recents,right');
   assert.deepEqual(recentYoutube.focus, { Recent: 'youtube.leanback.v4' });
-  const hidden = await scenario('apps', 'apps,down,menu,down,enter');
+  const appOptions = await scenario('app-options', 'apps,down,enter');
+  assert.deepEqual(appOptions.focus, 'OpenApp');
+  assert.ok(appOptions.ui_text.includes('Delete app'));
+  const deleteFocused = await scenario('delete-focused', 'apps,down,enter,down,down,down');
+  assert.deepEqual(deleteFocused.focus, { Option: 2 });
+  const deleteConfirm = await scenario('delete-confirm', 'apps,down,enter,down,down,down,enter');
+  assert.deepEqual(deleteConfirm.focus, 'CancelDelete');
+  assert.ok(deleteConfirm.ui_text.some((value) => value.includes('uninstall “Netflix”')));
+  const deleteCancel = await scenario(
+    'delete-cancel',
+    'apps,down,enter,down,down,down,enter,enter',
+  );
+  assert.deepEqual(deleteCancel.focus, { Option: 2 });
+  assert.ok(deleteCancel.apps.includes('netflix'));
+  const hidden = await scenario('apps', 'apps,down,enter,down,down,enter');
   assert.ok(hidden.preferences.hidden.includes('netflix'));
   assert.deepEqual(hidden.focus, { App: 'youtube.leanback.v4' });
   // Reload from disk, find Netflix in Hidden, and restore it.
   const restored = await scenario(
     'restored',
-    'apps,down,up,right,right,right,right,enter,down,menu,down,enter',
+    'apps,down,up,right,right,right,right,enter,down,enter,down,down,enter',
   );
   assert.deepEqual(restored.preferences.hidden, []);
   const searched = await scenario('search', 'apps,type:YouTube,back');
@@ -283,10 +297,34 @@ try {
   const clockFocus = await scenario('clock-format-focus', `${clockEditor},enter,down`);
   assert.equal(clockFocus.subpage, 'ClockFormat');
   assert.deepEqual(clockFocus.focus, { Choice: 1 });
-  const system = await scenario('system-settings', 'settings,down,down,down,down,down,right,down');
+  const system = await scenario(
+    'system-settings',
+    'settings,down,down,down,down,down,right,down,down',
+  );
   assert.deepEqual(system.focus, { Setting: 5 });
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
   assert.ok(system.ui_text.includes('Quit app'));
+  assert.ok(system.ui_text.includes('Text rendering'));
+  const textOptions = 'settings,down,down,down,down,down,right,down,enter';
+  const textRendering = await scenario('text-rendering-options', textOptions);
+  assert.equal(textRendering.subpage, 'TextRendering');
+  assert.deepEqual(textRendering.focus, { Choice: 0 });
+  assert.ok(textRendering.ui_text.includes('MSAA (default)'));
+  assert.ok(textRendering.ui_text.includes('Analytic'));
+  assert.ok(textRendering.ui_text.includes('Restart Luma to apply changes.'));
+  const analyticSaved = await scenario('text-rendering-saved', `${textOptions},down,enter`);
+  assert.equal(analyticSaved.preferences.text_rendering, 'analytic');
+  assert.deepEqual(analyticSaved.focus, { Setting: 7 });
+  assert.equal(analyticSaved.render.text_rendering.mode, 'msaa', 'Mode changes apply next launch');
+  const analytic = await scenario('text-rendering-analytic', 'home,down');
+  assert.equal(analytic.render.text_rendering.mode, 'analytic');
+  assert.equal(analytic.render.text_rendering.embolden, 0.25);
+  assert.equal(analytic.render.last_presented.multisample_samples, 0);
+  const msaaSaved = await scenario('text-rendering-msaa-saved', `${textOptions},up,enter`);
+  assert.equal(msaaSaved.preferences.text_rendering, 'msaa');
+  const msaa = await scenario('text-rendering-msaa', 'home,down');
+  assert.equal(msaa.render.text_rendering.mode, 'msaa');
+  assert.equal(msaa.render.text_rendering.embolden, 0);
   // The exposed card fragments are real pointer targets, including after remote scrolling.
   const edgeFavorites = [
     'netflix',
