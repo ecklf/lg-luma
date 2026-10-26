@@ -1,5 +1,12 @@
 # lg-luma
 
+## 2.10.3
+
+### Patch Changes
+
+- df0f4bb: Scale long Home greetings down to fit their existing single-line area without cropping names or moving weather and favorites. Keep LG's system keyboard and its existing name-entry behavior unchanged.
+- 49df652: Add Vietnamese (`vi`) translation: full `messages.json` catalog, locale registration in `i18n.rs` (language list, display name, and localized date formatting), and Latin Extended Additional (U+1EA0-1EF9) glyphs in the bundled Inter font so Vietnamese letters no longer fall back to the CJK font.
+
 ## 2.10.2
 
 ### Patch Changes
