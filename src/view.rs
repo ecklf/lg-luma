@@ -293,9 +293,11 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
             let size = (session.qr_size + 8) as f32 * scale;
             let x = (1920. - size) / 2.;
             let y = 354.;
-            let paper = c(0xf5f4ef, 1.);
-            let ink = c(0x17191c, 1.);
-            out.shape(Rect::new(x, y, size, size), 0., paper);
+            // Invert the normal QR polarity to blend into the dark modal, while
+            // retaining a high-contrast foreground and the full quiet zone.
+            let background = c(0x1b2023, 1.);
+            let modules = c(0xf5f4ef, 1.);
+            out.shape(Rect::new(x, y, size, size), 0., background);
             for row in 0..session.qr_size {
                 // Merge contiguous modules so QR rendering stays a few hundred quads.
                 let mut column = 0;
@@ -328,7 +330,7 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
                             scale,
                         ),
                         0.,
-                        ink,
+                        modules,
                     );
                 }
             }
@@ -339,7 +341,7 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
                 11. * scale,
                 11. * scale,
             );
-            out.shape(mark_plate, 1.1 * scale, ink);
+            out.shape(mark_plate, 1.1 * scale, background);
             let mark = Rect::new(
                 mark_plate.x + 1.25 * scale,
                 mark_plate.y + 1.25 * scale,

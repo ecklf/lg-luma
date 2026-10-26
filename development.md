@@ -263,8 +263,9 @@ each session accepts at most 64 local requests and expires after ten minutes. HT
 encrypted**; use a trusted local network. The URL is not logged.
 The branded code follows the small center-logo approach shown in
 [Vercel's QR example](https://github.com/vercel/examples/tree/main/container-images/demo/apps/qr):
-Luma uses high error correction, keeps the standard dark-on-light modules and quiet zone, and
-clears a compact center patch for its mark so phone cameras can still scan it in the dark-themed modal.
+Luma uses high error correction, light modules on the modal's dark background, and a compact center
+mark. QR readers vary in their support for inverted polarity; the URL remains visible as a manual
+fallback.
 Requests are serialized and bounded by header/body sizes and a deadline, with cancellation checks
 while reading and before committing. No user-controlled path is opened by the server. No privileged
 helper or permanent system service is installed. Networks with client isolation, IPv6-only access
