@@ -85,14 +85,20 @@ fn widening_favorites_does_not_widen_apps_or_unclip_offscreen_rows() {
     let controls = [control];
     assert!(state.hit_test(&controls, 40., 600.).is_none());
     assert!(state.hit_test(&controls, 1860., 600.).is_none());
-    assert!(state.hit_test(&controls, 100., 1000.).is_none());
+    assert_eq!(
+        state.hit_test(&controls, 100., 1000.),
+        Some(Target::App("sample".into()))
+    );
+    assert!(state.hit_test(&controls, 100., 1080.).is_none());
     assert_eq!(
         state.hit_test(&controls, 100., 600.),
         Some(Target::App("sample".into()))
     );
     assert!(!state.wheel_scroll(&controls, Some((1860., 600.)), 0, -1));
     assert_eq!(state.home_scroll, 0.);
-    assert_eq!(state.scroll, 90.);
+    let viewport = state.content_viewport();
+    let scroll_limit = controls[0].rect.y + controls[0].rect.h - (viewport.y + viewport.h - 12.);
+    assert_eq!(state.scroll, 90_f32.min(scroll_limit));
 }
 
 #[test]
@@ -888,13 +894,359 @@ fn a_notice_does_not_escape_modal_focus_and_closing_restores_the_app() {
     assert!(
         controls(&state)
             .iter()
-            .all(|c| matches!(c.target, Target::Option(_) | Target::CloseDialog))
+            .all(|c| matches!(c.target, Target::OpenApp | Target::Option(_)))
     );
     state.focus = Target::Option(1);
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Option(1));
+    assert_eq!(state.focus, Target::Option(2));
     state.back();
     assert_eq!(state.focus, Target::App("netflix".into()));
+}
+
+#[test]
+fn delete_confirmation_defaults_to_cancel_and_back_restores_side_popup() {
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state.open(1);
+    state.focus = Target::App("netflix".into());
+    let card = controls(&state)
+        .into_iter()
+        .find(|c| c.target == state.focus)
+        .unwrap()
+        .rect;
+    let parent_draw_count = scene(&state).draw.len();
+    state.options();
+    let popup_scene = scene(&state);
+    let popup = popup_scene.modal.unwrap();
+    assert!(
+        popup_scene
+            .controls
+            .iter()
+            .all(|control| matches!(control.target, Target::OpenApp | Target::Option(_)))
+    );
+    assert!(!popup_scene.draw[parent_draw_count..].iter().any(|draw| matches!(draw,
+        crate::renderer::Draw::Text(value, rect, ..) if popup.contains(rect.x, rect.y)
+            && ["Netflix", "Streaming", "Select", "Close", "OK", "Back"].contains(&value.as_str()))));
+    let action_icons: Vec<_> = popup_scene.draw[parent_draw_count..]
+        .iter()
+        .filter_map(|draw| match draw {
+            crate::renderer::Draw::Image(_, rect, ..)
+            | crate::renderer::Draw::TintedImage(_, rect, ..)
+                if popup.contains(rect.x, rect.y) =>
+            {
+                Some(rect)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(action_icons.len(), 4);
+    assert!(
+        action_icons
+            .iter()
+            .all(|rect| rect.x > popup.x + popup.w - 80.)
+    );
+    assert!(popup.x >= card.x + card.w || popup.x + popup.w <= card.x);
+    state.focus = Target::Option(2);
+    let focused_scene = scene(&state);
+    let delete_rect = focused_scene
+        .controls
+        .iter()
+        .find(|c| c.target == Target::Option(2))
+        .unwrap()
+        .rect;
+    assert!(focused_scene.draw.iter().any(|draw| matches!(draw,
+        crate::renderer::Draw::Shape(rect, _, _, color) if rect.x == delete_rect.x && rect.y == delete_rect.y
+            && *color == [214. / 255., 59. / 255., 53. / 255., 1.])));
+    assert!(focused_scene.draw.iter().any(|draw| matches!(draw,
+        crate::renderer::Draw::Text(label, rect, _, color, _) if label == "Delete app" && delete_rect.contains(rect.x, rect.y)
+            && *color == crate::renderer::WHITE)));
+    assert!(state.activate().is_empty());
+    assert!(matches!(state.overlay, Some(Overlay::Delete { .. })));
+    assert_eq!(state.focus, Target::CancelDelete);
+    let confirmation = scene(&state).modal.unwrap();
+    assert_eq!(confirmation.w, 640.);
+    assert!(confirmation.h < confirmation.w);
+    assert!(
+        controls(&state)
+            .iter()
+            .all(|c| matches!(c.target, Target::ConfirmDelete | Target::CancelDelete))
+    );
+    assert!(state.activate().is_empty());
+    assert!(matches!(state.overlay, Some(Overlay::Options { .. })));
+    assert_eq!(state.focus, Target::Option(2));
+    state.activate();
+    state.back();
+    assert_eq!(state.focus, Target::Option(2));
+    state.back();
+    assert_eq!(state.focus, Target::App("netflix".into()));
+}
+
+#[test]
+fn opening_side_popup_preserves_card_artwork_geometry_with_or_without_captions() {
+    for page in [0, 1] {
+        for names in [false, true] {
+            let mut state = ready();
+            state.preferences.show_app_names = names;
+            state.preferences.show_home_names = names;
+            state.open(page);
+            state.focus = Target::App("netflix".into());
+            let before = scene(&state);
+            let logo_rect = |draws: &[crate::renderer::Draw]| {
+                draws
+                    .iter()
+                    .filter_map(|draw| match draw {
+                        crate::renderer::Draw::Image(path, rect, ..)
+                        | crate::renderer::Draw::TintedImage(path, rect, ..)
+                            if path.contains("netflix") =>
+                        {
+                            Some([rect.x, rect.y, rect.w, rect.h])
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let original = logo_rect(&before.draw);
+            assert!(!original.is_empty());
+            state.options();
+            let lifted = logo_rect(&scene(&state).draw);
+            assert_eq!(lifted.len(), original.len() * 2);
+            for (actual, expected) in lifted.iter().zip(original.iter().cycle()) {
+                for (a, b) in actual.iter().zip(expected) {
+                    assert!(
+                        (a - b).abs() < 0.001,
+                        "Artwork bounds changed: {actual:?} vs {expected:?}"
+                    );
+                }
+            }
+            let hearts = |draws: &[crate::renderer::Draw]| {
+                draws
+                    .iter()
+                    .filter_map(|draw| match draw {
+                        crate::renderer::Draw::Image(path, rect, ..)
+                        | crate::renderer::Draw::TintedImage(path, rect, ..)
+                            if path.contains("heart-filled") && rect.x < 350. =>
+                        {
+                            Some([rect.x, rect.y, rect.w, rect.h])
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let original_hearts = hearts(&before.draw);
+            assert_eq!(original_hearts.len(), usize::from(page == 1));
+            let popup_hearts = hearts(&scene(&state).draw);
+            assert_eq!(popup_hearts.len(), original_hearts.len() + 1);
+            if page == 1 {
+                assert_eq!(popup_hearts, vec![original_hearts[0], original_hearts[0]]);
+            }
+        }
+    }
+}
+
+#[test]
+fn protected_apps_cannot_be_deleted_through_ui_or_worker() {
+    for id in [
+        crate::platform::APP_ID,
+        crate::platform::HOME_ID,
+        "com.webos.app.livetv",
+        "com.webos.app.browser",
+        "com.webos.app.settings",
+        "com.webos.service.applicationmanager",
+        "com.palm.app.settings",
+        "com.palm.app.input",
+        "com.lge.app.store",
+        "com.lge.service.example",
+        "com.luma.launcher",
+        "com.luma.native",
+        "com.luma.launcher.native",
+        "org.webosbrew.hbchannel",
+        "org.webosbrew.hbchannel.service",
+        "invalid';command",
+    ] {
+        assert!(crate::platform::uninstall_request(id).is_err());
+        let mut state = ready();
+        state.inventory.apps.push(App::new(id, "Renamed app"));
+        state.open(1);
+        state.focus = Target::App(id.into());
+        state.options();
+        assert!(
+            !controls(&state)
+                .iter()
+                .any(|c| c.target == Target::Option(2))
+        );
+        state.focus = Target::Option(2);
+        assert!(state.activate().is_empty());
+        assert!(matches!(state.overlay, Some(Overlay::Options { .. })));
+        state.overlay = Some(Overlay::Delete {
+            id: id.into(),
+            restore: Target::App(id.into()),
+        });
+        state.focus = Target::ConfirmDelete;
+        assert!(state.activate().is_empty());
+    }
+    assert_eq!(
+        crate::platform::uninstall_request("netflix").unwrap(),
+        (
+            "luna://com.webos.appInstallService/remove",
+            json!({"id": "netflix", "subscribe": true})
+        )
+    );
+    for id in [
+        "com.example.app",
+        "com.webosbrew.app",
+        "com.palmtree.app",
+        "com.lgeneric.app",
+    ] {
+        assert!(
+            crate::platform::can_uninstall(id),
+            "Unexpectedly protected: {id}"
+        );
+    }
+}
+
+#[test]
+fn deletion_is_single_flight_and_only_success_cleans_up_preferences() {
+    let mut state = ready();
+    state.open(1);
+    state.preferences.favorites = Some(vec!["netflix".into(), "youtube.leanback.v4".into()]);
+    state.preferences.hidden.push("netflix".into());
+    state.focus = Target::App("netflix".into());
+    state.options();
+    state.focus = Target::Option(2);
+    state.activate();
+    state.focus = Target::ConfirmDelete;
+    let cancel_before = controls(&state)
+        .into_iter()
+        .find(|c| c.target == Target::CancelDelete)
+        .unwrap()
+        .rect;
+    assert_eq!(state.activate(), vec![Effect::Uninstall("netflix".into())]);
+    assert_eq!(state.focus, Target::CancelDelete);
+    let cancel_after = controls(&state)
+        .into_iter()
+        .find(|c| c.target == Target::CancelDelete)
+        .unwrap()
+        .rect;
+    assert_eq!(
+        [
+            cancel_before.x,
+            cancel_before.y,
+            cancel_before.w,
+            cancel_before.h
+        ],
+        [
+            cancel_after.x,
+            cancel_after.y,
+            cancel_after.w,
+            cancel_after.h
+        ]
+    );
+    assert!(
+        !controls(&state)
+            .iter()
+            .any(|c| c.target == Target::ConfirmDelete)
+    );
+    state.focus = Target::ConfirmDelete;
+    assert!(state.activate().is_empty());
+    assert!(state.uninstall_response("other".into(), Ok(())).is_empty());
+    assert_eq!(state.uninstalling.as_deref(), Some("netflix"));
+    assert_eq!(
+        state.uninstall_response("netflix".into(), Err("denied".into())),
+        vec![Effect::Refresh]
+    );
+    assert!(state.inventory.apps.iter().any(|a| a.id == "netflix"));
+    assert!(state.preferences.hidden.contains(&"netflix".into()));
+    assert_eq!(state.preferences.favorites.as_ref().unwrap().len(), 2);
+    assert_eq!(state.focus, state.first_content());
+    assert!(state.overlay.is_none());
+    state.focus = Target::App("netflix".into());
+    state.options();
+    state.focus = Target::Option(2);
+    state.activate();
+    state.focus = Target::ConfirmDelete;
+    state.activate();
+    assert_eq!(
+        state.uninstall_response("netflix".into(), Ok(())),
+        vec![Effect::Save, Effect::Refresh]
+    );
+    assert!(!state.inventory.apps.iter().any(|a| a.id == "netflix"));
+    assert!(state.preferences.hidden.is_empty());
+    assert_eq!(
+        state.preferences.favorites,
+        Some(vec!["youtube.leanback.v4".into()])
+    );
+    assert!(state.overlay.is_none());
+    assert_eq!(state.focus, Target::App("youtube.leanback.v4".into()));
+}
+
+#[test]
+fn deletion_completion_does_not_steal_focus_after_dismissal() {
+    let mut state = ready();
+    state.uninstalling = Some("netflix".into());
+    state.open(2);
+    state.uninstall_response("netflix".into(), Ok(()));
+    assert_eq!(state.page, Page::Settings);
+    assert_eq!(state.focus, Target::Nav(2));
+    assert!(state.overlay.is_none());
+}
+
+#[test]
+fn app_activation_opens_options_with_open_focused_and_next_ok_launches() {
+    for page in [0, 1] {
+        let mut state = ready();
+        state.open(page);
+        state.focus = Target::App("netflix".into());
+        if page == 0 {
+            assert_eq!(state.activate(), vec![Effect::Launch("netflix".into())]);
+            assert!(state.overlay.is_none());
+            continue;
+        }
+        assert!(state.activate().is_empty());
+        assert!(matches!(state.overlay, Some(Overlay::Options { .. })));
+        assert_eq!(state.focus, Target::OpenApp);
+        assert_eq!(state.activate(), vec![Effect::Launch("netflix".into())]);
+        assert!(state.overlay.is_none());
+        assert_eq!(state.focus, Target::App("netflix".into()));
+    }
+}
+
+#[test]
+fn uncertain_deletion_uses_complete_inventory_instead_of_visible_app_filtering() {
+    use crate::platform::inventory_confirms_removal;
+    assert_eq!(inventory_confirms_removal(&json!([]), "netflix"), Ok(true));
+    assert_eq!(
+        inventory_confirms_removal(&json!([{"id": "youtube.leanback.v4"}]), "netflix"),
+        Ok(true)
+    );
+    assert_eq!(
+        inventory_confirms_removal(&json!([{"id": "netflix", "visible": false}]), "netflix"),
+        Ok(false)
+    );
+    assert!(inventory_confirms_removal(&json!({}), "netflix").is_err());
+    assert!(inventory_confirms_removal(&json!([{}]), "netflix").is_err());
+}
+
+#[test]
+fn failed_deletion_refreshes_inventory_and_closes_stale_confirmation() {
+    let mut state = ready();
+    state.open(1);
+    state.focus = Target::App("netflix".into());
+    state.options();
+    state.focus = Target::Option(2);
+    state.activate();
+    state.focus = Target::ConfirmDelete;
+    state.activate();
+    assert_eq!(
+        state.uninstall_response("netflix".into(), Err("timeout".into())),
+        vec![Effect::Refresh]
+    );
+    assert!(state.overlay.is_none());
+    assert_eq!(state.focus, Target::App("netflix".into()));
+    let mut inventory = demo_inventory();
+    inventory.apps.retain(|app| app.id != "netflix");
+    state.set_inventory(inventory, None);
+    assert!(!state.apps().iter().any(|app| app.id == "netflix"));
+    assert_ne!(state.focus, Target::App("netflix".into()));
 }
 
 #[test]
@@ -950,6 +1302,8 @@ fn pinning_a_hidden_app_restores_it_and_leaves_hidden_when_empty() {
     state.preferences.hidden.push("org.jellyfin.webos".into());
     state.focus = Target::App("org.jellyfin.webos".into());
     state.options();
+    assert_eq!(state.focus, Target::OpenApp);
+    state.focus = Target::Option(0);
     state.activate();
     assert!(state.preferences.hidden.is_empty());
     assert_eq!(state.filter, 0);

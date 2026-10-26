@@ -1089,15 +1089,81 @@
     "fr": "Accueil"
   },
   "options": {
-    "en": "Hold OK for options",
-    "de": "OK halten für Optionen",
-    "es": "Mantén OK para ver opciones",
-    "zh": "长按 OK 查看选项",
-    "pt": "Segure OK para opções",
-    "it": "Tieni premuto OK per le opzioni",
-    "ru": "Удерживайте OK для параметров",
-    "pl": "Przytrzymaj OK, aby wyświetlić opcje",
-    "fr": "Maintenez OK pour les options"
+    "en": "Options",
+    "de": "Optionen",
+    "es": "Opciones",
+    "zh": "选项",
+    "pt": "Opções",
+    "it": "Opzioni",
+    "ru": "Параметры",
+    "pl": "Opcje",
+    "fr": "Options"
+  },
+  "deleteApp": {
+    "en": "Delete app",
+    "de": "App löschen",
+    "es": "Eliminar app",
+    "zh": "删除应用",
+    "pt": "Excluir app",
+    "it": "Elimina app",
+    "ru": "Удалить приложение",
+    "pl": "Usuń aplikację",
+    "fr": "Supprimer l’app"
+  },
+  "deleteAppWarning": {
+    "en": "This will uninstall “{app}” from your TV and may delete its data. This cannot be undone.",
+    "de": "„{app}“ wird vom Fernseher deinstalliert. Dabei können die App-Daten gelöscht werden. Dies kann nicht rückgängig gemacht werden.",
+    "es": "Se desinstalará «{app}» del televisor y podrían eliminarse sus datos. Esta acción no se puede deshacer.",
+    "zh": "这将从电视卸载“{app}”，并可能删除其数据。此操作无法撤销。",
+    "pt": "“{app}” será desinstalado da TV e seus dados poderão ser excluídos. Isso não pode ser desfeito.",
+    "it": "“{app}” verrà disinstallata dalla TV e i suoi dati potrebbero essere eliminati. L’operazione non può essere annullata.",
+    "ru": "«{app}» будет удалено с телевизора вместе с возможными данными. Это действие нельзя отменить.",
+    "pl": "„{app}” zostanie odinstalowana z telewizora, a jej dane mogą zostać usunięte. Tej operacji nie można cofnąć.",
+    "fr": "« {app} » sera désinstallée du téléviseur et ses données pourront être supprimées. Cette action est irréversible."
+  },
+  "cancel": {
+    "en": "Cancel",
+    "de": "Abbrechen",
+    "es": "Cancelar",
+    "zh": "取消",
+    "pt": "Cancelar",
+    "it": "Annulla",
+    "ru": "Отмена",
+    "pl": "Anuluj",
+    "fr": "Annuler"
+  },
+  "deletingApp": {
+    "en": "Deleting app…",
+    "de": "App wird gelöscht…",
+    "es": "Eliminando app…",
+    "zh": "正在删除应用…",
+    "pt": "Excluindo app…",
+    "it": "Eliminazione dell’app…",
+    "ru": "Удаление приложения…",
+    "pl": "Usuwanie aplikacji…",
+    "fr": "Suppression de l’app…"
+  },
+  "deleteAppError": {
+    "en": "Could not confirm app deletion. Refresh apps to check before trying again.",
+    "de": "Das Löschen konnte nicht bestätigt werden. Aktualisiere die Apps vor einem erneuten Versuch.",
+    "es": "No se pudo confirmar la eliminación. Actualiza las apps antes de volver a intentarlo.",
+    "zh": "无法确认应用是否已删除。重试前请刷新应用列表。",
+    "pt": "Não foi possível confirmar a exclusão. Atualize os apps antes de tentar novamente.",
+    "it": "Impossibile confermare l’eliminazione. Aggiorna le app prima di riprovare.",
+    "ru": "Не удалось подтвердить удаление. Обновите список приложений перед повторной попыткой.",
+    "pl": "Nie udało się potwierdzić usunięcia. Odśwież aplikacje przed ponowną próbą.",
+    "fr": "Impossible de confirmer la suppression. Actualisez les apps avant de réessayer."
+  },
+  "appDeleted": {
+    "en": "App deleted.",
+    "de": "App gelöscht.",
+    "es": "App eliminada.",
+    "zh": "应用已删除。",
+    "pt": "App excluído.",
+    "it": "App eliminata.",
+    "ru": "Приложение удалено.",
+    "pl": "Aplikacja usunięta.",
+    "fr": "App supprimée."
   },
   "connected": {
     "en": "Connected",
@@ -1133,7 +1199,7 @@
     "fr": "Entrée externe"
   },
   "addFavorite": {
-    "en": "Add to favorites",
+    "en": "Add favorite",
     "de": "Zu Favoriten hinzufügen",
     "es": "Añadir a favoritos",
     "zh": "添加到收藏",
@@ -1144,7 +1210,7 @@
     "fr": "Ajouter aux favoris"
   },
   "removeFavorite": {
-    "en": "Remove from favorites",
+    "en": "Remove favorite",
     "de": "Aus Favoriten entfernen",
     "es": "Quitar de favoritos",
     "zh": "从收藏中移除",
