@@ -228,7 +228,6 @@ impl Service {
                     let _ = save_cache(&path, &cache);
                 } else {
                     let _ = fs::remove_file(&path);
-                    let _ = fs::remove_file(path.with_extension("json.tmp"));
                 }
             }
         });
@@ -287,16 +286,7 @@ pub fn load_cache(path: &Path) -> Option<Cache> {
     serde_json::from_slice(&bytes).ok()
 }
 pub(crate) fn save_cache(path: &Path, cache: &Cache) -> Result<(), String> {
-    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let temporary = path.with_extension("json.tmp");
-    fs::write(
-        &temporary,
-        serde_json::to_vec(cache).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
-    fs::rename(temporary, path).map_err(|e| e.to_string())
+    crate::storage::write_atomic(path, &serde_json::to_vec(cache).map_err(|e| e.to_string())?)
 }
 
 #[cfg(test)]
