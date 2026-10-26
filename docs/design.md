@@ -9,13 +9,15 @@ corner radii or type of their own.
 
 Home is a page title followed by rows, with small glance widgets beside the title.
 
-| Kind       | Widgets                       | Looks like                                                                                                                                                                                                                                                                             |
-| ---------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Title**  | Greeting (date and greeting)  | Text straight on the wallpaper, never on a card.                                                                                                                                                                                                                                       |
-| **Glance** | Weather, Crypto               | One or two lines of facts in the weather line's type (23.2 px). On the wallpaper in themes without cards (Classic), on the theme's surface card (`widget_card`, `RADIUS` corners) in themes with cards. All glance widgets of a theme look the same: never one bare and one on a card. |
-| **Row**    | Favourites, Inputs, Premieres | A row header, then a carousel of cards. No box behind the row: the cards are the surfaces.                                                                                                                                                                                             |
+| Kind       | Widgets                                      | Looks like                                                                                                                                                                                                                                                                             |
+| ---------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Title**  | Greeting (date and greeting)                 | Text straight on the wallpaper, never on a card.                                                                                                                                                                                                                                       |
+| **Glance** | Weather, Crypto                              | One or two lines of facts in the weather line's type (23.2 px). On the wallpaper in themes without cards (Classic), on the theme's surface card (`widget_card`, `RADIUS` corners) in themes with cards. All glance widgets of a theme look the same: never one bare and one on a card. |
+| **Row**    | Favourites, Inputs, Premieres, store widgets | A row header, then a carousel of cards. No box behind the row: the cards are the surfaces.                                                                                                                                                                                             |
 
-A new widget is a row unless it is one or two lines of facts.
+A new widget is a row unless it is one or two lines of facts. Widgets from the store are rows
+drawn by Luma's templates (`scoreboard`, `media` and `ticker` cards, and one dialog); see
+[widgets.md](widgets.md#5-templates).
 
 ## Rows
 
@@ -64,20 +66,24 @@ is left with `fit()`.
 
 ## Type
 
-| Role       | Style                             | Example                  |
-| ---------- | --------------------------------- | ------------------------ |
-| Display    | greeting only                     | "Good evening."          |
-| Section    | `section()` 23.2 / 550            | row titles               |
-| Card title | `card_title(tall)` 22 or 28 / 650 | a show, a team           |
-| Body       | `body()` 18.4 / 500               | secondary lines          |
-| Meta       | `meta()` 15.2 / 500, 55 % white   | event, freshness, counts |
+| Role       | Style                                    | Example                  |
+| ---------- | ---------------------------------------- | ------------------------ |
+| Display    | greeting only                            | "Good evening."          |
+| Section    | `section()` 23.2 / 550                   | row titles               |
+| Card title | `card_title(tall)` 22 or 28 / 650        | a show, a team           |
+| Body       | `body()` 18.4 / 500                      | secondary lines          |
+| Meta       | `meta()` 15.2 / 500, 55 % white          | event, freshness, counts |
+| Caps       | `caps()` 14.4 / 650, +0.1 em, upper case | small labels ("MAPS")    |
+| Figure     | `figure(size)` / 650                     | scores, prices           |
 
 Nothing on Home is smaller than 14.4 px. Font weights exist for 350–650 and 800 only.
 
 ## Colour
 
-Text is `TEXT` (#f5f5f5) at 100 %, 85 %, 60 % or 45 %. Accents: `UP` green and `DOWN` red for
-changes; add any other accent to `src/design.rs` first. The theme's accent is reserved for
+Text is `TEXT` (#f5f5f5) at 100 %, 85 %, 60 % or 45 %. Accents: `LIVE` red for live states only,
+`UP` green and `DOWN` red for changes, `GOLD` for prize money; add any other accent to
+`src/design.rs` first. A card's own state uses one accent at a time: a live match gets a red 32 %
+border, not a red fill. The theme's accent is reserved for
 focus. Placeholders without an image (a premiere without its poster) use a tint from the
 name (`name_tint`), never grey discs.
 

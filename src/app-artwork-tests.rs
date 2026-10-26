@@ -603,3 +603,19 @@ fn reset_discards_prefetch_backlog_and_queued_requests() {
     assert!(service.cache.borrow().entries.contains_key(&current));
     assert!(observed.try_recv().is_err());
 }
+
+#[test]
+fn team_logos_lend_their_hue_as_an_accent() {
+    let red = accent(&logo([200, 30, 40])).unwrap();
+    assert!(red[0] > red[1] + 60 && red[0] > red[2] + 60, "{red:?}");
+    let blue = accent(&logo([30, 80, 200])).unwrap();
+    assert!(blue[2] > blue[0] + 60 && blue[2] > blue[1], "{blue:?}");
+    // Bright enough to glow on the dark match dialog.
+    assert!(luminance(red) > 0.1 && luminance(blue) > 0.1);
+    assert_eq!(
+        accent(&logo([235, 235, 240])),
+        None,
+        "a white logo has no hue"
+    );
+    assert_eq!(accent(&RgbaImage::new(8, 8)), None, "nor does an empty one");
+}

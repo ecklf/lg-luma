@@ -9,7 +9,7 @@ license = "MIT"
 description = "A remote-first native launcher for rooted LG webOS TVs"
 
 [workspace]
-members = ["vector-geometry", "tools/vector-assets"]
+members = ["vector-geometry", "tools/vector-assets", "widgets"]
 resolver = "3"
 
 [features]
@@ -21,7 +21,9 @@ gl = "0.14"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 libc = { version = "0.2", optional = true }
 luma-vector-geometry = { path = "vector-geometry" }
+luma-widgets = { path = "widgets" }
 owned_ttf_parser = "0.25"
+qrcode = { version = "0.14", default-features = false }
 sdl2 = { version = "0.38", features = ["use-pkgconfig"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

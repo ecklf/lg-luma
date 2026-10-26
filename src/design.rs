@@ -21,8 +21,13 @@ pub const ROW_HEADER: f32 = 66.;
 pub const PAD: f32 = 20.;
 
 pub const TEXT: u32 = 0xf5f5f5;
+/// Live states only.
+pub const LIVE: u32 = 0xe5484d;
+pub const LIVE_TEXT: u32 = 0xff6b6f;
 pub const UP: u32 = 0x4ade80;
 pub const DOWN: u32 = 0xf87171;
+/// Prize money and other amounts worth singling out.
+pub const GOLD: u32 = 0xf5c451;
 
 pub fn color(rgb: u32, alpha: f32) -> Color {
     [
@@ -60,6 +65,16 @@ pub fn body() -> TextStyle {
 /// Events, freshness, counts.
 pub fn meta() -> TextStyle {
     style(15.2, 500, 0.)
+}
+
+/// Small labels, written in upper case.
+pub fn caps() -> TextStyle {
+    style(14.4, 650, 0.1)
+}
+
+/// Scores and prices.
+pub fn figure(size: f32) -> TextStyle {
+    style(size, 650, -0.01)
 }
 
 /// Where a row's cards go: their line on screen, size and pitch, how many whole ones show and

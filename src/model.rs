@@ -120,6 +120,41 @@ pub struct Preferences {
     pub home_theme: String,
     /// The app last chosen to watch a premiere in; offered first next time.
     pub poster_app: String,
+    /// Widgets from the store (docs/widgets.md): what is installed and each block's settings.
+    #[serde(deserialize_with = "deserialize_widgets")]
+    pub widgets: WidgetPrefs,
+}
+
+/// The store's widgets: installed manifests (their files are next to the preferences) and the
+/// slots their Home blocks use. Secrets are not here but in their own file.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct WidgetPrefs {
+    /// The newest catalog this installation accepted; an older one is refused.
+    pub catalog_sequence: u64,
+    pub installed: BTreeMap<String, InstalledWidget>,
+    /// `BlockKind::Widget(slot)` blocks: which widget and its settings.
+    pub slots: BTreeMap<u8, WidgetSlot>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct InstalledWidget {
+    pub version: String,
+    pub sha256: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct WidgetSlot {
+    pub widget: String,
+    pub settings: serde_json::Map<String, serde_json::Value>,
+}
+
+fn deserialize_widgets<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<WidgetPrefs, D::Error> {
+    Ok(serde_json::from_value(serde_json::Value::deserialize(deserializer)?).unwrap_or_default())
 }
 
 impl Default for Preferences {
@@ -144,6 +179,7 @@ impl Default for Preferences {
             home_layout: crate::home_grid::classic_layout(),
             home_theme: "classic".into(),
             poster_app: String::new(),
+            widgets: WidgetPrefs::default(),
         }
     }
 }

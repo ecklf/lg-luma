@@ -67,6 +67,14 @@ pub enum Target {
     Poster(usize),
     /// An app in a poster's dialog, in `State::poster_apps` order; past the end is Close.
     PosterApp(usize),
+    /// A card of a store widget: its slot and the item's index in its document.
+    WidgetItem(u8, usize),
+    /// A widget in the store's list, by its index in the catalog.
+    StoreEntry(usize),
+    /// A button on a store widget's page, in `State::store_actions` order.
+    StoreAction(usize),
+    /// A row of a store widget's settings page, in `State::widget_setting_rows` order.
+    WidgetSetting(usize),
     InputMode(String),
     InputRename,
     InputNameReset,
@@ -144,11 +152,14 @@ pub enum BlockAction {
     Move,
     Resize,
     Remove,
+    /// The widget's own settings page.
+    Settings,
 }
 
 impl BlockAction {
     pub fn key(self) -> &'static str {
         match self {
+            Self::Settings => "blockSettings",
             Self::Reorder => "blockReorder",
             Self::Move => "blockMove",
             Self::Resize => "blockResize",
@@ -181,6 +192,25 @@ pub enum Overlay {
         index: usize,
         restore: Target,
     },
+    /// The QR code and steps for sending a store widget's secret from a phone.
+    PhoneKey {
+        restore: Target,
+    },
+    /// A store widget's item: its dialog, by the item's id.
+    WidgetDialog {
+        slot: u8,
+        id: String,
+        restore: Target,
+    },
+    /// The widget store's list.
+    Store {
+        restore: Target,
+    },
+    /// One widget's page in the store, by its id.
+    StoreEntry {
+        id: String,
+        restore: Target,
+    },
     Recents {
         restore: Target,
     },
@@ -202,6 +232,9 @@ pub enum Subpage {
     TextRendering,
     /// General › Home theme: a layout with its wallpaper and look.
     Theme,
+    /// A store widget's settings, by slot, and the options of one of its settings.
+    Widget(u8),
+    WidgetOptions(u8, usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -210,6 +243,8 @@ pub enum TextField {
     Location,
     Name,
     InputName,
+    /// A store widget's text or secret setting, as `State::widget_editing` names it.
+    Widget,
 }
 
 #[derive(Clone, Copy)]
@@ -237,6 +272,8 @@ pub enum Effect {
     Weather(weather::Command),
     /// A notice after the effects before it, e.g. a title to look for once an app opens.
     Notify(String),
+    /// Start the one-time phone page for a store widget's secret.
+    PhoneKeyStart,
 }
 
 pub const KEYS: [&str; 40] = [
@@ -281,6 +318,25 @@ pub struct State {
     pub recents: crate::recents::Recents,
     pub home_edit: Option<HomeEdit>,
     pub feeds: crate::feeds::FeedData,
+    /// The phone page's address and QR code while its dialog is open.
+    pub phone_key: Option<(String, std::sync::Arc<crate::app_artwork::Artwork>)>,
+    /// Set by `Effect::PhoneKeyStart`; the main loop starts the page.
+    pub phone_key_start: bool,
+    /// Widgets from the store.
+    pub widgets: crate::widget_store::WidgetState,
+    /// The store widget setting the keyboard or the phone page is filling: slot and setting id.
+    pub widget_editing: Option<(u8, String)>,
+    pub widget_text_draft: String,
+}
+
+/// A row of "Add widget".
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AddChoice {
+    Kind(crate::home_grid::BlockKind),
+    /// An installed store widget, by id.
+    Widget(String),
+    /// "Widget store…".
+    Store,
 }
 
 impl State {
@@ -318,6 +374,11 @@ impl State {
             recents: crate::recents::Recents::default(),
             home_edit: None,
             feeds: crate::feeds::FeedData::default(),
+            phone_key: None,
+            phone_key_start: false,
+            widgets: Default::default(),
+            widget_editing: None,
+            widget_text_draft: String::new(),
         }
     }
 
@@ -471,6 +532,14 @@ impl State {
         use crate::home_grid::BlockKind;
         let (kind, index, count) = match target {
             Target::Poster(index) => (BlockKind::Premieres, *index, self.feeds.premieres.len()),
+            Target::WidgetItem(slot, index) => (
+                BlockKind::Widget(*slot),
+                *index,
+                self.widgets
+                    .slot(*slot)
+                    .and_then(|s| s.document.as_ref())
+                    .map_or(0, |d| d.items.len()),
+            ),
             Target::Input(id) => {
                 let inputs = self.home_inputs();
                 let index = inputs.iter().position(|input| &input.id == id)?;
@@ -486,6 +555,7 @@ impl State {
     fn row_target(&self, target: &Target, index: usize) -> Option<Target> {
         Some(match target {
             Target::Poster(_) => Target::Poster(index),
+            Target::WidgetItem(slot, _) => Target::WidgetItem(*slot, index),
             Target::Input(_) => Target::Input(self.home_inputs().get(index)?.id.clone()),
             _ => return None,
         })
@@ -560,6 +630,9 @@ impl State {
         if from_app && kind == crate::home_grid::BlockKind::Favorites {
             actions.push(BlockAction::Reorder);
         }
+        if matches!(kind, crate::home_grid::BlockKind::Widget(_)) {
+            actions.push(BlockAction::Settings);
+        }
         actions.extend([BlockAction::Move, BlockAction::Resize]);
         if kind.removable() {
             actions.push(BlockAction::Remove);
@@ -585,6 +658,7 @@ impl State {
             Target::WeatherConfigure => Some(BlockKind::Weather),
             Target::Block(kind) => Some(*kind),
             Target::Poster(_) => Some(BlockKind::Premieres),
+            Target::WidgetItem(slot, _) => Some(BlockKind::Widget(*slot)),
             _ => None,
         }
     }
@@ -631,7 +705,7 @@ impl State {
             Direction::Down => (0, 1),
         };
         let columns = i16::from(crate::home_grid::COLUMNS);
-        let ((min_w, min_h), (max_w, max_h)) = edit.kind.limits();
+        let ((min_w, min_h), (max_w, max_h)) = self.block_limits(edit.kind);
         if edit.resize {
             let max_w = i16::from(max_w).min(columns - i16::from(block.x));
             block.w = (i16::from(block.w) + dx).clamp(i16::from(min_w), max_w) as u8;
@@ -920,7 +994,7 @@ impl State {
         }
     }
 
-    fn close_subpage(&mut self) {
+    pub(crate) fn close_subpage(&mut self) {
         if self.subpage == Some(Subpage::WeatherLocation) {
             self.weather.cancel_search();
         }
@@ -944,6 +1018,11 @@ impl State {
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
             Some(Subpage::Theme) => Target::Setting(9),
+            Some(Subpage::Widget(_)) => Target::Sidebar(0),
+            Some(Subpage::WidgetOptions(slot, setting)) => {
+                self.subpage = Some(Subpage::Widget(slot));
+                Target::WidgetSetting(self.widget_row_of(slot, setting))
+            }
             None => Target::Sidebar(self.section),
         };
         self.scroll = 0.;
@@ -1052,6 +1131,9 @@ impl State {
                     ) => 2,
                     Some(Subpage::Language) => Language::ALL.len(),
                     Some(Subpage::Theme) => crate::themes::THEMES.len(),
+                    Some(Subpage::WidgetOptions(slot, setting)) => {
+                        self.widget_options(slot, setting).len().max(1)
+                    }
                     _ => 3,
                 };
                 match direction {
@@ -1120,6 +1202,7 @@ impl State {
             if matches!(
                 self.focus,
                 Target::Setting(0 | 1 | 4 | 6 | 7 | 9)
+                    | Target::WidgetSetting(_)
                     | Target::InputMode(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
@@ -1507,6 +1590,18 @@ impl State {
                 self.dirty = true;
                 return;
             }
+            if self.keyboard_field == TextField::Widget {
+                let limit = self.widget_text_limit();
+                let draft = &mut self.widget_text_draft;
+                let length = draft.chars().count();
+                draft.extend(
+                    text.chars()
+                        .filter(|c| !c.is_control())
+                        .take(limit.saturating_sub(length)),
+                );
+                self.dirty = true;
+                return;
+            }
             if self.keyboard_field == TextField::InputName {
                 let length = self.input_name.chars().count();
                 self.input_name.extend(
@@ -1537,6 +1632,8 @@ impl State {
                 self.greeting_name_draft.pop();
             } else if self.keyboard_field == TextField::InputName {
                 self.input_name.pop();
+            } else if self.keyboard_field == TextField::Widget {
+                self.widget_text_draft.pop();
             } else {
                 self.query.pop();
             }
@@ -1564,6 +1661,9 @@ impl State {
     }
 
     fn commit_text_input(&mut self) -> Vec<Effect> {
+        if self.keyboard_field == TextField::Widget {
+            return self.commit_widget_text();
+        }
         if self.keyboard_field == TextField::Name {
             let name = std::mem::take(&mut self.greeting_name_draft);
             let name = name.trim();
@@ -1617,6 +1717,8 @@ impl State {
             self.greeting_name_draft = query;
         } else if self.keyboard_field == TextField::InputName {
             self.input_name = query;
+        } else if self.keyboard_field == TextField::Widget {
+            self.widget_text_draft = query;
         } else {
             self.query = query;
             self.scroll = 0.;
@@ -1629,6 +1731,7 @@ impl State {
             TextField::Location => &self.weather.query,
             TextField::Name => &self.greeting_name_draft,
             TextField::InputName => &self.input_name,
+            TextField::Widget => &self.widget_text_draft,
             TextField::Apps => &self.query,
         }
     }
@@ -1642,6 +1745,9 @@ impl State {
             // The TV keyboard starts empty, so a new name replaces the old one.
             self.input_name.clear();
         }
+        if field == TextField::Widget {
+            self.widget_text_draft.clear();
+        }
         if cfg!(all(
             feature = "webos",
             target_os = "linux",
@@ -1652,6 +1758,7 @@ impl State {
                 TextField::Location => Target::WeatherQuery,
                 TextField::Name => Target::GreetingName,
                 TextField::InputName => Target::InputRename,
+                TextField::Widget => self.keyboard_return(),
                 TextField::Apps => Target::Search,
             };
             self.panel_started = None;
@@ -1680,6 +1787,7 @@ impl State {
             TextField::Location => Target::WeatherSearch,
             TextField::Name => Target::GreetingName,
             TextField::InputName => Target::InputRename,
+            TextField::Widget => self.widget_editing_target(),
             TextField::Apps => Target::Search,
         }
     }
@@ -1847,8 +1955,18 @@ impl State {
                             snapshot,
                         });
                     }
+                    Some(BlockAction::Settings) => {
+                        if let crate::home_grid::BlockKind::Widget(slot) = kind {
+                            self.open(2);
+                            self.open_widget_settings(slot);
+                        }
+                        return vec![];
+                    }
                     Some(BlockAction::Remove) => {
                         self.preferences.home_layout.retain(|b| b.kind != kind);
+                        if let crate::home_grid::BlockKind::Widget(slot) = kind {
+                            self.remove_widget_block(slot);
+                        }
                         self.focus = self.first_content();
                         return vec![Effect::Save];
                     }
@@ -1856,6 +1974,10 @@ impl State {
                 }
                 return vec![];
             }
+            Target::WidgetItem(slot, index) => return self.open_widget_dialog(slot, index),
+            Target::WidgetSetting(row) => return self.activate_widget_setting(row),
+            Target::StoreEntry(index) => return self.open_store_entry(index),
+            Target::StoreAction(index) => return self.store_action(index),
             Target::Poster(index) => {
                 if index < self.feeds.premieres.len() {
                     self.overlay = Some(Overlay::Poster {
@@ -1915,8 +2037,20 @@ impl State {
                 };
                 self.panel_started = None;
                 self.focus = restore;
-                let Some(kind) = self.missing_blocks().get(index).copied() else {
-                    return vec![];
+                let kind = match self.add_choices().get(index).cloned() {
+                    Some(AddChoice::Kind(kind)) => kind,
+                    Some(AddChoice::Widget(id)) => {
+                        return if self.add_widget(&id).is_ok() {
+                            vec![Effect::Save]
+                        } else {
+                            vec![]
+                        };
+                    }
+                    Some(AddChoice::Store) => {
+                        self.open_store(self.focus.clone());
+                        return vec![];
+                    }
+                    None => return vec![],
                 };
                 let mut blocks = self.home_blocks();
                 let (w, h) = kind.default_size();
@@ -2042,6 +2176,10 @@ impl State {
                             Unit::Celsius
                         }
                     }
+                    // A store widget's options: a checklist stays open, a choice closes.
+                    Some(Subpage::WidgetOptions(slot, setting)) => {
+                        return self.choose_widget_option(slot, setting, index);
+                    }
                     // A theme stays open too: its wallpaper shows behind the list at once.
                     Some(Subpage::Theme) => {
                         let theme =
@@ -2072,7 +2210,8 @@ impl State {
                         Subpage::WeatherLocation
                         | Subpage::Greeting
                         | Subpage::AppNames
-                        | Subpage::Clock,
+                        | Subpage::Clock
+                        | Subpage::Widget(_),
                     ) => {
                         return vec![];
                     }
@@ -2186,6 +2325,7 @@ impl State {
                     TextField::Location => self.weather.edit(String::new()),
                     TextField::Name => self.greeting_name_draft.clear(),
                     TextField::InputName => self.input_name.clear(),
+                    TextField::Widget => self.widget_text_draft.clear(),
                     TextField::Apps => self.query.clear(),
                 },
                 "Done" => {
@@ -2228,11 +2368,18 @@ impl State {
                     self.recents.closing_focus = None;
                 }
             }
+            if let Overlay::StoreEntry { id, restore } = overlay {
+                self.back_to_store(&id, restore);
+                return vec![];
+            }
             if let Overlay::Options { restore, .. }
             | Overlay::Recents { restore }
             | Overlay::Block { restore, .. }
             | Overlay::AddBlock { restore }
-            | Overlay::Poster { restore, .. } = overlay
+            | Overlay::Poster { restore, .. }
+            | Overlay::PhoneKey { restore }
+            | Overlay::WidgetDialog { restore, .. }
+            | Overlay::Store { restore } = overlay
             {
                 self.focus = restore;
                 self.recents.pending = None;

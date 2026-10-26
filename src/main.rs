@@ -16,6 +16,7 @@ mod i18n;
 #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
 mod luna;
 mod model;
+mod phone_key;
 mod platform;
 mod raster;
 mod recents;
@@ -35,9 +36,15 @@ mod weather_service;
 #[cfg(all(feature = "webos", any(target_os = "linux", test)))]
 #[path = "webos-compat.rs"]
 mod webos_compat;
+mod widget_state;
+mod widget_store;
+mod widget_worker;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+#[path = "widget-tests.rs"]
+mod widget_tests;
 
 use platform::{Platform, Request, Response};
 use raster::Size;
@@ -71,6 +78,13 @@ struct Options {
     diagnostics: Option<PathBuf>,
     profile_frames: Option<usize>,
     weather_test_server: Option<String>,
+    /// Desktop development: another catalog (an https URL or a folder) and its key.
+    widget_catalog: Option<String>,
+    widget_catalog_key: Option<String>,
+    /// Desktop development: a widget's source folder, installed as it is.
+    widget_dev: Option<PathBuf>,
+    /// Desktop development: sample replies instead of the network, for the widget in development.
+    widget_fixtures: Option<PathBuf>,
     test_extra_apps: usize,
 }
 
@@ -135,6 +149,10 @@ impl Options {
                 }
                 "--diagnostics" => result.diagnostics = Some(value.into()),
                 "--weather-test-server" => result.weather_test_server = Some(value),
+                "--widget-catalog" => result.widget_catalog = Some(value),
+                "--widget-catalog-key" => result.widget_catalog_key = Some(value),
+                "--widget-dev" => result.widget_dev = Some(value.into()),
+                "--widget-fixtures" => result.widget_fixtures = Some(value.into()),
                 "--test-extra-apps" => {
                     result.test_extra_apps = value
                         .parse::<usize>()
@@ -334,6 +352,7 @@ fn effects(
             }
             Effect::Weather(command) => weather.send(command),
             Effect::Notify(text) => state.notify(text),
+            Effect::PhoneKeyStart => state.phone_key_start = true,
         }
     }
     true
@@ -398,6 +417,10 @@ fn script(
 }
 
 fn main() {
+    // A store widget's transform, in a limited child process (docs/widgets.md §3.5).
+    if std::env::args().nth(1).as_deref() == Some(widget_worker::TRANSFORM_FLAG) {
+        luma_widgets::sandbox::child_main();
+    }
     if let Err(error) = run() {
         eprintln!("Luma native: {error}");
         std::process::exit(1);
@@ -617,6 +640,57 @@ fn run() -> Result<(), String> {
     }
     if webos && options.weather_test_server.is_some() {
         return Err("Weather test servers are only available in desktop builds".into());
+    }
+    if webos
+        && (options.widget_catalog.is_some()
+            || options.widget_catalog_key.is_some()
+            || options.widget_dev.is_some()
+            || options.widget_fixtures.is_some())
+    {
+        return Err("Widget development options are only available in desktop builds".into());
+    }
+    state.widgets.store =
+        widget_store::Store::open(&preferences_path, &state.preferences.widgets.installed);
+    // Desktop development: secrets from the environment for this run only (never saved), e.g.
+    // a personal API key for a live screenshot.
+    if !webos {
+        for id in state.widgets.store.ids() {
+            let Some(manifest) = state.widgets.store.manifest(&id) else {
+                continue;
+            };
+            for setting in &manifest.settings {
+                let variable = widget_store::runtime_secret_variable(&id, &setting.id);
+                if let Ok(value) = std::env::var(&variable)
+                    && matches!(
+                        setting.kind,
+                        luma_widgets::manifest::SettingKind::Secret { .. }
+                    )
+                    && setting.accepts(value.trim())
+                {
+                    eprintln!("Luma widget {id}: {} from {variable}", setting.id);
+                    state
+                        .widgets
+                        .store
+                        .set_runtime_secret(&id, &setting.id, value.trim().into());
+                }
+            }
+        }
+    }
+    if let Some(dir) = &options.widget_dev {
+        let (manifest, bytes) = luma_widgets::tree::load(dir).map_err(|e| e.0)?;
+        let id = manifest.id.clone();
+        state.widget_installed(manifest, &bytes)?;
+        let shown = state
+            .preferences
+            .widgets
+            .slots
+            .values()
+            .any(|s| s.widget == id);
+        if !shown {
+            state.add_widget(&id)?;
+        }
+        storage::save(&preferences_path, &state.preferences)?;
+        eprintln!("Luma widget {id}: from {}", dir.display());
     }
     let weather_cache = weather_service::cache_path(&preferences_path);
     state.weather.cache = weather_service::load_cache(&weather_cache);
@@ -864,6 +938,31 @@ fn run() -> Result<(), String> {
     let mut last_frame = Instant::now();
     // Home widgets' data: fetched only while their blocks are on a visible Home.
     let feeds = feeds::Feeds::new();
+    // Store widgets: the catalog, installs and refreshes, with transforms in child processes.
+    let widgets = widget_worker::Worker::new(widget_worker::Config {
+        catalog: match &options.widget_catalog {
+            Some(source) if source.starts_with("https://") => {
+                widget_worker::CatalogSource::Url(format!("{}/", source.trim_end_matches('/')))
+            }
+            Some(folder) => widget_worker::CatalogSource::Dir(folder.into()),
+            None => widget_worker::CatalogSource::Url(widget_store::CATALOG_URL.into()),
+        },
+        keys: match &options.widget_catalog_key {
+            Some(key) => vec![luma_widgets::catalog::public_key(key).map_err(|e| e.0)?],
+            None => widget_store::CATALOG_KEYS
+                .iter()
+                .filter_map(|key| luma_widgets::catalog::public_key(key).ok())
+                .collect(),
+        },
+        // Never fatal: without it, transforms fail and say so, the launcher still starts.
+        exe: std::env::current_exe().unwrap_or_else(|error| {
+            eprintln!("Luma widgets: {error}; transforms use /proc/self/exe");
+            PathBuf::from("/proc/self/exe")
+        }),
+        fixtures: options.widget_fixtures.clone(),
+    });
+    // The one-time phone page for a store widget's secret, while its dialog is open.
+    let mut phone_server: Option<phone_key::PhoneKey> = None;
     let mut crypto_fetched: Option<Instant> = None;
     let mut premieres_fetched: Option<Instant> = None;
     let mut last_minute = None;
@@ -913,6 +1012,82 @@ fn run() -> Result<(), String> {
                 premieres_fetched = Some(Instant::now());
                 feeds.send(feeds::FeedRequest::Premieres);
             }
+            // Store widgets' images, already limited to their widgets' origins.
+            if std::mem::take(&mut state.feeds.images_due) {
+                for (url, poster) in state.wanted_widget_images() {
+                    if state.feeds.requested.insert(url.clone()) {
+                        feeds.send(feeds::FeedRequest::WidgetImage { url, poster });
+                    }
+                }
+            }
+        }
+        for request in
+            state.widget_requests(Instant::now(), visible && state.page == state::Page::Home)
+        {
+            widgets.send(request);
+        }
+        while let Ok(response) = widgets.receiver.try_recv() {
+            let pending = state.widget_response(response);
+            running &= effects(
+                pending,
+                &mut state,
+                &platform,
+                &preferences_path,
+                &weather_service,
+            );
+        }
+        if std::mem::take(&mut state.phone_key_start) {
+            phone_server = None;
+            let language = state.preferences.language;
+            match state.phone_widget_secret() {
+                Some((label, hint, setting)) => {
+                    let texts = phone_key::PageTexts {
+                        title: language.format("widgetPhonePageTitle", &[("secret", &label)]),
+                        steps: vec![
+                            hint.unwrap_or_else(|| {
+                                language.format("widgetPhoneStep3", &[("secret", &label)])
+                            }),
+                            language.t("phonePageStep3").to_owned(),
+                        ],
+                        send: language.t("phonePageSend").into(),
+                        saved: language.t("phonePageSaved").into(),
+                        invalid: language.format("widgetSecretInvalid", &[("secret", &label)]),
+                        field: label,
+                        accepts: Some(std::sync::Arc::new(move |key: &str| setting.accepts(key))),
+                    };
+                    match phone_key::PhoneKey::start(texts) {
+                        Ok(server) => {
+                            eprintln!("Luma phone key page: {}", server.url);
+                            state.phone_key = Some((server.url.clone(), server.qr.clone()));
+                            phone_server = Some(server);
+                        }
+                        Err(error) => {
+                            eprintln!("Luma phone key page: {error}");
+                            state.back();
+                            state.notify(language.t("phoneKeyFailed"));
+                        }
+                    }
+                }
+                None => {
+                    state.back();
+                }
+            }
+            state.dirty = true;
+        }
+        if phone_server.is_some() && !matches!(state.overlay, Some(Overlay::PhoneKey { .. })) {
+            phone_server = None;
+            state.phone_key = None;
+        }
+        if let Some(key) = phone_server.as_ref().and_then(phone_key::PhoneKey::poll) {
+            phone_server = None;
+            let pending = state.phone_key_received(key);
+            running &= effects(
+                pending,
+                &mut state,
+                &platform,
+                &preferences_path,
+                &weather_service,
+            );
         }
         while let Ok(response) = feeds.receiver.try_recv() {
             state.dirty = true;
@@ -942,6 +1117,10 @@ fn run() -> Result<(), String> {
                     state.feeds.posters.insert(url, image);
                 }
                 feeds::FeedResponse::Poster(_, None) => {}
+                feeds::FeedResponse::WidgetImage(url, Some(image)) => {
+                    state.feeds.images.insert(url, image);
+                }
+                feeds::FeedResponse::WidgetImage(_, None) => {}
             }
         }
         while let Ok(response) = platform.receiver.try_recv() {

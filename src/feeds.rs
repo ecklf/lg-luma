@@ -52,18 +52,33 @@ pub struct FeedData {
     pub posters: std::collections::HashMap<String, Arc<Artwork>>,
     pub crypto_failed: bool,
     pub premieres_failed: bool,
+    /// Store widgets' logos, photos and posters by URL.
+    pub images: std::collections::HashMap<String, Arc<Artwork>>,
+    /// Store widget image URLs already asked for, loaded or not: a failed one is not retried.
+    pub requested: std::collections::HashSet<String>,
+    /// Store widgets may want images not asked for yet.
+    pub images_due: bool,
 }
+
+/// A loaded logo's backdrop when it has no colour of its own.
+pub const NO_ACCENT: [u8; 3] = [16, 16, 20];
 
 pub enum FeedRequest {
     Crypto,
     Premieres,
     Poster(String),
+    /// A store widget's image; the widget's origins were checked already.
+    WidgetImage {
+        url: String,
+        poster: bool,
+    },
 }
 
 pub enum FeedResponse {
     Crypto(Result<Vec<Quote>, String>),
     Premieres(Result<Vec<Premiere>, String>),
     Poster(String, Option<Arc<Artwork>>),
+    WidgetImage(String, Option<Arc<Artwork>>),
 }
 
 pub struct Feeds {
@@ -89,6 +104,10 @@ impl Feeds {
                     FeedRequest::Poster(url) => {
                         let image = poster(&agent, &url);
                         FeedResponse::Poster(url, image)
+                    }
+                    FeedRequest::WidgetImage { url, poster } => {
+                        let image = widget_image(&agent, &url, poster);
+                        FeedResponse::WidgetImage(url, image)
                     }
                 };
                 if responses.send(response).is_err() {
@@ -290,6 +309,27 @@ fn poster(agent: &ureq::Agent, url: &str) -> Option<Arc<Artwork>> {
         key: format!("poster:{url}"),
         pixels,
         backdrop: [[16, 16, 20]; 2],
+    }))
+}
+
+/// A store widget's image over HTTPS, decoded and shrunk here, off the SDL thread: a poster up
+/// to 300×450, a logo or photo up to 160×160 carrying its own colour.
+fn widget_image(agent: &ureq::Agent, url: &str, poster: bool) -> Option<Arc<Artwork>> {
+    if !url.starts_with("https://") {
+        return None;
+    }
+    let bytes = get(agent, url, IMAGE_LIMIT)
+        .map_err(|error| eprintln!("Luma widget image: {error}"))
+        .ok()?;
+    let image = image::load_from_memory(&bytes).ok()?;
+    let (w, h) = if poster { (300, 450) } else { (160, 160) };
+    let pixels = image.thumbnail(w, h).into_rgba8();
+    // A logo's own colour tints the dialog around it.
+    let accent = crate::app_artwork::accent(&pixels);
+    Some(Arc::new(Artwork {
+        key: format!("image:{url}"),
+        pixels,
+        backdrop: accent.map_or([NO_ACCENT; 2], |accent| [accent; 2]),
     }))
 }
 

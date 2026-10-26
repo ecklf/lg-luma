@@ -74,7 +74,8 @@ impl Source {
 pub struct Artwork {
     pub key: String,
     pub pixels: RgbaImage,
-    /// The card behind the icon: top and bottom of a vertical gradient (equal when flat).
+    /// The card behind the icon: top and bottom of a vertical gradient (equal when flat). A
+    /// widget's logo carries its `accent` in both, or a near-black grey without one.
     pub backdrop: [[u8; 3]; 2],
 }
 
@@ -238,26 +239,12 @@ fn backdrop(image: &RgbaImage) -> [[u8; 3]; 2] {
 /// dark behind a light one, with at least 3:1 contrast against the logo's average luminance.
 /// Logos without a clear hue get a neutral slate.
 fn logo_backdrop(image: &RgbaImage) -> [[u8; 3]; 2] {
-    let (mut weight, mut luminance_sum, mut saturated_weight, mut saturation_sum) =
-        (0., 0., 0., 0.);
-    let mut hues = [(0f32, 0f32, 0f32); 24];
+    let (mut weight, mut luminance_sum) = (0., 0.);
     for pixel in image.pixels() {
         let alpha = pixel[3] as f32 / 255.;
-        if alpha < 0.25 {
-            continue;
-        }
-        let rgb = [pixel[0], pixel[1], pixel[2]];
-        weight += alpha;
-        luminance_sum += alpha * luminance(rgb);
-        let (hue, saturation, value) = hsv(rgb);
-        if saturation >= 0.3 && value >= 0.2 {
-            let bin = &mut hues[(hue / 15.) as usize % 24];
-            let strength = alpha * saturation;
-            bin.0 += strength;
-            bin.1 += strength * hue.to_radians().cos();
-            bin.2 += strength * hue.to_radians().sin();
-            saturated_weight += alpha;
-            saturation_sum += alpha * saturation;
+        if alpha >= 0.25 {
+            weight += alpha;
+            luminance_sum += alpha * luminance([pixel[0], pixel[1], pixel[2]]);
         }
     }
     let logo = if weight > 0. {
@@ -265,18 +252,8 @@ fn logo_backdrop(image: &RgbaImage) -> [[u8; 3]; 2] {
     } else {
         1.
     };
-    let (hue, saturation) = if weight > 0. && saturated_weight >= 0.15 * weight {
-        let (_, x, y) = hues
-            .into_iter()
-            .max_by(|a, b| a.0.total_cmp(&b.0))
-            .unwrap_or_default();
-        (
-            y.atan2(x).to_degrees().rem_euclid(360.),
-            (saturation_sum / saturated_weight).min(0.6),
-        )
-    } else {
-        (220., 0.12)
-    };
+    let (hue, saturation) =
+        dominant_hue(image).map_or((220., 0.12), |(hue, saturation)| (hue, saturation.min(0.6)));
     let gradient = |top: f32, saturation: f32| {
         // Move both stops away from the logo's lightness until each has enough contrast.
         let step = if top > 0.5 { 0.02 } else { -0.02 };
@@ -296,6 +273,44 @@ fn logo_backdrop(image: &RgbaImage) -> [[u8; 3]; 2] {
     let light = gradient(0.9, saturation * 0.8);
     let dark = gradient(0.27, saturation);
     if light.0 > dark.0 { light.1 } else { dark.1 }
+}
+
+/// The hue most of a logo's visible, coloured pixels share and their mean saturation; `None`
+/// when under 15 % of it is coloured, as in white, black or grey marks.
+fn dominant_hue(image: &RgbaImage) -> Option<(f32, f32)> {
+    let (mut weight, mut saturated_weight, mut saturation_sum) = (0., 0., 0.);
+    let mut hues = [(0f32, 0f32, 0f32); 24];
+    for pixel in image.pixels() {
+        let alpha = pixel[3] as f32 / 255.;
+        if alpha < 0.25 {
+            continue;
+        }
+        weight += alpha;
+        let (hue, saturation, value) = hsv([pixel[0], pixel[1], pixel[2]]);
+        if saturation >= 0.3 && value >= 0.2 {
+            let bin = &mut hues[(hue / 15.) as usize % 24];
+            let strength = alpha * saturation;
+            bin.0 += strength;
+            bin.1 += strength * hue.to_radians().cos();
+            bin.2 += strength * hue.to_radians().sin();
+            saturated_weight += alpha;
+            saturation_sum += alpha * saturation;
+        }
+    }
+    if weight == 0. || saturated_weight < 0.15 * weight {
+        return None;
+    }
+    let (_, x, y) = hues.into_iter().max_by(|a, b| a.0.total_cmp(&b.0))?;
+    Some((
+        y.atan2(x).to_degrees().rem_euclid(360.),
+        saturation_sum / saturated_weight,
+    ))
+}
+
+/// A team or league logo's own colour, bright enough to glow on a dark panel; `None` for logos
+/// without a clear hue.
+pub fn accent(image: &RgbaImage) -> Option<[u8; 3]> {
+    dominant_hue(image).map(|(hue, _)| hsl(hue, 0.75, 0.56))
 }
 
 fn luminance(rgb: [u8; 3]) -> f32 {
