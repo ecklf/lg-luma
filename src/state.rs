@@ -55,6 +55,18 @@ pub enum Target {
     ClockFormat,
     ClockTimeFormat,
     Background(usize),
+    /// A Home block without controls of its own (greeting, a widget), focusable to edit it.
+    Block(crate::home_grid::BlockKind),
+    /// "+ Add widget" below Home's last block.
+    AddBlock,
+    /// A row of the block menu, in `State::block_actions` order.
+    BlockAction(usize),
+    /// A row of the add-widget list, in `State::missing_blocks` order.
+    AddKind(usize),
+    /// A poster in the premieres widget, by its index in the feed.
+    Poster(usize),
+    /// An app in a poster's dialog, in `State::poster_apps` order; past the end is Close.
+    PosterApp(usize),
     InputMode(String),
     InputRename,
     InputNameReset,
@@ -99,6 +111,24 @@ impl Rect {
     }
 }
 
+/// Where Home's favourites strip lies: tiles start at `left`, whole tiles end at `right`, and
+/// drawing is clipped to `clip_left`..`clip_right` (the screen edges when the block reaches them).
+#[derive(Clone, Copy, Debug)]
+pub struct Strip {
+    pub left: f32,
+    pub right: f32,
+    pub clip_left: f32,
+    pub clip_right: f32,
+}
+
+/// A Home block being moved or resized; `snapshot` is the layout when the edit began.
+#[derive(Clone, Debug)]
+pub struct HomeEdit {
+    pub kind: crate::home_grid::BlockKind,
+    pub resize: bool,
+    pub snapshot: Vec<crate::home_grid::Block>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Control {
     pub target: Target,
@@ -106,11 +136,54 @@ pub struct Control {
     pub scrollable: bool,
 }
 
+/// What the block menu offers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BlockAction {
+    /// The favourites' existing reorder mode, for the app the menu was opened on.
+    Reorder,
+    Move,
+    Resize,
+    Remove,
+}
+
+impl BlockAction {
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Reorder => "blockReorder",
+            Self::Move => "blockMove",
+            Self::Resize => "blockResize",
+            Self::Remove => "blockRemove",
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Overlay {
-    Options { id: String, restore: Target },
-    Delete { id: String, restore: Target },
-    Recents { restore: Target },
+    Options {
+        id: String,
+        restore: Target,
+    },
+    Delete {
+        id: String,
+        restore: Target,
+    },
+    /// Hold OK on a Home block: move, resize or remove it.
+    Block {
+        kind: crate::home_grid::BlockKind,
+        restore: Target,
+    },
+    /// "+ Add widget": the kinds not on Home.
+    AddBlock {
+        restore: Target,
+    },
+    /// A premiere's dialog: which app to watch it in.
+    Poster {
+        index: usize,
+        restore: Target,
+    },
+    Recents {
+        restore: Target,
+    },
     Keyboard,
     SystemKeyboard,
 }
@@ -127,6 +200,8 @@ pub enum Subpage {
     Temperature,
     Language,
     TextRendering,
+    /// General › Home theme: a layout with its wallpaper and look.
+    Theme,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -160,6 +235,8 @@ pub enum Effect {
     },
     Quit,
     Weather(weather::Command),
+    /// A notice after the effects before it, e.g. a title to look for once an app opens.
+    Notify(String),
 }
 
 pub const KEYS: [&str; 40] = [
@@ -200,6 +277,8 @@ pub struct State {
     pub greeting_name_draft: String,
     pub input_name: String,
     pub recents: crate::recents::Recents,
+    pub home_edit: Option<HomeEdit>,
+    pub feeds: crate::feeds::FeedData,
 }
 
 impl State {
@@ -234,6 +313,8 @@ impl State {
             greeting_name_draft: String::new(),
             input_name: String::new(),
             recents: crate::recents::Recents::default(),
+            home_edit: None,
+            feeds: crate::feeds::FeedData::default(),
         }
     }
 
@@ -372,14 +453,158 @@ impl State {
         Rect::new(64., 108.8, 1792., bottom - 108.8)
     }
 
+    /// Home's blocks as drawn: the saved layout repaired for the current content.
+    pub fn home_blocks(&self) -> Vec<crate::home_grid::Block> {
+        let mut blocks = self.preferences.home_layout.clone();
+        let inputs = self
+            .inventory
+            .inputs
+            .iter()
+            .filter(|input| self.preferences.input_visible(input))
+            .count();
+        crate::home_grid::normalize(&mut blocks, self.preferences.show_home_names, inputs);
+        blocks
+    }
+
+    pub fn favorites_strip(&self) -> Strip {
+        let blocks = self.home_blocks();
+        let Some(block) = blocks
+            .iter()
+            .find(|b| b.kind == crate::home_grid::BlockKind::Favorites)
+        else {
+            return Strip {
+                left: HOME_STRIP_LEFT,
+                right: HOME_STRIP_RIGHT,
+                clip_left: HOME_FADE_LEFT,
+                clip_right: HOME_FADE_RIGHT,
+            };
+        };
+        let rect = crate::home_grid::rect(block);
+        let whole = ((rect.w + HOME_TILE_PITCH - HOME_TILE_WIDTH) / HOME_TILE_PITCH)
+            .floor()
+            .max(1.);
+        Strip {
+            left: rect.x,
+            right: rect.x + (whole - 1.) * HOME_TILE_PITCH + HOME_TILE_WIDTH,
+            clip_left: if block.x == 0 { HOME_FADE_LEFT } else { rect.x },
+            clip_right: if block.x + block.w == crate::home_grid::COLUMNS {
+                HOME_FADE_RIGHT
+            } else {
+                rect.x + rect.w
+            },
+        }
+    }
+
     pub fn favorites_viewport(&self) -> Rect {
         let content = self.content_viewport();
+        let strip = self.favorites_strip();
         let left = if self.home_scroll > 0. {
-            HOME_FADE_LEFT
-        } else {
+            strip.clip_left
+        } else if strip.clip_left == HOME_FADE_LEFT {
             0.
+        } else {
+            strip.clip_left
         };
-        Rect::new(left, content.y, HOME_FADE_RIGHT - left, content.h)
+        Rect::new(left, content.y, strip.clip_right - left, content.h)
+    }
+
+    pub fn block_actions(
+        &self,
+        kind: crate::home_grid::BlockKind,
+        from_app: bool,
+    ) -> Vec<BlockAction> {
+        let mut actions = Vec::new();
+        if from_app && kind == crate::home_grid::BlockKind::Favorites {
+            actions.push(BlockAction::Reorder);
+        }
+        actions.extend([BlockAction::Move, BlockAction::Resize]);
+        if kind.removable() {
+            actions.push(BlockAction::Remove);
+        }
+        actions
+    }
+
+    /// Kinds that can still be added to Home, in their usual order.
+    pub fn missing_blocks(&self) -> Vec<crate::home_grid::BlockKind> {
+        let blocks = self.home_blocks();
+        crate::home_grid::BlockKind::ALL
+            .into_iter()
+            .filter(|kind| !blocks.iter().any(|b| b.kind == *kind))
+            .collect()
+    }
+
+    /// The Home block a focus target belongs to.
+    fn home_block_of(&self, target: &Target) -> Option<crate::home_grid::BlockKind> {
+        use crate::home_grid::BlockKind;
+        match target {
+            Target::App(_) | Target::Browse => Some(BlockKind::Favorites),
+            Target::Input(_) => Some(BlockKind::Inputs),
+            Target::WeatherConfigure => Some(BlockKind::Weather),
+            Target::Block(kind) => Some(*kind),
+            Target::Poster(_) => Some(BlockKind::Premieres),
+            _ => None,
+        }
+    }
+
+    /// Streaming apps to watch a premiere in, the one chosen last first.
+    pub fn poster_apps(&self) -> Vec<String> {
+        let favorites = self.preferences.favorites(&self.inventory.apps);
+        let mut apps: Vec<&App> = self
+            .inventory
+            .apps
+            .iter()
+            .filter(|app| app.category == "Streaming" && !self.preferences.hidden.contains(&app.id))
+            .collect();
+        apps.sort_by_key(|app| {
+            (
+                app.id != self.preferences.poster_app,
+                favorites
+                    .iter()
+                    .position(|id| id == &app.id)
+                    .unwrap_or(usize::MAX),
+                app.title.to_lowercase(),
+            )
+        });
+        apps.into_iter().take(6).map(|app| app.id.clone()).collect()
+    }
+
+    /// Moves or resizes the edited block by one cell and reflows the others from the layout
+    /// at the start of the edit.
+    fn edit_step(&mut self, edit: &HomeEdit, direction: Direction) {
+        let Some(mut block) = self
+            .preferences
+            .home_layout
+            .iter()
+            .find(|b| b.kind == edit.kind)
+            .copied()
+        else {
+            self.home_edit = None;
+            return;
+        };
+        let (dx, dy): (i16, i16) = match direction {
+            Direction::Left => (-1, 0),
+            Direction::Right => (1, 0),
+            Direction::Up => (0, -1),
+            Direction::Down => (0, 1),
+        };
+        let columns = i16::from(crate::home_grid::COLUMNS);
+        let ((min_w, min_h), (max_w, max_h)) = edit.kind.limits();
+        if edit.resize {
+            let max_w = i16::from(max_w).min(columns - i16::from(block.x));
+            block.w = (i16::from(block.w) + dx).clamp(i16::from(min_w), max_w) as u8;
+            block.h = (i16::from(block.h) + dy).clamp(i16::from(min_h), i16::from(max_h)) as u8;
+        } else {
+            block.x = (i16::from(block.x) + dx).clamp(0, columns - i16::from(block.w)) as u8;
+            block.y = (i16::from(block.y) + dy).clamp(0, 60) as u8;
+        }
+        self.preferences.home_layout = crate::home_grid::reflow(&edit.snapshot, block);
+        let rect = crate::home_grid::rect(&block);
+        if rect.y - self.scroll < 120.8 {
+            self.scroll = (rect.y - 120.8).max(0.);
+        } else if rect.y + rect.h - self.scroll > 1041.6 {
+            self.scroll = rect.y + rect.h - 1041.6;
+        }
+        self.dirty = true;
     }
 
     pub fn hit_test(&self, controls: &[Control], x: f32, y: f32) -> Option<Target> {
@@ -445,7 +670,8 @@ impl State {
         } else {
             (count - 1) as f32 * HOME_TILE_PITCH + HOME_TILE_WIDTH
         };
-        let max = (content - (HOME_STRIP_RIGHT - HOME_STRIP_LEFT)).max(0.);
+        let strip = self.favorites_strip();
+        let max = (content - (strip.right - strip.left)).max(0.);
         let next = (self.home_scroll + delta).clamp(0., max);
         if next != self.home_scroll {
             self.home_scroll = next;
@@ -544,10 +770,11 @@ impl State {
         let previous_home = self.home_scroll;
         if let Some(control) = controls.iter().find(|c| c.target == self.focus) {
             if self.page == Page::Home && matches!(self.focus, Target::App(_)) {
-                if control.rect.x < HOME_STRIP_LEFT {
-                    self.home_scroll += control.rect.x - HOME_STRIP_LEFT;
-                } else if control.rect.x + control.rect.w > HOME_STRIP_RIGHT {
-                    self.home_scroll += control.rect.x + control.rect.w - HOME_STRIP_RIGHT;
+                let strip = self.favorites_strip();
+                if control.rect.x < strip.left {
+                    self.home_scroll += control.rect.x - strip.left;
+                } else if control.rect.x + control.rect.w > strip.right {
+                    self.home_scroll += control.rect.x + control.rect.w - strip.right;
                 }
             }
             if matches!(
@@ -659,6 +886,7 @@ impl State {
             Some(Subpage::Temperature) => Target::WeatherTemperature,
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
+            Some(Subpage::Theme) => Target::Setting(9),
             None => Target::Sidebar(self.section),
         };
         self.scroll = 0.;
@@ -673,6 +901,10 @@ impl State {
         }
         if matches!(self.overlay, Some(Overlay::SystemKeyboard)) {
             // The TV keyboard owns its arrows until Done/Back dismisses it.
+            return vec![];
+        }
+        if let Some(edit) = self.home_edit.clone() {
+            self.edit_step(&edit, direction);
             return vec![];
         }
         if let Some(id) = self.moving.clone() {
@@ -707,45 +939,18 @@ impl State {
             {
                 let apps = self.apps();
                 if let Some(index) = apps.iter().position(|app| &app.id == id) {
-                    match direction {
-                        Direction::Left | Direction::Right => {
-                            let next = if matches!(direction, Direction::Left) {
-                                index.saturating_sub(1)
-                            } else {
-                                (index + 1).min(apps.len() - 1)
-                            };
-                            let id = apps[next].id.clone();
-                            self.focus(Target::App(id), controls);
-                        }
-                        Direction::Up => self.focus(Target::Nav(0), controls),
-                        Direction::Down => {
-                            let x = controls
-                                .iter()
-                                .find(|control| control.target == self.focus)
-                                .map_or(960., |control| control.rect.center().0);
-                            let top = controls
-                                .iter()
-                                .filter(|control| matches!(control.target, Target::Input(_)))
-                                .map(|control| control.rect.y)
-                                .fold(f32::INFINITY, f32::min);
-                            let next = controls
-                                .iter()
-                                .filter(|control| {
-                                    matches!(control.target, Target::Input(_))
-                                        && (control.rect.y - top).abs() < 1.
-                                })
-                                .min_by(|a, b| {
-                                    (a.rect.center().0 - x)
-                                        .abs()
-                                        .total_cmp(&(b.rect.center().0 - x).abs())
-                                })
-                                .map(|control| control.target.clone());
-                            if let Some(next) = next {
-                                self.focus(next, controls);
-                            }
-                        }
+                    let next = match direction {
+                        Direction::Left => index.checked_sub(1),
+                        Direction::Right => (index + 1 < apps.len()).then_some(index + 1),
+                        _ => None,
+                    };
+                    // Past either end, and Up/Down, the grid's spatial routes reach the
+                    // neighbouring blocks.
+                    if let Some(next) = next {
+                        let id = apps[next].id.clone();
+                        self.focus(Target::App(id), controls);
+                        return vec![];
                     }
-                    return vec![];
                 }
             }
             let setting_rows = match self.subpage {
@@ -789,6 +994,7 @@ impl State {
                         | Subpage::TextRendering,
                     ) => 2,
                     Some(Subpage::Language) => Language::ALL.len(),
+                    Some(Subpage::Theme) => crate::themes::THEMES.len(),
                     _ => 3,
                 };
                 match direction {
@@ -856,7 +1062,7 @@ impl State {
             }
             if matches!(
                 self.focus,
-                Target::Setting(0 | 1 | 4 | 6 | 7)
+                Target::Setting(0 | 1 | 4 | 6 | 7 | 9)
                     | Target::InputMode(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
@@ -1045,14 +1251,15 @@ impl State {
             return vec![];
         };
         let (x, y) = current.rect.center();
+        let strip = self.favorites_strip();
         let next = controls
             .iter()
             .filter(|candidate| candidate.target != self.focus)
             .filter(|candidate| {
                 self.page != Page::Home
                     || !matches!(candidate.target, Target::App(_))
-                    || (candidate.rect.x >= HOME_STRIP_LEFT - 0.1
-                        && candidate.rect.x + candidate.rect.w <= HOME_STRIP_RIGHT + 0.1)
+                    || (candidate.rect.x >= strip.left - 0.1
+                        && candidate.rect.x + candidate.rect.w <= strip.right + 0.1)
             })
             .filter_map(|candidate| {
                 // Header controls never steal an Up route from the active tab.
@@ -1170,8 +1377,18 @@ impl State {
 
     pub fn hold(&mut self) {
         if self.page == Page::Home && self.overlay.is_none() {
-            if let Target::App(id) = &self.focus {
-                self.moving = Some(id.clone());
+            if self.home_edit.is_some() || self.moving.is_some() {
+                return;
+            }
+            if let Some(kind) = self.home_block_of(&self.focus) {
+                self.overlay = Some(Overlay::Block {
+                    kind,
+                    restore: self.focus.clone(),
+                });
+                self.focus = Target::BlockAction(0);
+                if !self.preferences.reduced_motion {
+                    self.panel_started = Some(Instant::now());
+                }
                 self.notice = None;
                 self.dirty = true;
             }
@@ -1389,6 +1606,10 @@ impl State {
                 _ => vec![],
             };
         }
+        if self.home_edit.take().is_some() {
+            self.dirty = true;
+            return vec![Effect::Save];
+        }
         if self.moving.take().is_some() {
             // Order was saved at every move. A fresh OK release finishes the
             // mode and keeps the selected favorite, rather than launching it.
@@ -1517,6 +1738,107 @@ impl State {
                     return vec![Effect::Save];
                 }
             }
+            Target::BlockAction(index) => {
+                let Some(Overlay::Block { kind, restore }) = self.overlay.take() else {
+                    return vec![];
+                };
+                self.panel_started = None;
+                let actions = self.block_actions(kind, matches!(restore, Target::App(_)));
+                self.focus = restore.clone();
+                match actions.get(index) {
+                    Some(BlockAction::Reorder) => {
+                        if let Target::App(id) = restore {
+                            self.moving = Some(id);
+                        }
+                    }
+                    Some(action @ (BlockAction::Move | BlockAction::Resize)) => {
+                        let snapshot = self.home_blocks();
+                        self.preferences.home_layout = snapshot.clone();
+                        self.home_edit = Some(HomeEdit {
+                            kind,
+                            resize: *action == BlockAction::Resize,
+                            snapshot,
+                        });
+                    }
+                    Some(BlockAction::Remove) => {
+                        self.preferences.home_layout.retain(|b| b.kind != kind);
+                        self.focus = self.first_content();
+                        return vec![Effect::Save];
+                    }
+                    None => {}
+                }
+                return vec![];
+            }
+            Target::Poster(index) => {
+                if index < self.feeds.premieres.len() {
+                    self.overlay = Some(Overlay::Poster {
+                        index,
+                        restore: Target::Poster(index),
+                    });
+                    self.focus = Target::PosterApp(0);
+                    if !self.preferences.reduced_motion {
+                        self.panel_started = Some(Instant::now());
+                    }
+                }
+                return vec![];
+            }
+            Target::PosterApp(choice) => {
+                let Some(Overlay::Poster { index, restore }) = self.overlay.take() else {
+                    return vec![];
+                };
+                self.panel_started = None;
+                self.focus = restore;
+                let apps = self.poster_apps();
+                let (Some(id), Some(premiere)) =
+                    (apps.get(choice), self.feeds.premieres.get(index))
+                else {
+                    return vec![];
+                };
+                let title = self
+                    .inventory
+                    .apps
+                    .iter()
+                    .find(|app| &app.id == id)
+                    .map_or(id.as_str(), |app| app.title.as_str())
+                    .to_owned();
+                let notice = self.preferences.language.format(
+                    "posterOpening",
+                    &[("app", &title), ("title", &premiere.title)],
+                );
+                self.preferences.poster_app = id.clone();
+                return vec![
+                    Effect::Save,
+                    Effect::Launch(id.clone()),
+                    Effect::Notify(notice),
+                ];
+            }
+            Target::AddBlock => {
+                self.overlay = Some(Overlay::AddBlock {
+                    restore: Target::AddBlock,
+                });
+                self.focus = Target::AddKind(0);
+                if !self.preferences.reduced_motion {
+                    self.panel_started = Some(Instant::now());
+                }
+                return vec![];
+            }
+            Target::AddKind(index) => {
+                let Some(Overlay::AddBlock { restore }) = self.overlay.take() else {
+                    return vec![];
+                };
+                self.panel_started = None;
+                self.focus = restore;
+                let Some(kind) = self.missing_blocks().get(index).copied() else {
+                    return vec![];
+                };
+                let mut blocks = self.home_blocks();
+                let (w, h) = kind.default_size();
+                let (x, y) = crate::home_grid::first_free(&blocks, w, h);
+                blocks.push(crate::home_grid::Block { kind, x, y, w, h });
+                self.preferences.home_layout = blocks;
+                self.focus = Target::Block(kind);
+                return vec![Effect::Save];
+            }
             Target::Sidebar(index) => {
                 self.section = index;
                 self.scroll = 0.;
@@ -1556,6 +1878,20 @@ impl State {
                     7 => {
                         self.subpage = Some(Subpage::TextRendering);
                         self.focus = Target::Choice(self.preferences.text_rendering.index());
+                        self.scroll = 0.;
+                        if !self.preferences.reduced_motion {
+                            self.panel_started = Some(Instant::now());
+                        }
+                        return vec![];
+                    }
+                    9 => {
+                        self.subpage = Some(Subpage::Theme);
+                        self.focus = Target::Choice(
+                            crate::themes::THEMES
+                                .iter()
+                                .position(|theme| theme.id == self.preferences.home_theme)
+                                .unwrap_or(0),
+                        );
                         self.scroll = 0.;
                         if !self.preferences.reduced_motion {
                             self.panel_started = Some(Instant::now());
@@ -1618,6 +1954,20 @@ impl State {
                         } else {
                             Unit::Celsius
                         }
+                    }
+                    // A theme stays open too: its wallpaper shows behind the list at once.
+                    Some(Subpage::Theme) => {
+                        let theme =
+                            &crate::themes::THEMES[index.min(crate::themes::THEMES.len() - 1)];
+                        if !self.preferences.reduced_motion
+                            && self.preferences.background != theme.wallpaper
+                        {
+                            self.previous_background =
+                                Some((self.preferences.background.clone(), Instant::now()));
+                        }
+                        crate::themes::apply(&mut self.preferences, theme.id);
+                        self.home_scroll = 0.;
+                        return vec![Effect::Save];
                     }
                     Some(Subpage::Language) => {
                         self.preferences.language =
@@ -1767,6 +2117,10 @@ impl State {
     pub fn back(&mut self) -> Vec<Effect> {
         self.pointer = false;
         self.dirty = true;
+        if let Some(edit) = self.home_edit.take() {
+            self.preferences.home_layout = edit.snapshot;
+            return vec![];
+        }
         if self.moving.take().is_some() {
             return vec![];
         }
@@ -1787,7 +2141,12 @@ impl State {
                     self.recents.closing_focus = None;
                 }
             }
-            if let Overlay::Options { restore, .. } | Overlay::Recents { restore } = overlay {
+            if let Overlay::Options { restore, .. }
+            | Overlay::Recents { restore }
+            | Overlay::Block { restore, .. }
+            | Overlay::AddBlock { restore }
+            | Overlay::Poster { restore, .. } = overlay
+            {
                 self.focus = restore;
                 self.recents.pending = None;
                 self.reconcile_focus();

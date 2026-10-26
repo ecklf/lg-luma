@@ -1,12 +1,12 @@
 //! Screen geometry and styling mirror the web UI's 1920×1080 / 16px-rem layout.
 use crate::{
+    home_grid::BlockKind,
     i18n::Language,
     model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode},
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT,
-        HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State,
-        Subpage, Target, TextField, WEATHER_SECTION,
+        APPS_COLUMNS, Control, HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect,
+        SYSTEM_SECTION, State, Subpage, Target, TextField, WEATHER_SECTION,
     },
     weather::{self, Unit},
 };
@@ -127,6 +127,8 @@ pub struct Scene {
     pub draw: Vec<Draw>,
     pub controls: Vec<Control>,
     pub modal: Option<Rect>,
+    /// Focus rings; Home uses its theme's accent.
+    pub accent: Color,
 }
 impl Scene {
     fn new() -> Self {
@@ -134,6 +136,7 @@ impl Scene {
             draw: Vec::new(),
             controls: Vec::new(),
             modal: None,
+            accent: c(0xf0f0f0, 1.),
         }
     }
     fn shape(&mut self, rect: Rect, radius: f32, fill: Color) {
@@ -174,7 +177,7 @@ impl Scene {
     }
     fn ring(&mut self, rect: Rect, radius: f32) {
         self.border(rect.inset(-6.9), radius + 6.9, 3.7, c(0xffffff, 0.10));
-        self.border(rect.inset(-3.2), radius + 3.2, 3.2, c(0xf0f0f0, 1.));
+        self.border(rect.inset(-3.2), radius + 3.2, 3.2, self.accent);
     }
     fn shadow(&mut self, rect: Rect, radius: f32, blur: f32, y: f32, alpha: f32) {
         self.draw.push(Draw::Shadow(
@@ -284,6 +287,12 @@ pub fn scene_with_pill(
     now: OffsetDateTime,
 ) -> Scene {
     let mut out = Scene::new();
+    if state.page == Page::Home {
+        out.accent = c(
+            crate::themes::theme(&state.preferences.home_theme).accent,
+            1.,
+        );
+    }
     if let Some((previous, start)) = &state.previous_background {
         out.image(
             assets.path(format!("wallpapers/{previous}.jpg")),
@@ -372,8 +381,14 @@ pub fn scene_with_pill(
     out.draw.push(Draw::Clip(None));
     header(&mut out, state, assets, now, pill_x, pill_width);
     footer(&mut out, state, assets);
-    if let Some(overlay @ (Overlay::Options { .. } | Overlay::Delete { .. } | Overlay::Keyboard)) =
-        &state.overlay
+    if let Some(
+        overlay @ (Overlay::Options { .. }
+        | Overlay::Delete { .. }
+        | Overlay::Keyboard
+        | Overlay::Block { .. }
+        | Overlay::AddBlock { .. }
+        | Overlay::Poster { .. }),
+    ) = &state.overlay
     {
         let anchor = match overlay {
             Overlay::Options { id, .. } => out
@@ -408,10 +423,82 @@ pub fn scene_with_pill(
             // Fading it over its dimmed parent copy causes a brightness dip.
             out.fade(start, (opened.elapsed().as_secs_f32() / 0.12).min(1.), 1.);
         }
+        let language = state.preferences.language;
         match overlay {
             Overlay::Options { id, .. } => options(&mut out, state, assets, id, anchor),
             Overlay::Delete { id, .. } => delete_confirmation(&mut out, state, assets, id),
             Overlay::Keyboard => keyboard(&mut out, state, assets),
+            Overlay::Block { kind, restore } => {
+                let rows: Vec<String> = state
+                    .block_actions(*kind, matches!(restore, Target::App(_)))
+                    .into_iter()
+                    .map(|action| match (action, restore) {
+                        (crate::state::BlockAction::Reorder, Target::App(id)) => {
+                            let title = state
+                                .inventory
+                                .apps
+                                .iter()
+                                .find(|app| &app.id == id)
+                                .map_or(id.as_str(), |app| app.title.as_str());
+                            language.format("blockReorderApp", &[("app", title)])
+                        }
+                        (action, _) => language.t(action.key()).to_owned(),
+                    })
+                    .collect();
+                menu(
+                    &mut out,
+                    state,
+                    assets,
+                    language.t(kind.name_key()),
+                    &rows,
+                    Target::BlockAction,
+                );
+            }
+            Overlay::AddBlock { .. } => {
+                let rows: Vec<String> = state
+                    .missing_blocks()
+                    .into_iter()
+                    .map(|kind| language.t(kind.name_key()).to_owned())
+                    .collect();
+                menu(
+                    &mut out,
+                    state,
+                    assets,
+                    language.t("addWidget"),
+                    &rows,
+                    Target::AddKind,
+                );
+            }
+            Overlay::Poster { index, .. } => {
+                if let Some(premiere) = state.feeds.premieres.get(*index) {
+                    let mut rows: Vec<String> = state
+                        .poster_apps()
+                        .iter()
+                        .map(|id| {
+                            let title = state
+                                .inventory
+                                .apps
+                                .iter()
+                                .find(|app| &app.id == id)
+                                .map_or(id.as_str(), |app| app.title.as_str());
+                            language.format("posterOpenIn", &[("app", title)])
+                        })
+                        .collect();
+                    rows.push(language.t("close").to_owned());
+                    let title = format!(
+                        "{} · {}",
+                        premiere.title,
+                        language.format(
+                            "seasonPremiere",
+                            &[
+                                ("season", &premiere.season.to_string()),
+                                ("date", &short_date(&premiere.date, now, language)),
+                            ],
+                        )
+                    );
+                    menu(&mut out, state, assets, &title, &rows, Target::PosterApp);
+                }
+            }
             Overlay::SystemKeyboard | Overlay::Recents { .. } => {}
         }
         if !matches!(overlay, Overlay::Options { .. })
@@ -842,74 +929,236 @@ fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language:
 }
 
 fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
-    let language = state.preferences.language;
     let s = state.scroll;
-    let summary = state
-        .preferences
-        .show_weather
-        .then(|| weather_summary_layout(state, assets));
-    let shift = summary
-        .as_ref()
-        .map_or(0., |summary| (summary.height + 18.4) / 2.);
-    let date = language.date(now);
+    let blocks = state.home_blocks();
+    let theme = crate::themes::theme(&state.preferences.home_theme);
+    let editing = state.home_edit.as_ref();
+    if editing.is_some() {
+        // The grid's cells, so a moved or resized block can be lined up.
+        for row in 0..crate::home_grid::bottom(&blocks) + 1 {
+            for column in 0..crate::home_grid::COLUMNS {
+                let cell = crate::home_grid::rect(&crate::home_grid::Block {
+                    kind: BlockKind::Greeting,
+                    x: column,
+                    y: row,
+                    w: 1,
+                    h: 1,
+                });
+                // Clear of the hints at the bottom of the screen.
+                if cell.y - s + cell.h <= 1010. {
+                    out.shape(
+                        Rect::new(cell.x, cell.y - s, cell.w, cell.h),
+                        10.,
+                        c(0xffffff, 0.045),
+                    );
+                }
+            }
+        }
+    }
+    for block in &blocks {
+        let cell = crate::home_grid::rect(block);
+        let rect = Rect::new(cell.x, cell.y - s, cell.w, cell.h);
+        let controls = out.controls.len();
+        match block.kind {
+            BlockKind::Greeting => greeting_block(out, state, assets, now, rect),
+            BlockKind::Weather => weather_block(out, state, assets, theme, rect),
+            BlockKind::Favorites => favorites_block(out, state, assets, rect),
+            BlockKind::Inputs => inputs_block(out, state, assets, rect),
+            BlockKind::Crypto | BlockKind::Premieres => {
+                widget_block(out, state, assets, theme, block.kind, rect, now)
+            }
+        }
+        // Blocks without controls of their own are still focusable, to edit them.
+        if out.controls.len() == controls {
+            let target = Target::Block(block.kind);
+            if state.focus == target && !state.pointer && editing.is_none() {
+                out.ring(rect, theme.radius);
+            }
+            out.control(target, rect, true);
+        }
+        if let Some(edit) = editing {
+            let active = edit.kind == block.kind;
+            let color = if active {
+                out.accent
+            } else {
+                c(0xffffff, 0.35)
+            };
+            out.border(
+                rect.inset(-4.),
+                theme.radius + 4.,
+                if active { 4. } else { 1.5 },
+                color,
+            );
+            let label = format!(
+                "{} · {}×{}",
+                state.preferences.language.t(block.kind.name_key()),
+                block.w,
+                block.h
+            );
+            let style = text(16., 500, 0.);
+            let width = assets.width(&label, style) + 24.;
+            let tag = Rect::new(rect.x + rect.w - width - 8., rect.y + 8., width, 30.);
+            out.shape(tag, 9., c(0x080b12, if active { 0.85 } else { 0.6 }));
+            out.text(
+                label,
+                Rect::new(tag.x + 12., tag.y + 6., width, 20.),
+                style,
+                c(0xffffff, if active { 0.95 } else { 0.7 }),
+                false,
+            );
+        }
+    }
+    let missing = BlockKind::ALL
+        .iter()
+        .any(|kind| !blocks.iter().any(|b| b.kind == *kind));
+    if missing && editing.is_none() {
+        let cell = crate::home_grid::rect(&crate::home_grid::Block {
+            kind: BlockKind::Greeting,
+            x: 0,
+            y: crate::home_grid::bottom(&blocks),
+            w: 4,
+            h: 1,
+        });
+        let rect = Rect::new(cell.x, cell.y - s, cell.w, cell.h);
+        let focused = state.focus == Target::AddBlock && !state.pointer;
+        out.shape(
+            rect,
+            theme.radius,
+            c(0xffffff, if focused { 0.10 } else { 0.03 }),
+        );
+        out.border(rect, theme.radius, 1.5, c(0xffffff, 0.30));
+        out.text(
+            format!("+  {}", state.preferences.language.t("addWidget")),
+            Rect::new(rect.x, rect.y + 37., rect.w, 26.),
+            text(21., 500, -0.02),
+            c(0xf0f0f0, 0.85),
+            true,
+        );
+        if focused {
+            out.ring(rect, theme.radius);
+        }
+        out.control(Target::AddBlock, rect, true);
+    }
+}
+
+/// The date and the greeting, centred in the block; the greeting shrinks to fit its width.
+fn greeting_block(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    now: OffsetDateTime,
+    rect: Rect,
+) {
+    let language = state.preferences.language;
+    let greeting = language.greeting(now.hour(), &state.preferences.greeting_name);
+    let compact = rect.h < 150.;
+    let mut style = text(
+        if compact {
+            46.
+        } else if rect.h < 300. {
+            90.4
+        } else {
+            124.
+        },
+        500,
+        -0.065,
+    )
+    .leading(1.05);
+    let width = assets.width(&greeting, style);
+    if width > rect.w {
+        style.size *= rect.w / width;
+    }
+    let date_style = text(if compact { 12.8 } else { 14.4 }, 600, 0.12);
+    let gap = if compact { 6. } else { 20.8 };
+    let height = 17. + gap + style.size * 1.05;
+    // Taller greetings sit at the bottom of their block, close to what follows.
+    let top = if compact {
+        rect.y + (rect.h - height) / 2.
+    } else {
+        rect.y + rect.h - height - 8.
+    };
     out.text(
-        date,
-        Rect::new(84., 227.2 - shift - s, 1200., 17.),
-        text(14.4, 600, 0.12),
+        language.date(now),
+        Rect::new(rect.x, top, rect.w, 17.),
+        date_style,
         c(0xf5f5f5, 0.72),
         false,
     );
-    let greeting = language.greeting(now.hour(), &state.preferences.greeting_name);
     out.text(
         &greeting,
-        Rect::new(84., 265. - shift - s, 1500., 95.),
-        text(90.4, 500, -0.065).leading(1.05),
+        Rect::new(
+            rect.x,
+            top + 17. + gap,
+            rect.w + 24.,
+            style.size * 1.05 + 4.,
+        ),
+        style,
         WHITE,
         false,
     );
-    if let Some(summary) = summary {
-        weather_summary(out, state, assets, summary, 265. - shift + 94.92 + 18.4 - s);
+}
+
+/// The card behind widgets, in the theme's surface.
+fn widget_card(out: &mut Scene, theme: &crate::themes::Theme, rect: Rect) {
+    out.shape(rect, theme.radius, c(theme.surface, theme.surface_alpha));
+    out.border(rect, theme.radius, 1., c(0xffffff, 0.07));
+}
+
+fn weather_block(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    theme: &crate::themes::Theme,
+    rect: Rect,
+) {
+    if !state.preferences.show_weather {
+        return;
     }
-    out.text(
-        language.t("favorites"),
-        Rect::new(84., 478.5 - s, 1000., 31.),
-        text(23.2, 550, -0.035).leading(1.3),
-        WHITE,
-        false,
-    );
-    if state.moving.is_some() {
-        out.text(
-            language.t("moveApps"),
-            Rect::new(1686., 485. - s, 150., 24.),
-            text(14.4, 400, 0.),
-            c(0xdedede, 1.),
-            true,
-        );
+    if theme.cards {
+        widget_card(out, theme, rect);
     }
+    let pad = if theme.cards { 24. } else { 0. };
+    let summary = weather_summary_layout(state, assets, rect.w - 2. * pad);
+    // On a card the summary is centred; bare, it follows the greeting from the top.
+    let y = if theme.cards {
+        rect.y + (rect.h - summary.height) / 2.
+    } else {
+        rect.y + 4.
+    };
+    weather_summary(out, state, assets, summary, rect.x + pad, y);
+}
+
+fn favorites_block(out: &mut Scene, state: &State, assets: &Assets, rect: Rect) {
+    let language = state.preferences.language;
     let apps = state.apps();
     let names = state.preferences.show_home_names;
-    let mut grid_height = FACE_HEIGHT;
+    let strip = state.favorites_strip();
     if state.loading && state.inventory.apps.is_empty() {
-        for index in 0..6 {
+        let whole = ((strip.right - strip.left + HOME_TILE_PITCH - HOME_TILE_WIDTH)
+            / HOME_TILE_PITCH)
+            .round() as usize;
+        for index in 0..whole {
             out.shape(
                 Rect::new(
-                    84. + index as f32 * GRID_PITCH,
-                    544.8 - s,
-                    270.,
+                    rect.x + index as f32 * HOME_TILE_PITCH,
+                    rect.y + 66.,
+                    HOME_TILE_WIDTH,
                     FACE_HEIGHT,
                 ),
                 19.2,
                 c(0xffffff, 0.06),
             );
         }
-    } else if apps.is_empty() {
+        return;
+    }
+    if apps.is_empty() {
         let error = state.error.is_some() && state.inventory.apps.is_empty();
         empty(
             out,
             state,
             assets,
             EmptyState {
-                rect: Rect::new(84., 533.6 - s, 1752., 258.7),
+                rect,
                 icon: if error { "alert" } else { "heart" },
                 title: if error {
                     language.t("aLittleHelp")
@@ -924,34 +1173,37 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
                 action: Some(if error { Target::Retry } else { Target::Browse }),
             },
         );
-        grid_height = 247.5;
+        return;
     }
-    if !apps.is_empty() {
-        grid_height = FACE_HEIGHT
-            + if names {
-                18.4 + apps
-                    .iter()
-                    .map(|app| caption_height(state, assets, app, HOME_TILE_WIDTH))
-                    .fold(49.28, f32::max)
-            } else {
-                0.
-            };
+    out.text(
+        language.t("favorites"),
+        Rect::new(rect.x, rect.y, 1000., 31.),
+        text(23.2, 550, -0.035).leading(1.3),
+        WHITE,
+        false,
+    );
+    if state.moving.is_some() {
+        out.text(
+            language.t("moveApps"),
+            Rect::new(rect.x + rect.w - 150., rect.y + 6.5, 150., 24.),
+            text(14.4, 400, 0.),
+            c(0xdedede, 1.),
+            true,
+        );
     }
-    // Like Apple TV's rows, the favourites run to the screen edge: the next tile shows cut off
-    // at the right (and a scrolled-away one at the left), so it is clear the row continues.
+    // Like Apple TV's rows, the favourites run to the block's edge (the screen edge when the
+    // block reaches it): the next tile shows cut off, so it is clear the row continues.
     out.draw.push(Draw::Clip(Some(state.favorites_viewport())));
-    // Soft edges: out to the right from the end of the sixth tile, and in from the left once
-    // the row has scrolled.
     let left = if state.home_scroll > 0. {
-        [HOME_FADE_LEFT, HOME_STRIP_LEFT]
+        [strip.clip_left, strip.left]
     } else {
         [0., 0.]
     };
     out.draw.push(Draw::EdgeFadeX(Some([
         left[0],
         left[1],
-        HOME_STRIP_RIGHT,
-        HOME_FADE_RIGHT,
+        strip.right,
+        strip.clip_right,
     ])));
     for (index, app) in apps.iter().enumerate() {
         tile(
@@ -960,8 +1212,8 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             assets,
             app,
             Rect::new(
-                84. + index as f32 * HOME_TILE_PITCH - state.home_scroll,
-                544.8 - s,
+                rect.x + index as f32 * HOME_TILE_PITCH - state.home_scroll,
+                rect.y + 66.,
                 HOME_TILE_WIDTH,
                 FACE_HEIGHT,
             ),
@@ -971,96 +1223,377 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     }
     out.draw.push(Draw::EdgeFadeX(None));
     out.draw.push(Draw::Clip(Some(state.content_viewport())));
-    let input_y = 544.8 + grid_height + 41.6 - s;
+}
+
+/// Input cards in rows, as many across as whole cards fit the block.
+fn inputs_block(out: &mut Scene, state: &State, assets: &Assets, rect: Rect) {
     let inputs: Vec<_> = state
         .inventory
         .inputs
         .iter()
         .filter(|input| state.preferences.input_visible(input))
         .collect();
-    if !inputs.is_empty() {
-        out.text(
-            language.t("inputsHeading"),
-            Rect::new(84., input_y + 3.3, 1000., 31.),
-            text(23.2, 550, -0.035).leading(1.3),
-            WHITE,
-            false,
-        );
-    }
+    let columns = crate::home_grid::input_columns(rect.w);
+    let gap = crate::home_grid::INPUT_GAP;
+    let width = (rect.w - (columns - 1) as f32 * gap) / columns as f32;
+    let pitch = crate::home_grid::CELL_H + crate::home_grid::GAP;
     for (index, input) in inputs.iter().enumerate() {
-        let rect = Rect::new(
-            84. + (index % 3) as f32 * 591.45,
-            input_y + 58.4 + (index / 3) as f32 * 126.4,
-            569.1,
-            104.,
+        let card = Rect::new(
+            rect.x + (index % columns) as f32 * (width + gap),
+            rect.y + (index / columns) as f32 * pitch,
+            width,
+            crate::home_grid::CELL_H,
         );
-        let focused = state.focus == Target::Input(input.id.clone());
-        out.shadow(
-            rect,
-            18.4,
-            if focused { 34. } else { 4. },
-            if focused { 14. } else { 1. },
-            if focused { 0.4 } else { 0.01 },
-        );
-        out.draw.push(Draw::RoundedGradient(
-            rect,
-            18.4,
-            if focused {
-                c(0x30363c, 0.70)
+        if card.y + card.h > rect.y + rect.h + 0.5 {
+            break;
+        }
+        input_card(out, state, assets, input, card);
+        out.control(Target::Input(input.id.clone()), card, true);
+    }
+}
+
+/// A price with the language's separators: `80 378 $`, `$80,378`, `2,31 $`.
+fn price(value: f64, language: Language) -> String {
+    let english = matches!(language, Language::En | Language::Zh);
+    let decimals = if value >= 1000. {
+        0
+    } else if value >= 1. {
+        2
+    } else {
+        4
+    };
+    let text = format!("{value:.decimals$}");
+    let (whole, fraction) = text.split_once('.').unwrap_or((&text, ""));
+    let group = match language {
+        Language::En | Language::Zh => ',',
+        Language::Ru => ' ',
+        _ => '.',
+    };
+    let mut grouped = String::new();
+    for (index, digit) in whole.chars().enumerate() {
+        if index > 0 && (whole.len() - index).is_multiple_of(3) {
+            grouped.push(group);
+        }
+        grouped.push(digit);
+    }
+    if !fraction.is_empty() {
+        grouped.push(if english { '.' } else { ',' });
+        grouped.push_str(fraction);
+    }
+    if english {
+        format!("${grouped}")
+    } else {
+        format!("{grouped} $")
+    }
+}
+
+/// `Today`, `Tomorrow`, or the day and month in the language's order.
+fn short_date(date: &str, now: OffsetDateTime, language: Language) -> String {
+    let parse = |text: &str| -> Option<time::Date> {
+        let mut parts = text.split('-').map(|part| part.parse::<i32>().ok());
+        let (year, month, day) = (parts.next()??, parts.next()??, parts.next()??);
+        time::Date::from_calendar_date(year, time::Month::try_from(month as u8).ok()?, day as u8)
+            .ok()
+    };
+    let Some(day) = parse(date) else {
+        return date.to_owned();
+    };
+    match (day - now.date()).whole_days() {
+        0 => language.t("today").to_owned(),
+        1 => language.t("tomorrow").to_owned(),
+        _ => match language {
+            Language::En => format!("{}/{}", day.month() as u8, day.day()),
+            Language::Zh => format!("{}月{}日", day.month() as u8, day.day()),
+            _ => format!("{:02}.{:02}", day.day(), day.month() as u8),
+        },
+    }
+}
+
+/// Data widgets: crypto prices and season premieres.
+fn widget_block(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    theme: &crate::themes::Theme,
+    kind: BlockKind,
+    rect: Rect,
+    now: OffsetDateTime,
+) {
+    match kind {
+        BlockKind::Crypto => crypto_block(out, state, assets, theme, rect),
+        _ => premieres_block(out, state, assets, theme, rect, now),
+    }
+}
+
+/// Coins side by side, as many as fit; a second row of cells adds each coin's 24 h range.
+fn crypto_block(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    theme: &crate::themes::Theme,
+    rect: Rect,
+) {
+    let language = state.preferences.language;
+    widget_card(out, theme, rect);
+    let quotes = &state.feeds.quotes;
+    if quotes.is_empty() {
+        out.text(
+            language.t(if state.feeds.crypto_failed {
+                "cryptoUnavailable"
             } else {
-                c(0x20252b, 0.60)
-            },
-            if focused {
-                c(0x242a30, 0.65)
-            } else {
-                c(0x171c22, 0.55)
-            },
-        ));
-        out.border(
-            rect,
-            18.4,
-            1.,
-            c(0xffffff, if focused { 0.24 } else { 0.063 }),
+                "cryptoLoading"
+            }),
+            Rect::new(rect.x + 24., rect.y + rect.h / 2. - 14., rect.w - 48., 28.),
+            text(20., 450, -0.02),
+            c(0xf5f5f5, 0.62),
+            false,
         );
-        let art = Rect::new(rect.x + 21., rect.y + 24., 56., 56.);
-        out.draw.push(Draw::RoundedGradient(
-            art,
-            12.8,
-            c(0xd6d6d6, 0.24),
-            c(0xa0a0a0, 0.10),
-        ));
-        let name = state.preferences.input_name(input);
-        let icon = input_icon(input, name);
-        let size = if icon == "apple-tv" { 41.6 } else { 35.2 };
-        out.icon(
-            assets,
-            &format!("input-{icon}"),
-            Rect::new(
-                art.x + (56. - size) / 2.,
-                art.y + (56. - size) / 2.,
-                size,
-                size,
-            ),
-            c(0xdedede, 1.),
+        return;
+    }
+    let tall = rect.h > 150.;
+    let columns = (((rect.w - 48. + 24.) / 272.).floor() as usize).max(1);
+    let rows = if tall { 2 } else { 1 };
+    let width = (rect.w - 48.) / columns as f32;
+    let row_h = (rect.h - 32.) / rows as f32;
+    for (index, quote) in quotes.iter().take(columns * rows).enumerate() {
+        let x = rect.x + 24. + (index % columns) as f32 * width;
+        let y = rect.y + 16. + (index / columns) as f32 * row_h;
+        let line = y + (row_h - if tall { 52. } else { 26. }) / 2.;
+        let coin = text(21., 650, -0.01);
+        out.text(
+            quote.coin,
+            Rect::new(x, line, 70., 26.),
+            coin,
+            c(0xf5f5f5, 0.6),
+            false,
+        );
+        let value = price(quote.last, language);
+        let value_style = text(21., 550, -0.02);
+        let coin_width = assets.width(quote.coin, coin) + 10.;
+        out.text(
+            &value,
+            Rect::new(x + coin_width, line, width, 26.),
+            value_style,
+            WHITE,
+            false,
+        );
+        let change = format!(
+            "{}{:.1}%",
+            if quote.change >= 0. { "+" } else { "−" },
+            quote.change.abs()
         );
         out.text(
-            state.preferences.input_title(input),
-            Rect::new(rect.x + 93., rect.y + 24.3, 450., 28.8),
-            text(24., 500, -0.03),
+            change,
+            Rect::new(
+                x + coin_width + assets.width(&value, value_style) + 10.,
+                line + 2.,
+                90.,
+                24.,
+            ),
+            text(17.6, 550, 0.),
+            if quote.change >= 0. {
+                c(0x4ade80, 1.)
+            } else {
+                c(0xf87171, 1.)
+            },
+            false,
+        );
+        if tall {
+            out.text(
+                format!(
+                    "{} – {}",
+                    price(quote.low, language),
+                    price(quote.high, language)
+                ),
+                Rect::new(x, line + 30., width, 22.),
+                text(15., 400, 0.),
+                c(0xf5f5f5, 0.5),
+                false,
+            );
+        }
+    }
+}
+
+/// Portrait posters sized by the block's height, each with its title, season and date.
+fn premieres_block(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    theme: &crate::themes::Theme,
+    rect: Rect,
+    now: OffsetDateTime,
+) {
+    let language = state.preferences.language;
+    out.text(
+        language.t("premieresWidget"),
+        Rect::new(rect.x, rect.y, 1000., 31.),
+        text(23.2, 550, -0.035).leading(1.3),
+        WHITE,
+        false,
+    );
+    let premieres = &state.feeds.premieres;
+    if premieres.is_empty() {
+        let area = Rect::new(rect.x, rect.y + 46., rect.w, rect.h - 46.);
+        widget_card(out, theme, area);
+        out.text(
+            language.t(if state.feeds.premieres_failed {
+                "premieresUnavailable"
+            } else {
+                "premieresLoading"
+            }),
+            Rect::new(area.x + 24., area.y + area.h / 2. - 14., area.w - 48., 28.),
+            text(20., 450, -0.02),
+            c(0xf5f5f5, 0.62),
+            false,
+        );
+        return;
+    }
+    let height = rect.h - 46.;
+    let width = (height * 2. / 3.).round();
+    let gap = 18.;
+    let count = (((rect.w + gap) / (width + gap)).floor() as usize).max(1);
+    let radius = theme.radius.min(14.);
+    for (index, premiere) in premieres.iter().take(count).enumerate() {
+        let poster = Rect::new(
+            rect.x + index as f32 * (width + gap),
+            rect.y + 46.,
+            width,
+            height,
+        );
+        let focused = state.focus == Target::Poster(index) && !state.pointer;
+        out.shadow(poster, radius, if focused { 30. } else { 12. }, 8., 0.35);
+        out.draw.push(Draw::RoundedGradient(
+            poster,
+            radius,
+            c(0x3a4250, 1.),
+            c(0x161a22, 1.),
+        ));
+        if let Some(image) = premiere
+            .poster
+            .as_ref()
+            .and_then(|url| state.feeds.posters.get(url))
+        {
+            out.draw
+                .push(Draw::AppImage(image.clone(), poster, [1.; 4]));
+        }
+        // A dark band keeps the caption readable over any poster: up to two lines of title,
+        // then the season and date, shrunk to the poster's width.
+        let band = Rect::new(poster.x, poster.y + poster.h - 96., poster.w, 96.);
+        out.draw.push(Draw::RoundedGradient(
+            band,
+            0.,
+            c(0x05070a, 0.),
+            c(0x05070a, 0.92),
+        ));
+        let title = text(if poster.w < 160. { 14.4 } else { 16.8 }, 600, -0.01).leading(1.15);
+        let lines = assets.lines(&premiere.title, title, poster.w - 20.).min(2) as f32;
+        let info = language.format(
+            "seasonPremiere",
+            &[
+                ("season", &premiere.season.to_string()),
+                ("date", &short_date(&premiere.date, now, language)),
+            ],
+        );
+        let mut info_style = text(13.6, 450, 0.);
+        let info_width = assets.width(&info, info_style);
+        if info_width > poster.w - 20. {
+            info_style.size *= (poster.w - 20.) / info_width;
+        }
+        let info_y = poster.y + poster.h - 26.;
+        out.text(
+            &premiere.title,
+            Rect::new(
+                poster.x + 10.,
+                info_y - 4. - lines * title.size * 1.15,
+                poster.w - 20.,
+                lines * title.size * 1.15 + 2.,
+            ),
+            title,
             WHITE,
             false,
         );
         out.text(
-            input_status(input, name.is_some(), language),
-            Rect::new(rect.x + 93., rect.y + 58.7, 450., 20.),
-            text(13.12, 400, 0.).leading(1.5),
-            c(0xe8e8e8, 0.48),
+            info,
+            Rect::new(poster.x + 10., info_y, poster.w - 20., 18.),
+            info_style,
+            c(0xf5f5f5, 0.78),
             false,
         );
         if focused {
-            out.ring(rect, 18.4);
+            out.ring(poster, radius);
         }
-        out.control(Target::Input(input.id.clone()), rect, true);
+        out.control(Target::Poster(index), poster, true);
+    }
+}
+
+fn input_card(out: &mut Scene, state: &State, assets: &Assets, input: &Input, rect: Rect) {
+    let language = state.preferences.language;
+    let focused = state.focus == Target::Input(input.id.clone());
+    out.shadow(
+        rect,
+        18.4,
+        if focused { 34. } else { 4. },
+        if focused { 14. } else { 1. },
+        if focused { 0.4 } else { 0.01 },
+    );
+    out.draw.push(Draw::RoundedGradient(
+        rect,
+        18.4,
+        if focused {
+            c(0x30363c, 0.70)
+        } else {
+            c(0x20252b, 0.60)
+        },
+        if focused {
+            c(0x242a30, 0.65)
+        } else {
+            c(0x171c22, 0.55)
+        },
+    ));
+    out.border(
+        rect,
+        18.4,
+        1.,
+        c(0xffffff, if focused { 0.24 } else { 0.063 }),
+    );
+    let art = Rect::new(rect.x + 21., rect.y + (rect.h - 56.) / 2., 56., 56.);
+    out.draw.push(Draw::RoundedGradient(
+        art,
+        12.8,
+        c(0xd6d6d6, 0.24),
+        c(0xa0a0a0, 0.10),
+    ));
+    let name = state.preferences.input_name(input);
+    let icon = input_icon(input, name);
+    let size = if icon == "apple-tv" { 41.6 } else { 35.2 };
+    out.icon(
+        assets,
+        &format!("input-{icon}"),
+        Rect::new(
+            art.x + (56. - size) / 2.,
+            art.y + (56. - size) / 2.,
+            size,
+            size,
+        ),
+        c(0xdedede, 1.),
+    );
+    let top = (rect.h - (28.8 + 5.6 + 20.)) / 2.;
+    out.text(
+        state.preferences.input_title(input),
+        Rect::new(rect.x + 93., rect.y + top, rect.w - 114., 28.8),
+        text(24., 500, -0.03),
+        WHITE,
+        false,
+    );
+    out.text(
+        input_status(input, name.is_some(), language),
+        Rect::new(rect.x + 93., rect.y + top + 34.4, rect.w - 114., 20.),
+        text(13.12, 400, 0.).leading(1.5),
+        c(0xe8e8e8, 0.48),
+        false,
+    );
+    if focused {
+        out.ring(rect, 18.4);
     }
 }
 
@@ -1071,7 +1604,8 @@ struct WeatherSummary {
     parts: Vec<(String, TextStyle, Color, Rect)>,
 }
 type WeatherPart = (String, TextStyle, Color, f32, f32);
-fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
+fn weather_summary_layout(state: &State, assets: &Assets, width: f32) -> WeatherSummary {
+    let line = width - 37.6;
     let language = state.preferences.language;
     let base = text(23.2, 400, -0.025).leading(1.5);
     let mut parts = Vec::new();
@@ -1121,7 +1655,7 @@ fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
     let mut used = 0.;
     for (label, style, color) in parts {
         let measured_width = assets.width(&label, style);
-        let width = measured_width.min(1714.4);
+        let width = measured_width.min(line);
         // Use the same extra pixel as the rendered text rectangle. Counting
         // lines at the exact advance width can round into a phantom second
         // line even though the renderer displays the label on one line.
@@ -1132,7 +1666,7 @@ fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
             assets.lines(&label, style, text_width)
         };
         let height = lines as f32 * style.size * style.line_height;
-        if used > 0. && used + 11.2 + width > 1714.4 {
+        if used > 0. && used + 11.2 + width > line {
             rows.push(Vec::new());
             used = 0.;
         }
@@ -1146,7 +1680,7 @@ fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
     let mut right: f32 = 0.;
     for row in rows {
         let height = row.iter().map(|part| part.4).fold(34.8, f32::max);
-        let mut x = 121.6;
+        let mut x = 37.6;
         for (label, style, color, width, item_height) in row {
             positioned.push((
                 label,
@@ -1166,7 +1700,7 @@ fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
     }
     WeatherSummary {
         height: top - 11.2 + 1.6,
-        width: right - 84.,
+        width: right,
         icon,
         parts: positioned,
     }
@@ -1176,6 +1710,7 @@ fn weather_summary(
     state: &State,
     assets: &Assets,
     summary: WeatherSummary,
+    x: f32,
     y: f32,
 ) {
     let label_focus = summary.parts.first().map(|(_, style, _, rect)| {
@@ -1184,7 +1719,7 @@ fn weather_summary(
         // weather row, which also contains the location icon.
         let leading = style.size * (style.line_height - 1.).max(0.);
         Rect::new(
-            rect.x,
+            x + rect.x,
             y + rect.y + leading / 2.,
             rect.w,
             (rect.h - leading).max(style.size),
@@ -1193,20 +1728,20 @@ fn weather_summary(
     out.icon(
         assets,
         &summary.icon,
-        Rect::new(84., y + 5.8, 26.4, 26.4),
+        Rect::new(x, y + 5.8, 26.4, 26.4),
         c(0xdedede, 0.83),
     );
     for (label, style, color, rect) in summary.parts {
         out.text(
             label,
-            Rect::new(rect.x, rect.y + y, rect.w, rect.h),
+            Rect::new(x + rect.x, rect.y + y, rect.w, rect.h),
             style,
             color,
             false,
         );
     }
     if state.preferences.weather_location.is_none() {
-        let rect = Rect::new(84., y, summary.width, summary.height);
+        let rect = Rect::new(x, y, summary.width, summary.height);
         if state.focus == Target::WeatherConfigure
             && !state.pointer
             && let Some(label) = label_focus
@@ -1796,6 +2331,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Temperature) => language.t("temperature"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
+                Some(Subpage::Theme) => language.t("homeTheme"),
                 None => "",
             };
             let parent_width = assets.width(label, text(20.8, 550, -0.02)) + 2.;
@@ -1916,6 +2452,16 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     state.preferences.temperature_unit == Unit::Fahrenheit,
                 ),
             ],
+            Subpage::Theme => crate::themes::THEMES
+                .iter()
+                .map(|theme| {
+                    (
+                        language.t(theme.name_key),
+                        Some(language.t(theme.hint_key)),
+                        theme.id == state.preferences.home_theme,
+                    )
+                })
+                .collect(),
             Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames | Subpage::Clock => {
                 unreachable!()
             }
@@ -1955,6 +2501,20 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         if let Subpage::Input(id) = subpage {
             input_name_rows(out, state, assets, id, 164.8 + 3. * 102.7 + 16. - s);
         }
+        if *subpage == Subpage::Theme {
+            out.text(
+                language.t("homeThemeReplaces"),
+                Rect::new(
+                    660.,
+                    164.8 + crate::themes::THEMES.len() as f32 * 102.7 + 10. - s,
+                    1080.,
+                    24.,
+                ),
+                text(16., 400, 0.),
+                c(0xf5f5f5, 0.55),
+                false,
+            );
+        }
         if let Some(opened) = state.panel_started {
             out.fade(start, (opened.elapsed().as_secs_f32() / 0.15).min(1.), 1.);
         }
@@ -1986,6 +2546,13 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     } else {
                         state.preferences.greeting_name.as_str()
                     }),
+                    true,
+                ),
+                (
+                    9,
+                    "homeTheme",
+                    "sparkles",
+                    Some(language.t(crate::themes::theme(&state.preferences.home_theme).name_key)),
                     true,
                 ),
             ]
@@ -2400,10 +2967,39 @@ fn keycap(out: &mut Scene, label: &str, x: f32, y: f32, w: f32, small: bool) {
 fn footer(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let style = text(14.4, 400, 0.005);
+    let color = c(0xeeeeee, 0.37);
+    if let Some(edit) = &state.home_edit {
+        // Editing a Home block: arrows move or resize it, OK keeps, Back restores.
+        let mut x = 84.;
+        for (key, width, label) in [
+            (
+                "← → ↑ ↓",
+                70.,
+                language.t(if edit.resize {
+                    "blockResize"
+                } else {
+                    "blockMove"
+                }),
+            ),
+            ("OK", 27., language.t("done")),
+            ("Back", 39., language.t("cancel")),
+        ] {
+            keycap(out, key, x, 1030.4, width, false);
+            let label_x = x + width + 8.;
+            out.text(
+                label,
+                Rect::new(label_x, 1033., 300., 20.),
+                style,
+                color,
+                false,
+            );
+            x = label_x + assets.width(label, style) + 25.6;
+        }
+        return;
+    }
     if matches!(state.page, Page::Home | Page::Apps) && state.moving.is_none() {
         return;
     }
-    let color = c(0xeeeeee, 0.37);
     if state.moving.is_some() {
         keycap(out, "← →", 84., 1030.4, 42., false);
         out.text(
@@ -2875,4 +3471,60 @@ fn full_screen_fill(draw: &Draw) -> bool {
         Draw::RoundedGradient(rect, radius, ..) => whole(rect) && *radius <= 0.,
         _ => false,
     }
+}
+
+/// A modal list of actions: a title and rows that activate `target(index)`.
+fn menu(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    title: &str,
+    rows: &[String],
+    target: fn(usize) -> Target,
+) {
+    let panel = Rect::new(
+        680.,
+        540. - (120. + rows.len() as f32 * 76.8) / 2.,
+        560.,
+        120. + rows.len() as f32 * 76.8,
+    );
+    out.modal = Some(panel);
+    out.shadow(panel, 27.2, 120., 25., 0.47);
+    out.draw.push(Draw::RoundedGradient(
+        panel,
+        27.2,
+        c(0x34383b, 0.96),
+        c(0x24282d, 0.988),
+    ));
+    out.border(panel, 27.2, 1., c(0xffffff, 0.12));
+    out.text(
+        title,
+        Rect::new(717.8, panel.y + 34., 484.4, 42.),
+        text(32., 500, -0.04).leading(1.1),
+        WHITE,
+        false,
+    );
+    for (index, label) in rows.iter().enumerate() {
+        let rect = Rect::new(717.8, panel.y + 96. + index as f32 * 76.8, 484.4, 67.2);
+        let focused = state.focus == target(index);
+        out.shape(rect, 12., c(0xffffff, if focused { 0.07 } else { 0.016 }));
+        out.border(
+            rect,
+            12.,
+            if focused { 2. } else { 1. },
+            c(
+                if focused { 0xf0f0f0 } else { 0xffffff },
+                if focused { 0.95 } else { 0.05 },
+            ),
+        );
+        out.text(
+            label,
+            Rect::new(rect.x + 22., rect.y + 22., rect.w - 44., 25.),
+            text(17.6, 500, -0.015),
+            WHITE,
+            false,
+        );
+        out.control(target(index), rect, false);
+    }
+    let _ = assets;
 }

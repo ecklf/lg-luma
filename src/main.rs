@@ -8,7 +8,9 @@ mod branding;
 mod damage;
 mod diagnostics;
 mod egl_damage;
+mod feeds;
 mod font;
+mod home_grid;
 mod i18n;
 #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
 mod luna;
@@ -23,6 +25,7 @@ mod sdl_events;
 mod state;
 mod storage;
 mod text_rendering;
+mod themes;
 mod vector;
 mod view;
 mod weather;
@@ -329,6 +332,7 @@ fn effects(
                 });
             }
             Effect::Weather(command) => weather.send(command),
+            Effect::Notify(text) => state.notify(text),
         }
     }
     true
@@ -857,6 +861,10 @@ fn run() -> Result<(), String> {
     let mut pill = initial_nav.items[0].x;
     let mut pill_width = initial_nav.items[0].w;
     let mut last_frame = Instant::now();
+    // Home widgets' data: fetched only while their blocks are on a visible Home.
+    let feeds = feeds::Feeds::new();
+    let mut crypto_fetched: Option<Instant> = None;
+    let mut premieres_fetched: Option<Instant> = None;
     let mut last_minute = None;
     let mut frame = 0u64;
     let mut visible = true;
@@ -890,6 +898,51 @@ fn run() -> Result<(), String> {
         }
         state.tick();
         state.dirty |= assets.artwork.poll();
+        if visible && state.page == state::Page::Home {
+            let blocks = state.home_blocks();
+            let shown = |kind| blocks.iter().any(|b| b.kind == kind);
+            let due = |at: Option<Instant>, every: u64| {
+                at.is_none_or(|at| at.elapsed() >= Duration::from_secs(every))
+            };
+            if shown(home_grid::BlockKind::Crypto) && due(crypto_fetched, 300) {
+                crypto_fetched = Some(Instant::now());
+                feeds.send(feeds::FeedRequest::Crypto);
+            }
+            if shown(home_grid::BlockKind::Premieres) && due(premieres_fetched, 6 * 3600) {
+                premieres_fetched = Some(Instant::now());
+                feeds.send(feeds::FeedRequest::Premieres);
+            }
+        }
+        while let Ok(response) = feeds.receiver.try_recv() {
+            state.dirty = true;
+            match response {
+                feeds::FeedResponse::Crypto(Ok(quotes)) => {
+                    state.feeds.quotes = quotes;
+                    state.feeds.crypto_failed = false;
+                }
+                feeds::FeedResponse::Crypto(Err(error)) => {
+                    eprintln!("Luma crypto: {error}");
+                    state.feeds.crypto_failed = true;
+                }
+                feeds::FeedResponse::Premieres(Ok(premieres)) => {
+                    for url in premieres.iter().filter_map(|p| p.poster.as_ref()) {
+                        if !state.feeds.posters.contains_key(url) {
+                            feeds.send(feeds::FeedRequest::Poster(url.clone()));
+                        }
+                    }
+                    state.feeds.premieres = premieres;
+                    state.feeds.premieres_failed = false;
+                }
+                feeds::FeedResponse::Premieres(Err(error)) => {
+                    eprintln!("Luma premieres: {error}");
+                    state.feeds.premieres_failed = true;
+                }
+                feeds::FeedResponse::Poster(url, Some(image)) => {
+                    state.feeds.posters.insert(url, image);
+                }
+                feeds::FeedResponse::Poster(_, None) => {}
+            }
+        }
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
                 Response::Inventory(Ok((mut inventory, warning))) => {

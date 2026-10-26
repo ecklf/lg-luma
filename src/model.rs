@@ -115,6 +115,11 @@ pub struct Preferences {
     /// Applied at launch because MSAA is selected when SDL creates the GL window.
     #[serde(deserialize_with = "crate::text_rendering::deserialize")]
     pub text_rendering: crate::text_rendering::TextRendering,
+    #[serde(deserialize_with = "crate::home_grid::deserialize_layout")]
+    pub home_layout: Vec<crate::home_grid::Block>,
+    pub home_theme: String,
+    /// The app last chosen to watch a premiere in; offered first next time.
+    pub poster_app: String,
 }
 
 impl Default for Preferences {
@@ -136,6 +141,9 @@ impl Default for Preferences {
             temperature_unit: Unit::Celsius,
             language: Language::En,
             text_rendering: crate::text_rendering::TextRendering::default(),
+            home_layout: crate::home_grid::classic_layout(),
+            home_theme: "classic".into(),
+            poster_app: String::new(),
         }
     }
 }
