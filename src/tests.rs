@@ -1854,3 +1854,14 @@ fn inventory_success_resets_failures_and_later_failures_show_at_once() {
     assert!(!state.loading && state.error.is_some());
     assert!(!state.inventory.apps.is_empty());
 }
+
+#[test]
+fn lumas_virtual_input_is_hidden_from_its_own_input_row() {
+    let inputs = normalize_inputs(&json!([
+        {"appId":"com.ecklf.luma", "id":"LUMA", "label":"Luma"},
+        {"appId":"com.webos.app.hdmi1", "id":"HDMI_1", "port":1}
+    ]))
+    .unwrap();
+    assert_eq!(inputs.len(), 1);
+    assert_eq!(inputs[0].id, "com.webos.app.hdmi1");
+}

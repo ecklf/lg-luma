@@ -36,20 +36,20 @@ https://github.com/user-attachments/assets/0c3061bf-c158-417e-85a4-da3eb84ecf08
 > Luma should start on any TV running webOS 4 or newer. The following configurations have been
 > confirmed to work by the community. Home takeover support varies, as noted below:
 
-| TV        | Model identifier | webOS  | Takeover Support |
-| --------- | ---------------- | ------ | ---------------- |
-| LG C8     | `OLED??C8*`      | 4      | ❌               |
-| LG UM7450 | `UM74507LA`      | 4      | ❌               |
-| LG UN7100 | `49UN71006LB`    | 5      | ✅               |
-| LG C1     | `OLED48C1KNB`    | 6      | ✅               |
-| LG B2     | `OLED65B29LA`    | 24     | ✅               |
-| LG C2     | `OLED42C2PSA`    | 25     | ✅               |
-| LG C2     | `OLED65C2PSA`    | 26     | ✅               |
-| LG C3     | `OLED65C31LA`    | 26     | ✅               |
-| LG C3     | `OLED65C36LC`    | 26     | ✅               |
-| LG C4     | `OLED42C4*`      | 25     | —                |
-| LG C5     | `OLED55C57LA`    | 26     | ✅               |
-| LG G3     | `OLED??G3*`      | 25     | —                |
+| TV        | Model identifier | webOS | Takeover Support |
+| --------- | ---------------- | ----- | ---------------- |
+| LG C8     | `OLED??C8*`      | 4     | ❌               |
+| LG UM7450 | `UM74507LA`      | 4     | ❌               |
+| LG UN7100 | `49UN71006LB`    | 5     | ✅               |
+| LG C1     | `OLED48C1KNB`    | 6     | ✅               |
+| LG B2     | `OLED65B29LA`    | 24    | ✅               |
+| LG C2     | `OLED42C2PSA`    | 25    | ✅               |
+| LG C2     | `OLED65C2PSA`    | 26    | ✅               |
+| LG C3     | `OLED65C31LA`    | 26    | ✅               |
+| LG C3     | `OLED65C36LC`    | 26    | ✅               |
+| LG C4     | `OLED42C4*`      | 25    | —                |
+| LG C5     | `OLED55C57LA`    | 26    | ✅               |
+| LG G3     | `OLED??G3*`      | 25    | —                |
 
 > [!NOTE]
 > Model identifiers containing wildcards are inferred: `??` is an unknown screen size and `*` is an
@@ -248,3 +248,18 @@ There is no browser geolocation, IP-based location lookup, telemetry or runtime 
 Luma is licensed under MIT.
 
 Luma is not affiliated with LG, Apple, or any other brands shown in its UI.
+
+### Optional TV input
+
+After installing this package, run `node /media/developer/apps/usr/palm/applications/com.ecklf.luma/tv-input.cjs enable`
+as root (use `/media/cryptofs/apps/usr/palm/applications/com.ecklf.luma` for Homebrew installs).
+The helper verifies that LG actually lists Luma, and undoes registration if it does not.
+Use `status` to inspect it or `disable` to remove it. This is separate from Home takeover and
+never changes Home Auto Launch, HDMI selection, or the power-on preference automatically.
+
+Select Luma from LG's input picker and use the TV's last-input startup option where available.
+Whether the firmware restores a virtual input after standby or a cold boot needs device testing;
+registration success alone does not prove startup support. Luma is hidden from its own input row.
+Thanks to phranklins in [#79](https://github.com/ecklf/lg-luma/issues/79#issuecomment-6416333882)
+and [Hearth](https://github.com/rudra-avatar/Hearth/blob/b9f0a1c8240303b7cd52fdc820e2f840ac6d3a0e/src/lib/tvinput.ts)
+for the suggestion and API reference.
