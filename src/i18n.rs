@@ -578,4 +578,17 @@ mod tests {
             assert_eq!(Language::Fr.date(now), expected);
         }
     }
+
+    #[test]
+    fn vietnamese_dates_cover_leap_days_and_weekend_names() {
+        for (date, expected) in [
+            ("2024-02-29T00:05:00+07:00", "THỨ NĂM, 29 THÁNG 2"),
+            ("2026-10-24T12:00:00+07:00", "THỨ BẢY, 24 THÁNG 10"),
+            ("2026-11-01T20:41:00+07:00", "CHỦ NHẬT, 1 THÁNG 11"),
+        ] {
+            let now = OffsetDateTime::parse(date, &time::format_description::well_known::Rfc3339)
+                .unwrap();
+            assert_eq!(Language::Vi.date(now), expected);
+        }
+    }
 }
