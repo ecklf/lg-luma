@@ -74,7 +74,8 @@ impl Source {
 pub struct Artwork {
     pub key: String,
     pub pixels: RgbaImage,
-    pub color: [u8; 3],
+    /// The card behind the icon: top and bottom of a vertical gradient (equal when flat).
+    pub backdrop: [[u8; 3]; 2],
 }
 
 fn read_bounded(path: &Path, limit: usize) -> Option<Vec<u8>> {
@@ -124,18 +125,79 @@ fn decode(bytes: &[u8]) -> Option<Artwork> {
     limits.max_alloc = Some(32 * 1024 * 1024);
     reader.limits(limits);
     let image = reader.decode().ok()?;
-    let pixels = image.thumbnail(256, 256).into_rgba8();
-    let color = background(&pixels);
+    let pixels = thumbnail(image.into_rgba8());
+    let backdrop = backdrop(&pixels);
     Some(Artwork {
         key: String::new(),
         pixels,
-        color,
+        backdrop,
     })
 }
 
-fn background(image: &RgbaImage) -> [u8; 3] {
+/// Scales with premultiplied alpha, so the colour of transparent pixels (often black) never
+/// darkens antialiased edges. Transparent texels then take their neighbours' colour, which
+/// the GPU's linear filter blends in at the logo's edge.
+fn thumbnail(mut image: RgbaImage) -> RgbaImage {
+    for pixel in image.pixels_mut() {
+        let alpha = pixel[3] as u32;
+        for channel in 0..3 {
+            pixel[channel] = ((pixel[channel] as u32 * alpha + 127) / 255) as u8;
+        }
+    }
+    let mut pixels = image::DynamicImage::ImageRgba8(image)
+        .thumbnail(256, 256)
+        .into_rgba8();
+    for pixel in pixels.pixels_mut() {
+        let alpha = pixel[3] as u32;
+        if alpha > 0 {
+            for channel in 0..3 {
+                pixel[channel] = ((pixel[channel] as u32 * 255 + alpha / 2) / alpha).min(255) as u8;
+            }
+        }
+    }
+    bleed(&mut pixels, 6);
+    pixels
+}
+
+/// Gives fully transparent pixels the average colour of coloured neighbours, `passes` deep.
+fn bleed(pixels: &mut RgbaImage, passes: usize) {
+    let (width, height) = pixels.dimensions();
+    let mut coloured: Vec<bool> = pixels.pixels().map(|pixel| pixel[3] > 0).collect();
+    for _ in 0..passes {
+        let source = pixels.clone();
+        let known = coloured.clone();
+        for y in 0..height {
+            for x in 0..width {
+                if known[(y * width + x) as usize] {
+                    continue;
+                }
+                let (mut count, mut sum) = (0, [0u32; 3]);
+                for ny in y.saturating_sub(1)..(y + 2).min(height) {
+                    for nx in x.saturating_sub(1)..(x + 2).min(width) {
+                        if known[(ny * width + nx) as usize] {
+                            let pixel = source.get_pixel(nx, ny);
+                            count += 1;
+                            for channel in 0..3 {
+                                sum[channel] += pixel[channel] as u32;
+                            }
+                        }
+                    }
+                }
+                if count > 0 {
+                    let pixel = pixels.get_pixel_mut(x, y);
+                    for channel in 0..3 {
+                        pixel[channel] = (sum[channel] / count) as u8;
+                    }
+                    coloured[(y * width + x) as usize] = true;
+                }
+            }
+        }
+    }
+}
+
+fn backdrop(image: &RgbaImage) -> [[u8; 3]; 2] {
     // Match the icon's opaque edges rather than letting its central logo choose
-    // the card colour. Transparent artwork gets a neutral dark background, even
+    // the card colour. Transparent artwork gets a gradient of its own instead, even
     // when its logo reaches into the edge band: those few opaque pixels would
     // otherwise fill the card with the logo's own colour and hide it.
     let sample = image::imageops::resize(image, 48, 48, image::imageops::FilterType::Triangle);
@@ -159,13 +221,129 @@ fn background(image: &RgbaImage) -> [u8; 3] {
         }
     }
     if opaque * 2 < edge {
-        return [20; 3];
+        return logo_backdrop(image);
     }
     bins.into_iter()
         .max_by_key(|(key, (count, _))| (*count, *key))
-        .map_or([20; 3], |(_, (count, sum))| {
-            sum.map(|s| ((s + count / 2) / count) as u8)
-        })
+        .map_or_else(
+            || logo_backdrop(image),
+            |(_, (count, sum))| {
+                let rgb = sum.map(|s| ((s + count / 2) / count) as u8);
+                [rgb, rgb]
+            },
+        )
+}
+
+/// Transparent artwork: a gradient in the logo's dominant hue, light behind a dark logo and
+/// dark behind a light one, with at least 3:1 contrast against the logo's average luminance.
+/// Logos without a clear hue get a neutral slate.
+fn logo_backdrop(image: &RgbaImage) -> [[u8; 3]; 2] {
+    let (mut weight, mut luminance_sum, mut saturated_weight, mut saturation_sum) =
+        (0., 0., 0., 0.);
+    let mut hues = [(0f32, 0f32, 0f32); 24];
+    for pixel in image.pixels() {
+        let alpha = pixel[3] as f32 / 255.;
+        if alpha < 0.25 {
+            continue;
+        }
+        let rgb = [pixel[0], pixel[1], pixel[2]];
+        weight += alpha;
+        luminance_sum += alpha * luminance(rgb);
+        let (hue, saturation, value) = hsv(rgb);
+        if saturation >= 0.3 && value >= 0.2 {
+            let bin = &mut hues[(hue / 15.) as usize % 24];
+            let strength = alpha * saturation;
+            bin.0 += strength;
+            bin.1 += strength * hue.to_radians().cos();
+            bin.2 += strength * hue.to_radians().sin();
+            saturated_weight += alpha;
+            saturation_sum += alpha * saturation;
+        }
+    }
+    let logo = if weight > 0. {
+        luminance_sum / weight
+    } else {
+        1.
+    };
+    let (hue, saturation) = if weight > 0. && saturated_weight >= 0.15 * weight {
+        let (_, x, y) = hues
+            .into_iter()
+            .max_by(|a, b| a.0.total_cmp(&b.0))
+            .unwrap_or_default();
+        (
+            y.atan2(x).to_degrees().rem_euclid(360.),
+            (saturation_sum / saturated_weight).min(0.6),
+        )
+    } else {
+        (220., 0.12)
+    };
+    let gradient = |top: f32, saturation: f32| {
+        // Move both stops away from the logo's lightness until each has enough contrast.
+        let step = if top > 0.5 { 0.02 } else { -0.02 };
+        let mut top = top;
+        loop {
+            let stops = [hsl(hue, saturation, top), hsl(hue, saturation, top - 0.1)];
+            let worst = stops
+                .iter()
+                .map(|stop| contrast(luminance(*stop), logo))
+                .fold(f32::MAX, f32::min);
+            if worst >= 3. || !(0.14..=0.98).contains(&(top + step)) {
+                return (worst, stops);
+            }
+            top += step;
+        }
+    };
+    let light = gradient(0.9, saturation * 0.8);
+    let dark = gradient(0.27, saturation);
+    if light.0 > dark.0 { light.1 } else { dark.1 }
+}
+
+fn luminance(rgb: [u8; 3]) -> f32 {
+    let linear = |c: u8| {
+        let c = c as f32 / 255.;
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * linear(rgb[0]) + 0.7152 * linear(rgb[1]) + 0.0722 * linear(rgb[2])
+}
+
+fn contrast(a: f32, b: f32) -> f32 {
+    (a.max(b) + 0.05) / (a.min(b) + 0.05)
+}
+
+/// Hue in degrees, saturation and value in 0..1.
+fn hsv(rgb: [u8; 3]) -> (f32, f32, f32) {
+    let [r, g, b] = rgb.map(|c| c as f32 / 255.);
+    let max = r.max(g).max(b);
+    let range = max - r.min(g).min(b);
+    let hue = if range == 0. {
+        0.
+    } else if max == r {
+        60. * ((g - b) / range).rem_euclid(6.)
+    } else if max == g {
+        60. * ((b - r) / range + 2.)
+    } else {
+        60. * ((r - g) / range + 4.)
+    };
+    (hue, if max == 0. { 0. } else { range / max }, max)
+}
+
+fn hsl(hue: f32, saturation: f32, lightness: f32) -> [u8; 3] {
+    let chroma = (1. - (2. * lightness - 1.).abs()) * saturation;
+    let x = chroma * (1. - ((hue / 60.).rem_euclid(2.) - 1.).abs());
+    let (r, g, b) = match (hue / 60.) as u32 {
+        0 => (chroma, x, 0.),
+        1 => (x, chroma, 0.),
+        2 => (0., chroma, x),
+        3 => (0., x, chroma),
+        4 => (x, 0., chroma),
+        _ => (chroma, 0., x),
+    };
+    let m = lightness - chroma / 2.;
+    [r, g, b].map(|c| ((c + m).clamp(0., 1.) * 255.).round() as u8)
 }
 
 fn load(source: &Source) -> Option<Artwork> {
