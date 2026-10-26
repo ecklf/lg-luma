@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const script = await fs.readFile(new URL('../tv/home-filter.js', import.meta.url), 'utf8');
 
 // LG's compositor filter context: luna calls, a timer, and subscriptions the test drives.
-function compositor({ window = false } = {}) {
+function compositor({ window = false, inputOverride = true } = {}) {
   const calls = [];
   const splashes = [];
   const subscriptions = {};
@@ -39,6 +39,7 @@ function compositor({ window = false } = {}) {
     },
   });
   vm.runInContext(script, context);
+  context.lumaHomeInputOverride = inputOverride;
   context.init();
   const emit = (method, value) => subscriptions[method](JSON.stringify(value));
   return {
@@ -203,4 +204,12 @@ test('the loading screen ends after 90 s at the latest', () => {
   tv.boot(false);
   tv.timers.find(([ms]) => ms === 90000)[1]();
   assert.equal(tv.shown(), 0);
+});
+
+test('ordinary Home takeover never overrides Back/Exit', () => {
+  const tv = compositor({ inputOverride: false });
+  tv.boot(true);
+  tv.lastInput('com.webos.app.hdmi2');
+  tv.front('netflix');
+  assert.deepEqual(tv.calls, []);
 });

@@ -4,7 +4,7 @@ STATE=/var/lib/luma-home
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd) || exit 1
 COMMAND=${1:-boot}
 case "$COMMAND" in
-  enable|disable|restore|status|apply|boot|early|pin|unpin) ;;
+  enable|disable|restore|status|apply|boot|early|pin|unpin|startup-home) ;;
   *) printf '%s\n' 'Usage: home.sh enable [APP_DIR] | disable | restore | status' >&2; exit 1 ;;
 esac
 [ "$(id -u)" = 0 ] || { printf '%s\n' 'Run as root.' >&2; exit 1; }
@@ -71,32 +71,18 @@ luna_setting() {
   /usr/bin/luna-send -n 1 -w 4000 "luna://com.webos.settingsservice/$1" "$2" </dev/null 2>/dev/null
 }
 pin_lastinput() {
+  [ -f "$STATE/startup-home" ] || return 0
   grep -q " $LASTINPUT " /proc/mounts && return 0
-  [ -f "$LASTINPUT" ] || return 1
-  sed 's/"physicalLastSourceAppId": *"[^"]*"/"physicalLastSourceAppId":"com.webos.app.home"/' \
-    "$LASTINPUT" >"$PINNED.new"
-  grep -q '"physicalLastSourceAppId":"com.webos.app.home"' "$PINNED.new" || { rm -f "$PINNED.new"; return 1; }
-  mv -f "$PINNED.new" "$PINNED" && chmod 444 "$PINNED" || return 1
+  [ -f "$LASTINPUT" ] && [ -f "$PINNED" ] || return 1
   cmp -s "$PINNED" "$LASTINPUT" || cat "$PINNED" >"$LASTINPUT" || return 1
   if ! { mount --bind "$PINNED" "$LASTINPUT" && mount -o remount,ro,bind "$LASTINPUT"; }; then
     umount "$LASTINPUT" 2>/dev/null
     return 1
   fi
 }
-unpin_lastinput() {
-  if grep -q " $LASTINPUT " /proc/mounts; then umount "$LASTINPUT" || umount -l "$LASTINPUT"; fi
-  # The input EIM recorded ("appId") again, so the next cold boot is LG's.
-  grep -q '"physicalLastSourceAppId": *"com.webos.app.home"' "$LASTINPUT" 2>/dev/null &&
-    sed -i 's/\("appId": *"\([^"]*\)".*"physicalLastSourceAppId": *"\)com\.webos\.app\.home"/\1\2"/' "$LASTINPUT"
-  # The key filter pointed lastInputApp (Back/Exit) at Home.
-  luna_setting getSystemSettings '{"category":"general","keys":["lastInputApp"]}' |
-    grep -q '"lastInputApp": *"com.webos.app.home"' &&
-    luna_setting setSystemSettings '{"category":"general","settings":{"lastInputApp":"com.webos.app.livetv"}}' >/dev/null
-  return 0
-}
-# Called by home.cjs, which holds the lock already.
+# The boot fast path uses the JSON prepared when the owner opts in; restoration uses Node's
+# JSON parser below, never a key-order-dependent text substitution.
 if [ "$COMMAND" = pin ]; then pin_lastinput; exit; fi
-if [ "$COMMAND" = unpin ]; then unpin_lastinput; exit; fi
 if [ "$COMMAND" = early ]; then
   # From luma-early, ~18 s into a cold boot (see src/bin/luma-early.rs): the executable method's
   # mount without Node, which would cost seconds under boot load. Opens nothing; the key filter

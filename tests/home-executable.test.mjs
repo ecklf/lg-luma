@@ -261,3 +261,70 @@ test('disable restores LG Home and removes the hook and helper even when LS2 cle
   assert.ok(removed.includes('/var/lib/webosbrew/init.d/64-luma-home'));
   assert.equal(removed.filter((file) => file.startsWith('/var/luna-service2/')).length, 4);
 });
+
+test('restoration parses arbitrary JSON and restores HDMI or Live TV only while owned', () => {
+  for (const input of ['com.webos.app.hdmi2', 'com.webos.app.livetv']) {
+    for (const file of [
+      JSON.stringify({ appId: input, physicalLastSourceAppId: 'com.webos.app.home' }),
+      JSON.stringify({ physicalLastSourceAppId: 'com.webos.app.home', appId: input }, null, 2),
+    ]) {
+      const context = load();
+      const files = new Map([
+        ['/var/lib/eim/lastinput', file],
+        ['/var/lib/luma-home/lastinput', file],
+        ['/var/lib/luma-home/startup-home', 'enabled'],
+        [
+          '/var/lib/luma-home/input-policy.json',
+          JSON.stringify({ lastinput: { physicalLastSourceAppId: input }, lastInputApp: input }),
+        ],
+      ]);
+      let setting = 'com.webos.app.home';
+      Object.assign(context, {
+        fs: {
+          existsSync: (f) => files.has(f),
+          writeFileSync: (f, d) => files.set(f, d),
+          unlinkSync: (f) => files.delete(f),
+        },
+        read: (f) => files.get(f),
+        inputMounted: () => false,
+        inputSettings(method, payload) {
+          if (method === 'setSystemSettings') setting = payload.settings.lastInputApp;
+          return { settings: { lastInputApp: setting } };
+        },
+      });
+      context.restoreInputPolicy();
+      assert.equal(JSON.parse(files.get('/var/lib/eim/lastinput')).physicalLastSourceAppId, input);
+      assert.equal(setting, input);
+      assert.ok(!files.has('/var/lib/luma-home/input-policy.json'));
+      // An intentional change by the owner/another integration wins.
+      files.set('/var/lib/luma-home/lastinput', file);
+      files.set(
+        '/var/lib/eim/lastinput',
+        JSON.stringify({ appId: input, physicalLastSourceAppId: 'com.webos.app.hdmi3' }),
+      );
+      setting = 'com.webos.app.hdmi3';
+      context.restoreInputPolicy();
+      assert.equal(setting, 'com.webos.app.hdmi3');
+      assert.equal(
+        JSON.parse(files.get('/var/lib/eim/lastinput')).physicalLastSourceAppId,
+        setting,
+      );
+    }
+  }
+});
+
+test('input restoration failure still detaches Home so recovery can be retried', () => {
+  const { context, calls, state } = tv({
+    root: '/developer/apps/usr/palm/applications/com.ecklf.luma/luma',
+    same: true,
+  });
+  context.lastInput = () => {
+    throw new Error('settings unavailable');
+  };
+  assert.throws(
+    () => context.restoreExecutable({ method: 'executable', appDir }),
+    /settings unavailable/,
+  );
+  assert.equal(state.root, null);
+  assert.ok(calls.includes('stop'));
+});

@@ -12,6 +12,7 @@ var lumaHomeTries = 0;
 var lumaHomeFront = '';
 var lumaHomeLaunches = 0;
 var lumaHomeShown = false; // Home came to the front after a launch from here
+var lumaHomeInputOverride = false; // Changed only by explicit startup-home opt-in.
 var lumaHomeLastInput = null; // general/lastInputApp, null until the settings service answers
 
 function lumaHomeParse(payload) {
@@ -96,6 +97,7 @@ function lumaHomeIsInput(id) {
 // Back returns to Luma; LG's input apps set it to themselves again when chosen.
 function lumaHomePinInput() {
   if (
+    !lumaHomeInputOverride ||
     lumaHomeLastInput === null ||
     lumaHomeLastInput === 'com.webos.app.home' ||
     !lumaHomeFront ||

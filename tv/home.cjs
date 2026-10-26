@@ -61,11 +61,120 @@ function run(file, args) {
 // lastinput pinning lives in home.sh, which also runs it early in a cold boot without Node.
 // Best effort: without it LG still opens Live TV first at power-on.
 function lastInput(command) {
+  if (command === 'unpin') return restoreInputPolicy();
   try {
     execFileSync('/bin/sh', [STATE + '/home.sh', command], { timeout: 20000, stdio: 'ignore' });
   } catch (error) {
     console.error('Luma Home: lastinput ' + command + ' failed: ' + error.message);
   }
+}
+
+// This policy is separately opt-in: ordinary Home takeover leaves TV inputs unchanged.
+var INPUT_FILE = '/var/lib/eim/lastinput';
+var INPUT_SAVED = STATE + '/input-policy.json';
+var INPUT_FLAG = STATE + '/startup-home';
+function validInput(id) {
+  return (
+    typeof id === 'string' &&
+    /^com\.webos\.app\.(livetv|hdmi[0-9]+|externalinput\.[a-zA-Z0-9_.-]+)$/.test(id)
+  );
+}
+function inputSettings(method, payload) {
+  var reply = JSON.parse(
+    run('/usr/bin/luna-send', [
+      '-n',
+      '1',
+      '-w',
+      '4000',
+      'luna://com.webos.settingsservice/' + method,
+      JSON.stringify(payload)
+    ])
+  );
+  if (!reply.returnValue) throw new Error('Input settings: ' + JSON.stringify(reply));
+  return reply;
+}
+function inputMounted() {
+  return read('/proc/mounts')
+    .split('\n')
+    .some(function (line) {
+      return line.split(' ')[1] === INPUT_FILE;
+    });
+}
+function restoreInputPolicy() {
+  if (!fs.existsSync(INPUT_SAVED) && !fs.existsSync(STATE + '/lastinput')) return;
+  // Retain recovery data if any step fails, so disable can be retried.
+  if (inputMounted()) run('/bin/umount', [INPUT_FILE]);
+  var current = json(INPUT_FILE);
+  var saved = fs.existsSync(INPUT_SAVED) ? json(INPUT_SAVED) : null;
+  // Migration from the original draft: its unmodified appId is the only available prior input.
+  var fallback = validInput(current.appId) ? current.appId : null;
+  if (current.physicalLastSourceAppId === HOME) {
+    var previous = saved && saved.lastinput;
+    var input =
+      previous && validInput(previous.physicalLastSourceAppId)
+        ? previous.physicalLastSourceAppId
+        : fallback;
+    if (!input) throw new Error('Cannot identify the previous TV input; recovery data retained');
+    current.physicalLastSourceAppId = input;
+    // Write in place: EIM owns this inode and may keep it open.
+    fs.writeFileSync(INPUT_FILE, JSON.stringify(current));
+  }
+  var settings = inputSettings('getSystemSettings', {
+    category: 'general',
+    keys: ['lastInputApp']
+  });
+  if (settings.settings.lastInputApp === HOME) {
+    var last = saved && validInput(saved.lastInputApp) ? saved.lastInputApp : fallback;
+    if (!last) throw new Error('Cannot identify the previous Back/Exit input');
+    inputSettings('setSystemSettings', { category: 'general', settings: { lastInputApp: last } });
+  }
+  [INPUT_FLAG, INPUT_SAVED, STATE + '/lastinput'].forEach(function (file) {
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+  });
+}
+function writeInputFilter() {
+  var file = STATE + '/home-filter.js';
+  var source = read(file).replace(
+    /var lumaHomeInputOverride = (true|false);/,
+    'var lumaHomeInputOverride = ' + fs.existsSync(INPUT_FLAG) + ';'
+  );
+  fs.writeFileSync(file + '.new', source, { mode: 420 });
+  fs.renameSync(file + '.new', file);
+  setKeyFilters(true);
+}
+function configureInputPolicy(config, enabled) {
+  if (!config.enabled || config.method !== 'executable')
+    throw new Error('Requires executable Home takeover');
+  if (enabled) {
+    if (!fs.existsSync(INPUT_SAVED)) {
+      var original = json(INPUT_FILE);
+      var setting = inputSettings('getSystemSettings', {
+        category: 'general',
+        keys: ['lastInputApp']
+      });
+      if (
+        !validInput(original.physicalLastSourceAppId) ||
+        !validInput(setting.settings.lastInputApp)
+      )
+        throw new Error('Select a TV input before enabling startup-home');
+      writeJson(INPUT_SAVED, { lastinput: original, lastInputApp: setting.settings.lastInputApp });
+    }
+    var pinned = json(INPUT_SAVED).lastinput;
+    pinned.physicalLastSourceAppId = HOME;
+    writeJson(STATE + '/lastinput', pinned);
+    fs.writeFileSync(INPUT_FLAG, 'enabled\n', { mode: 420 });
+    // Unlike the boot fallback, an explicit opt-in must report a failed mount.
+    execFileSync('/bin/sh', [STATE + '/home.sh', 'pin'], { timeout: 20000, stdio: 'pipe' });
+  } else {
+    // Stop the setting writer before restoring its saved value.
+    if (fs.existsSync(INPUT_FLAG)) fs.unlinkSync(INPUT_FLAG);
+    try {
+      writeInputFilter();
+    } finally {
+      restoreInputPolicy();
+    }
+  }
+  writeInputFilter();
 }
 
 function pause() {
@@ -363,11 +472,17 @@ function restoreExecutable(config) {
   var root = exeMount();
   if (root && !exeOwned(root)) throw new Error('Another integration is mounted over LG Home');
   if (fs.existsSync(MARKER)) fs.unlinkSync(MARKER);
-  lastInput('unpin');
+  var inputError = null;
+  try {
+    lastInput('unpin');
+  } catch (error) {
+    inputError = error;
+  }
   if (root) unmountExe();
   stopHome(config.appDir);
   // LG Home on webOS 5/6 is an overlay above the current app, not a foreground app.
   if (wasHome) launchHome();
+  if (inputError) throw inputError;
 }
 
 function applyExecutable(config, open) {
@@ -483,6 +598,11 @@ function installScripts() {
   ['home.sh', 'home.cjs', 'home-filter.js', 'boot-logo.png'].forEach(function (name) {
     var target = STATE + '/' + name;
     var data = fs.readFileSync(path.join(__dirname, name));
+    if (name === 'home-filter.js')
+      data = String(data).replace(
+        'var lumaHomeInputOverride = false;',
+        'var lumaHomeInputOverride = ' + fs.existsSync(INPUT_FLAG) + ';'
+      );
     fs.writeFileSync(target + '.new', data, { mode: name === 'home.sh' ? 493 : 420 });
     fs.renameSync(target + '.new', target);
   });
@@ -597,8 +717,11 @@ function disable(config) {
   config.enabled = false;
   writeJson(CONFIG, config);
   if (config.method === 'executable') removeEarly();
-  restore(config);
-  if (hookOwned()) fs.unlinkSync(HOOK);
+  try {
+    restore(config);
+  } finally {
+    if (hookOwned()) fs.unlinkSync(HOOK);
+  }
 }
 
 function installHook() {
@@ -672,6 +795,12 @@ try {
   var command = process.argv[2];
   if (command === 'enable') {
     install(process.argv[3]);
+  } else if (command === 'startup-home') {
+    if (process.argv[3] !== 'on' && process.argv[3] !== 'off')
+      throw new Error('Usage: home.sh startup-home on|off');
+    configureInputPolicy(json(CONFIG), process.argv[3] === 'on');
+  } else if (command === 'unpin') {
+    restoreInputPolicy();
   } else if (command === 'status') {
     var saved = fs.existsSync(CONFIG) ? json(CONFIG) : null;
     console.log(
