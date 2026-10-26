@@ -262,16 +262,67 @@ use serde_json::Value;
 use std::{
     fs,
     io::{Read, Write},
+    path::{Path, PathBuf},
     sync::mpsc::{self, Receiver, Sender},
     thread,
     time::Duration,
+    time::Instant,
 };
 
 pub const FEED: &str = "https://github.com/ecklf/lg-luma/releases/latest/download/repo.json";
 pub const CURRENT: &str = env!("CARGO_PKG_VERSION");
 /// Only IPKs from this project's own release assets are installed.
 const RELEASES: &str = "https://github.com/ecklf/lg-luma/releases/download/";
-pub const DOWNLOAD: &str = "/tmp/luma-update.ipk";
+/// A fresh directory per attempt; never truncate a predictable path in shared /tmp.
+fn download_directory() -> Result<(String, PathBuf), String> {
+    use ring::rand::SecureRandom;
+    use std::os::unix::fs::DirBuilderExt;
+    let mut random = [0u8; 16];
+    ring::rand::SystemRandom::new()
+        .fill(&mut random)
+        .map_err(|_| "No secure randomness")?;
+    let attempt: String = random.iter().map(|b| format!("{b:02x}")).collect();
+    let directory = std::env::temp_dir().join(format!("luma-update-{attempt}"));
+    fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&directory)
+        .map_err(|e| e.to_string())?;
+    Ok((attempt, directory))
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub struct InstallResult {
+    pub attempt: String,
+    pub state: String,
+    pub message: String,
+}
+
+fn terminal(result: &InstallResult) -> Option<Result<(), String>> {
+    match result.state.as_str() {
+        "success" => Some(Ok(())),
+        "failed" => Some(Err(result.message.clone())),
+        _ => None,
+    }
+}
+
+fn wait_for_install(attempt: &str) -> Result<(), String> {
+    let deadline = Instant::now() + Duration::from_secs(330);
+    loop {
+        if let Ok(Some(result)) = crate::platform::update_result_for(Some(attempt))
+            && result.attempt == attempt
+            && let Some(done) = terminal(&result)
+        {
+            return done;
+        }
+        if Instant::now() >= deadline {
+            return Err(
+                "The update did not finish in time. Check /var/lib/luma-update before retrying."
+                    .into(),
+            );
+        }
+        thread::sleep(Duration::from_secs(2));
+    }
+}
 const FEED_LIMIT: u64 = 256 * 1024;
 const MAX_IPK: u64 = 96 * 1024 * 1024;
 
@@ -343,6 +394,7 @@ pub fn parse_feed(feed: &Value) -> Result<Release, String> {
 }
 
 pub enum Request {
+    Recover,
     Check,
     Download(Release),
 }
@@ -350,6 +402,7 @@ pub enum Request {
 pub enum Response {
     Checked(Result<Option<Release>, String>),
     Progress(u8),
+    Finished(Result<(), String>),
     /// Downloaded, verified and handed to the installer: the version being installed.
     Installing(Result<String, String>),
 }
@@ -391,6 +444,7 @@ fn download(
     agent: &ureq::Agent,
     release: &Release,
     progress: &Sender<Response>,
+    destination: &Path,
 ) -> Result<(), String> {
     let mut response = agent
         .get(&release.url)
@@ -398,7 +452,11 @@ fn download(
         .call()
         .map_err(|_| "The update could not be downloaded")?;
     let mut reader = response.body_mut().as_reader().take(release.size + 1);
-    let mut file = fs::File::create(DOWNLOAD).map_err(|e| e.to_string())?;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(destination)
+        .map_err(|e| e.to_string())?;
     let mut digest = ring::digest::Context::new(&ring::digest::SHA256);
     let (mut buffer, mut total, mut reported) = (vec![0; 64 * 1024], 0u64, 0u8);
     loop {
@@ -447,13 +505,49 @@ impl Worker {
                 for request in incoming {
                     let response = match request {
                         Request::Check => Response::Checked(check(&agent)),
-                        Request::Download(release) => {
-                            let result = download(&agent, &release, &responses)
-                                .and_then(|()| crate::platform::start_update(&release));
-                            if result.is_err() {
-                                let _ = fs::remove_file(DOWNLOAD);
+                        Request::Recover => {
+                            // A package install can close Luma. Surface a persisted failure on
+                            // its next launch, or continue watching the still-running attempt.
+                            match crate::platform::update_result_for(None) {
+                                Ok(Some(result)) => {
+                                    if let Some(done) = terminal(&result) {
+                                        if done.is_ok() {
+                                            continue;
+                                        }
+                                        Response::Finished(done)
+                                    } else {
+                                        Response::Finished(wait_for_install(&result.attempt))
+                                    }
+                                }
+                                _ => continue,
                             }
-                            Response::Installing(result.map(|()| release.version))
+                        }
+                        Request::Download(release) => {
+                            let result = (|| {
+                                let (attempt, directory) = download_directory()?;
+                                let ipk = directory.join("package.ipk");
+                                if let Err(error) = download(&agent, &release, &responses, &ipk) {
+                                    let _ = fs::remove_dir_all(&directory);
+                                    return Err(error);
+                                }
+                                // A timed-out exec may already have started the unit. Never
+                                // unlink its input on that ambiguous handoff; observe the result.
+                                let handoff =
+                                    crate::platform::start_update(&release, &attempt, &ipk);
+                                if let Err(error) = &handoff {
+                                    eprintln!("Update handoff: {error}");
+                                }
+                                let _ = responses
+                                    .send(Response::Installing(Ok(release.version.clone())));
+                                let done = wait_for_install(&attempt);
+                                // The root helper has its own verified copy. On timeout leave
+                                // the source intact in case a delayed handoff is still reading it.
+                                if done.as_ref().err().is_none_or(|e| !e.contains("in time")) {
+                                    let _ = fs::remove_dir_all(&directory);
+                                }
+                                done
+                            })();
+                            Response::Finished(result)
                         }
                     };
                     if responses.send(response).is_err() {
@@ -462,6 +556,7 @@ impl Worker {
                 }
             })
             .expect("spawn the update worker");
+        let _ = requests.send(Request::Recover);
         Self { requests, receiver }
     }
 
@@ -483,6 +578,36 @@ mod tests {
 
     const URL: &str =
         "https://github.com/ecklf/lg-luma/releases/download/v9.0.0/com.ecklf.luma_9.0.0_arm.ipk";
+
+    #[test]
+    fn attempt_paths_are_private_unique_and_results_are_terminal_only_when_finished() {
+        use std::os::unix::fs::PermissionsExt;
+        let (a, first) = download_directory().unwrap();
+        let (b, second) = download_directory().unwrap();
+        assert_ne!(a, b);
+        assert_eq!(
+            fs::metadata(&first).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        for state in ["starting", "installing"] {
+            assert!(
+                terminal(&InstallResult {
+                    attempt: a.clone(),
+                    state: state.into(),
+                    message: "".into()
+                })
+                .is_none()
+            );
+        }
+        let failed = InstallResult {
+            attempt: a,
+            state: "failed".into(),
+            message: "disk full".into(),
+        };
+        assert_eq!(terminal(&failed), Some(Err("disk full".into())));
+        fs::remove_dir(first).unwrap();
+        fs::remove_dir(second).unwrap();
+    }
 
     #[test]
     fn versions_compare_numerically() {

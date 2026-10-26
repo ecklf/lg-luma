@@ -17,7 +17,7 @@
     "deploy": "pnpm run package && node tools/deploy.mjs",
     "test": "pnpm test:release && pnpm test:home && pnpm test:icons && pnpm test:wallpapers && pnpm test:tiles && cargo test --locked --workspace --all-features",
     "test:release": "node --test tests/release.test.mjs",
-    "test:home": "node --test tests/home-splash.test.mjs tests/home-executable.test.mjs tests/sync-splash.test.mjs",
+    "test:home": "node --test tests/self-update.test.mjs tests/home-splash.test.mjs tests/home-executable.test.mjs tests/sync-splash.test.mjs",
     "test:icons": "node --test tests/read-app-icon.test.mjs tests/brand-assets.test.mjs",
     "test:wallpapers": "node --test tests/wallpaper-upload.test.mjs",
     "test:tiles": "node --test tests/tile-editor.test.mjs",

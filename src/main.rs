@@ -1066,7 +1066,10 @@ fn run() -> Result<(), String> {
                     state.update = Status::Installing(version);
                     state.notify(state.preferences.language.t("updateRestart"));
                 }
-                Response::Checked(Err(error)) | Response::Installing(Err(error)) => {
+                Response::Finished(Ok(())) => state.update = Status::Latest,
+                Response::Finished(Err(error))
+                | Response::Checked(Err(error))
+                | Response::Installing(Err(error)) => {
                     eprintln!("Luma update: {error}");
                     state.update = Status::Failed(error);
                     state.notify(state.preferences.language.t("updateError"));
@@ -1142,6 +1145,7 @@ fn run() -> Result<(), String> {
                         &weather_service,
                         &wallpaper_service,
                         &webhook_service,
+                        &updates,
                     );
                 }
                 Response::Recent {

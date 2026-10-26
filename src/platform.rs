@@ -378,16 +378,22 @@ impl Platform {
 /// Hands a downloaded, verified update to `tv/self-update.sh`, run as root through Homebrew
 /// Channel's exec in its own systemd unit: exec ends its children when the call returns, and the
 /// install closes Luma.
-pub fn start_update(release: &crate::update::Release) -> Result<(), String> {
+pub fn start_update(
+    release: &crate::update::Release,
+    attempt: &str,
+    ipk: &std::path::Path,
+) -> Result<(), String> {
     let directory = install_dir()?;
     let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
     let command = format!(
-        "systemd-run --unit=luma-update --collect /bin/sh -c {} self-update {} {} {} {}",
+        "systemd-run --unit=luma-update-{} --collect /bin/sh -c {} self-update {} {} {} {} {}",
+        attempt,
         quote(include_str!("../tv/self-update.sh")),
-        quote(crate::update::DOWNLOAD),
+        quote(&ipk.to_string_lossy()),
         quote(&release.sha256),
         quote(&release.version),
         quote(&directory.to_string_lossy()),
+        quote(attempt),
     );
     let envelope = call(
         "luna://org.webosbrew.hbchannel.service/exec",
@@ -408,6 +414,36 @@ pub fn start_update(release: &crate::update::Release) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Read only the root-owned result; the caller matches its unguessable attempt ID.
+pub fn update_result_for(
+    attempt: Option<&str>,
+) -> Result<Option<crate::update::InstallResult>, String> {
+    let file = match attempt {
+        Some(id) if id.len() == 32 && id.bytes().all(|b| b.is_ascii_hexdigit()) => {
+            format!("result.{id}.json")
+        }
+        Some(_) => return Err("Invalid update attempt".into()),
+        None => "result.json".into(),
+    };
+    let envelope = call(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        json!({
+            "command": format!("cat /var/lib/luma-update/{file} 2>/dev/null || true")
+        }),
+    )?;
+    let output = envelope
+        .get("stdoutString")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim();
+    if output.is_empty() {
+        return Ok(None);
+    }
+    serde_json::from_str(output)
+        .map(Some)
+        .map_err(|e| format!("Invalid installer result: {e}"))
 }
 
 fn sync_splash(background: &str) -> Result<(), String> {
