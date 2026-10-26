@@ -51,8 +51,15 @@
           <button id="submit" type="submit">Save to TV</button>
         </div>
       </form>
+      <section id="success" class="success" aria-live="polite" hidden>
+        <span class="success-mark" aria-hidden="true">✓</span>
+        <h2>Success</h2>
+        <p>Your background <strong id="success-name"></strong> was uploaded to</p>
+        <code id="success-path"></code>
+        <button id="another" type="button">Add another one</button>
+      </section>
       <p id="status" role="status" aria-live="polite"></p>
-      <footer>
+      <footer id="storage-footer">
         <span>Stored on this TV at</span>
         <code id="storage-path">Finding storage location…</code>
       </footer>

@@ -712,6 +712,10 @@ fn serve(
                 "text/javascript; charset=utf-8",
                 include_bytes!("../assets/wallpaper-upload/crop.js"),
             ),
+            "storage.js" => (
+                "text/javascript; charset=utf-8",
+                include_bytes!("../assets/wallpaper-upload/storage.js"),
+            ),
             "luma-mark.svg" => ("image/svg+xml", include_bytes!("../assets/app-icon.svg")),
             _ => {
                 error_response(stream, "404 Not Found", "Not found")?;

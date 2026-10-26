@@ -1,4 +1,5 @@
 import { cleanName, cropRect, panPosition } from './crop.js';
+import { loadStoragePath } from './storage.js';
 
 const element = (id) => document.getElementById(id);
 const file = element('file');
@@ -15,17 +16,13 @@ let busy = false;
 let horizontal = 0.5;
 let vertical = 0.5;
 
-fetch('info.json', { cache: 'no-store' })
-  .then((response) => {
-    if (!response.ok) throw new Error('Storage location unavailable');
-    return response.json();
-  })
-  .then((info) => {
-    element('storage-path').textContent = info.path;
-  })
-  .catch(() => {
-    element('storage-path').textContent = 'Available on the TV';
-  });
+const storageReady = loadStoragePath(fetch).catch(() => {
+  element('storage-path').textContent = 'Storage path unavailable';
+  return null;
+});
+storageReady.then((path) => {
+  if (path) element('storage-path').textContent = path;
+});
 
 function message(text, error = false) {
   status.textContent = text;
@@ -84,6 +81,23 @@ zoom.addEventListener('input', () => {
   if (!busy) draw();
 });
 element('change').addEventListener('click', () => file.click());
+element('another').addEventListener('click', () => {
+  image?.close();
+  image = undefined;
+  file.value = '';
+  file.disabled = false;
+  editor.reset();
+  editor.hidden = true;
+  element('success').hidden = true;
+  element('storage-footer').hidden = false;
+  picker.hidden = false;
+  element('picker-title').textContent = 'Choose an image';
+  zoom.value = '1';
+  horizontal = vertical = 0.5;
+  drag = undefined;
+  message('');
+  picker.focus();
+});
 canvas.addEventListener('pointerdown', (event) => {
   if (!image || busy) return;
   canvas.setPointerCapture(event.pointerId);
@@ -106,6 +120,11 @@ for (const event of ['pointerup', 'pointercancel', 'lostpointercapture'])
 editor.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (busy || !image) return;
+  const destination = await storageReady;
+  if (!destination) {
+    message('Could not read the TV storage path. Close and reopen this dialog.', true);
+    return;
+  }
   const title = cleanName(name.value);
   if (!title) {
     message('Give your background a name.', true);
@@ -136,9 +155,12 @@ editor.addEventListener('submit', async (event) => {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'The TV could not save this background.');
-    message(
-      `“${result.name}” was added to your TV’s backgrounds. Close the upload dialog to finish.`,
-    );
+    element('success-name').textContent = result.name;
+    element('success-path').textContent = destination;
+    editor.hidden = true;
+    element('success').hidden = false;
+    element('storage-footer').hidden = true;
+    message('');
   } catch (error) {
     message(
       error.name === 'AbortError'

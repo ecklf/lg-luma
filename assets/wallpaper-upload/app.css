@@ -231,6 +231,59 @@ input:focus-visible {
 #status.error {
   color: #e8a99d;
 }
+.success {
+  padding: 28px 4px 0;
+  text-align: center;
+}
+.success-mark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 15px;
+  place-items: center;
+  border: 1px solid #536a58;
+  border-radius: 50%;
+  color: #cce0cf;
+  background: #202c24;
+  font-size: 21px;
+}
+.success h2 {
+  margin: 0;
+  color: #f0f2ee;
+  font-size: 21px;
+  font-weight: 560;
+  letter-spacing: -0.3px;
+}
+.success p {
+  margin: 13px 0 7px;
+  color: #abb2ad;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.success p strong {
+  color: #edf0ec;
+  font-weight: 570;
+  overflow-wrap: anywhere;
+}
+.success code {
+  display: block;
+  padding: 11px 12px;
+  border: 1px solid #303633;
+  border-radius: 8px;
+  background: #171a1a;
+  color: #aab6ad;
+  font:
+    11px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.success button {
+  width: 100%;
+  margin-top: 20px;
+}
 footer {
   display: grid;
   justify-items: center;

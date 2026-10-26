@@ -267,6 +267,7 @@ fn browser_assets_are_local_and_a_real_http_upload_persists_the_name() {
         "",
         "app.js",
         "crop.js",
+        "storage.js",
         "app.css",
         "luma-mark.svg",
         "info.json",

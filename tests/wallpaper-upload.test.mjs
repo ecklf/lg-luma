@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { cleanName, cropRect, panPosition } from '../assets/wallpaper-upload/crop.js';
+import { loadStoragePath } from '../assets/wallpaper-upload/storage.js';
 
 test('portrait, landscape, panorama and zoom crops stay in bounds at 16:9', () => {
   for (const [width, height] of [
@@ -36,4 +37,28 @@ test('names retain Unicode, remove controls, and match the TV’s 40-character l
   assert.equal(cleanName('旅行 & mer'), '旅行 & mer');
   assert.equal(Array.from(cleanName('🌄'.repeat(50))).length, 40);
   assert.equal(cleanName(' \n '), '');
+});
+
+test('storage path resolves to the exact absolute directory and rejects unavailable or unsafe values', async () => {
+  const path = '/media/internal/.com.ecklf.luma/wallpapers';
+  assert.equal(
+    await loadStoragePath(async (url, options) => {
+      assert.equal(url, 'info.json');
+      assert.deepEqual(options, { cache: 'no-store' });
+      return { ok: true, json: async () => ({ path }) };
+    }),
+    path,
+  );
+  await assert.rejects(
+    loadStoragePath(async () => ({ ok: false })),
+    /unavailable/,
+  );
+  await assert.rejects(
+    loadStoragePath(async () => ({ ok: true, json: async () => ({ path: 'relative/path' }) })),
+    /Invalid storage location/,
+  );
+  await assert.rejects(
+    loadStoragePath(async () => ({ ok: true, json: async () => ({ path: 42 }) })),
+    /Invalid storage location/,
+  );
 });
