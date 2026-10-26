@@ -1748,7 +1748,8 @@
     "it": "Le tue immagini",
     "ru": "Свои изображения",
     "pl": "Własne obrazy",
-    "fr": "Vos images"
+    "fr": "Vos images",
+    "vi": "Ảnh của bạn"
   },
   "customWallpapersCopy": {
     "en": "Copy JPEG, PNG or WebP files into this folder:",
@@ -1759,7 +1760,8 @@
     "it": "Copia file JPEG, PNG o WebP in questa cartella:",
     "ru": "Скопируйте файлы JPEG, PNG или WebP в эту папку:",
     "pl": "Skopiuj pliki JPEG, PNG lub WebP do tego folderu:",
-    "fr": "Copiez des fichiers JPEG, PNG ou WebP dans ce dossier :"
+    "fr": "Copiez des fichiers JPEG, PNG ou WebP dans ce dossier :",
+    "vi": "Sao chép tệp JPEG, PNG hoặc WebP vào thư mục này:"
   },
   "customWallpapersHint": {
     "en": "Copy JPEG, PNG or WebP files to {folder}",
@@ -1770,7 +1772,8 @@
     "it": "Copia file JPEG, PNG o WebP in {folder}",
     "ru": "Скопируйте файлы JPEG, PNG или WebP в {folder}",
     "pl": "Skopiuj pliki JPEG, PNG lub WebP do {folder}",
-    "fr": "Copiez des fichiers JPEG, PNG ou WebP dans {folder}"
+    "fr": "Copiez des fichiers JPEG, PNG ou WebP dans {folder}",
+    "vi": "Sao chép tệp JPEG, PNG hoặc WebP vào {folder}"
   },
   "liveTV": {
     "en": "Live TV",
