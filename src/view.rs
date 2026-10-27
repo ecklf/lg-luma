@@ -352,7 +352,7 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
             out.text(
                 &session.url,
                 Rect::new(568., 734., 784., 36.),
-                assets.fit_text(&session.url, text(20., 450, 0.), 784.),
+                assets.fit_text(&session.url, text(26., 600, 0.), 784.),
                 WHITE,
                 true,
             );
