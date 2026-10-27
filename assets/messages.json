@@ -8,7 +8,9 @@
     "it": "Usa sfondo",
     "ru": "Использовать фон",
     "pl": "Użyj tła",
-    "fr": "Utiliser l’arrière-plan"
+    "fr": "Utiliser l’arrière-plan",
+    "vi": "Dùng hình nền",
+    "nl": "Achtergrond gebruiken"
   },
   "deleteBackground": {
     "en": "Delete background",
@@ -19,7 +21,9 @@
     "it": "Elimina sfondo",
     "ru": "Удалить фон",
     "pl": "Usuń tło",
-    "fr": "Supprimer l’arrière-plan"
+    "fr": "Supprimer l’arrière-plan",
+    "vi": "Xóa hình nền",
+    "nl": "Achtergrond verwijderen"
   },
   "deleteBackgroundWarning": {
     "en": "Delete “{app}”? This background will be removed from your gallery.",
@@ -30,7 +34,9 @@
     "it": "Eliminare “{app}”? Questo sfondo verrà rimosso dalla galleria.",
     "ru": "Удалить «{app}»? Этот фон будет удалён из галереи.",
     "pl": "Usunąć „{app}”? To tło zostanie usunięte z galerii.",
-    "fr": "Supprimer « {app} » ? Cet arrière-plan sera retiré de votre galerie."
+    "fr": "Supprimer « {app} » ? Cet arrière-plan sera retiré de votre galerie.",
+    "vi": "Xóa “{app}”? Hình nền này sẽ bị xóa khỏi thư viện của bạn.",
+    "nl": "‘{app}’ verwijderen? Deze achtergrond wordt uit je galerij verwijderd."
   },
   "deletingBackground": {
     "en": "Deleting background…",
@@ -41,7 +47,9 @@
     "it": "Eliminazione dello sfondo…",
     "ru": "Удаление фона…",
     "pl": "Usuwanie tła…",
-    "fr": "Suppression de l’arrière-plan…"
+    "fr": "Suppression de l’arrière-plan…",
+    "vi": "Đang xóa hình nền…",
+    "nl": "Achtergrond verwijderen…"
   },
   "backgroundDeleted": {
     "en": "Background deleted",
@@ -52,7 +60,9 @@
     "it": "Sfondo eliminato",
     "ru": "Фон удалён",
     "pl": "Tło usunięte",
-    "fr": "Arrière-plan supprimé"
+    "fr": "Arrière-plan supprimé",
+    "vi": "Đã xóa hình nền",
+    "nl": "Achtergrond verwijderd"
   },
   "deleteBackgroundError": {
     "en": "Could not delete background",
@@ -63,7 +73,9 @@
     "it": "Impossibile eliminare lo sfondo",
     "ru": "Не удалось удалить фон",
     "pl": "Nie udało się usunąć tła",
-    "fr": "Impossible de supprimer l’arrière-plan"
+    "fr": "Impossible de supprimer l’arrière-plan",
+    "vi": "Không thể xóa hình nền",
+    "nl": "Kan achtergrond niet verwijderen"
   },
   "uploadWallpaper": {
     "en": "Add a background",
@@ -74,7 +86,9 @@
     "it": "Aggiungi uno sfondo",
     "ru": "Добавить фон",
     "pl": "Dodaj tło",
-    "fr": "Ajouter un arrière-plan"
+    "fr": "Ajouter un arrière-plan",
+    "vi": "Thêm hình nền",
+    "nl": "Achtergrond toevoegen"
   },
   "wallpaperUploadHint": {
     "en": "Scan the QR code or open this address on a phone or computer connected to the same network.",
@@ -85,7 +99,9 @@
     "it": "Scansiona il codice QR o apri questo indirizzo su un telefono o computer connesso alla stessa rete.",
     "ru": "Отсканируй QR-код или открой этот адрес на телефоне или компьютере в той же сети.",
     "pl": "Zeskanuj kod QR lub otwórz ten adres na telefonie albo komputerze w tej samej sieci.",
-    "fr": "Scannez le code QR ou ouvrez cette adresse sur un téléphone ou ordinateur connecté au même réseau."
+    "fr": "Scannez le code QR ou ouvrez cette adresse sur un téléphone ou ordinateur connecté au même réseau.",
+    "vi": "Quét mã QR hoặc mở địa chỉ này trên điện thoại hay máy tính kết nối cùng mạng.",
+    "nl": "Scan de QR-code of open dit adres op een telefoon of computer die met hetzelfde netwerk is verbonden."
   },
   "wallpaperUploadPrivate": {
     "en": "Local upload · This link expires in 10 minutes",
@@ -96,7 +112,9 @@
     "it": "Caricamento locale · Il link scade tra 10 minuti",
     "ru": "Локальная загрузка · Ссылка действует 10 минут",
     "pl": "Przesyłanie lokalne · Link wygasa po 10 minutach",
-    "fr": "Import local · Ce lien expire dans 10 minutes"
+    "fr": "Import local · Ce lien expire dans 10 minutes",
+    "vi": "Tải lên nội bộ · Liên kết này hết hạn sau 10 phút",
+    "nl": "Lokaal uploaden · Deze link verloopt over 10 minuten"
   },
   "wallpaperUploadStarting": {
     "en": "Preparing your upload link…",
@@ -107,7 +125,9 @@
     "it": "Preparazione del link di caricamento…",
     "ru": "Подготовка ссылки для загрузки…",
     "pl": "Przygotowywanie linku do przesyłania…",
-    "fr": "Préparation du lien d’import…"
+    "fr": "Préparation du lien d’import…",
+    "vi": "Đang chuẩn bị liên kết tải lên…",
+    "nl": "Uploadlink voorbereiden…"
   },
   "wallpaperUploadError": {
     "en": "Couldn’t start local upload. Check your network connection, then close and reopen this dialog.",
@@ -118,7 +138,9 @@
     "it": "Impossibile avviare il caricamento locale. Controlla la rete e riapri questa finestra.",
     "ru": "Не удалось начать загрузку. Проверь подключение к сети и открой это окно снова.",
     "pl": "Nie udało się uruchomić przesyłania. Sprawdź połączenie z siecią i otwórz to okno ponownie.",
-    "fr": "Impossible de démarrer l’import local. Vérifiez le réseau, puis rouvrez cette fenêtre."
+    "fr": "Impossible de démarrer l’import local. Vérifiez le réseau, puis rouvrez cette fenêtre.",
+    "vi": "Không thể bắt đầu tải lên nội bộ. Hãy kiểm tra kết nối mạng, rồi đóng và mở lại hộp thoại này.",
+    "nl": "Kan lokaal uploaden niet starten. Controleer je netwerkverbinding en sluit en heropen dit venster."
   },
   "wallpaperUploadEnded": {
     "en": "Upload session ended",
@@ -129,7 +151,9 @@
     "it": "Sessione di caricamento terminata",
     "ru": "Сеанс загрузки завершён",
     "pl": "Sesja przesyłania zakończona",
-    "fr": "Session d’import terminée"
+    "fr": "Session d’import terminée",
+    "vi": "Phiên tải lên đã kết thúc",
+    "nl": "Uploadsessie beëindigd"
   },
   "textRendering": {
     "en": "Text rendering",
