@@ -417,13 +417,13 @@ try {
   assert.equal(cycleEnabled.subpage, null);
   assert.equal(cycleEnabled.focus, 'WallpaperCycle');
   assert.equal(cycleEnabled.preferences.wallpaper_cycle, true);
-  assert.ok(cycleEnabled.ui_text.includes('Auto background · On'));
+  assert.ok(cycleEnabled.ui_text.includes('Auto rotation · On'));
   const cycleDisabled = await scenario(
     'wallpaper-cycle-disabled',
     'settings,down,down,enter,up,up,left,enter',
   );
   assert.equal(cycleDisabled.preferences.wallpaper_cycle, false);
-  assert.ok(cycleDisabled.ui_text.includes('Auto background · Off'));
+  assert.ok(cycleDisabled.ui_text.includes('Auto rotation · Off'));
   console.log(
     'Native smoke checks passed: rendering/alpha, navigation, persistence, SDL pointer input, DPI-aware glyphs, 4K capture and presentation profiling.',
   );

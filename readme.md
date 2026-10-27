@@ -306,7 +306,8 @@ Use a trusted local network: the temporary local upload uses HTTP, not encrypted
 
 ### Automatic backgrounds
 
-Press **Auto background**, to the left of **Add a background**, to toggle On or Off (the default).
+Press **Auto rotation**, to the left of **Add a background**, to toggle On or Off (the default).
+The rotation icon is crossed out when Off.
 When enabled, all available images cycle in gallery order every 15 minutes with a slow cross-fade
 (instant with reduced motion). Manual selection restarts the interval. Automatic changes leave
 your manually chosen LG splash unchanged, including after unrelated settings saves and restarts.

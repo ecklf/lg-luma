@@ -259,7 +259,7 @@ updates, and normal/takeover launches using the shared preferences location use 
 Custom images are not used as LG's launch splash: runtime splash updates are skipped for them,
 and takeover boot staging uses a bundled fallback.
 
-The fixed **Auto background** button to the left of the upload action toggles cycling On/Off,
+The fixed **Auto rotation** button to the left of the upload action toggles cycling On/Off,
 defaulting to Off, without opening a subpage. All available images participate in gallery order;
 deleted and pending-deletion entries are excluded. The fixed 15-minute interval uses a persisted
 Unix timestamp; manual selection or enabling cycling restarts it, and a clock behind the last

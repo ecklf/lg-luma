@@ -60,6 +60,7 @@ fn cycling_button_toggles_on_off_without_opening_a_page_or_moving_controls() {
     for language in crate::i18n::Language::ALL {
         state.preferences.language = language;
         let before = controls(&state);
+        assert!(scene(&state).draw.iter().any(|draw| matches!(draw, Draw::TintedImage(path, ..) if path.ends_with("ui-icons/refresh-off.lvec"))));
         assert_eq!(state.activate(), vec![Effect::Save]);
         assert!(state.preferences.wallpaper_cycle);
         assert!(state.preferences.wallpaper_changed > 0);
@@ -68,6 +69,8 @@ fn cycling_button_toggles_on_off_without_opening_a_page_or_moving_controls() {
         assert_eq!(state.focus, Target::WallpaperCycle);
         assert_eq!(state.scroll, 300.);
         let enabled = scene(&state);
+        assert!(enabled.draw.iter().any(|draw| matches!(draw, Draw::TintedImage(path, ..) if path.ends_with("ui-icons/refresh.lvec"))));
+        assert!(!enabled.draw.iter().any(|draw| matches!(draw, Draw::TintedImage(path, ..) if path.ends_with("ui-icons/refresh-off.lvec"))));
         let label = format!(
             "{} · {}",
             language.t("wallpaperCycle"),

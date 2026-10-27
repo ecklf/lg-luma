@@ -2243,7 +2243,11 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                         64.,
                     ),
                     title: &cycle_label,
-                    icon: Some("refresh"),
+                    icon: Some(if state.preferences.wallpaper_cycle {
+                        "refresh"
+                    } else {
+                        "refresh-off"
+                    }),
                     value: None,
                     description: None,
                     selected: false,

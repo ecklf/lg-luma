@@ -1,16 +1,16 @@
 {
   "wallpaperCycle": {
-    "en": "Auto background",
-    "de": "Automatischer Hintergrund",
-    "es": "Fondo automático",
-    "zh": "自动背景",
-    "pt": "Fundo automático",
-    "it": "Sfondo automatico",
-    "ru": "Автоматический фон",
-    "pl": "Automatyczne tło",
-    "fr": "Arrière-plan automatique",
-    "vi": "Hình nền tự động",
-    "nl": "Automatische achtergrond"
+    "en": "Auto rotation",
+    "de": "Automatische Rotation",
+    "es": "Rotación automática",
+    "zh": "自动轮换",
+    "pt": "Rotação automática",
+    "it": "Rotazione automatica",
+    "ru": "Автоматическая смена",
+    "pl": "Automatyczna rotacja",
+    "fr": "Rotation automatique",
+    "vi": "Tự động luân phiên",
+    "nl": "Automatische rotatie"
   },
   "useBackground": {
     "en": "Use background",
