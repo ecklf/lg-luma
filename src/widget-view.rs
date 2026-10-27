@@ -1701,7 +1701,18 @@ pub(super) fn settings(out: &mut Scene, state: &State, assets: &Assets, slot: u8
                             .filter(|(_, chosen)| *chosen)
                             .map(|(label, _)| label)
                             .collect();
-                        (title, "grid", chosen.join(", "), true)
+                        // As many as fit the value's place, then "+2".
+                        let style = text(18.4, 450, 0.);
+                        let all = chosen.join(", ");
+                        let value = if chosen.len() > 1 && assets.width(&all, style) > 166. {
+                            let rest = format!(" +{}", chosen.len() - 1);
+                            let first =
+                                fit(assets, &chosen[0], style, 166. - assets.width(&rest, style));
+                            format!("{first}{rest}")
+                        } else {
+                            fit(assets, &all, style, 166.)
+                        };
+                        (title, "grid", value, true)
                     }
                     SettingKind::Text { .. } => (
                         title,
@@ -1710,7 +1721,10 @@ pub(super) fn settings(out: &mut Scene, state: &State, assets: &Assets, slot: u8
                             .get(&setting.id)
                             .and_then(|v| v.as_str())
                             .filter(|v| !v.is_empty())
-                            .map_or_else(|| language.t("widgetNotSet").to_owned(), str::to_owned),
+                            .map_or_else(
+                                || language.t("widgetNotSet").to_owned(),
+                                |v| fit(assets, v, text(18.4, 450, 0.), 166.),
+                            ),
                         true,
                     ),
                     SettingKind::Secret { .. } => (title, "type", String::new(), true),
