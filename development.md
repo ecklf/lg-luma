@@ -11,7 +11,7 @@ tools/vector-assets/         Host-only SVG compiler
 tools/                       Asset preparation, SDK/runtime setup, packaging and release feed
 tests/                       Desktop rendering and mocked HTTP smoke scripts
 tv/autostart.sh              Optional cold-boot launch hook
-tv/home.sh / home.cjs         Optional root-only native Home integration
+tv/home.sh / luma-helper         Optional root-only native Home integration
 dist/                        Generated ARM IPK, checksum and Homebrew feed
 .build/                      Generated assets, SDK/runtime caches and rendering diagnostics
 ```
@@ -116,8 +116,8 @@ Luma (including former app IDs and the Home identity), Homebrew Channel, test-pr
 all apps in the `com.webos.*`, `com.palm.*` and `com.lge.*` namespaces cannot be deleted. This
 conservative vendor protection includes Live TV, Web Browser, Settings and potentially removable
 LG apps, rather than relying on firmware to reject unsafe removals. The worker calls
-`org.webosbrew.hbchannel.service/exec` once to run the embedded Node 8-compatible
-`tv/uninstall-app.cjs` helper. It sends one `com.webos.appInstallService/remove` subscription with
+`org.webosbrew.hbchannel.service/exec` once to run the packaged native Rust
+`luma-helper uninstall-app` command. It sends one `com.webos.appInstallService/remove` subscription with
 `{"id":"APP_ID","subscribe":true}` and waits for status 31, not the initial acceptance reply.
 The normal endpoint was manually verified removing Content Store DAZN on webOS 26, whereas
 Homebrew's `uninstall` endpoint (`dev/remove`) returned `FAILED_REMOVE` for that app. The helper
@@ -300,12 +300,12 @@ checks do not establish webOS jail networking permissions or TV/browser behavior
 wallpapers. `tools/package.mjs` ships them under `splash/` plus `splash.png` (the default background),
 which `appinfo.json` names as `splashBackground`, with `bgColor` set to the UI base colour so the
 frame between the splash and the first draw is not black. On a normal TV launch and after successful
-preference saves, the native platform worker passes the loaded background to the embedded
-`tv/sync-splash.cjs` helper through Homebrew Channel's elevated `exec` service. It atomically updates
+preference saves, the native platform worker passes the loaded background to the native
+`luma-helper sync-splash` command through Homebrew Channel's elevated `exec` service. It atomically updates
 the installed `splash.png` and the matching enabled Home stage, skipping identical images. Desktop
 and isolated `--preferences` / `--test-extra-apps` runs do not update launch splashes. The first launch
 after installation or a package update can still show the packaged default until this sync completes;
-later launches use the saved selection. With Home takeover enabled, `tv/home.cjs`
+later launches use the saved selection. Already-root Home processes use the Rust file operation directly, avoiding a Homebrew/child-process round trip. With Home takeover enabled, the native Home helper
 copies the selected background's splash into the staged Home app on every apply, reading the saved
 preferences from the TV storage candidates in `storage.rs`. Production installations prefer internal
 storage; developer installations prefer developer storage, with existing files taking precedence over
@@ -357,7 +357,7 @@ sampled card colour. Missing, corrupt or unsupported artwork uses the existing g
 
 Discovery, bounded file reads, decoding and colour sampling run on a dedicated worker. If the
 jailed app cannot read an asset directly, the native process calls Homebrew Channel's elevated
-`exec` service with the embedded Node 8-compatible `tv/read-app-icon.cjs` reader. It returns bounded
+`exec` service with the packaged native `luma-helper read-app-icon` command. It returns bounded
 image bytes without writing collected files or changing filesystem permissions. PNG, JPEG and WebP
 are supported; runtime SVG parsing is not required. Source files are limited to 512 KiB and
 2048×2048 pixels; decoded icons are at most 256×256 with a 16 MiB/256-entry CPU cache. GPU uploads
@@ -579,7 +579,7 @@ failures preserve the last valid inputs. No failed inventory read substitutes de
 
 ### Optional native Home integration
 
-`tv/home.sh` and `tv/home.cjs` are packaged beside `luma`. They are a root-only, explicit integration
+`tv/home.sh` and the native Rust `luma-helper` executable are packaged beside `luma`. They are a root-only, explicit integration
 for webOS 10/25 and 11/26 (and webOS 5/6, see below). `enable` stages a native manifest with ID `com.webos.app.home` and
 symlinks to the installed executable, libraries and assets under `/var/lib/luma-home/app`, then
 bind-mounts it over `/usr/palm/applications/com.webos.app.home`. SAM rereads that one app through
@@ -917,3 +917,44 @@ The original `home` target remains the default. Press Home from another app to v
 disable restores LG's dashboard. This is a targeted compatibility option, not confirmation of
 the unreported cause of #109. The reporter's device still needs to establish which Home app
 receives the key. Do not infer support for webOS 4 from this option.
+
+### Native TV helper
+
+The `tv-helper/` workspace crate ports the former `tv/*.cjs` operations. Its `luma-helper` binary
+contains no GUI initialization, SDL dependency or persistent service. Root Home synchronizes its
+splash directly through the same Rust library on the platform worker. Normal jailed launches
+retain Homebrew Channel as the privilege boundary, executing the installed helper with individually
+quoted arguments. The helper retains bounded file reads, combined stdout/stderr caps, timeouts,
+protected application IDs and completion-based uninstall replies. `luna-send` is still used for
+root-side LS2 operations; Node is no longer required by these helpers.
+
+`home.sh` retains its explicit confirmation and filesystem lock. Enabling Home copies both that
+script and the native helper into `/var/lib/luma-home`, so recovery remains available after the
+source package is removed. When upgrading an existing integration from the interpreter helper,
+run the packaged `home.sh enable` again to replace its copied recovery/boot files. Configurations
+from the former scripts keep their method, installation and original stock manifest. Both `home`
+and `fullhome` executable targets are supported; the latter requires matching native lifecycle
+support from #142. Manifest takeover remains limited to webOS
+10/11. The optional `tv-input` subcommand implements the #124 registration/verification contract;
+its Settings integration is still tracked by that separate PR and requires `supportGIP`.
+
+The former VM tests for interpreter code are replaced by filesystem and service fixtures in
+`tv-helper/src/tests.rs`. They do not call a TV, real LS2 service or network. Host helper executables
+reject TV operations; only ARM webOS builds can perform them. Use `cargo test -p luma-tv-helper`
+for focused checks. The workspace tests include the helper, and ARM builds/package verification
+require both native binaries with executable permissions.
+
+On an LG 49UN71006LB running webOS 5.6.2, a manual comparison of the same Homebrew Channel icon
+request returned identical image bytes. Measured from a TV-local parent process around each
+complete child invocation (startup, file reads, JSON/hex output and exit), the old Node 8.12.0
+helper took a median 2.588 seconds over three samples; the native ARM helper took 0.0128 seconds
+over seven samples (range 0.0120–0.0208 seconds). This is about 203 times faster for that helper
+invocation, saving about 2.575 seconds. It excludes Homebrew transport and is not a measurement of
+the full launcher startup or every helper operation. No memory-usage comparison was made.
+
+Manual verification on that TV covered native package installation, Home enable/disable, the
+actual HOME button from YouTube, explicit fullhome launch and normal-tile redirect, splash
+synchronization, copied recovery files, protected uninstall rejection, and complete removal of a
+new disposable test app through status 31. The previous build, preferences and integration policy
+were restored after testing. Manifest takeover on webOS 10/11 is covered by fixtures, but was not
+tested on hardware in this run; standby and cold boot were not tested.

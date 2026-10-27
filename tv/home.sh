@@ -8,7 +8,7 @@ case "$COMMAND" in
   *) printf '%s\n' 'Usage: home.sh enable [APP_DIR] [HOME_ID] | disable | restore | status' >&2; exit 1 ;;
 esac
 [ "$(id -u)" = 0 ] || { printf '%s\n' 'Run as root.' >&2; exit 1; }
-[ -x /usr/bin/node ] || { printf '%s\n' 'The TV Node.js runtime is missing.' >&2; exit 1; }
+[ -x "$SCRIPT_DIR/luma-helper" ] || { printf '%s\n' 'The native Luma TV helper is missing.' >&2; exit 1; }
 if [ "$COMMAND" = enable ] && grep -q 'release [56]\.' /etc/starfish-release 2>/dev/null; then
   printf '%s\n' \
     'Enabling Luma Home (webOS 5/6) will:' \
@@ -66,4 +66,4 @@ if [ "$COMMAND" = boot ]; then
 fi
 exec 9>"$STATE/lock"
 flock -n 9 || { printf '%s\n' 'Luma Home integration is already being changed.' >&2; exit 1; }
-exec /usr/bin/node "$SCRIPT_DIR/home.cjs" "$COMMAND" "${2:-$SCRIPT_DIR}" "${3:-}"
+exec "$SCRIPT_DIR/luma-helper" home "$COMMAND" "${2:-$SCRIPT_DIR}" "${3:-}"

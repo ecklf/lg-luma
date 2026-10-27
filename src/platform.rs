@@ -255,13 +255,8 @@ impl Platform {
                         // Validate again at the worker boundary, not just in the UI.
                         let result = uninstall_request(&id).and_then(|(_, _)| {
                             if webos {
-                                let quote =
-                                    |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
-                                let command = format!(
-                                    "/usr/bin/node -e {} {}",
-                                    quote(include_str!("../tv/uninstall-app.cjs")),
-                                    quote(&id)
-                                );
+                                let command =
+                                    helper_command("uninstall-app", std::slice::from_ref(&id))?;
                                 #[cfg(all(
                                     feature = "webos",
                                     target_os = "linux",
@@ -375,14 +370,33 @@ impl Platform {
     }
 }
 
+/// Homebrew remains the privilege boundary for normal app jails. Each argument is shell-quoted
+/// independently; there is no interpreter source and no untrusted command name.
+fn helper_command(operation: &str, arguments: &[String]) -> Result<String, String> {
+    let executable = install_dir()?.join("luma-helper");
+    let quote = |text: &str| format!("'{}'", text.replace('\'', "'\\''"));
+    let mut parts = vec![quote(&executable.to_string_lossy()), quote(operation)];
+    parts.extend(arguments.iter().map(|argument| quote(argument)));
+    Ok(parts.join(" "))
+}
+
 fn sync_splash(background: &str) -> Result<(), String> {
     let directory = install_dir()?;
-    let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
-    let command = format!(
-        "/usr/bin/node -e {} {}",
-        quote(include_str!("../tv/sync-splash.cjs")),
-        quote(&json!({"directory": directory, "background": background}).to_string())
-    );
+    // The executable/manifest Home already runs privileged. Avoid starting another process or
+    // queuing a Homebrew call behind its startup; file work still stays on the platform worker.
+    #[cfg(all(feature = "webos", unix))]
+    if unsafe { libc::geteuid() } == 0 {
+        return luma_tv_helper::files::sync_splash(
+            &luma_tv_helper::system::Tv,
+            &directory,
+            background,
+        )
+        .map(|_| ());
+    }
+    let command = helper_command(
+        "sync-splash",
+        &[json!({"directory":directory,"background":background}).to_string()],
+    )?;
     let envelope = call(
         "luna://org.webosbrew.hbchannel.service/exec",
         json!({"command": command}),
@@ -512,12 +526,10 @@ pub fn read_app_icons(source: &app_artwork::Source) -> Result<Vec<Vec<u8>>, Stri
     if !cfg!(feature = "webos") {
         return Err("Installed artwork is only read on TV builds".into());
     }
-    let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
-    let command = format!(
-        "/usr/bin/node -e {} {}",
-        quote(include_str!("../tv/read-app-icon.cjs")),
-        quote(&serde_json::to_string(source).map_err(|e| e.to_string())?)
-    );
+    let command = helper_command(
+        "read-app-icon",
+        &[serde_json::to_string(source).map_err(|e| e.to_string())?],
+    )?;
     let envelope = call(
         "luna://org.webosbrew.hbchannel.service/exec",
         json!({"command": command}),
