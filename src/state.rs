@@ -395,6 +395,11 @@ impl State {
         Rect::new(left, content.y, HOME_FADE_RIGHT - left, content.h)
     }
 
+    pub fn backgrounds_viewport(&self) -> Rect {
+        let content = self.content_viewport();
+        Rect::new(620., 244.8, 1160., content.y + content.h - 244.8)
+    }
+
     pub fn hit_test(&self, controls: &[Control], x: f32, y: f32) -> Option<Target> {
         controls
             .iter()
@@ -403,6 +408,8 @@ impl State {
                 let viewport =
                     if self.page == Page::Home && matches!(control.target, Target::App(_)) {
                         self.favorites_viewport()
+                    } else if matches!(control.target, Target::Background(_)) {
+                        self.backgrounds_viewport()
                     } else {
                         self.content_viewport()
                     };
@@ -419,6 +426,12 @@ impl State {
         x: i32,
         y: i32,
     ) -> bool {
+        let backgrounds =
+            self.page == Page::Settings && self.section == 1 && self.subpage.is_none();
+        if backgrounds && position.is_some_and(|(x, y)| !self.backgrounds_viewport().contains(x, y))
+        {
+            return false;
+        }
         let over_favorites = self.page == Page::Home
             && position.is_some_and(|(x, y)| {
                 self.favorites_viewport().contains(x, y)
@@ -433,7 +446,9 @@ impl State {
             let bottom = self.content_viewport().y + self.content_viewport().h - 12.;
             let max = controls
                 .iter()
-                .filter(|c| c.scrollable)
+                .filter(|c| {
+                    c.scrollable && (!backgrounds || matches!(c.target, Target::Background(_)))
+                })
                 .map(|c| c.rect.y + c.rect.h + self.scroll - bottom)
                 .fold(0., f32::max);
             self.scroll = (self.scroll - y as f32 * 90.).clamp(0., max.max(0.));
@@ -574,7 +589,9 @@ impl State {
             ) {
                 self.scroll = 0.;
             } else if control.scrollable {
-                let top = if self.page == Page::Apps {
+                let top = if matches!(self.focus, Target::Background(_)) {
+                    self.backgrounds_viewport().y + 8.
+                } else if self.page == Page::Apps {
                     164.8
                 } else {
                     120.8

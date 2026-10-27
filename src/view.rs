@@ -1685,7 +1685,8 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
             },
         );
     }
-    out.control(row.target, row.rect, true);
+    let scrollable = row.target != Target::UploadWallpaper;
+    out.control(row.target, row.rect, scrollable);
 }
 
 fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
@@ -1923,12 +1924,18 @@ fn location_settings(out: &mut Scene, state: &State, assets: &Assets) {
 fn settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let s = state.scroll;
+    let sidebar_scroll = if state.section == 1 { 0. } else { s };
     for (index, key) in ["interface", "background", "weather", "inputs", "system"]
         .into_iter()
         .enumerate()
     {
         let label = language.t(key);
-        let rect = Rect::new(160., 164.8 + index as f32 * 84. - s, 403.2, 72.);
+        let rect = Rect::new(
+            160.,
+            164.8 + index as f32 * 84. - sidebar_scroll,
+            403.2,
+            72.,
+        );
         let focused = state.focus == Target::Sidebar(index);
         out.pill(rect, focused, state.section == index);
         let color = if focused {
@@ -2023,7 +2030,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 );
             }
         }
-        out.control(Target::Sidebar(index), rect, true);
+        out.control(Target::Sidebar(index), rect, state.section != 1);
     }
     if let Some(subpage) = &state.subpage {
         let start = out.draw.len();
@@ -2193,7 +2200,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 assets,
                 Row {
                     target: Target::UploadWallpaper,
-                    rect: Rect::new(1760. - upload_width, 164.8 - s, upload_width, 64.),
+                    rect: Rect::new(1760. - upload_width, 164.8, upload_width, 64.),
                     title: upload_label,
                     icon: Some("upload"),
                     value: None,
@@ -2202,6 +2209,8 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     chevron: false,
                 },
             );
+            out.draw
+                .push(Draw::Clip(Some(state.backgrounds_viewport())));
             for index in 0..state.background_count() {
                 let id = state.background_id(index).unwrap();
                 let custom = state.wallpapers.iter().find(|item| item.id == id);
@@ -2247,6 +2256,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     true,
                 );
             }
+            out.draw.push(Draw::Clip(Some(state.content_viewport())));
         }
         WEATHER_SECTION => weather_settings(out, state, assets),
         SYSTEM_SECTION => {

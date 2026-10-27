@@ -59,6 +59,105 @@ fn upload_button_is_compact_and_right_aligned_in_every_language() {
 }
 
 #[test]
+fn gallery_scrolling_keeps_sidebar_and_upload_fixed_and_clips_only_backgrounds() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    state.set_wallpapers((1..=8).map(|i| custom(i, "Lake")).collect());
+    let before = controls(&state);
+    state.wheel_scroll(&before, Some((1000., 600.)), 0, -3);
+    assert!(state.scroll > 0.);
+    let scrolled = scene(&state);
+    for target in [
+        Target::UploadWallpaper,
+        Target::Sidebar(0),
+        Target::Sidebar(1),
+        Target::Sidebar(4),
+    ] {
+        let old = before.iter().find(|c| c.target == target).unwrap();
+        let new = scrolled
+            .controls
+            .iter()
+            .find(|c| c.target == target)
+            .unwrap();
+        assert_eq!(
+            (old.rect.x, old.rect.y, old.rect.w, old.rect.h),
+            (new.rect.x, new.rect.y, new.rect.w, new.rect.h)
+        );
+        assert!(!new.scrollable);
+    }
+    let old = before
+        .iter()
+        .find(|c| c.target == Target::Background(3))
+        .unwrap();
+    let new = scrolled
+        .controls
+        .iter()
+        .find(|c| c.target == Target::Background(3))
+        .unwrap();
+    assert_eq!(old.rect.y - new.rect.y, state.scroll);
+    let viewport = state.backgrounds_viewport();
+    assert!(scrolled.draw.iter().any(|draw| matches!(draw, Draw::Clip(Some(rect)) if rect.x == viewport.x && rect.y == viewport.y && rect.h == viewport.h)));
+    let scroll = state.scroll;
+    state.wheel_scroll(&scrolled.controls, Some((300., 300.)), 0, -3);
+    assert_eq!(state.scroll, scroll);
+}
+
+#[test]
+fn scrolled_backgrounds_cannot_capture_upload_or_sidebar_pointer_hits() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    state.scroll = 150.;
+    let gallery = controls(&state);
+    let upload = gallery
+        .iter()
+        .find(|c| c.target == Target::UploadWallpaper)
+        .unwrap()
+        .rect;
+    let (x, y) = upload.center();
+    assert_eq!(
+        state.hit_test(&gallery, x, y),
+        Some(Target::UploadWallpaper)
+    );
+    assert_eq!(state.hit_test(&gallery, 1000., 200.), None);
+    assert_eq!(
+        state.hit_test(&gallery, 300., 280.),
+        Some(Target::Sidebar(1))
+    );
+    assert_eq!(
+        state.hit_test(&gallery, 900., 260.),
+        Some(Target::Background(0))
+    );
+}
+
+#[test]
+fn remote_background_focus_stays_below_the_fixed_upload_action() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    state.set_wallpapers((1..=9).map(|i| custom(i, "Lake")).collect());
+    state.focus = Target::Background(2);
+    for _ in 0..5 {
+        state.direction(Direction::Down, &controls(&state));
+    }
+    assert!(state.scroll > 0.);
+    for _ in 0..5 {
+        state.direction(Direction::Up, &controls(&state));
+        if matches!(state.focus, Target::Background(_)) {
+            let gallery = controls(&state);
+            let focused = gallery.iter().find(|c| c.target == state.focus).unwrap();
+            let viewport = state.backgrounds_viewport();
+            assert!(focused.rect.y >= viewport.y);
+            assert!(focused.rect.y + focused.rect.h <= viewport.y + viewport.h);
+        }
+    }
+    assert_eq!(state.focus, Target::Background(2));
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::UploadWallpaper);
+}
+
+#[test]
 fn custom_gallery_navigation_reveals_whole_cards_in_incomplete_rows() {
     let mut state = ready();
     state.open(2);
