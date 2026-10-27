@@ -716,8 +716,15 @@ pnpm assets
 xvfb-run -a pnpm test:smoke
 ```
 
-CI uses this native-only flow, then cross-links with a pinned Linux SDK, inspects/normalizes the
-actual ARM IPK and generates checksums/feed. It uploads release/rendering artifacts on PRs,
+CI prepares checks, unit tests, native assets and the desktop binary once. Four independent
+jobs run navigation/rendering, the brand gallery, mocked weather and translations in parallel,
+each with its own Xvfb display, scratch preferences and diagnostic artifact. They consume a
+same-run tar archive that preserves the binary's executable mode and use `LUMA_SMOKE_SKIP_BUILD=1`
+to avoid compiling the same executable again. Local smoke commands still build by default.
+The ARM package job runs alongside these suites using the shared assets, cross-links with a
+pinned Linux SDK, inspects/normalizes the actual IPK and generates checksums/feed. The existing
+**Rust checks, rendering, and native package** check remains as an aggregate that requires every
+preparation, smoke and package job to succeed. It uploads release/rendering artifacts on PRs,
 main-branch pushes and manual runs. `pnpm check` also validates synchronized release versions,
 and `pnpm test:release` covers version synchronization and the publish gate, including the real
 Changesets version command in an isolated fixture. Host CI cannot prove hardware compatibility,
@@ -784,6 +791,16 @@ that merged, same-repository PR and a numeric version increase can enter the pub
 also pass the existing checks, desktop smoke tests and native packaging build. Ordinary merges,
 unmerged PRs and manual CI runs do not publish. To retry a failed publication, rerun the original
 CI run for the merged version PR's main-branch commit.
+
+The Actions graph now shows **Release eligibility → shared preparation → four parallel smoke
+suites + ARM package → aggregate validation → Publish release and Homebrew feed**. Eligibility
+runs on PRs and manual dispatches too, explicitly reporting validation-only rather than leaving
+a skipped job to interpret. The **Release rollout summary** runs even when earlier jobs fail,
+listing stage results, the run/artifact link, release eligibility and retry instructions.
+The Release PR workflow also links the generated Version Packages PR and explains the rollout
+in its summary and PR body. A version-branch dispatch validates only, while the main push after
+merging is the publication candidate. Shared assets and release artifacts are always from that
+same workflow run and commit, never from a previous PR build.
 
 Publication retains the existing guards: an already-published version is skipped, a draft can be
 resumed, and a tag pointing at another commit requires a new app version. `pnpm version:check`

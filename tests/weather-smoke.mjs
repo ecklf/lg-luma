@@ -145,7 +145,8 @@ const forecastCount = () => requests.filter((request) => request.path === '/v1/f
 const searchCount = () => requests.filter((request) => request.path === '/v1/search').length;
 const locationPage = 'settings,down,down,down,enter,down,enter';
 try {
-  await run('cargo', ['build', '--locked', '--package', 'luma']);
+  if (process.env.LUMA_SMOKE_SKIP_BUILD !== '1')
+    await run('cargo', ['build', '--locked', '--package', 'luma']);
   await writePreferences();
   await scenario('unconfigured', 'home,down');
   assert.equal(requests.length, 0, 'No geolocation or automatic city discovery');

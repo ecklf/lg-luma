@@ -102,7 +102,8 @@ function contains(state, key, language) {
 const picker = 'settings,down,enter,down,down,down,enter';
 const location = 'settings,down,down,down,enter,down,enter';
 try {
-  await run('cargo', ['build', '--locked', '--package', 'luma']);
+  if (process.env.LUMA_SMOKE_SKIP_BUILD !== '1')
+    await run('cargo', ['build', '--locked', '--package', 'luma']);
   await fs.writeFile(
     preferences,
     JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
