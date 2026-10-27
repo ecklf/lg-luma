@@ -1,5 +1,24 @@
 # lg-luma
 
+## 2.11.0
+
+### Minor Changes
+
+- 90aa848: Upload named custom wallpapers from a phone or computer using a temporary local URL and QR code in Background settings. Preview and adjust a 16:9 crop before adding it to the TV's persistent wallpaper gallery.
+- 90aa848: Add app-style side popups for backgrounds, with selection and confirmed deletion of any background except the active one. Persist removal of bundled backgrounds from the gallery and delete uploaded files on the wallpaper worker.
+
+### Patch Changes
+
+- 90aa848: Balance background upload button and dialog padding, and make the non-interactive System version row more transparent.
+- 90aa848: Separate QR and browser instructions in the background upload dialog, simplify the displayed URL, and remind users to keep the dialog open during upload.
+- 90aa848: Place the background upload action in a compact, right-aligned button above the gallery.
+- 90aa848: Complete Vietnamese and Dutch translations for background selection, deletion, and upload messages.
+- 148d4eb: Add Dutch (`nl`) translation: full `messages.json` catalog and locale registration in `i18n.rs` (language list, display name and localized date formatting such as « WOENSDAG 21 OKTOBER »). The bundled Inter subset already covers Dutch, so no font changes are needed.
+- 90aa848: Scroll only the background gallery while keeping the settings sidebar and upload button fixed. Clip gallery drawing and pointer targets below the upload action and keep remote-focused cards fully visible.
+- 90aa848: Make the background upload URL larger and heavier for easier reading on TV.
+- 90aa848: Display the System version in a full-width, non-interactive settings row with clearer text.
+- 90aa848: Rename the background upload button and dialog title to “Upload background” across all languages.
+
 ## 2.10.3
 
 ### Patch Changes
