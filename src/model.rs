@@ -156,7 +156,9 @@ impl Default for Preferences {
 
 impl Preferences {
     pub fn splash_background(&self) -> &str {
-        self.splash_background.as_deref().unwrap_or(&self.background)
+        self.splash_background
+            .as_deref()
+            .unwrap_or(&self.background)
     }
 
     pub fn favorites(&self, apps: &[App]) -> Vec<String> {
@@ -217,7 +219,9 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
-        if self.splash_background.as_ref().is_some_and(|id| !BACKGROUNDS.iter().any(|(known, _)| *known == id) && !crate::wallpapers::valid_id(id)) {
+        if self.splash_background.as_ref().is_some_and(|id| {
+            !BACKGROUNDS.iter().any(|(known, _)| *known == id) && !crate::wallpapers::valid_id(id)
+        }) {
             self.splash_background = None;
         }
         if !BACKGROUNDS.iter().any(|(id, _)| *id == self.background)

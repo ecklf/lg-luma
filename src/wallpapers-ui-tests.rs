@@ -1,11 +1,162 @@
 use super::*;
-use crate::{model::BACKGROUNDS, renderer::Draw, wallpapers::Wallpaper};
+use crate::{model::BACKGROUNDS, renderer::Draw, state::Subpage, wallpapers::Wallpaper};
 
 fn custom(index: u32) -> Wallpaper {
     Wallpaper {
         id: format!("custom-{index:032x}"),
         directory: PathBuf::from(format!("/preview/wallpapers/custom-{index:032x}")),
     }
+}
+
+#[test]
+fn cycling_button_sits_left_of_upload_and_both_remain_fixed_in_every_language() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    for language in crate::i18n::Language::ALL {
+        state.preferences.language = language;
+        state.scroll = 0.;
+        let before = controls(&state);
+        let cycle = before
+            .iter()
+            .find(|c| c.target == Target::WallpaperCycle)
+            .unwrap()
+            .rect;
+        let upload = before
+            .iter()
+            .find(|c| c.target == Target::UploadWallpaper)
+            .unwrap()
+            .rect;
+        assert!(cycle.x >= 640.);
+        assert_eq!(cycle.x + cycle.w + 20., upload.x);
+        assert_eq!(cycle.y, upload.y);
+        state.scroll = 500.;
+        let after = controls(&state);
+        for target in [Target::WallpaperCycle, Target::UploadWallpaper] {
+            let old = before.iter().find(|c| c.target == target).unwrap();
+            let new = after.iter().find(|c| c.target == target).unwrap();
+            assert_eq!(
+                (old.rect.x, old.rect.y, old.rect.w),
+                (new.rect.x, new.rect.y, new.rect.w)
+            );
+            assert!(!new.scrollable);
+        }
+    }
+}
+
+#[test]
+fn cycling_button_opens_modes_and_thumbnail_exclusions_and_back_restores_it() {
+    use crate::wallpaper_cycle::WallpaperCycle;
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    state.focus = Target::UploadWallpaper;
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::WallpaperCycle);
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::UploadWallpaper);
+    state.direction(Direction::Left, &controls(&state));
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::WallpaperCycle));
+    assert_eq!(state.focus, Target::Choice(0));
+    for _ in 0..3 {
+        state.direction(Direction::Down, &controls(&state));
+    }
+    assert_eq!(state.focus, Target::Choice(WallpaperCycle::Hourly.index()));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.wallpaper_cycle, WallpaperCycle::Hourly);
+    assert!(state.preferences.wallpaper_changed > 0);
+    assert_eq!(state.subpage, Some(Subpage::WallpaperCycle));
+    state.direction(Direction::Down, &controls(&state));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Choice(WallpaperCycle::ALL.len()));
+    let id = state.background_id(0).unwrap().to_owned();
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.wallpaper_skip, vec![id]);
+    state.activate();
+    assert!(state.preferences.wallpaper_skip.is_empty());
+    state.back();
+    assert_eq!(state.subpage, None);
+    assert_eq!(state.focus, Target::WallpaperCycle);
+    assert_eq!(state.scroll, 0.);
+}
+
+#[test]
+fn cycling_uses_uploaded_ids_but_not_deleted_excluded_or_pending_deletion_entries() {
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    let first = custom(1);
+    let second = custom(2);
+    state.set_wallpapers(vec![first.clone(), second.clone()]);
+    state.preferences.wallpaper_skip = BACKGROUNDS.iter().map(|(id, _)| (*id).to_owned()).collect();
+    state.deleting_wallpaper = Some(first.id.clone());
+    assert!(state.cycle_wallpaper(100));
+    assert_eq!(state.preferences.background, second.id);
+    assert!(!state.can_delete_background(&second.id));
+    assert!(state.previous_background.is_none());
+    assert!(!state.cycle_wallpaper(200));
+    state.deleting_wallpaper = None;
+    assert!(state.cycle_wallpaper(300));
+    assert_eq!(state.preferences.background, first.id);
+    state.preferences.background = "dunes".into();
+    state.preferences.wallpaper_skip.clear();
+    state.preferences.deleted_backgrounds = vec!["san-francisco".into()];
+    assert!(state.cycle_wallpaper(400));
+    assert_eq!(state.preferences.background, "summit");
+}
+
+#[test]
+fn automatic_changes_preserve_manual_splash_across_saves_and_restart_and_manual_selection_resets_time()
+ {
+    let mut state = ready();
+    state.preferences.background = "forest".into();
+    state.preferences.wallpaper_cycle = crate::wallpaper_cycle::WallpaperCycle::Hourly;
+    assert!(state.cycle_wallpaper(100));
+    assert_eq!(state.background_fade, crate::state::CYCLE_FADE);
+    assert_eq!(state.preferences.splash_background(), "forest");
+    state.preferences.show_seconds = !state.preferences.show_seconds;
+    let mut preferences: Preferences =
+        serde_json::from_value(serde_json::to_value(&state.preferences).unwrap()).unwrap();
+    preferences.sanitize();
+    assert_eq!(preferences.splash_background(), "forest");
+    let mut restored = State::new(preferences);
+    assert!(restored.cycle_wallpaper(200));
+    assert_eq!(restored.preferences.splash_background(), "forest");
+    restored.open(2);
+    restored.section = 1;
+    restored.focus = Target::Background(0);
+    restored.activate();
+    assert_eq!(restored.activate(), vec![Effect::Save]);
+    assert_eq!(restored.preferences.background, "slate");
+    assert_eq!(restored.preferences.splash_background(), "slate");
+    assert_eq!(restored.background_fade, crate::state::BACKGROUND_FADE);
+    assert!(restored.preferences.wallpaper_changed > 200);
+}
+
+#[test]
+fn cycling_exclusions_follow_catalog_identity_and_sanitize_without_losing_uploaded_ids() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    let item = custom(2);
+    state.set_wallpapers(vec![item.clone()]);
+    state.focus = Target::WallpaperCycle;
+    state.activate();
+    let modes = crate::wallpaper_cycle::WallpaperCycle::ALL.len();
+    state.focus = Target::Choice(modes + BACKGROUNDS.len());
+    state.set_wallpapers(vec![custom(1), item.clone()]);
+    assert_eq!(state.focus, Target::Choice(modes + BACKGROUNDS.len() + 1));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.wallpaper_skip, vec![item.id.clone()]);
+    state
+        .preferences
+        .wallpaper_skip
+        .extend(["forest".into(), "../bad".into(), item.id.clone()]);
+    state.preferences.sanitize();
+    assert_eq!(
+        state.preferences.wallpaper_skip,
+        vec![item.id, "forest".into()]
+    );
 }
 
 #[test]

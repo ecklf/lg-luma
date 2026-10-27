@@ -304,6 +304,15 @@ background is selected.
 The upload link works only while its TV dialog is open and focused, for at most ten minutes.
 Use a trusted local network: the temporary local upload uses HTTP, not encrypted HTTPS.
 
+### Automatic backgrounds
+
+Open **Settings → Background → Change wallpaper**, to the left of **Add a background**.
+Choose Off, each Luma start, every 15 minutes, hourly or daily. Images advance in gallery order
+with a slow cross-fade (instant with reduced motion). Toggle the thumbnails on that page to
+exclude images; new uploads participate by default and deleted backgrounds do not participate.
+Manual selection restarts the interval. Automatic changes leave your manually chosen LG splash
+unchanged, including after unrelated settings saves and restarts.
+
 ## Privacy and scope
 
 App/input discovery uses fixed inventory commands through Homebrew Channel's elevated service.

@@ -259,6 +259,15 @@ updates, and normal/takeover launches using the shared preferences location use 
 Custom images are not used as LG's launch splash: runtime splash updates are skipped for them,
 and takeover boot staging uses a bundled fallback.
 
+The fixed **Change wallpaper** button to the left of the upload action opens cycling modes and
+thumbnail inclusion toggles. Rotation follows the visible ID-based gallery, excluding deleted,
+skipped, and pending-deletion entries. Timed modes use persisted Unix timestamps; manual selection
+restarts the interval, and a clock behind the last change waits. Startup rotation waits for the
+initial wallpaper catalog or three seconds. Changes wait until Luma is focused, visible, idle,
+and outside overlays. Automatic changes use a 1.6-second fade (instant with reduced motion) and
+save without refreshing LG's splash. `splash_background` preserves the manual selection across
+unrelated saves, package restaging, and process restarts; old preferences fall back to `background`.
+
 The native process binds an ephemeral port on one private/link-local IPv4 interface only while
 the upload modal is open and focused, with a fixed ten-minute session lifetime. Closing the modal,
 losing focus, hiding Luma or exiting invalidates the session. An unpredictable 128-bit capability

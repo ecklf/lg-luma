@@ -412,7 +412,7 @@ try {
   await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
   const cyclePage = await scenario(
     'wallpaper-cycle-page',
-    'settings,down,down,enter,down,down,down,enter,down,down,down,enter',
+    'settings,down,down,enter,up,up,left,enter,down,down,down,enter',
   );
   assert.equal(cyclePage.subpage, 'WallpaperCycle');
   assert.equal(cyclePage.preferences.wallpaper_cycle, 'hourly');

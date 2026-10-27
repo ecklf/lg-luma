@@ -885,7 +885,8 @@ fn run() -> Result<(), String> {
         pill_width,
         options.time.unwrap_or_else(OffsetDateTime::now_utc),
     );
-    let mut launch_cycle = state.preferences.wallpaper_cycle == wallpaper_cycle::WallpaperCycle::Launch;
+    let mut launch_cycle =
+        state.preferences.wallpaper_cycle == wallpaper_cycle::WallpaperCycle::Launch;
     let mut wallpapers_scanned = false;
     let launched = Instant::now();
     while running {
@@ -935,13 +936,25 @@ fn run() -> Result<(), String> {
         }
         state.dirty |= assets.artwork.poll();
         let unix = state::unix_now();
-        let launch_due = launch_cycle && (wallpapers_scanned || launched.elapsed() >= Duration::from_secs(3));
-        if focused && visible && state.overlay.is_none() && state.moving.is_none()
-            && state.deleting_wallpaper.is_none() && !state.animating()
-            && (launch_due || state.preferences.wallpaper_cycle.due(state.preferences.wallpaper_changed, unix)) {
+        let launch_due = launch_cycle
+            && state.preferences.wallpaper_cycle == wallpaper_cycle::WallpaperCycle::Launch
+            && (wallpapers_scanned || launched.elapsed() >= Duration::from_secs(3));
+        if focused
+            && visible
+            && state.overlay.is_none()
+            && state.moving.is_none()
+            && state.deleting_wallpaper.is_none()
+            && !state.animating()
+            && (launch_due
+                || state
+                    .preferences
+                    .wallpaper_cycle
+                    .due(state.preferences.wallpaper_changed, unix))
+        {
             launch_cycle = false;
             if state.cycle_wallpaper(unix)
-                && let Err(error) = storage::save(&preferences_path, &state.preferences) {
+                && let Err(error) = storage::save(&preferences_path, &state.preferences)
+            {
                 eprintln!("{error}");
             }
         }

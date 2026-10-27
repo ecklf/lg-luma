@@ -2052,7 +2052,11 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         let start = out.draw.len();
         if matches!(
             subpage,
-            Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames | Subpage::Clock | Subpage::WallpaperCycle
+            Subpage::WeatherLocation
+                | Subpage::Greeting
+                | Subpage::AppNames
+                | Subpage::Clock
+                | Subpage::WallpaperCycle
         ) {
             match subpage {
                 Subpage::WeatherLocation => location_settings(out, state, assets),
@@ -2113,7 +2117,11 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     state.preferences.temperature_unit == Unit::Fahrenheit,
                 ),
             ],
-            Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames | Subpage::Clock | Subpage::WallpaperCycle => {
+            Subpage::WeatherLocation
+            | Subpage::Greeting
+            | Subpage::AppNames
+            | Subpage::Clock
+            | Subpage::WallpaperCycle => {
                 unreachable!()
             }
             Subpage::Language => Language::ALL
@@ -2212,17 +2220,29 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 .ceil()
                 .clamp(240., 520.);
             let cycle_label = language.t("wallpaperCycle");
-            let cycle_width = (assets.width(cycle_label, text(20.8, 550, -0.02)) + 88.).ceil().clamp(240., 520.);
-            row(out, state, assets, Row {
-                target: Target::WallpaperCycle,
-                rect: Rect::new(1760. - upload_width - 20. - cycle_width, 164.8, cycle_width, 64.),
-                title: cycle_label,
-                icon: Some("refresh"),
-                value: None,
-                description: None,
-                selected: false,
-                chevron: false,
-            });
+            let cycle_width = (assets.width(cycle_label, text(20.8, 550, -0.02)) + 88.)
+                .ceil()
+                .clamp(240., 520.);
+            row(
+                out,
+                state,
+                assets,
+                Row {
+                    target: Target::WallpaperCycle,
+                    rect: Rect::new(
+                        1760. - upload_width - 20. - cycle_width,
+                        164.8,
+                        cycle_width,
+                        64.,
+                    ),
+                    title: cycle_label,
+                    icon: Some("refresh"),
+                    value: None,
+                    description: None,
+                    selected: false,
+                    chevron: false,
+                },
+            );
             row(
                 out,
                 state,
@@ -2400,31 +2420,60 @@ fn wallpaper_cycle_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let modes = crate::wallpaper_cycle::WallpaperCycle::ALL;
     for (index, mode) in modes.into_iter().enumerate() {
-        row(out, state, assets, Row {
-            target: Target::Choice(index),
-            rect: Rect::new(640., 164.8 + index as f32 * 84. - state.scroll, 1120., 72.),
-            title: language.t(mode.label_key()),
-            icon: None,
-            value: None,
-            description: None,
-            selected: state.preferences.wallpaper_cycle == mode,
-            chevron: false,
-        });
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::Choice(index),
+                rect: Rect::new(640., 164.8 + index as f32 * 84. - state.scroll, 1120., 72.),
+                title: language.t(mode.label_key()),
+                icon: None,
+                value: None,
+                description: None,
+                selected: state.preferences.wallpaper_cycle == mode,
+                chevron: false,
+            },
+        );
     }
-    out.text(language.t("wallpaperCycleIncluded"), Rect::new(664., 612.8 - state.scroll, 1072., 28.), text(18.4, 500, -0.02), WHITE, false);
+    out.text(
+        language.t("wallpaperCycleIncluded"),
+        Rect::new(664., 612.8 - state.scroll, 1072., 28.),
+        text(18.4, 500, -0.02),
+        WHITE,
+        false,
+    );
     for index in 0..state.background_count() {
         let id = state.background_id(index).unwrap();
-        let path = state.wallpapers.iter().find(|item| item.id == id)
-            .map_or_else(|| assets.path(format!("thumbnails/{id}.jpg")), |item| item.thumbnail());
-        let rect = Rect::new(640. + (index % 3) as f32 * 380., 660.8 + (index / 3) as f32 * 226.5 - state.scroll, 360., 202.5);
+        let path = state
+            .wallpapers
+            .iter()
+            .find(|item| item.id == id)
+            .map_or_else(
+                || assets.path(format!("thumbnails/{id}.jpg")),
+                |item| item.thumbnail(),
+            );
+        let rect = Rect::new(
+            640. + (index % 3) as f32 * 380.,
+            660.8 + (index / 3) as f32 * 226.5 - state.scroll,
+            360.,
+            202.5,
+        );
         let target = Target::Choice(modes.len() + index);
         out.image(path, rect, 16., false);
-        if !state.preferences.wallpaper_skip.iter().any(|skipped| skipped == id) {
+        if !state
+            .preferences
+            .wallpaper_skip
+            .iter()
+            .any(|skipped| skipped == id)
+        {
             let check = Rect::new(rect.x + rect.w - 32., rect.y + rect.h - 32., 24., 24.);
             out.shape(check, 12., WHITE);
             out.icon(assets, "check", check.inset(4.), c(0x333333, 1.));
         }
-        if state.focus == target { out.ring(rect, 16.); }
+        if state.focus == target {
+            out.ring(rect, 16.);
+        }
         out.control(target, rect, true);
     }
 }

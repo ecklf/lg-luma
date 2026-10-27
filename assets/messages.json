@@ -1,21 +1,81 @@
 {
   "wallpaperCycle": {
-    "en": "Change wallpaper", "de": "Hintergrund wechseln", "es": "Cambiar fondo", "zh": "更换壁纸", "pt": "Trocar plano de fundo", "it": "Cambia sfondo", "ru": "Смена обоев", "pl": "Zmiana tapety", "fr": "Changer de fond d’écran", "vi": "Đổi hình nền", "nl": "Achtergrond wisselen"
+    "en": "Change wallpaper",
+    "de": "Hintergrund wechseln",
+    "es": "Cambiar fondo",
+    "zh": "更换壁纸",
+    "pt": "Trocar plano de fundo",
+    "it": "Cambia sfondo",
+    "ru": "Смена обоев",
+    "pl": "Zmiana tapety",
+    "fr": "Changer de fond d’écran",
+    "vi": "Đổi hình nền",
+    "nl": "Achtergrond wisselen"
   },
   "wallpaperCycleLaunch": {
-    "en": "Each time Luma starts", "de": "Bei jedem Start von Luma", "es": "Cada vez que se inicia Luma", "zh": "每次启动 Luma 时", "pt": "Sempre que o Luma iniciar", "it": "A ogni avvio di Luma", "ru": "При каждом запуске Luma", "pl": "Przy każdym uruchomieniu Luma", "fr": "À chaque démarrage de Luma", "vi": "Mỗi lần Luma khởi động", "nl": "Elke keer dat Luma start"
+    "en": "Each time Luma starts",
+    "de": "Bei jedem Start von Luma",
+    "es": "Cada vez que se inicia Luma",
+    "zh": "每次启动 Luma 时",
+    "pt": "Sempre que o Luma iniciar",
+    "it": "A ogni avvio di Luma",
+    "ru": "При каждом запуске Luma",
+    "pl": "Przy każdym uruchomieniu Luma",
+    "fr": "À chaque démarrage de Luma",
+    "vi": "Mỗi lần Luma khởi động",
+    "nl": "Elke keer dat Luma start"
   },
   "wallpaperCycleQuarter": {
-    "en": "Every 15 minutes", "de": "Alle 15 Minuten", "es": "Cada 15 minutos", "zh": "每 15 分钟", "pt": "A cada 15 minutos", "it": "Ogni 15 minuti", "ru": "Каждые 15 минут", "pl": "Co 15 minut", "fr": "Toutes les 15 minutes", "vi": "Mỗi 15 phút", "nl": "Elke 15 minuten"
+    "en": "Every 15 minutes",
+    "de": "Alle 15 Minuten",
+    "es": "Cada 15 minutos",
+    "zh": "每 15 分钟",
+    "pt": "A cada 15 minutos",
+    "it": "Ogni 15 minuti",
+    "ru": "Каждые 15 минут",
+    "pl": "Co 15 minut",
+    "fr": "Toutes les 15 minutes",
+    "vi": "Mỗi 15 phút",
+    "nl": "Elke 15 minuten"
   },
   "wallpaperCycleHourly": {
-    "en": "Every hour", "de": "Stündlich", "es": "Cada hora", "zh": "每小时", "pt": "A cada hora", "it": "Ogni ora", "ru": "Каждый час", "pl": "Co godzinę", "fr": "Toutes les heures", "vi": "Mỗi giờ", "nl": "Elk uur"
+    "en": "Every hour",
+    "de": "Stündlich",
+    "es": "Cada hora",
+    "zh": "每小时",
+    "pt": "A cada hora",
+    "it": "Ogni ora",
+    "ru": "Каждый час",
+    "pl": "Co godzinę",
+    "fr": "Toutes les heures",
+    "vi": "Mỗi giờ",
+    "nl": "Elk uur"
   },
   "wallpaperCycleDaily": {
-    "en": "Every day", "de": "Täglich", "es": "Cada día", "zh": "每天", "pt": "Todos os dias", "it": "Ogni giorno", "ru": "Каждый день", "pl": "Codziennie", "fr": "Tous les jours", "vi": "Mỗi ngày", "nl": "Elke dag"
+    "en": "Every day",
+    "de": "Täglich",
+    "es": "Cada día",
+    "zh": "每天",
+    "pt": "Todos os dias",
+    "it": "Ogni giorno",
+    "ru": "Каждый день",
+    "pl": "Codziennie",
+    "fr": "Tous les jours",
+    "vi": "Mỗi ngày",
+    "nl": "Elke dag"
   },
   "wallpaperCycleIncluded": {
-    "en": "Wallpapers in the rotation", "de": "Hintergründe im Wechsel", "es": "Fondos en la rotación", "zh": "参与轮换的壁纸", "pt": "Planos de fundo na rotação", "it": "Sfondi nella rotazione", "ru": "Обои в ротации", "pl": "Tapety w rotacji", "fr": "Fonds d’écran en rotation", "vi": "Hình nền trong danh sách luân phiên", "nl": "Achtergronden in de rotatie"
+    "en": "Wallpapers in the rotation",
+    "de": "Hintergründe im Wechsel",
+    "es": "Fondos en la rotación",
+    "zh": "参与轮换的壁纸",
+    "pt": "Planos de fundo na rotação",
+    "it": "Sfondi nella rotazione",
+    "ru": "Обои в ротации",
+    "pl": "Tapety w rotacji",
+    "fr": "Fonds d’écran en rotation",
+    "vi": "Hình nền trong danh sách luân phiên",
+    "nl": "Achtergronden in de rotatie"
   },
   "useBackground": {
     "en": "Use background",

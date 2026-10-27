@@ -28,7 +28,10 @@ pub const BACKGROUND_FADE: f32 = 0.4;
 pub const CYCLE_FADE: f32 = 1.6;
 
 pub fn unix_now() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs()
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -293,7 +296,9 @@ impl State {
         }
         if let Some((_, start)) = &self.previous_background {
             self.dirty = true;
-            if self.preferences.reduced_motion || start.elapsed().as_secs_f32() >= self.background_fade {
+            if self.preferences.reduced_motion
+                || start.elapsed().as_secs_f32() >= self.background_fade
+            {
                 self.previous_background = None;
             }
         }
@@ -653,12 +658,20 @@ impl State {
     }
 
     pub fn cycle_wallpaper(&mut self, now: u64) -> bool {
-        let ids: Vec<_> = self.background_ids()
+        let ids: Vec<_> = self
+            .background_ids()
             .filter(|id| self.deleting_wallpaper.as_deref() != Some(*id))
-            .map(str::to_owned).collect();
-        let next = crate::wallpaper_cycle::next(&ids, &self.preferences.background, &self.preferences.wallpaper_skip);
+            .map(str::to_owned)
+            .collect();
+        let next = crate::wallpaper_cycle::next(
+            &ids,
+            &self.preferences.background,
+            &self.preferences.wallpaper_skip,
+        );
         self.preferences.wallpaper_changed = now;
-        let Some(id) = next else { return false; };
+        let Some(id) = next else {
+            return false;
+        };
         self.preferences.splash_background = Some(self.preferences.splash_background().to_owned());
         if self.preferences.reduced_motion {
             self.previous_background = None;
@@ -744,7 +757,16 @@ impl State {
     pub fn set_wallpapers(&mut self, wallpapers: Vec<crate::wallpapers::Wallpaper>) {
         // A newly uploaded ID can sort before existing entries. Keep the focused
         // image, rather than moving the pointer's target to a different photograph.
-        let focused_id = if let Target::Background(index) = self.focus {
+        let cycle_offset = crate::wallpaper_cycle::WallpaperCycle::ALL.len();
+        let cycle_choice = self.subpage == Some(Subpage::WallpaperCycle)
+            && matches!(self.focus, Target::Choice(index) if index >= cycle_offset);
+        let focused_id = if cycle_choice {
+            if let Target::Choice(index) = self.focus {
+                self.background_id(index - cycle_offset).map(str::to_owned)
+            } else {
+                None
+            }
+        } else if let Target::Background(index) = self.focus {
             self.background_id(index).map(str::to_owned)
         } else {
             None
@@ -767,11 +789,14 @@ impl State {
             self.pointer = false;
         }
         if let Some(id) = focused_id {
-            self.focus = Target::Background(
-                (0..self.background_count())
-                    .find(|&i| self.background_id(i) == Some(id.as_str()))
-                    .unwrap_or(0),
-            );
+            let index = (0..self.background_count())
+                .find(|&i| self.background_id(i) == Some(id.as_str()))
+                .unwrap_or(0);
+            self.focus = if cycle_choice {
+                Target::Choice(cycle_offset + index)
+            } else {
+                Target::Background(index)
+            };
         }
         self.dirty = true;
     }
@@ -951,12 +976,24 @@ impl State {
                     let count = modes + self.background_count();
                     let next = match direction {
                         Direction::Up if index == 0 => Target::Sidebar(1),
-                        Direction::Up => Target::Choice(if index >= modes + 3 { index - 3 } else if index >= modes { modes - 1 } else { index - 1 }),
-                        Direction::Down if index < modes => Target::Choice((index + 1).min(count - 1)),
+                        Direction::Up => Target::Choice(if index >= modes + 3 {
+                            index - 3
+                        } else if index >= modes {
+                            modes - 1
+                        } else {
+                            index - 1
+                        }),
+                        Direction::Down if index < modes => {
+                            Target::Choice((index + 1).min(count - 1))
+                        }
                         Direction::Down => Target::Choice((index + 3).min(count - 1)),
-                        Direction::Left if index < modes || (index - modes) % 3 == 0 => Target::Sidebar(1),
+                        Direction::Left if index < modes || (index - modes).is_multiple_of(3) => {
+                            Target::Sidebar(1)
+                        }
                         Direction::Left => Target::Choice(index - 1),
-                        Direction::Right if index >= modes => Target::Choice((index + 1).min(count - 1)),
+                        Direction::Right if index >= modes => {
+                            Target::Choice((index + 1).min(count - 1))
+                        }
                         Direction::Right => return vec![],
                     };
                     self.focus(next, controls);
@@ -1824,7 +1861,9 @@ impl State {
                 self.focus = Target::Choice(self.preferences.wallpaper_cycle.index());
                 self.scroll = 0.;
                 self.pressed = None;
-                if !self.preferences.reduced_motion { self.panel_started = Some(Instant::now()); }
+                if !self.preferences.reduced_motion {
+                    self.panel_started = Some(Instant::now());
+                }
             }
             Target::UseBackground => {
                 let Some(Overlay::BackgroundOptions { id, .. }) = self.overlay.clone() else {
@@ -1843,7 +1882,9 @@ impl State {
                 }
                 self.preferences.splash_background = Some(if crate::wallpapers::valid_id(&id) {
                     self.preferences.splash_background().to_owned()
-                } else { id.clone() });
+                } else {
+                    id.clone()
+                });
                 self.preferences.background = id;
                 self.preferences.wallpaper_changed = unix_now();
                 self.back();
@@ -1886,10 +1927,17 @@ impl State {
                                 self.preferences.wallpaper_cycle = *mode;
                                 self.preferences.wallpaper_changed = unix_now();
                             }
-                        } else if let Some(id) = self.background_id(index - crate::wallpaper_cycle::WallpaperCycle::ALL.len()).map(str::to_owned) {
+                        } else if let Some(id) = self
+                            .background_id(
+                                index - crate::wallpaper_cycle::WallpaperCycle::ALL.len(),
+                            )
+                            .map(str::to_owned)
+                        {
                             if self.preferences.wallpaper_skip.contains(&id) {
                                 self.preferences.wallpaper_skip.retain(|known| known != &id);
-                            } else { self.preferences.wallpaper_skip.push(id); }
+                            } else {
+                                self.preferences.wallpaper_skip.push(id);
+                            }
                         }
                         return vec![Effect::Save];
                     }
