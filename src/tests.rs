@@ -747,6 +747,29 @@ fn time_format_selects_seconds_without_changing_the_hour_format() {
 }
 
 #[test]
+fn system_version_uses_a_settings_surface_without_an_interactive_target() {
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::SYSTEM_SECTION;
+    state.panel_started = None;
+    let system = scene(&state);
+    assert!(system.draw.iter().any(|draw| matches!(
+        draw,
+        crate::renderer::Draw::Shape(rect, ..)
+            if rect.x == 640. && rect.y == 164.8 && rect.w == 1120. && rect.h == 72.
+    )));
+    assert!(system.draw.iter().any(|draw| matches!(
+        draw,
+        crate::renderer::Draw::Text(label, _, style, color, _)
+            if label == "Luma vtest" && style.size == 20.8 && style.weight == 550 && color[3] == 0.75
+    )));
+    assert_eq!(state.hit_test(&system.controls, 900., 200.), None);
+    state.focus = Target::Sidebar(crate::state::SYSTEM_SECTION);
+    state.direction(Direction::Right, &system.controls);
+    assert_eq!(state.focus, Target::Setting(3));
+}
+
+#[test]
 fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     let mut state = ready();
     state.open(2);

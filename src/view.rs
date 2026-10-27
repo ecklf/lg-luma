@@ -2240,11 +2240,14 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         }
         WEATHER_SECTION => weather_settings(out, state, assets),
         SYSTEM_SECTION => {
+            let version_rect = Rect::new(640., 164.8 - s, 1120., 72.);
+            out.shape(version_rect, 48., c(0x171c20, 0.72));
+            out.border(version_rect, 48., 1., c(0xffffff, 0.07));
             out.text(
                 format!("Luma v{}", assets.version.trim()),
-                Rect::new(664., 164.8 - s, 1072., 28.),
-                text(18.4, 400, 0.),
-                c(0xf5f5f5, 0.56),
+                Rect::new(664.2, version_rect.y + (72. - 29.12) / 2., 1031.8, 29.12),
+                text(20.8, 550, -0.02).leading(1.4),
+                c(0xeeeeee, 0.75),
                 false,
             );
             for (position, (index, title, icon, value, chevron)) in [
@@ -2277,7 +2280,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     assets,
                     Row {
                         target: Target::Setting(index),
-                        rect: Rect::new(640., 212.8 + position as f32 * 84. - s, 1120., 72.),
+                        rect: Rect::new(640., 248.8 + position as f32 * 84. - s, 1120., 72.),
                         title,
                         icon: Some(icon),
                         value,
