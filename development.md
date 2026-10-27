@@ -90,7 +90,7 @@ It does not execute the test suites. A desktop display is required; on headless 
 | OK or Back in move mode       | Finish reordering without launching                           |
 | Escape / Back / Backspace     | Parent navigation, overlay dismissal or Recent apps from Home |
 | Hold Back / Escape for 600 ms | Open Recent apps while Luma is focused                        |
-| Menu / M / right-click        | App options side popup                                        |
+| Menu / M / right-click        | App or background options side popup                          |
 | Pointer / wheel               | Hover, click, hold and scrolling                              |
 | F5                            | Refresh inventory                                             |
 
@@ -102,6 +102,11 @@ and the vector power-icon **Quit app** action separately from General preference
 On Apps, OK or a normal pointer click on an app opens its side popup, with **Open** first and focused by
 default, followed by favorite, hide/show and **Delete app** actions. A second OK launches the app.
 Home favorites, Inputs and Recent apps launch directly. Hold OK on Home still reorders favorites.
+Background cards open the same side popup with **Use background** first and **Delete background**
+only for inactive backgrounds. Deletion requires confirmation with **Cancel** focused by default.
+Uploaded images are deleted on the wallpaper worker; bundled assets remain in the package, with
+their gallery removal persisted in preferences. The active background is protected in both the
+UI and deletion worker. Back restores the gallery card by identity even after catalog changes.
 LG's Settings and More buttons retain their system menus, with no custom key interception.
 Deletion opens a separate confirmation with **Cancel** focused by default. Cancel or Back returns
 to the side popup. Once deletion is sent, dismissal does not cancel the platform operation.

@@ -273,6 +273,7 @@ fn effects(
     platform: &Platform,
     preferences: &std::path::Path,
     weather: &weather_service::Service,
+    wallpapers: &wallpapers::Service,
 ) -> bool {
     for effect in effects {
         match effect {
@@ -320,6 +321,9 @@ fn effects(
             }
             Effect::Quit => return false,
             Effect::Uninstall(id) => platform.send(Request::Uninstall(id)),
+            Effect::DeleteWallpaper(id) => {
+                wallpapers.delete(id, state.preferences.background.clone())
+            }
             Effect::Recent {
                 generation,
                 command,
@@ -634,6 +638,7 @@ fn run() -> Result<(), String> {
         &platform,
         &preferences_path,
         &weather_service,
+        &wallpaper_service,
     );
     platform.sync_splash(&state.preferences.background);
     startup_stage("preferences and workers");
@@ -900,6 +905,7 @@ fn run() -> Result<(), String> {
         while let Ok(event) = wallpaper_service.receiver.try_recv() {
             match event {
                 wallpapers::Event::Catalog(items) => state.set_wallpapers(items),
+                wallpapers::Event::Deleted(id, result) => state.wallpaper_deleted(id, result),
                 wallpapers::Event::Session(generation, result)
                     if generation == wallpaper_service.generation()
                         && matches!(state.overlay, Some(Overlay::WallpaperUpload)) =>
@@ -988,6 +994,7 @@ fn run() -> Result<(), String> {
                         &platform,
                         &preferences_path,
                         &weather_service,
+                        &wallpaper_service,
                     );
                 }
                 Response::Recent {
@@ -1010,6 +1017,7 @@ fn run() -> Result<(), String> {
                         &platform,
                         &preferences_path,
                         &weather_service,
+                        &wallpaper_service,
                     );
                 }
             }
@@ -1340,6 +1348,7 @@ fn run() -> Result<(), String> {
                 &platform,
                 &preferences_path,
                 &weather_service,
+                &wallpaper_service,
             );
             wallpaper_service.set_active(
                 running
@@ -1372,6 +1381,7 @@ fn run() -> Result<(), String> {
                 &platform,
                 &preferences_path,
                 &weather_service,
+                &wallpaper_service,
             );
         }
         if let Some(held) = &mut press
@@ -1406,6 +1416,7 @@ fn run() -> Result<(), String> {
                     &platform,
                     &preferences_path,
                     &weather_service,
+                    &wallpaper_service,
                 );
             }
         }
@@ -1435,6 +1446,7 @@ fn run() -> Result<(), String> {
                 &platform,
                 &preferences_path,
                 &weather_service,
+                &wallpaper_service,
             );
         }
         let keyboard = state.text_input_active();

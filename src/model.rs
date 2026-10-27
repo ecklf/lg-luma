@@ -94,6 +94,7 @@ pub struct Preferences {
     pub favorites: Option<Vec<String>>,
     pub hidden: Vec<String>,
     pub background: String,
+    pub deleted_backgrounds: Vec<String>,
     pub show_home_names: bool,
     pub show_app_names: bool,
     pub hour_24: bool,
@@ -123,6 +124,7 @@ impl Default for Preferences {
             favorites: None,
             hidden: vec![],
             background: "dunes".into(),
+            deleted_backgrounds: vec![],
             show_home_names: false,
             show_app_names: true,
             hour_24: false,
@@ -204,6 +206,12 @@ impl Preferences {
         {
             self.background = "dunes".into();
         }
+        let mut seen = HashSet::new();
+        self.deleted_backgrounds.retain(|id| {
+            id != &self.background
+                && BACKGROUNDS.iter().any(|(known, _)| *known == id)
+                && seen.insert(id.clone())
+        });
         fn clean(ids: &mut Vec<String>) {
             let mut seen = HashSet::new();
             ids.retain(|id| valid_app_id(id) && seen.insert(id.clone()));

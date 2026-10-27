@@ -527,11 +527,16 @@ pub fn scene_with_pill(
     if let Some(
         overlay @ (Overlay::Options { .. }
         | Overlay::Delete { .. }
+        | Overlay::BackgroundOptions { .. }
+        | Overlay::BackgroundDelete { .. }
         | Overlay::Keyboard
         | Overlay::WallpaperUpload),
     ) = &state.overlay
     {
         let anchor = match overlay {
+            Overlay::BackgroundOptions { id, .. } => out.controls.iter()
+                .find(|control| matches!(control.target, Target::Background(index) if state.background_id(index) == Some(id.as_str())))
+                .map(|control| Rect::new(control.rect.x, control.rect.y, control.rect.w, 202.5)),
             Overlay::Options { id, .. } => out
                 .controls
                 .iter()
@@ -557,22 +562,30 @@ pub fn scene_with_pill(
         out.controls.clear();
         let start = out.draw.len();
         out.shape(Rect::new(0., 0., 1920., 1080.), 0., c(0x080b12, 0.70));
-        if matches!(overlay, Overlay::Options { .. })
-            && let Some(opened) = state.panel_started
+        if matches!(
+            overlay,
+            Overlay::Options { .. } | Overlay::BackgroundOptions { .. }
+        ) && let Some(opened) = state.panel_started
         {
             // The lifted card stays opaque while the backdrop and popup fade.
             // Fading it over its dimmed parent copy causes a brightness dip.
             out.fade(start, (opened.elapsed().as_secs_f32() / 0.12).min(1.), 1.);
         }
         match overlay {
-            Overlay::Options { id, .. } => options(&mut out, state, assets, id, anchor),
-            Overlay::Delete { id, .. } => delete_confirmation(&mut out, state, assets, id),
+            Overlay::Options { id, .. } | Overlay::BackgroundOptions { id, .. } => {
+                options(&mut out, state, assets, id, anchor)
+            }
+            Overlay::Delete { id, .. } | Overlay::BackgroundDelete { id, .. } => {
+                delete_confirmation(&mut out, state, assets, id)
+            }
             Overlay::Keyboard => keyboard(&mut out, state, assets),
             Overlay::WallpaperUpload => wallpaper_upload(&mut out, state, assets),
             Overlay::SystemKeyboard | Overlay::Recents { .. } => {}
         }
-        if !matches!(overlay, Overlay::Options { .. })
-            && let Some(opened) = state.panel_started
+        if !matches!(
+            overlay,
+            Overlay::Options { .. } | Overlay::BackgroundOptions { .. }
+        ) && let Some(opened) = state.panel_started
         {
             out.fade(start, (opened.elapsed().as_secs_f32() / 0.12).min(1.), 1.);
         }
@@ -2187,9 +2200,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             );
             for index in 0..state.background_count() {
                 let id = state.background_id(index).unwrap();
-                let custom = index
-                    .checked_sub(BACKGROUNDS.len())
-                    .and_then(|index| state.wallpapers.get(index));
+                let custom = state.wallpapers.iter().find(|item| item.id == id);
                 let rect = Rect::new(
                     640. + (index % 3) as f32 * 380.,
                     252.8 + (index / 3) as f32 * 264.3 - s,
@@ -2716,14 +2727,25 @@ fn empty(out: &mut Scene, state: &State, assets: &Assets, content: EmptyState<'_
 
 fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Option<Rect>) {
     let language = state.preferences.language;
+    let background = matches!(state.overlay, Some(Overlay::BackgroundOptions { .. }));
     let app = state.inventory.apps.iter().find(|app| app.id == id);
     let favorite = state
         .preferences
         .favorites(&state.inventory.apps)
         .iter()
         .any(|item| item == id);
-    let deletable = crate::platform::can_uninstall(id);
-    let height = if deletable { 329.6 } else { 252.8 };
+    let deletable = if background {
+        state.can_delete_background(id) && state.deleting_wallpaper.is_none()
+    } else {
+        crate::platform::can_uninstall(id)
+    };
+    let height = if background {
+        if deletable { 176. } else { 99.2 }
+    } else if deletable {
+        329.6
+    } else {
+        252.8
+    };
     let card = anchor.unwrap_or(Rect::new(460., 380., 256., 153.6));
     let x = if card.x + card.w + 32. + 520. <= 1836. {
         card.x + card.w + 32.
@@ -2732,7 +2754,18 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
     };
     let panel = Rect::new(x, card.y.clamp(164., 974. - height), 520., height);
     // Lift the selected card out of the dimmed grid without moving its hit region.
-    if let Some(app) = app {
+    if background {
+        let path = state
+            .wallpapers
+            .iter()
+            .find(|item| item.id == id)
+            .map_or_else(
+                || assets.path(format!("thumbnails/{id}.jpg")),
+                |item| item.thumbnail(),
+            );
+        out.image(path, card, 16., false);
+        out.border(card, 16., 1., c(0xffffff, 0.086));
+    } else if let Some(app) = app {
         app_face(out, assets, app, card, language, 19.2);
         if favorite {
             out.icon(
@@ -2754,26 +2787,34 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
     ));
     out.border(panel, 27.2, 1., c(0xffffff, 0.12));
     let hidden = state.preferences.hidden.iter().any(|item| item == id);
-    for (row, (target, label)) in [
-        (Target::OpenApp, language.t("open")),
-        (
-            Target::Option(0),
-            if favorite {
-                language.t("removeFavorite")
-            } else {
-                language.t("addFavorite")
-            },
-        ),
-        (
-            Target::Option(1),
-            language.t(if hidden { "showApp" } else { "hideApp" }),
-        ),
-        (Target::Option(2), language.t("deleteApp")),
-    ]
-    .into_iter()
-    .take(if deletable { 4 } else { 3 })
-    .enumerate()
-    {
+    let actions = if background {
+        let mut actions = vec![(Target::UseBackground, language.t("useBackground"))];
+        if deletable {
+            actions.push((Target::DeleteBackground, language.t("deleteBackground")));
+        }
+        actions
+    } else {
+        vec![
+            (Target::OpenApp, language.t("open")),
+            (
+                Target::Option(0),
+                if favorite {
+                    language.t("removeFavorite")
+                } else {
+                    language.t("addFavorite")
+                },
+            ),
+            (
+                Target::Option(1),
+                language.t(if hidden { "showApp" } else { "hideApp" }),
+            ),
+            (Target::Option(2), language.t("deleteApp")),
+        ]
+        .into_iter()
+        .take(if deletable { 4 } else { 3 })
+        .collect()
+    };
+    for (row, (target, label)) in actions.into_iter().enumerate() {
         let rect = Rect::new(
             panel.x + 16.,
             panel.y + 16. + row as f32 * 76.8,
@@ -2781,7 +2822,7 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
             67.2,
         );
         let focused = state.focus == target;
-        let destructive = target == Target::Option(2);
+        let destructive = matches!(target, Target::Option(2) | Target::DeleteBackground);
         let label_style = text(20.8, 600, -0.02);
         let label_height = label_style.size * label_style.line_height;
         let label_color = if destructive || !focused {
@@ -2814,6 +2855,7 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
             assets,
             match &target {
                 Target::OpenApp => "arrow",
+                Target::UseBackground => "check",
                 Target::Option(0) => {
                     if favorite {
                         "heart-filled"
@@ -2846,26 +2888,51 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
 
 fn delete_confirmation(out: &mut Scene, state: &State, assets: &Assets, id: &str) {
     let language = state.preferences.language;
-    let title = state
-        .inventory
-        .apps
-        .iter()
-        .find(|app| app.id == id)
-        .map_or(id, |app| app.title.as_str());
+    let background = matches!(state.overlay, Some(Overlay::BackgroundDelete { .. }));
+    let deleting = if background {
+        state.deleting_wallpaper.as_deref() == Some(id)
+    } else {
+        state.uninstalling.as_deref() == Some(id)
+    };
+    let warning_key = if background {
+        "deleteBackgroundWarning"
+    } else {
+        "deleteAppWarning"
+    };
+    let deleting_key = if background {
+        "deletingBackground"
+    } else {
+        "deletingApp"
+    };
+    let delete_key = if background {
+        "deleteBackground"
+    } else {
+        "deleteApp"
+    };
+    let title = if background {
+        state
+            .wallpapers
+            .iter()
+            .find(|item| item.id == id)
+            .map_or_else(|| language.wallpaper(id), |item| item.name.as_str())
+    } else {
+        state
+            .inventory
+            .apps
+            .iter()
+            .find(|app| app.id == id)
+            .map_or(id, |app| app.title.as_str())
+    };
     let body_style = text(20.8, 600, -0.02).leading(1.5);
     let body = language.format(
-        if state.uninstalling.as_deref() == Some(id) {
-            "deletingApp"
-        } else {
-            "deleteAppWarning"
-        },
+        if deleting { deleting_key } else { warning_key },
         &[("app", title)],
     );
     // Status changes must not move the confirmation buttons under the pointer.
-    let warning = language.format("deleteAppWarning", &[("app", title)]);
+    let warning = language.format(warning_key, &[("app", title)]);
     let body_height = assets
         .lines(&warning, body_style, 568.)
-        .max(assets.lines(language.t("deletingApp"), body_style, 568.))
+        .max(assets.lines(language.t(deleting_key), body_style, 568.))
         .max(1) as f32
         * 31.2;
     let height = 244. + body_height;
@@ -2887,7 +2954,7 @@ fn delete_confirmation(out: &mut Scene, state: &State, assets: &Assets, id: &str
         true,
     );
     for (index, (target, label)) in [
-        (Target::ConfirmDelete, "deleteApp"),
+        (Target::ConfirmDelete, delete_key),
         (Target::CancelDelete, "cancel"),
     ]
     .into_iter()
@@ -2900,7 +2967,7 @@ fn delete_confirmation(out: &mut Scene, state: &State, assets: &Assets, id: &str
             68.,
         );
         let focused = state.focus == target;
-        let disabled = target == Target::ConfirmDelete && state.uninstalling.is_some();
+        let disabled = target == Target::ConfirmDelete && deleting;
         let label_style = text(20.8, 600, -0.02);
         let label_height = label_style.size * label_style.line_height;
         out.shape(

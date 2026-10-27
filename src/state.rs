@@ -56,6 +56,8 @@ pub enum Target {
     ClockTimeFormat,
     Background(usize),
     UploadWallpaper,
+    UseBackground,
+    DeleteBackground,
     InputMode(String),
     InputRename,
     InputNameReset,
@@ -115,6 +117,8 @@ pub enum Overlay {
     Keyboard,
     SystemKeyboard,
     WallpaperUpload,
+    BackgroundOptions { id: String, restore: Target },
+    BackgroundDelete { id: String, restore: Target },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -156,6 +160,7 @@ pub enum Effect {
     Reload,
     Launch(String),
     Uninstall(String),
+    DeleteWallpaper(String),
     Recent {
         generation: u64,
         command: crate::recents::Command,
@@ -197,6 +202,7 @@ pub struct State {
     pub pressed: Option<Target>,
     pub previous_background: Option<(String, Instant)>,
     pub wallpapers: Vec<crate::wallpapers::Wallpaper>,
+    pub deleting_wallpaper: Option<String>,
     pub wallpaper_upload: Option<Result<crate::wallpapers::Session, String>>,
     pub panel_started: Option<Instant>,
     pub weather: weather::Weather,
@@ -233,6 +239,7 @@ impl State {
             pressed: None,
             previous_background: None,
             wallpapers: vec![],
+            deleting_wallpaper: None,
             wallpaper_upload: None,
             panel_started: None,
             weather: weather::Weather::default(),
@@ -623,17 +630,77 @@ impl State {
     }
 
     pub fn background_count(&self) -> usize {
-        BACKGROUNDS.len() + self.wallpapers.len()
+        self.background_ids().count()
     }
 
     pub fn background_id(&self, index: usize) -> Option<&str> {
-        if index < BACKGROUNDS.len() {
-            Some(BACKGROUNDS[index].0)
-        } else {
-            self.wallpapers
-                .get(index - BACKGROUNDS.len())
-                .map(|item| item.id.as_str())
+        self.background_ids().nth(index)
+    }
+
+    fn background_ids(&self) -> impl Iterator<Item = &str> {
+        BACKGROUNDS
+            .iter()
+            .map(|(id, _)| *id)
+            .filter(|id| {
+                *id == self.preferences.background
+                    || !self
+                        .preferences
+                        .deleted_backgrounds
+                        .iter()
+                        .any(|deleted| deleted == id)
+            })
+            .chain(self.wallpapers.iter().map(|item| item.id.as_str()))
+    }
+
+    pub fn can_delete_background(&self, id: &str) -> bool {
+        id != self.preferences.background && self.background_ids().any(|known| known == id)
+    }
+
+    fn background_target(&self, id: &str) -> Target {
+        Target::Background(
+            self.background_ids()
+                .position(|known| known == id)
+                .unwrap_or(0),
+        )
+    }
+
+    pub fn wallpaper_deleted(&mut self, id: String, result: Result<(), String>) {
+        if self.deleting_wallpaper.as_deref() != Some(&id) {
+            return;
         }
+        self.deleting_wallpaper = None;
+        if let Err(error) = result {
+            eprintln!("Luma background deletion: {error}");
+            self.notify(self.preferences.language.t("deleteBackgroundError"));
+            return;
+        }
+        self.finish_background_delete(&id);
+    }
+
+    fn finish_background_delete(&mut self, id: &str) {
+        let index = self
+            .background_ids()
+            .position(|known| known == id)
+            .unwrap_or(0);
+        let focused = match self.focus {
+            Target::Background(index) => self.background_id(index).map(str::to_owned),
+            _ => None,
+        };
+        self.wallpapers.retain(|item| item.id != id);
+        if BACKGROUNDS.iter().any(|(known, _)| *known == id) {
+            self.preferences.deleted_backgrounds.push(id.to_owned());
+        }
+        if matches!(&self.overlay, Some(Overlay::BackgroundOptions { id: current, .. } | Overlay::BackgroundDelete { id: current, .. }) if current == id)
+        {
+            self.overlay = None;
+            self.panel_started = None;
+            self.focus = Target::Background(index.min(self.background_count().saturating_sub(1)));
+            self.pointer = false;
+        } else if let Some(focused) = focused {
+            self.focus = self.background_target(&focused);
+        }
+        self.pressed = None;
+        self.notify(self.preferences.language.t("backgroundDeleted"));
     }
 
     pub fn set_wallpapers(&mut self, wallpapers: Vec<crate::wallpapers::Wallpaper>) {
@@ -645,11 +712,27 @@ impl State {
             None
         };
         self.wallpapers = wallpapers;
+        if let Some(
+            Overlay::BackgroundOptions { id, restore } | Overlay::BackgroundDelete { id, restore },
+        ) = &self.overlay
+            && !self.background_ids().any(|known| known == id)
+        {
+            let index = if let Target::Background(index) = restore {
+                *index
+            } else {
+                0
+            };
+            self.focus = Target::Background(index.min(self.background_count().saturating_sub(1)));
+            self.overlay = None;
+            self.panel_started = None;
+            self.pressed = None;
+            self.pointer = false;
+        }
         if let Some(id) = focused_id {
             self.focus = Target::Background(
                 (0..self.background_count())
                     .find(|&i| self.background_id(i) == Some(id.as_str()))
-                    .unwrap_or(3),
+                    .unwrap_or(0),
             );
         }
         self.dirty = true;
@@ -662,7 +745,7 @@ impl State {
                     .position(|index| {
                         self.background_id(index) == Some(self.preferences.background.as_str())
                     })
-                    .unwrap_or(3),
+                    .unwrap_or(0),
             ),
             WEATHER_SECTION => Target::WeatherToggle,
             SYSTEM_SECTION => Target::Setting(3),
@@ -1176,7 +1259,19 @@ impl State {
         if self.overlay.is_some() || self.moving.is_some() {
             return;
         }
-        if let Target::App(id) = &self.focus {
+        if let Target::Background(index) = self.focus {
+            if let Some(id) = self.background_id(index).map(str::to_owned) {
+                self.overlay = Some(Overlay::BackgroundOptions {
+                    id,
+                    restore: self.focus.clone(),
+                });
+                self.focus = Target::UseBackground;
+                if !self.preferences.reduced_motion {
+                    self.panel_started = Some(Instant::now());
+                }
+                self.dirty = true;
+            }
+        } else if let Target::App(id) = &self.focus {
             self.overlay = Some(Overlay::Options {
                 id: id.clone(),
                 restore: self.focus.clone(),
@@ -1654,16 +1749,38 @@ impl State {
                 }
                 return vec![Effect::Save];
             }
-            Target::Background(index) => {
-                let Some(id) = self.background_id(index).map(str::to_owned) else {
+            Target::Background(_) => {
+                self.options();
+            }
+            Target::UseBackground => {
+                let Some(Overlay::BackgroundOptions { id, .. }) = self.overlay.clone() else {
                     return vec![];
                 };
+                if self.deleting_wallpaper.as_deref() == Some(&id) {
+                    return vec![];
+                }
+                if !self.background_ids().any(|known| known == id) {
+                    return self.back();
+                }
                 if !self.preferences.reduced_motion && self.preferences.background != id {
                     self.previous_background =
                         Some((self.preferences.background.clone(), Instant::now()));
                 }
                 self.preferences.background = id;
+                self.back();
                 return vec![Effect::Save];
+            }
+            Target::DeleteBackground => {
+                if let Some(Overlay::BackgroundOptions { id, restore }) = self.overlay.clone()
+                    && self.can_delete_background(&id)
+                    && self.deleting_wallpaper.is_none()
+                {
+                    self.overlay = Some(Overlay::BackgroundDelete { id, restore });
+                    self.focus = Target::CancelDelete;
+                    self.pointer = false;
+                    self.pressed = None;
+                    self.panel_started = None;
+                }
             }
             Target::InputMode(id) => {
                 let mode = self
@@ -1812,6 +1929,19 @@ impl State {
             }
             Target::CancelDelete => return self.back(),
             Target::ConfirmDelete => {
+                if let Some(Overlay::BackgroundDelete { id, .. }) = self.overlay.clone() {
+                    if self.can_delete_background(&id) && self.deleting_wallpaper.is_none() {
+                        if crate::wallpapers::valid_id(&id) {
+                            self.deleting_wallpaper = Some(id.clone());
+                            self.focus = Target::CancelDelete;
+                            return vec![Effect::DeleteWallpaper(id)];
+                        }
+                        // Packaged assets remain intact; persist removal from the gallery.
+                        self.finish_background_delete(&id);
+                        return vec![Effect::Save];
+                    }
+                    return vec![];
+                }
                 if let Some(Overlay::Delete { id, .. }) = &self.overlay
                     && self.uninstalling.is_none()
                     && crate::platform::can_uninstall(id)
@@ -1852,6 +1982,17 @@ impl State {
         }
         if let Some(overlay) = self.overlay.take() {
             self.panel_started = None;
+            if let Overlay::BackgroundDelete { id, restore } = overlay {
+                self.overlay = Some(Overlay::BackgroundOptions { id, restore });
+                self.focus = Target::DeleteBackground;
+                self.pressed = None;
+                return vec![];
+            }
+            if let Overlay::BackgroundOptions { id, .. } = overlay {
+                self.focus = self.background_target(&id);
+                self.pressed = None;
+                return vec![];
+            }
             if matches!(overlay, Overlay::WallpaperUpload) {
                 self.wallpaper_upload = None;
                 self.focus = Target::UploadWallpaper;

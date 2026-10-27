@@ -87,6 +87,65 @@ fn upload_tokens_are_eight_unbiased_alphanumeric_characters() {
 }
 
 #[test]
+fn deletion_protects_selected_and_bundled_backgrounds_and_only_removes_the_requested_upload() {
+    let fixture = Fixture::new();
+    let bytes = image(1920, 1080);
+    let first = store(&fixture.wallpapers(), "Lake", &bytes, || true).unwrap();
+    let second = store(&fixture.wallpapers(), "Mountain", &bytes, || true).unwrap();
+    assert!(delete_wallpaper(&fixture.wallpapers(), &first.id, &first.id).is_err());
+    for id in ["dunes", "../preferences.json", "custom-../../other"] {
+        assert!(delete_wallpaper(&fixture.wallpapers(), id, "dunes").is_err());
+    }
+    assert_eq!(catalog(&fixture.wallpapers()).len(), 2);
+    delete_wallpaper(&fixture.wallpapers(), &first.id, &second.id).unwrap();
+    assert!(!first.directory.exists());
+    assert!(second.directory.join("wallpaper.jpg").exists());
+    assert_eq!(catalog(&fixture.wallpapers()).len(), 1);
+    assert!(delete_wallpaper(&fixture.wallpapers(), &first.id, &second.id).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn deletion_rejects_symlink_roots_and_entries_and_never_follows_internal_symlinks() {
+    use std::os::unix::fs::symlink;
+    let fixture = Fixture::new();
+    let root = fixture.wallpapers();
+    fs::create_dir(&root).unwrap();
+    let outside = fixture.0.join("outside");
+    fs::create_dir(&outside).unwrap();
+    fs::write(outside.join("keep"), b"keep").unwrap();
+    let id = format!("custom-{}", "1".repeat(32));
+    symlink(&outside, root.join(&id)).unwrap();
+    assert!(delete_wallpaper(&root, &id, "dunes").is_err());
+    fs::remove_file(root.join(&id)).unwrap();
+    fs::create_dir(root.join(&id)).unwrap();
+    symlink(&outside, root.join(&id).join("linked")).unwrap();
+    let linked_root = fixture.0.join("linked-root");
+    symlink(&root, &linked_root).unwrap();
+    assert!(delete_wallpaper(&linked_root, &id, "dunes").is_err());
+    delete_wallpaper(&root, &id, "dunes").unwrap();
+    assert_eq!(fs::read(outside.join("keep")).unwrap(), b"keep");
+}
+
+#[test]
+fn worker_reports_deletion_before_the_updated_catalog() {
+    let fixture = Fixture::new();
+    let item = store(&fixture.wallpapers(), "Lake", &image(1920, 1080), || true).unwrap();
+    let service = Service::new(&fixture.0.join("preferences.json"), true).unwrap();
+    assert!(
+        matches!(service.receiver.recv_timeout(Duration::from_secs(5)).unwrap(), Event::Catalog(items) if items.len() == 1)
+    );
+    service.delete(item.id.clone(), "dunes".into());
+    assert!(
+        matches!(service.receiver.recv_timeout(Duration::from_secs(5)).unwrap(), Event::Deleted(id, Ok(())) if id == item.id)
+    );
+    assert!(
+        matches!(service.receiver.recv_timeout(Duration::from_secs(5)).unwrap(), Event::Catalog(items) if items.is_empty())
+    );
+    assert!(!item.directory.exists());
+}
+
+#[test]
 fn uploads_are_named_normalized_immutable_and_discoverable_after_restart() {
     let fixture = Fixture::new();
     let bytes = image(1920, 1080);

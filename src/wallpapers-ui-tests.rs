@@ -78,6 +78,8 @@ fn upload_discovery_does_not_apply_and_custom_selection_uses_immutable_paths() {
             .any(|draw| matches!(draw, Draw::Text(title, ..) if title == "Summer lake"))
     );
     state.focus = Target::Background(BACKGROUNDS.len());
+    assert!(state.activate().is_empty());
+    assert_eq!(state.focus, Target::UseBackground);
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert_eq!(state.preferences.background, item.id);
     assert!(
@@ -124,4 +126,207 @@ fn catalog_updates_keep_the_focused_image_and_pointer_geometry_stationary() {
         .find(|c| c.target == Target::Background(10))
         .unwrap();
     assert_eq!((before.rect.x, before.rect.y), (after.rect.x, after.rect.y));
+}
+
+#[test]
+fn background_popup_is_modal_lifts_the_same_thumbnail_and_restores_its_parent() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    state.focus = Target::Background(0);
+    let before = controls(&state)
+        .into_iter()
+        .find(|c| c.target == state.focus)
+        .unwrap()
+        .rect;
+    assert!(state.activate().is_empty());
+    assert_eq!(state.focus, Target::UseBackground);
+    assert!(matches!(
+        state.overlay,
+        Some(Overlay::BackgroundOptions { .. })
+    ));
+    let popup = scene(&state);
+    assert!(popup.modal.is_some());
+    assert_eq!(
+        popup
+            .controls
+            .iter()
+            .map(|c| c.target.clone())
+            .collect::<Vec<_>>(),
+        vec![Target::UseBackground, Target::DeleteBackground]
+    );
+    assert!(popup.draw.iter().any(|draw| matches!(draw, Draw::Image(_, rect, ..) if rect.x == before.x && rect.y == before.y && rect.w == before.w && rect.h == 202.5)));
+    state.direction(Direction::Down, &popup.controls);
+    assert_eq!(state.focus, Target::DeleteBackground);
+    state.activate();
+    assert_eq!(state.focus, Target::CancelDelete);
+    assert!(matches!(
+        state.overlay,
+        Some(Overlay::BackgroundDelete { .. })
+    ));
+    state.activate();
+    assert_eq!(state.focus, Target::DeleteBackground);
+    state.back();
+    assert_eq!(state.focus, Target::Background(0));
+    assert!(state.overlay.is_none());
+}
+
+#[test]
+fn selected_background_has_no_delete_action_and_rejects_forced_confirmation() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    let selected = state.preferences.background.clone();
+    let index = (0..state.background_count())
+        .find(|&i| state.background_id(i) == Some(&selected))
+        .unwrap();
+    state.focus = Target::Background(index);
+    state.options();
+    assert_eq!(scene(&state).controls.len(), 1);
+    assert!(!state.can_delete_background(&selected));
+    state.focus = Target::DeleteBackground;
+    state.activate();
+    assert!(matches!(
+        state.overlay,
+        Some(Overlay::BackgroundOptions { .. })
+    ));
+    state.overlay = Some(Overlay::BackgroundDelete {
+        id: selected.clone(),
+        restore: Target::Background(index),
+    });
+    state.focus = Target::ConfirmDelete;
+    assert!(state.activate().is_empty());
+    assert_eq!(state.preferences.background, selected);
+    assert!(state.preferences.deleted_backgrounds.is_empty());
+}
+
+#[test]
+fn every_unselected_bundled_background_can_be_removed_and_stays_removed_after_reload() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    for (id, _) in BACKGROUNDS {
+        if *id == state.preferences.background {
+            continue;
+        }
+        let index = (0..state.background_count())
+            .find(|&i| state.background_id(i) == Some(id))
+            .unwrap();
+        state.focus = Target::Background(index);
+        state.activate();
+        state.focus = Target::DeleteBackground;
+        state.activate();
+        state.focus = Target::ConfirmDelete;
+        assert_eq!(state.activate(), vec![Effect::Save]);
+        assert!(state.overlay.is_none());
+        assert!(!(0..state.background_count()).any(|i| state.background_id(i) == Some(id)));
+        assert!(controls(&state).iter().any(|c| c.target == state.focus));
+    }
+    assert_eq!(state.background_count(), 1);
+    let mut preferences: crate::model::Preferences =
+        serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
+    preferences.sanitize();
+    let restored = State::new(preferences);
+    assert_eq!(restored.background_count(), 1);
+    assert_eq!(restored.background_id(0), Some("dunes"));
+}
+
+#[test]
+fn uploaded_deletion_is_single_flight_handles_failures_and_keeps_unrelated_focus() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    let lake = custom(1, "Lake");
+    let mountain = custom(2, "Mountain");
+    state.set_wallpapers(vec![lake.clone(), mountain.clone()]);
+    state.focus = Target::Background(BACKGROUNDS.len());
+    state.activate();
+    state.focus = Target::DeleteBackground;
+    state.activate();
+    state.focus = Target::ConfirmDelete;
+    assert_eq!(
+        state.activate(),
+        vec![Effect::DeleteWallpaper(lake.id.clone())]
+    );
+    state.focus = Target::ConfirmDelete;
+    assert!(state.activate().is_empty());
+    state.wallpaper_deleted(mountain.id.clone(), Ok(()));
+    assert_eq!(state.wallpapers.len(), 2);
+    state.wallpaper_deleted(lake.id.clone(), Err("read-only".into()));
+    assert_eq!(state.wallpapers.len(), 2);
+    assert!(state.deleting_wallpaper.is_none());
+    state.focus = Target::ConfirmDelete;
+    assert_eq!(
+        state.activate(),
+        vec![Effect::DeleteWallpaper(lake.id.clone())]
+    );
+    state.back();
+    state.focus = Target::UseBackground;
+    assert!(state.activate().is_empty()); // Cannot apply an image being deleted.
+    assert_eq!(state.preferences.background, "dunes");
+    state.back();
+    state.focus = Target::Background(BACKGROUNDS.len() + 1);
+    state.wallpaper_deleted(lake.id, Ok(()));
+    assert_eq!(state.focus, Target::Background(BACKGROUNDS.len()));
+    assert_eq!(
+        state.background_id(BACKGROUNDS.len()),
+        Some(mountain.id.as_str())
+    );
+    assert!(state.overlay.is_none());
+}
+
+#[test]
+fn filtered_bundled_entries_do_not_misidentify_custom_thumbnails_or_popup_parents() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    state.preferences.deleted_backgrounds = BACKGROUNDS
+        .iter()
+        .filter(|(id, _)| *id != "dunes")
+        .map(|(id, _)| (*id).into())
+        .collect();
+    let lake = custom(1, "Lake");
+    state.set_wallpapers(vec![lake.clone()]);
+    state.focus = Target::Background(1);
+    assert!(
+        scene(&state)
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, Draw::Image(path, ..) if path == &lake.thumbnail()))
+    );
+    state.options();
+    state.set_wallpapers(vec![custom(2, "Alps"), lake.clone()]);
+    state.back();
+    assert_eq!(state.focus, Target::Background(2));
+    state.options();
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.background, lake.id);
+}
+
+#[test]
+fn removed_popup_entry_closes_safely_and_preference_sanitizing_protects_the_selection() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    state.set_wallpapers(vec![custom(1, "Lake")]);
+    state.focus = Target::Background(BACKGROUNDS.len());
+    state.options();
+    state.set_wallpapers(vec![]);
+    assert!(state.overlay.is_none());
+    assert!(controls(&state).iter().any(|c| c.target == state.focus));
+    state.preferences.deleted_backgrounds = vec![
+        "dunes".into(),
+        "../bad".into(),
+        "forest".into(),
+        "forest".into(),
+    ];
+    state.preferences.sanitize();
+    assert!(
+        !state
+            .preferences
+            .deleted_backgrounds
+            .iter()
+            .any(|id| id == "dunes" || id == "../bad")
+    );
+    assert!(state.preferences.deleted_backgrounds.len() <= 1);
 }

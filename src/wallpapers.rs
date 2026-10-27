@@ -66,13 +66,19 @@ pub struct Session {
 
 pub enum Event {
     Catalog(Vec<Wallpaper>),
+    Deleted(String, Result<(), String>),
     Session(u64, Result<Session, String>),
     Ended(u64),
 }
 
+enum Command {
+    Wake,
+    Delete { id: String, selected: String },
+}
+
 pub struct Service {
     desired: Arc<AtomicU64>,
-    wake: mpsc::SyncSender<()>,
+    wake: mpsc::Sender<Command>,
     pub receiver: mpsc::Receiver<Event>,
     active: bool,
     generation: u64,
@@ -87,7 +93,7 @@ impl Service {
         let desired = Arc::new(AtomicU64::new(0));
         let worker_desired = desired.clone();
         let (sender, receiver) = mpsc::sync_channel(4);
-        let (wake, updates) = mpsc::sync_channel(1);
+        let (wake, updates) = mpsc::channel();
         thread::Builder::new()
             .name("luma-wallpapers".into())
             .spawn(move || {
@@ -115,19 +121,23 @@ impl Service {
             self.generation += 1;
             self.desired
                 .store(if active { self.generation } else { 0 }, Ordering::Release);
-            let _ = self.wake.try_send(());
+            let _ = self.wake.send(Command::Wake);
         }
     }
 
     pub fn generation(&self) -> u64 {
         self.generation
     }
+
+    pub fn delete(&self, id: String, selected: String) {
+        let _ = self.wake.send(Command::Delete { id, selected });
+    }
 }
 
 impl Drop for Service {
     fn drop(&mut self) {
         self.desired.store(STOP, Ordering::Release);
-        let _ = self.wake.try_send(());
+        let _ = self.wake.send(Command::Wake);
     }
 }
 
@@ -219,6 +229,19 @@ fn catalog(directory: &Path) -> Vec<Wallpaper> {
             .then(a.id.cmp(&b.id))
     });
     result
+}
+
+fn delete_wallpaper(directory: &Path, id: &str, selected: &str) -> Result<(), String> {
+    if id == selected || !valid_id(id) || !real_directory(directory) {
+        return Err("Background cannot be deleted".into());
+    }
+    let path = directory.join(id);
+    if !real_directory(&path) {
+        return Err("Background directory unavailable".into());
+    }
+    // Only the strictly validated app-owned directory is removed; symlink
+    // entries within it are unlinked, never followed by remove_dir_all.
+    fs::remove_dir_all(path).map_err(|error| error.to_string())
 }
 
 /// Root Home creates files readable by the same app user after takeover is disabled.
@@ -458,21 +481,40 @@ fn worker(
     directory: &Path,
     desired: &AtomicU64,
     sender: &mpsc::SyncSender<Event>,
-    updates: &mpsc::Receiver<()>,
+    updates: &mpsc::Receiver<Command>,
     loopback_only: bool,
 ) {
     if sender.send(Event::Catalog(catalog(directory))).is_err() {
         return;
     }
+    let update = |command| match command {
+        Command::Wake => true,
+        Command::Delete { id, selected } => {
+            let result = delete_wallpaper(directory, &id, &selected);
+            sender.send(Event::Deleted(id, result)).is_ok()
+                && sender.send(Event::Catalog(catalog(directory))).is_ok()
+        }
+    };
     let mut handled = 0;
     loop {
+        // Finish queued mutations before starting another upload session.
+        for command in updates.try_iter() {
+            if !update(command) {
+                return;
+            }
+        }
         let generation = desired.load(Ordering::Acquire);
         if generation == STOP {
             break;
         }
         if generation == 0 || generation == handled {
-            if updates.recv().is_err() {
-                break;
+            match updates.recv() {
+                Ok(command) => {
+                    if !update(command) {
+                        break;
+                    }
+                }
+                Err(_) => break,
             }
             continue;
         }

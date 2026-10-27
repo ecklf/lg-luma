@@ -1,4 +1,70 @@
 {
+  "useBackground": {
+    "en": "Use background",
+    "de": "Hintergrund verwenden",
+    "zh": "使用背景",
+    "es": "Usar fondo",
+    "pt": "Usar fundo",
+    "it": "Usa sfondo",
+    "ru": "Использовать фон",
+    "pl": "Użyj tła",
+    "fr": "Utiliser l’arrière-plan"
+  },
+  "deleteBackground": {
+    "en": "Delete background",
+    "de": "Hintergrund löschen",
+    "zh": "删除背景",
+    "es": "Eliminar fondo",
+    "pt": "Excluir fundo",
+    "it": "Elimina sfondo",
+    "ru": "Удалить фон",
+    "pl": "Usuń tło",
+    "fr": "Supprimer l’arrière-plan"
+  },
+  "deleteBackgroundWarning": {
+    "en": "Delete “{app}”? This background will be removed from your gallery.",
+    "de": "„{app}“ löschen? Dieser Hintergrund wird aus deiner Galerie entfernt.",
+    "zh": "删除“{app}”？此背景将从图库中移除。",
+    "es": "¿Eliminar «{app}»? Este fondo se eliminará de tu galería.",
+    "pt": "Excluir “{app}”? Este fundo será removido da sua galeria.",
+    "it": "Eliminare “{app}”? Questo sfondo verrà rimosso dalla galleria.",
+    "ru": "Удалить «{app}»? Этот фон будет удалён из галереи.",
+    "pl": "Usunąć „{app}”? To tło zostanie usunięte z galerii.",
+    "fr": "Supprimer « {app} » ? Cet arrière-plan sera retiré de votre galerie."
+  },
+  "deletingBackground": {
+    "en": "Deleting background…",
+    "de": "Hintergrund wird gelöscht…",
+    "zh": "正在删除背景…",
+    "es": "Eliminando fondo…",
+    "pt": "Excluindo fundo…",
+    "it": "Eliminazione dello sfondo…",
+    "ru": "Удаление фона…",
+    "pl": "Usuwanie tła…",
+    "fr": "Suppression de l’arrière-plan…"
+  },
+  "backgroundDeleted": {
+    "en": "Background deleted",
+    "de": "Hintergrund gelöscht",
+    "zh": "背景已删除",
+    "es": "Fondo eliminado",
+    "pt": "Fundo excluído",
+    "it": "Sfondo eliminato",
+    "ru": "Фон удалён",
+    "pl": "Tło usunięte",
+    "fr": "Arrière-plan supprimé"
+  },
+  "deleteBackgroundError": {
+    "en": "Could not delete background",
+    "de": "Hintergrund konnte nicht gelöscht werden",
+    "zh": "无法删除背景",
+    "es": "No se pudo eliminar el fondo",
+    "pt": "Não foi possível excluir o fundo",
+    "it": "Impossibile eliminare lo sfondo",
+    "ru": "Не удалось удалить фон",
+    "pl": "Nie udało się usunąć tła",
+    "fr": "Impossible de supprimer l’arrière-plan"
+  },
   "uploadWallpaper": {
     "en": "Add a background",
     "de": "Hintergrund hinzufügen",
