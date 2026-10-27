@@ -90,10 +90,14 @@ impl Options {
                     serde_json::from_str(&argument).map_err(|error| error.to_string())?;
                 // Luma's own Home manifest passes "nid"; LG's Home manifest (Luma run in
                 // place of LG's Home executable) passes "appId" with lifecycle v2.
-                result.webos_home = metadata.get("nid").and_then(serde_json::Value::as_str)
-                    == Some(platform::HOME_ID)
-                    || metadata.get("appId").and_then(serde_json::Value::as_str)
-                        == Some(platform::HOME_ID)
+                result.webos_home = metadata
+                    .get("nid")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(platform::is_home_id)
+                    || metadata
+                        .get("appId")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(platform::is_home_id)
                     || platform::runs_as_lg_home();
             }
             eprintln!("Luma webOS launch parameters accepted");
@@ -552,7 +556,7 @@ fn run() -> Result<(), String> {
             return Ok(());
         }
         let surface_id = if options.webos_home {
-            platform::HOME_ID
+            platform::home_id()
         } else {
             platform::APP_ID
         };
@@ -791,9 +795,9 @@ fn run() -> Result<(), String> {
                 // so Luma registers through lifecycle v2 on its own connection.
                 let push = pusher(subsystem.event_sender());
                 luna::subscribe(
-                    Some(platform::HOME_ID),
+                    Some(platform::home_id()),
                     "luna://com.webos.applicationManager/registerApp",
-                    &serde_json::json!({"id": platform::HOME_ID}),
+                    &serde_json::json!({"id": platform::home_id()}),
                     // sam answers "registered" at once; without it sam would end Home later.
                     Duration::from_secs(10),
                     move |message| {
@@ -828,7 +832,7 @@ fn run() -> Result<(), String> {
                 let push = pusher(subsystem.event_sender());
                 let close = pusher(subsystem.event_sender());
                 match luna::subscribe_as_app(
-                    platform::HOME_ID,
+                    platform::home_id(),
                     "luna://com.webos.applicationManager/registerNativeApp",
                     &serde_json::json!({}),
                     Duration::from_secs(10),

@@ -13,13 +13,51 @@ mod installation;
 
 pub const APP_ID: &str = "com.ecklf.luma";
 pub const HOME_ID: &str = "com.webos.app.home";
+pub const FULL_HOME_ID: &str = "com.webos.app.fullhome";
+
+pub fn is_home_id(id: &str) -> bool {
+    matches!(id, HOME_ID | FULL_HOME_ID)
+}
+
+/// Keep the window surface and SAM lifecycle identity aligned with the executed Home app.
+fn home_identity(executable: Option<&std::path::Path>, metadata: Option<&Value>) -> &'static str {
+    if let Some(executable) = executable {
+        if executable == std::path::Path::new("/usr/bin/com.webos.app.fullhome") {
+            return FULL_HOME_ID;
+        }
+        if executable == std::path::Path::new(LG_HOME_EXE) {
+            return HOME_ID;
+        }
+    }
+    if metadata.is_some_and(|value| {
+        ["nid", "appId"]
+            .iter()
+            .any(|key| value.get(key).and_then(Value::as_str) == Some(FULL_HOME_ID))
+    }) {
+        FULL_HOME_ID
+    } else {
+        HOME_ID
+    }
+}
+
+/// Derive the identity from SAM's actual launch, never from a saved preference.
+pub fn home_id() -> &'static str {
+    let executable = std::env::current_exe().ok();
+    let metadata = std::env::args()
+        .nth(1)
+        .and_then(|arg| serde_json::from_str::<Value>(&arg).ok());
+    home_identity(executable.as_deref(), metadata.as_ref())
+}
 /// LG's Home executable. A root integration may bind-mount Luma over it, so sam starts Luma
 /// under LG's own Home manifest and LS2 role (lifecycle v2, keep-alive, no sam restart).
 pub const LG_HOME_EXE: &str = "/usr/bin/com.webos.app.home";
 
 /// Whether this process runs in place of LG's Home executable.
 pub fn runs_as_lg_home() -> bool {
-    std::env::current_exe().is_ok_and(|exe| exe == std::path::Path::new(LG_HOME_EXE))
+    std::env::current_exe().is_ok_and(|exe| {
+        exe == std::path::Path::new(LG_HOME_EXE)
+            || exe == std::path::Path::new("/usr/bin/com.webos.app.fullhome")
+    })
 }
 
 /// While this file exists, a staged Home (webOS 10/11) does not register with sam and is
@@ -123,7 +161,8 @@ pub fn redirect_to_home() -> Result<bool, String> {
         thread::spawn(|| {
             call(
                 "luna://com.webos.applicationManager/launch",
-                json!({"id": HOME_ID}),
+                json!({"id": std::fs::read_to_string("/var/run/luma-home-target").ok()
+                    .filter(|id| is_home_id(id.trim())).map(|id| id.trim().to_owned()).unwrap_or_else(|| HOME_ID.into())}),
             )
         })
         .join()
@@ -658,7 +697,7 @@ pub fn normalize_apps(raw: &Value) -> Result<Vec<App>, String> {
             || id == "com.luma.native"
             || id == "com.luma.launcher"
             || id == "com.luma.launcher.native"
-            || id == "com.webos.app.home"
+            || is_home_id(id)
             || id.starts_with("com.webos.app.hdmi")
             || id.starts_with("com.webos.app.externalinput.")
             || (!live && (visible == Some(&json!(false)) || visible == Some(&json!("false"))))
@@ -731,4 +770,44 @@ pub fn normalize_inputs(raw: &Value) -> Result<Vec<Input>, String> {
         });
     }
     Ok(inputs)
+}
+
+#[cfg(test)]
+mod home_identity_tests {
+    use super::*;
+    #[test]
+    fn executable_identity_has_priority_over_conflicting_launch_metadata() {
+        assert_eq!(
+            home_identity(
+                Some(std::path::Path::new(LG_HOME_EXE)),
+                Some(&json!({"appId": FULL_HOME_ID}))
+            ),
+            HOME_ID
+        );
+        assert_eq!(
+            home_identity(
+                Some(std::path::Path::new("/usr/bin/com.webos.app.fullhome")),
+                Some(&json!({"nid": HOME_ID}))
+            ),
+            FULL_HOME_ID
+        );
+        assert_eq!(
+            home_identity(None, Some(&json!({"appId": FULL_HOME_ID}))),
+            FULL_HOME_ID
+        );
+        assert_eq!(
+            home_identity(None, Some(&json!({"nid": FULL_HOME_ID}))),
+            FULL_HOME_ID
+        );
+        assert_eq!(
+            home_identity(None, Some(&json!({"nid": "other.app"}))),
+            HOME_ID
+        );
+        assert_eq!(home_identity(None, None), HOME_ID);
+    }
+    #[test]
+    fn both_home_variants_are_hidden_from_application_inventory() {
+        let raw = json!([{"id":HOME_ID,"title":"Home","visible":true}, {"id":FULL_HOME_ID,"title":"Home","visible":true}]);
+        assert!(normalize_apps(&raw).unwrap().is_empty());
+    }
 }

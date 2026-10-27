@@ -895,3 +895,25 @@ HTML alongside the feed and IPK, so the feed and its description must be publish
 Key modules: `state.rs` focus/preferences, `view.rs` geometry, `renderer.rs` GPU caches/draws,
 `font.rs` lazy metrics/outlines, `vector.rs` GPU mesh upload, `platform.rs` worker/inventory,
 `luna.rs` LS2, `weather*.rs` scheduling/HTTPS/cache, `storage.rs` atomic JSON, and `main.rs` SDL loop.
+
+### Home-key routing on webOS 5/6 (#109)
+
+`home.sh status` reports the selected `homeId` and installed Home candidates. `mounted`,
+`enabled` and `bootHook` describe integration files, not a successful remote Home-key test;
+`homeKeyVerified` therefore remains `null` (unknown). LG Home can be an overlay, so foreground app
+identity alone is not sufficient evidence that Luma rendered or received the Home key.
+
+If diagnostics on the affected TV establish that Home opens `com.webos.app.fullhome`, disable
+existing takeover first, then explicitly select that target:
+
+```sh
+sh /var/lib/luma-home/home.sh disable
+sh /media/developer/apps/usr/palm/applications/com.ecklf.luma/home.sh enable /media/developer/apps/usr/palm/applications/com.ecklf.luma com.webos.app.fullhome
+```
+
+Use the installed package directory on production installations. The selected target is saved
+for boot, package reapply and restore; no input remapping or Linux key-code assumption is used.
+The original `home` target remains the default. Press Home from another app to verify, then test
+disable restores LG's dashboard. This is a targeted compatibility option, not confirmation of
+the unreported cause of #109. The reporter's device still needs to establish which Home app
+receives the key. Do not infer support for webOS 4 from this option.
