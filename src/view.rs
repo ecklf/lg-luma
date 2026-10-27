@@ -2209,27 +2209,10 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             let upload_width = (assets.width(upload_label, text(20.8, 550, -0.02)) + 88.)
                 .ceil()
                 .clamp(240., 520.);
-            let cycle_label = format!(
-                "{} · {}",
-                language.t("wallpaperCycle"),
-                language.t(if state.preferences.wallpaper_cycle {
-                    "stateOn"
-                } else {
-                    "stateOff"
-                })
-            );
-            // Keep the pointer target stationary when On/Off changes label width.
-            let cycle_width = ["stateOn", "stateOff"]
-                .into_iter()
-                .map(|key| {
-                    assets.width(
-                        &format!("{} · {}", language.t("wallpaperCycle"), language.t(key)),
-                        text(20.8, 550, -0.02),
-                    ) + 88.
-                })
-                .fold(240., f32::max)
+            let cycle_label = language.t("wallpaperCycle");
+            let cycle_width = (assets.width(cycle_label, text(20.8, 550, -0.02)) + 88.)
                 .ceil()
-                .min(520.);
+                .clamp(240., 520.);
             row(
                 out,
                 state,
@@ -2242,7 +2225,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                         cycle_width,
                         64.,
                     ),
-                    title: &cycle_label,
+                    title: cycle_label,
                     icon: Some(if state.preferences.wallpaper_cycle {
                         "refresh"
                     } else {

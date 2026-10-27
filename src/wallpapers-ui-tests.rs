@@ -71,16 +71,12 @@ fn cycling_button_toggles_on_off_without_opening_a_page_or_moving_controls() {
         let enabled = scene(&state);
         assert!(enabled.draw.iter().any(|draw| matches!(draw, Draw::TintedImage(path, ..) if path.ends_with("ui-icons/refresh.lvec"))));
         assert!(!enabled.draw.iter().any(|draw| matches!(draw, Draw::TintedImage(path, ..) if path.ends_with("ui-icons/refresh-off.lvec"))));
-        let label = format!(
-            "{} · {}",
-            language.t("wallpaperCycle"),
-            language.t("stateOn")
-        );
+        let label = language.t("wallpaperCycle");
         assert!(
             enabled
                 .draw
                 .iter()
-                .any(|draw| matches!(draw, Draw::Text(value, ..) if value == &label))
+                .any(|draw| matches!(draw, Draw::Text(value, ..) if value == label))
         );
         let button = enabled
             .controls
@@ -92,7 +88,7 @@ fn cycling_button_toggles_on_off_without_opening_a_page_or_moving_controls() {
             .draw
             .iter()
             .find_map(|draw| match draw {
-                Draw::Text(value, rect, ..) if value == &label => Some(rect),
+                Draw::Text(value, rect, ..) if value == label => Some(rect),
                 _ => None,
             })
             .unwrap();
