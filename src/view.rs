@@ -2183,14 +2183,18 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             }
         }
         1 => {
+            let upload_label = language.t("uploadWallpaper");
+            let upload_width = (assets.width(upload_label, text(20.8, 550, -0.02)) + 128.)
+                .ceil()
+                .clamp(320., 520.);
             row(
                 out,
                 state,
                 assets,
                 Row {
                     target: Target::UploadWallpaper,
-                    rect: Rect::new(640., 164.8 - s, 1120., 64.),
-                    title: language.t("uploadWallpaper"),
+                    rect: Rect::new(1760. - upload_width, 164.8 - s, upload_width, 64.),
+                    title: upload_label,
                     icon: Some("upload"),
                     value: None,
                     description: None,

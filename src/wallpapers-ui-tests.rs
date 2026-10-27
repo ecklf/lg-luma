@@ -31,7 +31,31 @@ fn upload_is_modal_and_close_restores_its_exact_parent() {
     assert_eq!(state.focus, Target::UploadWallpaper);
     assert_eq!(state.section, 1);
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Background(0));
+    assert_eq!(state.focus, Target::Background(2));
+}
+
+#[test]
+fn upload_button_is_compact_and_right_aligned_in_every_language() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    for language in crate::i18n::Language::ALL {
+        state.preferences.language = language;
+        let gallery = controls(&state);
+        let upload = gallery
+            .iter()
+            .find(|c| c.target == Target::UploadWallpaper)
+            .unwrap()
+            .rect;
+        let right_card = gallery
+            .iter()
+            .find(|c| c.target == Target::Background(2))
+            .unwrap()
+            .rect;
+        assert_eq!(upload.x + upload.w, right_card.x + right_card.w);
+        assert!((320. ..=520.).contains(&upload.w));
+        assert!(upload.y + upload.h < right_card.y);
+    }
 }
 
 #[test]

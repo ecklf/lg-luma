@@ -1162,7 +1162,10 @@ impl State {
             }
             if self.focus == Target::UploadWallpaper {
                 match direction {
-                    Direction::Down => self.focus(Target::Background(0), controls),
+                    Direction::Down => self.focus(
+                        Target::Background(2.min(self.background_count().saturating_sub(1))),
+                        controls,
+                    ),
                     Direction::Up => self.focus(Target::Nav(2), controls),
                     Direction::Left => self.focus(Target::Sidebar(1), controls),
                     Direction::Right => {}
