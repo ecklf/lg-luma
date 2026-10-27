@@ -57,6 +57,7 @@ https://github.com/user-attachments/assets/0c3061bf-c158-417e-85a4-da3eb84ecf08
 | LG C6     | `OLED65C6*`      | 26    | —                |
 | LG C6     | `OLED77C6*`      | 26    | ✅               |
 | LG G3     | `OLED??G3*`      | 25    | —                |
+| LG G5     | `OLED83G5WUA.BUSYDJR` | 26    | ✅               |
 | LG NANO77 | `55NANO776RA`    | 25    | ✅               |
 | LG QNED86 | `55QNED86T6A`    | 25    | —                |
 | LG UT8050 | `50UT8050*`      | 25    | —                |
