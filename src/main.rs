@@ -885,10 +885,6 @@ fn run() -> Result<(), String> {
         pill_width,
         options.time.unwrap_or_else(OffsetDateTime::now_utc),
     );
-    let mut launch_cycle =
-        state.preferences.wallpaper_cycle == wallpaper_cycle::WallpaperCycle::Launch;
-    let mut wallpapers_scanned = false;
-    let launched = Instant::now();
     while running {
         let now = options
             .time
@@ -910,7 +906,6 @@ fn run() -> Result<(), String> {
         while let Ok(event) = wallpaper_service.receiver.try_recv() {
             match event {
                 wallpapers::Event::Catalog(items) => {
-                    wallpapers_scanned = true;
                     state.set_wallpapers(items);
                 }
                 wallpapers::Event::Deleted(id, result) => state.wallpaper_deleted(id, result),
@@ -936,27 +931,21 @@ fn run() -> Result<(), String> {
         }
         state.dirty |= assets.artwork.poll();
         let unix = state::unix_now();
-        let launch_due = launch_cycle
-            && state.preferences.wallpaper_cycle == wallpaper_cycle::WallpaperCycle::Launch
-            && (wallpapers_scanned || launched.elapsed() >= Duration::from_secs(3));
         if focused
             && visible
             && state.overlay.is_none()
             && state.moving.is_none()
             && state.deleting_wallpaper.is_none()
             && !state.animating()
-            && (launch_due
-                || state
-                    .preferences
-                    .wallpaper_cycle
-                    .due(state.preferences.wallpaper_changed, unix))
+            && wallpaper_cycle::due(
+                state.preferences.wallpaper_cycle,
+                state.preferences.wallpaper_changed,
+                unix,
+            )
+            && state.cycle_wallpaper(unix)
+            && let Err(error) = storage::save(&preferences_path, &state.preferences)
         {
-            launch_cycle = false;
-            if state.cycle_wallpaper(unix)
-                && let Err(error) = storage::save(&preferences_path, &state.preferences)
-            {
-                eprintln!("{error}");
-            }
+            eprintln!("{error}");
         }
         while let Ok(response) = platform.receiver.try_recv() {
             match response {

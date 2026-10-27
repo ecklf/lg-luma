@@ -306,12 +306,10 @@ Use a trusted local network: the temporary local upload uses HTTP, not encrypted
 
 ### Automatic backgrounds
 
-Open **Settings → Background → Change wallpaper**, to the left of **Add a background**.
-Choose Off, each Luma start, every 15 minutes, hourly or daily. Images advance in gallery order
-with a slow cross-fade (instant with reduced motion). Toggle the thumbnails on that page to
-exclude images; new uploads participate by default and deleted backgrounds do not participate.
-Manual selection restarts the interval. Automatic changes leave your manually chosen LG splash
-unchanged, including after unrelated settings saves and restarts.
+Press **Auto background**, to the left of **Add a background**, to toggle On or Off (the default).
+When enabled, all available images cycle in gallery order every 15 minutes with a slow cross-fade
+(instant with reduced motion). Manual selection restarts the interval. Automatic changes leave
+your manually chosen LG splash unchanged, including after unrelated settings saves and restarts.
 
 ## Privacy and scope
 

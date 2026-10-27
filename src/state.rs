@@ -143,7 +143,6 @@ pub enum Subpage {
     Temperature,
     Language,
     TextRendering,
-    WallpaperCycle,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -663,11 +662,7 @@ impl State {
             .filter(|id| self.deleting_wallpaper.as_deref() != Some(*id))
             .map(str::to_owned)
             .collect();
-        let next = crate::wallpaper_cycle::next(
-            &ids,
-            &self.preferences.background,
-            &self.preferences.wallpaper_skip,
-        );
+        let next = crate::wallpaper_cycle::next(&ids, &self.preferences.background);
         self.preferences.wallpaper_changed = now;
         let Some(id) = next else {
             return false;
@@ -757,16 +752,7 @@ impl State {
     pub fn set_wallpapers(&mut self, wallpapers: Vec<crate::wallpapers::Wallpaper>) {
         // A newly uploaded ID can sort before existing entries. Keep the focused
         // image, rather than moving the pointer's target to a different photograph.
-        let cycle_offset = crate::wallpaper_cycle::WallpaperCycle::ALL.len();
-        let cycle_choice = self.subpage == Some(Subpage::WallpaperCycle)
-            && matches!(self.focus, Target::Choice(index) if index >= cycle_offset);
-        let focused_id = if cycle_choice {
-            if let Target::Choice(index) = self.focus {
-                self.background_id(index - cycle_offset).map(str::to_owned)
-            } else {
-                None
-            }
-        } else if let Target::Background(index) = self.focus {
+        let focused_id = if let Target::Background(index) = self.focus {
             self.background_id(index).map(str::to_owned)
         } else {
             None
@@ -792,11 +778,7 @@ impl State {
             let index = (0..self.background_count())
                 .find(|&i| self.background_id(i) == Some(id.as_str()))
                 .unwrap_or(0);
-            self.focus = if cycle_choice {
-                Target::Choice(cycle_offset + index)
-            } else {
-                Target::Background(index)
-            };
+            self.focus = Target::Background(index);
         }
         self.dirty = true;
     }
@@ -845,7 +827,6 @@ impl State {
             Some(Subpage::Temperature) => Target::WeatherTemperature,
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
-            Some(Subpage::WallpaperCycle) => Target::WallpaperCycle,
             None => Target::Sidebar(self.section),
         };
         self.scroll = 0.;
@@ -971,34 +952,6 @@ impl State {
                 return vec![];
             }
             if let Target::Choice(index) = self.focus {
-                if self.subpage == Some(Subpage::WallpaperCycle) {
-                    let modes = crate::wallpaper_cycle::WallpaperCycle::ALL.len();
-                    let count = modes + self.background_count();
-                    let next = match direction {
-                        Direction::Up if index == 0 => Target::Sidebar(1),
-                        Direction::Up => Target::Choice(if index >= modes + 3 {
-                            index - 3
-                        } else if index >= modes {
-                            modes - 1
-                        } else {
-                            index - 1
-                        }),
-                        Direction::Down if index < modes => {
-                            Target::Choice((index + 1).min(count - 1))
-                        }
-                        Direction::Down => Target::Choice((index + 3).min(count - 1)),
-                        Direction::Left if index < modes || (index - modes).is_multiple_of(3) => {
-                            Target::Sidebar(1)
-                        }
-                        Direction::Left => Target::Choice(index - 1),
-                        Direction::Right if index >= modes => {
-                            Target::Choice((index + 1).min(count - 1))
-                        }
-                        Direction::Right => return vec![],
-                    };
-                    self.focus(next, controls);
-                    return vec![];
-                }
                 let count = match self.subpage {
                     Some(
                         Subpage::ClockFormat
@@ -1857,13 +1810,9 @@ impl State {
                 self.options();
             }
             Target::WallpaperCycle => {
-                self.subpage = Some(Subpage::WallpaperCycle);
-                self.focus = Target::Choice(self.preferences.wallpaper_cycle.index());
-                self.scroll = 0.;
-                self.pressed = None;
-                if !self.preferences.reduced_motion {
-                    self.panel_started = Some(Instant::now());
-                }
+                self.preferences.wallpaper_cycle = !self.preferences.wallpaper_cycle;
+                self.preferences.wallpaper_changed = unix_now();
+                return vec![Effect::Save];
             }
             Target::UseBackground => {
                 let Some(Overlay::BackgroundOptions { id, .. }) = self.overlay.clone() else {
@@ -1921,26 +1870,6 @@ impl State {
             }
             Target::Choice(index) => {
                 match self.subpage.clone() {
-                    Some(Subpage::WallpaperCycle) => {
-                        if let Some(mode) = crate::wallpaper_cycle::WallpaperCycle::ALL.get(index) {
-                            if self.preferences.wallpaper_cycle != *mode {
-                                self.preferences.wallpaper_cycle = *mode;
-                                self.preferences.wallpaper_changed = unix_now();
-                            }
-                        } else if let Some(id) = self
-                            .background_id(
-                                index - crate::wallpaper_cycle::WallpaperCycle::ALL.len(),
-                            )
-                            .map(str::to_owned)
-                        {
-                            if self.preferences.wallpaper_skip.contains(&id) {
-                                self.preferences.wallpaper_skip.retain(|known| known != &id);
-                            } else {
-                                self.preferences.wallpaper_skip.push(id);
-                            }
-                        }
-                        return vec![Effect::Save];
-                    }
                     Some(Subpage::ClockFormat) => self.preferences.hour_24 = index == 1,
                     Some(Subpage::TimeFormat) => self.preferences.show_seconds = index == 1,
                     Some(Subpage::Input(id)) => {

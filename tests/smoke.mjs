@@ -410,27 +410,20 @@ try {
     'Pointer focus preserves strip position',
   );
   await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
-  const cyclePage = await scenario(
-    'wallpaper-cycle-page',
-    'settings,down,down,enter,up,up,left,enter,down,down,down,enter',
+  const cycleEnabled = await scenario(
+    'wallpaper-cycle-enabled',
+    'settings,down,down,enter,up,up,left,enter',
   );
-  assert.equal(cyclePage.subpage, 'WallpaperCycle');
-  assert.equal(cyclePage.preferences.wallpaper_cycle, 'hourly');
-  assert.ok(cyclePage.ui_text.includes('Every hour'));
-  assert.ok(cyclePage.ui_text.includes('Wallpapers in the rotation'));
-  await fs.writeFile(
-    preferences,
-    JSON.stringify({
-      show_weather: false,
-      background: 'dunes',
-      wallpaper_cycle: 'launch',
-      wallpaper_skip: ['san-francisco'],
-    }),
+  assert.equal(cycleEnabled.subpage, null);
+  assert.equal(cycleEnabled.focus, 'WallpaperCycle');
+  assert.equal(cycleEnabled.preferences.wallpaper_cycle, true);
+  assert.ok(cycleEnabled.ui_text.includes('Auto background · On'));
+  const cycleDisabled = await scenario(
+    'wallpaper-cycle-disabled',
+    'settings,down,down,enter,up,up,left,enter',
   );
-  const cycled = await scenario('wallpaper-cycle-launch', 'down');
-  assert.equal(cycled.preferences.background, 'summit', 'Launch mode moves to the next wallpaper');
-  const cycledSaved = JSON.parse(await fs.readFile(preferences, 'utf8'));
-  assert.equal(cycledSaved.background, 'summit');
+  assert.equal(cycleDisabled.preferences.wallpaper_cycle, false);
+  assert.ok(cycleDisabled.ui_text.includes('Auto background · Off'));
   console.log(
     'Native smoke checks passed: rendering/alpha, navigation, persistence, SDL pointer input, DPI-aware glyphs, 4K capture and presentation profiling.',
   );

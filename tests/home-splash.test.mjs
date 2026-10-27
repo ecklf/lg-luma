@@ -109,7 +109,7 @@ test('production and developer installs follow native preference precedence', ()
 test('automatic rotation cannot replace the manual splash during boot restaging', () => {
   for (const production of [false, true]) {
     const preferences = {
-      [internal]: { background: 'prism', splash_background: 'forest', wallpaper_cycle: 'hourly' },
+      [internal]: { background: 'prism', splash_background: 'forest', wallpaper_cycle: true },
     };
     assert.equal(fixture({ production, preferences }).splash(), 'forest');
     preferences[internal].background = 'dunes';
