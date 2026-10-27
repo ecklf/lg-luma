@@ -523,7 +523,6 @@ pub fn scene_with_pill(
     out.draw.push(Draw::EdgeFade(None));
     out.draw.push(Draw::Clip(None));
     header(&mut out, state, assets, now, pill_x, pill_width);
-    footer(&mut out, state, assets);
     if let Some(
         overlay @ (Overlay::Options { .. }
         | Overlay::Delete { .. }
@@ -1924,7 +1923,6 @@ fn location_settings(out: &mut Scene, state: &State, assets: &Assets) {
 fn settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let s = state.scroll;
-    let sidebar_scroll = if state.section == 1 { 0. } else { s };
     for (index, key) in ["interface", "background", "weather", "inputs", "system"]
         .into_iter()
         .enumerate()
@@ -1932,7 +1930,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         let label = language.t(key);
         let rect = Rect::new(
             160.,
-            164.8 + index as f32 * 84. - sidebar_scroll,
+            164.8 + index as f32 * 84.,
             403.2,
             72.,
         );
@@ -2030,7 +2028,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 );
             }
         }
-        out.control(Target::Sidebar(index), rect, state.section != 1);
+        out.control(Target::Sidebar(index), rect, false);
     }
     if let Some(subpage) = &state.subpage {
         let start = out.draw.len();
@@ -2216,7 +2214,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 let custom = state.wallpapers.iter().find(|item| item.id == id);
                 let rect = Rect::new(
                     640. + (index % 3) as f32 * 380.,
-                    252.8 + (index / 3) as f32 * 264.3 - s,
+                    252.8 + (index / 3) as f32 * 226.5 - s,
                     360.,
                     202.5,
                 );
@@ -2241,25 +2239,19 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 if state.focus == Target::Background(index) {
                     out.ring(rect, 16.);
                 }
-                let title =
-                    custom.map_or_else(|| language.wallpaper(id), |item| item.name.as_str());
-                out.text(
-                    title,
-                    Rect::new(rect.x + 4., rect.y + rect.h + 12., 352., 26.),
-                    assets.fit_text(title, text(18.4, 500, -0.02).leading(1.4), 352.),
-                    c(0xf0f0f0, 0.87),
-                    false,
-                );
-                out.control(
-                    Target::Background(index),
-                    Rect::new(rect.x, rect.y, rect.w, rect.h + 37.8),
-                    true,
-                );
+                out.control(Target::Background(index), rect, true);
             }
             out.draw.push(Draw::Clip(Some(state.content_viewport())));
         }
         WEATHER_SECTION => weather_settings(out, state, assets),
         SYSTEM_SECTION => {
+            out.text(
+                format!("Luma v{}", assets.version.trim()),
+                Rect::new(664., 164.8 - s, 1072., 28.),
+                text(18.4, 400, 0.),
+                c(0xf5f5f5, 0.56),
+                false,
+            );
             for (position, (index, title, icon, value, chevron)) in [
                 (
                     3,
@@ -2290,7 +2282,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     assets,
                     Row {
                         target: Target::Setting(index),
-                        rect: Rect::new(640., 164.8 + position as f32 * 84. - s, 1120., 72.),
+                        rect: Rect::new(640., 212.8 + position as f32 * 84. - s, 1120., 72.),
                         title,
                         icon: Some(icon),
                         value,
@@ -2589,83 +2581,6 @@ pub fn input_status(input: &Input, renamed: bool, language: Language) -> String 
     parts.join(" · ")
 }
 
-fn keycap(out: &mut Scene, label: &str, x: f32, y: f32, w: f32, small: bool) {
-    let h = if small { 16. } else { 23.2 };
-    out.border(
-        Rect::new(x, y, w, h),
-        4.8,
-        1.,
-        c(0xffffff, if small { 0.125 } else { 0.20 }),
-    );
-    out.text(
-        label,
-        Rect::new(x, y + if small { 2. } else { 4.2 }, w, h),
-        text(if small { 8. } else { 11.52 }, 500, 0.),
-        c(0xf3f3f3, 0.64),
-        true,
-    );
-}
-
-fn footer(out: &mut Scene, state: &State, assets: &Assets) {
-    let language = state.preferences.language;
-    let style = text(14.4, 400, 0.005);
-    if matches!(state.page, Page::Home | Page::Apps) && state.moving.is_none() {
-        return;
-    }
-    let color = c(0xeeeeee, 0.37);
-    if state.moving.is_some() {
-        keycap(out, "← →", 84., 1030.4, 42., false);
-        out.text(
-            language.t("move"),
-            Rect::new(134., 1033., 100., 20.),
-            text(14.4, 400, 0.005),
-            color,
-            false,
-        );
-        let second_x = 134. + assets.width(language.t("move"), style) + 25.6;
-        keycap(out, "OK/Back", second_x, 1030.4, 62., false);
-        out.text(
-            language.t("done"),
-            Rect::new(second_x + 70., 1033., 150., 20.),
-            text(14.4, 400, 0.005),
-            color,
-            false,
-        );
-    } else {
-        let label = language.t(if state.page == Page::Settings {
-            "select"
-        } else {
-            "options"
-        });
-        let second_x = 119. + assets.width(label, style) + 25.6;
-        keycap(out, "OK", 84., 1030.4, 27., false);
-        out.text(
-            label,
-            Rect::new(119., 1033., 100., 20.),
-            text(14.4, 400, 0.005),
-            color,
-            false,
-        );
-        if state.page == Page::Settings {
-            keycap(out, "Back", second_x, 1030.4, 39., false);
-            out.text(
-                language.t("homeLabel"),
-                Rect::new(second_x + 47., 1033., 180., 20.),
-                text(14.4, 400, 0.005),
-                color,
-                false,
-            );
-            out.text(
-                format!("v{}", assets.version.trim()),
-                Rect::new(1775., 1037., 61., 16.),
-                text(12.48, 400, 0.),
-                c(0xf5f5f5, 0.56),
-                false,
-            );
-        }
-    }
-}
-
 struct EmptyState<'a> {
     rect: Rect,
     icon: &'a str,
@@ -2923,20 +2838,12 @@ fn delete_confirmation(out: &mut Scene, state: &State, assets: &Assets, id: &str
     } else {
         "deleteApp"
     };
-    let title = if background {
-        state
-            .wallpapers
-            .iter()
-            .find(|item| item.id == id)
-            .map_or_else(|| language.wallpaper(id), |item| item.name.as_str())
-    } else {
-        state
+    let title = state
             .inventory
             .apps
             .iter()
             .find(|app| app.id == id)
-            .map_or(id, |app| app.title.as_str())
-    };
+            .map_or(id, |app| app.title.as_str());
     let body_style = text(20.8, 600, -0.02).leading(1.5);
     let body = language.format(
         if deleting { deleting_key } else { warning_key },

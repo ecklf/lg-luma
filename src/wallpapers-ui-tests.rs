@@ -1,10 +1,9 @@
 use super::*;
 use crate::{model::BACKGROUNDS, renderer::Draw, wallpapers::Wallpaper};
 
-fn custom(index: u32, name: &str) -> Wallpaper {
+fn custom(index: u32) -> Wallpaper {
     Wallpaper {
         id: format!("custom-{index:032x}"),
-        name: name.into(),
         directory: PathBuf::from(format!("/preview/wallpapers/custom-{index:032x}")),
     }
 }
@@ -63,7 +62,7 @@ fn gallery_scrolling_keeps_sidebar_and_upload_fixed_and_clips_only_backgrounds()
     let mut state = ready();
     state.open(2);
     state.section = 1;
-    state.set_wallpapers((1..=8).map(|i| custom(i, "Lake")).collect());
+    state.set_wallpapers((1..=8).map(custom).collect());
     let before = controls(&state);
     state.wheel_scroll(&before, Some((1000., 600.)), 0, -3);
     assert!(state.scroll > 0.);
@@ -136,7 +135,7 @@ fn remote_background_focus_stays_below_the_fixed_upload_action() {
     let mut state = ready();
     state.open(2);
     state.section = 1;
-    state.set_wallpapers((1..=9).map(|i| custom(i, "Lake")).collect());
+    state.set_wallpapers((1..=9).map(custom).collect());
     state.focus = Target::Background(2);
     for _ in 0..5 {
         state.direction(Direction::Down, &controls(&state));
@@ -162,7 +161,7 @@ fn custom_gallery_navigation_reveals_whole_cards_in_incomplete_rows() {
     let mut state = ready();
     state.open(2);
     state.section = 1;
-    state.set_wallpapers(vec![custom(1, "Lake"), custom(2, "Mountains")]);
+    state.set_wallpapers(vec![custom(1), custom(2)]);
     state.focus = Target::Background(8);
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::Background(9));
@@ -190,7 +189,7 @@ fn upload_discovery_does_not_apply_and_custom_selection_uses_immutable_paths() {
     let mut state = ready();
     state.open(2);
     state.section = 1;
-    let item = custom(1, "Summer lake");
+    let item = custom(1);
     state.set_wallpapers(vec![item.clone()]);
     assert_eq!(state.preferences.background, "dunes");
     let gallery = scene(&state);
@@ -198,7 +197,7 @@ fn upload_discovery_does_not_apply_and_custom_selection_uses_immutable_paths() {
         gallery
             .draw
             .iter()
-            .any(|draw| matches!(draw, Draw::Text(title, ..) if title == "Summer lake"))
+            .any(|draw| matches!(draw, Draw::Image(path, ..) if path == &item.thumbnail()))
     );
     state.focus = Target::Background(BACKGROUNDS.len());
     assert!(state.activate().is_empty());
@@ -231,10 +230,10 @@ fn catalog_updates_keep_the_focused_image_and_pointer_geometry_stationary() {
     let mut state = ready();
     state.open(2);
     state.section = 1;
-    let item = custom(1, "Lake");
+    let item = custom(1);
     state.set_wallpapers(vec![item.clone()]);
     state.focus = Target::Background(9);
-    state.set_wallpapers(vec![custom(2, "Alps"), item.clone()]);
+    state.set_wallpapers(vec![custom(2), item.clone()]);
     assert_eq!(state.focus, Target::Background(10));
     assert_eq!(state.background_id(10), Some(item.id.as_str()));
     let scroll = state.scroll;
@@ -359,8 +358,8 @@ fn uploaded_deletion_is_single_flight_handles_failures_and_keeps_unrelated_focus
     let mut state = ready();
     state.open(2);
     state.section = 1;
-    let lake = custom(1, "Lake");
-    let mountain = custom(2, "Mountain");
+    let lake = custom(1);
+    let mountain = custom(2);
     state.set_wallpapers(vec![lake.clone(), mountain.clone()]);
     state.focus = Target::Background(BACKGROUNDS.len());
     state.activate();
@@ -408,7 +407,7 @@ fn filtered_bundled_entries_do_not_misidentify_custom_thumbnails_or_popup_parent
         .filter(|(id, _)| *id != "dunes")
         .map(|(id, _)| (*id).into())
         .collect();
-    let lake = custom(1, "Lake");
+    let lake = custom(1);
     state.set_wallpapers(vec![lake.clone()]);
     state.focus = Target::Background(1);
     assert!(
@@ -418,7 +417,7 @@ fn filtered_bundled_entries_do_not_misidentify_custom_thumbnails_or_popup_parent
             .any(|draw| matches!(draw, Draw::Image(path, ..) if path == &lake.thumbnail()))
     );
     state.options();
-    state.set_wallpapers(vec![custom(2, "Alps"), lake.clone()]);
+    state.set_wallpapers(vec![custom(2), lake.clone()]);
     state.back();
     assert_eq!(state.focus, Target::Background(2));
     state.options();
@@ -431,7 +430,7 @@ fn removed_popup_entry_closes_safely_and_preference_sanitizing_protects_the_sele
     let mut state = ready();
     state.open(2);
     state.section = 1;
-    state.set_wallpapers(vec![custom(1, "Lake")]);
+    state.set_wallpapers(vec![custom(1)]);
     state.focus = Target::Background(BACKGROUNDS.len());
     state.options();
     state.set_wallpapers(vec![]);

@@ -90,8 +90,8 @@ fn upload_tokens_are_eight_unbiased_alphanumeric_characters() {
 fn deletion_protects_selected_and_bundled_backgrounds_and_only_removes_the_requested_upload() {
     let fixture = Fixture::new();
     let bytes = image(1920, 1080);
-    let first = store(&fixture.wallpapers(), "Lake", &bytes, || true).unwrap();
-    let second = store(&fixture.wallpapers(), "Mountain", &bytes, || true).unwrap();
+    let first = store(&fixture.wallpapers(), &bytes, || true).unwrap();
+    let second = store(&fixture.wallpapers(), &bytes, || true).unwrap();
     assert!(delete_wallpaper(&fixture.wallpapers(), &first.id, &first.id).is_err());
     for id in ["dunes", "../preferences.json", "custom-../../other"] {
         assert!(delete_wallpaper(&fixture.wallpapers(), id, "dunes").is_err());
@@ -130,7 +130,7 @@ fn deletion_rejects_symlink_roots_and_entries_and_never_follows_internal_symlink
 #[test]
 fn worker_reports_deletion_before_the_updated_catalog() {
     let fixture = Fixture::new();
-    let item = store(&fixture.wallpapers(), "Lake", &image(1920, 1080), || true).unwrap();
+    let item = store(&fixture.wallpapers(), &image(1920, 1080), || true).unwrap();
     let service = Service::new(&fixture.0.join("preferences.json"), true).unwrap();
     assert!(
         matches!(service.receiver.recv_timeout(Duration::from_secs(5)).unwrap(), Event::Catalog(items) if items.len() == 1)
@@ -146,19 +146,18 @@ fn worker_reports_deletion_before_the_updated_catalog() {
 }
 
 #[test]
-fn uploads_are_named_normalized_immutable_and_discoverable_after_restart() {
+fn uploads_are_unnamed_normalized_immutable_and_discoverable_after_restart() {
     let fixture = Fixture::new();
     let bytes = image(1920, 1080);
-    let first = store(&fixture.wallpapers(), "  My\n view  ", &bytes, || true).unwrap();
-    let second = store(&fixture.wallpapers(), "My view", &bytes, || true).unwrap();
+    let first = store(&fixture.wallpapers(), &bytes, || true).unwrap();
+    let second = store(&fixture.wallpapers(), &bytes, || true).unwrap();
     assert_ne!(first.id, second.id);
-    assert_eq!(first.name, "My view");
     let found = catalog(&fixture.wallpapers());
     assert_eq!(found.len(), 2);
     assert!(
         found
             .iter()
-            .any(|item| item.id == first.id && item.name == "My view")
+            .any(|item| item.id == first.id)
     );
     let background = image::open(first.image()).unwrap();
     let thumbnail = image::open(first.thumbnail()).unwrap();
@@ -179,10 +178,9 @@ fn uploads_are_named_normalized_immutable_and_discoverable_after_restart() {
 fn validation_and_cancellation_leave_no_partial_gallery_entries() {
     let fixture = Fixture::new();
     let root = fixture.wallpapers();
-    assert!(store(&root, "name", b"<svg></svg>", || true).is_err());
-    assert!(store(&root, "name", &image(320, 240), || true).is_err());
-    assert!(store(&root, " \n", &image(1920, 1080), || true).is_err());
-    assert!(store(&root, "name", &image(1920, 1080), || false).is_err());
+    assert!(store(&root, b"<svg></svg>", || true).is_err());
+    assert!(store(&root, &image(320, 240), || true).is_err());
+    assert!(store(&root, &image(1920, 1080), || false).is_err());
     assert!(catalog(&root).is_empty());
     assert!(!root.exists());
     let mut reader = Cursor::new(b"unfinished");
@@ -204,7 +202,6 @@ fn cancellation_before_commit_cleans_only_the_new_staging_files() {
     let checks = AtomicUsize::new(0);
     let result = store(
         &fixture.wallpapers(),
-        "Cancelled",
         &image(1920, 1080),
         || checks.fetch_add(1, Ordering::Relaxed) == 0,
     );
@@ -225,7 +222,6 @@ fn gallery_capacity_is_checked_before_decoding_or_creating_another_upload() {
             &directory.join("metadata.json"),
             &serde_json::to_vec(&Wallpaper {
                 id,
-                name: format!("Photo {index}"),
                 directory: directory.clone(),
             })
             .unwrap(),
@@ -236,7 +232,7 @@ fn gallery_capacity_is_checked_before_decoding_or_creating_another_upload() {
     }
     assert_eq!(catalog(&fixture.wallpapers()).len(), MAX_WALLPAPERS);
     assert!(
-        store(&fixture.wallpapers(), "Another", b"not decoded", || true)
+        store(&fixture.wallpapers(), b"not decoded", || true)
             .unwrap_err()
             .contains("full")
     );
@@ -323,7 +319,7 @@ fn only_the_session_origin_host_token_and_upload_header_allow_writes() {
     assert!(response.starts_with("HTTP/1.1 403"));
     assert!(!changed);
     let (response, changed) = http(&fixture.wallpapers(), |host| {
-        format!("POST /secret/upload?name=photo HTTP/1.1\r\nHost: {host}\r\nContent-Length: 0\r\nContent-Type: image/jpeg\r\n\r\n").into_bytes()
+        format!("POST /secret/upload HTTP/1.1\r\nHost: {host}\r\nContent-Length: 0\r\nContent-Type: image/jpeg\r\n\r\n").into_bytes()
     });
     assert!(response.starts_with("HTTP/1.1 403"));
     assert!(!changed);
@@ -331,7 +327,7 @@ fn only_the_session_origin_host_token_and_upload_header_allow_writes() {
 }
 
 #[test]
-fn browser_assets_are_local_and_a_real_http_upload_persists_the_name() {
+fn browser_assets_are_local_and_a_real_http_upload_needs_no_name() {
     let fixture = Fixture::new();
     for route in [
         "",
@@ -361,37 +357,35 @@ fn browser_assets_are_local_and_a_real_http_upload_persists_the_name() {
     }
     let bytes = image(1920, 1080);
     let (response, changed) = http(&fixture.wallpapers(), |host| {
-        let mut wire = format!("POST /secret/upload?name=My%20%26%20view HTTP/1.1\r\nHost: {host}\r\nOrigin: http://{host}\r\nX-Luma-Upload: secret\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\n\r\n", bytes.len()).into_bytes();
+        let mut wire = format!("POST /secret/upload HTTP/1.1\r\nHost: {host}\r\nOrigin: http://{host}\r\nX-Luma-Upload: secret\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\n\r\n", bytes.len()).into_bytes();
         wire.extend_from_slice(&bytes);
         wire
     });
     assert!(response.starts_with("HTTP/1.1 201"), "{response}");
-    assert!(response.contains("My & view"));
     assert!(changed);
-    assert_eq!(catalog(&fixture.wallpapers())[0].name, "My & view");
+    let items = catalog(&fixture.wallpapers());
+    assert_eq!(items.len(), 1);
+    assert!(response.contains(&items[0].id));
+    let metadata: serde_json::Value = serde_json::from_slice(&fs::read(items[0].directory.join("metadata.json")).unwrap()).unwrap();
+    assert_eq!(metadata, serde_json::json!({"id": items[0].id}));
 }
 
 #[test]
-fn unicode_names_and_malformed_escapes_are_handled_without_paths_or_html() {
-    assert_eq!(
-        decode_name("%E6%97%85%E8%A1%8C+%26+sea").unwrap(),
-        "旅行 & sea"
-    );
-    for name in ["%", "%0", "%gg", "%ff"] {
-        assert!(decode_name(name).is_err());
-    }
-    assert!(decode_name(&"a".repeat(513)).is_err());
+fn legacy_named_uploads_keep_their_ids_and_load_without_names() {
     let fixture = Fixture::new();
     let item = store(
         &fixture.wallpapers(),
-        "../../<script>view</script>",
         &image(1920, 1080),
         || true,
     )
     .unwrap();
     assert!(item.directory.starts_with(fixture.wallpapers()));
     assert!(valid_id(&item.id));
-    assert_eq!(item.name, "../../<script>view</script>");
+    fs::write(item.directory.join("metadata.json"), serde_json::to_vec(&serde_json::json!({"id": item.id, "name": "旅行 & sea"})).unwrap()).unwrap();
+    let items = catalog(&fixture.wallpapers());
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].id, item.id);
+    assert_eq!(items[0].image(), item.image());
 }
 
 #[cfg(unix)]
@@ -402,7 +396,7 @@ fn symlink_storage_and_gallery_entries_are_never_followed() {
     let elsewhere = fixture.0.join("elsewhere");
     fs::create_dir(&elsewhere).unwrap();
     symlink(&elsewhere, fixture.wallpapers()).unwrap();
-    assert!(store(&fixture.wallpapers(), "view", &image(1920, 1080), || true).is_err());
+    assert!(store(&fixture.wallpapers(), &image(1920, 1080), || true).is_err());
     assert!(fs::read_dir(&elsewhere).unwrap().next().is_none());
     assert!(catalog(&fixture.wallpapers()).is_empty());
 }
@@ -498,7 +492,7 @@ fn cancelling_a_slow_request_releases_the_worker_without_waiting_for_the_body() 
     };
     let parts: Vec<_> = info.url.split('/').collect();
     let mut socket = TcpStream::connect(parts[2]).unwrap();
-    write!(socket, "POST /{}/upload?name=slow HTTP/1.1\r\nHost: {}\r\nX-Luma-Upload: {}\r\nContent-Type: image/jpeg\r\nContent-Length: 100000\r\n\r\npartial", parts[3], parts[2], parts[3]).unwrap();
+    write!(socket, "POST /{}/upload HTTP/1.1\r\nHost: {}\r\nX-Luma-Upload: {}\r\nContent-Type: image/jpeg\r\nContent-Length: 100000\r\n\r\npartial", parts[3], parts[2], parts[3]).unwrap();
     service.set_active(false);
     assert!(matches!(
         service

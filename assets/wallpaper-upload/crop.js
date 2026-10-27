@@ -6,17 +6,6 @@ export function cropRect(width, height, zoom, horizontal, vertical) {
   return { x: (width - w) * horizontal, y: (height - h) * vertical, w, h };
 }
 
-export function cleanName(value) {
-  const cleaned = Array.from(value)
-    .filter((character) => {
-      const code = character.codePointAt(0);
-      return code >= 32 && (code < 127 || code > 159);
-    })
-    .join('')
-    .trim();
-  return Array.from(cleaned).slice(0, 40).join('').trimEnd();
-}
-
 export function panPosition(position, delta, sourceExtent, cropExtent, previewExtent) {
   const range = sourceExtent - cropExtent;
   return range <= 0.001

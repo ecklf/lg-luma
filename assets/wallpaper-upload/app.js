@@ -1,11 +1,10 @@
-import { cleanName, cropRect, panPosition } from './crop.js';
+import { cropRect, panPosition } from './crop.js';
 import { loadStoragePath } from './storage.js';
 
 const element = (id) => document.getElementById(id);
 const file = element('file');
 const picker = element('picker');
 const editor = element('editor');
-const name = element('name');
 const canvas = element('preview');
 const zoom = element('zoom');
 const status = element('status');
@@ -62,7 +61,6 @@ file.addEventListener('change', async () => {
     }
     image?.close();
     image = next;
-    name.value = cleanName(selected.name.replace(/\.[^.]+$/, ''));
     element('picker-title').textContent = selected.name;
     zoom.value = '1';
     horizontal = vertical = 0.5;
@@ -70,7 +68,7 @@ file.addEventListener('change', async () => {
     editor.hidden = false;
     draw();
     message('');
-    name.focus();
+    zoom.focus();
   } catch (error) {
     if (generation === loading) message(error.message || 'This image could not be opened.', true);
   }
@@ -125,13 +123,6 @@ editor.addEventListener('submit', async (event) => {
     message('Could not read the TV storage path. Close and reopen this dialog.', true);
     return;
   }
-  const title = cleanName(name.value);
-  if (!title) {
-    message('Give your background a name.', true);
-    name.focus();
-    return;
-  }
-  name.value = title;
   busy = true;
   for (const input of editor.querySelectorAll('input, button')) input.disabled = true;
   file.disabled = true;
@@ -147,7 +138,7 @@ editor.addEventListener('submit', async (event) => {
     if (!blob) throw new Error('The image could not be prepared. Try another photo.');
     message('Sending to your TV…');
     const token = location.pathname.split('/')[1];
-    const response = await fetch(`upload?name=${encodeURIComponent(title)}`, {
+    const response = await fetch('upload', {
       method: 'POST',
       headers: { 'Content-Type': 'image/jpeg', 'X-Luma-Upload': token },
       body: blob,
@@ -155,7 +146,6 @@ editor.addEventListener('submit', async (event) => {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'The TV could not save this background.');
-    element('success-name').textContent = result.name;
     element('success-path').textContent = destination;
     editor.hidden = true;
     element('success').hidden = false;

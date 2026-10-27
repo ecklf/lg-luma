@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cleanName, cropRect, panPosition } from '../assets/wallpaper-upload/crop.js';
+import { cropRect, panPosition } from '../assets/wallpaper-upload/crop.js';
+import { readFile } from 'node:fs/promises';
 import { loadStoragePath } from '../assets/wallpaper-upload/storage.js';
 
 test('portrait, landscape, panorama and zoom crops stay in bounds at 16:9', () => {
@@ -32,11 +33,15 @@ test('dragging clamps at both edges and handles axes without overflow', () => {
   assert.ok(panPosition(0.5, 20, 4000, 2000, 960) < 0.5);
 });
 
-test('names retain Unicode, remove controls, and match the TV’s 40-character limit', () => {
-  assert.equal(cleanName('  My\n view  '), 'My view');
-  assert.equal(cleanName('旅行 & mer'), '旅行 & mer');
-  assert.equal(Array.from(cleanName('🌄'.repeat(50))).length, 40);
-  assert.equal(cleanName(' \n '), '');
+test('upload page needs no name and retains its storage-path success view', async () => {
+  const html = await readFile(new URL('../assets/wallpaper-upload/index.html', import.meta.url), 'utf8');
+  const script = await readFile(new URL('../assets/wallpaper-upload/app.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(html, /id="name"|success-name|Background name/);
+  assert.match(html, /Your background was uploaded to/);
+  assert.match(html, /id="success-path"/);
+  assert.match(html, /Add another one/);
+  assert.match(script, /fetch\('upload',/);
+  assert.doesNotMatch(script, /cleanName|upload\?name/);
 });
 
 test('storage path resolves to the exact absolute directory and rejects unavailable or unsafe values', async () => {

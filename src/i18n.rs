@@ -110,14 +110,6 @@ impl Language {
             _ => self.t("categoryUtilities"),
         }
     }
-    pub fn wallpaper(self, id: &str) -> &str {
-        self.t(match id {
-            "dunes" => "monumentValley",
-            "san-francisco" => "sanFrancisco",
-            "northern-lights" => "northernLights",
-            _ => id,
-        })
-    }
     pub fn greeting(self, hour: u8, name: &str) -> String {
         let key = match hour {
             0..=4 => "greetingNight",

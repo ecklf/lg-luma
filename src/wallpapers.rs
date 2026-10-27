@@ -28,7 +28,6 @@ const TOKEN_ALPHABET: &[u8; 58] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijk
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Wallpaper {
     pub id: String,
-    pub name: String,
     #[serde(skip)]
     pub directory: PathBuf,
 }
@@ -204,10 +203,9 @@ fn catalog(directory: &Path) -> Vec<Wallpaper> {
         let Ok(mut item) = serde_json::from_slice::<Wallpaper>(&bytes) else {
             continue;
         };
-        if item.id != id
-            || item.name != crate::model::clean_input_name(&item.name)
-            || item.name.is_empty()
-        {
+        // Legacy metadata may contain a name; serde ignores it. Identity and
+        // selection depend only on the generated ID, never a display label.
+        if item.id != id {
             continue;
         }
         if ["wallpaper.jpg", "thumbnail.jpg"].iter().any(|file| {
@@ -222,12 +220,7 @@ fn catalog(directory: &Path) -> Vec<Wallpaper> {
             break;
         }
     }
-    result.sort_by(|a, b| {
-        a.name
-            .to_lowercase()
-            .cmp(&b.name.to_lowercase())
-            .then(a.id.cmp(&b.id))
-    });
+    result.sort_by(|a, b| a.id.cmp(&b.id));
     result
 }
 
@@ -380,14 +373,9 @@ fn jpeg(image: &image::RgbImage, quality: u8) -> Result<Vec<u8>, String> {
 
 fn store(
     directory: &Path,
-    name: &str,
     bytes: &[u8],
     valid: impl Fn() -> bool,
 ) -> Result<Wallpaper, String> {
-    let name = crate::model::clean_input_name(name);
-    if name.is_empty() {
-        return Err("Give your wallpaper a name".into());
-    }
     if catalog(directory).len() >= MAX_WALLPAPERS {
         return Err("The wallpaper gallery is full (20 images)".into());
     }
@@ -415,7 +403,6 @@ fn store(
     create_directory(&staging)?;
     let item = Wallpaper {
         id: id.clone(),
-        name,
         directory: directory.join(&id),
     };
     let result = (|| {
@@ -683,32 +670,6 @@ fn error_response(stream: &mut TcpStream, status: &str, error: &str) -> Result<(
     )
 }
 
-fn decode_name(value: &str) -> Result<String, String> {
-    if value.len() > 512 {
-        return Err("Wallpaper name is too long".into());
-    }
-    let mut bytes = value.bytes();
-    let mut result = Vec::new();
-    while let Some(byte) = bytes.next() {
-        result.push(match byte {
-            b'%' => {
-                let a = bytes
-                    .next()
-                    .and_then(|c| (c as char).to_digit(16))
-                    .ok_or("Invalid wallpaper name")?;
-                let b = bytes
-                    .next()
-                    .and_then(|c| (c as char).to_digit(16))
-                    .ok_or("Invalid wallpaper name")?;
-                (a * 16 + b) as u8
-            }
-            b'+' => b' ',
-            c => c,
-        });
-    }
-    String::from_utf8(result).map_err(|_| "Invalid wallpaper name".into())
-}
-
 fn serve(
     stream: &mut TcpStream,
     host: &str,
@@ -793,7 +754,7 @@ fn serve(
         return Ok(false);
     }
     if request.method != "POST"
-        || !route.starts_with("upload?name=")
+        || route != "upload"
         || request.headers.get("x-luma-upload").map(String::as_str) != Some(token)
     {
         error_response(stream, "403 Forbidden", "Invalid upload request")?;
@@ -811,24 +772,17 @@ fn serve(
         )?;
         return Ok(false);
     }
-    let name = match decode_name(route.strip_prefix("upload?name=").unwrap()) {
-        Ok(name) => name,
-        Err(error) => {
-            error_response(stream, "400 Bad Request", &error)?;
-            return Ok(false);
-        }
-    };
     let mut body = vec![0; request.length];
     read_exact(&mut reader, &mut body, &valid, deadline)?;
     drop(reader);
-    match store(directory, &name, &body, valid) {
+    match store(directory, &body, valid) {
         Ok(item) => {
             // The commit succeeded even if the phone disconnects before receiving its reply.
             let _ = response(
                 stream,
                 "201 Created",
                 "application/json; charset=utf-8",
-                serde_json::json!({"name":item.name}).to_string().as_bytes(),
+                serde_json::json!({"id":item.id}).to_string().as_bytes(),
             );
             Ok(true)
         }

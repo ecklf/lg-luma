@@ -32,17 +32,6 @@
           ></canvas>
           <span class="ratio">JPEG <i>·</i> 1920 × 1080</span>
         </div>
-        <label class="field" for="name"
-          >Background name
-          <input
-            id="name"
-            name="name"
-            maxlength="80"
-            placeholder="Background name"
-            required
-            autocomplete="off"
-          />
-        </label>
         <label class="zoom" for="zoom"
           ><span>Zoom</span><input id="zoom" type="range" min="1" max="3" step="0.01" value="1"
         /></label>
@@ -54,7 +43,7 @@
       <section id="success" class="success" aria-live="polite" hidden>
         <span class="success-mark" aria-hidden="true">✓</span>
         <h2>Success</h2>
-        <p>Your background <strong id="success-name"></strong> was uploaded to</p>
+        <p>Your background was uploaded to</p>
         <code id="success-path"></code>
         <button id="another" type="button">Add another one</button>
       </section>

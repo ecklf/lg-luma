@@ -375,14 +375,7 @@ impl State {
     }
 
     pub fn content_viewport(&self) -> Rect {
-        let bottom = if self.page == Page::Apps {
-            1080.
-        } else if self.page == Page::Home && self.moving.is_none() {
-            1053.6
-        } else {
-            994.4
-        };
-        Rect::new(64., 108.8, 1792., bottom - 108.8)
+        Rect::new(64., 108.8, 1792., 1080. - 108.8)
     }
 
     pub fn favorites_viewport(&self) -> Rect {
@@ -599,11 +592,7 @@ impl State {
                 if control.rect.y < top {
                     self.scroll = (self.scroll + control.rect.y - top).max(0.);
                 }
-                let bottom = if self.page == Page::Home && self.moving.is_none() {
-                    1041.6
-                } else {
-                    982.4
-                };
+                let bottom = self.content_viewport().y + self.content_viewport().h - 12.;
                 if control.rect.y + control.rect.h > bottom {
                     self.scroll += control.rect.y + control.rect.h - bottom;
                 }
@@ -630,6 +619,9 @@ impl State {
         if let Target::Sidebar(section) = target {
             if self.subpage == Some(Subpage::WeatherLocation) {
                 self.weather.cancel_search();
+            }
+            if self.section != section || self.subpage.is_some() {
+                self.scroll = 0.;
             }
             self.section = section;
             self.subpage = None;
@@ -721,7 +713,7 @@ impl State {
     }
 
     pub fn set_wallpapers(&mut self, wallpapers: Vec<crate::wallpapers::Wallpaper>) {
-        // A newly uploaded title can sort before existing entries. Keep the focused
+        // A newly uploaded ID can sort before existing entries. Keep the focused
         // image, rather than moving the pointer's target to a different photograph.
         let focused_id = if let Target::Background(index) = self.focus {
             self.background_id(index).map(str::to_owned)

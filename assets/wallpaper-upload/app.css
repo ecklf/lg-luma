@@ -152,27 +152,6 @@ canvas:active {
   font-size: 10px;
   pointer-events: none;
 }
-.field {
-  display: grid;
-  gap: 8px;
-  margin-top: 20px;
-  color: #aab1ae;
-  font-size: 12px;
-}
-.field input {
-  width: 100%;
-  padding: 12px 13px;
-  border: 1px solid #343a37;
-  border-radius: 9px;
-  outline: none;
-  background: #171a1a;
-  color: #f3f4f2;
-  font: inherit;
-  font-size: 14px;
-}
-.field input:focus {
-  border-color: #8ca094;
-}
 .zoom {
   display: flex;
   align-items: center;

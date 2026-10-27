@@ -26,17 +26,17 @@
     "nl": "Achtergrond verwijderen"
   },
   "deleteBackgroundWarning": {
-    "en": "Delete “{app}”? This background will be removed from your gallery.",
-    "de": "„{app}“ löschen? Dieser Hintergrund wird aus deiner Galerie entfernt.",
-    "zh": "删除“{app}”？此背景将从图库中移除。",
-    "es": "¿Eliminar «{app}»? Este fondo se eliminará de tu galería.",
-    "pt": "Excluir “{app}”? Este fundo será removido da sua galeria.",
-    "it": "Eliminare “{app}”? Questo sfondo verrà rimosso dalla galleria.",
-    "ru": "Удалить «{app}»? Этот фон будет удалён из галереи.",
-    "pl": "Usunąć „{app}”? To tło zostanie usunięte z galerii.",
-    "fr": "Supprimer « {app} » ? Cet arrière-plan sera retiré de votre galerie.",
-    "vi": "Xóa “{app}”? Hình nền này sẽ bị xóa khỏi thư viện của bạn.",
-    "nl": "‘{app}’ verwijderen? Deze achtergrond wordt uit je galerij verwijderd."
+    "en": "Delete this background? It will be removed from your gallery.",
+    "de": "Diesen Hintergrund löschen? Er wird aus deiner Galerie entfernt.",
+    "zh": "删除此背景？它将从图库中移除。",
+    "es": "¿Eliminar este fondo? Se eliminará de tu galería.",
+    "pt": "Excluir este fundo? Ele será removido da sua galeria.",
+    "it": "Eliminare questo sfondo? Verrà rimosso dalla galleria.",
+    "ru": "Удалить этот фон? Он будет удалён из галереи.",
+    "pl": "Usunąć to tło? Zostanie usunięte z galerii.",
+    "fr": "Supprimer cet arrière-plan ? Il sera retiré de votre galerie.",
+    "vi": "Xóa hình nền này? Hình nền sẽ bị xóa khỏi thư viện của bạn.",
+    "nl": "Deze achtergrond verwijderen? Hij wordt uit je galerij verwijderd."
   },
   "deletingBackground": {
     "en": "Deleting background…",
