@@ -417,13 +417,19 @@ try {
   assert.equal(cycleEnabled.subpage, null);
   assert.equal(cycleEnabled.focus, 'WallpaperCycle');
   assert.equal(cycleEnabled.preferences.wallpaper_cycle, true);
-  assert.ok(cycleEnabled.ui_text.includes('Auto rotation'));
+  assert.ok(cycleEnabled.ui_text.includes('Rotation'));
+  const cycledAfterRestart = await scenario('wallpaper-cycle-restart', 'down');
+  assert.equal(
+    cycledAfterRestart.preferences.background,
+    'san-francisco',
+    'enabled rotation advances to the next wallpaper when Luma restarts',
+  );
   const cycleDisabled = await scenario(
     'wallpaper-cycle-disabled',
     'settings,down,down,enter,up,up,left,enter',
   );
   assert.equal(cycleDisabled.preferences.wallpaper_cycle, false);
-  assert.ok(cycleDisabled.ui_text.includes('Auto rotation'));
+  assert.ok(cycleDisabled.ui_text.includes('Rotation'));
   console.log(
     'Native smoke checks passed: rendering/alpha, navigation, persistence, SDL pointer input, DPI-aware glyphs, 4K capture and presentation profiling.',
   );

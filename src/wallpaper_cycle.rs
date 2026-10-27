@@ -1,10 +1,15 @@
 //! Automatic background cycling with one fixed interval and no per-image exclusions.
 use serde::{Deserialize, Deserializer};
+use std::time::Duration;
 
 pub const INTERVAL: u64 = 15 * 60;
 
 pub fn due(enabled: bool, changed: u64, now: u64) -> bool {
     enabled && now.saturating_sub(changed) >= INTERVAL
+}
+
+pub fn startup_due(enabled: bool, pending: bool, catalog_ready: bool, elapsed: Duration) -> bool {
+    enabled && pending && (catalog_ready || elapsed >= Duration::from_secs(3))
 }
 
 pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
@@ -53,6 +58,15 @@ mod tests {
         assert!(due(true, 100, 100 + INTERVAL));
         assert!(!due(true, 1_800_000_000, 1_577_836_800));
         assert!(!due(true, u64::MAX, u64::MAX));
+    }
+
+    #[test]
+    fn enabled_rotation_advances_once_after_startup_catalog_or_timeout() {
+        assert!(!startup_due(false, true, true, Duration::ZERO));
+        assert!(!startup_due(true, false, true, Duration::ZERO));
+        assert!(!startup_due(true, true, false, Duration::from_secs(2)));
+        assert!(startup_due(true, true, true, Duration::ZERO));
+        assert!(startup_due(true, true, false, Duration::from_secs(3)));
     }
 
     #[test]

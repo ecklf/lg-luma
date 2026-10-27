@@ -259,11 +259,12 @@ updates, and normal/takeover launches using the shared preferences location use 
 Custom images are not used as LG's launch splash: runtime splash updates are skipped for them,
 and takeover boot staging uses a bundled fallback.
 
-The fixed **Auto rotation** button to the left of the upload action toggles cycling On/Off,
+The fixed **Rotation** button to the left of the upload action toggles cycling On/Off,
 defaulting to Off, without opening a subpage. All available images participate in gallery order;
 deleted and pending-deletion entries are excluded. The fixed 15-minute interval uses a persisted
 Unix timestamp; manual selection or enabling cycling restarts it, and a clock behind the last
-change waits. Changes wait until Luma is focused, visible, idle, and outside overlays. Automatic
+change waits. On process start, rotation advances once after the gallery catalog loads, or after
+three seconds if the catalog is delayed. Changes wait until Luma is focused, visible, idle, and outside overlays. Automatic
 changes use a 1.6-second fade (instant with reduced motion) and save without refreshing LG's splash.
 `splash_background` preserves the manual selection across unrelated saves, package restaging, and
 process restarts; old preferences fall back to `background`. Old duration preferences load as On,

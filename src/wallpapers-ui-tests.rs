@@ -148,6 +148,14 @@ fn automatic_changes_preserve_manual_splash_across_saves_and_restart_and_manual_
     let mut state = ready();
     state.preferences.background = "forest".into();
     state.preferences.wallpaper_cycle = true;
+    state.preferences.wallpaper_changed = 100;
+    assert!(!crate::wallpaper_cycle::due(true, 100, 100));
+    assert!(crate::wallpaper_cycle::startup_due(
+        true,
+        true,
+        true,
+        std::time::Duration::ZERO
+    ));
     assert!(state.cycle_wallpaper(100));
     assert_eq!(state.background_fade, crate::state::CYCLE_FADE);
     assert_eq!(state.preferences.splash_background(), "forest");
