@@ -1635,7 +1635,7 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
         };
     let right_inset = if row.value.is_some() {
         210.
-    } else if row.target == Target::UploadWallpaper {
+    } else if matches!(row.target, Target::UploadWallpaper | Target::WallpaperCycle) {
         24.2
     } else {
         64.

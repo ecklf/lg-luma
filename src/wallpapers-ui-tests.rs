@@ -82,6 +82,21 @@ fn cycling_button_toggles_on_off_without_opening_a_page_or_moving_controls() {
                 .iter()
                 .any(|draw| matches!(draw, Draw::Text(value, ..) if value == &label))
         );
+        let button = enabled
+            .controls
+            .iter()
+            .find(|c| c.target == Target::WallpaperCycle)
+            .unwrap()
+            .rect;
+        let title = enabled
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text(value, rect, ..) if value == &label => Some(rect),
+                _ => None,
+            })
+            .unwrap();
+        assert!((button.x + button.w - title.x - title.w - 24.2).abs() < 0.001);
         for (old, new) in before.iter().zip(&enabled.controls) {
             assert_eq!(old.target, new.target);
             assert_eq!(
