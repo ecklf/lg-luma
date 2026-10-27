@@ -34,6 +34,51 @@ fn upload_is_modal_and_close_restores_its_exact_parent() {
 }
 
 #[test]
+fn upload_instructions_are_ordered_and_only_the_displayed_url_loses_its_slash() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    state.focus = Target::UploadWallpaper;
+    state.activate();
+    let url = "http://192.168.100.100:54321/AbCd1234/";
+    state.wallpaper_upload = Some(Ok(crate::wallpapers::Session {
+        url: url.into(),
+        qr_size: 21,
+        qr: vec![false; 21 * 21],
+    }));
+    for language in crate::i18n::Language::ALL {
+        state.preferences.language = language;
+        let modal = scene(&state);
+        let labels: Vec<_> = modal
+            .draw
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Text(label, rect, ..) => Some((label.as_str(), rect)),
+                _ => None,
+            })
+            .collect();
+        let mut previous_bottom = 0.;
+        for label in [
+            language.t("wallpaperUploadHint"),
+            language.t("wallpaperUploadBrowser"),
+            url.trim_end_matches('/'),
+            language.t("wallpaperUploadKeepOpen"),
+            language.t("wallpaperUploadPrivate"),
+            language.t("close"),
+        ] {
+            let (_, rect) = labels.iter().find(|(text, _)| *text == label).unwrap();
+            assert!(rect.y >= previous_bottom);
+            previous_bottom = rect.y + rect.h;
+        }
+        assert!(!labels.iter().any(|(label, _)| *label == url));
+        assert_eq!(modal.controls.len(), 1);
+        assert_eq!(modal.controls[0].target, Target::CloseDialog);
+    }
+    let session = state.wallpaper_upload.as_ref().unwrap().as_ref().unwrap();
+    assert_eq!(session.url, url);
+}
+
+#[test]
 fn upload_button_is_compact_and_right_aligned_in_every_language() {
     let mut state = ready();
     state.open(2);

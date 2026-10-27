@@ -701,13 +701,18 @@ fn serve(
         error_response(stream, "403 Forbidden", "Open the address shown on your TV")?;
         return Ok(false);
     }
+    if !valid() {
+        return Err("Upload session ended".into());
+    }
+    if request.method == "GET" && request.length == 0 && request.target == format!("/{token}") {
+        write!(stream, "HTTP/1.1 303 See Other\r\nLocation: /{token}/\r\nContent-Length: 0\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\n\r\n")
+            .map_err(|error| error.to_string())?;
+        return Ok(false);
+    }
     let Some(route) = request.target.strip_prefix(&format!("/{token}/")) else {
         error_response(stream, "404 Not Found", "Upload session not found")?;
         return Ok(false);
     };
-    if !valid() {
-        return Err("Upload session ended".into());
-    }
     if request.method == "GET" && request.length == 0 {
         if route == "info.json" {
             let body = serde_json::json!({"path": directory.to_string_lossy()}).to_string();

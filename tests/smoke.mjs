@@ -179,9 +179,12 @@ try {
   assert.equal(upload.modal, true);
   assert.equal(upload.focus, 'CloseDialog');
   assert.ok(upload.ui_text.includes('Add a background'));
+  assert.ok(upload.ui_text.includes('Scan this QR code'));
+  assert.ok(upload.ui_text.includes('or enter this URL in the browser'));
+  assert.ok(upload.ui_text.some((text) => text.startsWith('Keep this window open')));
   assert.ok(
     upload.ui_text.some((text) =>
-      /^http:\/\/127\.0\.0\.1:\d+\/[1-9A-HJ-NP-Za-km-z]{8}\/$/.test(text),
+      /^http:\/\/127\.0\.0\.1:\d+\/[1-9A-HJ-NP-Za-km-z]{8}$/.test(text),
     ),
   );
   const uploadClosed = await scenario(

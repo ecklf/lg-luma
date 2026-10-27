@@ -321,6 +321,33 @@ fn only_the_session_origin_host_token_and_upload_header_allow_writes() {
 }
 
 #[test]
+fn slashless_session_urls_redirect_to_the_local_asset_base() {
+    let fixture = Fixture::new();
+    let (response, changed) = http(&fixture.wallpapers(), |host| {
+        format!("GET /secret HTTP/1.1\r\nHost: {host}\r\n\r\n").into_bytes()
+    });
+    assert!(response.starts_with("HTTP/1.1 303 See Other\r\n"));
+    assert!(response.contains("\r\nLocation: /secret/\r\n"));
+    assert!(response.contains("Cache-Control: no-store"));
+    assert!(!changed);
+    for (target, headers, expected) in [
+        ("/wrong", "", "404 Not Found"),
+        (
+            "/secret",
+            "Origin: https://evil.example\r\n",
+            "403 Forbidden",
+        ),
+    ] {
+        let (response, changed) = http(&fixture.wallpapers(), |host| {
+            format!("GET {target} HTTP/1.1\r\nHost: {host}\r\n{headers}\r\n").into_bytes()
+        });
+        assert!(response.starts_with(&format!("HTTP/1.1 {expected}")));
+        assert!(!response.contains("\r\nLocation:"));
+        assert!(!changed);
+    }
+}
+
+#[test]
 fn browser_assets_are_local_and_a_real_http_upload_needs_no_name() {
     let fixture = Fixture::new();
     for route in [

@@ -282,7 +282,7 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
     );
     out.text(
         language.t("wallpaperUploadHint"),
-        Rect::new(604., 264., 712., 68.),
+        Rect::new(604., 264., 712., 32.),
         text(19., 400, 0.).leading(1.5),
         c(0xffffff, 0.65),
         true,
@@ -292,7 +292,7 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
             let scale = (336. / (session.qr_size + 8) as f32).floor();
             let size = (session.qr_size + 8) as f32 * scale;
             let x = (1920. - size) / 2.;
-            let y = 354.;
+            let y = 310.;
             // Invert the normal QR polarity to blend into the dark modal, while
             // retaining a high-contrast foreground and the full quiet zone.
             let background = c(0x1b2023, 1.);
@@ -350,15 +350,30 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
             );
             out.icon(assets, "luma-mark", mark, WHITE);
             out.text(
-                &session.url,
-                Rect::new(568., 734., 784., 36.),
-                assets.fit_text(&session.url, text(26., 600, 0.), 784.),
+                language.t("wallpaperUploadBrowser"),
+                Rect::new(604., 670., 712., 32.),
+                text(19., 400, 0.).leading(1.5),
+                c(0xffffff, 0.65),
+                true,
+            );
+            let display_url = session.url.trim_end_matches('/');
+            out.text(
+                display_url,
+                Rect::new(568., 716., 784., 36.),
+                assets.fit_text(display_url, text(26., 600, 0.), 784.),
                 WHITE,
                 true,
             );
             out.text(
+                language.t("wallpaperUploadKeepOpen"),
+                Rect::new(604., 766., 712., 52.),
+                text(16., 400, 0.).leading(1.4),
+                c(0xffffff, 0.75),
+                true,
+            );
+            out.text(
                 language.t("wallpaperUploadPrivate"),
-                Rect::new(604., 786., 712., 28.),
+                Rect::new(604., 820., 712., 22.),
                 text(15., 400, 0.),
                 c(0xffffff, 0.5),
                 true,
@@ -379,7 +394,7 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
             );
         }
     }
-    let close = Rect::new(812., 842., 296., 56.);
+    let close = Rect::new(812., 862., 296., 56.);
     out.pill(close, state.focus == Target::CloseDialog, false);
     out.text(
         language.t("close"),
