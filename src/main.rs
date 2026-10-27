@@ -640,6 +640,7 @@ fn run() -> Result<(), String> {
         &weather_service,
         &wallpaper_service,
     );
+    platform.send(Request::Clock);
     platform.sync_splash(&state.preferences.background);
     startup_stage("preferences and workers");
 
@@ -971,6 +972,12 @@ fn run() -> Result<(), String> {
                     } else if initial_focus {
                         state.focus = state.first_content();
                         initial_focus = false;
+                    }
+                }
+                Response::Clock(hour_24) => {
+                    if state.preferences.hour_24.is_none() {
+                        state.preferences.hour_24 = hour_24;
+                        state.dirty = true;
                     }
                 }
                 Response::Launched(result) => {

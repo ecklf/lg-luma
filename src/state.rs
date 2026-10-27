@@ -1663,7 +1663,7 @@ impl State {
                     Subpage::TimeFormat
                 });
                 self.focus = Target::Choice(usize::from(if format {
-                    self.preferences.hour_24
+                    self.preferences.hour_24_clock()
                 } else {
                     self.preferences.show_seconds
                 }));
@@ -1813,7 +1813,7 @@ impl State {
             }
             Target::Choice(index) => {
                 match self.subpage.clone() {
-                    Some(Subpage::ClockFormat) => self.preferences.hour_24 = index == 1,
+                    Some(Subpage::ClockFormat) => self.preferences.hour_24 = Some(index == 1),
                     Some(Subpage::TimeFormat) => self.preferences.show_seconds = index == 1,
                     Some(Subpage::Input(id)) => {
                         self.preferences.input_modes.insert(

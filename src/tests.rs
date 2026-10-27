@@ -662,7 +662,7 @@ fn clock_choices_only_highlight_focus_while_preserving_saved_checkmarks() {
         assert_eq!(highlighted, vec![focused.rect.y]);
         let checks = scene.draw.iter().filter(|draw| matches!(draw, crate::renderer::Draw::TintedImage(path, ..) if path.ends_with("check.lvec"))).count();
         assert_eq!(checks, 1);
-        assert!(!state.preferences.hour_24);
+        assert!(!state.preferences.hour_24_clock());
         assert!(state.preferences.show_seconds);
     }
 }
@@ -688,7 +688,7 @@ fn clock_format_subpage_saves_and_restores_its_parent_row() {
     assert_eq!(state.focus, Target::Choice(0));
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.activate(), vec![Effect::Save]);
-    assert!(state.preferences.hour_24);
+    assert!(state.preferences.hour_24_clock());
     assert!(!state.preferences.show_seconds);
     assert_eq!(state.subpage, Some(crate::state::Subpage::Clock));
     assert_eq!(state.focus, Target::ClockFormat);
@@ -708,7 +708,7 @@ fn clock_format_subpage_saves_and_restores_its_parent_row() {
 #[test]
 fn time_format_selects_seconds_without_changing_the_hour_format() {
     let mut state = ready();
-    state.preferences.hour_24 = true;
+    state.preferences.hour_24 = Some(true);
     state.open(2);
     state.focus = Target::Setting(1);
     state.direction(Direction::Right, &controls(&state));
@@ -728,7 +728,7 @@ fn time_format_selects_seconds_without_changing_the_hour_format() {
     assert_eq!(state.focus, Target::Choice(1));
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert!(state.preferences.show_seconds);
-    assert!(state.preferences.hour_24);
+    assert!(state.preferences.hour_24_clock());
     assert_eq!(state.subpage, Some(crate::state::Subpage::Clock));
     assert_eq!(state.focus, Target::ClockTimeFormat);
     state.activate();
@@ -740,7 +740,7 @@ fn time_format_selects_seconds_without_changing_the_hour_format() {
     state.direction(Direction::Up, &controls(&state));
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert!(!state.preferences.show_seconds);
-    assert!(state.preferences.hour_24);
+    assert!(state.preferences.hour_24_clock());
     state.back();
     assert!(state.subpage.is_none());
     assert_eq!(state.focus, Target::Setting(1));
@@ -1897,4 +1897,72 @@ fn inventory_success_resets_failures_and_later_failures_show_at_once() {
     assert_eq!(state.inventory_failed("timeout".into()), None);
     assert!(!state.loading && state.error.is_some());
     assert!(!state.inventory.apps.is_empty());
+}
+
+#[test]
+fn the_clock_follows_the_language_until_a_format_is_chosen() {
+    use crate::i18n::Language;
+    use crate::model::Preferences;
+    let mut preferences = Preferences::default();
+    assert!(!preferences.hour_24_clock(), "English: 12 hours");
+    preferences.language = Language::De;
+    assert!(preferences.hour_24_clock(), "German: 24 hours");
+    preferences.hour_24 = Some(false);
+    assert!(!preferences.hour_24_clock(), "a chosen format wins");
+    preferences.language = Language::En;
+    preferences.hour_24 = Some(true);
+    assert!(preferences.hour_24_clock());
+
+    // Saved preferences keep their choice; files without one follow the language.
+    let saved: Preferences =
+        serde_json::from_str(r#"{"hour_24": false, "language": "de"}"#).unwrap();
+    assert_eq!(saved.hour_24, Some(false));
+    let fresh: Preferences = serde_json::from_str(r#"{"language": "de"}"#).unwrap();
+    assert!(fresh.hour_24.is_none() && fresh.hour_24_clock());
+    assert!(!serde_json::to_string(&fresh).unwrap().contains("hour_24"));
+}
+
+#[test]
+fn the_clock_follows_the_tv_region_before_the_language() {
+    use crate::model::{Preferences, tv_hour_24};
+    use serde_json::json;
+    let locales =
+        |fmt: &str, ui: &str| json!({"clock": "locale", "locales": {"FMT": fmt, "UI": ui}});
+    assert_eq!(tv_hour_24(&locales("en-GB", "de-DE")), Some(true));
+    assert_eq!(tv_hour_24(&locales("en-US", "en-US")), Some(false));
+    assert_eq!(
+        tv_hour_24(&locales("en-AU", "de-DE")),
+        Some(false),
+        "FMT wins over UI"
+    );
+    assert_eq!(tv_hour_24(&locales("zh-Hans-CN", "zh-Hans-CN")), Some(true));
+    assert_eq!(
+        tv_hour_24(&json!({"locales": {"UI": "en-CA"}})),
+        Some(false)
+    );
+    assert_eq!(
+        tv_hour_24(&json!({"clock": "24", "locales": {"FMT": "en-US"}})),
+        Some(true)
+    );
+    assert_eq!(
+        tv_hour_24(&json!({"clock": "12", "locales": {"FMT": "de-DE"}})),
+        Some(false)
+    );
+    assert_eq!(
+        tv_hour_24(&json!({"locales": {"FMT": "en"}})),
+        None,
+        "no region"
+    );
+    assert_eq!(tv_hour_24(&json!({})), None);
+
+    // An unset format takes the TV's; a chosen one is kept.
+    let mut preferences: Preferences = serde_json::from_str(r#"{"language": "en"}"#).unwrap();
+    assert!(!preferences.hour_24_clock());
+    preferences.hour_24 = preferences
+        .hour_24
+        .or(tv_hour_24(&locales("en-GB", "en-GB")));
+    assert!(
+        preferences.hour_24_clock(),
+        "an English UI on a British TV: 24 hours"
+    );
 }

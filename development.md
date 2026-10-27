@@ -129,7 +129,9 @@ reply was lost. Otherwise the error closes the popup and refreshes inventory wit
 preferences. Uninstall mutations are never automatically retried. Desktop deletion changes only
 in-memory sample inventory. Verify app opening, real deletion, denial and focus restoration
 manually on a TV, including Home-takeover mode.
-The **Clock** subpage contains **Clock format** (12-hour or 24-hour) and **Time format** (`HH:MM`
+The **Clock** subpage contains **Clock format** (12-hour or 24-hour; until one is chosen, the TV's
+format: webOS's `localeInfo.clock`, else the region of `localeInfo.locales.FMT`, else 12-hour for
+English and 24-hour for the other languages) and **Time format** (`HH:MM`
 or `HH:MM:SS`, defaulting to `HH:MM`). Choosing a format returns to its row in Clock, and Back
 from Clock restores its General row. With seconds shown, the header clock redraws once per second
 instead of once per minute. Existing saved hour and seconds preferences are retained.
