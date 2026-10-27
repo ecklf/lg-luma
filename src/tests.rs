@@ -1444,6 +1444,13 @@ fn remote_can_select_and_restore_every_language() {
             state.direction(Direction::Down, &controls(&state));
         }
         assert_eq!(state.focus, Target::Choice(index));
+        let focused = controls(&state)
+            .into_iter()
+            .find(|control| control.target == state.focus)
+            .unwrap();
+        let viewport = state.content_viewport();
+        assert!(focused.rect.y >= viewport.y);
+        assert!(focused.rect.y + focused.rect.h <= viewport.y + viewport.h);
         assert_eq!(state.activate(), vec![Effect::Save]);
         assert_eq!(state.preferences.language, language);
         assert_eq!(state.focus, Target::Setting(4));

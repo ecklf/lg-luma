@@ -187,8 +187,16 @@ try {
   for (const key of ['stateOn', 'stateOff', 'stateAuto', 'inputWhenConnected'])
     contains(input, key, 'zh');
   const background = await scenario('zh-background', 'settings,down,down,enter');
-  for (const key of ['slate', 'midnight', 'monumentValley', 'northernLights'])
-    contains(background, key, 'zh');
+  for (const key of ['background', 'uploadWallpaper']) contains(background, key, 'zh');
+  assert.deepEqual(background.focus, { Background: 3 });
+  // Background thumbnails have no captions; their actions are translated in the popup.
+  const backgroundOptions = await scenario(
+    'zh-background-options',
+    'settings,down,down,enter,down,enter',
+  );
+  assert.equal(backgroundOptions.modal, true);
+  assert.equal(backgroundOptions.focus, 'UseBackground');
+  for (const key of ['useBackground', 'deleteBackground']) contains(backgroundOptions, key, 'zh');
   const keyboard = await scenario('zh-keyboard', 'apps,type:Netflix');
   for (const key of ['findApp', 'space', 'delete', 'clear', 'done']) contains(keyboard, key, 'zh');
   const weatherSettings = await scenario('zh-weather-settings', 'settings,down,down,down,enter');
@@ -264,8 +272,12 @@ try {
   const vietnamesePicker = `${picker},${Array(9).fill('down').join(',')}`;
   const vietnameseFocused = await scenario('vi-picker', vietnamesePicker);
   assert.deepEqual(vietnameseFocused.focus, { Choice: 9 });
-  assert.ok(vietnameseFocused.scroll > 0, 'The tenth language must scroll fully into view');
+  assert.equal(vietnameseFocused.scroll, 0, 'The first ten language rows fit without scrolling');
   assert.ok(vietnameseFocused.ui_text.includes('Tiếng Việt'));
+  const dutchFocused = await scenario('nl-picker', `${vietnamesePicker},down`);
+  assert.deepEqual(dutchFocused.focus, { Choice: 10 });
+  assert.ok(dutchFocused.scroll > 0, 'The eleventh language must scroll fully into view');
+  assert.ok(dutchFocused.ui_text.includes('Nederlands'));
   const vietnamese = await scenario('vi-home', `${vietnamesePicker},enter,home,down`);
   assert.equal(vietnamese.preferences.language, 'vi');
   for (const key of [
