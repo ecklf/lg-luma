@@ -2210,9 +2210,9 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 .ceil()
                 .clamp(240., 520.);
             let cycle_label = language.t("wallpaperCycle");
-            let cycle_width = (assets.width(cycle_label, text(20.8, 550, -0.02)) + 88.)
+            let cycle_width = (assets.width(cycle_label, text(20.8, 550, -0.02)) + 87.6)
                 .ceil()
-                .clamp(240., 520.);
+                .min(520.);
             row(
                 out,
                 state,
@@ -3115,6 +3115,38 @@ mod tests {
                 ),
             ]),
             artwork: crate::app_artwork::Service::new(false),
+        }
+    }
+
+    #[test]
+    fn auto_rotation_width_has_no_extra_minimum_padding() {
+        let assets = assets();
+        let mut state = State::new(Preferences::default());
+        state.open(2);
+        state.section = 1;
+        let label = state.preferences.language.t("wallpaperCycle");
+        let label_width = assets.width(label, text(20.8, 550, -0.02));
+        for enabled in [false, true] {
+            state.preferences.wallpaper_cycle = enabled;
+            let mut scene = Scene::new();
+            settings(&mut scene, &state, &assets);
+            let button = scene
+                .controls
+                .iter()
+                .find(|control| control.target == Target::WallpaperCycle)
+                .unwrap()
+                .rect;
+            let title = scene
+                .draw
+                .iter()
+                .find_map(|draw| match draw {
+                    Draw::Text(value, rect, ..) if value == label => Some(rect),
+                    _ => None,
+                })
+                .unwrap();
+            let padding = button.x + button.w - title.x - label_width;
+            assert!((24.2..25.2).contains(&padding));
+            assert!(button.w < 240.);
         }
     }
 
