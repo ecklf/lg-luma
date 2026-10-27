@@ -92,7 +92,19 @@ fn cycling_button_toggles_on_off_without_opening_a_page_or_moving_controls() {
                 _ => None,
             })
             .unwrap();
-        assert!((button.x + button.w - title.x - title.w - 24.2).abs() < 0.001);
+        let (value, style) = enabled
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text(label, rect, style, ..) if label == language.t("stateOn") => {
+                    Some((rect, style))
+                }
+                _ => None,
+            })
+            .unwrap();
+        assert!(style.align_right);
+        assert!((value.x - title.x - title.w - 24.).abs() < 0.001);
+        assert!((button.x + button.w - value.x - value.w - 24.2).abs() < 0.001);
         for (old, new) in before.iter().zip(&enabled.controls) {
             assert_eq!(old.target, new.target);
             assert_eq!(

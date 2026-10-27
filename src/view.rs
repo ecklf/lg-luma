@@ -1593,6 +1593,14 @@ struct Row<'a> {
     selected: bool,
     chevron: bool,
 }
+fn rotation_value_width(assets: &Assets, language: Language) -> f32 {
+    ["stateOn", "stateOff"]
+        .into_iter()
+        .map(|key| assets.width(language.t(key), text(18.4, 450, 0.)))
+        .fold(0., f32::max)
+        .ceil()
+}
+
 fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
     let focused = state.focus == row.target;
     let bright = focused;
@@ -1633,7 +1641,11 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
         } else {
             (row.rect.h - 29.12) / 2.
         };
-    let right_inset = if row.value.is_some() {
+    let compact_value_width = (row.target == Target::WallpaperCycle)
+        .then(|| rotation_value_width(assets, state.preferences.language));
+    let right_inset = if let Some(width) = compact_value_width {
+        width + 24.2 + 24.
+    } else if row.value.is_some() {
         210.
     } else if matches!(row.target, Target::UploadWallpaper | Target::WallpaperCycle) {
         24.2
@@ -1672,12 +1684,13 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
         );
     }
     if let Some(value) = row.value {
+        let value_width = compact_value_width.unwrap_or(170.);
         out.text(
             value,
             Rect::new(
-                row.rect.x + row.rect.w - 194.2 - if row.chevron { 34.4 } else { 0. },
+                row.rect.x + row.rect.w - value_width - 24.2 - if row.chevron { 34.4 } else { 0. },
                 row.rect.y + (row.rect.h - 23.) / 2.,
-                170.,
+                value_width,
                 24.,
             ),
             text(18.4, 450, 0.).right(),
@@ -2210,7 +2223,9 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 .ceil()
                 .clamp(240., 520.);
             let cycle_label = language.t("wallpaperCycle");
-            let cycle_width = (assets.width(cycle_label, text(20.8, 550, -0.02)) + 87.6)
+            let cycle_width = (assets.width(cycle_label, text(20.8, 550, -0.02))
+                + rotation_value_width(assets, language)
+                + 111.6)
                 .ceil()
                 .min(520.);
             row(
@@ -2231,7 +2246,11 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     } else {
                         "refresh-off"
                     }),
-                    value: None,
+                    value: Some(language.t(if state.preferences.wallpaper_cycle {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
                     description: None,
                     selected: false,
                     chevron: false,
@@ -3119,7 +3138,7 @@ mod tests {
     }
 
     #[test]
-    fn auto_rotation_width_has_no_extra_minimum_padding() {
+    fn auto_rotation_keeps_a_compact_gap_and_right_aligned_state() {
         let assets = assets();
         let mut state = State::new(Preferences::default());
         state.open(2);
@@ -3144,9 +3163,25 @@ mod tests {
                     _ => None,
                 })
                 .unwrap();
-            let padding = button.x + button.w - title.x - label_width;
-            assert!((24.2..25.2).contains(&padding));
-            assert!(button.w < 240.);
+            let state_label =
+                state
+                    .preferences
+                    .language
+                    .t(if enabled { "stateOn" } else { "stateOff" });
+            let (value, style) = scene
+                .draw
+                .iter()
+                .find_map(|draw| match draw {
+                    Draw::Text(label, rect, style, ..) if label == state_label => {
+                        Some((rect, style))
+                    }
+                    _ => None,
+                })
+                .unwrap();
+            assert!(style.align_right);
+            assert!((button.x + button.w - value.x - value.w - 24.2).abs() < 0.001);
+            assert!((24. ..25.).contains(&(value.x - title.x - label_width)));
+            assert!(button.w < 320.);
         }
     }
 
