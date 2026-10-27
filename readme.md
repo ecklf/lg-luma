@@ -36,32 +36,77 @@ https://github.com/user-attachments/assets/0c3061bf-c158-417e-85a4-da3eb84ecf08
 > Luma should start on any TV running webOS 4 or newer. The following configurations have been
 > confirmed to work by the community. Home takeover support varies, as noted below:
 
-| TV        | Model identifier | webOS | Takeover Support |
-| --------- | ---------------- | ----- | ---------------- |
-| LG C8     | `OLED??C8*`      | 4     | ❌               |
-| LG C9     | `OLED65C97LA`    | 4     | —                |
-| LG UM7450 | `UM74507LA`      | 4     | ❌               |
-| LG UN7100 | `49UN71006LB`    | 5     | ✅               |
-| LG C1     | `OLED48C1KNB`    | 6     | ✅               |
-| LG UP8000 | `86UP80009LA`    | 6     | —                |
-| LG B2     | `OLED65B29LA`    | 24    | ✅               |
-| LG B5     | `OLED77B5PUA`    | 25    | ✅               |
-| LG C2     | `OLED42C2PSA`    | 25    | ✅               |
-| LG C2     | `OLED65C2*`      | 25    | —                |
-| LG C2     | `OLED77C2*`      | 25    | —                |
-| LG C2     | `OLED65C2PSA`    | 26    | ✅               |
-| LG C3     | `OLED65C31LA`    | 26    | ✅               |
-| LG C3     | `OLED65C36LC`    | 26    | ✅               |
-| LG C4     | `OLED42C4*`      | 25    | ✅               |
-| LG C5     | `OLED55C57LA`    | 26    | ✅               |
-| LG C5     | `OLED55C5PSA`    | 26    | —                |
-| LG C6     | `OLED65C6*`      | 26    | —                |
-| LG C6     | `OLED77C6*`      | 26    | ✅               |
-| LG G3     | `OLED??G3*`      | 25    | —                |
-| LG G5     | `OLED83G5WUA.BUSYDJR` | 26    | ✅               |
-| LG NANO77 | `55NANO776RA`    | 25    | ✅               |
-| LG QNED86 | `55QNED86T6A`    | 25    | —                |
-| LG UT8050 | `50UT8050*`      | 25    | —                |
+<details>
+<summary>webOS 4</summary>
+
+| TV        | Model identifier | Takeover Support |
+| --------- | ---------------- | ---------------- |
+| LG C8     | `OLED??C8*`      | ❌               |
+| LG C9     | `OLED65C97LA`    | —                |
+| LG UM7450 | `UM74507LA`      | ❌               |
+
+</details>
+
+<details>
+<summary>webOS 5</summary>
+
+| TV        | Model identifier | Takeover Support |
+| --------- | ---------------- | ---------------- |
+| LG UN7100 | `49UN71006LB`    | ✅               |
+
+</details>
+
+<details>
+<summary>webOS 6</summary>
+
+| TV        | Model identifier | Takeover Support |
+| --------- | ---------------- | ---------------- |
+| LG C1     | `OLED48C1KNB`    | ✅               |
+| LG UP8000 | `86UP80009LA`    | —                |
+
+</details>
+
+<details>
+<summary>webOS 24</summary>
+
+| TV    | Model identifier | Takeover Support |
+| ----- | ---------------- | ---------------- |
+| LG B2 | `OLED65B29LA`    | ✅               |
+
+</details>
+
+<details>
+<summary>webOS 25</summary>
+
+| TV        | Model identifier | Takeover Support |
+| --------- | ---------------- | ---------------- |
+| LG B5     | `OLED77B5PUA`    | ✅               |
+| LG C2     | `OLED42C2PSA`    | ✅               |
+| LG C2     | `OLED65C2*`      | —                |
+| LG C2     | `OLED77C2*`      | —                |
+| LG C4     | `OLED42C4*`      | ✅               |
+| LG G3     | `OLED??G3*`      | —                |
+| LG NANO77 | `55NANO776RA`    | ✅               |
+| LG QNED86 | `55QNED86T6A`    | —                |
+| LG UT8050 | `50UT8050*`      | —                |
+
+</details>
+
+<details>
+<summary>webOS 26</summary>
+
+| TV    | Model identifier      | Takeover Support |
+| ----- | --------------------- | ---------------- |
+| LG C2 | `OLED65C2PSA`         | ✅               |
+| LG C3 | `OLED65C31LA`         | ✅               |
+| LG C3 | `OLED65C36LC`         | ✅               |
+| LG C5 | `OLED55C57LA`         | ✅               |
+| LG C5 | `OLED55C5PSA`         | —                |
+| LG C6 | `OLED65C6*`           | —                |
+| LG C6 | `OLED77C6*`           | ✅               |
+| LG G5 | `OLED83G5WUA.BUSYDJR` | ✅               |
+
+</details>
 
 > [!NOTE]
 > Model identifiers containing wildcards are inferred: `??` is an unknown screen size and `*` is an
