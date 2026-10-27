@@ -45,6 +45,7 @@ https://github.com/user-attachments/assets/0c3061bf-c158-417e-85a4-da3eb84ecf08
 | LG C1     | `OLED48C1KNB`    | 6     | ✅               |
 | LG UP8000 | `86UP80009LA`    | 6     | —                |
 | LG B2     | `OLED65B29LA`    | 24    | ✅               |
+| LG B5     | `OLED77B5PUA`    | 25    | ✅               |
 | LG C2     | `OLED42C2PSA`    | 25    | ✅               |
 | LG C2     | `OLED65C2*`      | 25    | —                |
 | LG C2     | `OLED77C2*`      | 25    | —                |
