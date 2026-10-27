@@ -73,6 +73,9 @@ fn upload_instructions_are_ordered_and_only_the_displayed_url_loses_its_slash() 
         assert!(!labels.iter().any(|(label, _)| *label == url));
         assert_eq!(modal.controls.len(), 1);
         assert_eq!(modal.controls[0].target, Target::CloseDialog);
+        let panel = modal.modal.unwrap();
+        let close = modal.controls[0].rect;
+        assert!(panel.y + panel.h - close.y - close.h >= 40.);
     }
     let session = state.wallpaper_upload.as_ref().unwrap().as_ref().unwrap();
     assert_eq!(session.url, url);
@@ -85,7 +88,8 @@ fn upload_button_is_compact_and_right_aligned_in_every_language() {
     state.section = 1;
     for language in crate::i18n::Language::ALL {
         state.preferences.language = language;
-        let gallery = controls(&state);
+        let rendered = scene(&state);
+        let gallery = &rendered.controls;
         let upload = gallery
             .iter()
             .find(|c| c.target == Target::UploadWallpaper)
@@ -97,8 +101,17 @@ fn upload_button_is_compact_and_right_aligned_in_every_language() {
             .unwrap()
             .rect;
         assert_eq!(upload.x + upload.w, right_card.x + right_card.w);
-        assert!((320. ..=520.).contains(&upload.w));
+        assert!((240. ..=520.).contains(&upload.w));
         assert!(upload.y + upload.h < right_card.y);
+        let title = rendered
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text(label, rect, ..) if label == language.t("uploadWallpaper") => Some(rect),
+                _ => None,
+            })
+            .unwrap();
+        assert!((upload.x + upload.w - title.x - title.w - 24.2).abs() < 0.01);
     }
 }
 

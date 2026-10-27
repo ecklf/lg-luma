@@ -755,13 +755,13 @@ fn system_version_uses_a_settings_surface_without_an_interactive_target() {
     let system = scene(&state);
     assert!(system.draw.iter().any(|draw| matches!(
         draw,
-        crate::renderer::Draw::Shape(rect, ..)
-            if rect.x == 640. && rect.y == 164.8 && rect.w == 1120. && rect.h == 72.
+        crate::renderer::Draw::Shape(rect, _, _, color)
+            if rect.x == 640. && rect.y == 164.8 && rect.w == 1120. && rect.h == 72. && color[3] == 0.3
     )));
     assert!(system.draw.iter().any(|draw| matches!(
         draw,
         crate::renderer::Draw::Text(label, _, style, color, _)
-            if label == "Luma vtest" && style.size == 20.8 && style.weight == 550 && color[3] == 0.75
+            if label == "Luma vtest" && style.size == 20.8 && style.weight == 550 && color[3] == 0.5
     )));
     assert_eq!(state.hit_test(&system.controls, 900., 200.), None);
     state.focus = Target::Sidebar(crate::state::SYSTEM_SECTION);

@@ -268,7 +268,7 @@ impl Scene {
 
 fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
-    let panel = Rect::new(520., 144., 880., 792.);
+    let panel = Rect::new(520., 144., 880., 816.);
     out.modal = Some(panel);
     out.shadow(panel, 24., 40., 12., 0.3);
     out.shape(panel, 24., c(0x1b2023, 1.));
@@ -1633,7 +1633,14 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
         } else {
             (row.rect.h - 29.12) / 2.
         };
-    let title_width = row.rect.w - (x - row.rect.x) - if row.value.is_some() { 210. } else { 64. };
+    let right_inset = if row.value.is_some() {
+        210.
+    } else if row.target == Target::UploadWallpaper {
+        24.2
+    } else {
+        64.
+    };
+    let title_width = row.rect.w - (x - row.rect.x) - right_inset;
     let title_height = if row.description.is_some() {
         assets.lines(row.title, text(20.8, 550, -0.02), title_width) as f32 * 29.12
     } else {
@@ -2199,9 +2206,9 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         }
         1 => {
             let upload_label = language.t("uploadWallpaper");
-            let upload_width = (assets.width(upload_label, text(20.8, 550, -0.02)) + 128.)
+            let upload_width = (assets.width(upload_label, text(20.8, 550, -0.02)) + 88.)
                 .ceil()
-                .clamp(320., 520.);
+                .clamp(240., 520.);
             row(
                 out,
                 state,
@@ -2256,13 +2263,13 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         WEATHER_SECTION => weather_settings(out, state, assets),
         SYSTEM_SECTION => {
             let version_rect = Rect::new(640., 164.8 - s, 1120., 72.);
-            out.shape(version_rect, 48., c(0x171c20, 0.72));
-            out.border(version_rect, 48., 1., c(0xffffff, 0.07));
+            out.shape(version_rect, 48., c(0x171c20, 0.3));
+            out.border(version_rect, 48., 1., c(0xffffff, 0.045));
             out.text(
                 format!("Luma v{}", assets.version.trim()),
                 Rect::new(664.2, version_rect.y + (72. - 29.12) / 2., 1031.8, 29.12),
                 text(20.8, 550, -0.02).leading(1.4),
-                c(0xeeeeee, 0.75),
+                c(0xeeeeee, 0.5),
                 false,
             );
             for (position, (index, title, icon, value, chevron)) in [
