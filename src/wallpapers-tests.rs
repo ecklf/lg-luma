@@ -154,11 +154,7 @@ fn uploads_are_unnamed_normalized_immutable_and_discoverable_after_restart() {
     assert_ne!(first.id, second.id);
     let found = catalog(&fixture.wallpapers());
     assert_eq!(found.len(), 2);
-    assert!(
-        found
-            .iter()
-            .any(|item| item.id == first.id)
-    );
+    assert!(found.iter().any(|item| item.id == first.id));
     let background = image::open(first.image()).unwrap();
     let thumbnail = image::open(first.thumbnail()).unwrap();
     assert_eq!((background.width(), background.height()), (1920, 1080));
@@ -200,11 +196,9 @@ fn validation_and_cancellation_leave_no_partial_gallery_entries() {
 fn cancellation_before_commit_cleans_only_the_new_staging_files() {
     let fixture = Fixture::new();
     let checks = AtomicUsize::new(0);
-    let result = store(
-        &fixture.wallpapers(),
-        &image(1920, 1080),
-        || checks.fetch_add(1, Ordering::Relaxed) == 0,
-    );
+    let result = store(&fixture.wallpapers(), &image(1920, 1080), || {
+        checks.fetch_add(1, Ordering::Relaxed) == 0
+    });
     assert!(result.is_err());
     assert_eq!(checks.load(Ordering::Relaxed), 2);
     assert!(fs::read_dir(fixture.wallpapers()).unwrap().next().is_none());
@@ -366,22 +360,23 @@ fn browser_assets_are_local_and_a_real_http_upload_needs_no_name() {
     let items = catalog(&fixture.wallpapers());
     assert_eq!(items.len(), 1);
     assert!(response.contains(&items[0].id));
-    let metadata: serde_json::Value = serde_json::from_slice(&fs::read(items[0].directory.join("metadata.json")).unwrap()).unwrap();
+    let metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(items[0].directory.join("metadata.json")).unwrap())
+            .unwrap();
     assert_eq!(metadata, serde_json::json!({"id": items[0].id}));
 }
 
 #[test]
 fn legacy_named_uploads_keep_their_ids_and_load_without_names() {
     let fixture = Fixture::new();
-    let item = store(
-        &fixture.wallpapers(),
-        &image(1920, 1080),
-        || true,
-    )
-    .unwrap();
+    let item = store(&fixture.wallpapers(), &image(1920, 1080), || true).unwrap();
     assert!(item.directory.starts_with(fixture.wallpapers()));
     assert!(valid_id(&item.id));
-    fs::write(item.directory.join("metadata.json"), serde_json::to_vec(&serde_json::json!({"id": item.id, "name": "旅行 & sea"})).unwrap()).unwrap();
+    fs::write(
+        item.directory.join("metadata.json"),
+        serde_json::to_vec(&serde_json::json!({"id": item.id, "name": "旅行 & sea"})).unwrap(),
+    )
+    .unwrap();
     let items = catalog(&fixture.wallpapers());
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].id, item.id);

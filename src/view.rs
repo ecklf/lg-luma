@@ -1928,12 +1928,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         .enumerate()
     {
         let label = language.t(key);
-        let rect = Rect::new(
-            160.,
-            164.8 + index as f32 * 84.,
-            403.2,
-            72.,
-        );
+        let rect = Rect::new(160., 164.8 + index as f32 * 84., 403.2, 72.);
         let focused = state.focus == Target::Sidebar(index);
         out.pill(rect, focused, state.section == index);
         let color = if focused {
@@ -2839,11 +2834,11 @@ fn delete_confirmation(out: &mut Scene, state: &State, assets: &Assets, id: &str
         "deleteApp"
     };
     let title = state
-            .inventory
-            .apps
-            .iter()
-            .find(|app| app.id == id)
-            .map_or(id, |app| app.title.as_str());
+        .inventory
+        .apps
+        .iter()
+        .find(|app| app.id == id)
+        .map_or(id, |app| app.title.as_str());
     let body_style = text(20.8, 600, -0.02).leading(1.5);
     let body = language.format(
         if deleting { deleting_key } else { warning_key },

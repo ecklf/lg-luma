@@ -371,11 +371,7 @@ fn jpeg(image: &image::RgbImage, quality: u8) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-fn store(
-    directory: &Path,
-    bytes: &[u8],
-    valid: impl Fn() -> bool,
-) -> Result<Wallpaper, String> {
+fn store(directory: &Path, bytes: &[u8], valid: impl Fn() -> bool) -> Result<Wallpaper, String> {
     if catalog(directory).len() >= MAX_WALLPAPERS {
         return Err("The wallpaper gallery is full (20 images)".into());
     }

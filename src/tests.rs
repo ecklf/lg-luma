@@ -333,6 +333,10 @@ fn preferences_round_trip_and_corrupt_data_is_not_silently_overwritten() {
 #[test]
 fn gallery_and_grid_navigation_scroll_to_keep_focus_visible() {
     let mut state = ready();
+    state.set_wallpapers(vec![crate::wallpapers::Wallpaper {
+        id: "custom-00000000000000000000000000000001".into(),
+        directory: PathBuf::from("/preview/wallpapers/custom-00000000000000000000000000000001"),
+    }]);
     state.open(2);
     state.section = 1;
     state.focus = Target::Background(0);
@@ -340,15 +344,16 @@ fn gallery_and_grid_navigation_scroll_to_keep_focus_visible() {
     assert_eq!(state.focus, Target::Background(3));
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Background(6));
-    assert!(
-        state.scroll > 0.,
-        "the upload action reserves room above the gallery"
-    );
+    assert_eq!(state.scroll, 0., "the first three gallery rows fit");
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Background(9));
+    assert!(state.scroll > 0., "the fourth gallery row must scroll");
     let control = controls(&state)
         .into_iter()
         .find(|c| c.target == state.focus)
         .unwrap();
-    let viewport = state.content_viewport();
+    let viewport = state.backgrounds_viewport();
+    assert!(control.rect.y >= viewport.y);
     assert!(control.rect.y + control.rect.h <= viewport.y + viewport.h);
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(1));

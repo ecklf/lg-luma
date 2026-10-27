@@ -34,8 +34,14 @@ test('dragging clamps at both edges and handles axes without overflow', () => {
 });
 
 test('upload page needs no name and retains its storage-path success view', async () => {
-  const html = await readFile(new URL('../assets/wallpaper-upload/index.html', import.meta.url), 'utf8');
-  const script = await readFile(new URL('../assets/wallpaper-upload/app.js', import.meta.url), 'utf8');
+  const html = await readFile(
+    new URL('../assets/wallpaper-upload/index.html', import.meta.url),
+    'utf8',
+  );
+  const script = await readFile(
+    new URL('../assets/wallpaper-upload/app.js', import.meta.url),
+    'utf8',
+  );
   assert.doesNotMatch(html, /id="name"|success-name|Background name/);
   assert.match(html, /Your background was uploaded to/);
   assert.match(html, /id="success-path"/);
