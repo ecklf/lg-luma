@@ -5,6 +5,7 @@ mod app_artwork;
 #[path = "app-subscription.rs"]
 mod app_subscription;
 mod branding;
+mod companion;
 mod damage;
 mod diagnostics;
 mod egl_damage;
@@ -23,6 +24,8 @@ mod sdl_events;
 mod state;
 mod storage;
 mod text_rendering;
+#[path = "tile-editor.rs"]
+mod tile_editor;
 mod vector;
 mod view;
 mod wallpaper_cycle;
@@ -403,6 +406,7 @@ fn script(
         "await-weather" => vec![],
         "await-recents" => vec![],
         "await-upload" => vec![],
+        "await-tile-editor" => vec![],
         _ => return Err(format!("Unknown scripted action: {action}")),
     })
 }
@@ -631,6 +635,7 @@ fn run() -> Result<(), String> {
     // Scripted desktop captures must never open a server on the real LAN.
     let mut wallpaper_service =
         wallpapers::Service::new(&preferences_path, !webos && !options.script.is_empty())?;
+    let mut tile_editor_service = tile_editor::Service::new(!webos && !options.script.is_empty())?;
     if options.test_extra_apps > 0 {
         eprintln!(
             "Luma scroll preview: explicit {}-app expansion; preferences {}",
@@ -951,6 +956,45 @@ fn run() -> Result<(), String> {
                 _ => {}
             }
         }
+        tile_editor_service.set_active(
+            focused && visible && matches!(state.overlay, Some(Overlay::TileEditor)),
+            &state.preferences.custom_tiles,
+        );
+        while let Ok(event) = tile_editor_service.receiver.try_recv() {
+            match event {
+                // Applied even after the dialog closed: the phone was already told it saved.
+                tile_editor::Event::Tiles(tiles) => {
+                    let pending = state.replace_tiles(tiles);
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                    );
+                }
+                tile_editor::Event::Session(generation, result)
+                    if generation == tile_editor_service.generation()
+                        && matches!(state.overlay, Some(Overlay::TileEditor)) =>
+                {
+                    if let Err(error) = &result {
+                        eprintln!("Luma tile editor: {error}");
+                    }
+                    state.tile_editor = Some(result);
+                    state.dirty = true;
+                }
+                tile_editor::Event::Ended(generation)
+                    if generation == tile_editor_service.generation()
+                        && matches!(state.overlay, Some(Overlay::TileEditor)) =>
+                {
+                    state.back();
+                    state.notify(state.preferences.language.t("tileEditorEnded"));
+                }
+                _ => {}
+            }
+        }
         state.dirty |= assets.artwork.poll();
         let unix = state::unix_now();
         let startup_cycle = wallpaper_cycle::startup_due(
@@ -1173,10 +1217,14 @@ fn run() -> Result<(), String> {
                     ..
                 } if window_id == window.id() => match win_event {
                     WindowEvent::Hidden | WindowEvent::Minimized => {
-                        if matches!(state.overlay, Some(Overlay::WallpaperUpload)) {
+                        if matches!(
+                            state.overlay,
+                            Some(Overlay::WallpaperUpload | Overlay::TileEditor)
+                        ) {
                             state.back();
                         }
                         wallpaper_service.set_active(false);
+                        tile_editor_service.set_active(false, &[]);
                         visible = false;
                         focused = false;
                         press = None;
@@ -1188,10 +1236,11 @@ fn run() -> Result<(), String> {
                     }
                     WindowEvent::FocusLost => {
                         if webos {
-                            if matches!(state.overlay, Some(Overlay::WallpaperUpload)) {
+                            if matches!(state.overlay, Some(Overlay::WallpaperUpload | Overlay::TileEditor)) {
                                 state.back();
                             }
                             wallpaper_service.set_active(false);
+                            tile_editor_service.set_active(false, &[]);
                         }
                         focused = false;
                         press = None;
@@ -1435,6 +1484,10 @@ fn run() -> Result<(), String> {
             );
             wallpaper_service
                 .set_active(running && wallpaper_upload_active(&state, webos, focused, visible));
+            tile_editor_service.set_active(
+                running && focused && visible && matches!(state.overlay, Some(Overlay::TileEditor)),
+                &state.preferences.custom_tiles,
+            );
             if press
                 .as_ref()
                 .is_some_and(|p| !p.held && p.target != state.focus)
@@ -1481,6 +1534,9 @@ fn run() -> Result<(), String> {
                     || (action == "await-upload"
                         && matches!(state.overlay, Some(Overlay::WallpaperUpload))
                         && state.wallpaper_upload.is_none())
+                    || (action == "await-tile-editor"
+                        && matches!(state.overlay, Some(Overlay::TileEditor))
+                        && state.tile_editor.is_none())
             })
             && let Some(action) = options.script.pop_front()
         {
@@ -1503,6 +1559,10 @@ fn run() -> Result<(), String> {
         }
         wallpaper_service
             .set_active(running && wallpaper_upload_active(&state, webos, focused, visible));
+        tile_editor_service.set_active(
+            running && focused && visible && matches!(state.overlay, Some(Overlay::TileEditor)),
+            &state.preferences.custom_tiles,
+        );
         // state.loading stays set meanwhile, so focus/relaunch refreshes do not add requests.
         if inventory_retry.is_some_and(|at| Instant::now() >= at) {
             inventory_retry = None;

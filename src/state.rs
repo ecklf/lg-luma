@@ -99,6 +99,7 @@ pub enum Target {
     TileMethod,
     TileSend,
     TileRemove,
+    TileEditor,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -138,6 +139,7 @@ pub enum Overlay {
     Keyboard,
     SystemKeyboard,
     WallpaperUpload,
+    TileEditor,
     BackgroundOptions { id: String, restore: Target },
     BackgroundDelete { id: String, restore: Target },
 }
@@ -234,6 +236,7 @@ pub struct State {
     pub wallpapers: Vec<crate::wallpapers::Wallpaper>,
     pub deleting_wallpaper: Option<String>,
     pub wallpaper_upload: Option<Result<crate::wallpapers::Session, String>>,
+    pub tile_editor: Option<Result<crate::companion::Session, String>>,
     pub panel_started: Option<Instant>,
     pub weather: weather::Weather,
     pub keyboard_field: TextField,
@@ -277,6 +280,7 @@ impl State {
             wallpapers: vec![],
             deleting_wallpaper: None,
             wallpaper_upload: None,
+            tile_editor: None,
             panel_started: None,
             weather: weather::Weather::default(),
             keyboard_field: TextField::Apps,
@@ -913,7 +917,10 @@ impl State {
             // The TV keyboard owns its arrows until Done/Back dismisses it.
             return vec![];
         }
-        if matches!(self.overlay, Some(Overlay::WallpaperUpload)) {
+        if matches!(
+            self.overlay,
+            Some(Overlay::WallpaperUpload | Overlay::TileEditor)
+        ) {
             return vec![];
         }
         if let Some(id) = self.moving.clone() {
@@ -1706,6 +1713,39 @@ impl State {
         vec![Effect::Save]
     }
 
+    /// Applies the tile list edited on a phone or computer. As in the TV editor, new tiles join
+    /// the end of the Home favorites and removed ones leave favorites and hidden apps.
+    pub fn replace_tiles(&mut self, tiles: Vec<CustomTile>) -> Vec<Effect> {
+        let removed: Vec<_> = self
+            .preferences
+            .custom_tiles
+            .iter()
+            .filter(|old| !tiles.iter().any(|tile| tile.id == old.id))
+            .map(|old| old.id.clone())
+            .collect();
+        for id in &removed {
+            self.preferences.remove_tile(id);
+        }
+        let added: Vec<_> = tiles
+            .iter()
+            .filter(|tile| self.preferences.custom_tile(&tile.id).is_none())
+            .map(|tile| tile.id.clone())
+            .collect();
+        self.preferences.custom_tiles = tiles;
+        self.preferences.sanitize();
+        self.sync_custom_tiles();
+        if !added.is_empty() {
+            let mut favorites = self.preferences.favorites(&self.inventory.apps);
+            for id in added {
+                if self.preferences.custom_tile(&id).is_some() && !favorites.contains(&id) {
+                    favorites.push(id);
+                }
+            }
+            self.preferences.favorites = Some(favorites);
+        }
+        vec![Effect::Save]
+    }
+
     fn send_tile(&mut self, tile: CustomTile) -> Vec<Effect> {
         self.notify(
             self.preferences
@@ -1867,6 +1907,12 @@ impl State {
             Target::UploadWallpaper => {
                 self.wallpaper_upload = None;
                 self.overlay = Some(Overlay::WallpaperUpload);
+                self.focus = Target::CloseDialog;
+                self.pressed = None;
+            }
+            Target::TileEditor => {
+                self.tile_editor = None;
+                self.overlay = Some(Overlay::TileEditor);
                 self.focus = Target::CloseDialog;
                 self.pressed = None;
             }
@@ -2375,6 +2421,12 @@ impl State {
             if matches!(overlay, Overlay::WallpaperUpload) {
                 self.wallpaper_upload = None;
                 self.focus = Target::UploadWallpaper;
+                self.pressed = None;
+                return vec![];
+            }
+            if matches!(overlay, Overlay::TileEditor) {
+                self.tile_editor = None;
+                self.focus = Target::TileEditor;
                 self.pressed = None;
                 return vec![];
             }

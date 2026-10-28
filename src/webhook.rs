@@ -22,19 +22,9 @@ impl Service {
         let (command_tx, command_rx) = mpsc::channel::<CustomTile>();
         let (response_tx, response_rx) = mpsc::channel::<Response>();
         thread::spawn(move || {
-            let agent = ureq::Agent::config_builder()
-                .timeout_global(Some(Duration::from_secs(5)))
-                .max_redirects(0)
-                .proxy(None)
-                .build()
-                .new_agent();
+            let agent = agent();
             while let Ok(tile) = command_rx.recv() {
-                let result = match tile.method {
-                    TileMethod::Get => agent.get(&tile.url).call(),
-                    TileMethod::Post => agent.post(&tile.url).send_empty(),
-                }
-                .map(|_| ())
-                .map_err(|error| error.to_string());
+                let result = send(&agent, &tile);
                 let response = Response::Done {
                     title: tile.title,
                     result,
@@ -55,4 +45,23 @@ impl Service {
         // send here just means the request is lost, not a crash.
         let _ = self.sender.send(tile);
     }
+}
+
+/// The client for tile requests, shared with the companion editor's test button.
+pub fn agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(5)))
+        .max_redirects(0)
+        .proxy(None)
+        .build()
+        .new_agent()
+}
+
+pub fn send(agent: &ureq::Agent, tile: &CustomTile) -> Result<(), String> {
+    match tile.method {
+        TileMethod::Get => agent.get(&tile.url).call(),
+        TileMethod::Post => agent.post(&tile.url).send_empty(),
+    }
+    .map(|_| ())
+    .map_err(|error| error.to_string())
 }

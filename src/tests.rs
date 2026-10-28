@@ -2304,3 +2304,79 @@ fn shortcut_tiles_alone_do_not_stop_inventory_retries() {
     );
     assert!(state.loading && state.error.is_none());
 }
+
+#[test]
+fn shortcut_tiles_open_a_modal_editor_for_another_device() {
+    use crate::state::SHORTCUTS_SECTION;
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state.open(2);
+    state.section = SHORTCUTS_SECTION;
+    state.focus = Target::TileAdd;
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::TileEditor);
+    assert!(state.activate().is_empty());
+    assert!(matches!(state.overlay, Some(Overlay::TileEditor)));
+    assert_eq!(state.focus, Target::CloseDialog);
+    let modal = scene(&state);
+    assert!(modal.modal.is_some());
+    assert_eq!(modal.controls.len(), 1);
+    assert_eq!(modal.controls[0].target, Target::CloseDialog);
+    assert!(state.direction(Direction::Up, &modal.controls).is_empty());
+    assert_eq!(state.focus, Target::CloseDialog);
+    state.tile_editor = Some(Err("offline".into()));
+    state.activate();
+    assert!(state.overlay.is_none());
+    assert!(state.tile_editor.is_none());
+    assert_eq!(state.focus, Target::TileEditor);
+    assert_eq!(state.section, SHORTCUTS_SECTION);
+}
+
+#[test]
+fn tiles_edited_elsewhere_join_and_leave_home_like_tv_edits() {
+    use crate::model::CustomTile;
+    let tile = |id: &str, title: &str| CustomTile {
+        id: id.into(),
+        title: title.into(),
+        url: "http://10.0.0.2/hook".into(),
+        ..Default::default()
+    };
+    let mut state = ready();
+    let before = state.preferences.favorites(&state.inventory.apps);
+    let saved = state.replace_tiles(vec![
+        tile("custom.gate", "Gate"),
+        tile("custom.lights", "Lights"),
+    ]);
+    assert_eq!(saved, vec![Effect::Save]);
+    let favorites = state.preferences.favorites.clone().unwrap();
+    assert_eq!(&favorites[..before.len()], &before[..]);
+    assert_eq!(&favorites[before.len()..], ["custom.gate", "custom.lights"]);
+    assert!(
+        state
+            .inventory
+            .apps
+            .iter()
+            .any(|app| app.id == "custom.gate")
+    );
+    state.preferences.hidden.push("custom.lights".into());
+    // A rename keeps the favorite in place; a removal clears it from favorites and hidden.
+    state.replace_tiles(vec![tile("custom.gate", "Garage")]);
+    assert_eq!(state.preferences.custom_tiles[0].title, "Garage");
+    let favorites = state.preferences.favorites.clone().unwrap();
+    assert_eq!(&favorites[before.len()..], ["custom.gate"]);
+    assert!(state.preferences.hidden.is_empty());
+    assert!(
+        !state
+            .inventory
+            .apps
+            .iter()
+            .any(|app| app.id == "custom.lights")
+    );
+    let app = state
+        .inventory
+        .apps
+        .iter()
+        .find(|app| app.id == "custom.gate")
+        .unwrap();
+    assert_eq!(app.title, "Garage");
+}

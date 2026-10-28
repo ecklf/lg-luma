@@ -1,11 +1,15 @@
 //! Immutable, app-owned wallpapers and a short-lived, capability-protected LAN upload server.
 //! Network I/O, decoding, normalization, metadata discovery and QR generation stay on this worker.
+pub use crate::companion::Session;
+use crate::companion::{
+    Request, error_response, listen, local_peer, random_token, read_exact, redirect_to_page,
+    response, session,
+};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
     fs,
     io::{BufReader, Cursor, Read, Write},
-    net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream},
+    net::TcpStream,
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -22,8 +26,6 @@ const SESSION_TIME: Duration = Duration::from_secs(600);
 const SESSION_REQUEST_LIMIT: usize = 64;
 const REQUEST_TIME: Duration = Duration::from_secs(20);
 const STOP: u64 = u64::MAX;
-// Base58 excludes easily confused 0/O and I/l while staying URL-safe.
-const TOKEN_ALPHABET: &[u8; 58] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Wallpaper {
@@ -54,13 +56,6 @@ pub fn valid_id(id: &str) -> bool {
                 .bytes()
                 .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
     })
-}
-
-#[derive(Clone, Debug)]
-pub struct Session {
-    pub url: String,
-    pub qr_size: i32,
-    pub qr: Vec<bool>,
 }
 
 pub enum Event {
@@ -145,23 +140,6 @@ fn random_id() -> Result<String, String> {
     getrandom::getrandom(&mut bytes)
         .map_err(|e| format!("Secure random source unavailable: {e}"))?;
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
-}
-
-fn random_token() -> Result<String, String> {
-    let mut token = String::with_capacity(8);
-    while token.len() < 8 {
-        let mut bytes = [0; 16];
-        getrandom::getrandom(&mut bytes)
-            .map_err(|e| format!("Secure random source unavailable: {e}"))?;
-        // 232 is the largest multiple of 58 below 256, avoiding modulo bias.
-        for byte in bytes.into_iter().filter(|byte| *byte < 232) {
-            token.push(TOKEN_ALPHABET[(byte % 58) as usize] as char);
-            if token.len() == 8 {
-                break;
-            }
-        }
-    }
-    Ok(token)
 }
 
 fn real_directory(path: &Path) -> bool {
@@ -423,43 +401,6 @@ fn store(directory: &Path, bytes: &[u8], valid: impl Fn() -> bool) -> Result<Wal
     result.map(|()| item)
 }
 
-fn listen(loopback_only: bool) -> Result<TcpListener, String> {
-    let address = if loopback_only {
-        Ipv4Addr::LOCALHOST
-    } else {
-        if_addrs::get_if_addrs()
-            .map_err(|e| e.to_string())?
-            .into_iter()
-            .filter_map(|interface| match interface.ip() {
-                std::net::IpAddr::V4(ip) if ip.is_private() || ip.is_link_local() => Some(ip),
-                _ => None,
-            })
-            .next()
-            .ok_or("Connect the TV to your local network, then reopen this dialog")?
-    };
-    // Bind only the chosen local interface, not every interface or a public address.
-    let listener =
-        TcpListener::bind((address, 0)).map_err(|e| format!("Upload server unavailable: {e}"))?;
-    listener.set_nonblocking(true).map_err(|e| e.to_string())?;
-    Ok(listener)
-}
-
-fn session(address: SocketAddr, token: &str) -> Result<Session, String> {
-    let url = format!("http://{address}/{token}/");
-    // Highest correction reserves capacity for the small branded center mark.
-    let qr = qrcodegen::QrCode::encode_text(&url, qrcodegen::QrCodeEcc::High)
-        .map_err(|e| e.to_string())?;
-    let size = qr.size();
-    Ok(Session {
-        url,
-        qr_size: size,
-        qr: (0..size)
-            .flat_map(|y| (0..size).map(move |x| (x, y)))
-            .map(|(x, y)| qr.get_module(x, y))
-            .collect(),
-    })
-}
-
 fn worker(
     directory: &Path,
     desired: &AtomicU64,
@@ -527,9 +468,7 @@ fn worker(
         {
             match listener.accept() {
                 Ok((mut stream, peer)) => {
-                    if !peer.ip().is_loopback()
-                        && !matches!(peer.ip(), std::net::IpAddr::V4(ip) if ip.is_private() || ip.is_link_local())
-                    {
+                    if !local_peer(peer.ip()) {
                         continue;
                     }
                     requests += 1;
@@ -562,108 +501,12 @@ fn worker(
     }
 }
 
-fn read_exact(
-    reader: &mut impl Read,
-    mut bytes: &mut [u8],
-    valid: &impl Fn() -> bool,
-    deadline: Instant,
-) -> Result<(), String> {
-    while !bytes.is_empty() {
-        if !valid() || Instant::now() >= deadline {
-            return Err("Upload session ended or request timed out".into());
-        }
-        match reader.read(bytes) {
-            Ok(0) => return Err("Incomplete request".into()),
-            Ok(n) => bytes = &mut bytes[n..],
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    std::io::ErrorKind::WouldBlock
-                        | std::io::ErrorKind::TimedOut
-                        | std::io::ErrorKind::Interrupted
-                ) => {}
-            Err(error) => return Err(error.to_string()),
-        }
-    }
-    Ok(())
-}
-
-struct Request {
-    method: String,
-    target: String,
-    headers: BTreeMap<String, String>,
-    length: usize,
-}
-
 fn request(
     reader: &mut impl Read,
     valid: &impl Fn() -> bool,
     deadline: Instant,
 ) -> Result<Request, String> {
-    let mut bytes = Vec::new();
-    while !bytes.ends_with(b"\r\n\r\n") {
-        if bytes.len() >= 8192 {
-            return Err("Request headers too large".into());
-        }
-        let mut byte = [0];
-        read_exact(reader, &mut byte, valid, deadline)?;
-        bytes.push(byte[0]);
-    }
-    let header = std::str::from_utf8(&bytes).map_err(|_| "Invalid request")?;
-    let mut lines = header.split("\r\n");
-    let parts: Vec<_> = lines.next().unwrap_or_default().split(' ').collect();
-    if parts.len() != 3 || parts[2] != "HTTP/1.1" {
-        return Err("Invalid request".into());
-    }
-    let mut headers = BTreeMap::new();
-    for line in lines.filter(|line| !line.is_empty()) {
-        let (name, value) = line.split_once(':').ok_or("Invalid header")?;
-        if name.is_empty() || !name.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-') {
-            return Err("Invalid header".into());
-        }
-        if headers
-            .insert(name.to_ascii_lowercase(), value.trim().to_owned())
-            .is_some()
-        {
-            return Err("Duplicate header".into());
-        }
-    }
-    if headers.contains_key("transfer-encoding") {
-        return Err("Chunked uploads are not supported".into());
-    }
-    let length = headers
-        .get("content-length")
-        .map(|s| {
-            if s.is_empty() || !s.bytes().all(|c| c.is_ascii_digit()) {
-                return Err("Invalid content length");
-            }
-            s.parse::<usize>().map_err(|_| "Invalid content length")
-        })
-        .transpose()?
-        .unwrap_or(0);
-    if length > MAX_BODY {
-        return Err("Image exceeds 12 MiB".into());
-    }
-    Ok(Request {
-        method: parts[0].into(),
-        target: parts[1].into(),
-        headers,
-        length,
-    })
-}
-
-fn response(stream: &mut TcpStream, status: &str, kind: &str, body: &[u8]) -> Result<(), String> {
-    write!(stream, "HTTP/1.1 {status}\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\r\n\r\n", body.len())
-        .and_then(|_| stream.write_all(body)).map_err(|e| e.to_string())
-}
-
-fn error_response(stream: &mut TcpStream, status: &str, error: &str) -> Result<(), String> {
-    response(
-        stream,
-        status,
-        "application/json; charset=utf-8",
-        serde_json::json!({"error":error}).to_string().as_bytes(),
-    )
+    crate::companion::request(reader, valid, deadline, MAX_BODY, "Image exceeds 12 MiB")
 }
 
 fn serve(
@@ -688,16 +531,7 @@ fn serve(
             return Ok(false);
         }
     };
-    if request.headers.get("host").map(String::as_str) != Some(host)
-        || request
-            .headers
-            .get("origin")
-            .is_some_and(|origin| origin != &format!("http://{host}"))
-        || request
-            .headers
-            .get("sec-fetch-site")
-            .is_some_and(|site| site == "cross-site")
-    {
+    if request.foreign(host) {
         error_response(stream, "403 Forbidden", "Open the address shown on your TV")?;
         return Ok(false);
     }
@@ -705,8 +539,7 @@ fn serve(
         return Err("Upload session ended".into());
     }
     if request.method == "GET" && request.length == 0 && request.target == format!("/{token}") {
-        write!(stream, "HTTP/1.1 303 See Other\r\nLocation: /{token}/\r\nContent-Length: 0\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\n\r\n")
-            .map_err(|error| error.to_string())?;
+        redirect_to_page(stream, token)?;
         return Ok(false);
     }
     let Some(route) = request.target.strip_prefix(&format!("/{token}/")) else {

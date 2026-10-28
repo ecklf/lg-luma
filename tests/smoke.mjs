@@ -407,6 +407,21 @@ try {
   assert.deepEqual(removed.preferences.custom_tiles, []);
   assert.ok(!removed.preferences.favorites.includes('custom.sandmann'));
   assert.ok(!removed.inventory.some((app) => app.id === 'custom.sandmann'));
+  const tileEditorOpen = 'settings,down,down,down,down,down,right,down,enter,await-tile-editor';
+  const tileEditor = await scenario('tile-editor', tileEditorOpen);
+  assert.equal(tileEditor.modal, true);
+  assert.equal(tileEditor.focus, 'CloseDialog');
+  assert.ok(tileEditor.ui_text.includes('Edit on phone or computer'));
+  assert.ok(tileEditor.ui_text.includes('Scan this QR code'));
+  assert.ok(tileEditor.ui_text.some((text) => text.startsWith('Keep this window open while')));
+  assert.ok(
+    tileEditor.ui_text.some((text) =>
+      /^http:\/\/127\.0\.0\.1:\d+\/[1-9A-HJ-NP-Za-km-z]{8}$/.test(text),
+    ),
+  );
+  const tileEditorClosed = await scenario('tile-editor-closed', `${tileEditorOpen},back`);
+  assert.equal(tileEditorClosed.modal, false);
+  assert.equal(tileEditorClosed.focus, 'TileEditor');
   // The exposed card fragments are real pointer targets, including after remote scrolling.
   const edgeFavorites = [
     'netflix',

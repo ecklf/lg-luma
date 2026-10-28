@@ -18,9 +18,10 @@ dist/                        Generated ARM IPK, checksum and Homebrew feed
 
 The launcher is rendered natively, without React, JSX, Vite or a browser runtime. Node/pnpm
 remain build/deployment tools for Sharp, the webOS CLI and formatting/linting. The installed app
-is the Rust executable `luma`, with app ID `com.ecklf.luma`. The companion wallpaper-upload page
-in `assets/wallpaper-upload/` is plain HTML/CSS/JavaScript, embedded in the native executable
-and served temporarily to the owner's phone or computer; it does not render the TV interface.
+is the Rust executable `luma`, with app ID `com.ecklf.luma`. The companion pages in
+`assets/wallpaper-upload/` and `assets/tile-editor/` are plain HTML/CSS/JavaScript, embedded in the
+native executable and served temporarily to the owner's phone or computer; they do not render the
+TV interface.
 
 ## Toolchain and commands
 
@@ -294,6 +295,30 @@ to loopback rather than the real LAN; `await-upload` waits for the modal's link 
 Verify the QR code, phone drag/zoom, upload,
 TV selection/restart, normal/takeover access, cancellation and timeout on real hardware; desktop
 checks do not establish webOS jail networking permissions or TV/browser behavior.
+
+## Shortcut editing on a phone or computer
+
+**Settings → Shortcuts → Edit on phone or computer** opens the same QR modal as the wallpaper
+upload, served by its own worker (`src/tile-editor.rs`). Both share `src/companion.rs`: interface
+choice, token, QR code, request parsing, Host/Origin checks and security headers are identical,
+including the ten-minute lifetime and invalidation on close, focus loss, hiding or exit. A page load
+needs about six requests, so a session accepts up to 256 instead of 64. The page is English, like
+the upload page.
+
+When the modal opens, the worker takes a copy of the saved tiles and serves `tiles.json` (tiles,
+choosable icons with their bundled SVG markup, and the limit). `POST save`, `remove` and `send`
+need the session token in `X-Luma-Token` and a JSON body of at most 4 KiB. Saves are validated with
+the TV editor's rules (`clean_input_name`, `valid_tile_url`, `TILE_ICONS`, `TILE_LIMIT`, `new_tile_id`).
+Each accepted change sends the complete list back to the launcher, which applies it like a TV edit:
+new tiles join the end of the Home favorites, removed ones leave favorites and hidden apps, and
+preferences are saved. Changes are applied even if the modal closed meanwhile, since the page was
+already told they were saved. The TV modal blocks other input, so the two editors never interleave.
+`send` makes the request from the TV with the same client as a tile press (five-second timeout, no
+redirects or proxy) without saving, and reports the result to the page.
+
+`pnpm test:tiles` checks the page helpers. Rust tests cover validation, the routes, header checks
+and session rotation over loopback; `await-tile-editor` waits for the modal's link in scripted runs.
+Verify scanning, editing and a test request against a real webhook on TV hardware.
 
 ## Splash images
 

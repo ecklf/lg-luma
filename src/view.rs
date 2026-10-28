@@ -266,7 +266,55 @@ impl Scene {
     }
 }
 
+/// The strings a companion dialog shows around its QR code, as message keys.
+struct Companion {
+    title: &'static str,
+    keep_open: &'static str,
+    private: &'static str,
+    error: &'static str,
+    starting: &'static str,
+}
+
 fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
+    companion(
+        out,
+        state,
+        assets,
+        state.wallpaper_upload.as_ref(),
+        Companion {
+            title: "uploadWallpaper",
+            keep_open: "wallpaperUploadKeepOpen",
+            private: "wallpaperUploadPrivate",
+            error: "wallpaperUploadError",
+            starting: "wallpaperUploadStarting",
+        },
+    );
+}
+
+fn tile_editor(out: &mut Scene, state: &State, assets: &Assets) {
+    companion(
+        out,
+        state,
+        assets,
+        state.tile_editor.as_ref(),
+        Companion {
+            title: "editTilesElsewhere",
+            keep_open: "tileEditorKeepOpen",
+            private: "tileEditorPrivate",
+            error: "tileEditorError",
+            starting: "tileEditorStarting",
+        },
+    );
+}
+
+/// A QR code and address for a page on the owner's phone or computer, with a Close button.
+fn companion(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    session: Option<&Result<crate::companion::Session, String>>,
+    strings: Companion,
+) {
     let language = state.preferences.language;
     let panel = Rect::new(520., 144., 880., 816.);
     out.modal = Some(panel);
@@ -274,7 +322,7 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
     out.shape(panel, 24., c(0x1b2023, 1.));
     out.border(panel, 24., 1., c(0xffffff, 0.09));
     out.text(
-        language.t("uploadWallpaper"),
+        language.t(strings.title),
         Rect::new(584., 198., 752., 48.),
         text(32., 550, -0.02),
         WHITE,
@@ -287,7 +335,7 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
         c(0xffffff, 0.65),
         true,
     );
-    match &state.wallpaper_upload {
+    match session {
         Some(Ok(session)) => {
             let scale = (336. / (session.qr_size + 8) as f32).floor();
             let size = (session.qr_size + 8) as f32 * scale;
@@ -365,14 +413,14 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
                 true,
             );
             out.text(
-                language.t("wallpaperUploadKeepOpen"),
+                language.t(strings.keep_open),
                 Rect::new(604., 766., 712., 52.),
                 text(16., 400, 0.).leading(1.4),
                 c(0xffffff, 0.75),
                 true,
             );
             out.text(
-                language.t("wallpaperUploadPrivate"),
+                language.t(strings.private),
                 Rect::new(604., 820., 712., 22.),
                 text(15., 400, 0.),
                 c(0xffffff, 0.5),
@@ -381,9 +429,9 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
         }
         result => {
             let key = if result.is_some() {
-                "wallpaperUploadError"
+                strings.error
             } else {
-                "wallpaperUploadStarting"
+                strings.starting
             };
             out.text(
                 language.t(key),
@@ -544,7 +592,8 @@ pub fn scene_with_pill(
         | Overlay::BackgroundOptions { .. }
         | Overlay::BackgroundDelete { .. }
         | Overlay::Keyboard
-        | Overlay::WallpaperUpload),
+        | Overlay::WallpaperUpload
+        | Overlay::TileEditor),
     ) = &state.overlay
     {
         let anchor = match overlay {
@@ -594,6 +643,7 @@ pub fn scene_with_pill(
             }
             Overlay::Keyboard => keyboard(&mut out, state, assets),
             Overlay::WallpaperUpload => wallpaper_upload(&mut out, state, assets),
+            Overlay::TileEditor => tile_editor(&mut out, state, assets),
             Overlay::SystemKeyboard | Overlay::Recents { .. } => {}
         }
         if !matches!(
@@ -2670,6 +2720,21 @@ fn shortcut_settings(out: &mut Scene, state: &State, assets: &Assets) {
             description: None,
             selected: false,
             chevron: true,
+        },
+    );
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::TileEditor,
+            rect: Rect::new(640., y + 84., 1120., 90.7),
+            title: language.t("editTilesElsewhere"),
+            icon: Some("globe"),
+            value: None,
+            description: Some(language.t("editTilesElsewhereHint")),
+            selected: false,
+            chevron: false,
         },
     );
 }

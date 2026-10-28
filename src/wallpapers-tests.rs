@@ -1,5 +1,9 @@
 use super::*;
-use std::sync::atomic::AtomicUsize;
+use crate::companion::TOKEN_ALPHABET;
+use std::{
+    net::{Ipv4Addr, TcpListener},
+    sync::atomic::AtomicUsize,
+};
 
 struct Fixture(PathBuf);
 impl Fixture {

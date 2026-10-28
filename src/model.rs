@@ -286,30 +286,7 @@ impl Preferences {
 
     /// Derived from the title once; renaming keeps the id so favorites stay put.
     pub fn new_tile_id(&self, title: &str) -> String {
-        let slug: String = title
-            .to_lowercase()
-            .split(|c: char| !c.is_ascii_alphanumeric())
-            .filter(|part| !part.is_empty())
-            .collect::<Vec<_>>()
-            .join("-")
-            .chars()
-            .take(48)
-            .collect();
-        let slug = match slug.trim_end_matches('-') {
-            "" => "tile",
-            slug => slug,
-        };
-        let base = format!("{CUSTOM_TILE_PREFIX}{slug}");
-        (1..)
-            .map(|n| {
-                if n == 1 {
-                    base.clone()
-                } else {
-                    format!("{base}-{n}")
-                }
-            })
-            .find(|id| self.custom_tile(id).is_none())
-            .unwrap()
+        new_tile_id(&self.custom_tiles, title)
     }
 
     pub fn remove_tile(&mut self, id: &str) -> Option<CustomTile> {
@@ -412,6 +389,34 @@ pub fn clean_input_name(name: &str) -> String {
     let clean: String = name.chars().filter(|c| !c.is_control()).collect();
     let clean: String = clean.trim().chars().take(INPUT_NAME_LIMIT).collect();
     clean.trim_end().into()
+}
+
+/// The id for a new tile titled `title`, unique among `tiles`.
+pub fn new_tile_id(tiles: &[CustomTile], title: &str) -> String {
+    let slug: String = title
+        .to_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+        .chars()
+        .take(48)
+        .collect();
+    let slug = match slug.trim_end_matches('-') {
+        "" => "tile",
+        slug => slug,
+    };
+    let base = format!("{CUSTOM_TILE_PREFIX}{slug}");
+    (1..)
+        .map(|n| {
+            if n == 1 {
+                base.clone()
+            } else {
+                format!("{base}-{n}")
+            }
+        })
+        .find(|id| !tiles.iter().any(|tile| &tile.id == id))
+        .unwrap()
 }
 
 /// Whether the URL uses https, and the address after the scheme.
