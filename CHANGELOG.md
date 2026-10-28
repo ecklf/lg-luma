@@ -1,5 +1,17 @@
 # lg-luma
 
+## 2.12.0
+
+### Minor Changes
+
+- efb6f3b: Return to Luma's Home tab when the remote Home button relaunches an existing Home-takeover instance, dismissing overlays and preserving keyboard edits. Normal-tile launches retain LG's system Home-button behavior.
+- 8430690: Add a Rotation On/Off button beside the upload action, defaulting to Off with a crossed-out rotation icon. When enabled, all available backgrounds advance on each Luma restart and every 15 minutes, with a slow cross-fade while preserving the manually chosen LG splash (#96).
+
+### Patch Changes
+
+- cb47502: Allow an explicit fullhome takeover target, preserve its native lifecycle identity, and distinguish mount status from Home-key verification.
+- 1abd414: Handle the remote Home key directly while Luma runs as the Home replacement, returning from Apps, Settings and overlays even when webOS does not send a lifecycle relaunch for an already-foreground Home. Normal app-tile launches retain system Home-key routing.
+
 ## 2.11.0
 
 ### Minor Changes
