@@ -143,6 +143,8 @@ Weather location and temperature choices return to Weather; Back from a widget r
 in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling.
+**Widgets → Greeting → Show on Home** hides only the greeting text, preserving the saved name,
+date, weather and Home layout. It defaults to enabled for existing and new installations.
 Lists render behind the fixed sidebar, navigation and background actions, without viewport clipping
 or edge fades. Pointer interaction and remote focus retain their safe content viewports.
 The **Greeting** subpage contains **Name** and **Clear name**. Selecting Name opens the text keyboard

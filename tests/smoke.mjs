@@ -473,7 +473,7 @@ try {
   await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
   const cycleEnabled = await scenario(
     'wallpaper-cycle-enabled',
-    'settings,down,down,enter,up,up,left,enter',
+    'settings,down,down,enter,up,up,right,enter',
   );
   assert.equal(cycleEnabled.subpage, null);
   assert.equal(cycleEnabled.focus, 'WallpaperCycle');
@@ -487,7 +487,7 @@ try {
   );
   const cycleDisabled = await scenario(
     'wallpaper-cycle-disabled',
-    'settings,down,down,enter,up,up,left,enter',
+    'settings,down,down,enter,up,up,right,enter',
   );
   assert.equal(cycleDisabled.preferences.wallpaper_cycle, false);
   assert.ok(cycleDisabled.ui_text.includes('Rotation'));

@@ -1006,25 +1006,25 @@ fn input_visibility_has_explicit_choices_and_returns_to_the_same_input() {
 }
 
 #[test]
-fn background_sidebar_right_focuses_rotation_and_ok_restores_the_applied_background() {
+fn background_sidebar_right_focuses_upload_and_ok_restores_the_applied_background() {
     let mut state = ready();
     state.open(2);
     state.preferences.background = "forest".into();
     state.focus = Target::Sidebar(1);
     state.section = 1;
     state.direction(Direction::Right, &controls(&state));
-    assert_eq!(state.focus, Target::WallpaperCycle);
+    assert_eq!(state.focus, Target::UploadWallpaper);
     assert_eq!(state.preferences.background, "forest");
     assert!(!state.preferences.wallpaper_cycle);
     assert!(state.overlay.is_none());
     state.direction(Direction::Right, &controls(&state));
-    assert_eq!(state.focus, Target::UploadWallpaper);
-    state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::WallpaperCycle);
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::UploadWallpaper);
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(1));
     state.direction(Direction::Right, &controls(&state));
-    assert_eq!(state.focus, Target::WallpaperCycle);
+    assert_eq!(state.focus, Target::UploadWallpaper);
     state.back();
     state.activate();
     assert_eq!(state.focus, Target::Background(6));
@@ -1615,8 +1615,11 @@ fn language_selection_restores_its_parent_and_is_saved_with_preferences() {
     state.focus = Target::Setting(4);
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.subpage, Some(crate::state::Subpage::Language));
-    assert_eq!(state.focus, Target::Choice(0));
-    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(
+        state.focus,
+        Target::Choice(crate::i18n::Language::En.index())
+    );
+    state.direction(Direction::Up, &controls(&state));
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert_eq!(state.preferences.language, crate::i18n::Language::De);
     assert_eq!(state.focus, Target::Setting(4));
@@ -1632,6 +1635,9 @@ fn remote_can_select_and_restore_every_language() {
         state.open(2);
         state.focus = Target::Setting(4);
         state.activate();
+        for _ in 0..crate::i18n::Language::En.index() {
+            state.direction(Direction::Up, &controls(&state));
+        }
         for _ in 0..index {
             state.direction(Direction::Down, &controls(&state));
         }
@@ -1660,6 +1666,46 @@ fn remote_can_select_and_restore_every_language() {
             Target::Choice((index + 1) % crate::i18n::Language::ALL.len())
         );
     }
+}
+
+#[test]
+fn settings_order_language_sort_and_shortcut_empty_card() {
+    use crate::{i18n::Language, renderer::Draw, state::Subpage};
+    assert!(
+        Language::ALL
+            .windows(2)
+            .all(|pair| pair[0].name().to_lowercase() < pair[1].name().to_lowercase())
+    );
+    for (index, language) in Language::ALL.into_iter().enumerate() {
+        assert_eq!(language.index(), index);
+    }
+    let mut state = ready();
+    state.open(2);
+    let general = controls(&state);
+    let language = general
+        .iter()
+        .find(|control| control.target == Target::Setting(4))
+        .unwrap();
+    let motion = general
+        .iter()
+        .find(|control| control.target == Target::Setting(2))
+        .unwrap();
+    assert!(language.rect.y < motion.rect.y);
+    state.subpage = Some(Subpage::Shortcuts);
+    let empty = scene(&state);
+    assert!(empty.draw.iter().any(|draw| matches!(draw,
+        Draw::Shape(rect, radius, stroke, color) if rect.x == 640. && rect.y == 248.8 && rect.h == 220.
+            && *radius == 20. && *stroke == 0. && color[3] == 0.72
+    )));
+    assert!(empty.draw.iter().any(|draw| matches!(draw,
+        Draw::Text(label, _, style, ..) if label == state.preferences.language.t("noTiles") && style.size == 24.
+    )));
+    assert!(
+        empty
+            .controls
+            .iter()
+            .any(|control| control.target == Target::TileEditor)
+    );
 }
 
 #[test]
@@ -2684,6 +2730,117 @@ fn category_focus_active_and_clear_button_share_the_pill_style() {
     assert!(focused.draw.iter().any(|draw| matches!(draw,
         Draw::RoundedGradient(rect, radius, ..) if rect.x == category.rect.x && rect.y == category.rect.y && *radius == 28.
     )));
+}
+
+#[test]
+fn clock_date_and_home_input_descriptions_use_larger_text() {
+    use crate::renderer::Draw;
+    for language in crate::i18n::Language::ALL {
+        let mut state = ready();
+        state.preferences.language = language;
+        let rendered = scene(&state);
+        let now = time::OffsetDateTime::UNIX_EPOCH;
+        for (label, size) in [
+            (
+                language.clock(
+                    now,
+                    state.preferences.hour_24,
+                    state.preferences.show_seconds,
+                ),
+                24.,
+            ),
+            (language.date(now), 18.4),
+        ] {
+            assert!(rendered.draw.iter().any(|draw| matches!(draw,
+                Draw::Text(text, rect, style, ..) if text == &label && style.size == size && rect.h >= size
+            )));
+        }
+        let input = &state.inventory.inputs[0];
+        let description = view::input_status(
+            input,
+            state.preferences.input_name(input).is_some(),
+            language,
+        );
+        assert!(rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::Text(text, rect, style, ..) if text == &description && style.size == 16.8 && rect.h == 25.2
+        )));
+    }
+}
+
+#[test]
+fn tv_settings_button_is_centered_alongside_navigation() {
+    let rendered = scene(&ready());
+    let button = rendered
+        .controls
+        .iter()
+        .find(|control| control.target == Target::TvSettings)
+        .unwrap();
+    assert!((button.rect.y + button.rect.h / 2. - (42.5 + 68.6 / 2.)).abs() < 0.01);
+    assert_eq!(button.rect.h, 60.);
+    assert_eq!(button.rect.w, button.rect.h);
+    assert_eq!(button.rect.x + button.rect.w, 1836.);
+    let (x, y) = button.rect.center();
+    assert_eq!(
+        ready().hit_test(&rendered.controls, x, y),
+        Some(Target::TvSettings)
+    );
+}
+
+#[test]
+fn greeting_visibility_toggle_persists_without_clearing_name_or_hiding_date() {
+    use crate::{renderer::Draw, state::Subpage};
+    let legacy: Preferences = serde_json::from_str(r#"{"greeting_name":"Ana"}"#).unwrap();
+    assert!(legacy.show_greeting);
+    let mut state = ready();
+    state.preferences = legacy;
+    state.open(2);
+    state.focus = Target::Widget(0);
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::Greeting));
+    state.direction(Direction::Down, &controls(&state));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::GreetingToggle);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!state.preferences.show_greeting);
+    assert_eq!(state.preferences.greeting_name, "Ana");
+    let saved = serde_json::to_string(&state.preferences).unwrap();
+    let restored: Preferences = serde_json::from_str(&saved).unwrap();
+    assert!(!restored.show_greeting);
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::GreetingNameClear);
+    state.focus = Target::GreetingToggle;
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::Widget(0));
+    state.open(0);
+    let hidden = scene(&state);
+    let language = state.preferences.language;
+    let now = time::OffsetDateTime::UNIX_EPOCH;
+    let greeting = language.greeting(now.hour(), "Ana");
+    assert!(
+        !hidden
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, Draw::Text(label, ..) if label == &greeting))
+    );
+    assert!(
+        hidden
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, Draw::Text(label, ..) if label == &language.date(now)))
+    );
+    state.open(2);
+    state.focus = Target::Widget(0);
+    state.activate();
+    state.focus = Target::GreetingToggle;
+    state.activate();
+    assert!(state.preferences.show_greeting);
+    state.open(0);
+    assert!(
+        scene(&state)
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, Draw::Text(label, ..) if label == &greeting))
+    );
 }
 
 #[test]

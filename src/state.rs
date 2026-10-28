@@ -60,6 +60,7 @@ pub enum Target {
     Widget(usize),
     GreetingName,
     GreetingNameClear,
+    GreetingToggle,
     AppNamesHome,
     AppNamesApps,
     ClockFormat,
@@ -990,10 +991,14 @@ impl State {
                     return vec![];
                 }
             }
-            let setting_rows = match self.subpage {
-                Some(Subpage::Greeting) => Some([Target::GreetingName, Target::GreetingNameClear]),
-                Some(Subpage::AppNames) => Some([Target::AppNamesHome, Target::AppNamesApps]),
-                Some(Subpage::Clock) => Some([Target::ClockFormat, Target::ClockTimeFormat]),
+            let setting_rows: Option<&[Target]> = match self.subpage {
+                Some(Subpage::Greeting) => Some(&[
+                    Target::GreetingName,
+                    Target::GreetingNameClear,
+                    Target::GreetingToggle,
+                ]),
+                Some(Subpage::AppNames) => Some(&[Target::AppNamesHome, Target::AppNamesApps]),
+                Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
                 _ => None,
             };
             if let Some(rows) = setting_rows
@@ -1005,11 +1010,13 @@ impl State {
                         if index == 0 {
                             Target::Nav(2)
                         } else {
-                            rows[0].clone()
+                            rows[index - 1].clone()
                         },
                         controls,
                     ),
-                    Direction::Down if index == 0 => self.focus(rows[1].clone(), controls),
+                    Direction::Down if index + 1 < rows.len() => {
+                        self.focus(rows[index + 1].clone(), controls)
+                    }
                     Direction::Right
                         if matches!(
                             self.focus,
@@ -1079,7 +1086,7 @@ impl State {
                 match direction {
                     Direction::Right => {
                         let entry = if self.section == 1 {
-                            Target::WallpaperCycle
+                            Target::UploadWallpaper
                         } else {
                             self.section_entry()
                         };
@@ -1275,7 +1282,9 @@ impl State {
                     }
                     Direction::Up => {
                         self.focus(
-                            if index < 3 {
+                            if index == 2 {
+                                Target::WallpaperCycle
+                            } else if index < 3 {
                                 Target::UploadWallpaper
                             } else {
                                 Target::Background(index - 3)
@@ -1298,22 +1307,22 @@ impl State {
             }
             if self.focus == Target::UploadWallpaper {
                 match direction {
-                    Direction::Down => self.focus(
-                        Target::Background(2.min(self.background_count().saturating_sub(1))),
-                        controls,
-                    ),
+                    Direction::Down => self.focus(Target::Background(0), controls),
                     Direction::Up => self.focus(Target::Nav(2), controls),
-                    Direction::Left => self.focus(Target::WallpaperCycle, controls),
-                    Direction::Right => {}
+                    Direction::Left => self.focus(Target::Sidebar(1), controls),
+                    Direction::Right => self.focus(Target::WallpaperCycle, controls),
                 }
                 return vec![];
             }
             if self.focus == Target::WallpaperCycle {
                 match direction {
-                    Direction::Right => self.focus(Target::UploadWallpaper, controls),
-                    Direction::Left => self.focus(Target::Sidebar(1), controls),
+                    Direction::Right => {}
+                    Direction::Left => self.focus(Target::UploadWallpaper, controls),
                     Direction::Up => self.focus(Target::Nav(2), controls),
-                    Direction::Down => self.focus(Target::Background(0), controls),
+                    Direction::Down => self.focus(
+                        Target::Background(2.min(self.background_count().saturating_sub(1))),
+                        controls,
+                    ),
                 }
                 return vec![];
             }
@@ -1860,6 +1869,10 @@ impl State {
                 }
             }
             Target::WeatherQuery => self.open_keyboard(TextField::Location),
+            Target::GreetingToggle => {
+                self.preferences.show_greeting = !self.preferences.show_greeting;
+                return vec![Effect::Save];
+            }
             Target::GreetingName => self.open_keyboard(TextField::Name),
             Target::GreetingNameClear => {
                 self.preferences.greeting_name.clear();

@@ -185,6 +185,7 @@ pub struct Preferences {
     pub show_seconds: bool,
     /// Optional name appended to the Home greeting ("Good evening, Ana."). Empty = plain greeting.
     pub greeting_name: String,
+    pub show_greeting: bool,
     pub input_modes: BTreeMap<String, InputMode>,
     /// Custom names by input app ID; the TV's port and label stay visible as detail.
     pub input_names: BTreeMap<String, String>,
@@ -220,6 +221,7 @@ impl Default for Preferences {
             reduced_motion: false,
             show_seconds: false,
             greeting_name: String::new(),
+            show_greeting: true,
             input_modes: BTreeMap::new(),
             input_names: BTreeMap::new(),
             show_weather: true,

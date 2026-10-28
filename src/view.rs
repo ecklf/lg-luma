@@ -704,8 +704,8 @@ fn header(
     );
     out.text(
         clock,
-        Rect::new(84., 64.8, 300., 24.),
-        text(20., 500, -0.03),
+        Rect::new(84., 62.4, 300., 28.8),
+        text(24., 500, -0.03),
         WHITE,
         false,
     );
@@ -741,13 +741,24 @@ fn header(
         );
         out.control(Target::Nav(index), rect, false);
     }
-    let rect = Rect::new(1786.4, 52., 49.6, 49.6);
+    let button_size = 60.;
+    let rect = Rect::new(
+        1836. - button_size,
+        nav.y + (nav.h - button_size) / 2.,
+        button_size,
+        button_size,
+    );
     let focused = state.focus == Target::TvSettings;
     out.pill(rect, focused, false);
     out.icon(
         assets,
         "settings",
-        Rect::new(1799.6, 65.2, 23.2, 23.2),
+        Rect::new(
+            rect.x + (rect.w - 23.2) / 2.,
+            rect.y + (rect.h - 23.2) / 2.,
+            23.2,
+            23.2,
+        ),
         if focused {
             c(0x2c2c2c, 1.)
         } else {
@@ -859,7 +870,7 @@ fn tile(
                 rect.w - 8.,
                 caption_height,
             ),
-            text(17.6, if focused { 550 } else { 450 }, -0.02).leading(1.4),
+            text(20.8, if focused { 600 } else { 550 }, -0.02).leading(1.4),
             if focused {
                 c(0xffffff, 1.)
             } else {
@@ -955,16 +966,16 @@ fn caption_height(state: &State, assets: &Assets, app: &App, width: f32) -> f32 
         }
     );
     let style = text(
-        17.6,
+        20.8,
         if state.focus == Target::App(app.id.clone()) {
-            550
+            600
         } else {
-            450
+            550
         },
         -0.02,
     )
     .leading(1.4);
-    (assets.lines(&title, style, width - 8.) as f32 * style.size * style.line_height).max(49.28)
+    (assets.lines(&title, style, width - 8.) as f32 * style.size * style.line_height).max(58.24)
 }
 
 fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language: Language) {
@@ -1092,22 +1103,24 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     let date = language.date(now);
     out.text(
         date,
-        Rect::new(84., 227.2 - shift - s, 1200., 17.),
-        text(14.4, 600, 0.12),
+        Rect::new(84., 223.2 - shift - s, 1200., 24.),
+        text(18.4, 600, 0.12),
         c(0xf5f5f5, 0.72),
         false,
     );
-    let greeting = language.greeting(now.hour(), &state.preferences.greeting_name);
-    let greeting_style = text(90.4, 500, -0.065).leading(1.05);
-    let fitted = assets.fit_text(&greeting, greeting_style, 1500.);
-    let height = 95. * fitted.size / greeting_style.size;
-    out.text(
-        &greeting,
-        Rect::new(84., 265. + (95. - height) / 2. - shift - s, 1500., height),
-        fitted,
-        WHITE,
-        false,
-    );
+    if state.preferences.show_greeting {
+        let greeting = language.greeting(now.hour(), &state.preferences.greeting_name);
+        let greeting_style = text(90.4, 500, -0.065).leading(1.05);
+        let fitted = assets.fit_text(&greeting, greeting_style, 1500.);
+        let height = 95. * fitted.size / greeting_style.size;
+        out.text(
+            &greeting,
+            Rect::new(84., 265. + (95. - height) / 2. - shift - s, 1500., height),
+            fitted,
+            WHITE,
+            false,
+        );
+    }
     if let Some(summary) = summary {
         weather_summary(out, state, assets, summary, 265. - shift + 94.92 + 18.4 - s);
     }
@@ -1173,7 +1186,7 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
                 18.4 + apps
                     .iter()
                     .map(|app| caption_height(state, assets, app, HOME_TILE_WIDTH))
-                    .fold(49.28, f32::max)
+                    .fold(58.24, f32::max)
             } else {
                 0.
             };
@@ -1293,8 +1306,8 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         );
         out.text(
             input_status(input, name.is_some(), language),
-            Rect::new(rect.x + 93., rect.y + 58.7, 450., 20.),
-            text(13.12, 400, 0.).leading(1.5),
+            Rect::new(rect.x + 93., rect.y + 57.4, 450., 25.2),
+            text(16.8, 400, 0.).leading(1.5),
             c(0xe8e8e8, 0.48),
             false,
         );
@@ -1613,7 +1626,7 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
                 18.4 + row
                     .iter()
                     .map(|app| caption_height(state, assets, app, 270.))
-                    .fold(49.28, f32::max)
+                    .fold(58.24, f32::max)
             } else {
                 0.
             };
@@ -2282,6 +2295,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             for (position, (index, key, icon, value, chevron)) in [
                 (0, "appNames", "type", None, true),
                 (1, "clock", "clock", None, true),
+                (4, "language", "language", Some(language.name()), true),
                 (
                     2,
                     "reducedMotion",
@@ -2293,7 +2307,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     }),
                     false,
                 ),
-                (4, "language", "language", Some(language.name()), true),
             ]
             .into_iter()
             .enumerate()
@@ -2333,12 +2346,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 assets,
                 Row {
                     target: Target::WallpaperCycle,
-                    rect: Rect::new(
-                        1760. - upload_width - 20. - cycle_width,
-                        164.8,
-                        cycle_width,
-                        64.,
-                    ),
+                    rect: Rect::new(1760. - cycle_width, 164.8, cycle_width, 64.),
                     title: cycle_label,
                     icon: Some(if state.preferences.wallpaper_cycle {
                         "refresh"
@@ -2361,7 +2369,12 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 assets,
                 Row {
                     target: Target::UploadWallpaper,
-                    rect: Rect::new(1760. - upload_width, 164.8, upload_width, 64.),
+                    rect: Rect::new(
+                        1760. - cycle_width - 20. - upload_width,
+                        164.8,
+                        upload_width,
+                        64.,
+                    ),
                     title: upload_label,
                     icon: Some("upload"),
                     value: None,
@@ -2598,6 +2611,25 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
             chevron: false,
         },
     );
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::GreetingToggle,
+            rect: Rect::new(640., 351.5 - state.scroll, 1120., 72.),
+            title: language.t("showOnHome"),
+            icon: None,
+            value: Some(language.t(if state.preferences.show_greeting {
+                "stateOn"
+            } else {
+                "stateOff"
+            })),
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
 }
 
 fn clock_settings(out: &mut Scene, state: &State, assets: &Assets) {
@@ -2751,11 +2783,26 @@ fn shortcut_settings(out: &mut Scene, state: &State, assets: &Assets) {
         );
     }
     if tiles.is_empty() {
+        let rect = Rect::new(640., 248.8 - state.scroll, 1120., 220.);
+        settings_surface(out, rect, 20.);
+        out.icon(
+            assets,
+            "sparkles",
+            Rect::new(rect.x + (rect.w - 32.) / 2., rect.y + 28., 32., 32.),
+            c(0xeeeeee, 0.73),
+        );
         out.text(
             language.t("noTiles"),
-            Rect::new(664., 254. - state.scroll, 1000., 52.),
-            text(16.8, 400, 0.).leading(1.5),
-            c(0xf5f5f5, 0.72),
+            Rect::new(rect.x + 32., rect.y + 80., rect.w - 64., 34.),
+            text(24., 550, -0.02).leading(1.4),
+            WHITE,
+            true,
+        );
+        out.text(
+            language.t("editTilesElsewhereHint"),
+            Rect::new(rect.x + 80., rect.y + 130., rect.w - 160., 56.),
+            text(18.4, 400, 0.).leading(1.5),
+            c(0xf5f5f5, 0.73),
             true,
         );
     }

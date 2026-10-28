@@ -30,17 +30,17 @@ pub enum Language {
 }
 impl Language {
     pub const ALL: [Self; 11] = [
-        Self::En,
         Self::De,
-        Self::Zh,
+        Self::En,
         Self::Es,
-        Self::Pt,
-        Self::It,
-        Self::Ru,
-        Self::Pl,
         Self::Fr,
-        Self::Vi,
+        Self::It,
         Self::Nl,
+        Self::Pl,
+        Self::Pt,
+        Self::Vi,
+        Self::Ru,
+        Self::Zh,
     ];
     pub fn code(self) -> &'static str {
         match self {
@@ -73,19 +73,10 @@ impl Language {
         }
     }
     pub fn index(self) -> usize {
-        match self {
-            Self::En => 0,
-            Self::De => 1,
-            Self::Zh => 2,
-            Self::Es => 3,
-            Self::Pt => 4,
-            Self::It => 5,
-            Self::Ru => 6,
-            Self::Pl => 7,
-            Self::Fr => 8,
-            Self::Vi => 9,
-            Self::Nl => 10,
-        }
+        Self::ALL
+            .iter()
+            .position(|language| *language == self)
+            .unwrap()
     }
     pub fn t(self, key: &str) -> &str {
         messages()

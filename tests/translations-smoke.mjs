@@ -100,7 +100,7 @@ async function scenario(name, script, extra = []) {
 function contains(state, key, language) {
   assert.ok(state.ui_text.includes(messages[key][language]), `Missing rendered ${key}/${language}`);
 }
-const picker = 'settings,down,enter,down,down,down,enter';
+const picker = 'settings,down,enter,down,down,enter';
 const weatherPage = 'settings,down,down,down,enter,down,enter';
 const inputsPage = 'settings,down,down,down,enter,down,down,down,enter';
 const location = `${weatherPage},down,enter`;
@@ -116,7 +116,7 @@ try {
   for (const name of ['English', 'Deutsch', '简体中文', 'Español', 'Português (Brasil)'])
     assert.ok(languages.ui_text.includes(name));
 
-  const german = await scenario('de-home', `${picker},down,enter,home,down`);
+  const german = await scenario('de-home', `${picker},up,enter,home,down`);
   assert.equal(german.preferences.language, 'de');
   for (const key of [
     'home',
@@ -132,7 +132,10 @@ try {
   assert.equal(persisted.preferences.language, 'de');
   contains(persisted, 'language', 'de');
 
-  const chinese = await scenario('zh-home', `${picker},down,enter,home,down`);
+  const chinese = await scenario(
+    'zh-home',
+    `${picker},${Array(10).fill('down').join(',')},enter,home,down`,
+  );
   assert.equal(chinese.preferences.language, 'zh');
   for (const key of [
     'home',
@@ -158,7 +161,10 @@ try {
   contains(selected, 'partlyCloudy', 'zh');
   assert.equal(requests.find((request) => request.path === '/v1/search').query.language, 'zh');
   const forecasts = requests.filter((request) => request.path === '/v1/forecast').length;
-  const changed = await scenario('de-weather', `${picker},up,enter,home,await-weather`);
+  const changed = await scenario(
+    'de-weather',
+    `${picker},${Array(10).fill('up').join(',')},enter,home,await-weather`,
+  );
   assert.equal(changed.preferences.language, 'de');
   contains(changed, 'partlyCloudy', 'de');
   assert.ok(changed.ui_text.includes('维也纳'), 'The saved city name is data, not a UI label');
@@ -214,7 +220,10 @@ try {
     preferences,
     JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
   );
-  const portuguese = await scenario('pt-home', `${picker},down,down,down,down,enter,home,down`);
+  const portuguese = await scenario(
+    'pt-home',
+    `${picker},${Array(6).fill('down').join(',')},enter,home,down`,
+  );
   assert.equal(portuguese.preferences.language, 'pt');
   for (const key of [
     'home',
@@ -269,15 +278,15 @@ try {
     preferences,
     JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
   );
-  const vietnamesePicker = `${picker},${Array(9).fill('down').join(',')}`;
+  const vietnamesePicker = `${picker},${Array(7).fill('down').join(',')}`;
   const vietnameseFocused = await scenario('vi-picker', vietnamesePicker);
-  assert.deepEqual(vietnameseFocused.focus, { Choice: 9 });
+  assert.deepEqual(vietnameseFocused.focus, { Choice: 8 });
   assert.equal(vietnameseFocused.scroll, 0, 'The first ten language rows fit without scrolling');
   assert.ok(vietnameseFocused.ui_text.includes('Tiếng Việt'));
-  const dutchFocused = await scenario('nl-picker', `${vietnamesePicker},down`);
-  assert.deepEqual(dutchFocused.focus, { Choice: 10 });
-  assert.ok(dutchFocused.scroll > 0, 'The eleventh language must scroll fully into view');
-  assert.ok(dutchFocused.ui_text.includes('Nederlands'));
+  const chineseFocused = await scenario('zh-picker-last', `${vietnamesePicker},down,down`);
+  assert.deepEqual(chineseFocused.focus, { Choice: 10 });
+  assert.ok(chineseFocused.scroll > 0, 'The eleventh language must scroll fully into view');
+  assert.ok(chineseFocused.ui_text.includes('简体中文'));
   const vietnamese = await scenario('vi-home', `${vietnamesePicker},enter,home,down`);
   assert.equal(vietnamese.preferences.language, 'vi');
   for (const key of [
