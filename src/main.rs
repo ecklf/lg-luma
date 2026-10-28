@@ -425,6 +425,11 @@ fn compose(
     }
 }
 
+fn wallpaper_upload_active(state: &State, webos: bool, focused: bool, visible: bool) -> bool {
+    // Desktop users need to switch to a browser without invalidating the upload URL.
+    visible && (!webos || focused) && matches!(state.overlay, Some(Overlay::WallpaperUpload))
+}
+
 fn weather_tick(state: &mut State, service: &weather_service::Service, visible: bool) {
     let now = OffsetDateTime::now_utc().unix_timestamp();
     let (command, changed) = state.weather.sync(
@@ -912,9 +917,7 @@ fn run() -> Result<(), String> {
             state.dirty = true;
         }
         state.tick();
-        wallpaper_service.set_active(
-            focused && visible && matches!(state.overlay, Some(Overlay::WallpaperUpload)),
-        );
+        wallpaper_service.set_active(wallpaper_upload_active(&state, webos, focused, visible));
         while let Ok(event) = wallpaper_service.receiver.try_recv() {
             match event {
                 wallpapers::Event::Catalog(items) => {
@@ -1165,10 +1168,12 @@ fn run() -> Result<(), String> {
                         profile.pause();
                     }
                     WindowEvent::FocusLost => {
-                        if matches!(state.overlay, Some(Overlay::WallpaperUpload)) {
-                            state.back();
+                        if webos {
+                            if matches!(state.overlay, Some(Overlay::WallpaperUpload)) {
+                                state.back();
+                            }
+                            wallpaper_service.set_active(false);
                         }
-                        wallpaper_service.set_active(false);
                         focused = false;
                         press = None;
                         back_button.cancel();
@@ -1408,12 +1413,8 @@ fn run() -> Result<(), String> {
                 &weather_service,
                 &wallpaper_service,
             );
-            wallpaper_service.set_active(
-                running
-                    && focused
-                    && visible
-                    && matches!(state.overlay, Some(Overlay::WallpaperUpload)),
-            );
+            wallpaper_service
+                .set_active(running && wallpaper_upload_active(&state, webos, focused, visible));
             if press
                 .as_ref()
                 .is_some_and(|p| !p.held && p.target != state.focus)
@@ -1478,12 +1479,8 @@ fn run() -> Result<(), String> {
                 );
             }
         }
-        wallpaper_service.set_active(
-            running
-                && focused
-                && visible
-                && matches!(state.overlay, Some(Overlay::WallpaperUpload)),
-        );
+        wallpaper_service
+            .set_active(running && wallpaper_upload_active(&state, webos, focused, visible));
         // state.loading stays set meanwhile, so focus/relaunch refreshes do not add requests.
         if inventory_retry.is_some_and(|at| Instant::now() >= at) {
             inventory_retry = None;

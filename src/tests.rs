@@ -1002,14 +1002,25 @@ fn input_visibility_has_explicit_choices_and_returns_to_the_same_input() {
 }
 
 #[test]
-fn background_entry_restores_the_applied_background() {
+fn background_sidebar_right_focuses_rotation_and_ok_restores_the_applied_background() {
     let mut state = ready();
     state.open(2);
     state.preferences.background = "forest".into();
     state.focus = Target::Sidebar(1);
     state.section = 1;
     state.direction(Direction::Right, &controls(&state));
-    assert_eq!(state.focus, Target::Background(6));
+    assert_eq!(state.focus, Target::WallpaperCycle);
+    assert_eq!(state.preferences.background, "forest");
+    assert!(!state.preferences.wallpaper_cycle);
+    assert!(state.overlay.is_none());
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::UploadWallpaper);
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::WallpaperCycle);
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::Sidebar(1));
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::WallpaperCycle);
     state.back();
     state.activate();
     assert_eq!(state.focus, Target::Background(6));

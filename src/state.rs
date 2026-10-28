@@ -1021,7 +1021,11 @@ impl State {
             if let Target::Sidebar(index) = self.focus {
                 match direction {
                     Direction::Right => {
-                        let entry = self.section_entry();
+                        let entry = if self.section == 1 {
+                            Target::WallpaperCycle
+                        } else {
+                            self.section_entry()
+                        };
                         self.focus(entry, controls);
                     }
                     Direction::Up => self.focus(

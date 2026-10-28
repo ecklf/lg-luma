@@ -219,6 +219,37 @@ fn upload_is_modal_and_close_restores_its_exact_parent() {
 }
 
 #[test]
+fn upload_stays_active_without_desktop_focus_but_requires_tv_focus() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    state.focus = Target::UploadWallpaper;
+    state.activate();
+
+    for webos in [false, true] {
+        assert!(crate::wallpaper_upload_active(&state, webos, true, true));
+        assert_eq!(
+            crate::wallpaper_upload_active(&state, webos, false, true),
+            !webos
+        );
+        for focused in [false, true] {
+            assert!(!crate::wallpaper_upload_active(
+                &state, webos, focused, false
+            ));
+        }
+    }
+
+    state.back();
+    for webos in [false, true] {
+        for focused in [false, true] {
+            assert!(!crate::wallpaper_upload_active(
+                &state, webos, focused, true
+            ));
+        }
+    }
+}
+
+#[test]
 fn upload_instructions_are_ordered_and_only_the_displayed_url_loses_its_slash() {
     let mut state = ready();
     state.open(2);
@@ -286,7 +317,7 @@ fn upload_button_is_compact_and_right_aligned_in_every_language() {
             .unwrap()
             .rect;
         assert_eq!(upload.x + upload.w, right_card.x + right_card.w);
-        assert!((240. ..=520.).contains(&upload.w));
+        assert!((88. ..=520.).contains(&upload.w));
         assert!(upload.y + upload.h < right_card.y);
         let title = rendered
             .draw

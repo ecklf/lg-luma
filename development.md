@@ -271,8 +271,9 @@ process restarts; old preferences fall back to `background`. Old duration prefer
 while former per-image exclusions are ignored.
 
 The native process binds an ephemeral port on one private/link-local IPv4 interface only while
-the upload modal is open and focused, with a fixed ten-minute session lifetime. Closing the modal,
-losing focus, hiding Luma or exiting invalidates the session. An unpredictable 128-bit capability
+the upload modal is open and visible, with a fixed ten-minute session lifetime. Closing the modal,
+hiding Luma or exiting invalidates the session. On TV, losing focus also closes the modal and
+invalidates the session; desktop previews keep it alive when switching to a browser. An unpredictable 128-bit capability
 URL, exact Host/Origin checks, a custom upload header, no CORS, and restrictive browser security
 headers limit access. The 8-character case-sensitive base-58 token has about 47 bits of entropy;
 each session accepts at most 64 local requests and expires after ten minutes. HTTP is **not

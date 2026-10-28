@@ -91,17 +91,17 @@
     "nl": "Kan achtergrond niet verwijderen"
   },
   "uploadWallpaper": {
-    "en": "Upload background",
-    "de": "Hintergrund hochladen",
-    "zh": "上传背景",
-    "es": "Subir fondo",
-    "pt": "Enviar fundo",
-    "it": "Carica sfondo",
-    "ru": "Загрузить фон",
-    "pl": "Prześlij tło",
-    "fr": "Importer un arrière-plan",
-    "vi": "Tải hình nền lên",
-    "nl": "Achtergrond uploaden"
+    "en": "Upload",
+    "de": "Hochladen",
+    "zh": "上传",
+    "es": "Subir",
+    "pt": "Enviar",
+    "it": "Carica",
+    "ru": "Загрузить",
+    "pl": "Prześlij",
+    "fr": "Importer",
+    "vi": "Tải lên",
+    "nl": "Uploaden"
   },
   "wallpaperUploadHint": {
     "en": "Scan this QR code",

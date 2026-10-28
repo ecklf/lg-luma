@@ -2221,7 +2221,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             let upload_label = language.t("uploadWallpaper");
             let upload_width = (assets.width(upload_label, text(20.8, 550, -0.02)) + 88.)
                 .ceil()
-                .clamp(240., 520.);
+                .min(520.);
             let cycle_label = language.t("wallpaperCycle");
             let cycle_width = (assets.width(cycle_label, text(20.8, 550, -0.02))
                 + rotation_value_width(assets, language)
@@ -3134,6 +3134,37 @@ mod tests {
                 ),
             ]),
             artwork: crate::app_artwork::Service::new(false),
+        }
+    }
+
+    #[test]
+    fn upload_button_padding_tracks_the_label_in_every_language() {
+        let assets = assets();
+        let mut state = State::new(Preferences::default());
+        state.open(2);
+        state.section = 1;
+        for language in Language::ALL {
+            state.preferences.language = language;
+            let label = language.t("uploadWallpaper");
+            let label_width = assets.width(label, text(20.8, 550, -0.02));
+            let mut scene = Scene::new();
+            settings(&mut scene, &state, &assets);
+            let button = scene
+                .controls
+                .iter()
+                .find(|control| control.target == Target::UploadWallpaper)
+                .unwrap()
+                .rect;
+            let title = scene
+                .draw
+                .iter()
+                .find_map(|draw| match draw {
+                    Draw::Text(value, rect, ..) if value == label => Some(rect),
+                    _ => None,
+                })
+                .unwrap();
+            let right_padding = button.x + button.w - title.x - label_width;
+            assert!((24.2..25.6).contains(&right_padding));
         }
     }
 
