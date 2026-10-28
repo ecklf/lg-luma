@@ -1,5 +1,52 @@
 # lg-luma
 
+## 2.14.0
+
+### Minor Changes
+
+- 3b610ec: Add a Show on Home toggle under Widgets → Greeting to hide the greeting without clearing its saved
+  name or hiding the date and weather. Existing installations keep the greeting enabled.
+- 3b610ec: Check the official release feed in the background on TV startup and show an Update available notice
+  and System settings card for newer versions. Open Homebrew Channel from the card to update safely
+  through the existing installer. Offline failures are non-disruptive and desktop tests stay offline.
+- 3b610ec: Consolidate the System version and update information into one status card. Show up-to-date status
+  after a successful check, with Check again, checking and retryable failure states. Keep the Homebrew
+  Channel CTA for available updates and support up-to-date previews with the current version.
+
+### Patch Changes
+
+- 3b610ec: Remove the Apps page's top clipping and edge fade so cards scroll behind the fixed navigation.
+  Keep categories, search and their clear controls fixed above the scrolling grid, with protected
+  pointer interaction and remote focus visibility.
+- 3b610ec: Give app categories pill surfaces matching search, with larger, heavier category and search labels.
+- 3b610ec: Place background Upload left of Rotation with matching remote navigation. Enlarge app captions
+  on Home and Apps and increase their weight, retaining space for wrapped names.
+- 3b610ec: Enable live update checks and Check again in interactive desktop runs using the same endpoint as
+  TV. Keep scripted captures and simulated-version previews offline.
+- 3b610ec: Move Greeting's visibility toggle to the first row and label it Show widget, matching Weather.
+- 3b610ec: Enlarge the clock, Home weekday/date and input descriptions for better TV readability.
+- 3b610ec: Refresh the Homebrew Channel listing to describe uploaded backgrounds, rotation, QR-managed webhook
+  shortcuts and current customization options.
+- 3b610ec: Update the Homebrew Channel description to list all supported languages and add regression coverage
+  to keep future language additions reflected in release metadata.
+- 3b610ec: Place Language above Reduced motion, sort language choices alphabetically by their displayed names,
+  and show a readable empty-state card when no shortcuts are saved.
+- 3b610ec: Let Settings lists scroll behind fixed navigation, sidebar and background actions without viewport
+  clipping or edge fades. Preserve fixed-control pointer priority and remote focus visibility.
+- 3b610ec: Increase version and shortcut row opacity, match shortcut description cards to HDMI settings rows,
+  and make shortcut removal buttons circular.
+- 3b610ec: Simplify the shortcut empty-state hint to explain that Configure adds the first shortcut.
+- 3b610ec: Open shortcut test/removal actions in a popup from selectable Settings rows, lighten the System
+  version surface, and refine category focus/active styling with a full-height clear button.
+- 3b610ec: Reduce Languages and Backgrounds bottom scroll padding from 64 to 48 logical pixels.
+- 3b610ec: Add Traditional Chinese (繁體中文) immediately after Simplified Chinese, with translated interface
+  text, persisted language selection, Chinese date/time formatting and verified bundled glyph coverage.
+  Update Homebrew metadata and use the provider's Chinese locale for geocoding.
+- 3b610ec: Enlarge the TV Settings button to 60px and center it alongside the top navigation bar.
+- 3b610ec: Add --test-update-version and LUMA_TEST_UPDATE_VERSION to preview the update card without contacting
+  GitHub or persisting simulated update metadata.
+  Display the running binary's version rather than a potentially stale generated-artwork version.
+
 ## 2.13.0
 
 ### Minor Changes
