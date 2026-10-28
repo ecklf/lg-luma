@@ -1,5 +1,27 @@
 # lg-luma
 
+## 2.13.0
+
+### Minor Changes
+
+- 13211ee: Add shortcut tiles that send a GET or POST request instead of launching an app, for example to a
+  Home Assistant webhook. Create, edit, test and remove them in Settings › Shortcuts, or scan a QR
+  code there to edit them on a phone or computer instead of with the remote.
+- ffcf8ed: Group Greeting, Weather, Shortcuts and Inputs under Settings → Widgets. Create and edit shortcuts
+  through Configure's phone/computer QR page, with passive shortcut rows and separate TV removal
+  buttons. Preserve existing preferences, increase Settings list bottom spacing and use a flat
+  background on the shortcut web page.
+
+### Patch Changes
+
+- 61b673d: Focus the rotation button when pressing Right from the Background settings sidebar instead of the active background.
+- 61b673d: Remove excess right padding from the Upload button by sizing it to its localized label.
+- 61b673d: Keep the background upload modal and session open when the desktop preview loses focus, so switching to a browser does not interrupt uploads. TV focus-loss and window hiding behavior are unchanged.
+- 61b673d: Remove the background gradient from the wallpaper upload page for a flat dark appearance.
+- 13211ee: Keep shortcut context-menu actions on the webhook path, prevent platform app deletion of shortcuts,
+  and preserve accepted phone-editor changes when its dialog is reopened before pending saves are applied.
+- 61b673d: Shorten the Background settings upload button label to “Upload” in every language.
+
 ## 2.12.0
 
 ### Minor Changes
