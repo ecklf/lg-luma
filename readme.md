@@ -228,8 +228,7 @@ Open **Settings → Background → Upload**, then scan the QR code or open the s
 address on a phone or computer on the same network. Choose a JPEG, PNG or WebP and adjust
 its 16:9 crop before choosing **Save to TV**.
 
-The upload link works only while its TV dialog is open and focused, for at most ten minutes.
-Use a trusted local network: the temporary local upload uses HTTP, not encrypted HTTPS.
+The upload link works only while its TV dialog is open and focused.
 
 Enable **Rotation** beside **Upload** to cycle through backgrounds on each Luma restart and every
 15 minutes with a slow cross-fade. Rotation is off by default and leaves your manually chosen

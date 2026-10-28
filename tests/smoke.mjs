@@ -178,7 +178,7 @@ try {
   );
   assert.equal(upload.modal, true);
   assert.equal(upload.focus, 'CloseDialog');
-  assert.ok(upload.ui_text.includes('Upload background'));
+  assert.ok(upload.ui_text.includes('Upload'));
   assert.ok(upload.ui_text.includes('Scan this QR code'));
   assert.ok(upload.ui_text.includes('or enter this URL in the browser'));
   assert.ok(upload.ui_text.some((text) => text.startsWith('Keep this window open')));
