@@ -464,6 +464,29 @@ pub fn deserialize_language<'de, D: Deserializer<'de>>(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn homebrew_description_lists_every_supported_language() {
+        let description = include_str!("../assets/homebrew-description.html");
+        for language in super::Language::ALL {
+            let name = match language {
+                super::Language::En => "English",
+                super::Language::De => "German",
+                super::Language::Zh => "Simplified Chinese",
+                super::Language::Es => "Spanish",
+                super::Language::Pt => "Portuguese (Brazil)",
+                super::Language::It => "Italian",
+                super::Language::Ru => "Russian",
+                super::Language::Pl => "Polish",
+                super::Language::Fr => "French",
+                super::Language::Vi => "Vietnamese",
+                super::Language::Nl => "Dutch",
+            };
+            assert!(
+                description.contains(name),
+                "Homebrew description is missing {name}"
+            );
+        }
+    }
     use super::*;
     #[test]
     fn every_message_has_all_languages_and_no_empty_values() {
