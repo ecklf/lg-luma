@@ -45,6 +45,7 @@ pub enum Page {
 pub enum Target {
     Nav(usize),
     TvSettings,
+    OpenHomebrew,
     Recent(String),
     RecentEmpty,
     RecentRetry,
@@ -217,6 +218,7 @@ pub struct State {
     pub uninstalling: Option<String>,
     pub notice: Option<(String, Instant)>,
     pub error: Option<String>,
+    pub available_update: Option<String>,
     /// Inventory loads that failed in a row while no apps were shown yet.
     pub inventory_failures: u32,
     pub dirty: bool,
@@ -257,6 +259,7 @@ impl State {
             uninstalling: None,
             notice: None,
             error: None,
+            available_update: None,
             inventory_failures: 0,
             dirty: true,
             pointer: false,
@@ -856,6 +859,7 @@ impl State {
                     .unwrap_or(0),
             ),
             WIDGETS_SECTION => Target::Widget(0),
+            SYSTEM_SECTION if self.available_update.is_some() => Target::OpenHomebrew,
             SYSTEM_SECTION => Target::Setting(3),
             _ => Target::Setting(0),
         }
@@ -1926,6 +1930,11 @@ impl State {
                 self.scroll = 0.;
                 if !self.preferences.reduced_motion {
                     self.panel_started = Some(Instant::now());
+                }
+            }
+            Target::OpenHomebrew => {
+                if self.available_update.is_some() {
+                    return vec![Effect::Launch(crate::update::HOMEBREW_CHANNEL.into())];
                 }
             }
             Target::Tile(_) => self.options(),

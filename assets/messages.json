@@ -1,4 +1,56 @@
 {
+  "addFirstShortcutHint": {
+    "en": "Press Configure to add your first shortcut.",
+    "de": "Wähle Konfigurieren, um deine erste Verknüpfung hinzuzufügen.",
+    "es": "Pulsa Configurar para añadir tu primer acceso directo.",
+    "zh": "按“配置”添加第一个快捷方式。",
+    "pt": "Pressione Configurar para adicionar seu primeiro atalho.",
+    "it": "Premi Configura per aggiungere la tua prima scorciatoia.",
+    "ru": "Нажмите «Настроить», чтобы добавить первый ярлык.",
+    "pl": "Naciśnij Konfiguruj, aby dodać pierwszy skrót.",
+    "fr": "Appuyez sur Configurer pour ajouter votre premier raccourci.",
+    "vi": "Nhấn Cấu hình để thêm lối tắt đầu tiên.",
+    "nl": "Druk op Configureren om je eerste snelkoppeling toe te voegen."
+  },
+  "updateAvailable": {
+    "en": "Update available",
+    "de": "Update verfügbar",
+    "es": "Actualización disponible",
+    "zh": "有可用更新",
+    "pt": "Atualização disponível",
+    "it": "Aggiornamento disponibile",
+    "ru": "Доступно обновление",
+    "pl": "Dostępna aktualizacja",
+    "fr": "Mise à jour disponible",
+    "vi": "Có bản cập nhật",
+    "nl": "Update beschikbaar"
+  },
+  "updateVersions": {
+    "en": "Current: {current} · Latest: {latest}",
+    "de": "Installiert: {current} · Neueste Version: {latest}",
+    "es": "Actual: {current} · Última: {latest}",
+    "zh": "当前版本：{current} · 最新版本：{latest}",
+    "pt": "Atual: {current} · Mais recente: {latest}",
+    "it": "Attuale: {current} · Più recente: {latest}",
+    "ru": "Текущая: {current} · Последняя: {latest}",
+    "pl": "Obecna: {current} · Najnowsza: {latest}",
+    "fr": "Actuelle : {current} · Dernière : {latest}",
+    "vi": "Hiện tại: {current} · Mới nhất: {latest}",
+    "nl": "Huidig: {current} · Nieuwste: {latest}"
+  },
+  "openHomebrewChannel": {
+    "en": "Open Homebrew Channel to update",
+    "de": "Zum Aktualisieren Homebrew Channel öffnen",
+    "es": "Abrir Homebrew Channel para actualizar",
+    "zh": "打开 Homebrew Channel 进行更新",
+    "pt": "Abrir Homebrew Channel para atualizar",
+    "it": "Apri Homebrew Channel per aggiornare",
+    "ru": "Открыть Homebrew Channel для обновления",
+    "pl": "Otwórz Homebrew Channel, aby zaktualizować",
+    "fr": "Ouvrir Homebrew Channel pour mettre à jour",
+    "vi": "Mở Homebrew Channel để cập nhật",
+    "nl": "Open Homebrew Channel om bij te werken"
+  },
   "testShortcut": {
     "en": "Test shortcut",
     "de": "Verknüpfung testen",

@@ -26,6 +26,7 @@ mod storage;
 mod text_rendering;
 #[path = "tile-editor.rs"]
 mod tile_editor;
+mod update;
 mod vector;
 mod view;
 mod wallpaper_cycle;
@@ -656,6 +657,7 @@ fn run() -> Result<(), String> {
         options.preferences.is_none() && options.test_extra_apps == 0,
     );
     let webhook_service = webhook::Service::new();
+    let update_service = update::Service::new(webos);
     effects(
         vec![Effect::Refresh],
         &mut state,
@@ -1134,6 +1136,16 @@ fn run() -> Result<(), String> {
             state.notify(state.preferences.language.format(key, &[("tile", &title)]));
         }
         weather_tick(&mut state, &weather_service, visible);
+        for result in update_service.receiver.try_iter() {
+            match result {
+                Ok(Some(version)) => {
+                    state.available_update = Some(version);
+                    state.notify(state.preferences.language.t("updateAvailable"));
+                }
+                Ok(None) => {}
+                Err(error) => eprintln!("Luma update check: {error}"),
+            }
+        }
         // Rebuild hit regions before input whenever inventory/layout changed.
         if state.dirty {
             scene = compose(&mut state, &assets, pill, pill_width, now);

@@ -1700,6 +1700,9 @@ fn settings_order_language_sort_and_shortcut_empty_card() {
     assert!(empty.draw.iter().any(|draw| matches!(draw,
         Draw::Text(label, _, style, ..) if label == state.preferences.language.t("noTiles") && style.size == 24.
     )));
+    assert!(empty.draw.iter().any(|draw| matches!(draw,
+        Draw::Text(label, ..) if label == "Press Configure to add your first shortcut."
+    )));
     assert!(
         empty
             .controls
@@ -2841,6 +2844,61 @@ fn greeting_visibility_toggle_persists_without_clearing_name_or_hiding_date() {
             .iter()
             .any(|draw| matches!(draw, Draw::Text(label, ..) if label == &greeting))
     );
+}
+
+#[test]
+fn update_card_shows_both_versions_and_launches_homebrew_without_installing() {
+    use crate::{i18n::Language, renderer::Draw};
+    for language in Language::ALL {
+        let mut state = ready();
+        state.preferences.language = language;
+        state.open(2);
+        state.section = crate::state::SYSTEM_SECTION;
+        assert!(
+            !controls(&state)
+                .iter()
+                .any(|control| control.target == Target::OpenHomebrew)
+        );
+        state.available_update = Some("9.0.0".into());
+        let rendered = scene(&state);
+        for label in [
+            language.t("updateAvailable").to_owned(),
+            language.t("openHomebrewChannel").to_owned(),
+            language.format(
+                "updateVersions",
+                &[("current", "test"), ("latest", "9.0.0")],
+            ),
+        ] {
+            assert!(
+                rendered
+                    .draw
+                    .iter()
+                    .any(|draw| matches!(draw, Draw::Text(text, ..) if text == &label))
+            );
+        }
+        state.focus = Target::Sidebar(crate::state::SYSTEM_SECTION);
+        state.direction(Direction::Right, &rendered.controls);
+        assert_eq!(state.focus, Target::OpenHomebrew);
+        assert_eq!(
+            state.activate(),
+            vec![Effect::Launch("org.webosbrew.hbchannel".into())]
+        );
+        let button = rendered
+            .controls
+            .iter()
+            .find(|control| control.target == Target::OpenHomebrew)
+            .unwrap();
+        let (x, y) = button.rect.center();
+        assert_eq!(
+            state.hit_test(&rendered.controls, x, y),
+            Some(Target::OpenHomebrew)
+        );
+        state.direction(Direction::Down, &rendered.controls);
+        assert_eq!(state.focus, Target::Setting(3));
+        state.focus = Target::OpenHomebrew;
+        state.direction(Direction::Left, &rendered.controls);
+        assert_eq!(state.focus, Target::Sidebar(crate::state::SYSTEM_SECTION));
+    }
 }
 
 #[test]

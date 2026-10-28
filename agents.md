@@ -83,6 +83,10 @@ by displayed name and selection indices consistent. Update translation smoke nav
 changes. The Homebrew description must name every supported language; keep the
 `homebrew_description_lists_every_supported_language` regression test exhaustive so a new enum
 variant cannot silently leave release-facing metadata outdated. Do not edit generated feed files.
+When adding or changing user-facing features, review `assets/homebrew-description.html` as well as
+the README/development docs so the Homebrew listing reflects major capabilities (including uploaded
+backgrounds and QR-managed webhook shortcuts), not just languages. Avoid claims for unverified TV
+behavior or features not yet implemented.
 
 SVG sources and fonts retain licenses in `assets/`. TV app artwork is resolved at runtime from
 inventory/installed manifests by `src/app_artwork.rs`, with an embedded Node 8-compatible elevated

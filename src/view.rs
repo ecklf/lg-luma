@@ -2457,6 +2457,45 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 c(0xeeeeee, 0.6),
                 false,
             );
+            let update_height = if let Some(latest) = &state.available_update {
+                let rect = Rect::new(640., 248.8 - s, 1120., 220.);
+                settings_surface(out, rect, 20.);
+                out.text(
+                    language.t("updateAvailable"),
+                    Rect::new(rect.x + 24.2, rect.y + 24., rect.w - 48.4, 34.),
+                    text(24., 550, -0.02).leading(1.4),
+                    WHITE,
+                    false,
+                );
+                out.text(
+                    language.format(
+                        "updateVersions",
+                        &[("current", assets.version.trim()), ("latest", latest)],
+                    ),
+                    Rect::new(rect.x + 24.2, rect.y + 74., rect.w - 48.4, 32.),
+                    text(20.8, 450, -0.02).leading(1.4),
+                    c(0xeeeeee, 0.73),
+                    false,
+                );
+                row(
+                    out,
+                    state,
+                    assets,
+                    Row {
+                        target: Target::OpenHomebrew,
+                        rect: Rect::new(rect.x + 24., rect.y + 132., rect.w - 48., 64.),
+                        title: language.t("openHomebrewChannel"),
+                        icon: Some("arrow"),
+                        value: None,
+                        description: None,
+                        selected: false,
+                        chevron: false,
+                    },
+                );
+                244.
+            } else {
+                0.
+            };
             for (position, (index, title, icon, value, chevron)) in [
                 (
                     3,
@@ -2487,7 +2526,12 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     assets,
                     Row {
                         target: Target::Setting(index),
-                        rect: Rect::new(640., 248.8 + position as f32 * 84. - s, 1120., 72.),
+                        rect: Rect::new(
+                            640.,
+                            248.8 + update_height + position as f32 * 84. - s,
+                            1120.,
+                            72.,
+                        ),
                         title,
                         icon: Some(icon),
                         value,
@@ -2799,7 +2843,7 @@ fn shortcut_settings(out: &mut Scene, state: &State, assets: &Assets) {
             true,
         );
         out.text(
-            language.t("editTilesElsewhereHint"),
+            language.t("addFirstShortcutHint"),
             Rect::new(rect.x + 80., rect.y + 130., rect.w - 160., 56.),
             text(18.4, 400, 0.).leading(1.5),
             c(0xf5f5f5, 0.73),

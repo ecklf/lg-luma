@@ -812,6 +812,18 @@ and weather labels. App/device names and saved city names remain real data. No g
 runtime font/translation services or telemetry are used. Weather attribution: Open-Meteo,
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
+## Update availability
+
+On TV startup a separate worker checks
+`https://github.com/ecklf/lg-luma/releases/latest/download/repo.json` once per process.
+It only reads the `com.ecklf.luma` package/manifest version and compares numeric major/minor/patch
+components with the compiled version. Equal, older, malformed or prerelease versions do not offer
+updates. HTTP is HTTPS-only with bounded redirects, a ten-second timeout, a 256 KiB reply limit and
+no proxy; failures are logged without interrupting launch. Desktop previews do not contact GitHub.
+A newer version shows an **Update available** notice and a **Settings → System** card with both
+versions. Its button launches `org.webosbrew.hbchannel` through the native platform launch path;
+Homebrew Channel handles updating, not Luma. No IPK or executable is downloaded by the checker.
+
 ## Compatibility
 
 Luma's native startup, rendering and app/input discovery have been verified on rooted webOS 26.
