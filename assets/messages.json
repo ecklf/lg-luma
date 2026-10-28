@@ -1,5 +1,6 @@
 {
   "latestVersionInstalled": {
+    "zh-tw": "未發現更新版本",
     "en": "No newer version found",
     "de": "Keine neuere Version gefunden",
     "es": "No se encontró una versión más reciente",
@@ -13,6 +14,7 @@
     "nl": "Geen nieuwere versie gevonden"
   },
   "checkAgain": {
+    "zh-tw": "重新檢查",
     "en": "Check again",
     "de": "Erneut prüfen",
     "es": "Comprobar de nuevo",
@@ -26,6 +28,7 @@
     "nl": "Opnieuw controleren"
   },
   "checkingUpdates": {
+    "zh-tw": "正在檢查更新…",
     "en": "Checking for updates…",
     "de": "Updates werden geprüft…",
     "es": "Buscando actualizaciones…",
@@ -39,6 +42,7 @@
     "nl": "Controleren op updates…"
   },
   "checkForUpdates": {
+    "zh-tw": "檢查更新",
     "en": "Check for updates",
     "de": "Nach Updates suchen",
     "es": "Buscar actualizaciones",
@@ -52,6 +56,7 @@
     "nl": "Controleren op updates"
   },
   "updateCheckFailed": {
+    "zh-tw": "無法檢查更新",
     "en": "Couldn't check for updates",
     "de": "Updates konnten nicht geprüft werden",
     "es": "No se pudieron buscar actualizaciones",
@@ -65,6 +70,7 @@
     "nl": "Controleren op updates mislukt"
   },
   "currentVersion": {
+    "zh-tw": "目前版本：{current}",
     "en": "Current version: {current}",
     "de": "Installierte Version: {current}",
     "es": "Versión actual: {current}",
@@ -78,6 +84,7 @@
     "nl": "Huidige versie: {current}"
   },
   "addFirstShortcutHint": {
+    "zh-tw": "按「設定」新增第一個捷徑。",
     "en": "Press Configure to add your first shortcut.",
     "de": "Wähle Konfigurieren, um deine erste Verknüpfung hinzuzufügen.",
     "es": "Pulsa Configurar para añadir tu primer acceso directo.",
@@ -91,6 +98,7 @@
     "nl": "Druk op Configureren om je eerste snelkoppeling toe te voegen."
   },
   "updateAvailable": {
+    "zh-tw": "有可用更新",
     "en": "Update available",
     "de": "Update verfügbar",
     "es": "Actualización disponible",
@@ -104,6 +112,7 @@
     "nl": "Update beschikbaar"
   },
   "updateVersions": {
+    "zh-tw": "目前版本：{current} · 最新版本：{latest}",
     "en": "Current: {current} · Latest: {latest}",
     "de": "Installiert: {current} · Neueste Version: {latest}",
     "es": "Actual: {current} · Última: {latest}",
@@ -117,6 +126,7 @@
     "nl": "Huidig: {current} · Nieuwste: {latest}"
   },
   "openHomebrewChannel": {
+    "zh-tw": "開啟 Homebrew Channel 進行更新",
     "en": "Open Homebrew Channel to update",
     "de": "Zum Aktualisieren Homebrew Channel öffnen",
     "es": "Abrir Homebrew Channel para actualizar",
@@ -130,6 +140,7 @@
     "nl": "Open Homebrew Channel om bij te werken"
   },
   "testShortcut": {
+    "zh-tw": "測試捷徑",
     "en": "Test shortcut",
     "de": "Verknüpfung testen",
     "es": "Probar acceso directo",
@@ -143,6 +154,7 @@
     "nl": "Snelkoppeling testen"
   },
   "configure": {
+    "zh-tw": "設定",
     "en": "Configure",
     "de": "Konfigurieren",
     "es": "Configurar",
@@ -156,6 +168,7 @@
     "nl": "Configureren"
   },
   "widgets": {
+    "zh-tw": "小工具",
     "en": "Widgets",
     "de": "Widgets",
     "es": "Widgets",
@@ -169,6 +182,7 @@
     "nl": "Widgets"
   },
   "wallpaperCycle": {
+    "zh-tw": "輪播",
     "en": "Rotation",
     "de": "Rotation",
     "es": "Rotación",
@@ -182,6 +196,7 @@
     "nl": "Rotatie"
   },
   "useBackground": {
+    "zh-tw": "使用背景",
     "en": "Use background",
     "de": "Hintergrund verwenden",
     "zh": "使用背景",
@@ -195,6 +210,7 @@
     "nl": "Achtergrond gebruiken"
   },
   "deleteBackground": {
+    "zh-tw": "刪除背景",
     "en": "Delete background",
     "de": "Hintergrund löschen",
     "zh": "删除背景",
@@ -208,6 +224,7 @@
     "nl": "Achtergrond verwijderen"
   },
   "deleteBackgroundWarning": {
+    "zh-tw": "刪除此背景？它將從圖庫中移除。",
     "en": "Delete this background? It will be removed from your gallery.",
     "de": "Diesen Hintergrund löschen? Er wird aus deiner Galerie entfernt.",
     "zh": "删除此背景？它将从图库中移除。",
@@ -221,6 +238,7 @@
     "nl": "Deze achtergrond verwijderen? Hij wordt uit je galerij verwijderd."
   },
   "deletingBackground": {
+    "zh-tw": "正在刪除背景…",
     "en": "Deleting background…",
     "de": "Hintergrund wird gelöscht…",
     "zh": "正在删除背景…",
@@ -234,6 +252,7 @@
     "nl": "Achtergrond verwijderen…"
   },
   "backgroundDeleted": {
+    "zh-tw": "背景已刪除",
     "en": "Background deleted",
     "de": "Hintergrund gelöscht",
     "zh": "背景已删除",
@@ -247,6 +266,7 @@
     "nl": "Achtergrond verwijderd"
   },
   "deleteBackgroundError": {
+    "zh-tw": "無法刪除背景",
     "en": "Could not delete background",
     "de": "Hintergrund konnte nicht gelöscht werden",
     "zh": "无法删除背景",
@@ -260,6 +280,7 @@
     "nl": "Kan achtergrond niet verwijderen"
   },
   "uploadWallpaper": {
+    "zh-tw": "上傳",
     "en": "Upload",
     "de": "Hochladen",
     "zh": "上传",
@@ -273,6 +294,7 @@
     "nl": "Uploaden"
   },
   "wallpaperUploadHint": {
+    "zh-tw": "掃描此 QR Code",
     "en": "Scan this QR code",
     "de": "Scanne diesen QR-Code",
     "zh": "扫描此二维码",
@@ -286,6 +308,7 @@
     "nl": "Scan deze QR-code"
   },
   "wallpaperUploadBrowser": {
+    "zh-tw": "或在瀏覽器中輸入此網址",
     "en": "or enter this URL in the browser",
     "de": "oder gib diese URL im Browser ein",
     "zh": "或在浏览器中输入此网址",
@@ -299,6 +322,7 @@
     "nl": "of voer deze URL in de browser in"
   },
   "wallpaperUploadKeepOpen": {
+    "zh-tw": "請保持此視窗開啟，直到上傳完成。請使用連線到同一網路的裝置。",
     "en": "Keep this window open until your upload finishes. Use a device on the same network.",
     "de": "Lass dieses Fenster bis zum Ende des Uploads geöffnet. Nutze ein Gerät im selben Netzwerk.",
     "zh": "请保持此窗口打开，直到上传完成。请使用连接到同一网络的设备。",
@@ -312,6 +336,7 @@
     "nl": "Houd dit venster open tot het uploaden klaar is. Gebruik een apparaat op hetzelfde netwerk."
   },
   "wallpaperUploadPrivate": {
+    "zh-tw": "區域網路上傳 · 連結將在 10 分鐘後失效",
     "en": "Local upload · This link expires in 10 minutes",
     "de": "Lokaler Upload · Dieser Link läuft in 10 Minuten ab",
     "zh": "本地上传 · 链接将在 10 分钟后失效",
@@ -325,6 +350,7 @@
     "nl": "Lokaal uploaden · Deze link verloopt over 10 minuten"
   },
   "wallpaperUploadStarting": {
+    "zh-tw": "正在準備上傳連結…",
     "en": "Preparing your upload link…",
     "de": "Upload-Link wird vorbereitet…",
     "zh": "正在准备上传链接…",
@@ -338,6 +364,7 @@
     "nl": "Uploadlink voorbereiden…"
   },
   "wallpaperUploadError": {
+    "zh-tw": "無法啟動區域網路上傳。請檢查網路連線，然後關閉並重新開啟此對話框。",
     "en": "Couldn’t start local upload. Check your network connection, then close and reopen this dialog.",
     "de": "Lokaler Upload konnte nicht gestartet werden. Prüfe die Netzwerkverbindung und öffne diesen Dialog erneut.",
     "zh": "无法启动本地上传。请检查网络连接，然后关闭并重新打开此对话框。",
@@ -351,6 +378,7 @@
     "nl": "Kan lokaal uploaden niet starten. Controleer je netwerkverbinding en sluit en heropen dit venster."
   },
   "wallpaperUploadEnded": {
+    "zh-tw": "上傳工作階段已結束",
     "en": "Upload session ended",
     "de": "Upload-Sitzung beendet",
     "zh": "上传会话已结束",
@@ -364,6 +392,7 @@
     "nl": "Uploadsessie beëindigd"
   },
   "textRendering": {
+    "zh-tw": "文字繪製",
     "en": "Text rendering",
     "de": "Textdarstellung",
     "zh": "文字渲染",
@@ -377,6 +406,7 @@
     "nl": "Tekstweergave"
   },
   "textRenderingMsaa": {
+    "zh-tw": "MSAA（預設）",
     "en": "MSAA (default)",
     "de": "MSAA (Standard)",
     "zh": "MSAA（默认）",
@@ -390,6 +420,7 @@
     "nl": "MSAA (standaard)"
   },
   "textRenderingAnalytic": {
+    "zh-tw": "解析式",
     "en": "Analytic",
     "de": "Analytisch",
     "zh": "解析式",
@@ -403,6 +434,7 @@
     "nl": "Analytisch"
   },
   "textRenderingRestart": {
+    "zh-tw": "重新啟動 Luma 以套用變更。",
     "en": "Restart Luma to apply changes.",
     "de": "Luma neu starten, um Änderungen anzuwenden.",
     "zh": "重启 Luma 以应用更改。",
@@ -416,6 +448,7 @@
     "nl": "Start Luma opnieuw op om de wijzigingen toe te passen."
   },
   "recentEmpty": {
+    "zh-tw": "尚無最近使用的應用程式",
     "en": "No recent apps",
     "de": "Keine zuletzt verwendeten Apps",
     "es": "No hay aplicaciones recientes",
@@ -429,6 +462,7 @@
     "nl": "Geen recente apps"
   },
   "recentError": {
+    "zh-tw": "無法更新最近使用的應用程式",
     "en": "Recent apps could not be updated",
     "de": "Zuletzt verwendete Apps konnten nicht aktualisiert werden",
     "es": "No se pudieron actualizar las aplicaciones recientes",
@@ -442,6 +476,7 @@
     "nl": "Recente apps konden niet worden bijgewerkt"
   },
   "recentLoading": {
+    "zh-tw": "正在更新最近使用的應用程式…",
     "en": "Updating recent apps…",
     "de": "Zuletzt verwendete Apps werden aktualisiert…",
     "es": "Actualizando aplicaciones recientes…",
@@ -455,6 +490,7 @@
     "nl": "Recente apps worden bijgewerkt…"
   },
   "recentDesktop": {
+    "zh-tw": "桌面預覽 · 範例記錄",
     "en": "Desktop preview · Sample history",
     "de": "Desktop-Vorschau · Beispielverlauf",
     "es": "Vista previa de escritorio · Historial de ejemplo",
@@ -468,6 +504,7 @@
     "nl": "Desktopvoorbeeld · Voorbeeldgeschiedenis"
   },
   "home": {
+    "zh-tw": "主畫面",
     "en": "Home",
     "de": "Start",
     "es": "Inicio",
@@ -481,6 +518,7 @@
     "nl": "Start"
   },
   "apps": {
+    "zh-tw": "應用程式",
     "en": "Apps",
     "de": "Apps",
     "es": "Aplicaciones",
@@ -494,6 +532,7 @@
     "nl": "Apps"
   },
   "inputs": {
+    "zh-tw": "輸入來源",
     "en": "Inputs",
     "de": "Eingänge",
     "es": "Entradas",
@@ -507,6 +546,7 @@
     "nl": "Ingangen"
   },
   "settings": {
+    "zh-tw": "設定",
     "en": "Settings",
     "de": "Einstellungen",
     "es": "Ajustes",
@@ -520,6 +560,7 @@
     "nl": "Instellingen"
   },
   "settingsRegion": {
+    "zh-tw": "Luma 設定",
     "en": "Luma settings",
     "de": "Luma-Einstellungen",
     "es": "Ajustes de Luma",
@@ -533,6 +574,7 @@
     "nl": "Luma-instellingen"
   },
   "mainNavigation": {
+    "zh-tw": "主要導覽",
     "en": "Main navigation",
     "de": "Hauptnavigation",
     "es": "Navegación principal",
@@ -546,6 +588,7 @@
     "nl": "Hoofdnavigatie"
   },
   "settingsSections": {
+    "zh-tw": "設定分類",
     "en": "Settings sections",
     "de": "Einstellungsbereiche",
     "es": "Secciones de ajustes",
@@ -559,6 +602,7 @@
     "nl": "Instellingencategorieën"
   },
   "stateOn": {
+    "zh-tw": "開",
     "en": "On",
     "de": "Ein",
     "es": "Activado",
@@ -572,6 +616,7 @@
     "nl": "Aan"
   },
   "stateOff": {
+    "zh-tw": "關",
     "en": "Off",
     "de": "Aus",
     "es": "Desactivado",
@@ -585,6 +630,7 @@
     "nl": "Uit"
   },
   "stateAuto": {
+    "zh-tw": "自動",
     "en": "Auto",
     "de": "Automatisch",
     "es": "Automático",
@@ -598,6 +644,7 @@
     "nl": "Automatisch"
   },
   "inputAlways": {
+    "zh-tw": "一律顯示",
     "en": "Always show",
     "de": "Immer anzeigen",
     "es": "Mostrar siempre",
@@ -611,6 +658,7 @@
     "nl": "Altijd tonen"
   },
   "inputNever": {
+    "zh-tw": "永不顯示",
     "en": "Never show",
     "de": "Nie anzeigen",
     "es": "No mostrar nunca",
@@ -624,6 +672,7 @@
     "nl": "Nooit tonen"
   },
   "inputWhenConnected": {
+    "zh-tw": "僅在連線時顯示",
     "en": "Only show when connected",
     "de": "Nur anzeigen, wenn verbunden",
     "es": "Mostrar solo cuando esté conectada",
@@ -637,6 +686,7 @@
     "nl": "Alleen tonen als verbonden"
   },
   "renameInput": {
+    "zh-tw": "重新命名",
     "en": "Rename",
     "de": "Umbenennen",
     "es": "Cambiar nombre",
@@ -650,6 +700,7 @@
     "nl": "Hernoemen"
   },
   "inputName": {
+    "zh-tw": "輸入來源名稱",
     "en": "Input name",
     "de": "Name des Eingangs",
     "es": "Nombre de la entrada",
@@ -663,6 +714,7 @@
     "nl": "Naam van de ingang"
   },
   "inputNameHint": {
+    "zh-tw": "顯示自訂名稱而非連接埠名稱",
     "en": "Show a custom name instead of the port",
     "de": "Eigenen Namen statt des Anschlusses anzeigen",
     "es": "Mostrar un nombre propio en lugar del puerto",
@@ -676,6 +728,7 @@
     "nl": "Toon een eigen naam in plaats van de poort"
   },
   "clearName": {
+    "zh-tw": "清除名稱",
     "en": "Clear name",
     "de": "Name löschen",
     "es": "Borrar nombre",
@@ -689,6 +742,7 @@
     "nl": "Naam wissen"
   },
   "back": {
+    "zh-tw": "返回",
     "en": "Back",
     "de": "Zurück",
     "es": "Atrás",
@@ -702,6 +756,7 @@
     "nl": "Terug"
   },
   "background": {
+    "zh-tw": "背景",
     "en": "Background",
     "de": "Hintergrund",
     "es": "Fondo",
@@ -715,6 +770,7 @@
     "nl": "Achtergrond"
   },
   "interface": {
+    "zh-tw": "一般",
     "en": "General",
     "de": "Allgemein",
     "es": "General",
@@ -728,6 +784,7 @@
     "nl": "Algemeen"
   },
   "system": {
+    "zh-tw": "系統",
     "en": "System",
     "de": "System",
     "es": "Sistema",
@@ -741,6 +798,7 @@
     "nl": "Systeem"
   },
   "favorites": {
+    "zh-tw": "我的最愛",
     "en": "Favorites",
     "de": "Favoriten",
     "es": "Favoritos",
@@ -754,6 +812,7 @@
     "nl": "Favorieten"
   },
   "weather": {
+    "zh-tw": "天氣",
     "en": "Weather",
     "de": "Wetter",
     "es": "Tiempo",
@@ -767,6 +826,7 @@
     "nl": "Weer"
   },
   "location": {
+    "zh-tw": "地點",
     "en": "Location",
     "de": "Standort",
     "es": "Ubicación",
@@ -780,6 +840,7 @@
     "nl": "Locatie"
   },
   "manageWeatherLocation": {
+    "zh-tw": "設定地點",
     "en": "Set up location",
     "de": "Standort einrichten",
     "es": "Configurar ubicación",
@@ -793,6 +854,7 @@
     "nl": "Locatie instellen"
   },
   "locationResults": {
+    "zh-tw": "地點搜尋結果",
     "en": "Location results",
     "de": "Suchergebnisse",
     "es": "Resultados",
@@ -806,6 +868,7 @@
     "nl": "Zoekresultaten"
   },
   "appNames": {
+    "zh-tw": "應用程式名稱",
     "en": "App names",
     "de": "App-Namen",
     "es": "Nombres de apps",
@@ -819,6 +882,7 @@
     "nl": "App-namen"
   },
   "showOnHome": {
+    "zh-tw": "在主畫面顯示",
     "en": "Show on Home",
     "de": "Auf der Startseite anzeigen",
     "es": "Mostrar en Inicio",
@@ -832,6 +896,7 @@
     "nl": "Tonen op Start"
   },
   "showOnApps": {
+    "zh-tw": "在應用程式頁面顯示",
     "en": "Show on Apps",
     "de": "In Apps anzeigen",
     "es": "Mostrar en Aplicaciones",
@@ -845,6 +910,7 @@
     "nl": "Tonen in Apps"
   },
   "clock24": {
+    "zh-tw": "24 小時制",
     "en": "24-hour clock",
     "de": "24-Stunden-Uhr",
     "es": "Reloj de 24 horas",
@@ -858,6 +924,7 @@
     "nl": "24-uursklok"
   },
   "clockFormat": {
+    "zh-tw": "時鐘格式",
     "en": "Clock format",
     "de": "Uhrzeitformat",
     "es": "Formato de hora",
@@ -871,6 +938,7 @@
     "nl": "Klokformaat"
   },
   "clock": {
+    "zh-tw": "時鐘",
     "en": "Clock",
     "de": "Uhr",
     "es": "Reloj",
@@ -884,6 +952,7 @@
     "nl": "Klok"
   },
   "timeFormat": {
+    "zh-tw": "時間顯示",
     "en": "Time format",
     "de": "Zeitformat",
     "es": "Formato de visualización",
@@ -897,6 +966,7 @@
     "nl": "Tijdnotatie"
   },
   "hour12": {
+    "zh-tw": "12 小時制",
     "en": "12-hour",
     "de": "12 Stunden",
     "es": "12 horas",
@@ -910,6 +980,7 @@
     "nl": "12-uurs"
   },
   "hour24": {
+    "zh-tw": "24 小時制",
     "en": "24-hour",
     "de": "24 Stunden",
     "es": "24 horas",
@@ -923,6 +994,7 @@
     "nl": "24-uurs"
   },
   "reducedMotion": {
+    "zh-tw": "減少動態效果",
     "en": "Reduced motion",
     "de": "Bewegungen reduzieren",
     "es": "Reducir movimiento",
@@ -936,6 +1008,7 @@
     "nl": "Minder beweging"
   },
   "refreshApps": {
+    "zh-tw": "重新整理應用程式和輸入來源",
     "en": "Refresh apps & inputs",
     "de": "Apps und Eingänge aktualisieren",
     "es": "Actualizar apps y entradas",
@@ -949,6 +1022,7 @@
     "nl": "Apps en ingangen vernieuwen"
   },
   "quitApp": {
+    "zh-tw": "結束應用程式",
     "en": "Quit app",
     "de": "App beenden",
     "es": "Salir de la app",
@@ -962,6 +1036,7 @@
     "nl": "App afsluiten"
   },
   "language": {
+    "zh-tw": "顯示語言",
     "en": "Language",
     "de": "Anzeigesprache",
     "es": "Idioma",
@@ -975,6 +1050,7 @@
     "nl": "Taal"
   },
   "greetingName": {
+    "zh-tw": "問候稱呼",
     "en": "Greeting name",
     "de": "Name in der Begrüßung",
     "es": "Nombre en el saludo",
@@ -988,6 +1064,7 @@
     "nl": "Naam in de begroeting"
   },
   "greeting": {
+    "zh-tw": "問候語",
     "en": "Greeting",
     "de": "Begrüßung",
     "es": "Saludo",
@@ -1001,6 +1078,7 @@
     "nl": "Begroeting"
   },
   "name": {
+    "zh-tw": "名稱",
     "en": "Name",
     "de": "Name",
     "es": "Nombre",
@@ -1014,6 +1092,7 @@
     "nl": "Naam"
   },
   "greetingNightNamed": {
+    "zh-tw": "{name}，還沒睡嗎？",
     "en": "Still up, {name}?",
     "de": "Noch wach, {name}?",
     "es": "¿Aún despiertos, {name}?",
@@ -1027,6 +1106,7 @@
     "nl": "Nog wakker, {name}?"
   },
   "morningNamed": {
+    "zh-tw": "{name}，早安。",
     "en": "Good morning, {name}.",
     "de": "Guten Morgen, {name}.",
     "es": "Buenos días, {name}.",
@@ -1040,6 +1120,7 @@
     "nl": "Goedemorgen, {name}."
   },
   "afternoonNamed": {
+    "zh-tw": "{name}，午安。",
     "en": "Good afternoon, {name}.",
     "de": "Guten Tag, {name}.",
     "es": "Buenas tardes, {name}.",
@@ -1053,6 +1134,7 @@
     "nl": "Goedemiddag, {name}."
   },
   "eveningNamed": {
+    "zh-tw": "{name}，晚安。",
     "en": "Good evening, {name}.",
     "de": "Guten Abend, {name}.",
     "es": "Buenas noches, {name}.",
@@ -1066,6 +1148,7 @@
     "nl": "Goedenavond, {name}."
   },
   "english": {
+    "zh-tw": "English",
     "en": "English",
     "de": "English",
     "es": "English",
@@ -1079,6 +1162,7 @@
     "nl": "English"
   },
   "german": {
+    "zh-tw": "Deutsch",
     "en": "Deutsch",
     "de": "Deutsch",
     "es": "Deutsch",
@@ -1092,6 +1176,7 @@
     "nl": "Deutsch"
   },
   "chinese": {
+    "zh-tw": "简体中文",
     "en": "简体中文",
     "de": "简体中文",
     "es": "简体中文",
@@ -1105,6 +1190,7 @@
     "nl": "简体中文"
   },
   "showWidget": {
+    "zh-tw": "顯示小工具",
     "en": "Show widget",
     "de": "Widget anzeigen",
     "es": "Mostrar widget",
@@ -1118,6 +1204,7 @@
     "nl": "Widget tonen"
   },
   "temperature": {
+    "zh-tw": "溫度",
     "en": "Temperature",
     "de": "Temperatur",
     "es": "Temperatura",
@@ -1131,6 +1218,7 @@
     "nl": "Temperatuur"
   },
   "celsius": {
+    "zh-tw": "攝氏度",
     "en": "Celsius",
     "de": "Celsius",
     "es": "Celsius",
@@ -1144,6 +1232,7 @@
     "nl": "Celsius"
   },
   "fahrenheit": {
+    "zh-tw": "華氏度",
     "en": "Fahrenheit",
     "de": "Fahrenheit",
     "es": "Fahrenheit",
@@ -1157,6 +1246,7 @@
     "nl": "Fahrenheit"
   },
   "cityPostcode": {
+    "zh-tw": "城市或郵遞區號",
     "en": "City or postcode",
     "de": "Stadt oder Postleitzahl",
     "es": "Ciudad o código postal",
@@ -1170,6 +1260,7 @@
     "nl": "Plaats of postcode"
   },
   "searchLocations": {
+    "zh-tw": "搜尋地點",
     "en": "Search locations",
     "de": "Orte suchen",
     "es": "Buscar ubicaciones",
@@ -1183,6 +1274,7 @@
     "nl": "Locaties zoeken"
   },
   "removeWeatherLocation": {
+    "zh-tw": "移除天氣地點",
     "en": "Remove weather location",
     "de": "Wetterort entfernen",
     "es": "Eliminar ubicación del tiempo",
@@ -1196,6 +1288,7 @@
     "nl": "Weerlocatie verwijderen"
   },
   "enterCity": {
+    "zh-tw": "請輸入至少兩個字元的城市或郵遞區號。",
     "en": "Enter a city or postcode with at least two characters.",
     "de": "Gib mindestens zwei Zeichen für eine Stadt oder Postleitzahl ein.",
     "es": "Escribe una ciudad o un código postal con al menos dos caracteres.",
@@ -1209,6 +1302,7 @@
     "nl": "Voer een plaats of postcode in van minstens twee tekens."
   },
   "noLocations": {
+    "zh-tw": "找不到地點，請嘗試其他城市或郵遞區號。",
     "en": "No locations found. Try another city or postcode.",
     "de": "Keine Orte gefunden. Versuche eine andere Stadt oder Postleitzahl.",
     "es": "Sin resultados. Prueba con otra ciudad o código postal.",
@@ -1222,6 +1316,7 @@
     "nl": "Geen locaties gevonden. Probeer een andere plaats of postcode."
   },
   "searchUnavailable": {
+    "zh-tw": "無法搜尋地點。請檢查網路連線後重試。",
     "en": "Location search is unavailable. Check your connection and try again.",
     "de": "Die Ortssuche ist nicht verfügbar. Prüfe deine Verbindung und versuche es erneut.",
     "es": "Búsqueda no disponible. Revisa tu conexión e inténtalo de nuevo.",
@@ -1235,6 +1330,7 @@
     "nl": "Locaties zoeken is niet beschikbaar. Controleer je verbinding en probeer het opnieuw."
   },
   "findApp": {
+    "zh-tw": "搜尋應用程式",
     "en": "Find an app",
     "de": "App suchen",
     "es": "Buscar una app",
@@ -1248,6 +1344,7 @@
     "nl": "Zoek een app"
   },
   "clearCategory": {
+    "zh-tw": "清除分類篩選",
     "en": "Clear category filter",
     "de": "Kategoriefilter löschen",
     "es": "Borrar filtro de categoría",
@@ -1261,6 +1358,7 @@
     "nl": "Categoriefilter wissen"
   },
   "appCategories": {
+    "zh-tw": "應用程式分類",
     "en": "App categories",
     "de": "App-Kategorien",
     "es": "Categorías de apps",
@@ -1274,6 +1372,7 @@
     "nl": "App-categorieën"
   },
   "hidden": {
+    "zh-tw": "已隱藏（{count}）",
     "en": "Hidden ({count})",
     "de": "Ausgeblendet ({count})",
     "es": "Ocultas ({count})",
@@ -1287,6 +1386,7 @@
     "nl": "Verborgen ({count})"
   },
   "noMatches": {
+    "zh-tw": "這裡還沒有內容。",
     "en": "Nothing here. Yet.",
     "de": "Hier ist noch nichts.",
     "es": "Nada por aquí. Todavía.",
@@ -1300,6 +1400,7 @@
     "nl": "Nog niets hier."
   },
   "noHidden": {
+    "zh-tw": "沒有隱藏的應用程式。",
     "en": "No hidden apps.",
     "de": "Keine ausgeblendeten Apps.",
     "es": "No hay apps ocultas.",
@@ -1313,6 +1414,7 @@
     "nl": "Geen verborgen apps."
   },
   "roomForNew": {
+    "zh-tw": "這裡可以放入新的應用程式。",
     "en": "A little room for something new.",
     "de": "Hier ist Platz für etwas Neues.",
     "es": "Un hueco para algo nuevo.",
@@ -1326,6 +1428,7 @@
     "nl": "Een beetje ruimte voor iets nieuws."
   },
   "findingApps": {
+    "zh-tw": "正在尋找應用程式…",
     "en": "Finding your apps…",
     "de": "Apps werden gesucht…",
     "es": "Buscando tus apps…",
@@ -1339,6 +1442,7 @@
     "nl": "Je apps worden gezocht…"
   },
   "noCategoryApps": {
+    "zh-tw": "此分類中的應用程式會顯示在這裡。",
     "en": "Apps in this category will appear here.",
     "de": "Apps dieser Kategorie werden hier angezeigt.",
     "es": "Las apps de esta categoría aparecerán aquí.",
@@ -1352,6 +1456,7 @@
     "nl": "Apps in deze categorie verschijnen hier."
   },
   "hiddenHint": {
+    "zh-tw": "隱藏的應用程式會顯示在這裡。",
     "en": "Apps you hide will appear here.",
     "de": "Ausgeblendete Apps erscheinen hier.",
     "es": "Las apps que ocultes aparecerán aquí.",
@@ -1365,6 +1470,7 @@
     "nl": "Apps die je verbergt, verschijnen hier."
   },
   "noMatchesHint": {
+    "zh-tw": "沒有與「{query}」相符的應用程式。請嘗試其他名稱。",
     "en": "No apps match “{query}”. Try another name.",
     "de": "Keine Apps entsprechen „{query}“. Versuche einen anderen Namen.",
     "es": "Ninguna app coincide con “{query}”. Prueba con otro nombre.",
@@ -1378,6 +1484,7 @@
     "nl": "Geen apps gevonden voor “{query}”. Probeer een andere naam."
   },
   "greetingNight": {
+    "zh-tw": "稍等片刻。",
     "en": "One more moment.",
     "de": "Einen Moment noch.",
     "es": "Un momento más.",
@@ -1391,6 +1498,7 @@
     "nl": "Nog één momentje."
   },
   "morning": {
+    "zh-tw": "早安。",
     "en": "Good morning.",
     "de": "Guten Morgen.",
     "es": "Buenos días.",
@@ -1404,6 +1512,7 @@
     "nl": "Goedemorgen."
   },
   "afternoon": {
+    "zh-tw": "午安。",
     "en": "Good afternoon.",
     "de": "Guten Tag.",
     "es": "Buenas tardes.",
@@ -1417,6 +1526,7 @@
     "nl": "Goedemiddag."
   },
   "evening": {
+    "zh-tw": "晚安。",
     "en": "Good evening.",
     "de": "Guten Abend.",
     "es": "Buenas noches.",
@@ -1430,6 +1540,7 @@
     "nl": "Goedenavond."
   },
   "aLittleHelp": {
+    "zh-tw": "電視需要一點幫助。",
     "en": "A little help from your TV.",
     "de": "Ein wenig Hilfe von deinem Fernseher.",
     "es": "Una pequeña ayuda de tu tele.",
@@ -1443,6 +1554,7 @@
     "nl": "Een beetje hulp van je tv."
   },
   "makeFavorites": {
+    "zh-tw": "將喜歡的應用程式加入我的最愛。",
     "en": "Make room for your favorites.",
     "de": "Deine Favoriten verdienen einen Platz.",
     "es": "Haz sitio para tus favoritas.",
@@ -1456,6 +1568,7 @@
     "nl": "Maak ruimte voor je favorieten."
   },
   "pinHint": {
+    "zh-tw": "找到喜歡的應用程式，長按 OK 將它固定在這裡。",
     "en": "Find an app you love. Hold OK to pin it here.",
     "de": "Finde eine App und halte OK, um sie hier anzupinnen.",
     "es": "Encuentra una app que te guste. Mantén OK para fijarla aquí.",
@@ -1469,6 +1582,7 @@
     "nl": "Zoek een app die je mooi vindt. Houd OK ingedrukt om hem hier vast te zetten."
   },
   "exploreApps": {
+    "zh-tw": "瀏覽應用程式",
     "en": "Explore your apps",
     "de": "Apps entdecken",
     "es": "Explora tus apps",
@@ -1482,6 +1596,7 @@
     "nl": "Ontdek je apps"
   },
   "moveApps": {
+    "zh-tw": "移動應用程式",
     "en": "Move apps",
     "de": "Apps verschieben",
     "es": "Mover apps",
@@ -1495,6 +1610,7 @@
     "nl": "Apps verplaatsen"
   },
   "inputsHeading": {
+    "zh-tw": "輸入來源",
     "en": "Inputs",
     "de": "Eingänge",
     "es": "Entradas",
@@ -1508,6 +1624,7 @@
     "nl": "Ingangen"
   },
   "noInputs": {
+    "zh-tw": "沒有可用的輸入來源。",
     "en": "No inputs to show.",
     "de": "Keine Eingänge verfügbar.",
     "es": "No hay entradas que mostrar.",
@@ -1521,6 +1638,7 @@
     "nl": "Geen ingangen om te tonen."
   },
   "findingInputs": {
+    "zh-tw": "正在尋找輸入來源…",
     "en": "Finding your inputs…",
     "de": "Eingänge werden gesucht…",
     "es": "Buscando tus entradas…",
@@ -1534,6 +1652,7 @@
     "nl": "Je ingangen worden gezocht…"
   },
   "physicalInputs": {
+    "zh-tw": "電視的 HDMI 輸入來源會顯示在這裡。",
     "en": "Your TV’s physical HDMI inputs will appear here.",
     "de": "Die HDMI-Eingänge deines Fernsehers erscheinen hier.",
     "es": "Las entradas HDMI de tu tele aparecerán aquí.",
@@ -1547,6 +1666,7 @@
     "nl": "De fysieke HDMI-ingangen van je tv verschijnen hier."
   },
   "refreshInputs": {
+    "zh-tw": "重新整理輸入來源",
     "en": "Refresh inputs",
     "de": "Eingänge aktualisieren",
     "es": "Actualizar entradas",
@@ -1560,6 +1680,7 @@
     "nl": "Ingangen vernieuwen"
   },
   "retry": {
+    "zh-tw": "重試",
     "en": "Try again",
     "de": "Erneut versuchen",
     "es": "Reintentar",
@@ -1573,6 +1694,7 @@
     "nl": "Opnieuw proberen"
   },
   "open": {
+    "zh-tw": "開啟",
     "en": "Open",
     "de": "Öffnen",
     "es": "Abrir",
@@ -1586,6 +1708,7 @@
     "nl": "Openen"
   },
   "select": {
+    "zh-tw": "選取",
     "en": "Select",
     "de": "Auswählen",
     "es": "Seleccionar",
@@ -1599,6 +1722,7 @@
     "nl": "Selecteren"
   },
   "move": {
+    "zh-tw": "移動",
     "en": "Move",
     "de": "Verschieben",
     "es": "Mover",
@@ -1612,6 +1736,7 @@
     "nl": "Verplaatsen"
   },
   "done": {
+    "zh-tw": "完成",
     "en": "Done",
     "de": "Fertig",
     "es": "Listo",
@@ -1625,6 +1750,7 @@
     "nl": "Klaar"
   },
   "close": {
+    "zh-tw": "關閉",
     "en": "Close",
     "de": "Schließen",
     "es": "Cerrar",
@@ -1638,6 +1764,7 @@
     "nl": "Sluiten"
   },
   "homeLabel": {
+    "zh-tw": "主畫面",
     "en": "Home",
     "de": "Startseite",
     "es": "Inicio",
@@ -1651,6 +1778,7 @@
     "nl": "Startpagina"
   },
   "options": {
+    "zh-tw": "選項",
     "en": "Options",
     "de": "Optionen",
     "es": "Opciones",
@@ -1664,6 +1792,7 @@
     "nl": "Opties"
   },
   "deleteApp": {
+    "zh-tw": "刪除應用程式",
     "en": "Delete app",
     "de": "App löschen",
     "es": "Eliminar app",
@@ -1677,6 +1806,7 @@
     "nl": "App verwijderen"
   },
   "deleteAppWarning": {
+    "zh-tw": "這將從電視解除安裝「{app}」，並可能刪除其資料。此操作無法復原。",
     "en": "This will uninstall “{app}” from your TV and may delete its data. This cannot be undone.",
     "de": "„{app}“ wird vom Fernseher deinstalliert. Dabei können die App-Daten gelöscht werden. Dies kann nicht rückgängig gemacht werden.",
     "es": "Se desinstalará «{app}» del televisor y podrían eliminarse sus datos. Esta acción no se puede deshacer.",
@@ -1690,6 +1820,7 @@
     "nl": "Hiermee wordt “{app}” van je tv verwijderd en mogelijk ook de bijbehorende gegevens. Dit kan niet ongedaan worden gemaakt."
   },
   "cancel": {
+    "zh-tw": "取消",
     "en": "Cancel",
     "de": "Abbrechen",
     "es": "Cancelar",
@@ -1703,6 +1834,7 @@
     "nl": "Annuleren"
   },
   "deletingApp": {
+    "zh-tw": "正在刪除應用程式…",
     "en": "Deleting app…",
     "de": "App wird gelöscht…",
     "es": "Eliminando app…",
@@ -1716,6 +1848,7 @@
     "nl": "App wordt verwijderd…"
   },
   "deleteAppError": {
+    "zh-tw": "無法確認應用程式是否已刪除。重試前請重新整理應用程式清單。",
     "en": "Could not confirm app deletion. Refresh apps to check before trying again.",
     "de": "Das Löschen konnte nicht bestätigt werden. Aktualisiere die Apps vor einem erneuten Versuch.",
     "es": "No se pudo confirmar la eliminación. Actualiza las apps antes de volver a intentarlo.",
@@ -1729,6 +1862,7 @@
     "nl": "Het verwijderen kon niet worden bevestigd. Vernieuw de apps om dit te controleren voordat je het opnieuw probeert."
   },
   "appDeleted": {
+    "zh-tw": "應用程式已刪除。",
     "en": "App deleted.",
     "de": "App gelöscht.",
     "es": "App eliminada.",
@@ -1742,6 +1876,7 @@
     "nl": "App verwijderd."
   },
   "connected": {
+    "zh-tw": "已連線",
     "en": "Connected",
     "de": "Verbunden",
     "es": "Conectado",
@@ -1755,6 +1890,7 @@
     "nl": "Verbonden"
   },
   "noDevice": {
+    "zh-tw": "未連線裝置",
     "en": "No device connected",
     "de": "Kein Gerät verbunden",
     "es": "Ningún dispositivo conectado",
@@ -1768,6 +1904,7 @@
     "nl": "Geen apparaat verbonden"
   },
   "externalInput": {
+    "zh-tw": "外部輸入來源",
     "en": "External input",
     "de": "Externer Eingang",
     "es": "Entrada externa",
@@ -1781,6 +1918,7 @@
     "nl": "Externe ingang"
   },
   "addFavorite": {
+    "zh-tw": "加入我的最愛",
     "en": "Add favorite",
     "de": "Zu Favoriten hinzufügen",
     "es": "Añadir a favoritos",
@@ -1794,6 +1932,7 @@
     "nl": "Toevoegen aan favorieten"
   },
   "removeFavorite": {
+    "zh-tw": "從我的最愛中移除",
     "en": "Remove favorite",
     "de": "Aus Favoriten entfernen",
     "es": "Quitar de favoritos",
@@ -1807,6 +1946,7 @@
     "nl": "Verwijderen uit favorieten"
   },
   "hideApp": {
+    "zh-tw": "隱藏應用程式",
     "en": "Hide app",
     "de": "App ausblenden",
     "es": "Ocultar app",
@@ -1820,6 +1960,7 @@
     "nl": "App verbergen"
   },
   "showApp": {
+    "zh-tw": "顯示應用程式",
     "en": "Show app",
     "de": "App anzeigen",
     "es": "Mostrar app",
@@ -1833,6 +1974,7 @@
     "nl": "App tonen"
   },
   "favorite": {
+    "zh-tw": "我的最愛",
     "en": "Favorite",
     "de": "Favorit",
     "es": "Favorita",
@@ -1846,6 +1988,7 @@
     "nl": "Favoriet"
   },
   "tvSettings": {
+    "zh-tw": "電視設定",
     "en": "TV settings",
     "de": "TV-Einstellungen",
     "es": "Ajustes del televisor",
@@ -1859,6 +2002,7 @@
     "nl": "Tv-instellingen"
   },
   "loadingWeather": {
+    "zh-tw": "正在載入天氣…",
     "en": "Loading weather…",
     "de": "Wetter wird geladen…",
     "es": "Cargando el tiempo…",
@@ -1872,6 +2016,7 @@
     "nl": "Weer wordt geladen…"
   },
   "weatherUnavailable": {
+    "zh-tw": "無法取得天氣",
     "en": "Weather unavailable",
     "de": "Wetter nicht verfügbar",
     "es": "Tiempo no disponible",
@@ -1885,6 +2030,7 @@
     "nl": "Weer niet beschikbaar"
   },
   "setWeatherLocation": {
+    "zh-tw": "設定天氣地點",
     "en": "Set weather location",
     "de": "Wetterort festlegen",
     "es": "Fijar ubicación del tiempo",
@@ -1898,6 +2044,7 @@
     "nl": "Weerlocatie instellen"
   },
   "configureWeather": {
+    "zh-tw": "設定天氣地點",
     "en": "Configure weather location",
     "de": "Wetterort konfigurieren",
     "es": "Configurar ubicación del tiempo",
@@ -1911,6 +2058,7 @@
     "nl": "Weerlocatie configureren"
   },
   "weatherInLocation": {
+    "zh-tw": "{city}的天氣。設定天氣地點。",
     "en": "Weather in {city}. Configure weather location.",
     "de": "Wetter in {city}. Wetterort konfigurieren.",
     "es": "El tiempo en {city}. Configura la ubicación.",
@@ -1924,6 +2072,7 @@
     "nl": "Weer in {city}. Weerlocatie configureren."
   },
   "lastReading": {
+    "zh-tw": "上次儲存的資料",
     "en": "Last saved reading",
     "de": "Letzter gespeicherter Wert",
     "es": "Último dato guardado",
@@ -1937,6 +2086,7 @@
     "nl": "Laatst opgeslagen waarde"
   },
   "selectClose": {
+    "zh-tw": "選取",
     "en": "Select",
     "de": "Auswählen",
     "es": "Elegir",
@@ -1950,6 +2100,7 @@
     "nl": "Selecteren"
   },
   "closeDialog": {
+    "zh-tw": "關閉",
     "en": "Close",
     "de": "Schließen",
     "es": "Cerrar",
@@ -1963,6 +2114,7 @@
     "nl": "Sluiten"
   },
   "dismissNotification": {
+    "zh-tw": "關閉通知",
     "en": "Dismiss notification",
     "de": "Meldung schließen",
     "es": "Descartar aviso",
@@ -1976,6 +2128,7 @@
     "nl": "Melding sluiten"
   },
   "opening": {
+    "zh-tw": "正在開啟…",
     "en": "Opening…",
     "de": "Wird geöffnet…",
     "es": "Abriendo…",
@@ -1989,6 +2142,7 @@
     "nl": "Openen…"
   },
   "desktopPreview": {
+    "zh-tw": "桌面預覽 · {app}將在電視上開啟。",
     "en": "Desktop preview · {app} will open on your TV.",
     "de": "Desktop-Vorschau · {app} wird auf deinem Fernseher geöffnet.",
     "es": "Vista previa · {app} se abrirá en tu tele.",
@@ -2002,6 +2156,7 @@
     "nl": "Desktopvoorbeeld · {app} wordt geopend op je tv."
   },
   "favoriteRemoved": {
+    "zh-tw": "已從我的最愛中移除 {app}。",
     "en": "{app} removed from favorites.",
     "de": "{app} aus Favoriten entfernt.",
     "es": "{app} eliminada de favoritos.",
@@ -2015,6 +2170,7 @@
     "nl": "{app} verwijderd uit favorieten."
   },
   "favoriteAdded": {
+    "zh-tw": "已將 {app} 加入我的最愛。",
     "en": "{app} added to favorites.",
     "de": "{app} zu Favoriten hinzugefügt.",
     "es": "{app} añadida a favoritos.",
@@ -2028,6 +2184,7 @@
     "nl": "{app} toegevoegd aan favorieten."
   },
   "appRestored": {
+    "zh-tw": "{app}已恢復到應用程式庫。",
     "en": "{app} is back in your library.",
     "de": "{app} ist wieder in deiner Bibliothek.",
     "es": "{app} vuelve a estar en tu biblioteca.",
@@ -2041,6 +2198,7 @@
     "nl": "{app} staat weer in je bibliotheek."
   },
   "appHidden": {
+    "zh-tw": "已隱藏 {app}。你可以在「應用程式」中恢復。",
     "en": "{app} hidden. You can restore it from Apps.",
     "de": "{app} ausgeblendet. Du kannst sie unter Apps wiederherstellen.",
     "es": "{app} oculta. Puedes recuperarla en Aplicaciones.",
@@ -2054,6 +2212,7 @@
     "nl": "{app} verborgen. Je kunt de app herstellen via Apps."
   },
   "refreshNotice": {
+    "zh-tw": "正在重新整理應用程式和輸入來源…",
     "en": "Refreshing your apps and inputs…",
     "de": "Apps und Eingänge werden aktualisiert…",
     "es": "Actualizando tus apps y entradas…",
@@ -2067,6 +2226,7 @@
     "nl": "Je apps en ingangen worden vernieuwd…"
   },
   "savedError": {
+    "zh-tw": "無法儲存變更。",
     "en": "Your changes couldn’t be saved.",
     "de": "Änderungen konnten nicht gespeichert werden.",
     "es": "No se pudieron guardar los cambios.",
@@ -2080,6 +2240,7 @@
     "nl": "Je wijzigingen konden niet worden opgeslagen."
   },
   "tvUnreachable": {
+    "zh-tw": "無法連線至電視。",
     "en": "Your TV couldn’t be reached.",
     "de": "Der Fernseher ist nicht erreichbar.",
     "es": "No se puede conectar con tu tele.",
@@ -2093,6 +2254,7 @@
     "nl": "Je tv is niet bereikbaar."
   },
   "appOpenError": {
+    "zh-tw": "無法開啟此應用程式。",
     "en": "This app couldn’t be opened.",
     "de": "Diese App konnte nicht geöffnet werden.",
     "es": "No se pudo abrir esta app.",
@@ -2106,6 +2268,7 @@
     "nl": "Deze app kon niet worden geopend."
   },
   "dismissSearch": {
+    "zh-tw": "清除搜尋",
     "en": "Clear search",
     "de": "Suche löschen",
     "es": "Borrar búsqueda",
@@ -2119,6 +2282,7 @@
     "nl": "Zoekopdracht wissen"
   },
   "languageMenu": {
+    "zh-tw": "顯示語言",
     "en": "Language",
     "de": "Anzeigesprache",
     "es": "Idioma",
@@ -2132,6 +2296,7 @@
     "nl": "Taal"
   },
   "slate": {
+    "zh-tw": "石板",
     "en": "Slate",
     "de": "Schiefer",
     "es": "Pizarra",
@@ -2145,6 +2310,7 @@
     "nl": "Leisteen"
   },
   "midnight": {
+    "zh-tw": "午夜",
     "en": "Midnight",
     "de": "Mitternacht",
     "es": "Medianoche",
@@ -2158,6 +2324,7 @@
     "nl": "Middernacht"
   },
   "prism": {
+    "zh-tw": "稜鏡",
     "en": "Prism",
     "de": "Prisma",
     "es": "Prisma",
@@ -2171,6 +2338,7 @@
     "nl": "Prisma"
   },
   "monumentValley": {
+    "zh-tw": "紀念碑谷",
     "en": "Monument Valley",
     "de": "Monument Valley",
     "es": "Monument Valley",
@@ -2184,6 +2352,7 @@
     "nl": "Monument Valley"
   },
   "sanFrancisco": {
+    "zh-tw": "舊金山",
     "en": "San Francisco",
     "de": "San Francisco",
     "es": "San Francisco",
@@ -2197,6 +2366,7 @@
     "nl": "San Francisco"
   },
   "summit": {
+    "zh-tw": "山巔",
     "en": "Summit",
     "de": "Gipfel",
     "es": "Cumbre",
@@ -2210,6 +2380,7 @@
     "nl": "Bergtop"
   },
   "forest": {
+    "zh-tw": "森林",
     "en": "Forest",
     "de": "Wald",
     "es": "Bosque",
@@ -2223,6 +2394,7 @@
     "nl": "Bos"
   },
   "yosemite": {
+    "zh-tw": "優勝美地",
     "en": "Yosemite",
     "de": "Yosemite",
     "es": "Yosemite",
@@ -2236,6 +2408,7 @@
     "nl": "Yosemite"
   },
   "northernLights": {
+    "zh-tw": "北極光",
     "en": "Northern lights",
     "de": "Nordlichter",
     "es": "Auroras boreales",
@@ -2249,6 +2422,7 @@
     "nl": "Noorderlicht"
   },
   "liveTV": {
+    "zh-tw": "電視直播",
     "en": "Live TV",
     "de": "Live-TV",
     "es": "TV en directo",
@@ -2262,6 +2436,7 @@
     "nl": "Live-tv"
   },
   "homebrew": {
+    "zh-tw": "Homebrew Channel",
     "en": "Homebrew",
     "de": "Homebrew",
     "es": "Homebrew",
@@ -2275,6 +2450,7 @@
     "nl": "Homebrew"
   },
   "browser": {
+    "zh-tw": "瀏覽器",
     "en": "Browser",
     "de": "Browser",
     "es": "Navegador",
@@ -2288,6 +2464,7 @@
     "nl": "Browser"
   },
   "categoryStreaming": {
+    "zh-tw": "串流影音",
     "en": "Streaming",
     "de": "Streaming",
     "es": "Streaming",
@@ -2301,6 +2478,7 @@
     "nl": "Streaming"
   },
   "categoryMusic": {
+    "zh-tw": "音樂",
     "en": "Music",
     "de": "Musik",
     "es": "Música",
@@ -2314,6 +2492,7 @@
     "nl": "Muziek"
   },
   "categoryGaming": {
+    "zh-tw": "遊戲",
     "en": "Gaming",
     "de": "Spiele",
     "es": "Juegos",
@@ -2327,6 +2506,7 @@
     "nl": "Games"
   },
   "categoryUtilities": {
+    "zh-tw": "工具",
     "en": "Utilities",
     "de": "Werkzeuge",
     "es": "Utilidades",
@@ -2340,6 +2520,7 @@
     "nl": "Hulpmiddelen"
   },
   "clearSkies": {
+    "zh-tw": "晴朗",
     "en": "Clear skies",
     "de": "Klarer Himmel",
     "es": "Despejado",
@@ -2353,6 +2534,7 @@
     "nl": "Heldere hemel"
   },
   "clearNight": {
+    "zh-tw": "晴朗的夜晚",
     "en": "Clear night",
     "de": "Klare Nacht",
     "es": "Noche despejada",
@@ -2366,6 +2548,7 @@
     "nl": "Heldere nacht"
   },
   "mostlyClear": {
+    "zh-tw": "大致晴朗",
     "en": "Mostly clear",
     "de": "Überwiegend klar",
     "es": "Casi despejado",
@@ -2379,6 +2562,7 @@
     "nl": "Overwegend helder"
   },
   "partlyCloudy": {
+    "zh-tw": "局部多雲",
     "en": "Partly cloudy",
     "de": "Teilweise bewölkt",
     "es": "Parcialmente nublado",
@@ -2392,6 +2576,7 @@
     "nl": "Half bewolkt"
   },
   "overcast": {
+    "zh-tw": "陰天",
     "en": "Overcast",
     "de": "Bedeckt",
     "es": "Cubierto",
@@ -2405,6 +2590,7 @@
     "nl": "Bewolkt"
   },
   "fog": {
+    "zh-tw": "霧",
     "en": "Fog",
     "de": "Nebel",
     "es": "Niebla",
@@ -2418,6 +2604,7 @@
     "nl": "Mist"
   },
   "drizzle": {
+    "zh-tw": "毛毛雨",
     "en": "Drizzle",
     "de": "Nieselregen",
     "es": "Llovizna",
@@ -2431,6 +2618,7 @@
     "nl": "Motregen"
   },
   "rain": {
+    "zh-tw": "雨",
     "en": "Rain",
     "de": "Regen",
     "es": "Lluvia",
@@ -2444,6 +2632,7 @@
     "nl": "Regen"
   },
   "snow": {
+    "zh-tw": "雪",
     "en": "Snow",
     "de": "Schnee",
     "es": "Nieve",
@@ -2457,6 +2646,7 @@
     "nl": "Sneeuw"
   },
   "thunderstorms": {
+    "zh-tw": "雷雨",
     "en": "Thunderstorms",
     "de": "Gewitter",
     "es": "Tormentas",
@@ -2470,6 +2660,7 @@
     "nl": "Onweer"
   },
   "currentWeather": {
+    "zh-tw": "目前天氣",
     "en": "Current weather",
     "de": "Aktuelles Wetter",
     "es": "Tiempo actual",
@@ -2483,6 +2674,7 @@
     "nl": "Huidig weer"
   },
   "searching": {
+    "zh-tw": "正在搜尋…",
     "en": "Searching…",
     "de": "Suche läuft…",
     "es": "Buscando…",
@@ -2496,6 +2688,7 @@
     "nl": "Zoeken…"
   },
   "space": {
+    "zh-tw": "空格",
     "en": "Space",
     "de": "Leerzeichen",
     "es": "Espacio",
@@ -2509,6 +2702,7 @@
     "nl": "Spatie"
   },
   "delete": {
+    "zh-tw": "刪除",
     "en": "Delete",
     "de": "Löschen",
     "es": "Eliminar",
@@ -2522,6 +2716,7 @@
     "nl": "Wissen"
   },
   "clear": {
+    "zh-tw": "清除",
     "en": "Clear",
     "de": "Leeren",
     "es": "Borrar",
@@ -2535,6 +2730,7 @@
     "nl": "Leegmaken"
   },
   "hiddenLabel": {
+    "zh-tw": "已隱藏",
     "en": "Hidden",
     "de": "Ausgeblendet",
     "es": "Oculta",
@@ -2548,6 +2744,7 @@
     "nl": "Verborgen"
   },
   "scrollTestApp": {
+    "zh-tw": "捲動測試",
     "en": "Scroll test",
     "de": "Scroll-Test",
     "es": "Prueba de desplazamiento",
@@ -2561,6 +2758,7 @@
     "nl": "Scrolltest"
   },
   "scrollTestOnly": {
+    "zh-tw": "捲動測試卡片，沒有可啟動的應用程式。",
     "en": "Test card for scrolling; no app to launch.",
     "de": "Testkarte zum Scrollen; keine App zum Öffnen.",
     "es": "Tarjeta de prueba; no hay app que abrir.",
@@ -2574,6 +2772,7 @@
     "nl": "Testkaart om te scrollen; er is geen app om te starten."
   },
   "shortcuts": {
+    "zh-tw": "捷徑",
     "en": "Shortcuts",
     "de": "Kurzbefehle",
     "es": "Accesos directos",
@@ -2587,6 +2786,7 @@
     "nl": "Snelkoppelingen"
   },
   "noTiles": {
+    "zh-tw": "主畫面上的捷徑會傳送網路請求，例如傳送到 Home Assistant webhook。",
     "en": "Shortcut tiles on Home send a web request, for example to a Home Assistant webhook.",
     "de": "Kurzbefehl-Kacheln auf Start senden eine Webanfrage, zum Beispiel an einen Home-Assistant-Webhook.",
     "es": "Los accesos directos en Inicio envían una solicitud web, por ejemplo a un webhook de Home Assistant.",
@@ -2600,6 +2800,7 @@
     "nl": "Snelkoppelingen op Start sturen een webverzoek, bijvoorbeeld naar een Home Assistant-webhook."
   },
   "addTile": {
+    "zh-tw": "新增捷徑",
     "en": "Add shortcut",
     "de": "Kurzbefehl hinzufügen",
     "es": "Añadir acceso directo",
@@ -2613,6 +2814,7 @@
     "nl": "Snelkoppeling toevoegen"
   },
   "newTile": {
+    "zh-tw": "新捷徑",
     "en": "New shortcut",
     "de": "Neuer Kurzbefehl",
     "es": "Nuevo acceso directo",
@@ -2626,6 +2828,7 @@
     "nl": "Nieuwe snelkoppeling"
   },
   "tileName": {
+    "zh-tw": "捷徑名稱",
     "en": "Shortcut name",
     "de": "Name des Kurzbefehls",
     "es": "Nombre del acceso directo",
@@ -2639,6 +2842,7 @@
     "nl": "Naam van snelkoppeling"
   },
   "tileNameHint": {
+    "zh-tw": "顯示在卡片上",
     "en": "Shown on the tile",
     "de": "Wird auf der Kachel angezeigt",
     "es": "Se muestra en el mosaico",
@@ -2652,6 +2856,7 @@
     "nl": "Wordt op de tegel getoond"
   },
   "url": {
+    "zh-tw": "網址",
     "en": "URL",
     "de": "URL",
     "es": "URL",
@@ -2665,6 +2870,7 @@
     "nl": "URL"
   },
   "tileUrl": {
+    "zh-tw": "網址 (URL)",
     "en": "Web address (URL)",
     "de": "Webadresse (URL)",
     "es": "Dirección web (URL)",
@@ -2678,6 +2884,7 @@
     "nl": "Webadres (URL)"
   },
   "tileUrlHint": {
+    "zh-tw": "不含 http:// 的網址，例如 homeassistant.local:8123/api/webhook/…",
     "en": "Address without http://, e.g. homeassistant.local:8123/api/webhook/…",
     "de": "Adresse ohne http://, z. B. homeassistant.local:8123/api/webhook/…",
     "es": "Dirección sin http://, p. ej. homeassistant.local:8123/api/webhook/…",
@@ -2691,6 +2898,7 @@
     "nl": "Adres zonder http://, bijv. homeassistant.local:8123/api/webhook/…"
   },
   "icon": {
+    "zh-tw": "圖示",
     "en": "Icon",
     "de": "Symbol",
     "es": "Icono",
@@ -2704,6 +2912,7 @@
     "nl": "Pictogram"
   },
   "iconMoon": {
+    "zh-tw": "月亮",
     "en": "Moon",
     "de": "Mond",
     "es": "Luna",
@@ -2717,6 +2926,7 @@
     "nl": "Maan"
   },
   "iconSun": {
+    "zh-tw": "太陽",
     "en": "Sun",
     "de": "Sonne",
     "es": "Sol",
@@ -2730,6 +2940,7 @@
     "nl": "Zon"
   },
   "iconCloud": {
+    "zh-tw": "雲",
     "en": "Cloud",
     "de": "Wolke",
     "es": "Nube",
@@ -2743,6 +2954,7 @@
     "nl": "Wolk"
   },
   "iconTv": {
+    "zh-tw": "電視",
     "en": "TV",
     "de": "Fernseher",
     "es": "Televisor",
@@ -2756,6 +2968,7 @@
     "nl": "Tv"
   },
   "iconPower": {
+    "zh-tw": "電源",
     "en": "Power",
     "de": "Ein/Aus",
     "es": "Encendido",
@@ -2769,6 +2982,7 @@
     "nl": "Aan/uit"
   },
   "iconGlobe": {
+    "zh-tw": "地球",
     "en": "Globe",
     "de": "Globus",
     "es": "Globo",
@@ -2782,6 +2996,7 @@
     "nl": "Wereldbol"
   },
   "iconClock": {
+    "zh-tw": "時鐘",
     "en": "Clock",
     "de": "Uhr",
     "es": "Reloj",
@@ -2795,6 +3010,7 @@
     "nl": "Klok"
   },
   "iconCoffee": {
+    "zh-tw": "咖啡",
     "en": "Coffee",
     "de": "Kaffee",
     "es": "Café",
@@ -2808,6 +3024,7 @@
     "nl": "Koffie"
   },
   "iconGaming": {
+    "zh-tw": "遊戲控制器",
     "en": "Controller",
     "de": "Controller",
     "es": "Mando",
@@ -2821,6 +3038,7 @@
     "nl": "Controller"
   },
   "iconHeart": {
+    "zh-tw": "愛心",
     "en": "Heart",
     "de": "Herz",
     "es": "Corazón",
@@ -2834,6 +3052,7 @@
     "nl": "Hart"
   },
   "iconLocation": {
+    "zh-tw": "位置",
     "en": "Location",
     "de": "Ort",
     "es": "Ubicación",
@@ -2847,6 +3066,7 @@
     "nl": "Locatie"
   },
   "iconThermometer": {
+    "zh-tw": "溫度計",
     "en": "Thermometer",
     "de": "Thermometer",
     "es": "Termómetro",
@@ -2860,6 +3080,7 @@
     "nl": "Thermometer"
   },
   "iconSparkles": {
+    "zh-tw": "閃光",
     "en": "Sparkles",
     "de": "Funkeln",
     "es": "Destellos",
@@ -2873,6 +3094,7 @@
     "nl": "Sterretjes"
   },
   "iconAlert": {
+    "zh-tw": "提醒",
     "en": "Alert",
     "de": "Hinweis",
     "es": "Alerta",
@@ -2886,6 +3108,7 @@
     "nl": "Melding"
   },
   "iconEye": {
+    "zh-tw": "眼睛",
     "en": "Eye",
     "de": "Auge",
     "es": "Ojo",
@@ -2899,6 +3122,7 @@
     "nl": "Oog"
   },
   "protocol": {
+    "zh-tw": "通訊協定",
     "en": "Protocol",
     "de": "Protokoll",
     "es": "Protocolo",
@@ -2912,6 +3136,7 @@
     "nl": "Protocol"
   },
   "requestMethod": {
+    "zh-tw": "請求方法",
     "en": "Request method",
     "de": "Anfragemethode",
     "es": "Método de solicitud",
@@ -2925,6 +3150,7 @@
     "nl": "Verzoekmethode"
   },
   "sendNow": {
+    "zh-tw": "立即傳送",
     "en": "Send now",
     "de": "Jetzt senden",
     "es": "Enviar ahora",
@@ -2938,6 +3164,7 @@
     "nl": "Nu verzenden"
   },
   "removeTile": {
+    "zh-tw": "移除捷徑",
     "en": "Remove shortcut",
     "de": "Kurzbefehl entfernen",
     "es": "Eliminar acceso directo",
@@ -2951,6 +3178,7 @@
     "nl": "Snelkoppeling verwijderen"
   },
   "tileAdded": {
+    "zh-tw": "已將 {tile} 新增到主畫面。",
     "en": "{tile} added to Home.",
     "de": "{tile} zu Start hinzugefügt.",
     "es": "{tile} añadido a Inicio.",
@@ -2964,6 +3192,7 @@
     "nl": "{tile} toegevoegd aan Start."
   },
   "tileRemoved": {
+    "zh-tw": "已移除 {tile}。",
     "en": "{tile} removed.",
     "de": "{tile} entfernt.",
     "es": "{tile} eliminado.",
@@ -2977,6 +3206,7 @@
     "nl": "{tile} verwijderd."
   },
   "tileSending": {
+    "zh-tw": "正在傳送 {tile}…",
     "en": "Sending {tile}…",
     "de": "{tile} wird gesendet…",
     "es": "Enviando {tile}…",
@@ -2990,6 +3220,7 @@
     "nl": "{tile} wordt verzonden…"
   },
   "tileSent": {
+    "zh-tw": "{tile} 已傳送。",
     "en": "{tile} sent.",
     "de": "{tile} gesendet.",
     "es": "{tile} enviado.",
@@ -3003,6 +3234,7 @@
     "nl": "{tile} verzonden."
   },
   "tileFailed": {
+    "zh-tw": "無法傳送 {tile}。",
     "en": "{tile} couldn’t be sent.",
     "de": "{tile} konnte nicht gesendet werden.",
     "es": "No se pudo enviar {tile}.",
@@ -3016,6 +3248,7 @@
     "nl": "{tile} kon niet worden verzonden."
   },
   "tileUrlInvalid": {
+    "zh-tw": "請輸入包含主機名稱的有效 http:// 或 https:// 網址。",
     "en": "Enter a valid http:// or https:// address with a host name.",
     "de": "Gib eine gültige http://- oder https://-Adresse mit Hostnamen ein.",
     "es": "Introduce una dirección http:// o https:// válida con un nombre de host.",
@@ -3029,6 +3262,7 @@
     "nl": "Voer een geldig http://- of https://-adres met een hostnaam in."
   },
   "tileIncomplete": {
+    "zh-tw": "請先填寫名稱和網址。",
     "en": "Add a name and a URL first.",
     "de": "Gib zuerst einen Namen und eine URL ein.",
     "es": "Primero añade un nombre y una URL.",
@@ -3042,6 +3276,7 @@
     "nl": "Voeg eerst een naam en een URL toe."
   },
   "tileLimit": {
+    "zh-tw": "無法再新增更多捷徑。",
     "en": "No more shortcuts can be added.",
     "de": "Es können keine weiteren Kurzbefehle hinzugefügt werden.",
     "es": "No se pueden añadir más accesos directos.",
@@ -3055,6 +3290,7 @@
     "nl": "Er kunnen geen snelkoppelingen meer worden toegevoegd."
   },
   "editTilesElsewhere": {
+    "zh-tw": "在手機或電腦上編輯",
     "en": "Edit on phone or computer",
     "de": "Am Handy oder Computer bearbeiten",
     "zh": "在手机或电脑上编辑",
@@ -3068,6 +3304,7 @@
     "nl": "Bewerken op telefoon of computer"
   },
   "editTilesElsewhereHint": {
+    "zh-tw": "在那裡輸入名稱和網址，無需使用遙控器",
     "en": "Type names and addresses there instead of with the remote",
     "de": "Namen und Adressen dort tippen statt mit der Fernbedienung",
     "zh": "在那里输入名称和地址，无需使用遥控器",
@@ -3081,6 +3318,7 @@
     "nl": "Typ daar namen en adressen in plaats van met de afstandsbediening"
   },
   "tileEditorKeepOpen": {
+    "zh-tw": "編輯時請保持此視窗開啟。請使用連線到同一網路的裝置。",
     "en": "Keep this window open while you edit. Use a device on the same network.",
     "de": "Lass dieses Fenster beim Bearbeiten geöffnet. Nutze ein Gerät im selben Netzwerk.",
     "zh": "编辑时请保持此窗口打开。请使用连接到同一网络的设备。",
@@ -3094,6 +3332,7 @@
     "nl": "Houd dit venster open terwijl je bewerkt. Gebruik een apparaat op hetzelfde netwerk."
   },
   "tileEditorPrivate": {
+    "zh-tw": "區域網路編輯 · 連結將在 10 分鐘後失效",
     "en": "Local editing · This link expires in 10 minutes",
     "de": "Lokale Bearbeitung · Dieser Link läuft in 10 Minuten ab",
     "zh": "本地编辑 · 链接将在 10 分钟后失效",
@@ -3107,6 +3346,7 @@
     "nl": "Lokaal bewerken · Deze link verloopt over 10 minuten"
   },
   "tileEditorError": {
+    "zh-tw": "無法啟動區域網路編輯。請檢查網路連線，然後關閉並重新開啟此對話框。",
     "en": "Couldn’t start local editing. Check your network connection, then close and reopen this dialog.",
     "de": "Lokale Bearbeitung konnte nicht gestartet werden. Prüfe die Netzwerkverbindung und öffne diesen Dialog erneut.",
     "zh": "无法启动本地编辑。请检查网络连接，然后关闭并重新打开此对话框。",
@@ -3120,6 +3360,7 @@
     "nl": "Kan lokaal bewerken niet starten. Controleer je netwerkverbinding en sluit en heropen dit venster."
   },
   "tileEditorStarting": {
+    "zh-tw": "正在準備編輯連結…",
     "en": "Preparing your editing link…",
     "de": "Bearbeitungslink wird vorbereitet…",
     "zh": "正在准备编辑链接…",
@@ -3133,6 +3374,7 @@
     "nl": "Bewerkingslink voorbereiden…"
   },
   "tileEditorEnded": {
+    "zh-tw": "編輯工作階段已結束",
     "en": "Editing session ended",
     "de": "Bearbeitungssitzung beendet",
     "zh": "编辑会话已结束",

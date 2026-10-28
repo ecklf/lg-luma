@@ -337,6 +337,42 @@ try {
   assert.equal(vietnameseSearch.query.language, 'vi', 'Geocoding must use the Vietnamese locale');
   assert.equal(vietnameseSearch.query.name, 'Viên', 'Accented queries must round-trip unchanged');
   await scenario('vi-4k', 'home,down', ['--capture-scale', '2']);
+  await fs.writeFile(
+    preferences,
+    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
+  );
+  const traditionalPicker = `${picker},${Array(10).fill('down').join(',')}`;
+  const traditionalFocused = await scenario('zh-tw-picker', traditionalPicker);
+  assert.deepEqual(traditionalFocused.focus, { Choice: 11 });
+  assert.ok(traditionalFocused.scroll > 0);
+  assert.ok(traditionalFocused.ui_text.includes('繁體中文'));
+  const traditional = await scenario('zh-tw-home', `${traditionalPicker},enter,home,down`);
+  assert.equal(traditional.preferences.language, 'zh-tw');
+  for (const key of [
+    'home',
+    'apps',
+    'settings',
+    'favorites',
+    'inputsHeading',
+    'evening',
+    'setWeatherLocation',
+  ])
+    contains(traditional, key, 'zh-tw');
+  assert.ok(traditional.ui_text.includes('10月21日星期三'));
+  assert.ok(traditional.ui_text.includes('Netflix'));
+  const traditionalSettings = await scenario('zh-tw-settings', 'settings,down');
+  assert.equal(traditionalSettings.preferences.language, 'zh-tw');
+  for (const key of ['language', 'appNames', 'clock']) contains(traditionalSettings, key, 'zh-tw');
+  const traditionalWeather = await scenario(
+    'zh-tw-weather',
+    `${location},type:Vienna,back,enter,await-search,down,enter,home,await-weather`,
+  );
+  contains(traditionalWeather, 'partlyCloudy', 'zh-tw');
+  assert.equal(
+    requests.filter((request) => request.path === '/v1/search').at(-1).query.language,
+    'zh',
+  );
+  await scenario('zh-tw-4k', 'home,down', ['--capture-scale', '2']);
   console.log(
     'Native translation checks passed: saved language selection, shared labels, Portuguese and Vietnamese locale formatting and accented glyphs, Vietnamese deletion/cancel UI, localized geocoding/weather, unchanged app names, Chinese glyphs and 4K rendering.',
   );

@@ -1,4 +1,4 @@
-//! Bundled English, German, Spanish, Chinese, Brazilian Portuguese, Italian, Russian, Polish, French, Vietnamese and Dutch message catalog.
+//! Bundled translations, including Simplified and Traditional Chinese.
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::BTreeMap, sync::OnceLock};
 use time::OffsetDateTime;
@@ -19,6 +19,8 @@ pub enum Language {
     En,
     De,
     Zh,
+    #[serde(rename = "zh-tw", alias = "zh-TW", alias = "zh-Hant")]
+    ZhTw,
     Es,
     Pt,
     It,
@@ -29,7 +31,7 @@ pub enum Language {
     Nl,
 }
 impl Language {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::De,
         Self::En,
         Self::Es,
@@ -41,12 +43,14 @@ impl Language {
         Self::Vi,
         Self::Ru,
         Self::Zh,
+        Self::ZhTw,
     ];
     pub fn code(self) -> &'static str {
         match self {
             Self::En => "en",
             Self::De => "de",
             Self::Zh => "zh",
+            Self::ZhTw => "zh-tw",
             Self::Es => "es",
             Self::Pt => "pt",
             Self::It => "it",
@@ -62,6 +66,7 @@ impl Language {
             Self::En => "English",
             Self::De => "Deutsch",
             Self::Zh => "简体中文",
+            Self::ZhTw => "繁體中文",
             Self::Es => "Español",
             Self::Pt => "Português (Brasil)",
             Self::It => "Italiano",
@@ -77,6 +82,14 @@ impl Language {
             .iter()
             .position(|language| *language == self)
             .unwrap()
+    }
+    /// Open-Meteo geocoding exposes one Chinese locale, not a script-specific variant.
+    pub fn geocoding_code(self) -> &'static str {
+        if self == Self::ZhTw {
+            "zh"
+        } else {
+            self.code()
+        }
     }
     pub fn t(self, key: &str) -> &str {
         messages()
@@ -175,7 +188,7 @@ impl Language {
                 ][month]
             )
             .to_uppercase(),
-            Self::Zh => format!(
+            Self::Zh | Self::ZhTw => format!(
                 "{}月{}日星期{}",
                 now.month() as u8,
                 now.day(),
@@ -427,7 +440,7 @@ impl Language {
             0 => 12,
             value => value,
         };
-        if self == Self::Zh {
+        if matches!(self, Self::Zh | Self::ZhTw) {
             format!(
                 "{}{hour}:{:02}",
                 if now.hour() >= 12 { "下午" } else { "上午" },
@@ -449,6 +462,7 @@ pub fn deserialize_language<'de, D: Deserializer<'de>>(
         match serde_json::Value::deserialize(deserializer)?.as_str() {
             Some("de") => Language::De,
             Some("zh") => Language::Zh,
+            Some("zh-tw" | "zh-TW" | "zh-Hant") => Language::ZhTw,
             Some("es") => Language::Es,
             Some("pt") => Language::Pt,
             Some("it") => Language::It,
@@ -465,13 +479,64 @@ pub fn deserialize_language<'de, D: Deserializer<'de>>(
 #[cfg(test)]
 mod tests {
     #[test]
+    fn traditional_chinese_follows_simplified_and_preserves_locale_preferences() {
+        use super::Language;
+        assert_eq!(Language::ALL[Language::Zh.index() + 1], Language::ZhTw);
+        assert_eq!(Language::ZhTw.name(), "繁體中文");
+        assert_eq!(Language::ZhTw.code(), "zh-tw");
+        assert_eq!(Language::ZhTw.geocoding_code(), "zh");
+        for code in ["zh-tw", "zh-TW", "zh-Hant"] {
+            let preferences: crate::model::Preferences =
+                serde_json::from_value(serde_json::json!({"language": code})).unwrap();
+            assert_eq!(preferences.language, Language::ZhTw);
+            assert_eq!(
+                serde_json::to_value(&preferences).unwrap()["language"],
+                "zh-tw"
+            );
+        }
+        let now = time::OffsetDateTime::parse(
+            "2026-10-21T20:41:00Z",
+            &time::format_description::well_known::Rfc3339,
+        )
+        .unwrap();
+        assert_eq!(Language::ZhTw.date(now), "10月21日星期三");
+        assert_eq!(Language::ZhTw.clock(now, false, false), "下午8:41");
+        assert_eq!(Language::ZhTw.clock(now, false, true), "下午8:41:00");
+        assert_eq!(Language::ZhTw.greeting(20, "小明"), "小明，晚安。");
+    }
+
+    #[test]
+    fn bundled_cjk_font_covers_every_traditional_chinese_message() {
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/assets/fonts/noto-sans-sc.ttf"
+        ))
+        .unwrap();
+        let font = crate::font::Font::from_bytes(bytes).unwrap();
+        let extra = "繁體中文一二三四五六日月星期上午下午";
+        for character in super::messages()
+            .values()
+            .flat_map(|entry| entry["zh-tw"].chars())
+            .chain(extra.chars())
+        {
+            if ('\u{3000}'..='\u{9fff}').contains(&character) {
+                assert_ne!(
+                    font.lookup_glyph_index(character),
+                    0,
+                    "Missing Traditional Chinese glyph {character}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn homebrew_description_lists_every_supported_language() {
         let description = include_str!("../assets/homebrew-description.html");
         for language in super::Language::ALL {
             let name = match language {
                 super::Language::En => "English",
                 super::Language::De => "German",
-                super::Language::Zh => "Simplified Chinese",
+                super::Language::Zh | super::Language::ZhTw => "Simplified / Traditional Chinese",
                 super::Language::Es => "Spanish",
                 super::Language::Pt => "Portuguese (Brazil)",
                 super::Language::It => "Italian",
