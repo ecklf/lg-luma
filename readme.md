@@ -247,6 +247,12 @@ Press **Back** on Home, or hold **Back** for 0.6 seconds from any page, to open 
 
 These shortcuts work while Luma is focused. From another app, return to Luma first.
 
+### Shortcut tiles
+
+Shortcut tiles sit on Home like apps but send a web request when selected, for example to a Home
+Assistant webhook. Open **Settings → Widgets → Shortcuts → Configure** and scan
+the QR code.
+
 ## Development
 
 ### Setup & Building
@@ -314,29 +320,6 @@ See [Releases](development.md#releases) for the workflow and repository setup.
 **Settings → Widgets → Date** lets you show or hide the date and choose the localized display,
 `DD.MM.YYYY`, `MM/DD/YYYY`, or `YYYY-MM-DD`. Hiding the greeting moves weather directly below
 the date; hiding the date also removes its reserved space. Favorites stay in place.
-
-## Shortcut tiles
-
-Shortcut tiles sit on Home like apps but send a web request when selected, for example to a Home
-Assistant webhook. Open **Settings → Widgets → Shortcuts → Configure** and scan
-the QR code. Creation and editing happen on that page, which also tests and removes shortcuts.
-On the TV, select a saved shortcut in Settings to test or remove it from its popup. Changes appear
-on the TV as soon as they are saved. Like the wallpaper upload, its link works only while the TV
-dialog is open and focused,
-for at most ten minutes, over unencrypted HTTP on your local network.
-
-## Privacy and scope
-
-App/input discovery uses fixed inventory commands through Homebrew Channel's elevated service.
-App launches use the native Luna bus with declared permissions. There is no demo inventory
-fallback on the TV. Native caller permissions and lifecycle behavior can differ by firmware.
-
-Favorites, hidden apps, settings, weather location and cached readings stay in local JSON files
-in an app-owned persistent directory outside the installed payload.
-Weather search/forecast requests go to Open-Meteo, with embedded TLS roots and bounded responses.
-Shortcut tiles send one bodiless GET or POST to the URL configured through the companion page, only
-when selected, with no proxy or redirects; the response is not read.
-There is no browser geolocation, IP-based location lookup, telemetry or runtime font download.
 
 ## License
 
