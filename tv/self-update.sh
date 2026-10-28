@@ -83,20 +83,25 @@ launch() {
   printf '%s\n' "$reply" >>"$LOG"
   printf '%s\n' "$reply" | grep -q '"returnValue": *true'
 }
+HOME_ID=$(node -e 'try { var c = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(c.homeId || "com.webos.app.home"); } catch (e) { process.stdout.write("com.webos.app.home"); }' "$HOME_STATE/state.json")
+case "$HOME_ID" in
+  com.webos.app.home|com.webos.app.fullhome) ;;
+  *) fail 'The saved Home target is invalid.' ;;
+esac
 recover_home() {
   # Disable must complete, then independently verify both takeover methods are detached.
   if sh "$HOME_STATE/home.sh" disable >>"$LOG" 2>&1 </dev/null &&
-     ! awk '$2 == "/usr/bin/com.webos.app.home" || $2 == "/usr/palm/applications/com.webos.app.home" { found=1 } END { exit !found }' /proc/mounts &&
+     ! awk '$2 == "/usr/bin/com.webos.app.home" || $2 == "/usr/palm/applications/com.webos.app.home" || $2 == "/usr/bin/com.webos.app.fullhome" || $2 == "/usr/palm/applications/com.webos.app.fullhome" { found=1 } END { exit !found }' /proc/mounts &&
      [ ! -e /var/run/luma-home ]; then
-    launch com.webos.app.home || fail 'LG Home was restored but could not be opened.'
+    launch "$HOME_ID" || fail 'LG Home was restored but could not be opened.'
     fail 'Update installed, but Home takeover failed; LG Home restored. Enable Luma Home again to retry.'
   fi
   fail 'Update installed, but Home recovery needs attention; see /var/lib/luma-update/update.log.'
 }
 if grep -q '"enabled": *true' "$HOME_STATE/state.json" 2>/dev/null; then
   # Use the NEW scripts: refresh copied helpers and staged manifest as well as the executable.
-  if ! printf 'y\n' | sh "$APP_DIR/home.sh" enable "$APP_DIR" >>"$LOG" 2>&1; then recover_home; fi
-  launch com.webos.app.home || recover_home
+  if ! printf 'y\n' | sh "$APP_DIR/home.sh" enable "$APP_DIR" "$HOME_ID" >>"$LOG" 2>&1; then recover_home; fi
+  launch "$HOME_ID" || recover_home
 else
   launch com.ecklf.luma || fail 'Update installed, but Luma could not be opened.'
 fi

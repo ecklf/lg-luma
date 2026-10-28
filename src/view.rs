@@ -1666,22 +1666,29 @@ fn filter(out: &mut Scene, state: &State, target: Target, rect: Rect, label: &st
     out.control(target, rect, false);
 }
 
-/// The Luma update row's value: the installed version, or where an update stands.
+/// The existing System status card owns the only update action.
 fn update_value(state: &State) -> String {
-    use crate::update::{CURRENT, Status};
+    use crate::update::{InstallStatus, Status};
     let language = state.preferences.language;
     match &state.update {
-        Status::Idle => CURRENT.to_owned(),
-        Status::Checking => language.t("updateChecking").to_owned(),
-        Status::Latest => language.t("updateLatest").to_owned(),
-        Status::Available(release) => {
-            language.format("updateAvailable", &[("version", &release.version)])
+        InstallStatus::Idle => {
+            if let Some(version) = &state.available_update {
+                language.format("installUpdate", &[("version", version)])
+            } else {
+                language
+                    .t(if state.update_status == Status::Checking {
+                        "checkingUpdates"
+                    } else {
+                        "checkAgain"
+                    })
+                    .to_owned()
+            }
         }
-        Status::Downloading(percent) => {
+        InstallStatus::Downloading(percent) => {
             language.format("updateDownloading", &[("percent", &percent.to_string())])
         }
-        Status::Installing(_) => language.t("updateInstalling").to_owned(),
-        Status::Failed(_) => language.t("updateFailed").to_owned(),
+        InstallStatus::Installing(_) => language.t("updateInstalling").to_owned(),
+        InstallStatus::Failed(_) => language.t("updateFailed").to_owned(),
     }
 }
 
@@ -2468,7 +2475,9 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         }
         SYSTEM_SECTION => {
             let rect = Rect::new(640., 164.8 - s, 1120., 220.);
-            let title = if state.available_update.is_some() {
+            let title = if matches!(state.update, crate::update::InstallStatus::Failed(_)) {
+                "updateError"
+            } else if state.available_update.is_some() {
                 "updateAvailable"
             } else {
                 match state.update_status {
@@ -2506,18 +2515,12 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 assets,
                 Row {
                     target: if state.available_update.is_some() {
-                        Target::OpenHomebrew
+                        Target::InstallUpdate
                     } else {
                         Target::CheckUpdates
                     },
                     rect: Rect::new(rect.x + 24., rect.y + 132., rect.w - 48., 64.),
-                    title: language.t(if state.available_update.is_some() {
-                        "openHomebrewChannel"
-                    } else if state.update_status == crate::update::Status::Checking {
-                        "checkingUpdates"
-                    } else {
-                        "checkAgain"
-                    }),
+                    title: &update_value(state),
                     icon: Some(if state.available_update.is_some() {
                         "arrow"
                     } else {
@@ -2548,13 +2551,11 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     Some(language.t(state.preferences.text_rendering.label_key())),
                     true,
                 ),
-                (8, language.t("lumaUpdate"), "sparkles", None, false),
                 (5, language.t("quitApp"), "power", None, false),
             ]
             .into_iter()
             .enumerate()
             {
-                let update = (index == 8).then(|| update_value(state));
                 row(
                     out,
                     state,
@@ -2564,7 +2565,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                         rect: Rect::new(640., 408.8 + position as f32 * 84. - s, 1120., 72.),
                         title,
                         icon: Some(icon),
-                        value: update.as_deref().or(value),
+                        value,
                         description: None,
                         selected: false,
                         chevron,

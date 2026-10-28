@@ -288,6 +288,7 @@ impl BackButton {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn effects(
     effects: Vec<Effect>,
     state: &mut State,
@@ -343,7 +344,6 @@ fn effects(
                 }
             }
             Effect::FireWebhook(tile) => webhook.send(tile),
-            Effect::UpdateCheck => updates.request(update::Request::Check),
             Effect::UpdateDownload(release) => updates.request(update::Request::Download(release)),
             Effect::Quit => return false,
             Effect::Uninstall(id) => platform.send(Request::Uninstall(id)),
@@ -679,7 +679,7 @@ fn run() -> Result<(), String> {
         weather_service::Client::new(options.weather_test_server.as_deref())?,
         weather_cache,
     );
-    let updates = update::Worker::new();
+    let updates = update::Worker::new(webos && public_update_checks);
     let platform = Platform::new(
         webos,
         options.preferences.is_none() && options.test_extra_apps == 0,
@@ -1004,6 +1004,7 @@ fn run() -> Result<(), String> {
                         &weather_service,
                         &wallpaper_service,
                         &webhook_service,
+                        &updates,
                     );
                 }
                 tile_editor::Event::Session(generation, result)
@@ -1056,25 +1057,7 @@ fn run() -> Result<(), String> {
             }
         }
         while let Ok(response) = updates.receiver.try_recv() {
-            use update::{Response, Status};
-            state.dirty = true;
-            match response {
-                Response::Checked(Ok(Some(release))) => state.update = Status::Available(release),
-                Response::Checked(Ok(None)) => state.update = Status::Latest,
-                Response::Progress(percent) => state.update = Status::Downloading(percent),
-                Response::Installing(Ok(version)) => {
-                    state.update = Status::Installing(version);
-                    state.notify(state.preferences.language.t("updateRestart"));
-                }
-                Response::Finished(Ok(())) => state.update = Status::Latest,
-                Response::Finished(Err(error))
-                | Response::Checked(Err(error))
-                | Response::Installing(Err(error)) => {
-                    eprintln!("Luma update: {error}");
-                    state.update = Status::Failed(error);
-                    state.notify(state.preferences.language.t("updateError"));
-                }
-            }
+            state.install_response(response);
         }
         while let Ok(response) = platform.receiver.try_recv() {
             match response {

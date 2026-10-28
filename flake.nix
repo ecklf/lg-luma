@@ -63,7 +63,9 @@
               pkgs.cmake
               pkgs.git
             ]
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.flock ]
             ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              pkgs.util-linux
               pkgs.libGL
               pkgs.mesa
               pkgs.xvfb-run

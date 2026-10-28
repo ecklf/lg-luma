@@ -15,6 +15,7 @@ function run({
   launch = true,
   checksum = true,
   method = 'executable',
+  homeId = 'com.webos.app.home',
 } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'luma-installer-'));
   const app = `${dir}/app`;
@@ -25,7 +26,7 @@ function run({
   const write = (file, contents) => fs.writeFileSync(file, contents, { mode: 0o755 });
   write(`${dir}/package.ipk`, 'test package');
   write(`${app}/appinfo.json`, JSON.stringify({ version: '9.0.0' }));
-  write(`${homeState}/state.json`, JSON.stringify({ enabled: home, method }));
+  write(`${homeState}/state.json`, JSON.stringify({ enabled: home, method, homeId }));
   write(`${dir}/mounts`, '');
   write(`${bin}/id`, '#!/bin/sh\necho 0\n');
   write(`${bin}/stat`, '#!/bin/sh\necho "0 700"\n');
@@ -105,4 +106,15 @@ test('both Home methods refresh from the new package and fail visibly when reapp
 });
 test('a rejected launch is not reported as a successful update', () => {
   assert.equal(run({ launch: false }).status.state, 'failed');
+});
+
+test('fullhome remains the launch and recovery target after an update', () => {
+  const homeId = 'com.webos.app.fullhome';
+  const success = run({ home: true, homeId });
+  assert.equal(success.status.state, 'success');
+  assert.match(success.calls, /launch.*com.webos.app.fullhome/);
+  assert.doesNotMatch(success.calls, /launch.*com.webos.app.home/);
+  const failed = run({ home: true, homeId, reapply: false });
+  assert.match(failed.status.message, /LG Home restored/);
+  assert.match(failed.calls, /restore[\s\S]*launch.*com.webos.app.fullhome/);
 });

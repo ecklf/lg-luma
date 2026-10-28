@@ -1021,43 +1021,9 @@
     "vi": "Làm mới ứng dụng & đầu vào",
     "nl": "Apps en ingangen vernieuwen"
   },
-  "lumaUpdate": {
-    "en": "Luma update",
-    "de": "Luma-Update",
-    "es": "Actualización de Luma",
-    "zh": "Luma 更新",
-    "pt": "Atualização do Luma",
-    "it": "Aggiornamento di Luma",
-    "ru": "Обновление Luma",
-    "pl": "Aktualizacja Luma",
-    "fr": "Mise à jour de Luma",
-    "vi": "Cập nhật Luma"
-  },
-  "updateChecking": {
-    "en": "Checking…",
-    "de": "Wird geprüft …",
-    "es": "Comprobando…",
-    "zh": "正在检查…",
-    "pt": "Verificando…",
-    "it": "Verifica in corso…",
-    "ru": "Проверка…",
-    "pl": "Sprawdzanie…",
-    "fr": "Vérification…",
-    "vi": "Đang kiểm tra…"
-  },
-  "updateLatest": {
-    "en": "Up to date",
-    "de": "Aktuell",
-    "es": "Actualizado",
-    "zh": "已是最新版本",
-    "pt": "Atualizado",
-    "it": "Aggiornato",
-    "ru": "Актуальная версия",
-    "pl": "Aktualna wersja",
-    "fr": "À jour",
-    "vi": "Đã cập nhật"
-  },
-  "updateAvailable": {
+  "installUpdate": {
+    "zh-tw": "安裝 {version}",
+    "nl": "{version} installeren",
     "en": "Install {version}",
     "de": "{version} installieren",
     "es": "Instalar {version}",
@@ -1070,6 +1036,8 @@
     "vi": "Cài đặt {version}"
   },
   "updateDownloading": {
+    "zh-tw": "正在下載 {percent}%",
+    "nl": "Downloaden {percent}%",
     "en": "Downloading {percent} %",
     "de": "Wird geladen: {percent} %",
     "es": "Descargando {percent} %",
@@ -1082,6 +1050,8 @@
     "vi": "Đang tải {percent} %"
   },
   "updateInstalling": {
+    "zh-tw": "正在安裝…",
+    "nl": "Installeren…",
     "en": "Installing…",
     "de": "Wird installiert …",
     "es": "Instalando…",
@@ -1094,6 +1064,8 @@
     "vi": "Đang cài đặt…"
   },
   "updateFailed": {
+    "zh-tw": "重試",
+    "nl": "Opnieuw proberen",
     "en": "Try again",
     "de": "Erneut versuchen",
     "es": "Reintentar",
@@ -1106,6 +1078,8 @@
     "vi": "Thử lại"
   },
   "updateError": {
+    "zh-tw": "更新未成功，請稍後重試。",
+    "nl": "De update is mislukt. Probeer het later opnieuw.",
     "en": "The update did not work. Try again later.",
     "de": "Das Update hat nicht geklappt. Versuche es später erneut.",
     "es": "La actualización no funcionó. Inténtalo más tarde.",
@@ -1118,6 +1092,8 @@
     "vi": "Cập nhật không thành công. Hãy thử lại sau."
   },
   "updateRestart": {
+    "zh-tw": "更新安裝完成後，Luma 將重新啟動。",
+    "nl": "Luma start opnieuw wanneer de update is geïnstalleerd.",
     "en": "Luma restarts when the update is installed.",
     "de": "Luma startet neu, sobald das Update installiert ist.",
     "es": "Luma se reiniciará cuando se instale la actualización.",

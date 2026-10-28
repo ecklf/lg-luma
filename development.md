@@ -826,8 +826,17 @@ Scripted captures and simulated update previews do not contact GitHub. Interacti
 use the same endpoint and worker as TV. The card shows the current version and only reports
 **No newer version found** after a successful check, never while unchecked or offline.
 A newer version shows an **Update available** notice and a **Settings → System** card with both
-versions. Its button launches `org.webosbrew.hbchannel` through the native platform launch path;
-Homebrew Channel handles updating, not Luma. No IPK or executable is downloaded by the checker.
+versions. Its **Install {version}** button explicitly starts installation on interactive TV runs.
+The read-only checker never downloads an IPK. A separate installer worker rechecks release metadata,
+requires the exact offered version, and accepts only this project's ARM release assets with a bounded
+size and SHA-256. It downloads into a private random directory and verifies both before handing off
+to `tv/self-update.sh`, detached through Homebrew Channel's root service into a systemd unit.
+The installer locks, stages and re-verifies a root-owned copy, waits for installation completion and
+checks the installed version before reopening Luma. Home takeover refreshes from the new package;
+failed reapplication attempts verified LG Home recovery. Atomic attempt-specific results and a log
+persist in `/var/lib/luma-update`. The card displays progress, ignores repeated presses while busy,
+and returns to **Check again** after failure. On restart the installer worker observes an unfinished
+attempt or reports its persisted failure. Desktop and scripted/simulated runs cannot install.
 
 Preview the update card without a network request:
 
@@ -839,8 +848,8 @@ cargo run -- --test-update-version 99.0.0 --script settings,down,down,down,down,
 The flag overrides the environment variable and accepts the current or a newer numeric version.
 Use the current version to preview the up-to-date card and **Check again** without HTTP. It is logged as
 a simulated update, stored only in memory, and disables the public feed check even on TV. Open
-**Settings → System** to see it. The CTA still uses the normal Homebrew launch path (desktop builds
-only show a launch preview); no installation occurs in Luma.
+**Settings → System** to see it. The install action is rejected locally without HTTP, Luna calls or
+package installation in these previews.
 
 ## Compatibility
 

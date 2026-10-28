@@ -400,7 +400,7 @@ pub fn start_update(
         json!({"command": command}),
     )?;
     // systemd-run prints nothing on stdout once the unit started; only its exit status counts.
-    // An error here must be real: the worker then deletes the IPK the installer would read.
+    // A transport error can be ambiguous: the worker preserves the IPK and observes the result.
     for key in ["returnCode", "exitCode"] {
         if let Some(code) = envelope.get(key)
             && code != 0

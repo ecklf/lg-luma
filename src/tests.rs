@@ -923,8 +923,6 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(7));
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Setting(8));
-    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(5));
     assert_eq!(state.activate(), vec![Effect::Quit]);
     state.back();
@@ -2863,7 +2861,7 @@ fn greeting_visibility_toggle_persists_without_clearing_name_or_hiding_date() {
 }
 
 #[test]
-fn update_card_shows_both_versions_and_launches_homebrew_without_installing() {
+fn update_card_shows_both_versions_and_explicitly_starts_installation() {
     use crate::{i18n::Language, renderer::Draw};
     for language in Language::ALL {
         let mut state = ready();
@@ -2873,13 +2871,13 @@ fn update_card_shows_both_versions_and_launches_homebrew_without_installing() {
         assert!(
             !controls(&state)
                 .iter()
-                .any(|control| control.target == Target::OpenHomebrew)
+                .any(|control| control.target == Target::InstallUpdate)
         );
         state.available_update = Some("9.0.0".into());
         let rendered = scene(&state);
         for label in [
             language.t("updateAvailable").to_owned(),
-            language.t("openHomebrewChannel").to_owned(),
+            language.format("installUpdate", &[("version", "9.0.0")]),
             language.format(
                 "updateVersions",
                 &[("current", "test"), ("latest", "9.0.0")],
@@ -2894,24 +2892,24 @@ fn update_card_shows_both_versions_and_launches_homebrew_without_installing() {
         }
         state.focus = Target::Sidebar(crate::state::SYSTEM_SECTION);
         state.direction(Direction::Right, &rendered.controls);
-        assert_eq!(state.focus, Target::OpenHomebrew);
+        assert_eq!(state.focus, Target::InstallUpdate);
         assert_eq!(
             state.activate(),
-            vec![Effect::Launch("org.webosbrew.hbchannel".into())]
+            vec![Effect::UpdateDownload("9.0.0".into())]
         );
         let button = rendered
             .controls
             .iter()
-            .find(|control| control.target == Target::OpenHomebrew)
+            .find(|control| control.target == Target::InstallUpdate)
             .unwrap();
         let (x, y) = button.rect.center();
         assert_eq!(
             state.hit_test(&rendered.controls, x, y),
-            Some(Target::OpenHomebrew)
+            Some(Target::InstallUpdate)
         );
         state.direction(Direction::Down, &rendered.controls);
         assert_eq!(state.focus, Target::Setting(3));
-        state.focus = Target::OpenHomebrew;
+        state.focus = Target::InstallUpdate;
         state.direction(Direction::Left, &rendered.controls);
         assert_eq!(state.focus, Target::Sidebar(crate::state::SYSTEM_SECTION));
     }
@@ -2949,7 +2947,7 @@ fn update_status_card_only_claims_latest_after_success_and_allows_single_flight_
     }
     state.activate();
     state.update_response(Ok(Some("9.0.0".into())));
-    assert_eq!(state.focus, Target::OpenHomebrew);
+    assert_eq!(state.focus, Target::InstallUpdate);
     state.update_response(Err("offline".into()));
     assert_eq!(state.available_update.as_deref(), Some("9.0.0"));
 }
@@ -3095,42 +3093,69 @@ fn tiles_edited_elsewhere_join_and_leave_home_like_tv_edits() {
 }
 
 #[test]
-fn the_update_row_checks_installs_and_ignores_presses_while_busy() {
-    use crate::update::{CURRENT, Release, Status};
+fn update_card_shows_progress_restores_retry_and_ignores_presses_while_busy() {
+    use crate::update::{InstallStatus, Response, Status};
     let mut state = ready();
     state.open(2);
     state.section = crate::state::SYSTEM_SECTION;
-    state.focus = Target::Setting(8);
-    let value = |state: &State| {
-        scene(state)
-            .draw
-            .iter()
-            .any(|draw| matches!(draw, crate::renderer::Draw::Text(text, ..) if text == CURRENT))
-    };
-    assert!(value(&state), "the installed version shows before a check");
-    assert_eq!(state.activate(), vec![Effect::UpdateCheck]);
-    assert_eq!(state.update, Status::Checking);
+    state.focus = Target::CheckUpdates;
+    assert!(state.activate().is_empty());
+    assert_eq!(state.update_status, Status::Checking);
     assert!(
         state.activate().is_empty(),
         "no second check while one runs"
     );
-    let release = Release {
-        version: "9.9.9".into(),
-        url: "https://github.com/ecklf/lg-luma/releases/download/v9.9.9/x_arm.ipk".into(),
-        sha256: "a".repeat(64),
-        size: 1,
-    };
-    state.update = Status::Available(release.clone());
+    state.update_response(Ok(Some("9.9.9".into())));
     assert!(scene(&state).draw.iter().any(|draw| {
         matches!(draw, crate::renderer::Draw::Text(text, ..) if text == "Install 9.9.9")
     }));
-    assert_eq!(state.activate(), vec![Effect::UpdateDownload(release)]);
-    assert_eq!(state.update, Status::Downloading(0));
-    assert!(state.activate().is_empty());
-    state.update = Status::Failed("offline".into());
+    let initial = scene(&state);
+    assert!(
+        !initial
+            .controls
+            .iter()
+            .any(|control| control.target == Target::Setting(8))
+    );
     assert_eq!(
         state.activate(),
-        vec![Effect::UpdateCheck],
-        "a failure can be retried"
+        vec![Effect::UpdateDownload("9.9.9".into())]
     );
+    assert_eq!(state.update, InstallStatus::Downloading(0));
+    assert!(state.activate().is_empty());
+    state.install_response(Response::Progress(45));
+    assert!(scene(&state).draw.iter().any(|draw| {
+        matches!(draw, crate::renderer::Draw::Text(text, ..) if text == "Downloading 45 %")
+    }));
+    let geometry = |items: Vec<crate::state::Control>| {
+        items
+            .into_iter()
+            .map(|item| {
+                (
+                    item.target,
+                    item.rect.x,
+                    item.rect.y,
+                    item.rect.w,
+                    item.rect.h,
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        geometry(controls(&state)),
+        geometry(initial.controls),
+        "progress must not move hit targets"
+    );
+    state.install_response(Response::Installing("9.9.9".into()));
+    assert!(state.activate().is_empty());
+    state.pressed = Some(Target::InstallUpdate);
+    state.install_response(Response::Finished(Err("disk full".into())));
+    assert_eq!(state.focus, Target::CheckUpdates);
+    assert!(state.pressed.is_none());
+    assert!(state.available_update.is_none());
+    assert!(!state.update_busy());
+    state.activate();
+    assert_eq!(state.update_status, Status::Checking);
+    assert_eq!(state.update, InstallStatus::Idle);
+    state.install_response(Response::Finished(Ok(())));
+    assert_eq!(state.update_status, Status::Unchecked);
 }

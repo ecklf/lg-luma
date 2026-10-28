@@ -132,12 +132,15 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 
 ### Updating from the TV
 
-**Settings → System → Luma update** checks the latest GitHub release. If it is newer, select the row
-again to install it: Luma downloads the IPK, verifies its size and SHA-256 against the release's
+The **Settings → System** update card automatically checks the latest GitHub release at startup;
+**Check again** retries. When a newer version is available, select **Install {version}** to install it:
+Luma downloads the IPK, verifies its size and SHA-256 against the release's
 Homebrew Channel feed, and installs it through Homebrew Channel's root service. Luma restarts when
 the update is installed (as Home, the integration remounts the new executable first). A log is
 kept in `/var/lib/luma-update/update.log`. Installer outcomes persist across Luma restarts;
 failed installs become retryable, and a failed Home takeover attempts verified LG Home recovery.
+The card shows download/install progress and blocks repeated presses while busy. Installation is
+disabled in desktop runs and simulated/scripted previews.
 
 ## Replacing LG Home
 

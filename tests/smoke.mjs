@@ -363,17 +363,17 @@ try {
   );
   assert.deepEqual(system.focus, { Setting: 5 });
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
-  assert.ok(system.ui_text.includes('Luma update'));
+  assert.ok(!system.ui_text.includes('Luma update'));
   assert.ok(system.ui_text.includes('Quit app'));
   assert.ok(system.ui_text.includes('Text rendering'));
   const updatePreview = await scenario('update-preview', 'settings,down,down,down,down,right', [
     '--test-update-version',
     '99.0.0',
   ]);
-  assert.equal(updatePreview.focus, 'OpenHomebrew');
+  assert.equal(updatePreview.focus, 'InstallUpdate');
   assert.ok(updatePreview.ui_text.includes('Update available'));
   assert.ok(updatePreview.ui_text.some((label) => label.includes('Latest: 99.0.0')));
-  assert.ok(updatePreview.ui_text.includes('Open Homebrew Channel to update'));
+  assert.ok(updatePreview.ui_text.includes('Install 99.0.0'));
   const afterUpdatePreview = await scenario(
     'update-preview-cleared',
     'settings,down,down,down,down,right',
