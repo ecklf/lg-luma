@@ -1,5 +1,15 @@
 # lg-luma
 
+## 2.15.0
+
+### Minor Changes
+
+- a2580d9: Install verified Luma releases from the existing Settings → System update card, with download/install progress and retry after failure. Installation uses Homebrew Channel's root service and a detached systemd unit, persists outcomes across restarts, and refreshes Home takeover with recovery on failure. Desktop and scripted previews cannot install updates.
+
+### Patch Changes
+
+- ad3bb27: Add date widget visibility and localized or numeric date formats. Remove the greeting's empty space when hidden so weather moves directly below the date.
+
 ## 2.14.0
 
 ### Minor Changes
