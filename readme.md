@@ -226,14 +226,7 @@ Test on a spare button first. Disable the mapping in Input Hook to restore norma
 
 Open **Settings → Background → Upload**, then scan the QR code or open the shown
 address on a phone or computer on the same network. Choose a JPEG, PNG or WebP and adjust
-its 16:9 crop before choosing **Save to TV**. Close the TV dialog, open the new thumbnail's
-side popup, and choose **Use background**. The popup also offers **Delete background** for
-any background except the active one, with confirmation before removal. Uploaded files are
-deleted; bundled backgrounds are permanently removed from your gallery without modifying
-packaged assets.
-Images stay beside Luma's shared preferences and survive updates. The gallery supports 20 uploads;
-the upload page shows the exact TV folder path. LG's launch splash remains bundled when a custom
-background is selected.
+its 16:9 crop before choosing **Save to TV**.
 
 The upload link works only while its TV dialog is open and focused, for at most ten minutes.
 Use a trusted local network: the temporary local upload uses HTTP, not encrypted HTTPS.
@@ -328,5 +321,5 @@ There is no browser geolocation, IP-based location lookup, telemetry or runtime 
 
 ## License
 
-Luma is licensed under MIT.
+Luma is licensed under MIT.\
 Luma is not affiliated with LG, Apple, or any other brands shown in its UI.
