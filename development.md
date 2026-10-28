@@ -825,6 +825,18 @@ A newer version shows an **Update available** notice and a **Settings → System
 versions. Its button launches `org.webosbrew.hbchannel` through the native platform launch path;
 Homebrew Channel handles updating, not Luma. No IPK or executable is downloaded by the checker.
 
+Preview the update card without a network request:
+
+```sh
+cargo run -- --test-update-version 99.0.0 --script settings,down,down,down,down,right
+# Alternatively: LUMA_TEST_UPDATE_VERSION=99.0.0 cargo run
+```
+
+The flag overrides the environment variable and requires a newer numeric version. It is logged as
+a simulated update, stored only in memory, and disables the public feed check even on TV. Open
+**Settings → System** to see it. The CTA still uses the normal Homebrew launch path (desktop builds
+only show a launch preview); no installation occurs in Luma.
+
 ## Compatibility
 
 Luma's native startup, rendering and app/input discovery have been verified on rooted webOS 26.

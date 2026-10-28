@@ -362,6 +362,20 @@ try {
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
   assert.ok(system.ui_text.includes('Quit app'));
   assert.ok(system.ui_text.includes('Text rendering'));
+  const updatePreview = await scenario('update-preview', 'settings,down,down,down,down,right', [
+    '--test-update-version',
+    '99.0.0',
+  ]);
+  assert.equal(updatePreview.focus, 'OpenHomebrew');
+  assert.ok(updatePreview.ui_text.includes('Update available'));
+  assert.ok(updatePreview.ui_text.some((label) => label.includes('Latest: 99.0.0')));
+  assert.ok(updatePreview.ui_text.includes('Open Homebrew Channel to update'));
+  const afterUpdatePreview = await scenario(
+    'update-preview-cleared',
+    'settings,down,down,down,down,right',
+  );
+  assert.deepEqual(afterUpdatePreview.focus, { Setting: 3 });
+  assert.ok(!afterUpdatePreview.ui_text.includes('Update available'));
   const textOptions = 'settings,down,down,down,down,right,down,enter';
   const textRendering = await scenario('text-rendering-options', textOptions);
   assert.equal(textRendering.subpage, 'TextRendering');

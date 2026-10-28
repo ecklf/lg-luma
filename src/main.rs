@@ -75,6 +75,7 @@ struct Options {
     profile_frames: Option<usize>,
     weather_test_server: Option<String>,
     test_extra_apps: usize,
+    test_update_version: Option<String>,
 }
 
 impl Options {
@@ -116,6 +117,9 @@ impl Options {
                     "\n  --test-extra-apps N  Explicit scroll preview with up to 300 non-launchable extra cards; separate preferences"
                 );
                 println!(
+                    "  --test-update-version VERSION  Preview an available update without HTTP; also LUMA_TEST_UPDATE_VERSION"
+                );
+                println!(
                     "\n  Press Back / Escape on Home, or hold for 600 ms, to open Recent apps.\n  --script recents,await-recents  Open the desktop recent-app preview."
                 );
                 std::process::exit(0);
@@ -142,6 +146,7 @@ impl Options {
                 }
                 "--diagnostics" => result.diagnostics = Some(value.into()),
                 "--weather-test-server" => result.weather_test_server = Some(value),
+                "--test-update-version" => result.test_update_version = Some(value),
                 "--test-extra-apps" => {
                     result.test_extra_apps = value
                         .parse::<usize>()
@@ -179,6 +184,12 @@ impl Options {
                 "--script" => result.script = value.split(',').map(str::to_owned).collect(),
                 _ => return Err(format!("Unknown option: {arg}")),
             }
+        }
+        if result.test_update_version.is_none() {
+            result.test_update_version = std::env::var("LUMA_TEST_UPDATE_VERSION").ok();
+        }
+        if let Some(version) = &result.test_update_version {
+            update::validate_preview(version, env!("CARGO_PKG_VERSION"))?;
         }
         if result.screenshot.is_some() && result.frames.is_none() && result.profile_frames.is_none()
         {
@@ -632,6 +643,12 @@ fn run() -> Result<(), String> {
         storage::load(&preferences_path)?
     };
     let mut state = State::new(initial_preferences);
+    if let Some(version) = &options.test_update_version {
+        eprintln!(
+            "Luma update preview: simulated version {version}; public release check disabled"
+        );
+        state.available_update = Some(version.clone());
+    }
     // Scripted desktop captures must never open a server on the real LAN.
     let mut wallpaper_service =
         wallpapers::Service::new(&preferences_path, !webos && !options.script.is_empty())?;
@@ -657,7 +674,7 @@ fn run() -> Result<(), String> {
         options.preferences.is_none() && options.test_extra_apps == 0,
     );
     let webhook_service = webhook::Service::new();
-    let update_service = update::Service::new(webos);
+    let update_service = update::Service::new(webos && options.test_update_version.is_none());
     effects(
         vec![Effect::Refresh],
         &mut state,

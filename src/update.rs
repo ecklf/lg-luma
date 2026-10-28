@@ -104,9 +104,32 @@ pub fn newer_version(bytes: &[u8], current: &str) -> Result<Option<String>, Stri
     Ok((latest > current).then_some(package.manifest.version))
 }
 
+pub fn validate_preview(latest: &str, current: &str) -> Result<(), String> {
+    let current = version(current).ok_or("Invalid installed version")?;
+    let latest = version(latest).ok_or("Update preview requires a version such as 99.0.0")?;
+    if latest <= current {
+        return Err("Update preview version must be newer than the installed version".into());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn preview_requires_a_valid_newer_version() {
+        assert!(validate_preview("99.0.0", "2.13.0").is_ok());
+        for value in [
+            "",
+            "garbage",
+            "2.13.0",
+            "2.12.0",
+            "3.0.0-beta",
+            "https://example.com",
+        ] {
+            assert!(validate_preview(value, "2.13.0").is_err());
+        }
+    }
     fn feed(value: &str) -> Vec<u8> {
         serde_json::to_vec(&serde_json::json!({"packages":[{"id":"com.ecklf.luma","manifest":{"id":"com.ecklf.luma","version":value}}]})).unwrap()
     }

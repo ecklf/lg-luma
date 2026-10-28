@@ -36,7 +36,8 @@ impl Assets {
             std::fs::read(root.join(file))
                 .map_err(|e| format!("Native assets are missing: {e}. Run pnpm assets."))
         };
-        let version = String::from_utf8(load("version.txt")?).map_err(|e| e.to_string())?;
+        // Generated artwork may outlive a binary rebuild; version the running app, not the assets.
+        let version = env!("CARGO_PKG_VERSION").to_owned();
         let metrics =
             serde_json::from_slice(&load("font-metrics.json")?).map_err(|e| e.to_string())?;
         Ok(Self {
