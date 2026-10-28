@@ -572,6 +572,11 @@ fn run() -> Result<(), String> {
         // Magic Remotes send the separate Exit key for a long Back press.
         // Claim it before video init so the compositor does not close Luma.
         sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_EXIT", "true");
+        // SAM may not relaunch Home when its surface is already foreground. Handle the
+        // physical key ourselves only as Home; normal tile launches keep LG's routing.
+        if options.webos_home {
+            sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_HOME", "true");
+        }
         // SDL-webOS answers tvpower's screen saver requests with `ack: !suspend_screensaver`, and
         // SDL suspends the screen saver unless this hint allows it: LG's screen saver never
         // started while Luma was in front. A launcher has no video to protect.
@@ -1204,6 +1209,17 @@ fn run() -> Result<(), String> {
                         back_button.cancel();
                     }
                     match key {
+                        _ if webos
+                            && options.webos_home
+                            && i32::from(key) == sdl_events::WEBOS_HOME_KEYCODE =>
+                        {
+                            if !repeat {
+                                eprintln!("Luma Home key: returning to Home tab");
+                                press = None;
+                                back_button.cancel();
+                                pending = state.return_home();
+                            }
+                        }
                         _ if native_hold => {
                             if !repeat && back_button.native_hold(Instant::now()) {
                                 press = None;
