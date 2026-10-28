@@ -1893,7 +1893,8 @@ impl State {
             return vec![];
         }
         self.dirty = true;
-        if let Target::App(id) = &self.focus
+        if self.page != Page::Apps
+            && let Target::App(id) = &self.focus
             && let Some(tile) = self.preferences.custom_tile(id).cloned()
         {
             return self.send_tile(tile);
@@ -1927,6 +1928,9 @@ impl State {
                 {
                     let id = id.clone();
                     self.back();
+                    if let Some(tile) = self.preferences.custom_tile(&id).cloned() {
+                        return self.send_tile(tile);
+                    }
                     return vec![Effect::Launch(id)];
                 }
             }

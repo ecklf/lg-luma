@@ -963,8 +963,9 @@ fn run() -> Result<(), String> {
         while let Ok(event) = tile_editor_service.receiver.try_recv() {
             match event {
                 // Applied even after the dialog closed: the phone was already told it saved.
-                tile_editor::Event::Tiles(tiles) => {
+                tile_editor::Event::Tiles(revision, tiles) => {
                     let pending = state.replace_tiles(tiles);
+                    tile_editor_service.acknowledge(revision);
                     running &= effects(
                         pending,
                         &mut state,

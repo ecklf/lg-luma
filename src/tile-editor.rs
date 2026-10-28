@@ -31,14 +31,21 @@ const STOP: u64 = u64::MAX;
 pub enum Event {
     Session(u64, Result<Session, String>),
     /// The complete tile list after an accepted change.
-    Tiles(Vec<CustomTile>),
+    Tiles(u64, Vec<CustomTile>),
     Ended(u64),
+}
+
+#[derive(Default)]
+struct Snapshot {
+    tiles: Vec<CustomTile>,
+    revision: u64,
+    acknowledged: u64,
 }
 
 pub struct Service {
     desired: Arc<AtomicU64>,
-    /// The tiles a new session starts from, handed over when the dialog opens.
-    tiles: Arc<Mutex<Vec<CustomTile>>>,
+    /// Accepted edits remain authoritative until the SDL thread has consumed them.
+    tiles: Arc<Mutex<Snapshot>>,
     wake: mpsc::Sender<()>,
     pub receiver: mpsc::Receiver<Event>,
     active: bool,
@@ -48,7 +55,7 @@ pub struct Service {
 impl Service {
     pub fn new(loopback_only: bool) -> Result<Self, String> {
         let desired = Arc::new(AtomicU64::new(0));
-        let tiles = Arc::new(Mutex::new(vec![]));
+        let tiles = Arc::new(Mutex::new(Snapshot::default()));
         let worker_desired = desired.clone();
         let worker_tiles = tiles.clone();
         let (sender, receiver) = mpsc::sync_channel(4);
@@ -79,17 +86,26 @@ impl Service {
         if self.active != active {
             self.active = active;
             self.generation += 1;
-            if active && let Ok(mut current) = self.tiles.lock() {
-                *current = tiles.to_vec();
+            // Serialize session rotation with commit: an old request either commits before
+            // this snapshot or sees its generation revoked, never overwriting a new session.
+            let mut current = self.tiles.lock().unwrap();
+            if active && current.revision == current.acknowledged {
+                current.tiles = tiles.to_vec();
             }
             self.desired
                 .store(if active { self.generation } else { 0 }, Ordering::Release);
+            drop(current);
             let _ = self.wake.send(());
         }
     }
 
     pub fn generation(&self) -> u64 {
         self.generation
+    }
+
+    pub fn acknowledge(&self, revision: u64) {
+        let mut current = self.tiles.lock().unwrap();
+        current.acknowledged = current.acknowledged.max(revision.min(current.revision));
     }
 }
 
@@ -203,7 +219,7 @@ fn listing(tiles: &[CustomTile]) -> serde_json::Value {
 
 fn worker(
     desired: &AtomicU64,
-    shared: &Mutex<Vec<CustomTile>>,
+    shared: &Mutex<Snapshot>,
     sender: &mpsc::SyncSender<Event>,
     wake: &mpsc::Receiver<()>,
     loopback_only: bool,
@@ -222,7 +238,7 @@ fn worker(
             continue;
         }
         handled = generation;
-        let mut tiles = shared.lock().map(|tiles| tiles.clone()).unwrap_or_default();
+        let mut tiles = shared.lock().unwrap().tiles.clone();
         let opened = (|| {
             let listener = listen(loopback_only)?;
             let token = random_token()?;
@@ -256,14 +272,32 @@ fn worker(
                         desired.load(Ordering::Acquire) == generation && Instant::now() < deadline
                     };
                     let host = address.to_string();
-                    match serve(&mut stream, &host, &token, &mut tiles, &agent, valid) {
-                        Ok(true) => {
-                            if sender.send(Event::Tiles(tiles.clone())).is_err() {
-                                return;
+                    let commit = |tiles: &[CustomTile]| {
+                        let revision = {
+                            let mut current = shared.lock().unwrap();
+                            if !valid() {
+                                return Err("Editing session ended".into());
                             }
-                        }
-                        Ok(false) => {}
-                        Err(error) => eprintln!("Luma tile editor: {error}"),
+                            current.tiles = tiles.to_vec();
+                            current.revision += 1;
+                            current.revision
+                        };
+                        // Queue the accepted edit before replying, without holding the lock
+                        // while waiting for SDL to drain the bounded event channel.
+                        sender
+                            .send(Event::Tiles(revision, tiles.to_vec()))
+                            .map_err(|_| "Launcher stopped".to_owned())
+                    };
+                    if let Err(error) = serve(
+                        &mut stream,
+                        &host,
+                        &token,
+                        &mut tiles,
+                        &agent,
+                        valid,
+                        commit,
+                    ) {
+                        eprintln!("Luma tile editor: {error}");
                     }
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
@@ -291,7 +325,8 @@ fn json(stream: &mut TcpStream, status: &str, body: &serde_json::Value) -> Resul
     )
 }
 
-/// Serves one request; `Ok(true)` means `tiles` changed and the launcher should save them.
+/// Serves one request; changes are published by `commit` before a success reply.
+/// `Ok(true)` means the local tile list changed, including if the reply was lost.
 fn serve(
     stream: &mut TcpStream,
     host: &str,
@@ -299,6 +334,7 @@ fn serve(
     tiles: &mut Vec<CustomTile>,
     agent: &ureq::Agent,
     valid: impl Fn() -> bool,
+    commit: impl FnOnce(&[CustomTile]) -> Result<(), String>,
 ) -> Result<bool, String> {
     stream
         .set_read_timeout(Some(Duration::from_millis(100)))
@@ -416,6 +452,7 @@ fn serve(
             if !valid() {
                 return Err("Editing session ended".into());
             }
+            commit(&next)?;
             *tiles = next;
             let mut body = listing(tiles);
             body["id"] = serde_json::json!(id);

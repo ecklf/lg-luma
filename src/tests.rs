@@ -1232,6 +1232,7 @@ fn protected_apps_cannot_be_deleted_through_ui_or_worker() {
         "com.luma.launcher.native",
         "org.webosbrew.hbchannel",
         "org.webosbrew.hbchannel.service",
+        "custom.lamp",
         "invalid';command",
     ] {
         assert!(crate::platform::uninstall_request(id).is_err());
@@ -2285,6 +2286,53 @@ fn shortcut_tiles_are_created_edited_sent_and_removed_in_settings() {
     assert!(!state.inventory.apps.iter().any(|app| app.id == tile.id));
     assert_eq!(state.subpage, None);
     assert_eq!(state.focus, Target::TileAdd);
+}
+
+#[test]
+fn shortcut_tiles_keep_apps_options_and_never_launch_or_uninstall_a_platform_app() {
+    let tile = crate::model::CustomTile {
+        id: "custom.lamp".into(),
+        title: "Lamp".into(),
+        url: "http://127.0.0.1:9/hook".into(),
+        ..Default::default()
+    };
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state.replace_tiles(vec![tile.clone()]);
+    state.open(0);
+    state.focus = Target::App(tile.id.clone());
+    assert_eq!(state.activate(), vec![Effect::FireWebhook(tile.clone())]);
+    state.options();
+    assert_eq!(state.activate(), vec![Effect::FireWebhook(tile.clone())]);
+
+    state.open(1);
+    state.focus = Target::App(tile.id.clone());
+    assert!(state.activate().is_empty());
+    assert_eq!(state.focus, Target::OpenApp);
+    assert!(matches!(state.overlay, Some(Overlay::Options { .. })));
+    assert!(
+        !controls(&state)
+            .iter()
+            .any(|c| c.target == Target::Option(2))
+    );
+    assert_eq!(state.activate(), vec![Effect::FireWebhook(tile.clone())]);
+    assert!(state.overlay.is_none());
+
+    state.focus = Target::App(tile.id.clone());
+    state.options();
+    state.focus = Target::Option(0);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(
+        !state
+            .preferences
+            .favorites(&state.inventory.apps)
+            .contains(&tile.id)
+    );
+    state.options();
+    state.focus = Target::Option(1);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.hidden.contains(&tile.id));
+    assert_eq!(state.preferences.custom_tile(&tile.id), Some(&tile));
 }
 
 #[test]

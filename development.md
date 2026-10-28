@@ -311,8 +311,10 @@ need the session token in `X-Luma-Token` and a JSON body of at most 4 KiB. Saves
 the TV editor's rules (`clean_input_name`, `valid_tile_url`, `TILE_ICONS`, `TILE_LIMIT`, `new_tile_id`).
 Each accepted change sends the complete list back to the launcher, which applies it like a TV edit:
 new tiles join the end of the Home favorites, removed ones leave favorites and hidden apps, and
-preferences are saved. Changes are applied even if the modal closed meanwhile, since the page was
-already told they were saved. The TV modal blocks other input, so the two editors never interleave.
+preferences are saved. Accepted changes are revisioned and queued before replying to the page;
+reopening retains the worker's latest list until the launcher acknowledges every pending revision.
+Changes are applied even if the modal closed meanwhile, since the page was already told they were
+saved. The TV modal blocks other input, so the two editors never interleave.
 `send` makes the request from the TV with the same client as a tile press (five-second timeout, no
 redirects or proxy) without saving, and reports the result to the page.
 

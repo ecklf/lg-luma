@@ -40,6 +40,7 @@ fn http(tiles: &mut Vec<CustomTile>, request: impl FnOnce(&str) -> Vec<u8>) -> (
         tiles,
         &agent,
         || true,
+        |_| Ok(()),
     )
     .unwrap_or(false);
     drop(stream);
@@ -62,6 +63,116 @@ fn post(route: &str, body: &str, headers: &str) -> impl FnOnce(&str) -> Vec<u8> 
 }
 
 const WRITE: &str = "X-Luma-Token: secret\r\nContent-Type: application/json\r\n";
+
+fn session_request(session: &Session, method: &str, route: &str, body: &str) -> serde_json::Value {
+    let parts: Vec<_> = session.url.split('/').collect();
+    let mut socket = TcpStream::connect(parts[2]).unwrap();
+    socket
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    write!(socket, "{method} /{}/{route} HTTP/1.1\r\nHost: {}\r\nX-Luma-Token: {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}", parts[3], parts[2], parts[3], body.len()).unwrap();
+    let mut response = String::new();
+    socket.read_to_string(&mut response).unwrap();
+    assert!(response.starts_with("HTTP/1.1 200 OK"), "{response}");
+    serde_json::from_str(response.split("\r\n\r\n").nth(1).unwrap()).unwrap()
+}
+
+fn next_session(service: &Service) -> Session {
+    loop {
+        match service
+            .receiver
+            .recv_timeout(Duration::from_secs(3))
+            .unwrap()
+        {
+            Event::Session(generation, Ok(session)) => {
+                assert_eq!(generation, service.generation());
+                return session;
+            }
+            Event::Ended(_) => {}
+            _ => panic!("Expected a local editing session"),
+        }
+    }
+}
+
+#[test]
+fn reopening_preserves_unacknowledged_saves_and_removals() {
+    let mut service = Service::new(true).unwrap();
+    service.set_active(true, &[]);
+    let first = next_session(&service);
+    session_request(
+        &first,
+        "POST",
+        "save",
+        r#"{"title":"Lamp","url":"http://127.0.0.1:9/hook"}"#,
+    );
+    // Rotate before SDL has consumed the edit; its preferences still contain no tiles.
+    service.set_active(false, &[]);
+    service.set_active(true, &[]);
+    let Event::Tiles(lamp_revision, lamp_tiles) = service
+        .receiver
+        .recv_timeout(Duration::from_secs(3))
+        .unwrap()
+    else {
+        panic!("Expected saved Lamp")
+    };
+    let second = next_session(&service);
+    let listing = session_request(&second, "GET", "tiles.json", "");
+    assert_eq!(listing["tiles"][0]["id"], "custom.lamp");
+    session_request(
+        &second,
+        "POST",
+        "save",
+        r#"{"title":"Gate","url":"http://127.0.0.1:9/hook"}"#,
+    );
+    let Event::Tiles(gate_revision, both_tiles) = service
+        .receiver
+        .recv_timeout(Duration::from_secs(3))
+        .unwrap()
+    else {
+        panic!("Expected saved Gate")
+    };
+    assert_eq!(both_tiles.len(), 2);
+    // Acknowledging an older event cannot make a newer pending save replaceable.
+    service.acknowledge(lamp_revision);
+    service.set_active(false, &[]);
+    service.set_active(true, &lamp_tiles);
+    let third = next_session(&service);
+    assert_eq!(
+        session_request(&third, "GET", "tiles.json", "")["tiles"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    service.acknowledge(gate_revision);
+    session_request(&third, "POST", "remove", r#"{"id":"custom.lamp"}"#);
+    service.set_active(false, &[]);
+    service.set_active(true, &both_tiles);
+    let Event::Tiles(remove_revision, remaining) = service
+        .receiver
+        .recv_timeout(Duration::from_secs(3))
+        .unwrap()
+    else {
+        panic!("Expected removed Lamp")
+    };
+    let fourth = next_session(&service);
+    let listing = session_request(&fourth, "GET", "tiles.json", "");
+    assert_eq!(listing["tiles"].as_array().unwrap().len(), 1);
+    assert_eq!(listing["tiles"][0]["id"], "custom.gate");
+    service.acknowledge(remove_revision);
+    service.acknowledge(lamp_revision);
+    // Once every edit is consumed, a later TV-side edit may seed a fresh session.
+    let mut tv_tiles = remaining;
+    tv_tiles[0].title = "Garage".into();
+    service.set_active(false, &[]);
+    service.set_active(true, &tv_tiles);
+    let fifth = next_session(&service);
+    assert_eq!(
+        session_request(&fifth, "GET", "tiles.json", "")["tiles"][0]["title"],
+        "Garage"
+    );
+    service.set_active(false, &[]);
+}
 
 #[test]
 fn saving_adds_a_tile_with_a_unique_id_and_edits_keep_it() {
