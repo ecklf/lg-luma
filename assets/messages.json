@@ -2410,7 +2410,12 @@
     "es": "Accesos directos",
     "zh": "快捷方式",
     "pt": "Atalhos",
-    "it": "Scorciatoie"
+    "it": "Scorciatoie",
+    "ru": "Ярлыки",
+    "pl": "Skróty",
+    "fr": "Raccourcis",
+    "vi": "Phím tắt",
+    "nl": "Snelkoppelingen"
   },
   "noTiles": {
     "en": "Shortcut tiles on Home send a web request, for example to a Home Assistant webhook.",
@@ -2418,7 +2423,12 @@
     "es": "Los accesos directos en Inicio envían una solicitud web, por ejemplo a un webhook de Home Assistant.",
     "zh": "主页上的快捷方式会发送网络请求，例如发送到 Home Assistant webhook。",
     "pt": "Os atalhos no Início enviam uma solicitação web, por exemplo para um webhook do Home Assistant.",
-    "it": "Le scorciatoie nella Home inviano una richiesta web, ad esempio a un webhook di Home Assistant."
+    "it": "Le scorciatoie nella Home inviano una richiesta web, ad esempio a un webhook di Home Assistant.",
+    "ru": "Ярлыки на главном экране отправляют веб-запрос, например на вебхук Home Assistant.",
+    "pl": "Skróty na ekranie Start wysyłają żądanie sieciowe, na przykład do webhooka Home Assistant.",
+    "fr": "Les raccourcis sur l’Accueil envoient une requête web, par exemple vers un webhook Home Assistant.",
+    "vi": "Thẻ phím tắt trên Trang chính gửi một yêu cầu web, ví dụ đến webhook của Home Assistant.",
+    "nl": "Snelkoppelingen op Start sturen een webverzoek, bijvoorbeeld naar een Home Assistant-webhook."
   },
   "addTile": {
     "en": "Add shortcut",
@@ -2426,7 +2436,12 @@
     "es": "Añadir acceso directo",
     "zh": "添加快捷方式",
     "pt": "Adicionar atalho",
-    "it": "Aggiungi scorciatoia"
+    "it": "Aggiungi scorciatoia",
+    "ru": "Добавить ярлык",
+    "pl": "Dodaj skrót",
+    "fr": "Ajouter un raccourci",
+    "vi": "Thêm phím tắt",
+    "nl": "Snelkoppeling toevoegen"
   },
   "newTile": {
     "en": "New shortcut",
@@ -2434,7 +2449,12 @@
     "es": "Nuevo acceso directo",
     "zh": "新快捷方式",
     "pt": "Novo atalho",
-    "it": "Nuova scorciatoia"
+    "it": "Nuova scorciatoia",
+    "ru": "Новый ярлык",
+    "pl": "Nowy skrót",
+    "fr": "Nouveau raccourci",
+    "vi": "Phím tắt mới",
+    "nl": "Nieuwe snelkoppeling"
   },
   "tileName": {
     "en": "Shortcut name",
@@ -2442,7 +2462,12 @@
     "es": "Nombre del acceso directo",
     "zh": "快捷方式名称",
     "pt": "Nome do atalho",
-    "it": "Nome della scorciatoia"
+    "it": "Nome della scorciatoia",
+    "ru": "Название ярлыка",
+    "pl": "Nazwa skrótu",
+    "fr": "Nom du raccourci",
+    "vi": "Tên phím tắt",
+    "nl": "Naam van snelkoppeling"
   },
   "tileNameHint": {
     "en": "Shown on the tile",
@@ -2450,7 +2475,12 @@
     "es": "Se muestra en el mosaico",
     "zh": "显示在磁贴上",
     "pt": "Exibido no bloco",
-    "it": "Mostrato sul riquadro"
+    "it": "Mostrato sul riquadro",
+    "ru": "Отображается на плитке",
+    "pl": "Wyświetlana na kafelku",
+    "fr": "Affiché sur la vignette",
+    "vi": "Hiển thị trên thẻ",
+    "nl": "Wordt op de tegel getoond"
   },
   "url": {
     "en": "URL",
@@ -2458,7 +2488,12 @@
     "es": "URL",
     "zh": "网址",
     "pt": "URL",
-    "it": "URL"
+    "it": "URL",
+    "ru": "URL",
+    "pl": "URL",
+    "fr": "URL",
+    "vi": "URL",
+    "nl": "URL"
   },
   "tileUrl": {
     "en": "Web address (URL)",
@@ -2466,7 +2501,12 @@
     "es": "Dirección web (URL)",
     "zh": "网址 (URL)",
     "pt": "Endereço web (URL)",
-    "it": "Indirizzo web (URL)"
+    "it": "Indirizzo web (URL)",
+    "ru": "Веб-адрес (URL)",
+    "pl": "Adres internetowy (URL)",
+    "fr": "Adresse web (URL)",
+    "vi": "Địa chỉ web (URL)",
+    "nl": "Webadres (URL)"
   },
   "tileUrlHint": {
     "en": "Address without http://, e.g. homeassistant.local:8123/api/webhook/…",
@@ -2474,7 +2514,12 @@
     "es": "Dirección sin http://, p. ej. homeassistant.local:8123/api/webhook/…",
     "zh": "不含 http:// 的地址，例如 homeassistant.local:8123/api/webhook/…",
     "pt": "Endereço sem http://, por exemplo homeassistant.local:8123/api/webhook/…",
-    "it": "Indirizzo senza http://, ad es. homeassistant.local:8123/api/webhook/…"
+    "it": "Indirizzo senza http://, ad es. homeassistant.local:8123/api/webhook/…",
+    "ru": "Адрес без http://, например homeassistant.local:8123/api/webhook/…",
+    "pl": "Adres bez http://, np. homeassistant.local:8123/api/webhook/…",
+    "fr": "Adresse sans http://, par ex. homeassistant.local:8123/api/webhook/…",
+    "vi": "Địa chỉ không có http://, ví dụ homeassistant.local:8123/api/webhook/…",
+    "nl": "Adres zonder http://, bijv. homeassistant.local:8123/api/webhook/…"
   },
   "icon": {
     "en": "Icon",
@@ -2482,7 +2527,12 @@
     "es": "Icono",
     "zh": "图标",
     "pt": "Ícone",
-    "it": "Icona"
+    "it": "Icona",
+    "ru": "Значок",
+    "pl": "Ikona",
+    "fr": "Icône",
+    "vi": "Biểu tượng",
+    "nl": "Pictogram"
   },
   "iconMoon": {
     "en": "Moon",
@@ -2490,7 +2540,12 @@
     "es": "Luna",
     "zh": "月亮",
     "pt": "Lua",
-    "it": "Luna"
+    "it": "Luna",
+    "ru": "Луна",
+    "pl": "Księżyc",
+    "fr": "Lune",
+    "vi": "Mặt trăng",
+    "nl": "Maan"
   },
   "iconSun": {
     "en": "Sun",
@@ -2498,7 +2553,12 @@
     "es": "Sol",
     "zh": "太阳",
     "pt": "Sol",
-    "it": "Sole"
+    "it": "Sole",
+    "ru": "Солнце",
+    "pl": "Słońce",
+    "fr": "Soleil",
+    "vi": "Mặt trời",
+    "nl": "Zon"
   },
   "iconCloud": {
     "en": "Cloud",
@@ -2506,7 +2566,12 @@
     "es": "Nube",
     "zh": "云",
     "pt": "Nuvem",
-    "it": "Nuvola"
+    "it": "Nuvola",
+    "ru": "Облако",
+    "pl": "Chmura",
+    "fr": "Nuage",
+    "vi": "Mây",
+    "nl": "Wolk"
   },
   "iconTv": {
     "en": "TV",
@@ -2514,7 +2579,12 @@
     "es": "Televisor",
     "zh": "电视",
     "pt": "TV",
-    "it": "TV"
+    "it": "TV",
+    "ru": "Телевизор",
+    "pl": "Telewizor",
+    "fr": "TV",
+    "vi": "TV",
+    "nl": "Tv"
   },
   "iconPower": {
     "en": "Power",
@@ -2522,7 +2592,12 @@
     "es": "Encendido",
     "zh": "电源",
     "pt": "Liga/desliga",
-    "it": "Accensione"
+    "it": "Accensione",
+    "ru": "Питание",
+    "pl": "Zasilanie",
+    "fr": "Marche/arrêt",
+    "vi": "Nguồn",
+    "nl": "Aan/uit"
   },
   "iconGlobe": {
     "en": "Globe",
@@ -2530,7 +2605,12 @@
     "es": "Globo",
     "zh": "地球",
     "pt": "Globo",
-    "it": "Globo"
+    "it": "Globo",
+    "ru": "Глобус",
+    "pl": "Glob",
+    "fr": "Globe",
+    "vi": "Quả địa cầu",
+    "nl": "Wereldbol"
   },
   "iconClock": {
     "en": "Clock",
@@ -2538,7 +2618,12 @@
     "es": "Reloj",
     "zh": "时钟",
     "pt": "Relógio",
-    "it": "Orologio"
+    "it": "Orologio",
+    "ru": "Часы",
+    "pl": "Zegar",
+    "fr": "Horloge",
+    "vi": "Đồng hồ",
+    "nl": "Klok"
   },
   "iconCoffee": {
     "en": "Coffee",
@@ -2546,7 +2631,12 @@
     "es": "Café",
     "zh": "咖啡",
     "pt": "Café",
-    "it": "Caffè"
+    "it": "Caffè",
+    "ru": "Кофе",
+    "pl": "Kawa",
+    "fr": "Café",
+    "vi": "Cà phê",
+    "nl": "Koffie"
   },
   "iconGaming": {
     "en": "Controller",
@@ -2554,7 +2644,12 @@
     "es": "Mando",
     "zh": "手柄",
     "pt": "Controle",
-    "it": "Controller"
+    "it": "Controller",
+    "ru": "Геймпад",
+    "pl": "Kontroler",
+    "fr": "Manette",
+    "vi": "Tay cầm",
+    "nl": "Controller"
   },
   "iconHeart": {
     "en": "Heart",
@@ -2562,7 +2657,12 @@
     "es": "Corazón",
     "zh": "爱心",
     "pt": "Coração",
-    "it": "Cuore"
+    "it": "Cuore",
+    "ru": "Сердце",
+    "pl": "Serce",
+    "fr": "Cœur",
+    "vi": "Trái tim",
+    "nl": "Hart"
   },
   "iconLocation": {
     "en": "Location",
@@ -2570,7 +2670,12 @@
     "es": "Ubicación",
     "zh": "位置",
     "pt": "Local",
-    "it": "Posizione"
+    "it": "Posizione",
+    "ru": "Местоположение",
+    "pl": "Lokalizacja",
+    "fr": "Lieu",
+    "vi": "Vị trí",
+    "nl": "Locatie"
   },
   "iconThermometer": {
     "en": "Thermometer",
@@ -2578,7 +2683,12 @@
     "es": "Termómetro",
     "zh": "温度计",
     "pt": "Termômetro",
-    "it": "Termometro"
+    "it": "Termometro",
+    "ru": "Термометр",
+    "pl": "Termometr",
+    "fr": "Thermomètre",
+    "vi": "Nhiệt kế",
+    "nl": "Thermometer"
   },
   "iconSparkles": {
     "en": "Sparkles",
@@ -2586,7 +2696,12 @@
     "es": "Destellos",
     "zh": "闪光",
     "pt": "Brilhos",
-    "it": "Scintille"
+    "it": "Scintille",
+    "ru": "Блёстки",
+    "pl": "Iskierki",
+    "fr": "Étincelles",
+    "vi": "Lấp lánh",
+    "nl": "Sterretjes"
   },
   "iconAlert": {
     "en": "Alert",
@@ -2594,7 +2709,12 @@
     "es": "Alerta",
     "zh": "提醒",
     "pt": "Alerta",
-    "it": "Avviso"
+    "it": "Avviso",
+    "ru": "Предупреждение",
+    "pl": "Alert",
+    "fr": "Alerte",
+    "vi": "Cảnh báo",
+    "nl": "Melding"
   },
   "iconEye": {
     "en": "Eye",
@@ -2602,7 +2722,12 @@
     "es": "Ojo",
     "zh": "眼睛",
     "pt": "Olho",
-    "it": "Occhio"
+    "it": "Occhio",
+    "ru": "Глаз",
+    "pl": "Oko",
+    "fr": "Œil",
+    "vi": "Mắt",
+    "nl": "Oog"
   },
   "protocol": {
     "en": "Protocol",
@@ -2610,7 +2735,12 @@
     "es": "Protocolo",
     "zh": "协议",
     "pt": "Protocolo",
-    "it": "Protocollo"
+    "it": "Protocollo",
+    "ru": "Протокол",
+    "pl": "Protokół",
+    "fr": "Protocole",
+    "vi": "Giao thức",
+    "nl": "Protocol"
   },
   "requestMethod": {
     "en": "Request method",
@@ -2618,7 +2748,12 @@
     "es": "Método de solicitud",
     "zh": "请求方法",
     "pt": "Método da solicitação",
-    "it": "Metodo di richiesta"
+    "it": "Metodo di richiesta",
+    "ru": "Метод запроса",
+    "pl": "Metoda żądania",
+    "fr": "Méthode de requête",
+    "vi": "Phương thức yêu cầu",
+    "nl": "Verzoekmethode"
   },
   "sendNow": {
     "en": "Send now",
@@ -2626,7 +2761,12 @@
     "es": "Enviar ahora",
     "zh": "立即发送",
     "pt": "Enviar agora",
-    "it": "Invia ora"
+    "it": "Invia ora",
+    "ru": "Отправить сейчас",
+    "pl": "Wyślij teraz",
+    "fr": "Envoyer maintenant",
+    "vi": "Gửi ngay",
+    "nl": "Nu verzenden"
   },
   "removeTile": {
     "en": "Remove shortcut",
@@ -2634,7 +2774,12 @@
     "es": "Eliminar acceso directo",
     "zh": "移除快捷方式",
     "pt": "Remover atalho",
-    "it": "Rimuovi scorciatoia"
+    "it": "Rimuovi scorciatoia",
+    "ru": "Удалить ярлык",
+    "pl": "Usuń skrót",
+    "fr": "Supprimer le raccourci",
+    "vi": "Xóa phím tắt",
+    "nl": "Snelkoppeling verwijderen"
   },
   "tileAdded": {
     "en": "{tile} added to Home.",
@@ -2642,7 +2787,12 @@
     "es": "{tile} añadido a Inicio.",
     "zh": "已将 {tile} 添加到主页。",
     "pt": "{tile} adicionado ao Início.",
-    "it": "{tile} aggiunto alla Home."
+    "it": "{tile} aggiunto alla Home.",
+    "ru": "{tile}: добавлено на «Главную».",
+    "pl": "Dodano {tile} do ekranu Start.",
+    "fr": "{tile} a été ajouté à l’Accueil.",
+    "vi": "Đã thêm {tile} vào Trang chính.",
+    "nl": "{tile} toegevoegd aan Start."
   },
   "tileRemoved": {
     "en": "{tile} removed.",
@@ -2650,7 +2800,12 @@
     "es": "{tile} eliminado.",
     "zh": "已移除 {tile}。",
     "pt": "{tile} removido.",
-    "it": "{tile} rimosso."
+    "it": "{tile} rimosso.",
+    "ru": "{tile}: удалено.",
+    "pl": "Usunięto {tile}.",
+    "fr": "{tile} a été supprimé.",
+    "vi": "Đã xóa {tile}.",
+    "nl": "{tile} verwijderd."
   },
   "tileSending": {
     "en": "Sending {tile}…",
@@ -2658,7 +2813,12 @@
     "es": "Enviando {tile}…",
     "zh": "正在发送 {tile}…",
     "pt": "Enviando {tile}…",
-    "it": "Invio di {tile}…"
+    "it": "Invio di {tile}…",
+    "ru": "Отправка: {tile}…",
+    "pl": "Wysyłanie: {tile}…",
+    "fr": "Envoi de {tile}…",
+    "vi": "Đang gửi {tile}…",
+    "nl": "{tile} wordt verzonden…"
   },
   "tileSent": {
     "en": "{tile} sent.",
@@ -2666,7 +2826,12 @@
     "es": "{tile} enviado.",
     "zh": "{tile} 已发送。",
     "pt": "{tile} enviado.",
-    "it": "{tile} inviato."
+    "it": "{tile} inviato.",
+    "ru": "{tile}: отправлено.",
+    "pl": "Wysłano: {tile}.",
+    "fr": "{tile} a été envoyé.",
+    "vi": "Đã gửi {tile}.",
+    "nl": "{tile} verzonden."
   },
   "tileFailed": {
     "en": "{tile} couldn’t be sent.",
@@ -2674,7 +2839,12 @@
     "es": "No se pudo enviar {tile}.",
     "zh": "无法发送 {tile}。",
     "pt": "Não foi possível enviar {tile}.",
-    "it": "Impossibile inviare {tile}."
+    "it": "Impossibile inviare {tile}.",
+    "ru": "Не удалось отправить: {tile}.",
+    "pl": "Nie udało się wysłać: {tile}.",
+    "fr": "Impossible d’envoyer {tile}.",
+    "vi": "Không thể gửi {tile}.",
+    "nl": "{tile} kon niet worden verzonden."
   },
   "tileUrlInvalid": {
     "en": "Enter a valid http:// or https:// address with a host name.",
@@ -2685,7 +2855,9 @@
     "it": "Inserisci un indirizzo http:// o https:// valido con un nome host.",
     "ru": "Введите корректный адрес http:// или https:// с именем хоста.",
     "pl": "Wpisz prawidłowy adres http:// lub https:// z nazwą hosta.",
-    "fr": "Saisissez une adresse http:// ou https:// valide avec un nom d’hôte."
+    "fr": "Saisissez une adresse http:// ou https:// valide avec un nom d’hôte.",
+    "vi": "Nhập một địa chỉ http:// hoặc https:// hợp lệ có tên máy chủ.",
+    "nl": "Voer een geldig http://- of https://-adres met een hostnaam in."
   },
   "tileIncomplete": {
     "en": "Add a name and a URL first.",
@@ -2693,7 +2865,12 @@
     "es": "Primero añade un nombre y una URL.",
     "zh": "请先填写名称和网址。",
     "pt": "Primeiro adicione um nome e uma URL.",
-    "it": "Prima aggiungi un nome e un URL."
+    "it": "Prima aggiungi un nome e un URL.",
+    "ru": "Сначала введите название и URL.",
+    "pl": "Najpierw dodaj nazwę i adres URL.",
+    "fr": "Ajoutez d’abord un nom et une URL.",
+    "vi": "Hãy thêm tên và URL trước.",
+    "nl": "Voeg eerst een naam en een URL toe."
   },
   "tileLimit": {
     "en": "No more shortcuts can be added.",

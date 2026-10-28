@@ -1092,6 +1092,7 @@ fn run() -> Result<(), String> {
                         &preferences_path,
                         &weather_service,
                         &wallpaper_service,
+                        &webhook_service,
                     );
                 }
                 Response::Recent {
@@ -1236,7 +1237,10 @@ fn run() -> Result<(), String> {
                     }
                     WindowEvent::FocusLost => {
                         if webos {
-                            if matches!(state.overlay, Some(Overlay::WallpaperUpload | Overlay::TileEditor)) {
+                            if matches!(
+                                state.overlay,
+                                Some(Overlay::WallpaperUpload | Overlay::TileEditor)
+                            ) {
                                 state.back();
                             }
                             wallpaper_service.set_active(false);
