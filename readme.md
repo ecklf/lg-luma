@@ -312,7 +312,7 @@ See [Releases](development.md#releases) for the workflow and repository setup.
 Shortcut tiles sit on Home like apps but send a web request when selected, for example to a Home
 Assistant webhook. Open **Settings → Widgets → Shortcuts → Configure** and scan
 the QR code. Creation and editing happen on that page, which also tests and removes shortcuts.
-On the TV, use the remove button beside a saved shortcut in Settings to remove it. Changes appear
+On the TV, select a saved shortcut in Settings to test or remove it from its popup. Changes appear
 on the TV as soon as they are saved. Like the wallpaper upload, its link works only while the TV
 dialog is open and focused,
 for at most ten minutes, over unencrypted HTTP on your local network.

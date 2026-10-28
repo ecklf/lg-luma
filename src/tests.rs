@@ -880,12 +880,12 @@ fn system_version_uses_a_settings_surface_without_an_interactive_target() {
     assert!(system.draw.iter().any(|draw| matches!(
         draw,
         crate::renderer::Draw::Shape(rect, _, _, color)
-            if rect.x == 640. && rect.y == 164.8 && rect.w == 1120. && rect.h == 72. && color[3] == 0.3
+            if rect.x == 640. && rect.y == 164.8 && rect.w == 1120. && rect.h == 72. && color[3] == 0.45
     )));
     assert!(system.draw.iter().any(|draw| matches!(
         draw,
         crate::renderer::Draw::Text(label, _, style, color, _)
-            if label == "Luma vtest" && style.size == 20.8 && style.weight == 550 && color[3] == 0.5
+            if label == "Luma vtest" && style.size == 20.8 && style.weight == 550 && color[3] == 0.6
     )));
     assert_eq!(state.hit_test(&system.controls, 900., 200.), None);
     state.focus = Target::Sidebar(crate::state::SYSTEM_SECTION);
@@ -2174,7 +2174,7 @@ fn custom_tiles_are_sanitized_and_get_stable_unique_ids() {
 }
 
 #[test]
-fn shortcut_settings_only_offer_qr_editing_and_local_removal() {
+fn shortcut_settings_offer_qr_editing_and_a_test_remove_popup() {
     use crate::state::{Subpage, WIDGETS_SECTION};
     let mut state = ready();
     state.preferences.reduced_motion = true;
@@ -2206,12 +2206,48 @@ fn shortcut_settings_only_offer_qr_editing_and_local_removal() {
             .filter(|c| c.scrollable)
             .map(|c| c.target)
             .collect::<Vec<_>>(),
-        vec![Target::TileRemove(tile.id.clone()), Target::TileEditor]
+        vec![Target::Tile(tile.id.clone()), Target::TileEditor]
     );
-    assert!(state.hit_test(&controls(&state), 800., 280.).is_none());
+    assert_eq!(
+        state.hit_test(&controls(&state), 800., 280.),
+        Some(Target::Tile(tile.id.clone()))
+    );
     let page = scene(&state);
-    assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, _, _, color, _) if label == "Lamp" && color[3] == 0.5)));
+    assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, _, _, color, _) if label == "Lamp" && color[3] == 0.73)));
+    assert!(page.draw.iter().any(|draw| matches!(draw,
+        crate::renderer::Draw::Shape(rect, radius, _, color)
+            if rect.x == 640. && rect.h == 90.7 && *radius == 20. && color[3] == 0.72
+    )));
+    assert!(
+        !page
+            .controls
+            .iter()
+            .any(|control| matches!(control.target, Target::TileRemove(_)))
+    );
     assert!(!page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::TintedImage(path, rect, ..) if path.ends_with("right.lvec") && rect.x >= 640.)));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Tile(tile.id.clone()));
+    state.activate();
+    assert_eq!(state.focus, Target::TileTest(tile.id.clone()));
+    let popup = scene(&state);
+    assert!(popup.modal.is_some());
+    assert_eq!(
+        popup
+            .controls
+            .iter()
+            .map(|control| control.target.clone())
+            .collect::<Vec<_>>(),
+        vec![
+            Target::TileTest(tile.id.clone()),
+            Target::TileRemove(tile.id.clone())
+        ]
+    );
+    assert!(
+        matches!(state.activate().as_slice(), [Effect::FireWebhook(sent)] if sent.id == tile.id)
+    );
+    state.back();
+    assert_eq!(state.focus, Target::Tile(tile.id.clone()));
+    state.activate();
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::TileRemove(tile.id.clone()));
     assert_eq!(state.activate(), vec![Effect::Save]);
@@ -2375,7 +2411,7 @@ fn shortcut_list_scroll_and_pointer_focus_preserve_control_positions() {
     for _ in 0..20 {
         state.direction(Direction::Down, &controls(&state));
     }
-    assert_eq!(state.focus, Target::TileRemove("custom.tile-19".into()));
+    assert_eq!(state.focus, Target::Tile("custom.tile-19".into()));
     assert!(state.scroll > 0.);
     let before: Vec<_> = controls(&state)
         .iter()
@@ -2384,9 +2420,7 @@ fn shortcut_list_scroll_and_pointer_focus_preserve_control_positions() {
     let scroll = state.scroll;
     let target = controls(&state)
         .into_iter()
-        .find(|c| {
-            matches!(c.target, Target::TileRemove(_)) && c.rect.y > state.content_viewport().y
-        })
+        .find(|c| matches!(c.target, Target::Tile(_)) && c.rect.y > state.content_viewport().y)
         .unwrap();
     state.pointer_focus(target.target);
     assert_eq!(state.scroll, scroll);
@@ -2445,6 +2479,211 @@ fn settings_lists_keep_bottom_padding_for_remote_and_wheel_scrolling() {
             .rect;
         assert!((rect.y + rect.h - bottom).abs() < 0.01);
     }
+}
+
+#[test]
+fn language_list_scrolls_under_fixed_ui_without_clipping_or_fades() {
+    use crate::{renderer::Draw, state::Subpage};
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state.open(2);
+    state.subpage = Some(Subpage::Language);
+    state.scroll = 180.;
+    let rendered = scene(&state);
+    assert!(!rendered.draw.iter().any(|draw| matches!(
+        draw,
+        Draw::Clip(Some(_)) | Draw::EdgeFade(Some(_)) | Draw::EdgeFadeX(Some(_))
+    )));
+    let first = rendered
+        .controls
+        .iter()
+        .find(|control| control.target == Target::Choice(0))
+        .unwrap();
+    assert!(first.rect.y < state.content_viewport().y);
+    let last_language = rendered
+        .draw
+        .iter()
+        .rposition(|draw| {
+            matches!(draw,
+                Draw::Text(label, ..) if label == crate::i18n::Language::ALL.last().unwrap().name()
+            )
+        })
+        .unwrap();
+    for key in ["interface", "settings"] {
+        let label = state.preferences.language.t(key);
+        let fixed = rendered
+            .draw
+            .iter()
+            .position(|draw| {
+                matches!(draw,
+                    Draw::Text(text, ..) if text == label
+                )
+            })
+            .unwrap();
+        assert!(fixed > last_language);
+    }
+    let nav = rendered
+        .controls
+        .iter()
+        .find(|control| control.target == Target::Nav(2))
+        .unwrap();
+    let (x, y) = nav.rect.center();
+    assert_eq!(
+        state.hit_test(&rendered.controls, x, y),
+        Some(Target::Nav(2))
+    );
+}
+
+#[test]
+fn apps_scroll_behind_navigation_without_a_top_cutoff_or_fade() {
+    use crate::renderer::Draw;
+    let mut state = ready();
+    state.open(1);
+    state.scroll = 400.;
+    let rendered = scene(&state);
+    assert!(!rendered.draw.iter().any(|draw| matches!(
+        draw,
+        Draw::Clip(Some(_)) | Draw::EdgeFade(Some(_)) | Draw::EdgeFadeX(Some(_))
+    )));
+    let card = rendered
+        .draw
+        .iter()
+        .position(|draw| {
+            matches!(draw,
+                Draw::Shadow(rect, ..) if rect.y < 0. && rect.y + rect.h > 0.
+            )
+        })
+        .expect("cards remain drawn until they leave the screen, not the content viewport");
+    let nav_label = rendered
+        .draw
+        .iter()
+        .rposition(|draw| {
+            matches!(draw,
+                Draw::Text(label, ..) if label == state.preferences.language.t("apps")
+            )
+        })
+        .unwrap();
+    assert!(card < nav_label);
+    let nav = rendered
+        .controls
+        .iter()
+        .find(|control| control.target == Target::Nav(1))
+        .unwrap();
+    let (x, y) = nav.rect.center();
+    assert_eq!(
+        state.hit_test(&rendered.controls, x, y),
+        Some(Target::Nav(1))
+    );
+}
+
+#[test]
+fn apps_toolbar_stays_fixed_above_scrolling_cards_and_keeps_pointer_priority() {
+    for with_clear_controls in [false, true] {
+        let mut state = ready();
+        state.open(1);
+        if with_clear_controls {
+            state.filter = 1;
+            state.query = "n".into();
+        }
+        let before = controls(&state);
+        state.scroll = 200.;
+        let rendered = scene(&state);
+        for control in before.iter().filter(|control| {
+            matches!(
+                control.target,
+                Target::Filter(_) | Target::ClearFilter | Target::Search | Target::ClearSearch
+            )
+        }) {
+            let fixed = rendered
+                .controls
+                .iter()
+                .find(|item| item.target == control.target)
+                .unwrap();
+            assert_eq!(fixed.rect.y, control.rect.y);
+            assert!(!fixed.scrollable);
+            let (x, y) = fixed.rect.center();
+            assert_eq!(
+                state.hit_test(&rendered.controls, x, y),
+                Some(fixed.target.clone())
+            );
+        }
+        assert_eq!(state.hit_test(&rendered.controls, 1400., 230.), None);
+        let first = before
+            .iter()
+            .find(|control| matches!(control.target, Target::App(_)))
+            .unwrap();
+        let scrolled = rendered
+            .controls
+            .iter()
+            .find(|control| control.target == first.target)
+            .unwrap();
+        assert_eq!(first.rect.y - scrolled.rect.y, state.scroll);
+        state.focus = first.target.clone();
+        state.reveal_focus(&rendered.controls);
+        let revealed = controls(&state)
+            .into_iter()
+            .find(|control| control.target == first.target)
+            .unwrap();
+        assert!(revealed.rect.y >= state.apps_viewport().y);
+    }
+}
+
+#[test]
+fn app_categories_and_search_use_matching_pills_and_larger_heavier_labels() {
+    use crate::renderer::Draw;
+    let mut state = ready();
+    state.open(1);
+    let rendered = scene(&state);
+    for control in rendered
+        .controls
+        .iter()
+        .filter(|control| matches!(control.target, Target::Filter(_) | Target::Search))
+    {
+        assert_eq!(control.rect.h, 56.);
+        assert_eq!(control.rect.y, 164.8);
+        assert!(rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::Shape(rect, radius, _, color) if rect.x == control.rect.x && rect.y == control.rect.y
+                && rect.w == control.rect.w && (*radius == 48. || *radius == 28.) && color[3] >= 0.72
+        )));
+        assert!(rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::Text(_, rect, style, ..) if rect.x >= control.rect.x && rect.x < control.rect.x + control.rect.w
+                && rect.y > control.rect.y && rect.y < control.rect.y + control.rect.h
+                && style.size == 20.8 && style.weight == 550
+        )));
+    }
+}
+
+#[test]
+fn category_focus_active_and_clear_button_share_the_pill_style() {
+    use crate::renderer::Draw;
+    let mut state = ready();
+    state.open(1);
+    state.filter = 1;
+    state.focus = Target::ClearFilter;
+    let rendered = scene(&state);
+    let clear = rendered
+        .controls
+        .iter()
+        .find(|control| control.target == Target::ClearFilter)
+        .unwrap();
+    assert_eq!((clear.rect.w, clear.rect.h), (56., 56.));
+    assert!(rendered.draw.iter().any(|draw| matches!(draw,
+        Draw::RoundedGradient(rect, radius, ..) if rect.x == clear.rect.x && rect.y == clear.rect.y && *radius == 28.
+    )));
+    let category = rendered
+        .controls
+        .iter()
+        .find(|control| control.target == Target::Filter(1))
+        .unwrap();
+    assert!(rendered.draw.iter().any(|draw| matches!(draw,
+        Draw::Shape(rect, radius, stroke, color) if rect.x == category.rect.x && rect.y == category.rect.y
+            && *radius == 28. && *stroke == 1.5 && color[3] == 0.35
+    )));
+    state.focus = Target::Filter(1);
+    let focused = scene(&state);
+    assert!(focused.draw.iter().any(|draw| matches!(draw,
+        Draw::RoundedGradient(rect, radius, ..) if rect.x == category.rect.x && rect.y == category.rect.y && *radius == 28.
+    )));
 }
 
 #[test]

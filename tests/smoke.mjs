@@ -421,7 +421,7 @@ try {
   assert.ok(!shortcut.ui_text.includes('Add shortcut'));
   assert.ok(!shortcut.ui_text.includes('Request method'));
   // Scenarios share one preferences file, so the tile is removed again here.
-  const removed = await scenario('shortcut-removed', `${shortcutsPage},down,enter`);
+  const removed = await scenario('shortcut-removed', `${shortcutsPage},down,enter,down,enter`);
   assert.equal(removed.focus, 'TileEditor');
   assert.equal(removed.subpage, 'Shortcuts');
   assert.deepEqual(removed.preferences.custom_tiles, []);

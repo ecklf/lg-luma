@@ -89,6 +89,8 @@ pub enum Target {
     WeatherSearch,
     WeatherClear,
     WeatherResult(usize),
+    Tile(String),
+    TileTest(String),
     TileRemove(String),
     TileEditor,
 }
@@ -437,6 +439,11 @@ impl State {
         Rect::new(left, content.y, HOME_FADE_RIGHT - left, content.h)
     }
 
+    pub fn apps_viewport(&self) -> Rect {
+        let content = self.content_viewport();
+        Rect::new(content.x, 244.8, content.w, content.y + content.h - 244.8)
+    }
+
     pub fn backgrounds_viewport(&self) -> Rect {
         let content = self.content_viewport();
         Rect::new(620., 244.8, 1160., content.y + content.h - 244.8)
@@ -452,6 +459,8 @@ impl State {
                         self.favorites_viewport()
                     } else if matches!(control.target, Target::Background(_)) {
                         self.backgrounds_viewport()
+                    } else if self.page == Page::Apps {
+                        self.apps_viewport()
                     } else {
                         self.content_viewport()
                     };
@@ -652,7 +661,7 @@ impl State {
                 let top = if matches!(self.focus, Target::Background(_)) {
                     self.backgrounds_viewport().y + 8.
                 } else if self.page == Page::Apps {
-                    164.8
+                    self.apps_viewport().y + 8.
                 } else {
                     120.8
                 };
@@ -1094,7 +1103,7 @@ impl State {
             if (matches!(
                 self.focus,
                 Target::TileEditor
-                    | Target::TileRemove(_)
+                    | Target::Tile(_)
                     | Target::InputMode(_)
                     | Target::WeatherToggle
                     | Target::WeatherLocation
@@ -1410,6 +1419,17 @@ impl State {
                 }
                 self.dirty = true;
             }
+        } else if let Target::Tile(id) = &self.focus {
+            if self.preferences.custom_tile(id).is_none() {
+                return;
+            }
+            self.overlay = Some(Overlay::Options {
+                id: id.clone(),
+                restore: self.focus.clone(),
+            });
+            self.focus = Target::TileTest(id.clone());
+            self.panel_started = (!self.preferences.reduced_motion).then(Instant::now);
+            self.dirty = true;
         } else if let Target::App(id) = &self.focus {
             self.overlay = Some(Overlay::Options {
                 id: id.clone(),
@@ -1618,9 +1638,19 @@ impl State {
         self.preferences.custom_tiles = tiles;
         self.preferences.sanitize();
         self.sync_custom_tiles();
-        if let Target::TileRemove(id) = &self.focus
+        if let Target::Tile(id) | Target::TileRemove(id) | Target::TileTest(id) = &self.focus
             && self.preferences.custom_tile(id).is_none()
         {
+            if matches!(
+                &self.overlay,
+                Some(Overlay::Options {
+                    restore: Target::Tile(_),
+                    ..
+                })
+            ) {
+                self.overlay = None;
+                self.panel_started = None;
+            }
             self.focus = Target::TileEditor;
         }
         if !added.is_empty() {
@@ -1885,8 +1915,19 @@ impl State {
                     self.panel_started = Some(Instant::now());
                 }
             }
+            Target::Tile(_) => self.options(),
+            Target::TileTest(id) => {
+                if matches!(&self.overlay, Some(Overlay::Options { id: current, restore: Target::Tile(_), .. }) if current == &id)
+                    && let Some(tile) = self.preferences.custom_tile(&id).cloned()
+                {
+                    return self.send_tile(tile);
+                }
+            }
             Target::TileRemove(id) => {
-                if let Some(tile) = self.preferences.remove_tile(&id) {
+                if matches!(&self.overlay, Some(Overlay::Options { id: current, restore: Target::Tile(_), .. }) if current == &id)
+                    && let Some(tile) = self.preferences.remove_tile(&id)
+                {
+                    self.overlay = None;
                     self.notify(
                         self.preferences
                             .language

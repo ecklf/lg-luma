@@ -143,6 +143,8 @@ Weather location and temperature choices return to Weather; Back from a widget r
 in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling.
+Lists render behind the fixed sidebar, navigation and background actions, without viewport clipping
+or edge fades. Pointer interaction and remote focus retain their safe content viewports.
 The **Greeting** subpage contains **Name** and **Clear name**. Selecting Name opens the text keyboard
 (the system keyboard on the TV) and the name is appended to the Home greeting ("Good evening, Ana.").
 Long greetings scale down to fit their existing single-line area, centred vertically without
@@ -317,8 +319,9 @@ need the session token in `X-Luma-Token` and a JSON body of at most 4 KiB. Saves
 the preference validation rules (`clean_input_name`, `valid_tile_url`, `TILE_ICONS`, `TILE_LIMIT`,
 `new_tile_id`).
 Creation and editing are available only on this companion page, which uses a flat background.
-The TV lists saved shortcuts on passive surfaces matching the System version row, without
-chevrons or row selection. Each has a separate remove-icon control. Removal clears the
+The TV lists saved shortcuts as selectable description rows matching HDMI settings. Pressing one
+opens a popup with **Test shortcut** and **Remove shortcut**; Back returns to the same row.
+The System version retains a separate muted, non-interactive surface. Removal clears the
 shortcut from preferences, favorites and hidden apps without attempting a platform uninstall.
 Each accepted companion change sends the complete list back to the launcher:
 new tiles join the end of the Home favorites, removed ones leave favorites and hidden apps, and

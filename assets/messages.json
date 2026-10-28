@@ -1,4 +1,17 @@
 {
+  "testShortcut": {
+    "en": "Test shortcut",
+    "de": "Verknüpfung testen",
+    "es": "Probar acceso directo",
+    "zh": "测试快捷方式",
+    "pt": "Testar atalho",
+    "it": "Prova scorciatoia",
+    "ru": "Проверить ярлык",
+    "pl": "Testuj skrót",
+    "fr": "Tester le raccourci",
+    "vi": "Thử lối tắt",
+    "nl": "Snelkoppeling testen"
+  },
   "configure": {
     "en": "Configure",
     "de": "Konfigurieren",

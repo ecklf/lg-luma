@@ -332,7 +332,7 @@ fn upload_button_is_compact_and_right_aligned_in_every_language() {
 }
 
 #[test]
-fn gallery_scrolling_keeps_sidebar_and_upload_fixed_and_clips_only_backgrounds() {
+fn gallery_scrolls_behind_fixed_controls_without_clipping_or_fades() {
     let mut state = ready();
     state.open(2);
     state.section = 1;
@@ -369,8 +369,32 @@ fn gallery_scrolling_keeps_sidebar_and_upload_fixed_and_clips_only_backgrounds()
         .find(|c| c.target == Target::Background(3))
         .unwrap();
     assert_eq!(old.rect.y - new.rect.y, state.scroll);
-    let viewport = state.backgrounds_viewport();
-    assert!(scrolled.draw.iter().any(|draw| matches!(draw, Draw::Clip(Some(rect)) if rect.x == viewport.x && rect.y == viewport.y && rect.h == viewport.h)));
+    assert!(!scrolled.draw.iter().any(|draw| matches!(
+        draw,
+        Draw::Clip(Some(_)) | Draw::EdgeFade(Some(_)) | Draw::EdgeFadeX(Some(_))
+    )));
+    let last_card = scrolled
+        .draw
+        .iter()
+        .rposition(|draw| {
+            matches!(draw,
+                Draw::Image(_, rect, ..) if rect.w == 360. && rect.h == 202.5
+            )
+        })
+        .unwrap();
+    for key in ["uploadWallpaper", "wallpaperCycle", "interface"] {
+        let label = state.preferences.language.t(key);
+        let fixed = scrolled
+            .draw
+            .iter()
+            .position(|draw| {
+                matches!(draw,
+                    Draw::Text(text, ..) if text == label
+                )
+            })
+            .unwrap();
+        assert!(fixed > last_card, "{key} must be drawn above the gallery");
+    }
     let scroll = state.scroll;
     state.wheel_scroll(&scrolled.controls, Some((300., 300.)), 0, -3);
     assert_eq!(state.scroll, scroll);
