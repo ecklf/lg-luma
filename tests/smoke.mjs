@@ -282,7 +282,7 @@ try {
   assert.ok(widgets.ui_text.includes('Widgets'));
   for (const title of ['Greeting', 'Weather', 'Shortcuts', 'Inputs'])
     assert.ok(widgets.ui_text.includes(title));
-  const greetingEditor = `${widgetsPage},enter,enter`;
+  const greetingEditor = `${widgetsPage},enter,down,enter`;
   for (const [id, name] of [
     ['Ana', 'Ana'],
     ['Bob', 'Bob'],
@@ -310,7 +310,7 @@ try {
       'Keyboard completion must save without waiting for another SDL input event',
     );
   }
-  const greeting = await scenario('greeting-settings', `${widgetsPage},enter,down`);
+  const greeting = await scenario('greeting-settings', `${widgetsPage},enter,down,down`);
   assert.equal(greeting.subpage, 'Greeting');
   assert.equal(greeting.focus, 'GreetingNameClear');
   assert.ok(greeting.ui_text.includes('Clear name'));

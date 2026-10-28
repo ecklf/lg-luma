@@ -564,6 +564,8 @@ fn greeting_subpage_opens_the_keyboard_and_back_restores_its_parent() {
             .is_empty()
     );
     assert_eq!(state.subpage, Some(crate::state::Subpage::Greeting));
+    assert_eq!(state.focus, Target::GreetingToggle);
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::GreetingName);
     assert!(!state.text_input_active());
     assert!(state.activate().is_empty());
@@ -592,6 +594,7 @@ fn greeting_name_replacement_commits_on_every_keyboard_completion_route() {
         state.open(2);
         state.focus = Target::Widget(0);
         state.activate();
+        state.direction(Direction::Down, &controls(&state));
         state.activate();
         assert!(state.editing_text().is_empty());
         state.text("  BobX ");
@@ -632,6 +635,7 @@ fn remote_can_clear_a_saved_greeting_name_without_moving_the_controls() {
         .iter()
         .map(|c| (c.target.clone(), c.rect.y))
         .collect();
+    state.direction(Direction::Down, &controls(&state));
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::GreetingNameClear);
     assert_eq!(state.activate(), vec![Effect::Save]);
@@ -2484,7 +2488,7 @@ fn shortcut_list_scroll_and_pointer_focus_preserve_control_positions() {
 
 #[test]
 fn settings_lists_keep_bottom_padding_for_remote_and_wheel_scrolling() {
-    use crate::state::{SETTINGS_BOTTOM_PADDING, Subpage};
+    use crate::state::{SETTINGS_LIST_BOTTOM_PADDING, Subpage};
     for backgrounds in [false, true] {
         let mut state = ready();
         state.preferences.reduced_motion = true;
@@ -2513,7 +2517,7 @@ fn settings_lists_keep_bottom_padding_for_remote_and_wheel_scrolling() {
         state.focus = last.clone();
         state.reveal_focus(&controls(&state));
         let bottom =
-            state.content_viewport().y + state.content_viewport().h - SETTINGS_BOTTOM_PADDING;
+            state.content_viewport().y + state.content_viewport().h - SETTINGS_LIST_BOTTOM_PADDING;
         let rect = controls(&state)
             .into_iter()
             .find(|c| c.target == last)
@@ -2800,17 +2804,25 @@ fn greeting_visibility_toggle_persists_without_clearing_name_or_hiding_date() {
     state.focus = Target::Widget(0);
     state.activate();
     assert_eq!(state.subpage, Some(Subpage::Greeting));
-    state.direction(Direction::Down, &controls(&state));
-    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::GreetingToggle);
+    let rendered = scene(&state);
+    let toggle = rendered
+        .controls
+        .iter()
+        .find(|control| control.target == Target::GreetingToggle)
+        .unwrap();
+    assert_eq!(toggle.rect.y, 164.8);
+    assert!(rendered.draw.iter().any(|draw| matches!(draw,
+        Draw::Text(label, ..) if label == state.preferences.language.t("showWidget")
+    )));
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert!(!state.preferences.show_greeting);
     assert_eq!(state.preferences.greeting_name, "Ana");
     let saved = serde_json::to_string(&state.preferences).unwrap();
     let restored: Preferences = serde_json::from_str(&saved).unwrap();
     assert!(!restored.show_greeting);
-    state.direction(Direction::Up, &controls(&state));
-    assert_eq!(state.focus, Target::GreetingNameClear);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::GreetingName);
     state.focus = Target::GreetingToggle;
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::Widget(0));

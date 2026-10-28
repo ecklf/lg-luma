@@ -2630,7 +2630,7 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
         assets,
         Row {
             target: Target::GreetingName,
-            rect: Rect::new(640., 164.8 - state.scroll, 1120., 90.7),
+            rect: Rect::new(640., 248.8 - state.scroll, 1120., 90.7),
             title: language.t("name"),
             icon: Some("type"),
             value: None,
@@ -2646,7 +2646,7 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
         assets,
         Row {
             target: Target::GreetingNameClear,
-            rect: Rect::new(640., 267.5 - state.scroll, 1120., 72.),
+            rect: Rect::new(640., 351.5 - state.scroll, 1120., 72.),
             title: language.t("clearName"),
             icon: Some("refresh"),
             value: None,
@@ -2661,8 +2661,8 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
         assets,
         Row {
             target: Target::GreetingToggle,
-            rect: Rect::new(640., 351.5 - state.scroll, 1120., 72.),
-            title: language.t("showOnHome"),
+            rect: Rect::new(640., 164.8 - state.scroll, 1120., 72.),
+            title: language.t("showWidget"),
             icon: None,
             value: Some(language.t(if state.preferences.show_greeting {
                 "stateOn"

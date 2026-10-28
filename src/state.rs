@@ -12,6 +12,7 @@ pub const WIDGETS_SECTION: usize = 2;
 pub const SYSTEM_SECTION: usize = 3;
 pub const SECTION_COUNT: usize = 4;
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
+pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
 pub const APPS_COLUMNS: usize = 6;
 /// Automatic inventory retries before the error shows: with the 6.5 s Luna timeout about 50 s.
 pub const INVENTORY_RETRIES: u32 = 5;
@@ -427,7 +428,13 @@ impl State {
         let viewport = self.content_viewport();
         viewport.y + viewport.h
             - if self.page == Page::Settings {
-                SETTINGS_BOTTOM_PADDING
+                if self.subpage == Some(Subpage::Language)
+                    || (self.section == 1 && self.subpage.is_none())
+                {
+                    SETTINGS_LIST_BOTTOM_PADDING
+                } else {
+                    SETTINGS_BOTTOM_PADDING
+                }
             } else {
                 12.
             }
@@ -997,9 +1004,9 @@ impl State {
             }
             let setting_rows: Option<&[Target]> = match self.subpage {
                 Some(Subpage::Greeting) => Some(&[
+                    Target::GreetingToggle,
                     Target::GreetingName,
                     Target::GreetingNameClear,
-                    Target::GreetingToggle,
                 ]),
                 Some(Subpage::AppNames) => Some(&[Target::AppNamesHome, Target::AppNamesApps]),
                 Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
@@ -1911,7 +1918,7 @@ impl State {
             Target::InputRename => self.open_keyboard(TextField::InputName),
             Target::Widget(index) => {
                 let (subpage, focus) = match index {
-                    0 => (Subpage::Greeting, Target::GreetingName),
+                    0 => (Subpage::Greeting, Target::GreetingToggle),
                     1 => (Subpage::Weather, Target::WeatherToggle),
                     2 => (Subpage::Shortcuts, Target::TileEditor),
                     3 => (
