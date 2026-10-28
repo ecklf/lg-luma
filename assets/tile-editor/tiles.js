@@ -1,4 +1,4 @@
-// Like the TV keyboard, an address typed without a scheme is sent over http.
+// An address typed without a scheme defaults to http for local automation.
 export function normalizeUrl(text) {
   const url = text.trim();
   return url && !url.includes('://') ? `http://${url}` : url;

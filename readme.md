@@ -310,10 +310,11 @@ See [Releases](development.md#releases) for the workflow and repository setup.
 ## Shortcut tiles
 
 Shortcut tiles sit on Home like apps but send a web request when selected, for example to a Home
-Assistant webhook. Add them in **Settings → Shortcuts**, or choose **Edit on phone or computer**
-there and scan the QR code to type names and addresses on another device instead of with the
-remote. That page adds, edits, tests and removes shortcuts; changes appear on the TV as soon as they
-are saved. Like the wallpaper upload, its link works only while the TV dialog is open and focused,
+Assistant webhook. Open **Settings → Widgets → Shortcuts → Configure** and scan
+the QR code. Creation and editing happen on that page, which also tests and removes shortcuts.
+On the TV, use the remove button beside a saved shortcut in Settings to remove it. Changes appear
+on the TV as soon as they are saved. Like the wallpaper upload, its link works only while the TV
+dialog is open and focused,
 for at most ten minutes, over unencrypted HTTP on your local network.
 
 ## Privacy and scope
@@ -325,7 +326,7 @@ fallback on the TV. Native caller permissions and lifecycle behavior can differ 
 Favorites, hidden apps, settings, weather location and cached readings stay in local JSON files
 in an app-owned persistent directory outside the installed payload.
 Weather search/forecast requests go to Open-Meteo, with embedded TLS roots and bounded responses.
-Shortcut tiles send one bodiless GET or POST to the URL you enter in Settings › Shortcuts, only
+Shortcut tiles send one bodiless GET or POST to the URL configured through the companion page, only
 when selected, with no proxy or redirects; the response is not read.
 There is no browser geolocation, IP-based location lookup, telemetry or runtime font download.
 

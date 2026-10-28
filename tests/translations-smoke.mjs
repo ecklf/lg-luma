@@ -101,7 +101,9 @@ function contains(state, key, language) {
   assert.ok(state.ui_text.includes(messages[key][language]), `Missing rendered ${key}/${language}`);
 }
 const picker = 'settings,down,enter,down,down,down,enter';
-const location = 'settings,down,down,down,enter,down,enter';
+const weatherPage = 'settings,down,down,down,enter,down,enter';
+const inputsPage = 'settings,down,down,down,enter,down,down,down,enter';
+const location = `${weatherPage},down,enter`;
 try {
   if (process.env.LUMA_SMOKE_SKIP_BUILD !== '1')
     await run('cargo', ['build', '--locked', '--package', 'luma']);
@@ -183,7 +185,7 @@ try {
   const chineseDialog = await scenario('zh-dialog', 'apps,down,menu');
   contains(chineseDialog, 'removeFavorite', 'zh');
   contains(chineseDialog, 'categoryStreaming', 'zh');
-  const input = await scenario('zh-input-options', 'settings,down,down,down,down,enter,enter');
+  const input = await scenario('zh-input-options', `${inputsPage},enter`);
   for (const key of ['stateOn', 'stateOff', 'stateAuto', 'inputWhenConnected'])
     contains(input, key, 'zh');
   const background = await scenario('zh-background', 'settings,down,down,enter');
@@ -199,8 +201,9 @@ try {
   for (const key of ['useBackground', 'deleteBackground']) contains(backgroundOptions, key, 'zh');
   const keyboard = await scenario('zh-keyboard', 'apps,type:Netflix');
   for (const key of ['findApp', 'space', 'delete', 'clear', 'done']) contains(keyboard, key, 'zh');
-  const weatherSettings = await scenario('zh-weather-settings', 'settings,down,down,down,enter');
-  for (const key of ['showWidget', 'location', 'temperature']) contains(weatherSettings, key, 'zh');
+  const weatherSettings = await scenario('zh-weather-settings', weatherPage);
+  for (const key of ['widgets', 'showWidget', 'location', 'temperature'])
+    contains(weatherSettings, key, 'zh');
   assert.ok(
     !weatherSettings.ui_text.some((label) => label.includes('Open-Meteo')),
     'Weather credit is not shown in the UI',
@@ -244,10 +247,7 @@ try {
   const portugueseKeyboard = await scenario('pt-keyboard', 'apps,type:Netflix');
   for (const key of ['findApp', 'space', 'delete', 'clear', 'done'])
     contains(portugueseKeyboard, key, 'pt');
-  const portugueseInputs = await scenario(
-    'pt-input-options',
-    'settings,down,down,down,down,enter,enter',
-  );
+  const portugueseInputs = await scenario('pt-input-options', `${inputsPage},enter`);
   for (const key of ['stateOn', 'stateOff', 'stateAuto', 'inputWhenConnected'])
     contains(portugueseInputs, key, 'pt');
 

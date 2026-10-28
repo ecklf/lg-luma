@@ -128,7 +128,7 @@ struct Edit {
 }
 
 impl Edit {
-    /// The tile this edit describes, validated with the same rules as the TV editor.
+    /// The tile this edit describes, validated before saving to launcher preferences.
     fn tile(&self) -> Result<CustomTile, String> {
         let title = clean_input_name(&self.title);
         if title.is_empty() {

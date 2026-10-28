@@ -557,7 +557,7 @@ fn focused_navigation_tabs_switch_pages_immediately() {
 fn greeting_subpage_opens_the_keyboard_and_back_restores_its_parent() {
     let mut state = ready();
     state.open(2);
-    state.focus = Target::Setting(6);
+    state.focus = Target::Widget(0);
     assert!(
         state
             .direction(Direction::Right, &controls(&state))
@@ -581,7 +581,7 @@ fn greeting_subpage_opens_the_keyboard_and_back_restores_its_parent() {
     assert_eq!(state.subpage, Some(crate::state::Subpage::Greeting));
     assert!(state.back().is_empty());
     assert!(state.subpage.is_none());
-    assert_eq!(state.focus, Target::Setting(6));
+    assert_eq!(state.focus, Target::Widget(0));
 }
 
 #[test]
@@ -590,7 +590,7 @@ fn greeting_name_replacement_commits_on_every_keyboard_completion_route() {
         let mut state = ready();
         state.preferences.greeting_name = "Ana".into();
         state.open(2);
-        state.focus = Target::Setting(6);
+        state.focus = Target::Widget(0);
         state.activate();
         state.activate();
         assert!(state.editing_text().is_empty());
@@ -626,7 +626,7 @@ fn remote_can_clear_a_saved_greeting_name_without_moving_the_controls() {
     let mut state = ready();
     state.preferences.greeting_name = "Ana".into();
     state.open(2);
-    state.focus = Target::Setting(6);
+    state.focus = Target::Widget(0);
     state.activate();
     let before: Vec<_> = controls(&state)
         .iter()
@@ -643,7 +643,7 @@ fn remote_can_clear_a_saved_greeting_name_without_moving_the_controls() {
         .collect();
     assert_eq!(before, after);
     state.direction(Direction::Left, &controls(&state));
-    assert_eq!(state.focus, Target::Setting(6));
+    assert_eq!(state.focus, Target::Widget(0));
     assert!(state.subpage.is_none());
 }
 
@@ -717,7 +717,8 @@ fn input_name_actions_only_highlight_the_focused_row_and_keep_the_saved_mode() {
         .preferences
         .set_input_name("com.webos.app.hdmi1", "Console");
     state.open(2);
-    state.section = crate::state::INPUTS_SECTION;
+    state.focus = Target::Widget(3);
+    state.activate();
     state.focus = Target::InputMode("com.webos.app.hdmi1".into());
     state.activate();
     for target in [Target::InputRename, Target::InputNameReset] {
@@ -985,7 +986,8 @@ fn text_rendering_choices_persist_and_back_restores_the_system_row() {
 fn input_visibility_has_explicit_choices_and_returns_to_the_same_input() {
     let mut state = ready();
     state.open(2);
-    state.section = crate::state::INPUTS_SECTION;
+    state.focus = Target::Widget(3);
+    state.activate();
     let id = "com.webos.app.hdmi1".to_string();
     state.focus = Target::InputMode(id.clone());
     state.activate();
@@ -998,7 +1000,9 @@ fn input_visibility_has_explicit_choices_and_returns_to_the_same_input() {
     state.activate();
     state.back();
     assert_eq!(state.focus, Target::InputMode(id));
-    assert!(state.subpage.is_none());
+    assert_eq!(state.subpage, Some(crate::state::Subpage::Inputs));
+    state.back();
+    assert_eq!(state.focus, Target::Widget(3));
 }
 
 #[test]
@@ -1492,8 +1496,12 @@ fn pinning_a_hidden_app_restores_it_and_leaves_hidden_when_empty() {
 fn weather_location_keyboard_back_and_sidebar_routes_restore_focus() {
     let mut state = ready();
     state.open(2);
-    state.focus = Target::Sidebar(crate::state::WEATHER_SECTION);
-    state.section = crate::state::WEATHER_SECTION;
+    state.focus = Target::Sidebar(crate::state::WIDGETS_SECTION);
+    state.section = crate::state::WIDGETS_SECTION;
+    state.activate();
+    assert_eq!(state.focus, Target::Widget(0));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Widget(1));
     state.activate();
     assert_eq!(state.focus, Target::WeatherToggle);
     state.direction(Direction::Down, &controls(&state));
@@ -1508,14 +1516,20 @@ fn weather_location_keyboard_back_and_sidebar_routes_restore_focus() {
     assert_eq!(state.subpage, Some(crate::state::Subpage::WeatherLocation));
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::WeatherLocation);
+    assert_eq!(state.subpage, Some(crate::state::Subpage::Weather));
+    state.back();
+    assert_eq!(state.focus, Target::Widget(1));
     assert!(state.subpage.is_none());
+    state.back();
+    assert_eq!(state.focus, Target::Sidebar(crate::state::WIDGETS_SECTION));
 }
 
 #[test]
 fn weather_units_save_without_replacing_celsius_cache_and_hide_keeps_city() {
     let mut state = ready();
     state.open(2);
-    state.section = crate::state::WEATHER_SECTION;
+    state.focus = Target::Widget(1);
+    state.activate();
     let place = crate::weather::Location {
         name: "Vienna".into(),
         region: "Vienna".into(),
@@ -1554,10 +1568,30 @@ fn weather_units_save_without_replacing_celsius_cache_and_hide_keeps_city() {
 }
 
 #[test]
+fn home_weather_setup_returns_through_the_widgets_weather_parent() {
+    use crate::state::{Subpage, WIDGETS_SECTION};
+    let mut state = ready();
+    state.focus = Target::WeatherConfigure;
+    state.activate();
+    assert_eq!(state.page, Page::Settings);
+    assert_eq!(state.section, WIDGETS_SECTION);
+    assert_eq!(state.subpage, Some(Subpage::WeatherLocation));
+    assert!(state.text_input_active());
+    state.back();
+    state.back();
+    assert_eq!(state.subpage, Some(Subpage::Weather));
+    assert_eq!(state.focus, Target::WeatherLocation);
+    state.back();
+    assert!(state.subpage.is_none());
+    assert_eq!(state.focus, Target::Widget(1));
+}
+
+#[test]
 fn removing_weather_location_clears_cache_and_cancels_pending_results() {
     let mut state = ready();
     state.open(2);
-    state.section = crate::state::WEATHER_SECTION;
+    state.focus = Target::Widget(1);
+    state.activate();
     state.focus = Target::WeatherLocation;
     state.activate();
     state.focus = Target::WeatherClear;
@@ -1832,7 +1866,8 @@ fn custom_input_names_keep_the_label_port_and_status_as_detail() {
 fn remote_renames_and_resets_an_input_from_its_settings_page() {
     let mut state = ready();
     state.open(2);
-    state.section = crate::state::INPUTS_SECTION;
+    state.focus = Target::Widget(3);
+    state.activate();
     let id = "com.webos.app.hdmi2".to_string();
     state.focus = Target::InputMode(id.clone());
     state.activate();
@@ -1869,14 +1904,15 @@ fn remote_renames_and_resets_an_input_from_its_settings_page() {
     state.focus = Target::InputRename;
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::InputMode(id));
-    assert!(state.subpage.is_none());
+    assert_eq!(state.subpage, Some(crate::state::Subpage::Inputs));
 }
 
 #[test]
 fn keyboard_done_saves_a_typed_input_name() {
     let mut state = ready();
     state.open(2);
-    state.section = crate::state::INPUTS_SECTION;
+    state.focus = Target::Widget(3);
+    state.activate();
     state.focus = Target::InputMode("com.webos.app.hdmi1".into());
     state.activate();
     state.focus = Target::InputRename;
@@ -2080,7 +2116,7 @@ fn tile_urls_need_a_host_the_request_client_accepts() {
 
 #[test]
 fn custom_tiles_are_sanitized_and_get_stable_unique_ids() {
-    use crate::model::{TileMethod, valid_app_id};
+    use crate::model::{TileMethod, new_tile_id, valid_app_id};
     let mut preferences: Preferences = serde_json::from_value(json!({
         "custom_tiles": [
             {"id": "custom.lamp", "title": "  Lamp ", "url": " http://ha.local/api/webhook/a "},
@@ -2122,170 +2158,293 @@ fn custom_tiles_are_sanitized_and_get_stable_unique_ids() {
     // Only interface icons from the list are kept.
     assert!(preferences.custom_tiles[1].icon.is_empty());
     assert_eq!(preferences.custom_tiles[1].icon(), "weather-moon");
-    assert_eq!(preferences.new_tile_id("Lamp"), "custom.lamp-2");
     assert_eq!(
-        preferences.new_tile_id("Licht Küche!"),
+        new_tile_id(&preferences.custom_tiles, "Lamp"),
+        "custom.lamp-2"
+    );
+    assert_eq!(
+        new_tile_id(&preferences.custom_tiles, "Licht Küche!"),
         "custom.licht-k-che"
     );
-    assert_eq!(preferences.new_tile_id("灯"), "custom.tile");
-    assert!(valid_app_id(&preferences.new_tile_id(&"x".repeat(200))));
+    assert_eq!(new_tile_id(&preferences.custom_tiles, "灯"), "custom.tile");
+    assert!(valid_app_id(&new_tile_id(
+        &preferences.custom_tiles,
+        &"x".repeat(200)
+    )));
 }
 
 #[test]
-fn shortcut_tiles_are_created_edited_sent_and_removed_in_settings() {
-    use crate::model::TileMethod;
-    use crate::state::{SHORTCUTS_SECTION, Subpage};
+fn shortcut_settings_only_offer_qr_editing_and_local_removal() {
+    use crate::state::{Subpage, WIDGETS_SECTION};
     let mut state = ready();
     state.preferences.reduced_motion = true;
     state.open(2);
-    state.section = SHORTCUTS_SECTION;
-    state.focus = Target::Sidebar(SHORTCUTS_SECTION);
-    state.direction(Direction::Right, &controls(&state));
-    assert_eq!(state.focus, Target::TileAdd);
-    assert!(state.activate().is_empty());
-    assert!(state.text_input_active());
-    state.text("Sandmann");
-    // Nothing is saved until the tile also has a valid URL.
-    assert!(state.finish_text_input().is_empty());
-    assert_eq!(state.subpage, Some(Subpage::Tile(None)));
-    assert_eq!(state.focus, Target::TileName);
-    state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::TileScheme);
-    state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::TileUrl);
+    state.focus = Target::Widget(2);
     state.activate();
-    state.text("ftp://example");
-    assert!(state.finish_text_input().is_empty());
-    assert!(state.preferences.custom_tiles.is_empty());
-    assert!(state.notice.is_some());
-    // Without a host the address is refused here, not saved to fail on every press.
-    for typed in ["/", ":8123/api/webhook/abc", "http:///"] {
-        state.notice = None;
-        state.activate();
-        state.text(typed);
-        assert!(state.finish_text_input().is_empty(), "{typed}");
-        assert!(state.tile_draft.url.is_empty(), "{typed}");
-        assert!(state.notice.is_some(), "{typed}");
-    }
-    assert!(state.preferences.custom_tiles.is_empty());
-    state.activate();
-    state.text("http://ha.local:8123/api/webhook/abc");
-    assert_eq!(state.finish_text_input(), vec![Effect::Save]);
-    let tile = state.preferences.custom_tiles[0].clone();
-    assert_eq!(tile.id, "custom.sandmann");
-    assert_eq!(tile.method, TileMethod::Post);
-    assert_eq!(state.subpage, Some(Subpage::Tile(Some(tile.id.clone()))));
-    assert!(
-        state
-            .preferences
-            .favorites
-            .as_ref()
-            .unwrap()
-            .contains(&tile.id)
-    );
-    assert!(
-        state
-            .inventory
-            .apps
-            .iter()
-            .any(|app| app.id == tile.id && app.brand == "custom")
-    );
-
-    // Renaming keeps the id, so the Home position is kept too.
-    state.focus = Target::TileName;
-    state.activate();
-    state.text("Sandmännchen");
-    assert_eq!(state.finish_text_input(), vec![Effect::Save]);
-    assert_eq!(state.preferences.custom_tiles[0].id, tile.id);
-    assert!(
-        state
-            .inventory
-            .apps
-            .iter()
-            .any(|app| app.id == tile.id && app.title == "Sandmännchen")
-    );
-    // An empty dismissal keeps the saved value.
-    state.activate();
-    assert!(state.finish_text_input().is_empty());
-    assert_eq!(state.preferences.custom_tiles[0].title, "Sandmännchen");
-
-    // The protocol row switches the scheme; an address typed without one gets it.
-    state.focus = Target::TileScheme;
-    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.section, WIDGETS_SECTION);
+    assert_eq!(state.subpage, Some(Subpage::Shortcuts));
     assert_eq!(
-        state.preferences.custom_tiles[0].url,
-        "https://ha.local:8123/api/webhook/abc"
+        controls(&state)
+            .into_iter()
+            .filter(|c| c.scrollable)
+            .map(|c| c.target)
+            .collect::<Vec<_>>(),
+        vec![Target::TileEditor]
     );
-    state.focus = Target::TileUrl;
-    state.activate();
-    state.text("ha.local/api/webhook/xyz");
-    assert_eq!(state.finish_text_input(), vec![Effect::Save]);
+    let tile = crate::model::CustomTile {
+        id: "custom.lamp".into(),
+        title: "Lamp".into(),
+        url: "http://127.0.0.1:9/hook".into(),
+        ..Default::default()
+    };
+    assert_eq!(state.replace_tiles(vec![tile.clone()]), vec![Effect::Save]);
+    assert_eq!(state.subpage, Some(Subpage::Shortcuts));
+    assert!(!state.text_input_active());
     assert_eq!(
-        state.preferences.custom_tiles[0].url,
-        "https://ha.local/api/webhook/xyz"
+        controls(&state)
+            .into_iter()
+            .filter(|c| c.scrollable)
+            .map(|c| c.target)
+            .collect::<Vec<_>>(),
+        vec![Target::TileRemove(tile.id.clone()), Target::TileEditor]
     );
-    state.focus = Target::TileScheme;
-    state.activate();
-
-    // The icon list returns to its row and shows the choice on the Home card.
-    state.focus = Target::TileIcon;
-    state.direction(Direction::Right, &controls(&state));
-    assert!(matches!(state.subpage, Some(Subpage::TileIcon(_))));
-    assert_eq!(state.focus, Target::Choice(0));
+    assert!(state.hit_test(&controls(&state), 800., 280.).is_none());
+    let page = scene(&state);
+    assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, _, _, color, _) if label == "Lamp" && color[3] == 0.5)));
+    assert!(!page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::TintedImage(path, rect, ..) if path.ends_with("right.lvec") && rect.x >= 640.)));
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.activate(), vec![Effect::Save]);
-    assert_eq!(state.focus, Target::TileIcon);
-    assert!(matches!(state.subpage, Some(Subpage::Tile(Some(_)))));
-    assert_eq!(state.preferences.custom_tiles[0].icon, "weather-sun");
-    assert!(
-        state
-            .inventory
-            .apps
-            .iter()
-            .any(|app| app.brand == "custom" && app.mark == "weather-sun")
-    );
-    let tile = state.preferences.custom_tiles[0].clone();
-    assert_eq!(tile.url, "http://ha.local/api/webhook/xyz");
-
-    state.focus = Target::TileMethod;
-    assert_eq!(state.activate(), vec![Effect::Save]);
-    assert_eq!(state.preferences.custom_tiles[0].method, TileMethod::Get);
-    state.focus = Target::TileSend;
-    assert!(matches!(
-        state.activate().as_slice(),
-        [Effect::FireWebhook(sent)] if sent.method == TileMethod::Get
-    ));
-
-    state.open(0);
-    state.focus = Target::App(tile.id.clone());
-    assert!(matches!(
-        state.activate().as_slice(),
-        [Effect::FireWebhook(sent)] if sent.url == tile.url
-    ));
-
-    state.open(2);
-    state.section = SHORTCUTS_SECTION;
-    state.focus = Target::Tile(tile.id.clone());
-    state.direction(Direction::Right, &controls(&state));
-    assert_eq!(state.subpage, Some(Subpage::Tile(Some(tile.id.clone()))));
-    state.direction(Direction::Left, &controls(&state));
-    assert_eq!(state.subpage, None);
-    assert_eq!(state.focus, Target::Tile(tile.id.clone()));
-    state.activate();
-    state.focus = Target::TileRemove;
+    assert_eq!(state.focus, Target::TileRemove(tile.id.clone()));
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert!(state.preferences.custom_tiles.is_empty());
     assert!(
         !state
             .preferences
-            .favorites
-            .as_ref()
-            .unwrap()
+            .favorites(&state.inventory.apps)
             .contains(&tile.id)
     );
     assert!(!state.inventory.apps.iter().any(|app| app.id == tile.id));
+    assert_eq!(state.subpage, Some(Subpage::Shortcuts));
+    assert_eq!(state.focus, Target::TileEditor);
+    state.back();
     assert_eq!(state.subpage, None);
-    assert_eq!(state.focus, Target::TileAdd);
+    assert_eq!(state.focus, Target::Widget(2));
+}
+
+#[test]
+fn widgets_group_existing_settings_and_restore_each_parent_without_changing_preferences() {
+    use crate::state::{SECTION_COUNT, Subpage, WIDGETS_SECTION};
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state.preferences.greeting_name = "Ana".into();
+    state.preferences.show_weather = false;
+    state.preferences.weather_location = Some(crate::weather::Location {
+        name: "Vienna".into(),
+        region: "Vienna".into(),
+        country: "Austria".into(),
+        latitude: 48.2085,
+        longitude: 16.3721,
+    });
+    state.replace_tiles(vec![crate::model::CustomTile {
+        id: "custom.lamp".into(),
+        title: "Lamp".into(),
+        url: "http://127.0.0.1:9/hook".into(),
+        icon: "power".into(),
+        ..Default::default()
+    }]);
+    let saved = serde_json::to_value(&state.preferences).unwrap();
+    state.open(2);
+    assert_eq!(SECTION_COUNT, 4);
+    assert!(
+        !controls(&state)
+            .iter()
+            .any(|control| control.target == Target::Setting(6))
+    );
+    state.direction(Direction::Down, &controls(&state));
+    state.direction(Direction::Down, &controls(&state));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Sidebar(WIDGETS_SECTION));
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::Widget(0));
+    for (index, subpage) in [
+        Subpage::Greeting,
+        Subpage::Weather,
+        Subpage::Shortcuts,
+        Subpage::Inputs,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        state.focus = Target::Widget(index);
+        state.direction(Direction::Right, &controls(&state));
+        assert_eq!(state.subpage, Some(subpage));
+        state.back();
+        assert!(state.subpage.is_none());
+        assert_eq!(state.focus, Target::Widget(index));
+    }
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::Sidebar(WIDGETS_SECTION));
+    assert_eq!(serde_json::to_value(&state.preferences).unwrap(), saved);
+    state.inventory.inputs.clear();
+    state.focus = Target::Widget(3);
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::Inputs));
+    assert_eq!(state.focus, Target::Setting(3));
+    assert_eq!(state.activate(), vec![Effect::Reload]);
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::Widget(3));
+}
+
+#[test]
+fn companion_removal_updates_the_shortcut_list_on_close() {
+    use crate::state::Subpage;
+    let mut state = ready();
+    let tile = crate::model::CustomTile {
+        id: "custom.lamp".into(),
+        title: "Lamp".into(),
+        url: "http://127.0.0.1:9/hook".into(),
+        ..Default::default()
+    };
+    state.replace_tiles(vec![tile.clone()]);
+    state.open(2);
+    state.focus = Target::Widget(2);
+    state.activate();
+    state.activate();
+    assert!(matches!(state.overlay, Some(Overlay::TileEditor)));
+    state.replace_tiles(vec![]);
+    assert_eq!(state.subpage, Some(Subpage::Shortcuts));
+    assert_eq!(state.focus, Target::CloseDialog);
+    state.back();
+    assert_eq!(state.focus, Target::TileEditor);
+    assert!(
+        !state
+            .preferences
+            .favorites(&state.inventory.apps)
+            .contains(&tile.id)
+    );
+    state.back();
+    assert_eq!(state.focus, Target::Widget(2));
+}
+
+#[test]
+fn widgets_are_localized_without_legacy_sidebar_entries() {
+    use crate::state::WIDGETS_SECTION;
+    for language in crate::i18n::Language::ALL {
+        let mut state = ready();
+        state.preferences.language = language;
+        state.open(2);
+        state.pointer_focus(Target::Sidebar(WIDGETS_SECTION));
+        let page = scene(&state);
+        assert_eq!(
+            page.controls
+                .iter()
+                .filter(|c| matches!(c.target, Target::Sidebar(_)))
+                .count(),
+            4
+        );
+        assert_eq!(
+            page.controls
+                .iter()
+                .filter(|c| matches!(c.target, Target::Widget(_)))
+                .count(),
+            4
+        );
+        for key in ["widgets", "greeting", "weather", "shortcuts", "inputs"] {
+            assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t(key))), "{key}/{language:?}");
+        }
+        state.pointer_focus(Target::Sidebar(0));
+        assert!(!scene(&state).draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t("greeting"))));
+    }
+}
+
+#[test]
+fn shortcut_list_scroll_and_pointer_focus_preserve_control_positions() {
+    let mut state = ready();
+    state.replace_tiles(
+        (0..20)
+            .map(|index| crate::model::CustomTile {
+                id: format!("custom.tile-{index}"),
+                title: format!("Tile {index}"),
+                url: "http://127.0.0.1:9/hook".into(),
+                ..Default::default()
+            })
+            .collect(),
+    );
+    state.open(2);
+    state.focus = Target::Widget(2);
+    state.activate();
+    for _ in 0..20 {
+        state.direction(Direction::Down, &controls(&state));
+    }
+    assert_eq!(state.focus, Target::TileRemove("custom.tile-19".into()));
+    assert!(state.scroll > 0.);
+    let before: Vec<_> = controls(&state)
+        .iter()
+        .map(|c| (c.target.clone(), c.rect.y))
+        .collect();
+    let scroll = state.scroll;
+    let target = controls(&state)
+        .into_iter()
+        .find(|c| {
+            matches!(c.target, Target::TileRemove(_)) && c.rect.y > state.content_viewport().y
+        })
+        .unwrap();
+    state.pointer_focus(target.target);
+    assert_eq!(state.scroll, scroll);
+    assert_eq!(
+        before,
+        controls(&state)
+            .iter()
+            .map(|c| (c.target.clone(), c.rect.y))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn settings_lists_keep_bottom_padding_for_remote_and_wheel_scrolling() {
+    use crate::state::{SETTINGS_BOTTOM_PADDING, Subpage};
+    for backgrounds in [false, true] {
+        let mut state = ready();
+        state.preferences.reduced_motion = true;
+        state.open(2);
+        if backgrounds {
+            state.set_wallpapers(
+                (1..=8)
+                    .map(|index| crate::wallpapers::Wallpaper {
+                        id: format!("custom-{index:032x}"),
+                        directory: std::path::PathBuf::from(".build/padding-fixture"),
+                    })
+                    .collect(),
+            );
+        }
+        state.section = if backgrounds { 1 } else { 0 };
+        state.subpage = if backgrounds {
+            None
+        } else {
+            Some(Subpage::Language)
+        };
+        let last = if backgrounds {
+            Target::Background(state.background_count() - 1)
+        } else {
+            Target::Choice(crate::i18n::Language::ALL.len() - 1)
+        };
+        state.focus = last.clone();
+        state.reveal_focus(&controls(&state));
+        let bottom =
+            state.content_viewport().y + state.content_viewport().h - SETTINGS_BOTTOM_PADDING;
+        let rect = controls(&state)
+            .into_iter()
+            .find(|c| c.target == last)
+            .unwrap()
+            .rect;
+        assert!(rect.y + rect.h <= bottom + 0.01);
+        state.wheel_scroll(&controls(&state), Some((1000., 600.)), 0, -1000);
+        let rect = controls(&state)
+            .into_iter()
+            .find(|c| c.target == last)
+            .unwrap()
+            .rect;
+        assert!((rect.y + rect.h - bottom).abs() < 0.01);
+    }
 }
 
 #[test]
@@ -2355,13 +2514,12 @@ fn shortcut_tiles_alone_do_not_stop_inventory_retries() {
 
 #[test]
 fn shortcut_tiles_open_a_modal_editor_for_another_device() {
-    use crate::state::SHORTCUTS_SECTION;
+    use crate::state::WIDGETS_SECTION;
     let mut state = ready();
     state.preferences.reduced_motion = true;
     state.open(2);
-    state.section = SHORTCUTS_SECTION;
-    state.focus = Target::TileAdd;
-    state.direction(Direction::Down, &controls(&state));
+    state.focus = Target::Widget(2);
+    state.activate();
     assert_eq!(state.focus, Target::TileEditor);
     assert!(state.activate().is_empty());
     assert!(matches!(state.overlay, Some(Overlay::TileEditor)));
@@ -2377,7 +2535,7 @@ fn shortcut_tiles_open_a_modal_editor_for_another_device() {
     assert!(state.overlay.is_none());
     assert!(state.tile_editor.is_none());
     assert_eq!(state.focus, Target::TileEditor);
-    assert_eq!(state.section, SHORTCUTS_SECTION);
+    assert_eq!(state.section, WIDGETS_SECTION);
 }
 
 #[test]

@@ -219,9 +219,10 @@ try {
   assert.equal(clock.focus, 'ClockFormat');
   assert.ok(clock.ui_text.includes('Clock format'));
   assert.ok(clock.ui_text.includes('Time format'));
-  const input = await scenario('inputs', 'settings,down,down,down,down,enter,enter,up,enter');
+  const inputsPage = 'settings,down,down,down,enter,down,down,down,enter';
+  const input = await scenario('inputs', `${inputsPage},enter,up,enter`);
   assert.equal(input.preferences.input_modes['com.webos.app.hdmi1'], 'Off');
-  assert.equal(input.subpage, null);
+  assert.equal(input.subpage, 'Inputs');
   const closed = await scenario('dialog-closed', 'apps,down,menu,click:100:900');
   assert.equal(closed.modal, false);
   assert.deepEqual(closed.focus, { App: 'youtube.leanback.v4' });
@@ -275,7 +276,13 @@ try {
   assert.equal(profiled.render.profile.presented, 24);
   assert.ok(profiled.render.profile.pacing.samples > 0);
   assert.ok(profiled.render.profile.cpu_submission.mean_ms >= 0);
-  const greetingEditor = 'settings,down,enter,down,down,down,down,enter,enter';
+  const widgetsPage = 'settings,down,down,down,enter';
+  const widgets = await scenario('widgets-settings', widgetsPage);
+  assert.deepEqual(widgets.focus, { Widget: 0 });
+  assert.ok(widgets.ui_text.includes('Widgets'));
+  for (const title of ['Greeting', 'Weather', 'Shortcuts', 'Inputs'])
+    assert.ok(widgets.ui_text.includes(title));
+  const greetingEditor = `${widgetsPage},enter,enter`;
   for (const [id, name] of [
     ['Ana', 'Ana'],
     ['Bob', 'Bob'],
@@ -303,10 +310,7 @@ try {
       'Keyboard completion must save without waiting for another SDL input event',
     );
   }
-  const greeting = await scenario(
-    'greeting-settings',
-    'settings,down,enter,down,down,down,down,enter,down',
-  );
+  const greeting = await scenario('greeting-settings', `${widgetsPage},enter,down`);
   assert.equal(greeting.subpage, 'Greeting');
   assert.equal(greeting.focus, 'GreetingNameClear');
   assert.ok(greeting.ui_text.includes('Clear name'));
@@ -331,7 +335,7 @@ try {
 
   const renamedInput = await scenario(
     'input-rename-focus',
-    'settings,down,down,down,down,enter,down,enter,down,type:Console,back',
+    `${inputsPage},down,enter,down,type:Console,back`,
   );
   assert.equal(renamedInput.focus, 'InputRename');
   assert.equal(renamedInput.preferences.input_names['com.webos.app.hdmi2'], 'Console');
@@ -353,15 +357,12 @@ try {
   const clockFocus = await scenario('clock-format-focus', `${clockEditor},enter,down`);
   assert.equal(clockFocus.subpage, 'ClockFormat');
   assert.deepEqual(clockFocus.focus, { Choice: 1 });
-  const system = await scenario(
-    'system-settings',
-    'settings,down,down,down,down,down,down,right,down,down',
-  );
+  const system = await scenario('system-settings', 'settings,down,down,down,down,right,down,down');
   assert.deepEqual(system.focus, { Setting: 5 });
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
   assert.ok(system.ui_text.includes('Quit app'));
   assert.ok(system.ui_text.includes('Text rendering'));
-  const textOptions = 'settings,down,down,down,down,down,down,right,down,enter';
+  const textOptions = 'settings,down,down,down,down,right,down,enter';
   const textRendering = await scenario('text-rendering-options', textOptions);
   assert.equal(textRendering.subpage, 'TextRendering');
   assert.deepEqual(textRendering.focus, { Choice: 0 });
@@ -381,12 +382,28 @@ try {
   const msaa = await scenario('text-rendering-msaa', 'home,down');
   assert.equal(msaa.render.text_rendering.mode, 'msaa');
   assert.equal(msaa.render.text_rendering.embolden, 0);
-  const shortcut = await scenario(
-    'shortcut-settings',
-    'settings,down,down,down,down,down,right,enter,type:Sandmann,back,down,down,enter,type:127.0.0.1:9/api/webhook/luma,back',
+  // Companion HTTP writes are covered by loopback Rust tests. Seed its persisted result
+  // here to render the TV's read-only detail/removal flow without a TV keyboard editor.
+  const beforeShortcut = JSON.parse(await fs.readFile(preferences, 'utf8'));
+  await fs.writeFile(
+    preferences,
+    JSON.stringify({
+      ...beforeShortcut,
+      custom_tiles: [
+        {
+          id: 'custom.sandmann',
+          title: 'Sandmann',
+          url: 'http://127.0.0.1:9/api/webhook/luma',
+          method: 'POST',
+        },
+      ],
+      favorites: [...beforeShortcut.favorites, 'custom.sandmann'],
+    }),
   );
-  assert.equal(shortcut.focus, 'TileUrl');
-  assert.deepEqual(shortcut.subpage, { Tile: 'custom.sandmann' });
+  const shortcutsPage = `${widgetsPage},down,down,enter`;
+  const shortcut = await scenario('shortcut-settings', shortcutsPage);
+  assert.equal(shortcut.focus, 'TileEditor');
+  assert.equal(shortcut.subpage, 'Shortcuts');
   assert.deepEqual(shortcut.preferences.custom_tiles, [
     {
       id: 'custom.sandmann',
@@ -396,18 +413,21 @@ try {
     },
   ]);
   assert.ok(shortcut.preferences.favorites.includes('custom.sandmann'));
-  assert.ok(shortcut.ui_text.includes('Remove shortcut'));
-  // Scenarios share one preferences file, so the tile is removed again here.
-  const removed = await scenario(
-    'shortcut-removed',
-    'settings,down,down,down,down,down,right,enter,down,down,down,down,down,down,enter',
+  assert.ok(shortcut.ui_text.includes('Configure'));
+  assert.ok(shortcut.ui_text.includes('Sandmann'));
+  assert.ok(
+    !shortcut.ui_text.includes('Type names and addresses there instead of with the remote'),
   );
-  assert.equal(removed.focus, 'TileAdd');
-  assert.equal(removed.subpage, null);
+  assert.ok(!shortcut.ui_text.includes('Add shortcut'));
+  assert.ok(!shortcut.ui_text.includes('Request method'));
+  // Scenarios share one preferences file, so the tile is removed again here.
+  const removed = await scenario('shortcut-removed', `${shortcutsPage},down,enter`);
+  assert.equal(removed.focus, 'TileEditor');
+  assert.equal(removed.subpage, 'Shortcuts');
   assert.deepEqual(removed.preferences.custom_tiles, []);
   assert.ok(!removed.preferences.favorites.includes('custom.sandmann'));
   assert.ok(!removed.inventory.some((app) => app.id === 'custom.sandmann'));
-  const tileEditorOpen = 'settings,down,down,down,down,down,right,down,enter,await-tile-editor';
+  const tileEditorOpen = `${shortcutsPage},enter,await-tile-editor`;
   const tileEditor = await scenario('tile-editor', tileEditorOpen);
   assert.equal(tileEditor.modal, true);
   assert.equal(tileEditor.focus, 'CloseDialog');

@@ -1,12 +1,12 @@
 //! Screen geometry and styling mirror the web UI's 1920×1080 / 16px-rem layout.
 use crate::{
     i18n::Language,
-    model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode, TILE_ICONS},
+    model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode},
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
         APPS_COLUMNS, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT,
-        HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, SHORTCUTS_SECTION,
-        SYSTEM_SECTION, State, Subpage, Target, TextField, WEATHER_SECTION,
+        HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State,
+        Subpage, Target, TextField, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -2009,16 +2009,9 @@ fn location_settings(out: &mut Scene, state: &State, assets: &Assets) {
 fn settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let s = state.scroll;
-    for (index, key) in [
-        "interface",
-        "background",
-        "weather",
-        "inputs",
-        "shortcuts",
-        "system",
-    ]
-    .into_iter()
-    .enumerate()
+    for (index, key) in ["interface", "background", "widgets", "system"]
+        .into_iter()
+        .enumerate()
     {
         let label = language.t(key);
         let rect = Rect::new(160., 164.8 + index as f32 * 84., 403.2, 72.);
@@ -2032,7 +2025,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             c(0xeeeeee, 0.73)
         };
         if state.section == index && state.subpage.is_some() {
-            let clock_path = match state.subpage {
+            let nested_path = match &state.subpage {
                 Some(Subpage::ClockFormat) => Some(format!(
                     "{} › {}",
                     language.t("clock"),
@@ -2043,30 +2036,42 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     language.t("clock"),
                     language.t("timeFormat")
                 )),
+                Some(Subpage::WeatherLocation | Subpage::Temperature) => Some(format!(
+                    "{} › {}",
+                    language.t("weather"),
+                    language.t(if state.subpage == Some(Subpage::WeatherLocation) {
+                        "location"
+                    } else {
+                        "temperature"
+                    })
+                )),
+                Some(Subpage::Input(id)) => Some(format!(
+                    "{} › {}",
+                    language.t("inputs"),
+                    state
+                        .inventory
+                        .inputs
+                        .iter()
+                        .find(|input| &input.id == id)
+                        .map_or(language.t("inputs"), |input| state
+                            .preferences
+                            .input_title(input))
+                )),
                 _ => None,
             };
             let sub = match &state.subpage {
                 Some(Subpage::AppNames) => language.t("appNames"),
                 Some(Subpage::Greeting) => language.t("greeting"),
+                Some(Subpage::Weather) => language.t("weather"),
+                Some(Subpage::Shortcuts) => language.t("shortcuts"),
+                Some(Subpage::Inputs) => language.t("inputs"),
                 Some(Subpage::Clock) => language.t("clock"),
-                Some(Subpage::ClockFormat | Subpage::TimeFormat) => clock_path.as_deref().unwrap(),
-                Some(Subpage::Input(id)) => state
-                    .inventory
-                    .inputs
-                    .iter()
-                    .find(|input| &input.id == id)
-                    .map_or(language.t("inputs"), |input| {
-                        state.preferences.input_title(input)
-                    }),
-                Some(Subpage::WeatherLocation) => language.t("location"),
-                Some(Subpage::Temperature) => language.t("temperature"),
+                Some(Subpage::ClockFormat | Subpage::TimeFormat) => nested_path.as_deref().unwrap(),
+                Some(Subpage::WeatherLocation | Subpage::Temperature | Subpage::Input(_)) => {
+                    nested_path.as_deref().unwrap()
+                }
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
-                Some(Subpage::Tile(_)) if state.tile_draft.title.is_empty() => {
-                    language.t("newTile")
-                }
-                Some(Subpage::Tile(_)) => state.tile_draft.title.as_str(),
-                Some(Subpage::TileIcon(_)) => language.t("icon"),
                 None => "",
             };
             let parent_width = assets.width(label, text(20.8, 550, -0.02)) + 2.;
@@ -2085,7 +2090,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             );
             let sub_width = rect.w - 24.2 - parent_width - 28. - 24.2;
             let mut sub_style = text(20.8, 550, -0.02);
-            if clock_path.is_some() {
+            if nested_path.is_some() {
                 sub_style.size *= (sub_width / assets.width(sub, sub_style)).min(1.);
             }
             out.text(
@@ -2128,19 +2133,21 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
         if matches!(
             subpage,
             Subpage::WeatherLocation
+                | Subpage::Weather
+                | Subpage::Shortcuts
+                | Subpage::Inputs
                 | Subpage::Greeting
                 | Subpage::AppNames
                 | Subpage::Clock
-                | Subpage::Tile(_)
-                | Subpage::TileIcon(_)
         ) {
             match subpage {
                 Subpage::WeatherLocation => location_settings(out, state, assets),
+                Subpage::Weather => weather_settings(out, state, assets),
+                Subpage::Shortcuts => shortcut_settings(out, state, assets),
+                Subpage::Inputs => inputs_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::AppNames => app_name_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
-                Subpage::Tile(id) => tile_settings(out, state, assets, id.is_some()),
-                Subpage::TileIcon(_) => tile_icon_settings(out, state, assets),
                 _ => unreachable!(),
             }
             if let Some(opened) = state.panel_started {
@@ -2195,11 +2202,12 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 ),
             ],
             Subpage::WeatherLocation
+            | Subpage::Weather
+            | Subpage::Shortcuts
+            | Subpage::Inputs
             | Subpage::Greeting
             | Subpage::AppNames
-            | Subpage::Clock
-            | Subpage::Tile(_)
-            | Subpage::TileIcon(_) => {
+            | Subpage::Clock => {
                 unreachable!()
             }
             Subpage::Language => Language::ALL
@@ -2260,17 +2268,6 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     false,
                 ),
                 (4, "language", "language", Some(language.name()), true),
-                (
-                    6,
-                    "greeting",
-                    "type",
-                    Some(if state.preferences.greeting_name.trim().is_empty() {
-                        language.t("stateOff")
-                    } else {
-                        state.preferences.greeting_name.as_str()
-                    }),
-                    true,
-                ),
             ]
             .into_iter()
             .enumerate()
@@ -2382,12 +2379,36 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             }
             out.draw.push(Draw::Clip(Some(state.content_viewport())));
         }
-        WEATHER_SECTION => weather_settings(out, state, assets),
-        SHORTCUTS_SECTION => shortcut_settings(out, state, assets),
+        WIDGETS_SECTION => {
+            for (index, (key, icon)) in [
+                ("greeting", "type"),
+                ("weather", "weather-sun"),
+                ("shortcuts", "sparkles"),
+                ("inputs", "input-hdmi"),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                row(
+                    out,
+                    state,
+                    assets,
+                    Row {
+                        target: Target::Widget(index),
+                        rect: Rect::new(640., 164.8 + index as f32 * 84. - s, 1120., 72.),
+                        title: language.t(key),
+                        icon: Some(icon),
+                        value: None,
+                        description: None,
+                        selected: false,
+                        chevron: true,
+                    },
+                );
+            }
+        }
         SYSTEM_SECTION => {
             let version_rect = Rect::new(640., 164.8 - s, 1120., 72.);
-            out.shape(version_rect, 48., c(0x171c20, 0.3));
-            out.border(version_rect, 48., 1., c(0xffffff, 0.045));
+            settings_surface(out, version_rect);
             out.text(
                 format!("Luma v{}", assets.version.trim()),
                 Rect::new(664.2, version_rect.y + (72. - 29.12) / 2., 1031.8, 29.12),
@@ -2436,73 +2457,77 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 );
             }
         }
-        _ => {
-            for (index, input) in state.inventory.inputs.iter().enumerate() {
-                let mode = state
-                    .preferences
-                    .input_modes
-                    .get(&input.id)
-                    .copied()
-                    .unwrap_or_default();
-                row(
-                    out,
-                    state,
-                    assets,
-                    Row {
-                        target: Target::InputMode(input.id.clone()),
-                        rect: Rect::new(640., 164.8 + index as f32 * 102.7 - s, 1120., 90.7),
-                        title: state.preferences.input_title(input),
-                        icon: Some(&format!(
-                            "input-{}",
-                            input_icon(input, state.preferences.input_name(input))
-                        )),
-                        value: Some(language.t(match mode {
-                            InputMode::On => "stateOn",
-                            InputMode::Off => "stateOff",
-                            InputMode::Auto => "stateAuto",
-                        })),
-                        description: Some(&input_status(
-                            input,
-                            state.preferences.input_name(input).is_some(),
-                            language,
-                        )),
-                        selected: false,
-                        chevron: true,
-                    },
-                );
-            }
-            let mut y = 164.8 + state.inventory.inputs.len() as f32 * 102.7 + 16. - s;
-            if state.inventory.inputs.is_empty() {
-                out.text(
-                    language.t("noInputs"),
-                    Rect::new(664., 165. - s, 1000., 26.),
-                    text(16.8, 400, 0.).leading(1.5),
-                    c(0xf5f5f5, 0.72),
-                    false,
-                );
-                y += 36.;
-            }
-            row(
-                out,
-                state,
-                assets,
-                Row {
-                    target: Target::Setting(3),
-                    rect: Rect::new(640., y, 1120., 72.),
-                    title: if state.loading {
-                        language.t("refreshNotice")
-                    } else {
-                        language.t("refreshInputs")
-                    },
-                    icon: Some("refresh"),
-                    value: None,
-                    description: None,
-                    selected: false,
-                    chevron: false,
-                },
-            );
-        }
+        _ => {}
     }
+}
+
+fn inputs_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let s = state.scroll;
+    for (index, input) in state.inventory.inputs.iter().enumerate() {
+        let mode = state
+            .preferences
+            .input_modes
+            .get(&input.id)
+            .copied()
+            .unwrap_or_default();
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::InputMode(input.id.clone()),
+                rect: Rect::new(640., 164.8 + index as f32 * 102.7 - s, 1120., 90.7),
+                title: state.preferences.input_title(input),
+                icon: Some(&format!(
+                    "input-{}",
+                    input_icon(input, state.preferences.input_name(input))
+                )),
+                value: Some(language.t(match mode {
+                    InputMode::On => "stateOn",
+                    InputMode::Off => "stateOff",
+                    InputMode::Auto => "stateAuto",
+                })),
+                description: Some(&input_status(
+                    input,
+                    state.preferences.input_name(input).is_some(),
+                    language,
+                )),
+                selected: false,
+                chevron: true,
+            },
+        );
+    }
+    let mut y = 164.8 + state.inventory.inputs.len() as f32 * 102.7 + 16. - s;
+    if state.inventory.inputs.is_empty() {
+        out.text(
+            language.t("noInputs"),
+            Rect::new(664., 165. - s, 1000., 26.),
+            text(16.8, 400, 0.).leading(1.5),
+            c(0xf5f5f5, 0.72),
+            false,
+        );
+        y += 36.;
+    }
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::Setting(3),
+            rect: Rect::new(640., y, 1120., 72.),
+            title: if state.loading {
+                language.t("refreshNotice")
+            } else {
+                language.t("refreshInputs")
+            },
+            icon: Some("refresh"),
+            value: None,
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
 }
 
 fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
@@ -2670,197 +2695,87 @@ fn input_name_rows(out: &mut Scene, state: &State, assets: &Assets, id: &str, y:
     }
 }
 
+fn settings_surface(out: &mut Scene, rect: Rect) {
+    out.shape(rect, 48., c(0x171c20, 0.3));
+    out.border(rect, 48., 1., c(0xffffff, 0.045));
+}
+
 fn shortcut_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let tiles = &state.preferences.custom_tiles;
     for (index, tile) in tiles.iter().enumerate() {
-        let description = format!("{} · {}", tile.method.label(), shorten(&tile.url, false));
-        row(
-            out,
-            state,
+        let description = format!("{} · {}", tile.method.label(), shorten(&tile.url));
+        let y = 248.8 + index as f32 * 102.7 - state.scroll;
+        let rect = Rect::new(640., y, 1036., 90.7);
+        settings_surface(out, rect);
+        out.icon(
             assets,
-            Row {
-                target: Target::Tile(tile.id.clone()),
-                rect: Rect::new(
-                    640.,
-                    164.8 + index as f32 * 102.7 - state.scroll,
-                    1120.,
-                    90.7,
-                ),
-                title: &tile.title,
-                icon: Some(tile.icon()),
-                value: None,
-                description: Some(&description),
-                selected: false,
-                chevron: true,
+            tile.icon(),
+            Rect::new(664.2, y + 33.35, 24., 24.),
+            c(0xeeeeee, 0.5),
+        );
+        out.text(
+            &tile.title,
+            Rect::new(711., y + 18., 940., 29.12),
+            text(20.8, 550, -0.02).leading(1.4),
+            c(0xeeeeee, 0.5),
+            false,
+        );
+        out.text(
+            description,
+            Rect::new(711., y + 51., 940., 24.),
+            text(16.8, 400, 0.),
+            c(0xeeeeee, 0.5),
+            false,
+        );
+        let remove = Rect::new(1688., y + 13.35, 72., 64.);
+        let target = Target::TileRemove(tile.id.clone());
+        let focused = state.focus == target;
+        out.pill(remove, focused, false);
+        out.icon(
+            assets,
+            "close",
+            Rect::new(remove.x + 24., remove.y + 20., 24., 24.),
+            if focused {
+                c(0x2c2c2c, 1.)
+            } else {
+                c(0xeeeeee, 0.6)
             },
         );
+        out.control(target, remove, true);
     }
-    let mut y = 164.8 + tiles.len() as f32 * 102.7 + 16. - state.scroll;
     if tiles.is_empty() {
         out.text(
             language.t("noTiles"),
-            Rect::new(664., 165. - state.scroll, 1000., 26.),
+            Rect::new(664., 254. - state.scroll, 1000., 52.),
             text(16.8, 400, 0.).leading(1.5),
             c(0xf5f5f5, 0.72),
-            false,
+            true,
         );
-        y += 36.;
     }
-    row(
-        out,
-        state,
-        assets,
-        Row {
-            target: Target::TileAdd,
-            rect: Rect::new(640., y, 1120., 72.),
-            title: language.t("addTile"),
-            icon: Some("sparkles"),
-            value: None,
-            description: None,
-            selected: false,
-            chevron: true,
-        },
-    );
     row(
         out,
         state,
         assets,
         Row {
             target: Target::TileEditor,
-            rect: Rect::new(640., y + 84., 1120., 90.7),
-            title: language.t("editTilesElsewhere"),
-            icon: Some("globe"),
+            rect: Rect::new(640., 164.8 - state.scroll, 1120., 72.),
+            title: language.t("configure"),
+            icon: Some("settings"),
             value: None,
-            description: Some(language.t("editTilesElsewhereHint")),
+            description: None,
             selected: false,
             chevron: false,
         },
     );
 }
 
-/// Every row keeps its place while typing, so completing entry cannot move a
-/// clicked control; Remove only exists once the tile is saved.
-fn tile_settings(out: &mut Scene, state: &State, assets: &Assets, saved: bool) {
-    let language = state.preferences.language;
-    let draft = &state.tile_draft;
-    let editing = |field: TextField| state.text_input_active() && state.keyboard_field == field;
-    let name = if editing(TextField::TileName) {
-        format!("{}|", state.tile_text)
-    } else if draft.title.is_empty() {
-        language.t("tileNameHint").into()
-    } else {
-        draft.title.clone()
-    };
-    let url = if editing(TextField::TileUrl) {
-        let typed = &state.tile_text;
-        let scheme = if typed.contains("://") {
-            ""
-        } else {
-            state.tile_scheme()
-        };
-        format!("{}|", shorten(&format!("{scheme}{typed}"), true))
-    } else if draft.url.is_empty() {
-        language.t("tileUrlHint").into()
-    } else {
-        shorten(&draft.url, false)
-    };
-    let mut rows = vec![
-        (Target::TileName, "name", "type", None, Some(name)),
-        (
-            Target::TileScheme,
-            "protocol",
-            "globe",
-            Some(state.tile_scheme()),
-            None,
-        ),
-        (Target::TileUrl, "url", "location", None, Some(url)),
-        (
-            Target::TileIcon,
-            "icon",
-            draft.icon(),
-            Some(language.t(tile_icon_name(draft.icon()))),
-            None,
-        ),
-        (
-            Target::TileMethod,
-            "requestMethod",
-            "settings",
-            Some(draft.method.label()),
-            None,
-        ),
-        (Target::TileSend, "sendNow", "arrow", None, None),
-    ];
-    if saved {
-        rows.push((Target::TileRemove, "removeTile", "close", None, None));
-    }
-    let mut y = 164.8 - state.scroll;
-    for (target, title, icon, value, description) in rows {
-        let height = if description.is_some() { 90.7 } else { 72. };
-        let chevron = matches!(
-            target,
-            Target::TileName | Target::TileUrl | Target::TileIcon
-        );
-        row(
-            out,
-            state,
-            assets,
-            Row {
-                target,
-                rect: Rect::new(640., y, 1120., height),
-                title: language.t(title),
-                icon: Some(icon),
-                value,
-                description: description.as_deref(),
-                selected: false,
-                chevron,
-            },
-        );
-        y += height + 12.;
-    }
-}
-
-fn tile_icon_settings(out: &mut Scene, state: &State, assets: &Assets) {
-    let language = state.preferences.language;
-    let current = state.tile_draft.icon();
-    for (index, (icon, name)) in TILE_ICONS.iter().enumerate() {
-        row(
-            out,
-            state,
-            assets,
-            Row {
-                target: Target::Choice(index),
-                rect: Rect::new(640., 164.8 + index as f32 * 84. - state.scroll, 1120., 72.),
-                title: language.t(name),
-                icon: Some(icon),
-                value: None,
-                description: None,
-                selected: *icon == current,
-                chevron: false,
-            },
-        );
-    }
-}
-
-fn tile_icon_name(icon: &str) -> &'static str {
-    TILE_ICONS
-        .iter()
-        .find(|(key, _)| *key == icon)
-        .map_or(TILE_ICONS[0].1, |(_, name)| name)
-}
-
 /// URLs have no break opportunities, so long ones are cut to a single line.
-/// While typing, the end stays visible next to the cursor.
-fn shorten(text: &str, keep_end: bool) -> String {
+fn shorten(text: &str) -> String {
     const MAX: usize = 96;
     let count = text.chars().count();
     if count <= MAX {
         text.into()
-    } else if keep_end {
-        format!(
-            "…{}",
-            text.chars().skip(count + 1 - MAX).collect::<String>()
-        )
     } else {
         format!("{}…", text.chars().take(MAX - 1).collect::<String>())
     }
@@ -3287,8 +3202,6 @@ fn keyboard(out: &mut Scene, state: &State, assets: &Assets) {
             TextField::Location => language.t("cityPostcode"),
             TextField::Name => language.t("greetingName"),
             TextField::InputName => language.t("inputName"),
-            TextField::TileName => language.t("tileName"),
-            TextField::TileUrl => language.t("tileUrl"),
             TextField::Apps => language.t("findApp"),
         },
         Rect::new(389., 324., 1000., 44.),

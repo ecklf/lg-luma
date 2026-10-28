@@ -138,13 +138,19 @@ General has an **App names** subpage with independent **Show on Home** and **Sho
 Home captions default to off and Apps captions default to on, stored independently in `show_home_names`
 and `show_app_names`. The legacy `show_names` preference does not override these defaults. Hidden
 captions do not reserve layout space.
+**Settings → Widgets** groups **Greeting**, **Weather**, **Shortcuts**, and **Inputs** as separate subpages.
+Weather location and temperature choices return to Weather; Back from a widget returns to its row
+in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row.
+Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
+reserve 64 logical pixels below their last item for both remote focus and wheel scrolling.
 The **Greeting** subpage contains **Name** and **Clear name**. Selecting Name opens the text keyboard
 (the system keyboard on the TV) and the name is appended to the Home greeting ("Good evening, Ana.").
 Long greetings scale down to fit their existing single-line area, centred vertically without
 moving the weather summary or favorite cards. Short greetings retain their original size.
 The keyboard starts empty; closing it without a name preserves the saved value. Clear name removes
 it. Preferences are saved when the keyboard closes, including automatic system-keyboard dismissal.
-Back from either subpage restores its General row. Input name removal also uses **Clear name**.
+Back from Greeting restores its Widgets row; App names returns to General. Input name removal
+also uses **Clear name**.
 Choice checkmarks identify saved values, while the bright row fill identifies only the current focus.
 
 Home favorites form one horizontal strip, never a second row. Left/Right follows saved order,
@@ -298,7 +304,7 @@ checks do not establish webOS jail networking permissions or TV/browser behavior
 
 ## Shortcut editing on a phone or computer
 
-**Settings → Shortcuts → Edit on phone or computer** opens the same QR modal as the wallpaper
+**Settings → Widgets → Shortcuts → Configure** opens the same QR modal as the wallpaper
 upload, served by its own worker (`src/tile-editor.rs`). Both share `src/companion.rs`: interface
 choice, token, QR code, request parsing, Host/Origin checks and security headers are identical,
 including the ten-minute lifetime and invalidation on close, focus loss, hiding or exit. A page load
@@ -308,8 +314,13 @@ the upload page.
 When the modal opens, the worker takes a copy of the saved tiles and serves `tiles.json` (tiles,
 choosable icons with their bundled SVG markup, and the limit). `POST save`, `remove` and `send`
 need the session token in `X-Luma-Token` and a JSON body of at most 4 KiB. Saves are validated with
-the TV editor's rules (`clean_input_name`, `valid_tile_url`, `TILE_ICONS`, `TILE_LIMIT`, `new_tile_id`).
-Each accepted change sends the complete list back to the launcher, which applies it like a TV edit:
+the preference validation rules (`clean_input_name`, `valid_tile_url`, `TILE_ICONS`, `TILE_LIMIT`,
+`new_tile_id`).
+Creation and editing are available only on this companion page, which uses a flat background.
+The TV lists saved shortcuts on passive surfaces matching the System version row, without
+chevrons or row selection. Each has a separate remove-icon control. Removal clears the
+shortcut from preferences, favorites and hidden apps without attempting a platform uninstall.
+Each accepted companion change sends the complete list back to the launcher:
 new tiles join the end of the Home favorites, removed ones leave favorites and hidden apps, and
 preferences are saved. Accepted changes are revisioned and queued before replying to the page;
 reopening retains the worker's latest list until the launcher acknowledges every pending revision.

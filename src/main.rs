@@ -392,7 +392,6 @@ fn script(
                     Some(state::Subpage::Greeting) => state::TextField::Name,
                     Some(state::Subpage::WeatherLocation) => state::TextField::Location,
                     Some(state::Subpage::Input(_)) => state::TextField::InputName,
-                    Some(state::Subpage::Tile(_)) => state::TextField::TileName,
                     _ => state::TextField::Apps,
                 }
             };

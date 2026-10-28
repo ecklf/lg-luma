@@ -345,7 +345,7 @@ fn gallery_scrolling_keeps_sidebar_and_upload_fixed_and_clips_only_backgrounds()
         Target::UploadWallpaper,
         Target::Sidebar(0),
         Target::Sidebar(1),
-        Target::Sidebar(4),
+        Target::Sidebar(crate::state::SYSTEM_SECTION),
     ] {
         let old = before.iter().find(|c| c.target == target).unwrap();
         let new = scrolled

@@ -1,4 +1,30 @@
 {
+  "configure": {
+    "en": "Configure",
+    "de": "Konfigurieren",
+    "es": "Configurar",
+    "zh": "配置",
+    "pt": "Configurar",
+    "it": "Configura",
+    "ru": "Настроить",
+    "pl": "Konfiguruj",
+    "fr": "Configurer",
+    "vi": "Cấu hình",
+    "nl": "Configureren"
+  },
+  "widgets": {
+    "en": "Widgets",
+    "de": "Widgets",
+    "es": "Widgets",
+    "zh": "小组件",
+    "pt": "Widgets",
+    "it": "Widget",
+    "ru": "Виджеты",
+    "pl": "Widżety",
+    "fr": "Widgets",
+    "vi": "Tiện ích",
+    "nl": "Widgets"
+  },
   "wallpaperCycle": {
     "en": "Rotation",
     "de": "Rotation",

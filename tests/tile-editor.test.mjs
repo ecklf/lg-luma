@@ -15,7 +15,7 @@ const listing = {
   limit: 64,
 };
 
-test('addresses typed without a scheme use http, like the TV keyboard', () => {
+test('addresses typed without a scheme default to http', () => {
   assert.equal(
     normalizeUrl('  ha.local:8123/api/webhook/x '),
     'http://ha.local:8123/api/webhook/x',
@@ -83,4 +83,10 @@ test('the page loads only its own scripts and uses no inline styles or handlers'
   assert.doesNotMatch(html, /\sstyle=|\son[a-z]+=|https?:\/\/(?!homeassistant\.local)/);
   assert.doesNotMatch(script, /innerHTML|eval\(|new Function/);
   assert.match(script, /post\(fetch, token, route/);
+});
+
+test('the shortcut page uses a flat background like wallpaper uploads', async () => {
+  const css = await readFile(new URL('../assets/tile-editor/app.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css, /(?:radial|linear)-gradient\(/);
+  assert.match(css, /background:\s*#101213/);
 });

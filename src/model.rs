@@ -284,11 +284,6 @@ impl Preferences {
         self.custom_tiles.iter().find(|tile| tile.id == id)
     }
 
-    /// Derived from the title once; renaming keeps the id so favorites stay put.
-    pub fn new_tile_id(&self, title: &str) -> String {
-        new_tile_id(&self.custom_tiles, title)
-    }
-
     pub fn remove_tile(&mut self, id: &str) -> Option<CustomTile> {
         let index = self.custom_tiles.iter().position(|tile| tile.id == id)?;
         if let Some(favorites) = &mut self.favorites {
