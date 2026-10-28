@@ -1115,6 +1115,9 @@ fn run() -> Result<(), String> {
                 Event::Quit { .. } => running = false,
                 Event::User { type_, code, .. } if Some(type_) == lifecycle_event => {
                     if code == 1 {
+                        press = None;
+                        back_button.cancel();
+                        pending = state.return_home();
                         // A staged Home must come forward itself. If it does not, its
                         // registration would leave the Home key dead: check below.
                         if end_registration.is_some() {

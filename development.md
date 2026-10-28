@@ -630,7 +630,8 @@ is bound to that executable path. Luma detects this (`platform::runs_as_lg_home`
   registers with SAM itself through `registerApp` (lifecycle v2) on its own LS2 connection.
   `luna::subscribe` waits up to 10 s for SAM's first reply (`registered`); a failed connection,
   call or refused registration is a startup error, so Luma exits and SAM starts Home afresh.
-  `relaunch` raises the window and refreshes the inventory, `close` and a later
+  `relaunch` returns to Luma's Home tab, dismisses overlays, raises the window and refreshes
+  the inventory. Keyboard edits are saved before leaving their subpage. `close` and a later
   `returnValue: false` (registration lost) quit. SAM keeps the process across Home launches and
   standby (`pause`, reason `keepAlive`) instead of restarting it;
 - resolves `assets/`, `lib/` (extra RPATH) and the splash directory from the installed package,

@@ -19,6 +19,129 @@ fn ready() -> State {
     state
 }
 
+#[test]
+fn home_relaunch_returns_from_apps_and_settings() {
+    for page in [1, 2] {
+        let mut state = ready();
+        state.open(page);
+        state.query = "YouTube".into();
+        state.filter = 1;
+        state.scroll = 400.;
+        state.subpage = Some(crate::state::Subpage::Clock);
+        state.pointer = true;
+        state.pressed = Some(Target::Nav(page));
+        state.dirty = false;
+
+        assert!(state.return_home().is_empty());
+        assert_eq!(state.page, Page::Home);
+        assert_eq!(state.focus, Target::Nav(0));
+        assert!(state.query.is_empty());
+        assert_eq!(state.filter, 0);
+        assert_eq!(state.scroll, 0.);
+        assert!(state.subpage.is_none());
+        assert!(!state.pointer);
+        assert!(state.pressed.is_none());
+        assert!(state.dirty);
+        assert!(state.return_home().is_empty());
+        assert!(state.overlay.is_none(), "Home again must not open Recents");
+    }
+}
+
+#[test]
+fn home_relaunch_dismisses_overlays_without_cancelling_mutations() {
+    for overlay in [
+        Overlay::Options {
+            id: "test.app".into(),
+            restore: Target::Nav(1),
+        },
+        Overlay::Delete {
+            id: "test.app".into(),
+            restore: Target::Nav(1),
+        },
+        Overlay::WallpaperUpload,
+        Overlay::BackgroundOptions {
+            id: "dunes".into(),
+            restore: Target::Sidebar(1),
+        },
+        Overlay::BackgroundDelete {
+            id: "dunes".into(),
+            restore: Target::Sidebar(1),
+        },
+    ] {
+        let mut state = ready();
+        state.open(2);
+        state.overlay = Some(overlay);
+        state.panel_started = Some(std::time::Instant::now());
+        state.wallpaper_upload = Some(Err("test".into()));
+        state.uninstalling = Some("test.app".into());
+        state.deleting_wallpaper = Some("dunes".into());
+        state.moving = Some("test.app".into());
+
+        assert!(state.return_home().is_empty());
+        assert_eq!(state.page, Page::Home);
+        assert!(state.overlay.is_none());
+        assert!(state.panel_started.is_none());
+        assert!(state.wallpaper_upload.is_none());
+        assert!(state.moving.is_none());
+        assert_eq!(state.uninstalling.as_deref(), Some("test.app"));
+        assert_eq!(state.deleting_wallpaper.as_deref(), Some("dunes"));
+    }
+}
+
+#[test]
+fn home_relaunch_commits_keyboard_edits_before_clearing_the_subpage() {
+    for system in [false, true] {
+        let mut state = ready();
+        state.open(2);
+        state.subpage = Some(crate::state::Subpage::Input("HDMI_1".into()));
+        state.open_keyboard(crate::state::TextField::InputName);
+        if system {
+            state.overlay = Some(Overlay::SystemKeyboard);
+        }
+        state.text("Console");
+
+        assert_eq!(state.return_home(), vec![Effect::Save]);
+        assert_eq!(
+            state
+                .preferences
+                .input_names
+                .get("HDMI_1")
+                .map(String::as_str),
+            Some("Console")
+        );
+        assert_eq!(state.page, Page::Home);
+        assert_eq!(state.focus, Target::Nav(0));
+        assert!(!state.text_input_active());
+        assert!(state.subpage.is_none());
+    }
+}
+
+#[test]
+fn home_relaunch_dismisses_recents_and_ignores_its_pending_reply() {
+    let mut state = ready();
+    state.open(1);
+    state.open_recents();
+    state.recents.visibility = 1.;
+    state.recents.closing_focus = Some(Target::RecentEmpty);
+    assert!(state.recents.pending.is_some());
+    let generation = state.recents.generation;
+    let command = state.recents.pending.clone().unwrap();
+
+    assert!(state.return_home().is_empty());
+    assert_eq!(state.page, Page::Home);
+    assert!(state.overlay.is_none());
+    assert!(state.recents.pending.is_none());
+    assert_eq!(state.recents.visibility, 0.);
+    assert!(state.recents.closing_focus.is_none());
+    assert!(
+        state
+            .recent_response(generation, command, Ok(Some(vec![])))
+            .is_empty()
+    );
+    assert_eq!(state.focus, Target::Nav(0));
+    assert!(state.overlay.is_none());
+}
+
 fn scene(state: &State) -> view::Scene {
     let assets = view::Assets {
         root: PathBuf::new(),

@@ -332,6 +332,20 @@ impl State {
                     .is_some_and(|(_, start)| start.elapsed() < Duration::from_millis(120)))
     }
 
+    /// Home's lifecycle relaunch returns directly to Home, even from an overlay.
+    pub fn return_home(&mut self) -> Vec<Effect> {
+        // Commit keyboard drafts before open() clears their settings subpage.
+        let pending = self.finish_text_input();
+        self.recents.pending = None;
+        self.recents.visibility = 0.;
+        self.recents.closing_focus = None;
+        self.wallpaper_upload = None;
+        self.pointer = false;
+        self.pressed = None;
+        self.open(0);
+        pending
+    }
+
     pub fn open(&mut self, index: usize) {
         self.weather.cancel_search();
         self.page = match index {
