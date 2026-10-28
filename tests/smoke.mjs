@@ -278,11 +278,11 @@ try {
   assert.ok(profiled.render.profile.cpu_submission.mean_ms >= 0);
   const widgetsPage = 'settings,down,down,down,enter';
   const widgets = await scenario('widgets-settings', widgetsPage);
-  assert.deepEqual(widgets.focus, { Widget: 0 });
+  assert.deepEqual(widgets.focus, { Widget: 4 });
   assert.ok(widgets.ui_text.includes('Widgets'));
-  for (const title of ['Greeting', 'Weather', 'Shortcuts', 'Inputs'])
+  for (const title of ['Date', 'Greeting', 'Weather', 'Shortcuts', 'Inputs'])
     assert.ok(widgets.ui_text.includes(title));
-  const greetingEditor = `${widgetsPage},enter,down,enter`;
+  const greetingEditor = `${widgetsPage},down,enter,down,enter`;
   for (const [id, name] of [
     ['Ana', 'Ana'],
     ['Bob', 'Bob'],
@@ -310,7 +310,7 @@ try {
       'Keyboard completion must save without waiting for another SDL input event',
     );
   }
-  const greeting = await scenario('greeting-settings', `${widgetsPage},enter,down,down`);
+  const greeting = await scenario('greeting-settings', `${widgetsPage},down,enter,down,down`);
   assert.equal(greeting.subpage, 'Greeting');
   assert.equal(greeting.focus, 'GreetingNameClear');
   assert.ok(greeting.ui_text.includes('Clear name'));
@@ -433,7 +433,7 @@ try {
       favorites: [...beforeShortcut.favorites, 'custom.sandmann'],
     }),
   );
-  const shortcutsPage = `${widgetsPage},down,down,enter`;
+  const shortcutsPage = `${widgetsPage},down,down,down,enter`;
   const shortcut = await scenario('shortcut-settings', shortcutsPage);
   assert.equal(shortcut.focus, 'TileEditor');
   assert.equal(shortcut.subpage, 'Shortcuts');

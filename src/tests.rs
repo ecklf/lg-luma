@@ -1505,6 +1505,8 @@ fn weather_location_keyboard_back_and_sidebar_routes_restore_focus() {
     state.focus = Target::Sidebar(crate::state::WIDGETS_SECTION);
     state.section = crate::state::WIDGETS_SECTION;
     state.activate();
+    assert_eq!(state.focus, Target::Widget(4));
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Widget(0));
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Widget(1));
@@ -2355,7 +2357,15 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(WIDGETS_SECTION));
     state.direction(Direction::Right, &controls(&state));
-    assert_eq!(state.focus, Target::Widget(0));
+    assert_eq!(state.focus, Target::Widget(4));
+    let widget_order: Vec<_> = controls(&state)
+        .into_iter()
+        .filter_map(|control| match control.target {
+            Target::Widget(index) => Some(index),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(widget_order, [4, 0, 1, 2, 3]);
     for (index, subpage) in [
         Subpage::Greeting,
         Subpage::Weather,
@@ -2437,9 +2447,16 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
                 .iter()
                 .filter(|c| matches!(c.target, Target::Widget(_)))
                 .count(),
-            4
+            5
         );
-        for key in ["widgets", "greeting", "weather", "shortcuts", "inputs"] {
+        for key in [
+            "widgets",
+            "greeting",
+            "weather",
+            "shortcuts",
+            "inputs",
+            "date",
+        ] {
             assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t(key))), "{key}/{language:?}");
         }
         state.pointer_focus(Target::Sidebar(0));
@@ -2858,6 +2875,88 @@ fn greeting_visibility_toggle_persists_without_clearing_name_or_hiding_date() {
             .iter()
             .any(|draw| matches!(draw, Draw::Text(label, ..) if label == &greeting))
     );
+}
+
+#[test]
+fn date_widget_settings_persist_and_restore_parent_focus() {
+    use crate::{model::DateFormat, state::Subpage};
+    let legacy: Preferences = serde_json::from_str("{}").unwrap();
+    assert!(legacy.show_date);
+    assert_eq!(legacy.date_format, DateFormat::Localized);
+    let mut state = ready();
+    state.open(2);
+    state.focus = Target::Widget(4);
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::Date));
+    assert_eq!(state.focus, Target::DateToggle);
+    let before = controls(&state);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!state.preferences.show_date);
+    let after = controls(&state);
+    for (a, b) in before.iter().zip(&after) {
+        assert_eq!(a.target, b.target);
+        assert_eq!((a.rect.x, a.rect.y), (b.rect.x, b.rect.y));
+    }
+    state.direction(Direction::Down, &after);
+    assert_eq!(state.focus, Target::DateFormat);
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.subpage, Some(Subpage::DateFormat));
+    assert_eq!(state.focus, Target::Choice(0));
+    for index in 1..4 {
+        state.direction(Direction::Down, &controls(&state));
+        assert_eq!(state.focus, Target::Choice(index));
+    }
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Choice(0));
+    for _ in 0..3 {
+        state.direction(Direction::Down, &controls(&state));
+    }
+    assert_eq!(state.focus, Target::Choice(3));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.date_format, DateFormat::YearMonthDay);
+    assert_eq!(state.subpage, Some(Subpage::Date));
+    assert_eq!(state.focus, Target::DateFormat);
+    state.activate();
+    assert_eq!(state.focus, Target::Choice(3));
+    state.back();
+    assert_eq!(state.focus, Target::DateFormat);
+    state.back();
+    assert_eq!(state.focus, Target::Widget(4));
+    let saved: Preferences =
+        serde_json::from_str(&serde_json::to_string(&state.preferences).unwrap()).unwrap();
+    assert!(!saved.show_date);
+    assert_eq!(saved.date_format, DateFormat::YearMonthDay);
+    state.open(0);
+    let date = saved
+        .date_format
+        .format(saved.language, time::OffsetDateTime::UNIX_EPOCH);
+    assert!(
+        !scene(&state)
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == &date))
+    );
+}
+
+#[test]
+fn date_formats_preserve_localized_default_and_pad_numeric_dates() {
+    use crate::{i18n::Language, model::DateFormat};
+    let now = time::Date::from_calendar_date(2026, time::Month::February, 3)
+        .unwrap()
+        .midnight()
+        .assume_utc();
+    for language in Language::ALL {
+        assert_eq!(
+            DateFormat::Localized.format(language, now),
+            language.date(now)
+        );
+        assert_eq!(DateFormat::DayMonthYear.format(language, now), "03.02.2026");
+        assert_eq!(DateFormat::MonthDayYear.format(language, now), "02/03/2026");
+        assert_eq!(DateFormat::YearMonthDay.format(language, now), "2026-02-03");
+        for key in ["date", "dateFormat", "dateLocalized"] {
+            assert_ne!(language.t(key), key);
+        }
+    }
 }
 
 #[test]

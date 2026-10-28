@@ -64,6 +64,8 @@ pub enum Target {
     GreetingName,
     GreetingNameClear,
     GreetingToggle,
+    DateToggle,
+    DateFormat,
     AppNamesHome,
     AppNamesApps,
     ClockFormat,
@@ -145,6 +147,8 @@ pub enum Overlay {
 pub enum Subpage {
     AppNames,
     Greeting,
+    Date,
+    DateFormat,
     Weather,
     Shortcuts,
     Inputs,
@@ -945,7 +949,7 @@ impl State {
                     })
                     .unwrap_or(0),
             ),
-            WIDGETS_SECTION => Target::Widget(0),
+            WIDGETS_SECTION => Target::Widget(4),
             SYSTEM_SECTION if self.available_update.is_some() => Target::InstallUpdate,
             SYSTEM_SECTION => Target::CheckUpdates,
             _ => Target::Setting(0),
@@ -961,6 +965,11 @@ impl State {
         self.focus = match self.subpage.take() {
             Some(Subpage::AppNames) => Target::Setting(0),
             Some(Subpage::Greeting) => Target::Widget(0),
+            Some(Subpage::Date) => Target::Widget(4),
+            Some(Subpage::DateFormat) => {
+                self.subpage = Some(Subpage::Date);
+                Target::DateFormat
+            }
             Some(Subpage::Weather) => Target::Widget(1),
             Some(Subpage::Shortcuts) => Target::Widget(2),
             Some(Subpage::Inputs) => Target::Widget(3),
@@ -1089,6 +1098,7 @@ impl State {
                     Target::GreetingNameClear,
                 ]),
                 Some(Subpage::AppNames) => Some(&[Target::AppNamesHome, Target::AppNamesApps]),
+                Some(Subpage::Date) => Some(&[Target::DateToggle, Target::DateFormat]),
                 Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
                 _ => None,
             };
@@ -1111,7 +1121,10 @@ impl State {
                     Direction::Right
                         if matches!(
                             self.focus,
-                            Target::GreetingName | Target::ClockFormat | Target::ClockTimeFormat
+                            Target::GreetingName
+                                | Target::ClockFormat
+                                | Target::ClockTimeFormat
+                                | Target::DateFormat
                         ) =>
                     {
                         return self.activate();
@@ -1129,6 +1142,7 @@ impl State {
                         | Subpage::TextRendering,
                     ) => 2,
                     Some(Subpage::Language) => Language::ALL.len(),
+                    Some(Subpage::DateFormat) => crate::model::DateFormat::ALL.len(),
                     _ => 3,
                 };
                 match direction {
@@ -1964,6 +1978,18 @@ impl State {
                 self.preferences.show_greeting = !self.preferences.show_greeting;
                 return vec![Effect::Save];
             }
+            Target::DateToggle => {
+                self.preferences.show_date = !self.preferences.show_date;
+                return vec![Effect::Save];
+            }
+            Target::DateFormat => {
+                self.subpage = Some(Subpage::DateFormat);
+                self.focus = Target::Choice(self.preferences.date_format.index());
+                self.scroll = 0.;
+                if !self.preferences.reduced_motion {
+                    self.panel_started = Some(Instant::now());
+                }
+            }
             Target::GreetingName => self.open_keyboard(TextField::Name),
             Target::GreetingNameClear => {
                 self.preferences.greeting_name.clear();
@@ -2001,6 +2027,7 @@ impl State {
                     0 => (Subpage::Greeting, Target::GreetingToggle),
                     1 => (Subpage::Weather, Target::WeatherToggle),
                     2 => (Subpage::Shortcuts, Target::TileEditor),
+                    4 => (Subpage::Date, Target::DateToggle),
                     3 => (
                         Subpage::Inputs,
                         self.inventory
@@ -2207,6 +2234,9 @@ impl State {
                 match self.subpage.clone() {
                     Some(Subpage::ClockFormat) => self.preferences.hour_24 = index == 1,
                     Some(Subpage::TimeFormat) => self.preferences.show_seconds = index == 1,
+                    Some(Subpage::DateFormat) => {
+                        self.preferences.date_format = crate::model::DateFormat::ALL[index.min(3)];
+                    }
                     Some(Subpage::Input(id)) => {
                         self.preferences.input_modes.insert(
                             id,
@@ -2235,6 +2265,7 @@ impl State {
                     Some(
                         Subpage::WeatherLocation
                         | Subpage::Greeting
+                        | Subpage::Date
                         | Subpage::AppNames
                         | Subpage::Clock
                         | Subpage::Weather

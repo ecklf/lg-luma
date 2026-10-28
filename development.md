@@ -138,14 +138,19 @@ General has an **App names** subpage with independent **Show on Home** and **Sho
 Home captions default to off and Apps captions default to on, stored independently in `show_home_names`
 and `show_app_names`. The legacy `show_names` preference does not override these defaults. Hidden
 captions do not reserve layout space.
-**Settings → Widgets** groups **Greeting**, **Weather**, **Shortcuts**, and **Inputs** as separate subpages.
+**Settings → Widgets** groups **Date**, **Greeting**, **Weather**, **Shortcuts**, and **Inputs** as separate subpages.
 Weather location and temperature choices return to Weather; Back from a widget returns to its row
 in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
 with a tighter 48-pixel spacing for Languages and Backgrounds.
 **Widgets → Greeting → Show widget** is the first row and hides only the greeting text, preserving the saved name,
-date, weather and Home layout. It defaults to enabled for existing and new installations.
+date and weather. Weather moves directly below the date when the greeting is hidden, without
+moving favorites or inputs. It defaults to enabled for existing and new installations.
+**Widgets → Date** contains **Show widget** (enabled by default) and **Date format**. Choose the
+existing localized weekday/month/day display (default), `DD.MM.YYYY`, `MM/DD/YYYY`, or `YYYY-MM-DD`.
+Choosing a format returns to its Date row; Back from Date restores its Widgets row. Hiding the
+date removes its reserved space above the greeting/weather and preserves the chosen format.
 Lists render behind the fixed sidebar, navigation and background actions, without viewport clipping
 or edge fades. Pointer interaction and remote focus retain their safe content viewports.
 The **Greeting** subpage contains **Name** and **Clear name**. Selecting Name opens the text keyboard

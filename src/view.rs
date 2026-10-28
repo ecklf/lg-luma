@@ -1101,14 +1101,21 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     let shift = summary
         .as_ref()
         .map_or(0., |summary| (summary.height + 18.4) / 2.);
-    let date = language.date(now);
-    out.text(
-        date,
-        Rect::new(84., 223.2 - shift - s, 1200., 24.),
-        text(18.4, 600, 0.12),
-        c(0xf5f5f5, 0.72),
-        false,
-    );
+    let top = 223.2 - shift - s;
+    let date_height = if state.preferences.show_date {
+        41.8
+    } else {
+        0.
+    };
+    if state.preferences.show_date {
+        out.text(
+            state.preferences.date_format.format(language, now),
+            Rect::new(84., top, 1200., 24.),
+            text(18.4, 600, 0.12),
+            c(0xf5f5f5, 0.72),
+            false,
+        );
+    }
     if state.preferences.show_greeting {
         let greeting = language.greeting(now.hour(), &state.preferences.greeting_name);
         let greeting_style = text(90.4, 500, -0.065).leading(1.05);
@@ -1116,14 +1123,25 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         let height = 95. * fitted.size / greeting_style.size;
         out.text(
             &greeting,
-            Rect::new(84., 265. + (95. - height) / 2. - shift - s, 1500., height),
+            Rect::new(84., top + date_height + (95. - height) / 2., 1500., height),
             fitted,
             WHITE,
             false,
         );
     }
     if let Some(summary) = summary {
-        weather_summary(out, state, assets, summary, 265. - shift + 94.92 + 18.4 - s);
+        let greeting_height = if state.preferences.show_greeting {
+            94.92 + 18.4
+        } else {
+            0.
+        };
+        weather_summary(
+            out,
+            state,
+            assets,
+            summary,
+            top + date_height + greeting_height,
+        );
     }
     out.text(
         language.t("favorites"),
@@ -2087,6 +2105,11 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
         };
         if state.section == index && state.subpage.is_some() {
             let nested_path = match &state.subpage {
+                Some(Subpage::DateFormat) => Some(format!(
+                    "{} › {}",
+                    language.t("date"),
+                    language.t("dateFormat")
+                )),
                 Some(Subpage::ClockFormat) => Some(format!(
                     "{} › {}",
                     language.t("clock"),
@@ -2123,6 +2146,8 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
             let sub = match &state.subpage {
                 Some(Subpage::AppNames) => language.t("appNames"),
                 Some(Subpage::Greeting) => language.t("greeting"),
+                Some(Subpage::Date) => language.t("date"),
+                Some(Subpage::DateFormat) => nested_path.as_deref().unwrap(),
                 Some(Subpage::Weather) => language.t("weather"),
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
                 Some(Subpage::Inputs) => language.t("inputs"),
@@ -2203,6 +2228,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::Shortcuts
                 | Subpage::Inputs
                 | Subpage::Greeting
+                | Subpage::Date
                 | Subpage::AppNames
                 | Subpage::Clock
         ) {
@@ -2212,6 +2238,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::Shortcuts => shortcut_settings(out, state, assets),
                 Subpage::Inputs => inputs_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
+                Subpage::Date => date_settings(out, state, assets),
                 Subpage::AppNames => app_name_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
                 _ => unreachable!(),
@@ -2222,6 +2249,16 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             return;
         }
         let options: Vec<(&str, Option<&str>, bool)> = match subpage {
+            Subpage::DateFormat => crate::model::DateFormat::ALL
+                .iter()
+                .map(|format| {
+                    (
+                        format.label(language),
+                        None,
+                        *format == state.preferences.date_format,
+                    )
+                })
+                .collect(),
             Subpage::ClockFormat => vec![
                 (language.t("hour12"), None, !state.preferences.hour_24),
                 (language.t("hour24"), None, state.preferences.hour_24),
@@ -2272,6 +2309,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::Shortcuts
             | Subpage::Inputs
             | Subpage::Greeting
+            | Subpage::Date
             | Subpage::AppNames
             | Subpage::Clock => {
                 unreachable!()
@@ -2447,11 +2485,12 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             out.draw.extend(actions);
         }
         WIDGETS_SECTION => {
-            for (index, (key, icon)) in [
-                ("greeting", "type"),
-                ("weather", "weather-sun"),
-                ("shortcuts", "sparkles"),
-                ("inputs", "input-hdmi"),
+            for (index, (widget, key, icon)) in [
+                (4, "date", "clock"),
+                (0, "greeting", "type"),
+                (1, "weather", "weather-sun"),
+                (2, "shortcuts", "sparkles"),
+                (3, "inputs", "input-hdmi"),
             ]
             .into_iter()
             .enumerate()
@@ -2461,7 +2500,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     state,
                     assets,
                     Row {
-                        target: Target::Widget(index),
+                        target: Target::Widget(widget),
                         rect: Rect::new(640., 164.8 + index as f32 * 84. - s, 1120., 72.),
                         title: language.t(key),
                         icon: Some(icon),
@@ -2705,6 +2744,47 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
             chevron: false,
         },
     );
+}
+
+fn date_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    for (index, (target, title, value, chevron)) in [
+        (
+            Target::DateToggle,
+            "showWidget",
+            language.t(if state.preferences.show_date {
+                "stateOn"
+            } else {
+                "stateOff"
+            }),
+            false,
+        ),
+        (
+            Target::DateFormat,
+            "dateFormat",
+            state.preferences.date_format.label(language),
+            true,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target,
+                rect: Rect::new(640., 164.8 + index as f32 * 84. - state.scroll, 1120., 72.),
+                title: language.t(title),
+                icon: None,
+                value: Some(value),
+                description: None,
+                selected: false,
+                chevron,
+            },
+        );
+    }
 }
 
 fn clock_settings(out: &mut Scene, state: &State, assets: &Assets) {
@@ -3658,6 +3738,71 @@ mod tests {
                     (before.rect.x, before.rect.y, before.rect.w, before.rect.h),
                     (after.rect.x, after.rect.y, after.rect.w, after.rect.h)
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn hidden_home_widgets_collapse_without_moving_favorites_or_inputs() {
+        let assets = assets();
+        let mut state = State::new(Preferences::default());
+        state.set_inventory(demo_inventory(), None);
+        let mut original = Scene::new();
+        home(&mut original, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+        let weather_y = |scene: &Scene| {
+            scene
+                .controls
+                .iter()
+                .find(|control| control.target == Target::WeatherConfigure)
+                .unwrap()
+                .rect
+                .y
+        };
+        let original_y = weather_y(&original);
+        for show_date in [false, true] {
+            for show_greeting in [false, true] {
+                state.preferences.show_date = show_date;
+                state.preferences.show_greeting = show_greeting;
+                let mut rendered = Scene::new();
+                home(&mut rendered, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+                let removed = if show_date { 0. } else { 41.8 }
+                    + if show_greeting { 0. } else { 94.92 + 18.4 };
+                assert!((weather_y(&rendered) - (original_y - removed)).abs() < 0.001);
+                for control in original
+                    .controls
+                    .iter()
+                    .filter(|control| matches!(control.target, Target::App(_) | Target::Input(_)))
+                {
+                    let other = rendered
+                        .controls
+                        .iter()
+                        .find(|other| other.target == control.target)
+                        .unwrap();
+                    assert_eq!(
+                        (control.rect.x, control.rect.y),
+                        (other.rect.x, other.rect.y)
+                    );
+                }
+                if show_date && !show_greeting {
+                    let date_y = rendered
+                        .draw
+                        .iter()
+                        .find_map(|draw| match draw {
+                            Draw::Text(label, rect, ..)
+                                if label
+                                    == &state
+                                        .preferences
+                                        .language
+                                        .date(OffsetDateTime::UNIX_EPOCH) =>
+                            {
+                                Some(rect.y)
+                            }
+                            _ => None,
+                        })
+                        .unwrap();
+                    // Weather's control includes padding around the summary itself.
+                    assert!((weather_y(&rendered) - date_y).abs() < 60.);
+                }
             }
         }
     }

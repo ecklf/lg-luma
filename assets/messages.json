@@ -1,4 +1,46 @@
 {
+  "date": {
+    "en": "Date",
+    "de": "Datum",
+    "es": "Fecha",
+    "zh": "日期",
+    "zh-tw": "日期",
+    "pt": "Data",
+    "it": "Data",
+    "ru": "Дата",
+    "pl": "Data",
+    "fr": "Date",
+    "vi": "Ngày",
+    "nl": "Datum"
+  },
+  "dateFormat": {
+    "en": "Date format",
+    "de": "Datumsformat",
+    "es": "Formato de fecha",
+    "zh": "日期格式",
+    "zh-tw": "日期格式",
+    "pt": "Formato de data",
+    "it": "Formato data",
+    "ru": "Формат даты",
+    "pl": "Format daty",
+    "fr": "Format de date",
+    "vi": "Định dạng ngày",
+    "nl": "Datumnotatie"
+  },
+  "dateLocalized": {
+    "en": "Localized (weekday, month and day)",
+    "de": "Lokalisiert (Wochentag, Monat und Tag)",
+    "es": "Localizado (día de la semana, mes y día)",
+    "zh": "本地格式（星期、月和日）",
+    "zh-tw": "本地格式（星期、月和日）",
+    "pt": "Localizado (dia da semana, mês e dia)",
+    "it": "Localizzato (giorno della settimana, mese e giorno)",
+    "ru": "Местный (день недели, месяц и день)",
+    "pl": "Lokalny (dzień tygodnia, miesiąc i dzień)",
+    "fr": "Localisé (jour de la semaine, mois et jour)",
+    "vi": "Theo ngôn ngữ (thứ, tháng và ngày)",
+    "nl": "Lokaal (weekdag, maand en dag)"
+  },
   "latestVersionInstalled": {
     "zh-tw": "未發現更新版本",
     "en": "No newer version found",

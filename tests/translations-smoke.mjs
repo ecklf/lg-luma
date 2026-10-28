@@ -101,8 +101,8 @@ function contains(state, key, language) {
   assert.ok(state.ui_text.includes(messages[key][language]), `Missing rendered ${key}/${language}`);
 }
 const picker = 'settings,down,enter,down,down,enter';
-const weatherPage = 'settings,down,down,down,enter,down,enter';
-const inputsPage = 'settings,down,down,down,enter,down,down,down,enter';
+const weatherPage = 'settings,down,down,down,enter,down,down,enter';
+const inputsPage = 'settings,down,down,down,enter,down,down,down,down,enter';
 const location = `${weatherPage},down,enter`;
 try {
   if (process.env.LUMA_SMOKE_SKIP_BUILD !== '1')

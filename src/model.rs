@@ -168,6 +168,48 @@ pub const CUSTOM_TILE_PREFIX: &str = "custom.";
 pub const TILE_LIMIT: usize = 64;
 pub const TILE_URL_LIMIT: usize = 512;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DateFormat {
+    #[default]
+    Localized,
+    DayMonthYear,
+    MonthDayYear,
+    YearMonthDay,
+}
+
+impl DateFormat {
+    pub const ALL: [Self; 4] = [
+        Self::Localized,
+        Self::DayMonthYear,
+        Self::MonthDayYear,
+        Self::YearMonthDay,
+    ];
+
+    pub fn index(self) -> usize {
+        Self::ALL.iter().position(|format| *format == self).unwrap()
+    }
+
+    pub fn label(self, language: Language) -> &'static str {
+        match self {
+            Self::Localized => language.t("dateLocalized"),
+            Self::DayMonthYear => "DD.MM.YYYY",
+            Self::MonthDayYear => "MM/DD/YYYY",
+            Self::YearMonthDay => "YYYY-MM-DD",
+        }
+    }
+
+    pub fn format(self, language: Language, now: time::OffsetDateTime) -> String {
+        let (year, month, day) = (now.year(), now.month() as u8, now.day());
+        match self {
+            Self::Localized => language.date(now),
+            Self::DayMonthYear => format!("{day:02}.{month:02}.{year:04}"),
+            Self::MonthDayYear => format!("{month:02}/{day:02}/{year:04}"),
+            Self::YearMonthDay => format!("{year:04}-{month:02}-{day:02}"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
@@ -186,6 +228,8 @@ pub struct Preferences {
     /// Optional name appended to the Home greeting ("Good evening, Ana."). Empty = plain greeting.
     pub greeting_name: String,
     pub show_greeting: bool,
+    pub show_date: bool,
+    pub date_format: DateFormat,
     pub input_modes: BTreeMap<String, InputMode>,
     /// Custom names by input app ID; the TV's port and label stay visible as detail.
     pub input_names: BTreeMap<String, String>,
@@ -222,6 +266,8 @@ impl Default for Preferences {
             show_seconds: false,
             greeting_name: String::new(),
             show_greeting: true,
+            show_date: true,
+            date_format: DateFormat::default(),
             input_modes: BTreeMap::new(),
             input_names: BTreeMap::new(),
             show_weather: true,
