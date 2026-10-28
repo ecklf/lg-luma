@@ -222,7 +222,7 @@ Test on a spare button first. Disable the mapping in Input Hook to restore norma
 
 ## Features
 
-### Custom wallpapers
+### Backgrounds
 
 Open **Settings → Background → Upload**, then scan the QR code or open the shown
 address on a phone or computer on the same network. Choose a JPEG, PNG or WebP and adjust
@@ -238,13 +238,9 @@ background is selected.
 The upload link works only while its TV dialog is open and focused, for at most ten minutes.
 Use a trusted local network: the temporary local upload uses HTTP, not encrypted HTTPS.
 
-### Automatic backgrounds
-
-Press **Rotation**, to the left of **Upload**, to toggle On or Off (the default).
-The rotation icon is crossed out when Off.
-When enabled, all available images advance in gallery order once on every Luma restart and every
-15 minutes with a slow cross-fade (instant with reduced motion). Manual selection restarts the interval. Automatic changes leave
-your manually chosen LG splash unchanged, including after unrelated settings saves and restarts.
+Enable **Rotation** beside **Upload** to cycle through backgrounds on each Luma restart and every
+15 minutes with a slow cross-fade. Rotation is off by default and leaves your manually chosen
+LG splash unchanged.
 
 ### Recent app switching
 
