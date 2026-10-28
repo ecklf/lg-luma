@@ -642,6 +642,10 @@ fn run() -> Result<(), String> {
     } else {
         storage::load(&preferences_path)?
     };
+    let public_update_checks = update::public_checks_enabled(
+        !options.script.is_empty(),
+        options.test_update_version.is_some(),
+    );
     let mut state = State::new(initial_preferences);
     if let Some(version) = &options.test_update_version {
         eprintln!(
@@ -649,7 +653,7 @@ fn run() -> Result<(), String> {
         );
         state.available_update = (version != env!("CARGO_PKG_VERSION")).then(|| version.clone());
         state.update_status = update::Status::Checked;
-    } else if webos {
+    } else if public_update_checks {
         state.update_status = update::Status::Checking;
     }
     // Scripted desktop captures must never open a server on the real LAN.
@@ -677,7 +681,7 @@ fn run() -> Result<(), String> {
         options.preferences.is_none() && options.test_extra_apps == 0,
     );
     let webhook_service = webhook::Service::new();
-    let update_service = update::Service::new(webos && options.test_update_version.is_none());
+    let update_service = update::Service::new(public_update_checks);
     effects(
         vec![Effect::Refresh],
         &mut state,
@@ -1836,6 +1840,7 @@ fn run() -> Result<(), String> {
     if let Some(path) = options.dump {
         let state = serde_json::json!({ "page": state.page, "focus": state.focus, "query": state.query,
             "filter": state.filter, "preferences": state.preferences, "apps": state.apps().iter().map(|a| &a.id).collect::<Vec<_>>(),
+            "update_status": state.update_status, "available_update": state.available_update,
             "error": state.error, "scroll": state.scroll, "home_scroll": state.home_scroll, "subpage": state.subpage, "modal": state.overlay.is_some(), "weather": state.weather,
             "inventory": state.inventory.apps,
             "recents": state.recents.entries, "recents_pending": state.recents.pending, "recents_error": state.recents.error, "recents_visibility": state.recents.visibility,

@@ -388,6 +388,8 @@ try {
     ['--test-update-version', currentVersion],
   );
   assert.equal(latestPreview.focus, 'CheckUpdates');
+  assert.equal(latestPreview.update_status, 'checked');
+  assert.equal(latestPreview.available_update, null);
   assert.ok(latestPreview.ui_text.includes('No newer version found'));
   assert.ok(latestPreview.ui_text.includes('Check again'));
   assert.ok(latestPreview.ui_text.includes(`Current version: ${currentVersion}`));

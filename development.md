@@ -815,14 +815,15 @@ runtime font/translation services or telemetry are used. Weather attribution: Op
 
 ## Update availability
 
-On TV startup a separate worker checks
+On interactive desktop or TV startup a separate worker checks
 `https://github.com/ecklf/lg-luma/releases/latest/download/repo.json` once per process automatically.
 **Settings → System → Check again** retries on the same worker, with one request in flight at a time.
 It only reads the `com.ecklf.luma` package/manifest version and compares numeric major/minor/patch
 components with the compiled version. Equal, older, malformed or prerelease versions do not offer
 updates. HTTP is HTTPS-only with bounded redirects, a ten-second timeout, a 256 KiB reply limit and
 no proxy; failures are logged without interrupting launch and the status card offers retry.
-Desktop previews do not contact GitHub. The card shows the current version and only reports
+Scripted captures and simulated update previews do not contact GitHub. Interactive desktop checks
+use the same endpoint and worker as TV. The card shows the current version and only reports
 **No newer version found** after a successful check, never while unchecked or offline.
 A newer version shows an **Update available** notice and a **Settings → System** card with both
 versions. Its button launches `org.webosbrew.hbchannel` through the native platform launch path;

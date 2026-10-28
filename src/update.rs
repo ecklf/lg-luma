@@ -1,12 +1,13 @@
 //! Read-only release discovery. Installation stays with Homebrew Channel.
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{io::Read, sync::mpsc, thread, time::Duration};
 
 const FEED: &str = "https://github.com/ecklf/lg-luma/releases/latest/download/repo.json";
 const LIMIT: usize = 256 * 1024;
 pub const HOMEBREW_CHANNEL: &str = "org.webosbrew.hbchannel";
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Status {
     #[default]
     Unchecked,
@@ -15,13 +16,17 @@ pub enum Status {
     Failed,
 }
 
+pub fn public_checks_enabled(scripted: bool, simulated: bool) -> bool {
+    !scripted && !simulated
+}
+
 pub struct Service {
     pub receiver: mpsc::Receiver<Result<Option<String>, String>>,
     sender: mpsc::Sender<()>,
 }
 
 impl Service {
-    /// Desktop previews and automated captures never request the public feed.
+    /// Interactive desktop and TV runs share the feed; scripted/simulated previews stay offline.
     pub fn new(enabled: bool) -> Self {
         let (sender, receiver) = mpsc::channel();
         let (command_tx, command_rx) = mpsc::channel();
@@ -37,7 +42,7 @@ impl Service {
                 let result = if enabled {
                     fetch(&agent, FEED, env!("CARGO_PKG_VERSION"))
                 } else {
-                    Err("Public release checks are disabled in desktop/preview mode".into())
+                    Err("Public release checks are disabled for scripted/simulated previews".into())
                 };
                 if sender.send(result).is_err() {
                     break;
@@ -147,6 +152,13 @@ pub fn validate_preview(latest: &str, current: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn interactive_checks_are_live_but_scripts_and_simulations_stay_offline() {
+        assert!(public_checks_enabled(false, false));
+        assert!(!public_checks_enabled(true, false));
+        assert!(!public_checks_enabled(false, true));
+        assert!(!public_checks_enabled(true, true));
+    }
     #[test]
     fn preview_requires_a_valid_current_or_newer_version() {
         assert!(validate_preview("99.0.0", "2.13.0").is_ok());
