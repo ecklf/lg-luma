@@ -357,7 +357,10 @@ try {
   const clockFocus = await scenario('clock-format-focus', `${clockEditor},enter,down`);
   assert.equal(clockFocus.subpage, 'ClockFormat');
   assert.deepEqual(clockFocus.focus, { Choice: 1 });
-  const system = await scenario('system-settings', 'settings,down,down,down,down,right,down,down');
+  const system = await scenario(
+    'system-settings',
+    'settings,down,down,down,down,right,down,down,down',
+  );
   assert.deepEqual(system.focus, { Setting: 5 });
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
   assert.ok(system.ui_text.includes('Quit app'));
@@ -374,9 +377,22 @@ try {
     'update-preview-cleared',
     'settings,down,down,down,down,right',
   );
-  assert.deepEqual(afterUpdatePreview.focus, { Setting: 3 });
+  assert.equal(afterUpdatePreview.focus, 'CheckUpdates');
   assert.ok(!afterUpdatePreview.ui_text.includes('Update available'));
-  const textOptions = 'settings,down,down,down,down,right,down,enter';
+  const currentVersion = JSON.parse(
+    await fs.readFile(path.join(root, 'package.json'), 'utf8'),
+  ).version;
+  const latestPreview = await scenario(
+    'update-current-preview',
+    'settings,down,down,down,down,right,enter',
+    ['--test-update-version', currentVersion],
+  );
+  assert.equal(latestPreview.focus, 'CheckUpdates');
+  assert.ok(latestPreview.ui_text.includes('No newer version found'));
+  assert.ok(latestPreview.ui_text.includes('Check again'));
+  assert.ok(latestPreview.ui_text.includes(`Current version: ${currentVersion}`));
+  assert.ok(!latestPreview.ui_text.some((label) => label.startsWith('Luma v')));
+  const textOptions = 'settings,down,down,down,down,right,down,down,enter';
   const textRendering = await scenario('text-rendering-options', textOptions);
   assert.equal(textRendering.subpage, 'TextRendering');
   assert.deepEqual(textRendering.focus, { Choice: 0 });

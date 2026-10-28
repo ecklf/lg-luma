@@ -6,27 +6,56 @@ const FEED: &str = "https://github.com/ecklf/lg-luma/releases/latest/download/re
 const LIMIT: usize = 256 * 1024;
 pub const HOMEBREW_CHANNEL: &str = "org.webosbrew.hbchannel";
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Status {
+    #[default]
+    Unchecked,
+    Checking,
+    Checked,
+    Failed,
+}
+
 pub struct Service {
     pub receiver: mpsc::Receiver<Result<Option<String>, String>>,
+    sender: mpsc::Sender<()>,
 }
 
 impl Service {
     /// Desktop previews and automated captures never request the public feed.
     pub fn new(enabled: bool) -> Self {
         let (sender, receiver) = mpsc::channel();
+        let (command_tx, command_rx) = mpsc::channel();
+        thread::spawn(move || {
+            let agent = ureq::Agent::config_builder()
+                .timeout_global(Some(Duration::from_secs(10)))
+                .max_redirects(5)
+                .https_only(true)
+                .proxy(None)
+                .build()
+                .new_agent();
+            while command_rx.recv().is_ok() {
+                let result = if enabled {
+                    fetch(&agent, FEED, env!("CARGO_PKG_VERSION"))
+                } else {
+                    Err("Public release checks are disabled in desktop/preview mode".into())
+                };
+                if sender.send(result).is_err() {
+                    break;
+                }
+            }
+        });
+        let service = Self {
+            receiver,
+            sender: command_tx,
+        };
         if enabled {
-            thread::spawn(move || {
-                let agent = ureq::Agent::config_builder()
-                    .timeout_global(Some(Duration::from_secs(10)))
-                    .max_redirects(5)
-                    .https_only(true)
-                    .proxy(None)
-                    .build()
-                    .new_agent();
-                let _ = sender.send(fetch(&agent, FEED, env!("CARGO_PKG_VERSION")));
-            });
+            service.check();
         }
-        Self { receiver }
+        service
+    }
+
+    pub fn check(&self) {
+        let _ = self.sender.send(());
     }
 }
 
@@ -107,8 +136,10 @@ pub fn newer_version(bytes: &[u8], current: &str) -> Result<Option<String>, Stri
 pub fn validate_preview(latest: &str, current: &str) -> Result<(), String> {
     let current = version(current).ok_or("Invalid installed version")?;
     let latest = version(latest).ok_or("Update preview requires a version such as 99.0.0")?;
-    if latest <= current {
-        return Err("Update preview version must be newer than the installed version".into());
+    if latest < current {
+        return Err(
+            "Update preview version must match or be newer than the installed version".into(),
+        );
     }
     Ok(())
 }
@@ -117,16 +148,10 @@ pub fn validate_preview(latest: &str, current: &str) -> Result<(), String> {
 mod tests {
     use super::*;
     #[test]
-    fn preview_requires_a_valid_newer_version() {
+    fn preview_requires_a_valid_current_or_newer_version() {
         assert!(validate_preview("99.0.0", "2.13.0").is_ok());
-        for value in [
-            "",
-            "garbage",
-            "2.13.0",
-            "2.12.0",
-            "3.0.0-beta",
-            "https://example.com",
-        ] {
+        assert!(validate_preview("2.13.0", "2.13.0").is_ok());
+        for value in ["", "garbage", "2.12.0", "3.0.0-beta", "https://example.com"] {
             assert!(validate_preview(value, "2.13.0").is_err());
         }
     }
@@ -173,7 +198,16 @@ mod tests {
     }
     #[test]
     fn disabled_service_never_contacts_the_network() {
-        assert!(Service::new(false).receiver.recv().is_err());
+        let service = Service::new(false);
+        assert!(service.receiver.try_recv().is_err());
+        service.check();
+        assert!(
+            service
+                .receiver
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap()
+                .is_err()
+        );
     }
     #[test]
     fn local_http_checks_bound_responses_and_report_errors() {

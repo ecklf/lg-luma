@@ -47,6 +47,7 @@ pub enum Target {
     Nav(usize),
     TvSettings,
     OpenHomebrew,
+    CheckUpdates,
     Recent(String),
     RecentEmpty,
     RecentRetry,
@@ -220,6 +221,8 @@ pub struct State {
     pub notice: Option<(String, Instant)>,
     pub error: Option<String>,
     pub available_update: Option<String>,
+    pub update_status: crate::update::Status,
+    pub update_check_requested: bool,
     /// Inventory loads that failed in a row while no apps were shown yet.
     pub inventory_failures: u32,
     pub dirty: bool,
@@ -261,6 +264,8 @@ impl State {
             notice: None,
             error: None,
             available_update: None,
+            update_status: crate::update::Status::Unchecked,
+            update_check_requested: false,
             inventory_failures: 0,
             dirty: true,
             pointer: false,
@@ -282,6 +287,35 @@ impl State {
 
     pub fn notify(&mut self, text: impl Into<String>) {
         self.notice = Some((text.into(), Instant::now()));
+        self.dirty = true;
+    }
+
+    pub fn update_response(&mut self, result: Result<Option<String>, String>) {
+        match result {
+            Ok(latest) => {
+                let announce = latest.is_some() && latest != self.available_update;
+                self.available_update = latest;
+                self.update_status = crate::update::Status::Checked;
+                if announce {
+                    self.notify(self.preferences.language.t("updateAvailable"));
+                }
+            }
+            Err(error) => {
+                eprintln!("Luma update check: {error}");
+                self.update_status = crate::update::Status::Failed;
+            }
+        }
+        if matches!(self.focus, Target::CheckUpdates | Target::OpenHomebrew) {
+            let target = if self.available_update.is_some() {
+                Target::OpenHomebrew
+            } else {
+                Target::CheckUpdates
+            };
+            if self.focus != target {
+                self.focus = target;
+                self.pressed = None;
+            }
+        }
         self.dirty = true;
     }
 
@@ -867,7 +901,7 @@ impl State {
             ),
             WIDGETS_SECTION => Target::Widget(0),
             SYSTEM_SECTION if self.available_update.is_some() => Target::OpenHomebrew,
-            SYSTEM_SECTION => Target::Setting(3),
+            SYSTEM_SECTION => Target::CheckUpdates,
             _ => Target::Setting(0),
         }
     }
@@ -1942,6 +1976,13 @@ impl State {
             Target::OpenHomebrew => {
                 if self.available_update.is_some() {
                     return vec![Effect::Launch(crate::update::HOMEBREW_CHANNEL.into())];
+                }
+            }
+            Target::CheckUpdates => {
+                if self.update_status != crate::update::Status::Checking {
+                    self.update_status = crate::update::Status::Checking;
+                    self.update_check_requested = true;
+                    self.dirty = true;
                 }
             }
             Target::Tile(_) => self.options(),

@@ -816,11 +816,14 @@ runtime font/translation services or telemetry are used. Weather attribution: Op
 ## Update availability
 
 On TV startup a separate worker checks
-`https://github.com/ecklf/lg-luma/releases/latest/download/repo.json` once per process.
+`https://github.com/ecklf/lg-luma/releases/latest/download/repo.json` once per process automatically.
+**Settings → System → Check again** retries on the same worker, with one request in flight at a time.
 It only reads the `com.ecklf.luma` package/manifest version and compares numeric major/minor/patch
 components with the compiled version. Equal, older, malformed or prerelease versions do not offer
 updates. HTTP is HTTPS-only with bounded redirects, a ten-second timeout, a 256 KiB reply limit and
-no proxy; failures are logged without interrupting launch. Desktop previews do not contact GitHub.
+no proxy; failures are logged without interrupting launch and the status card offers retry.
+Desktop previews do not contact GitHub. The card shows the current version and only reports
+**No newer version found** after a successful check, never while unchecked or offline.
 A newer version shows an **Update available** notice and a **Settings → System** card with both
 versions. Its button launches `org.webosbrew.hbchannel` through the native platform launch path;
 Homebrew Channel handles updating, not Luma. No IPK or executable is downloaded by the checker.
@@ -832,7 +835,8 @@ cargo run -- --test-update-version 99.0.0 --script settings,down,down,down,down,
 # Alternatively: LUMA_TEST_UPDATE_VERSION=99.0.0 cargo run
 ```
 
-The flag overrides the environment variable and requires a newer numeric version. It is logged as
+The flag overrides the environment variable and accepts the current or a newer numeric version.
+Use the current version to preview the up-to-date card and **Check again** without HTTP. It is logged as
 a simulated update, stored only in memory, and disables the public feed check even on TV. Open
 **Settings → System** to see it. The CTA still uses the normal Homebrew launch path (desktop builds
 only show a launch preview); no installation occurs in Luma.

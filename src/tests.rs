@@ -875,7 +875,7 @@ fn time_format_selects_seconds_without_changing_the_hour_format() {
 }
 
 #[test]
-fn system_version_uses_a_settings_surface_without_an_interactive_target() {
+fn system_version_is_inside_the_update_status_card_without_a_separate_row() {
     let mut state = ready();
     state.open(2);
     state.section = crate::state::SYSTEM_SECTION;
@@ -884,17 +884,17 @@ fn system_version_uses_a_settings_surface_without_an_interactive_target() {
     assert!(system.draw.iter().any(|draw| matches!(
         draw,
         crate::renderer::Draw::Shape(rect, _, _, color)
-            if rect.x == 640. && rect.y == 164.8 && rect.w == 1120. && rect.h == 72. && color[3] == 0.45
+            if rect.x == 640. && rect.y == 164.8 && rect.w == 1120. && rect.h == 220. && color[3] == 0.72
     )));
     assert!(system.draw.iter().any(|draw| matches!(
         draw,
         crate::renderer::Draw::Text(label, _, style, color, _)
-            if label == "Luma vtest" && style.size == 20.8 && style.weight == 550 && color[3] == 0.6
+            if label == "Current version: test" && style.size == 20.8 && style.weight == 450 && color[3] == 0.73
     )));
     assert_eq!(state.hit_test(&system.controls, 900., 200.), None);
     state.focus = Target::Sidebar(crate::state::SYSTEM_SECTION);
     state.direction(Direction::Right, &system.controls);
-    assert_eq!(state.focus, Target::Setting(3));
+    assert_eq!(state.focus, Target::CheckUpdates);
 }
 
 #[test]
@@ -916,6 +916,8 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     assert_eq!(state.focus, Target::Sidebar(crate::state::SYSTEM_SECTION));
     assert_eq!(state.section, crate::state::SYSTEM_SECTION);
     state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::CheckUpdates);
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(3));
     assert_eq!(state.activate(), vec![Effect::Reload]);
     state.direction(Direction::Down, &controls(&state));
@@ -2911,6 +2913,43 @@ fn update_card_shows_both_versions_and_launches_homebrew_without_installing() {
         state.direction(Direction::Left, &rendered.controls);
         assert_eq!(state.focus, Target::Sidebar(crate::state::SYSTEM_SECTION));
     }
+}
+
+#[test]
+fn update_status_card_only_claims_latest_after_success_and_allows_single_flight_retry() {
+    use crate::{renderer::Draw, update::Status};
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::SYSTEM_SECTION;
+    state.focus = Target::CheckUpdates;
+    assert_eq!(state.update_status, Status::Unchecked);
+    assert!(!scene(&state).draw.iter().any(|draw| matches!(draw,
+        Draw::Text(label, ..) if label == state.preferences.language.t("latestVersionInstalled")
+    )));
+    assert!(state.activate().is_empty());
+    assert_eq!(state.update_status, Status::Checking);
+    assert!(std::mem::take(&mut state.update_check_requested));
+    state.activate();
+    assert!(!state.update_check_requested);
+    state.update_response(Err("offline".into()));
+    assert_eq!(state.update_status, Status::Failed);
+    assert!(!scene(&state).draw.iter().any(|draw| matches!(draw,
+        Draw::Text(label, ..) if label == state.preferences.language.t("latestVersionInstalled")
+    )));
+    state.activate();
+    assert!(std::mem::take(&mut state.update_check_requested));
+    state.update_response(Ok(None));
+    assert_eq!(state.update_status, Status::Checked);
+    for key in ["latestVersionInstalled", "checkAgain"] {
+        assert!(scene(&state).draw.iter().any(|draw| matches!(draw,
+            Draw::Text(label, ..) if label == state.preferences.language.t(key)
+        )));
+    }
+    state.activate();
+    state.update_response(Ok(Some("9.0.0".into())));
+    assert_eq!(state.focus, Target::OpenHomebrew);
+    state.update_response(Err("offline".into()));
+    assert_eq!(state.available_update.as_deref(), Some("9.0.0"));
 }
 
 #[test]

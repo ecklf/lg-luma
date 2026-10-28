@@ -2448,55 +2448,68 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             }
         }
         SYSTEM_SECTION => {
-            let version_rect = Rect::new(640., 164.8 - s, 1120., 72.);
-            out.shape(version_rect, 48., c(0x171c20, 0.45));
-            out.border(version_rect, 48., 1., c(0xffffff, 0.05));
+            let rect = Rect::new(640., 164.8 - s, 1120., 220.);
+            let title = if state.available_update.is_some() {
+                "updateAvailable"
+            } else {
+                match state.update_status {
+                    crate::update::Status::Unchecked => "checkForUpdates",
+                    crate::update::Status::Checking => "checkingUpdates",
+                    crate::update::Status::Checked => "latestVersionInstalled",
+                    crate::update::Status::Failed => "updateCheckFailed",
+                }
+            };
+            settings_surface(out, rect, 20.);
             out.text(
-                format!("Luma v{}", assets.version.trim()),
-                Rect::new(664.2, version_rect.y + (72. - 29.12) / 2., 1031.8, 29.12),
-                text(20.8, 550, -0.02).leading(1.4),
-                c(0xeeeeee, 0.6),
+                language.t(title),
+                Rect::new(rect.x + 24.2, rect.y + 24., rect.w - 48.4, 34.),
+                text(24., 550, -0.02).leading(1.4),
+                WHITE,
                 false,
             );
-            let update_height = if let Some(latest) = &state.available_update {
-                let rect = Rect::new(640., 248.8 - s, 1120., 220.);
-                settings_surface(out, rect, 20.);
-                out.text(
-                    language.t("updateAvailable"),
-                    Rect::new(rect.x + 24.2, rect.y + 24., rect.w - 48.4, 34.),
-                    text(24., 550, -0.02).leading(1.4),
-                    WHITE,
-                    false,
-                );
-                out.text(
+            out.text(
+                if let Some(latest) = &state.available_update {
                     language.format(
                         "updateVersions",
                         &[("current", assets.version.trim()), ("latest", latest)],
-                    ),
-                    Rect::new(rect.x + 24.2, rect.y + 74., rect.w - 48.4, 32.),
-                    text(20.8, 450, -0.02).leading(1.4),
-                    c(0xeeeeee, 0.73),
-                    false,
-                );
-                row(
-                    out,
-                    state,
-                    assets,
-                    Row {
-                        target: Target::OpenHomebrew,
-                        rect: Rect::new(rect.x + 24., rect.y + 132., rect.w - 48., 64.),
-                        title: language.t("openHomebrewChannel"),
-                        icon: Some("arrow"),
-                        value: None,
-                        description: None,
-                        selected: false,
-                        chevron: false,
+                    )
+                } else {
+                    language.format("currentVersion", &[("current", assets.version.trim())])
+                },
+                Rect::new(rect.x + 24.2, rect.y + 74., rect.w - 48.4, 32.),
+                text(20.8, 450, -0.02).leading(1.4),
+                c(0xeeeeee, 0.73),
+                false,
+            );
+            row(
+                out,
+                state,
+                assets,
+                Row {
+                    target: if state.available_update.is_some() {
+                        Target::OpenHomebrew
+                    } else {
+                        Target::CheckUpdates
                     },
-                );
-                244.
-            } else {
-                0.
-            };
+                    rect: Rect::new(rect.x + 24., rect.y + 132., rect.w - 48., 64.),
+                    title: language.t(if state.available_update.is_some() {
+                        "openHomebrewChannel"
+                    } else if state.update_status == crate::update::Status::Checking {
+                        "checkingUpdates"
+                    } else {
+                        "checkAgain"
+                    }),
+                    icon: Some(if state.available_update.is_some() {
+                        "arrow"
+                    } else {
+                        "refresh"
+                    }),
+                    value: None,
+                    description: None,
+                    selected: false,
+                    chevron: false,
+                },
+            );
             for (position, (index, title, icon, value, chevron)) in [
                 (
                     3,
@@ -2527,12 +2540,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     assets,
                     Row {
                         target: Target::Setting(index),
-                        rect: Rect::new(
-                            640.,
-                            248.8 + update_height + position as f32 * 84. - s,
-                            1120.,
-                            72.,
-                        ),
+                        rect: Rect::new(640., 408.8 + position as f32 * 84. - s, 1120., 72.),
                         title,
                         icon: Some(icon),
                         value,

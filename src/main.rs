@@ -647,7 +647,10 @@ fn run() -> Result<(), String> {
         eprintln!(
             "Luma update preview: simulated version {version}; public release check disabled"
         );
-        state.available_update = Some(version.clone());
+        state.available_update = (version != env!("CARGO_PKG_VERSION")).then(|| version.clone());
+        state.update_status = update::Status::Checked;
+    } else if webos {
+        state.update_status = update::Status::Checking;
     }
     // Scripted desktop captures must never open a server on the real LAN.
     let mut wallpaper_service =
@@ -1153,15 +1156,17 @@ fn run() -> Result<(), String> {
             state.notify(state.preferences.language.format(key, &[("tile", &title)]));
         }
         weather_tick(&mut state, &weather_service, visible);
-        for result in update_service.receiver.try_iter() {
-            match result {
-                Ok(Some(version)) => {
-                    state.available_update = Some(version);
-                    state.notify(state.preferences.language.t("updateAvailable"));
-                }
-                Ok(None) => {}
-                Err(error) => eprintln!("Luma update check: {error}"),
+        if std::mem::take(&mut state.update_check_requested) {
+            if let Some(version) = &options.test_update_version {
+                state.update_response(Ok(
+                    (version != env!("CARGO_PKG_VERSION")).then(|| version.clone())
+                ));
+            } else {
+                update_service.check();
             }
+        }
+        for result in update_service.receiver.try_iter() {
+            state.update_response(result);
         }
         // Rebuild hit regions before input whenever inventory/layout changed.
         if state.dirty {
