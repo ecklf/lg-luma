@@ -1335,6 +1335,123 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         }
         out.control(Target::Input(input.id.clone()), rect, true);
     }
+    if state.preferences.show_crypto && !state.preferences.crypto_coins.is_empty() {
+        let rows = inputs.len().div_ceil(3) as f32;
+        let crypto_y = if inputs.is_empty() {
+            input_y
+        } else {
+            input_y + 58.4 + (rows - 1.) * 126.4 + 104. + 41.6
+        };
+        crypto_row(out, state, crypto_y);
+    }
+}
+
+/// Home's crypto prices: a heading and up to four cards in the inputs' style, each with the
+/// coin, its price in US dollars and the 24-hour change.
+fn crypto_row(out: &mut Scene, state: &State, y: f32) {
+    let language = state.preferences.language;
+    out.text(
+        language.t("crypto"),
+        Rect::new(84., y + 3.3, 1000., 31.),
+        text(23.2, 550, -0.035).leading(1.3),
+        WHITE,
+        false,
+    );
+    let gap = 22.35;
+    let width =
+        (1752. - gap * (crate::crypto::MAX_COINS - 1) as f32) / crate::crypto::MAX_COINS as f32;
+    for (index, symbol) in state.preferences.crypto_coins.iter().enumerate() {
+        let rect = Rect::new(84. + index as f32 * (width + gap), y + 58.4, width, 104.);
+        let focused = state.focus == Target::Coin(index) && !state.pointer;
+        out.shadow(
+            rect,
+            18.4,
+            if focused { 34. } else { 4. },
+            if focused { 14. } else { 1. },
+            if focused { 0.4 } else { 0.01 },
+        );
+        out.draw.push(Draw::RoundedGradient(
+            rect,
+            18.4,
+            if focused {
+                c(0x30363c, 0.70)
+            } else {
+                c(0x20252b, 0.60)
+            },
+            if focused {
+                c(0x242a30, 0.65)
+            } else {
+                c(0x171c22, 0.55)
+            },
+        ));
+        out.border(
+            rect,
+            18.4,
+            1.,
+            c(0xffffff, if focused { 0.24 } else { 0.063 }),
+        );
+        let name = crate::crypto::COINS
+            .iter()
+            .find(|(coin, name)| coin == symbol && name != coin)
+            .map_or("", |(_, name)| name);
+        let half = rect.w / 2. - 24.;
+        out.text(
+            symbol,
+            Rect::new(rect.x + 24., rect.y + 24.3, half, 28.8),
+            text(24., 550, -0.02),
+            WHITE,
+            false,
+        );
+        out.text(
+            name,
+            Rect::new(rect.x + 24., rect.y + 57.4, half, 25.2),
+            text(16.8, 400, 0.).leading(1.5),
+            c(0xe8e8e8, 0.55),
+            false,
+        );
+        let right = Rect::new(rect.x + rect.w / 2., 0., half, 0.);
+        if let Some(quote) = state
+            .crypto
+            .quotes
+            .iter()
+            .find(|quote| &quote.symbol == symbol)
+        {
+            out.text(
+                crate::crypto::format_price(quote.price),
+                Rect::new(right.x, rect.y + 24.3, right.w, 28.8),
+                text(24., 550, -0.02).right(),
+                WHITE,
+                false,
+            );
+            out.text(
+                crate::crypto::format_change(quote.change),
+                Rect::new(right.x, rect.y + 57.4, right.w, 25.2),
+                text(16.8, 550, 0.).leading(1.5).right(),
+                if quote.change < -0.005 {
+                    c(0xff8a80, 0.95)
+                } else {
+                    c(0x7ee2a8, 0.95)
+                },
+                false,
+            );
+        } else {
+            out.text(
+                language.t(if state.crypto.failed {
+                    "cryptoUnavailable"
+                } else {
+                    "cryptoLoading"
+                }),
+                Rect::new(right.x, rect.y + 40.8, right.w, 25.2),
+                text(16.8, 400, 0.).leading(1.5).right(),
+                c(0xe8e8e8, 0.55),
+                false,
+            );
+        }
+        if focused {
+            out.ring(rect, 18.4);
+        }
+        out.control(Target::Coin(index), rect, true);
+    }
 }
 
 struct WeatherSummary {
@@ -1931,6 +2048,69 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
     );
 }
 
+fn crypto_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let s = state.scroll;
+    let on_off = |on: bool| {
+        Some(if on {
+            language.t("stateOn")
+        } else {
+            language.t("stateOff")
+        })
+    };
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::CryptoToggle,
+            rect: Rect::new(640., 164.8 - s, 1120., 72.),
+            title: language.t("showWidget"),
+            icon: Some("eye"),
+            value: on_off(state.preferences.show_crypto),
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
+    out.text(
+        language.t("cryptoCoins"),
+        Rect::new(660., 264.8 - s, 1080., 24.),
+        text(16., 400, 0.),
+        c(0xf5f5f5, 0.55),
+        false,
+    );
+    for (index, (symbol, name)) in crate::crypto::COINS.into_iter().enumerate() {
+        // BNB and XRP are their own names.
+        let title = if name == symbol {
+            symbol.to_owned()
+        } else {
+            format!("{name} · {symbol}")
+        };
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::CryptoCoin(index),
+                rect: Rect::new(640., 300.8 + index as f32 * 84. - s, 1120., 72.),
+                title: &title,
+                icon: None,
+                value: on_off(
+                    state
+                        .preferences
+                        .crypto_coins
+                        .iter()
+                        .any(|coin| coin == symbol),
+                ),
+                description: None,
+                selected: false,
+                chevron: false,
+            },
+        );
+    }
+}
+
 fn location_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let mut y = 164.8 - state.scroll;
@@ -2141,6 +2321,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Date) => language.t("date"),
                 Some(Subpage::Weather) => language.t("weather"),
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
+                Some(Subpage::Crypto) => language.t("crypto"),
                 Some(Subpage::Inputs) => language.t("inputs"),
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
@@ -2221,6 +2402,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::Weather
                 | Subpage::Shortcuts
                 | Subpage::Inputs
+                | Subpage::Crypto
                 | Subpage::Greeting
                 | Subpage::Date
                 | Subpage::AppNames
@@ -2231,6 +2413,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::Weather => weather_settings(out, state, assets),
                 Subpage::Shortcuts => shortcut_settings(out, state, assets),
                 Subpage::Inputs => inputs_settings(out, state, assets),
+                Subpage::Crypto => crypto_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::Date => date_settings(out, state, assets),
                 Subpage::AppNames => app_name_settings(out, state, assets),
@@ -2302,6 +2485,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::Weather
             | Subpage::Shortcuts
             | Subpage::Inputs
+            | Subpage::Crypto
             | Subpage::Greeting
             | Subpage::Date
             | Subpage::AppNames
@@ -2485,6 +2669,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 (1, "weather", "weather-sun"),
                 (2, "shortcuts", "sparkles"),
                 (3, "inputs", "input-hdmi"),
+                (5, "crypto", "globe"),
             ]
             .into_iter()
             .enumerate()

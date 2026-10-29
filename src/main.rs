@@ -6,6 +6,9 @@ mod app_artwork;
 mod app_subscription;
 mod branding;
 mod companion;
+mod crypto;
+#[path = "crypto-service.rs"]
+mod crypto_service;
 mod damage;
 mod diagnostics;
 mod egl_damage;
@@ -74,6 +77,7 @@ struct Options {
     diagnostics: Option<PathBuf>,
     profile_frames: Option<usize>,
     weather_test_server: Option<String>,
+    crypto_test_server: Option<String>,
     test_extra_apps: usize,
     test_update_version: Option<String>,
 }
@@ -146,6 +150,7 @@ impl Options {
                 }
                 "--diagnostics" => result.diagnostics = Some(value.into()),
                 "--weather-test-server" => result.weather_test_server = Some(value),
+                "--crypto-test-server" => result.crypto_test_server = Some(value),
                 "--test-update-version" => result.test_update_version = Some(value),
                 "--test-extra-apps" => {
                     result.test_extra_apps = value
@@ -417,7 +422,7 @@ fn script(
             vec![]
         }
         "await-search" => vec![],
-        "await-weather" => vec![],
+        "await-weather" | "await-crypto" => vec![],
         "await-recents" => vec![],
         "await-upload" => vec![],
         "await-tile-editor" => vec![],
@@ -477,6 +482,24 @@ fn weather_tick(state: &mut State, service: &weather_service::Service, visible: 
                 }
             }
         }
+    }
+}
+
+fn crypto_tick(state: &mut State, service: &crypto_service::Service, visible: bool) {
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+    let (command, changed) = state.crypto.sync(
+        state.preferences.show_crypto,
+        &state.preferences.crypto_coins,
+        visible && state.page == state::Page::Home,
+        now,
+    );
+    state.dirty |= changed;
+    service.generation(state.crypto.generation());
+    if let Some(command) = command {
+        service.send(command);
+    }
+    while let Ok(response) = service.receiver.try_recv() {
+        state.dirty |= state.crypto.accept(response.id, response.result, now);
     }
 }
 
@@ -673,6 +696,12 @@ fn run() -> Result<(), String> {
     if webos && options.weather_test_server.is_some() {
         return Err("Weather test servers are only available in desktop builds".into());
     }
+    if webos && options.crypto_test_server.is_some() {
+        return Err("Crypto test servers are only available in desktop builds".into());
+    }
+    let crypto_service = crypto_service::Service::new(crypto_service::Client::new(
+        options.crypto_test_server.as_deref(),
+    )?);
     let weather_cache = weather_service::cache_path(&preferences_path);
     state.weather.cache = weather_service::load_cache(&weather_cache);
     let weather_service = weather_service::Service::new(
@@ -1171,6 +1200,7 @@ fn run() -> Result<(), String> {
             state.notify(state.preferences.language.format(key, &[("tile", &title)]));
         }
         weather_tick(&mut state, &weather_service, visible);
+        crypto_tick(&mut state, &crypto_service, visible);
         if std::mem::take(&mut state.update_check_requested) {
             if let Some(version) = &options.test_update_version {
                 state.update_response(Ok(
@@ -1585,6 +1615,7 @@ fn run() -> Result<(), String> {
             && !options.script.front().is_some_and(|action| {
                 (action == "await-search" && state.weather.searching)
                     || (action == "await-weather" && state.weather.fetching())
+                    || (action == "await-crypto" && state.crypto.fetching())
                     || (action == "await-recents" && state.recents.pending.is_some())
                     || (action == "await-upload"
                         && matches!(state.overlay, Some(Overlay::WallpaperUpload))
@@ -1625,6 +1656,7 @@ fn run() -> Result<(), String> {
             platform.send(Request::Refresh);
         }
         weather_tick(&mut state, &weather_service, visible);
+        crypto_tick(&mut state, &crypto_service, visible);
         // SDL-webOS disables text input when its own panel is dismissed, even
         // if it did not forward a Back/Return key to the application.
         if text_active
@@ -1856,7 +1888,7 @@ fn run() -> Result<(), String> {
         let state = serde_json::json!({ "page": state.page, "focus": state.focus, "query": state.query,
             "filter": state.filter, "preferences": state.preferences, "apps": state.apps().iter().map(|a| &a.id).collect::<Vec<_>>(),
             "update_status": state.update_status, "available_update": state.available_update,
-            "error": state.error, "scroll": state.scroll, "home_scroll": state.home_scroll, "subpage": state.subpage, "modal": state.overlay.is_some(), "weather": state.weather,
+            "error": state.error, "scroll": state.scroll, "home_scroll": state.home_scroll, "subpage": state.subpage, "modal": state.overlay.is_some(), "weather": state.weather, "crypto": state.crypto,
             "inventory": state.inventory.apps,
             "recents": state.recents.entries, "recents_pending": state.recents.pending, "recents_error": state.recents.error, "recents_visibility": state.recents.visibility,
             "ui_text": scene.draw.iter().filter_map(|draw| match draw { renderer::Draw::Text(value, ..) => Some(value), _ => None }).collect::<Vec<_>>() });
