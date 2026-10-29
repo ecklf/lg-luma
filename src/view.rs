@@ -2105,92 +2105,86 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
         };
         if state.section == index && state.subpage.is_some() {
             let nested_path = match &state.subpage {
-                Some(Subpage::DateFormat) => Some(format!(
-                    "{} › {}",
-                    language.t("date"),
-                    language.t("dateFormat")
-                )),
-                Some(Subpage::ClockFormat) => Some(format!(
-                    "{} › {}",
-                    language.t("clock"),
-                    language.t("clockFormat")
-                )),
-                Some(Subpage::TimeFormat) => Some(format!(
-                    "{} › {}",
-                    language.t("clock"),
-                    language.t("timeFormat")
-                )),
-                Some(Subpage::WeatherLocation | Subpage::Temperature) => Some(format!(
-                    "{} › {}",
+                Some(Subpage::DateFormat) => {
+                    Some(vec![language.t("date"), language.t("dateFormat")])
+                }
+                Some(Subpage::ClockFormat) => {
+                    Some(vec![language.t("clock"), language.t("clockFormat")])
+                }
+                Some(Subpage::TimeFormat) => {
+                    Some(vec![language.t("clock"), language.t("timeFormat")])
+                }
+                Some(Subpage::WeatherLocation | Subpage::Temperature) => Some(vec![
                     language.t("weather"),
                     language.t(if state.subpage == Some(Subpage::WeatherLocation) {
                         "location"
                     } else {
                         "temperature"
-                    })
-                )),
-                Some(Subpage::Input(id)) => Some(format!(
-                    "{} › {}",
+                    }),
+                ]),
+                Some(Subpage::Input(id)) => Some(vec![
                     language.t("inputs"),
                     state
                         .inventory
                         .inputs
                         .iter()
                         .find(|input| &input.id == id)
-                        .map_or(language.t("inputs"), |input| state
-                            .preferences
-                            .input_title(input))
-                )),
+                        .map_or(language.t("inputs"), |input| {
+                            state.preferences.input_title(input)
+                        }),
+                ]),
                 _ => None,
             };
             let sub = match &state.subpage {
                 Some(Subpage::AppNames) => language.t("appNames"),
                 Some(Subpage::Greeting) => language.t("greeting"),
                 Some(Subpage::Date) => language.t("date"),
-                Some(Subpage::DateFormat) => nested_path.as_deref().unwrap(),
                 Some(Subpage::Weather) => language.t("weather"),
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
                 Some(Subpage::Inputs) => language.t("inputs"),
                 Some(Subpage::Clock) => language.t("clock"),
-                Some(Subpage::ClockFormat | Subpage::TimeFormat) => nested_path.as_deref().unwrap(),
-                Some(Subpage::WeatherLocation | Subpage::Temperature | Subpage::Input(_)) => {
-                    nested_path.as_deref().unwrap()
-                }
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
-                None => "",
+                _ => "",
             };
-            let parent_width = assets.width(label, text(20.8, 550, -0.02)) + 2.;
-            out.text(
-                label,
-                Rect::new(rect.x + 24.2, rect.y + 23.5, parent_width, 25.),
-                text(20.8, 550, -0.02),
-                [color[0], color[1], color[2], color[3] * 0.7],
-                false,
-            );
-            out.icon(
-                assets,
-                "right",
-                Rect::new(rect.x + 24.2 + parent_width + 5., rect.y + 27., 17., 17.),
-                [color[0], color[1], color[2], color[3] * 0.6],
-            );
-            let sub_width = rect.w - 24.2 - parent_width - 28. - 24.2;
-            let mut sub_style = text(20.8, 550, -0.02);
-            if nested_path.is_some() {
-                sub_style.size *= (sub_width / assets.width(sub, sub_style)).min(1.);
+            let mut path = vec![label];
+            path.extend(nested_path.unwrap_or_else(|| vec![sub]));
+            let gap = 6.;
+            let chevron_size = 17.;
+            let separators_width = (path.len() - 1) as f32 * (gap * 2. + chevron_size);
+            let mut style = text(20.8, 550, -0.02);
+            let text_width: f32 = path.iter().map(|part| assets.width(part, style)).sum();
+            style.size *= ((rect.w - 48.4 - separators_width) / text_width).min(1.);
+            let muted = if focused {
+                c(0x2c2c2c, 0.7)
+            } else {
+                c(0xeeeeee, 0.73)
+            };
+            let mut x = rect.x + 24.2;
+            for (position, &part) in path.iter().enumerate() {
+                if position > 0 {
+                    out.icon(
+                        assets,
+                        "right",
+                        Rect::new(x + gap, rect.y + 27., chevron_size, chevron_size),
+                        muted,
+                    );
+                    x += gap * 2. + chevron_size;
+                }
+                let width = assets.width(part, style);
+                out.text(
+                    part,
+                    Rect::new(x, rect.y + 23.5, width + 2., 25.),
+                    style,
+                    if position == path.len() - 1 {
+                        color
+                    } else {
+                        muted
+                    },
+                    false,
+                );
+                x += width;
             }
-            out.text(
-                sub,
-                Rect::new(
-                    rect.x + 24.2 + parent_width + 28.,
-                    rect.y + 23.5,
-                    sub_width,
-                    25.,
-                ),
-                sub_style,
-                color,
-                false,
-            );
         } else {
             out.text(
                 label,
@@ -3546,6 +3540,66 @@ mod tests {
                 ),
             ]),
             artwork: crate::app_artwork::Service::new(false),
+        }
+    }
+
+    #[test]
+    fn settings_breadcrumbs_use_equal_gaps_and_only_highlight_the_leaf() {
+        let assets = assets();
+        let mut state = State::new(Preferences::default());
+        state.open(2);
+        state.section = 2;
+        state.subpage = Some(Subpage::DateFormat);
+        for language in Language::ALL {
+            state.preferences.language = language;
+            for focused in [false, true] {
+                state.focus = if focused {
+                    Target::Sidebar(2)
+                } else {
+                    Target::Setting(0)
+                };
+                let mut scene = Scene::new();
+                settings_sidebar(&mut scene, &state, &assets);
+                let parts: Vec<_> = scene
+                    .draw
+                    .iter()
+                    .filter_map(|draw| match draw {
+                        Draw::Text(label, rect, style, color, _)
+                            if (rect.y - 356.3).abs() < 0.001 =>
+                        {
+                            Some((label, rect, style, color))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(parts.len(), 3);
+                assert_eq!(parts[0].0, language.t("widgets"));
+                assert_eq!(parts[1].0, language.t("date"));
+                assert_eq!(parts[2].0, language.t("dateFormat"));
+                assert_eq!(parts[0].3, parts[1].3);
+                assert!(parts[2].3[3] > parts[1].3[3]);
+                let chevrons: Vec<_> = scene
+                    .draw
+                    .iter()
+                    .filter_map(|draw| match draw {
+                        Draw::TintedImage(_, rect, _, _, color)
+                            if (rect.y - 359.8).abs() < 0.001 =>
+                        {
+                            assert_eq!(color, parts[0].3);
+                            Some(rect)
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(chevrons.len(), 2);
+                for (index, chevron) in chevrons.iter().enumerate() {
+                    let (label, rect, style, _) = parts[index];
+                    let left_gap = chevron.x - rect.x - assets.width(label, *style);
+                    let right_gap = parts[index + 1].1.x - chevron.x - chevron.w;
+                    assert!((left_gap - 6.).abs() < 0.001);
+                    assert!((right_gap - 6.).abs() < 0.001);
+                }
+            }
         }
     }
 
