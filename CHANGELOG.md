@@ -1,5 +1,11 @@
 # lg-luma
 
+## 2.15.2
+
+### Patch Changes
+
+- 7ee2a7e: Fix in-app updates failing before installation because systemd expanded variables in the installer script.
+
 ## 2.15.1
 
 ### Patch Changes
