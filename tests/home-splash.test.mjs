@@ -12,7 +12,13 @@ const developer = `/media/developer/${app}/preferences.json`;
 const shared = `/media/developer/temp/${app}/preferences.json`;
 const internal = `/media/internal/.${app}/preferences.json`;
 
-function fixture({ production = false, mounted = false, preferences = {} } = {}) {
+function fixture({
+  production = false,
+  mounted = false,
+  preferences = {},
+  owners = {},
+  symlinks = [],
+} = {}) {
   const appDir = `/media/${production ? 'cryptofs' : 'developer'}/apps/usr/palm/applications/${app}`;
   const files = new Map([
     [stage, Buffer.alloc(0)],
@@ -33,6 +39,15 @@ function fixture({ production = false, mounted = false, preferences = {} } = {})
   const missing = () => Object.assign(new Error('Missing'), { code: 'ENOENT' });
   const mockFs = {
     existsSync: (file) => files.has(file),
+    lstatSync(directory) {
+      if (!Array.from(files.keys()).some((file) => path.posix.dirname(file) === directory)) {
+        throw missing();
+      }
+      return {
+        uid: owners[directory] ?? 5000,
+        isDirectory: () => !symlinks.includes(directory),
+      };
+    },
     readFileSync(file, encoding) {
       if (!files.has(file)) throw missing();
       const data = files.get(file);
@@ -89,6 +104,48 @@ test('production and developer installs follow native preference precedence', ()
   };
   assert.equal(fixture({ production: true, preferences }).splash(), 'prism');
   assert.equal(fixture({ preferences }).splash(), 'forest');
+});
+
+test('automatic rotation cannot replace the manual splash during boot restaging', () => {
+  for (const production of [false, true]) {
+    const preferences = {
+      [internal]: { background: 'prism', splash_background: 'forest', wallpaper_cycle: true },
+    };
+    assert.equal(fixture({ production, preferences }).splash(), 'forest');
+    preferences[internal].background = 'dunes';
+    assert.equal(fixture({ production, preferences }).splash(), 'forest');
+  }
+});
+
+test('root Home stages app-owned preferences before a root-owned takeover fallback', () => {
+  const preferences = {
+    [developer]: { background: 'forest' },
+    [internal]: { background: 'prism' },
+  };
+  const production = fixture({
+    production: true,
+    preferences,
+    owners: { [path.posix.dirname(internal)]: 0 },
+  });
+  assert.equal(production.splash(), 'forest');
+  const development = fixture({
+    preferences,
+    owners: { [path.posix.dirname(developer)]: 0 },
+  });
+  assert.equal(development.splash(), 'prism');
+  assert.equal(JSON.parse(production.files.get(internal)).background, 'prism');
+  assert.equal(JSON.parse(development.files.get(developer)).background, 'forest');
+});
+
+test('splash selection rejects symlink storage directories just like native startup', () => {
+  const mock = fixture({
+    preferences: {
+      [developer]: { background: 'forest' },
+      [shared]: { background: 'prism' },
+    },
+    symlinks: [path.posix.dirname(developer)],
+  });
+  assert.equal(mock.splash(), 'prism');
 });
 
 test('an existing persistent destination wins before installation-local migration', () => {

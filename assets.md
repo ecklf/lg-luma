@@ -15,7 +15,7 @@
   Resized to a 2560px JPEG; generated wallpapers/thumbnails retain the source license.
 - `assets/wallpapers/northern-lights.jpg`: Unsplash photo `1531366936337-7c912a4589a7`,
   https://images.unsplash.com/photo-1531366936337-7c912a4589a7, Unsplash License.
-- Inter variable font (Latin, Latin Extended-A + Cyrillic subset, `opsz` pinned at 14): Rasmus Andersson, SIL Open Font License 1.1, `assets/fonts/ofl.txt`.
+- Inter variable font (Latin, Latin Extended-A, Vietnamese + Cyrillic subset, `opsz` pinned at 14): Rasmus Andersson, SIL Open Font License 1.1, `assets/fonts/ofl.txt`.
 - Noto Sans SC: copyright 2014–2021 Adobe, SIL OFL 1.1. Source/license in `assets/fonts/`;
   `tools/font-assets.mjs` pins the Google Fonts revision and checksums. Generated regular/medium
   subsets are renamed Luma CJK and retain copyright/license tables.
@@ -23,11 +23,16 @@
   `assets/fonts/noto-ofl.txt`). Pinned the same way. Google Fonts ships Hangul only in this family,
   not in Noto Sans SC; generated Hangul-only regular/medium subsets are renamed Luma KR.
 - Lucide interface icons: exported standalone SVG sources in `assets/ui-icons/`, ISC license
-  bundled at `assets/licenses/lucide.txt`. PlayStation/Apple TV input paths were supplied by the
-  user; the brand marks belong to Sony/Apple. Spotify/Kodi symbol treatments use the original
-  native artwork. Logos identify third-party apps; Luma is unaffiliated with their owners.
+  bundled at `assets/licenses/lucide.txt`. The Luma upload icon and the small `luma-mark.svg` reuse
+  original project artwork under MIT. PlayStation/Apple TV input paths were supplied by the user;
+  the brand marks belong to Sony/Apple. Spotify/Kodi symbol treatments use the original native
+  artwork. Logos identify third-party apps; Luma is unaffiliated with their owners.
 - SDL-webOS 2.30.12 (`release-2.30.12-webos.5`, standard SDL ABI), zlib license.
   `tools/webos-runtime.mjs` records archive/library SHA-256. Notice at `assets/licenses/sdl2.txt`.
+- QR Code generator (`qrcodegen`): Project Nayuki, MIT; `assets/licenses/qrcodegen.txt`.
+- Local interface discovery (`if-addrs`): MaidSafe.net limited and messense, MIT;
+  `assets/licenses/if-addrs.txt`.
+- `assets/ui-icons/upload.svg` and `assets/wallpaper-upload/`: original Luma artwork/UI, MIT.
 
 The bundled icon/logo SVG sources are compiled into derived `.lvec` triangles with the same
 source licenses. Apple TV, Disney+, Prime Video and Das Erste retain the white display treatment.

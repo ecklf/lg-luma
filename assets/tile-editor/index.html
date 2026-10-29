@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Shortcuts · Luma</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="app.css" />
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand"><img src="luma-mark.svg" alt="" /><span>luma</span></div>
+      </header>
+      <section id="overview">
+        <h1>Shortcuts</h1>
+        <p class="intro">
+          Tiles on your TV’s Home that send a web request, for example to a Home Assistant webhook.
+        </p>
+        <ul id="tiles" class="tiles" aria-label="Shortcuts"></ul>
+        <p id="empty" class="empty" hidden>No shortcuts yet.</p>
+        <button id="add" type="button" disabled>Add shortcut</button>
+      </section>
+      <form id="editor" hidden>
+        <h1 id="editor-title">New shortcut</h1>
+        <label class="field"
+          ><span>Name</span
+          ><input
+            id="title"
+            type="text"
+            maxlength="40"
+            autocomplete="off"
+            placeholder="Shown on the tile"
+            required
+        /></label>
+        <label class="field"
+          ><span>Web address</span
+          ><input
+            id="url"
+            type="text"
+            inputmode="url"
+            maxlength="512"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="http://homeassistant.local:8123/api/webhook/…"
+            required
+        /></label>
+        <fieldset class="method-field">
+          <legend>Request method</legend>
+          <div class="methods">
+            <label
+              ><input type="radio" name="method" value="POST" checked /><span>POST</span></label
+            >
+            <label><input type="radio" name="method" value="GET" /><span>GET</span></label>
+          </div>
+        </fieldset>
+        <p class="hint">Home Assistant webhooks need POST unless GET is allowed on the trigger.</p>
+        <fieldset>
+          <legend>Icon</legend>
+          <div id="icons" class="icons"></div>
+        </fieldset>
+        <div class="actions">
+          <button id="cancel" type="button" class="secondary">Cancel</button>
+          <button id="save" type="submit">Save to TV</button>
+        </div>
+        <button id="send" type="button" class="secondary wide">Send a test request</button>
+        <button id="remove" type="button" class="danger wide" hidden>Remove shortcut</button>
+      </form>
+      <p id="status" role="status" aria-live="polite"></p>
+      <footer>Changes appear on your TV as soon as they are saved.</footer>
+    </main>
+  </body>
+</html>
