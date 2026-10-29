@@ -1,5 +1,11 @@
 # lg-luma
 
+## 2.15.1
+
+### Patch Changes
+
+- 3d881a2: Add Swedish (`sv`) translation: full `messages.json` catalog and locale registration, including localized date formatting. The bundled Inter subset already covers å, ä and ö.
+
 ## 2.15.0
 
 ### Minor Changes
