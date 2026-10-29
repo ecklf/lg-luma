@@ -1,5 +1,11 @@
 # lg-luma
 
+## 2.15.3
+
+### Patch Changes
+
+- 166060e: Use consistent chevron spacing in settings breadcrumbs and highlight only the final item.
+
 ## 2.15.2
 
 ### Patch Changes
