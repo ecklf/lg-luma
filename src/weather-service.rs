@@ -1,7 +1,9 @@
 //! Dedicated latest-job HTTP workers and an ordered cache writer. No request,
 //! DNS/TLS work or cache write blocks the SDL thread.
 use crate::i18n::Language;
-use crate::weather::{Cache, Command, Location, Reading, parse_locations, parse_reading};
+use crate::weather::{
+    Cache, Command, Forecast, Location, parse_air, parse_details, parse_locations, parse_reading,
+};
 use serde_json::Value;
 use std::{
     fs,
@@ -24,10 +26,11 @@ pub struct Client {
     agent: ureq::Agent,
     geocoding: String,
     forecast: String,
+    air: String,
 }
 impl Client {
     pub fn new(test_server: Option<&str>) -> Result<Self, String> {
-        let (geocoding, forecast) = if let Some(server) = test_server {
+        let (geocoding, forecast, air) = if let Some(server) = test_server {
             let uri: ureq::http::Uri = server
                 .parse()
                 .map_err(|e| format!("Invalid weather test server: {e}"))?;
@@ -48,11 +51,13 @@ impl Client {
             (
                 format!("http://{address}/v1/search"),
                 format!("http://{address}/v1/forecast"),
+                format!("http://{address}/v1/air-quality"),
             )
         } else {
             (
                 "https://geocoding-api.open-meteo.com/v1/search".into(),
                 "https://api.open-meteo.com/v1/forecast".into(),
+                "https://air-quality-api.open-meteo.com/v1/air-quality".into(),
             )
         };
         let agent = ureq::Agent::config_builder()
@@ -65,6 +70,7 @@ impl Client {
             agent,
             geocoding,
             forecast,
+            air,
         })
     }
     fn request(&self, endpoint: &str, query: &[(&str, &str)]) -> Result<Value, String> {
@@ -110,19 +116,50 @@ impl Client {
             ],
         )?)
     }
-    pub fn forecast(&self, location: &Location) -> Result<Reading, String> {
+    pub fn forecast(&self, location: &Location, air: bool) -> Result<Forecast, String> {
         let latitude = location.latitude.to_string();
         let longitude = location.longitude.to_string();
-        parse_reading(&self.request(
+        let reply = self.request(
             &self.forecast,
             &[
                 ("latitude", &latitude),
                 ("longitude", &longitude),
-                ("current", "temperature_2m,is_day,weather_code"),
+                ("current", "temperature_2m,is_day,weather_code,uv_index"),
+                (
+                    "daily",
+                    "temperature_2m_max,temperature_2m_min,sunrise,sunset",
+                ),
+                (
+                    "hourly",
+                    "temperature_2m,weather_code,is_day,precipitation_probability",
+                ),
+                ("forecast_days", "2"),
+                ("forecast_hours", "12"),
                 ("temperature_unit", "celsius"),
+                ("timeformat", "unixtime"),
                 ("timezone", "auto"),
             ],
-        )?)
+        )?;
+        let reading = parse_reading(&reply)?;
+        let mut details = parse_details(&reply);
+        if air {
+            // Air quality is extra: without it the reading still shows.
+            details.air = self
+                .request(
+                    &self.air,
+                    &[
+                        ("latitude", &latitude),
+                        ("longitude", &longitude),
+                        ("current", "european_aqi"),
+                        ("timezone", "auto"),
+                    ],
+                )
+                .ok()
+                .as_ref()
+                .and_then(parse_air);
+            details.air_requested = true;
+        }
+        Ok(Forecast { reading, details })
     }
 }
 
@@ -134,7 +171,7 @@ pub enum Response {
     Forecast {
         id: u64,
         key: String,
-        result: Result<Reading, String>,
+        result: Result<Forecast, String>,
     },
 }
 #[derive(Default)]
@@ -203,10 +240,10 @@ impl Service {
                             id,
                             result: client.search(&query, language),
                         },
-                        Command::Forecast { id, location } => Response::Forecast {
+                        Command::Forecast { id, location, air } => Response::Forecast {
                             id,
                             key: location.key(),
-                            result: client.forecast(&location),
+                            result: client.forecast(&location, air),
                         },
                         _ => continue,
                     };
@@ -315,11 +352,12 @@ mod tests {
         let cache = Cache {
             key: "48.2085,16.3721".into(),
             updated_at: 1000,
-            reading: Reading {
+            reading: crate::weather::Reading {
                 temperature: 14.2,
                 code: 2,
                 is_day: true,
             },
+            details: None,
         };
         {
             let service = Service::new(

@@ -13,6 +13,14 @@ pub const SYSTEM_SECTION: usize = 3;
 pub const SECTION_COUNT: usize = 4;
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
+/// Settings › Weather's switches for what Home shows beside the current weather, in row order.
+pub const WEATHER_DETAILS: [&str; 5] = [
+    "weatherHighLow",
+    "weatherAirUv",
+    "weatherRain",
+    "weatherSun",
+    "weatherHourly",
+];
 pub const APPS_COLUMNS: usize = 6;
 /// Automatic inventory retries before the error shows: with the 6.5 s Luna timeout about 50 s.
 pub const INVENTORY_RETRIES: u32 = 5;
@@ -91,6 +99,10 @@ pub enum Target {
     WeatherToggle,
     WeatherLocation,
     WeatherTemperature,
+    /// Settings › Weather: one of `WEATHER_DETAILS` shown on Home.
+    WeatherDetail(usize),
+    /// Settings › Weather: whether the details beside the greeting sit on a card.
+    WeatherCard,
     WeatherQuery,
     WeatherSearch,
     WeatherClear,
@@ -1220,6 +1232,8 @@ impl State {
                     | Target::WeatherToggle
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
+                    | Target::WeatherDetail(_)
+                    | Target::WeatherCard
                     | Target::Widget(_)
             ) || (self.focus == Target::Setting(3) && self.subpage == Some(Subpage::Inputs)))
                 && matches!(direction, Direction::Left)
@@ -1238,8 +1252,13 @@ impl State {
             {
                 return self.activate();
             }
-            if matches!(self.focus, Target::Setting(_) | Target::WeatherToggle)
-                && matches!(direction, Direction::Right)
+            if matches!(
+                self.focus,
+                Target::Setting(_)
+                    | Target::WeatherToggle
+                    | Target::WeatherDetail(_)
+                    | Target::WeatherCard
+            ) && matches!(direction, Direction::Right)
             {
                 return vec![];
             }
@@ -1960,6 +1979,24 @@ impl State {
             }
             Target::WeatherToggle => {
                 self.preferences.show_weather = !self.preferences.show_weather;
+                self.weather.invalidate_forecast();
+                return vec![Effect::Save];
+            }
+            Target::WeatherCard => {
+                self.preferences.weather_card = !self.preferences.weather_card;
+                return vec![Effect::Save];
+            }
+            Target::WeatherDetail(index) => {
+                let preferences = &mut self.preferences;
+                let detail = match index {
+                    0 => &mut preferences.weather_high_low,
+                    1 => &mut preferences.weather_air,
+                    2 => &mut preferences.weather_rain,
+                    3 => &mut preferences.weather_sun,
+                    _ => &mut preferences.weather_hourly,
+                };
+                *detail = !*detail;
+                // A cache without what was just turned on is fetched again now.
                 self.weather.invalidate_forecast();
                 return vec![Effect::Save];
             }

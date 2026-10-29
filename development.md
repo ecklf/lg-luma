@@ -151,6 +151,14 @@ moving favorites or inputs. It defaults to enabled for existing and new installa
 existing localized weekday/month/day display (default), `DD.MM.YYYY`, `MM/DD/YYYY`, or `YYYY-MM-DD`.
 Choosing a format returns to its Date row; Back from Date restores its Widgets row. Hiding the
 date removes its reserved space above the greeting/weather and preserves the chosen format.
+**Widgets → Weather** also has five switches below Temperature, all off by default: **Today's
+high and low**, **Air quality and UV**, **Chance of rain** (the most likely of the next three
+hours), **Sunrise and sunset**, and **Hourly forecast**. Once any is on and a city is set, Home
+shows them in the header's right 30%, beside the greeting: the details wrap to its width above the
+next five hours. The short weather line under the greeting stays as it is, and long greetings
+shrink before reaching the block. **Card background** (on by default) puts the block on a card;
+off, it sits on the wallpaper. Favorites and inputs keep their positions either way. Times use the
+location's UTC offset and the chosen clock format.
 Lists render behind the fixed sidebar, navigation and background actions, without viewport clipping
 or edge fades. Pointer interaction and remote focus retain their safe content viewports.
 The **Greeting** subpage contains **Name** and **Clear name**. Selecting Name opens the text keyboard
@@ -810,6 +818,11 @@ have separate workers and generation IDs, avoiding stale responses overwriting c
 Fresh Celsius readings are reused for 15 minutes; valid saved data lasts up to six hours and
 failure retries after five minutes. Unit changes convert unrounded cached Celsius immediately.
 Removing a city clears its cache. The `.weather.json` sidecar uses Unix-seconds timestamps.
+Each forecast also asks for today's high/low, sunrise/sunset, current UV and the next twelve
+hours (`timeformat=unixtime`), saved with the reading; caches from before these details still
+load. Air quality comes from the fixed `air-quality-api.open-meteo.com` origin only while its
+switch is on, and a failure there leaves the rest of the weather in place. Turning on a detail
+the cache lacks fetches once instead of waiting for the next refresh.
 Mock servers accept only literal loopback HTTP origins and are refused in TV builds.
 
 `assets/messages.json` supplies Dutch, English, French, German, Italian, Polish, Portuguese (Brazil),

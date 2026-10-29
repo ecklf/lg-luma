@@ -6,7 +6,7 @@ use crate::{
     state::{
         APPS_COLUMNS, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT,
         HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State,
-        Subpage, Target, TextField, WIDGETS_SECTION,
+        Subpage, Target, TextField, WEATHER_DETAILS, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -1094,6 +1094,7 @@ fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language:
 fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     let language = state.preferences.language;
     let s = state.scroll;
+    let panel = weather_panel_shown(state);
     let summary = state
         .preferences
         .show_weather
@@ -1119,15 +1120,24 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     if state.preferences.show_greeting {
         let greeting = language.greeting(now.hour(), &state.preferences.greeting_name);
         let greeting_style = text(90.4, 500, -0.065).leading(1.05);
-        let fitted = assets.fit_text(&greeting, greeting_style, 1500.);
+        // Beside the weather card, long greetings shrink before reaching it.
+        let width = if panel {
+            WEATHER_PANEL_X - 84. - 48.
+        } else {
+            1500.
+        };
+        let fitted = assets.fit_text(&greeting, greeting_style, width);
         let height = 95. * fitted.size / greeting_style.size;
         out.text(
             &greeting,
-            Rect::new(84., top + date_height + (95. - height) / 2., 1500., height),
+            Rect::new(84., top + date_height + (95. - height) / 2., width, height),
             fitted,
             WHITE,
             false,
         );
+    }
+    if panel {
+        weather_panel(out, state, assets, now);
     }
     if let Some(summary) = summary {
         let greeting_height = if state.preferences.show_greeting {
@@ -1343,6 +1353,11 @@ struct WeatherSummary {
     icon: String,
     parts: Vec<(String, TextStyle, Color, Rect)>,
 }
+/// The weather details block fills the header's right 30%, beside the greeting.
+const WEATHER_PANEL_X: f32 = 1311.;
+const WEATHER_PANEL_RIGHT: f32 = 1836.;
+const WEATHER_PANEL_PADDING: f32 = 28.;
+const WEATHER_PANEL_HOURS: usize = 5;
 type WeatherPart = (String, TextStyle, Color, f32, f32);
 fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
     let language = state.preferences.language;
@@ -1443,6 +1458,202 @@ fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
         icon,
         parts: positioned,
     }
+}
+
+/// The details Home's weather line shows after the condition, in Settings › Weather order.
+fn weather_details(
+    state: &State,
+    details: &weather::Details,
+    reading: weather::Reading,
+    now: OffsetDateTime,
+) -> Vec<String> {
+    let preferences = &state.preferences;
+    let language = preferences.language;
+    let unit = preferences.temperature_unit;
+    let unix = now.unix_timestamp();
+    let mut out = Vec::new();
+    if preferences.weather_high_low
+        && let (Some(high), Some(low)) = (details.high, details.low)
+    {
+        out.push(format!(
+            "↑{} ↓{}",
+            weather::format_degrees(high, unit),
+            weather::format_degrees(low, unit)
+        ));
+    }
+    if preferences.weather_air {
+        if let Some(aqi) = details.air {
+            out.push(language.t(weather::air_key(aqi)).to_owned());
+        }
+        // The index is 0 all night; it only says something in daylight.
+        if let Some(uv) = details.uv.filter(|uv| reading.is_day || *uv >= 0.5) {
+            out.push(language.format("uvIndex", &[("value", &format!("{uv:.0}"))]));
+        }
+    }
+    if preferences.weather_rain
+        && let Some(chance) = details.rain_chance(unix)
+    {
+        out.push(language.format("rainChance", &[("percent", &chance.to_string())]));
+    }
+    if preferences.weather_sun {
+        for (key, time) in [("sunrise", details.sunrise), ("sunset", details.sunset)] {
+            if let Some(time) = time.and_then(|time| local_time(state, time, details.offset)) {
+                out.push(language.format(key, &[("time", &time)]));
+            }
+        }
+    }
+    out
+}
+
+/// The next hours for the strip, from the current one; none if too few are left.
+fn hourly(
+    state: &State,
+    details: &weather::Details,
+    now: OffsetDateTime,
+    count: usize,
+) -> Vec<(String, String, String)> {
+    let hours: Vec<_> = details
+        .upcoming(now.unix_timestamp())
+        .take(count)
+        .enumerate()
+        .filter_map(|(index, hour)| {
+            let condition = weather::condition(weather::Reading {
+                temperature: hour.temperature,
+                code: hour.code,
+                is_day: hour.is_day,
+            });
+            Some((
+                if index == 0 && hour.time <= now.unix_timestamp() {
+                    state.preferences.language.t("weatherNow").to_owned()
+                } else {
+                    local_time(state, hour.time, details.offset)?
+                },
+                format!("weather-{}", condition.icon),
+                weather::format_degrees(hour.temperature, state.preferences.temperature_unit),
+            ))
+        })
+        .collect();
+    if hours.len() < 3 { Vec::new() } else { hours }
+}
+
+/// Whether Home shows the weather details block beside the greeting: any detail is on and a
+/// city is set. The short line under the greeting stays as it is.
+fn weather_panel_shown(state: &State) -> bool {
+    state.preferences.show_weather
+        && state.preferences.weather_location.is_some()
+        && (0..WEATHER_DETAILS.len()).any(|index| state.preferences.weather_detail(index))
+}
+
+/// The weather details beside the greeting: the chosen details, then the next hours, on a card
+/// or straight on the wallpaper. Vertically centred on the greeting, clear of the favorites heading.
+fn weather_panel(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
+    let Some(place) = &state.preferences.weather_location else {
+        return;
+    };
+    let card = state.preferences.weather_card;
+    let pad = if card { WEATHER_PANEL_PADDING } else { 0. };
+    let width = WEATHER_PANEL_RIGHT - WEATHER_PANEL_X;
+    let inner = width - pad * 2.;
+    let (Some(reading), Some(details)) =
+        (state.weather.reading(place), state.weather.details(place))
+    else {
+        return;
+    };
+    let detail_style = text(19.2, 450, -0.01).leading(1.45);
+    let line_height = detail_style.size * detail_style.line_height;
+    let mut lines: Vec<String> = Vec::new();
+    for part in weather_details(state, details, reading, now) {
+        match lines.last_mut() {
+            Some(line) if assets.width(&format!("{line}  ·  {part}"), detail_style) <= inner => {
+                *line = format!("{line}  ·  {part}");
+            }
+            _ => lines.push(part),
+        }
+    }
+    let hours = if state.preferences.weather_hourly {
+        hourly(state, details, now, WEATHER_PANEL_HOURS)
+    } else {
+        Vec::new()
+    };
+    if lines.is_empty() && hours.is_empty() {
+        return;
+    }
+    let details_height = lines.len() as f32 * line_height;
+    let gap = if lines.is_empty() || hours.is_empty() {
+        0.
+    } else {
+        24.
+    };
+    let hours_height = if hours.is_empty() { 0. } else { 92. };
+    let height = pad * 2. + details_height + gap + hours_height;
+    let top = (300. - height / 2.).clamp(128., 470. - height) - state.scroll;
+    let rect = Rect::new(WEATHER_PANEL_X, top, width, height);
+    if card {
+        out.shadow(rect, 24., 4., 1., 0.01);
+        out.draw.push(Draw::RoundedGradient(
+            rect,
+            24.,
+            c(0x20252b, 0.60),
+            c(0x171c22, 0.55),
+        ));
+        out.border(rect, 24., 1., c(0xffffff, 0.063));
+    }
+    let x = rect.x + pad;
+    let mut y = rect.y + pad;
+    for line in lines {
+        out.text(
+            line,
+            Rect::new(x, y, inner, line_height),
+            detail_style,
+            c(0xf5f5f5, 0.78),
+            false,
+        );
+        y += line_height;
+    }
+    if hours.is_empty() {
+        return;
+    }
+    y += gap;
+    if gap > 0. {
+        out.shape(Rect::new(x, y - 12., inner, 1.), 0., c(0xffffff, 0.1));
+    }
+    let pitch = inner / hours.len() as f32;
+    for (index, (time, icon, temperature)) in hours.into_iter().enumerate() {
+        let column = x + index as f32 * pitch;
+        out.text(
+            time,
+            Rect::new(column, y + 2., pitch, 20.),
+            text(15.08, 500, 0.02),
+            c(0xf5f5f5, if index == 0 { 0.85 } else { 0.55 }),
+            true,
+        );
+        out.icon(
+            assets,
+            &icon,
+            Rect::new(column + (pitch - 30.) / 2., y + 28., 30., 30.),
+            c(0xdedede, 0.83),
+        );
+        out.text(
+            temperature,
+            Rect::new(column, y + 63., pitch, 27.),
+            text(20.8, 550, -0.02),
+            c(0xf5f5f5, 0.91),
+            true,
+        );
+    }
+}
+
+/// A time at the weather location, in the clock format chosen in Settings.
+fn local_time(state: &State, unix: i64, offset: i32) -> Option<String> {
+    let time = OffsetDateTime::from_unix_timestamp(unix)
+        .ok()?
+        .to_offset(time::UtcOffset::from_whole_seconds(offset).ok()?);
+    Some(
+        state
+            .preferences
+            .language
+            .clock(time, state.preferences.hour_24, false),
+    )
 }
 fn weather_summary(
     out: &mut Scene,
@@ -1927,6 +2138,59 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
             description: None,
             selected: false,
             chevron: true,
+        },
+    );
+    // What Home shows beside the current weather.
+    let icons = [
+        "thermometer",
+        "weather-fog",
+        "weather-rain",
+        "weather-sun",
+        "clock",
+    ];
+    for (index, (key, icon)) in WEATHER_DETAILS.into_iter().zip(icons).enumerate() {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::WeatherDetail(index),
+                rect: Rect::new(640., y + 84. * (index + 1) as f32, 1120., 72.),
+                title: language.t(key),
+                icon: Some(icon),
+                value: Some(if state.preferences.weather_detail(index) {
+                    language.t("stateOn")
+                } else {
+                    language.t("stateOff")
+                }),
+                description: None,
+                selected: false,
+                chevron: false,
+            },
+        );
+    }
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::WeatherCard,
+            rect: Rect::new(
+                640.,
+                y + 84. * (WEATHER_DETAILS.len() + 1) as f32,
+                1120.,
+                72.,
+            ),
+            title: language.t("weatherCardBackground"),
+            icon: Some("grid"),
+            value: Some(if state.preferences.weather_card {
+                language.t("stateOn")
+            } else {
+                language.t("stateOff")
+            }),
+            description: None,
+            selected: false,
+            chevron: false,
         },
     );
 }
