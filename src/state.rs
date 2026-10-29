@@ -10,11 +10,11 @@ use std::time::{Duration, Instant};
 
 pub const WIDGETS_SECTION: usize = 2;
 pub const SYSTEM_SECTION: usize = 3;
-/// System › Luma as Home screen.
-pub const HOME_TAKEOVER_ROW: usize = 9;
 pub const SECTION_COUNT: usize = 4;
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
+/// System › Luma as Home screen.
+pub const HOME_TAKEOVER_ROW: usize = 9;
 pub const APPS_COLUMNS: usize = 6;
 /// Automatic inventory retries before the error shows: with the 6.5 s Luna timeout about 50 s.
 pub const INVENTORY_RETRIES: u32 = 5;
@@ -1240,11 +1240,12 @@ impl State {
             }
             if matches!(
                 self.focus,
-                Target::Setting(0 | 1 | 4 | 7 | HOME_TAKEOVER_ROW)
+                Target::Setting(0 | 1 | 4 | 7)
                     | Target::Widget(_)
                     | Target::InputMode(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
+                    | Target::Setting(HOME_TAKEOVER_ROW)
             ) && matches!(direction, Direction::Right)
             {
                 return self.activate();
@@ -2165,19 +2166,19 @@ impl State {
                         }
                         return vec![];
                     }
-                    5 => return vec![Effect::Quit],
-                    7 => {
-                        self.subpage = Some(Subpage::TextRendering);
-                        self.focus = Target::Choice(self.preferences.text_rendering.index());
+                    HOME_TAKEOVER_ROW => {
+                        self.subpage = Some(Subpage::HomeTakeover);
+                        self.focus = Target::Choice(if self.home_takeover { 0 } else { 1 });
                         self.scroll = 0.;
                         if !self.preferences.reduced_motion {
                             self.panel_started = Some(Instant::now());
                         }
                         return vec![];
                     }
-                    HOME_TAKEOVER_ROW => {
-                        self.subpage = Some(Subpage::HomeTakeover);
-                        self.focus = Target::Choice(if self.home_takeover { 0 } else { 1 });
+                    5 => return vec![Effect::Quit],
+                    7 => {
+                        self.subpage = Some(Subpage::TextRendering);
+                        self.focus = Target::Choice(self.preferences.text_rendering.index());
                         self.scroll = 0.;
                         if !self.preferences.reduced_motion {
                             self.panel_started = Some(Instant::now());
@@ -2263,13 +2264,6 @@ impl State {
                             [InputMode::On, InputMode::Off, InputMode::Auto][index.min(2)],
                         );
                     }
-                    Some(Subpage::Temperature) => {
-                        self.preferences.temperature_unit = if index == 1 {
-                            Unit::Fahrenheit
-                        } else {
-                            Unit::Celsius
-                        }
-                    }
                     Some(Subpage::HomeTakeover) => {
                         let enable = index == 0;
                         self.close_subpage();
@@ -2278,6 +2272,13 @@ impl State {
                         } else {
                             vec![Effect::HomeTakeover(enable)]
                         };
+                    }
+                    Some(Subpage::Temperature) => {
+                        self.preferences.temperature_unit = if index == 1 {
+                            Unit::Fahrenheit
+                        } else {
+                            Unit::Celsius
+                        }
                     }
                     Some(Subpage::Language) => {
                         self.preferences.language =
