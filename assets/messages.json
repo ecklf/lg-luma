@@ -11,7 +11,8 @@
     "pl": "Data",
     "fr": "Date",
     "vi": "Ngày",
-    "nl": "Datum"
+    "nl": "Datum",
+    "sv": "Datum"
   },
   "dateFormat": {
     "en": "Date format",
@@ -25,7 +26,8 @@
     "pl": "Format daty",
     "fr": "Format de date",
     "vi": "Định dạng ngày",
-    "nl": "Datumnotatie"
+    "nl": "Datumnotatie",
+    "sv": "Datumformat"
   },
   "dateLocalized": {
     "en": "Localized (weekday, month and day)",
@@ -39,7 +41,8 @@
     "pl": "Lokalny (dzień tygodnia, miesiąc i dzień)",
     "fr": "Localisé (jour de la semaine, mois et jour)",
     "vi": "Theo ngôn ngữ (thứ, tháng và ngày)",
-    "nl": "Lokaal (weekdag, maand en dag)"
+    "nl": "Lokaal (weekdag, maand en dag)",
+    "sv": "Lokalt (veckodag, månad och dag)"
   },
   "latestVersionInstalled": {
     "zh-tw": "未發現更新版本",
@@ -53,7 +56,8 @@
     "pl": "Nie znaleziono nowszej wersji",
     "fr": "Aucune version plus récente trouvée",
     "vi": "Không tìm thấy phiên bản mới hơn",
-    "nl": "Geen nieuwere versie gevonden"
+    "nl": "Geen nieuwere versie gevonden",
+    "sv": "Ingen nyare version hittades"
   },
   "checkAgain": {
     "zh-tw": "重新檢查",
@@ -67,7 +71,8 @@
     "pl": "Sprawdź ponownie",
     "fr": "Vérifier à nouveau",
     "vi": "Kiểm tra lại",
-    "nl": "Opnieuw controleren"
+    "nl": "Opnieuw controleren",
+    "sv": "Kontrollera igen"
   },
   "checkingUpdates": {
     "zh-tw": "正在檢查更新…",
@@ -81,7 +86,8 @@
     "pl": "Sprawdzanie aktualizacji…",
     "fr": "Recherche de mises à jour…",
     "vi": "Đang kiểm tra bản cập nhật…",
-    "nl": "Controleren op updates…"
+    "nl": "Controleren op updates…",
+    "sv": "Söker efter uppdateringar…"
   },
   "checkForUpdates": {
     "zh-tw": "檢查更新",
@@ -95,7 +101,8 @@
     "pl": "Sprawdź aktualizacje",
     "fr": "Rechercher des mises à jour",
     "vi": "Kiểm tra bản cập nhật",
-    "nl": "Controleren op updates"
+    "nl": "Controleren op updates",
+    "sv": "Sök efter uppdateringar"
   },
   "updateCheckFailed": {
     "zh-tw": "無法檢查更新",
@@ -109,7 +116,8 @@
     "pl": "Nie udało się sprawdzić aktualizacji",
     "fr": "Impossible de rechercher des mises à jour",
     "vi": "Không thể kiểm tra bản cập nhật",
-    "nl": "Controleren op updates mislukt"
+    "nl": "Controleren op updates mislukt",
+    "sv": "Det gick inte att söka efter uppdateringar"
   },
   "currentVersion": {
     "zh-tw": "目前版本：{current}",
@@ -123,7 +131,8 @@
     "pl": "Obecna wersja: {current}",
     "fr": "Version actuelle : {current}",
     "vi": "Phiên bản hiện tại: {current}",
-    "nl": "Huidige versie: {current}"
+    "nl": "Huidige versie: {current}",
+    "sv": "Nuvarande version: {current}"
   },
   "addFirstShortcutHint": {
     "zh-tw": "按「設定」新增第一個捷徑。",
@@ -137,7 +146,8 @@
     "pl": "Naciśnij Konfiguruj, aby dodać pierwszy skrót.",
     "fr": "Appuyez sur Configurer pour ajouter votre premier raccourci.",
     "vi": "Nhấn Cấu hình để thêm lối tắt đầu tiên.",
-    "nl": "Druk op Configureren om je eerste snelkoppeling toe te voegen."
+    "nl": "Druk op Configureren om je eerste snelkoppeling toe te voegen.",
+    "sv": "Tryck på Konfigurera för att lägga till din första genväg."
   },
   "updateAvailable": {
     "zh-tw": "有可用更新",
@@ -151,7 +161,8 @@
     "pl": "Dostępna aktualizacja",
     "fr": "Mise à jour disponible",
     "vi": "Có bản cập nhật",
-    "nl": "Update beschikbaar"
+    "nl": "Update beschikbaar",
+    "sv": "Uppdatering tillgänglig"
   },
   "updateVersions": {
     "zh-tw": "目前版本：{current} · 最新版本：{latest}",
@@ -165,7 +176,8 @@
     "pl": "Obecna: {current} · Najnowsza: {latest}",
     "fr": "Actuelle : {current} · Dernière : {latest}",
     "vi": "Hiện tại: {current} · Mới nhất: {latest}",
-    "nl": "Huidig: {current} · Nieuwste: {latest}"
+    "nl": "Huidig: {current} · Nieuwste: {latest}",
+    "sv": "Nuvarande: {current} · Senaste: {latest}"
   },
   "openHomebrewChannel": {
     "zh-tw": "開啟 Homebrew Channel 進行更新",
@@ -179,7 +191,8 @@
     "pl": "Otwórz Homebrew Channel, aby zaktualizować",
     "fr": "Ouvrir Homebrew Channel pour mettre à jour",
     "vi": "Mở Homebrew Channel để cập nhật",
-    "nl": "Open Homebrew Channel om bij te werken"
+    "nl": "Open Homebrew Channel om bij te werken",
+    "sv": "Öppna Homebrew Channel för att uppdatera"
   },
   "testShortcut": {
     "zh-tw": "測試捷徑",
@@ -193,7 +206,8 @@
     "pl": "Testuj skrót",
     "fr": "Tester le raccourci",
     "vi": "Thử lối tắt",
-    "nl": "Snelkoppeling testen"
+    "nl": "Snelkoppeling testen",
+    "sv": "Testa genväg"
   },
   "configure": {
     "zh-tw": "設定",
@@ -207,7 +221,8 @@
     "pl": "Konfiguruj",
     "fr": "Configurer",
     "vi": "Cấu hình",
-    "nl": "Configureren"
+    "nl": "Configureren",
+    "sv": "Konfigurera"
   },
   "widgets": {
     "zh-tw": "小工具",
@@ -221,7 +236,8 @@
     "pl": "Widżety",
     "fr": "Widgets",
     "vi": "Tiện ích",
-    "nl": "Widgets"
+    "nl": "Widgets",
+    "sv": "Widgetar"
   },
   "wallpaperCycle": {
     "zh-tw": "輪播",
@@ -235,7 +251,8 @@
     "pl": "Rotacja",
     "fr": "Rotation",
     "vi": "Luân phiên",
-    "nl": "Rotatie"
+    "nl": "Rotatie",
+    "sv": "Rotera"
   },
   "useBackground": {
     "zh-tw": "使用背景",
@@ -249,7 +266,8 @@
     "pl": "Użyj tła",
     "fr": "Utiliser l’arrière-plan",
     "vi": "Dùng hình nền",
-    "nl": "Achtergrond gebruiken"
+    "nl": "Achtergrond gebruiken",
+    "sv": "Använd bakgrund"
   },
   "deleteBackground": {
     "zh-tw": "刪除背景",
@@ -263,7 +281,8 @@
     "pl": "Usuń tło",
     "fr": "Supprimer l’arrière-plan",
     "vi": "Xóa hình nền",
-    "nl": "Achtergrond verwijderen"
+    "nl": "Achtergrond verwijderen",
+    "sv": "Ta bort bakgrund"
   },
   "deleteBackgroundWarning": {
     "zh-tw": "刪除此背景？它將從圖庫中移除。",
@@ -277,7 +296,8 @@
     "pl": "Usunąć to tło? Zostanie usunięte z galerii.",
     "fr": "Supprimer cet arrière-plan ? Il sera retiré de votre galerie.",
     "vi": "Xóa hình nền này? Hình nền sẽ bị xóa khỏi thư viện của bạn.",
-    "nl": "Deze achtergrond verwijderen? Hij wordt uit je galerij verwijderd."
+    "nl": "Deze achtergrond verwijderen? Hij wordt uit je galerij verwijderd.",
+    "sv": "Ta bort den här bakgrunden? Den tas bort från ditt galleri."
   },
   "deletingBackground": {
     "zh-tw": "正在刪除背景…",
@@ -291,7 +311,8 @@
     "pl": "Usuwanie tła…",
     "fr": "Suppression de l’arrière-plan…",
     "vi": "Đang xóa hình nền…",
-    "nl": "Achtergrond verwijderen…"
+    "nl": "Achtergrond verwijderen…",
+    "sv": "Tar bort bakgrund…"
   },
   "backgroundDeleted": {
     "zh-tw": "背景已刪除",
@@ -305,7 +326,8 @@
     "pl": "Tło usunięte",
     "fr": "Arrière-plan supprimé",
     "vi": "Đã xóa hình nền",
-    "nl": "Achtergrond verwijderd"
+    "nl": "Achtergrond verwijderd",
+    "sv": "Bakgrunden har tagits bort"
   },
   "deleteBackgroundError": {
     "zh-tw": "無法刪除背景",
@@ -319,7 +341,8 @@
     "pl": "Nie udało się usunąć tła",
     "fr": "Impossible de supprimer l’arrière-plan",
     "vi": "Không thể xóa hình nền",
-    "nl": "Kan achtergrond niet verwijderen"
+    "nl": "Kan achtergrond niet verwijderen",
+    "sv": "Det gick inte att ta bort bakgrunden"
   },
   "uploadWallpaper": {
     "zh-tw": "上傳",
@@ -333,7 +356,8 @@
     "pl": "Prześlij",
     "fr": "Importer",
     "vi": "Tải lên",
-    "nl": "Uploaden"
+    "nl": "Uploaden",
+    "sv": "Ladda upp"
   },
   "wallpaperUploadHint": {
     "zh-tw": "掃描此 QR Code",
@@ -347,7 +371,8 @@
     "pl": "Zeskanuj ten kod QR",
     "fr": "Scannez ce code QR",
     "vi": "Quét mã QR này",
-    "nl": "Scan deze QR-code"
+    "nl": "Scan deze QR-code",
+    "sv": "Skanna den här QR-koden"
   },
   "wallpaperUploadBrowser": {
     "zh-tw": "或在瀏覽器中輸入此網址",
@@ -361,7 +386,8 @@
     "pl": "lub wpisz ten adres URL w przeglądarce",
     "fr": "ou saisissez cette URL dans le navigateur",
     "vi": "hoặc nhập URL này vào trình duyệt",
-    "nl": "of voer deze URL in de browser in"
+    "nl": "of voer deze URL in de browser in",
+    "sv": "eller ange den här webbadressen i webbläsaren"
   },
   "wallpaperUploadKeepOpen": {
     "zh-tw": "請保持此視窗開啟，直到上傳完成。請使用連線到同一網路的裝置。",
@@ -375,7 +401,8 @@
     "pl": "Nie zamykaj tego okna do końca przesyłania. Użyj urządzenia w tej samej sieci.",
     "fr": "Gardez cette fenêtre ouverte jusqu’à la fin de l’import. Utilisez un appareil sur le même réseau.",
     "vi": "Giữ cửa sổ này mở cho đến khi tải lên xong. Dùng thiết bị kết nối cùng mạng.",
-    "nl": "Houd dit venster open tot het uploaden klaar is. Gebruik een apparaat op hetzelfde netwerk."
+    "nl": "Houd dit venster open tot het uploaden klaar is. Gebruik een apparaat op hetzelfde netwerk.",
+    "sv": "Låt det här fönstret vara öppet tills uppladdningen är klar. Använd en enhet på samma nätverk."
   },
   "wallpaperUploadPrivate": {
     "zh-tw": "區域網路上傳 · 連結將在 10 分鐘後失效",
@@ -389,7 +416,8 @@
     "pl": "Przesyłanie lokalne · Link wygasa po 10 minutach",
     "fr": "Import local · Ce lien expire dans 10 minutes",
     "vi": "Tải lên nội bộ · Liên kết này hết hạn sau 10 phút",
-    "nl": "Lokaal uploaden · Deze link verloopt over 10 minuten"
+    "nl": "Lokaal uploaden · Deze link verloopt over 10 minuten",
+    "sv": "Lokal uppladdning · Länken slutar gälla om 10 minuter"
   },
   "wallpaperUploadStarting": {
     "zh-tw": "正在準備上傳連結…",
@@ -403,7 +431,8 @@
     "pl": "Przygotowywanie linku do przesyłania…",
     "fr": "Préparation du lien d’import…",
     "vi": "Đang chuẩn bị liên kết tải lên…",
-    "nl": "Uploadlink voorbereiden…"
+    "nl": "Uploadlink voorbereiden…",
+    "sv": "Förbereder uppladdningslänk…"
   },
   "wallpaperUploadError": {
     "zh-tw": "無法啟動區域網路上傳。請檢查網路連線，然後關閉並重新開啟此對話框。",
@@ -417,7 +446,8 @@
     "pl": "Nie udało się uruchomić przesyłania. Sprawdź połączenie z siecią i otwórz to okno ponownie.",
     "fr": "Impossible de démarrer l’import local. Vérifiez le réseau, puis rouvrez cette fenêtre.",
     "vi": "Không thể bắt đầu tải lên nội bộ. Hãy kiểm tra kết nối mạng, rồi đóng và mở lại hộp thoại này.",
-    "nl": "Kan lokaal uploaden niet starten. Controleer je netwerkverbinding en sluit en heropen dit venster."
+    "nl": "Kan lokaal uploaden niet starten. Controleer je netwerkverbinding en sluit en heropen dit venster.",
+    "sv": "Det gick inte att starta den lokala uppladdningen. Kontrollera nätverksanslutningen och öppna sedan dialogrutan igen."
   },
   "wallpaperUploadEnded": {
     "zh-tw": "上傳工作階段已結束",
@@ -431,7 +461,8 @@
     "pl": "Sesja przesyłania zakończona",
     "fr": "Session d’import terminée",
     "vi": "Phiên tải lên đã kết thúc",
-    "nl": "Uploadsessie beëindigd"
+    "nl": "Uploadsessie beëindigd",
+    "sv": "Uppladdningssessionen har avslutats"
   },
   "textRendering": {
     "zh-tw": "文字繪製",
@@ -445,7 +476,8 @@
     "pl": "Renderowanie tekstu",
     "fr": "Rendu du texte",
     "vi": "Hiển thị văn bản",
-    "nl": "Tekstweergave"
+    "nl": "Tekstweergave",
+    "sv": "Textrendering"
   },
   "textRenderingMsaa": {
     "zh-tw": "MSAA（預設）",
@@ -459,7 +491,8 @@
     "pl": "MSAA (domyślne)",
     "fr": "MSAA (par défaut)",
     "vi": "MSAA (mặc định)",
-    "nl": "MSAA (standaard)"
+    "nl": "MSAA (standaard)",
+    "sv": "MSAA (standard)"
   },
   "textRenderingAnalytic": {
     "zh-tw": "解析式",
@@ -473,7 +506,8 @@
     "pl": "Analityczne",
     "fr": "Analytique",
     "vi": "Giải tích",
-    "nl": "Analytisch"
+    "nl": "Analytisch",
+    "sv": "Analytisk"
   },
   "textRenderingRestart": {
     "zh-tw": "重新啟動 Luma 以套用變更。",
@@ -487,7 +521,8 @@
     "pl": "Uruchom ponownie Luma, aby zastosować zmiany.",
     "fr": "Redémarrez Luma pour appliquer les modifications.",
     "vi": "Khởi động lại Luma để áp dụng thay đổi.",
-    "nl": "Start Luma opnieuw op om de wijzigingen toe te passen."
+    "nl": "Start Luma opnieuw op om de wijzigingen toe te passen.",
+    "sv": "Starta om Luma för att tillämpa ändringarna."
   },
   "recentEmpty": {
     "zh-tw": "尚無最近使用的應用程式",
@@ -501,7 +536,8 @@
     "pl": "Brak ostatnio używanych aplikacji",
     "fr": "Aucune application récente",
     "vi": "Không có ứng dụng gần đây",
-    "nl": "Geen recente apps"
+    "nl": "Geen recente apps",
+    "sv": "Inga senaste appar"
   },
   "recentError": {
     "zh-tw": "無法更新最近使用的應用程式",
@@ -515,7 +551,8 @@
     "pl": "Nie udało się zaktualizować ostatnio używanych aplikacji",
     "fr": "Impossible de mettre à jour les applications récentes",
     "vi": "Không thể cập nhật ứng dụng gần đây",
-    "nl": "Recente apps konden niet worden bijgewerkt"
+    "nl": "Recente apps konden niet worden bijgewerkt",
+    "sv": "Senaste appar kunde inte uppdateras"
   },
   "recentLoading": {
     "zh-tw": "正在更新最近使用的應用程式…",
@@ -529,7 +566,8 @@
     "pl": "Aktualizowanie ostatnio używanych aplikacji…",
     "fr": "Mise à jour des applications récentes…",
     "vi": "Đang cập nhật ứng dụng gần đây…",
-    "nl": "Recente apps worden bijgewerkt…"
+    "nl": "Recente apps worden bijgewerkt…",
+    "sv": "Uppdaterar senaste appar…"
   },
   "recentDesktop": {
     "zh-tw": "桌面預覽 · 範例記錄",
@@ -543,7 +581,8 @@
     "pl": "Podgląd na komputerze · Przykładowa historia",
     "fr": "Aperçu sur ordinateur · Historique d’exemple",
     "vi": "Bản xem trước trên máy tính · Lịch sử mẫu",
-    "nl": "Desktopvoorbeeld · Voorbeeldgeschiedenis"
+    "nl": "Desktopvoorbeeld · Voorbeeldgeschiedenis",
+    "sv": "Skrivbordsförhandsvisning · Exempelhistorik"
   },
   "home": {
     "zh-tw": "主畫面",
@@ -557,7 +596,8 @@
     "pl": "Start",
     "fr": "Accueil",
     "vi": "Trang chính",
-    "nl": "Start"
+    "nl": "Start",
+    "sv": "Hem"
   },
   "apps": {
     "zh-tw": "應用程式",
@@ -571,7 +611,8 @@
     "pl": "Aplikacje",
     "fr": "Applications",
     "vi": "Ứng dụng",
-    "nl": "Apps"
+    "nl": "Apps",
+    "sv": "Appar"
   },
   "inputs": {
     "zh-tw": "輸入來源",
@@ -585,7 +626,8 @@
     "pl": "Wejścia",
     "fr": "Entrées",
     "vi": "Đầu vào",
-    "nl": "Ingangen"
+    "nl": "Ingangen",
+    "sv": "Ingångar"
   },
   "settings": {
     "zh-tw": "設定",
@@ -599,7 +641,8 @@
     "pl": "Ustawienia",
     "fr": "Paramètres",
     "vi": "Cài đặt",
-    "nl": "Instellingen"
+    "nl": "Instellingen",
+    "sv": "Inställningar"
   },
   "settingsRegion": {
     "zh-tw": "Luma 設定",
@@ -613,7 +656,8 @@
     "pl": "Ustawienia Luma",
     "fr": "Paramètres de Luma",
     "vi": "Cài đặt Luma",
-    "nl": "Luma-instellingen"
+    "nl": "Luma-instellingen",
+    "sv": "Luma-inställningar"
   },
   "mainNavigation": {
     "zh-tw": "主要導覽",
@@ -627,7 +671,8 @@
     "pl": "Nawigacja główna",
     "fr": "Navigation principale",
     "vi": "Điều hướng chính",
-    "nl": "Hoofdnavigatie"
+    "nl": "Hoofdnavigatie",
+    "sv": "Huvudnavigering"
   },
   "settingsSections": {
     "zh-tw": "設定分類",
@@ -641,7 +686,8 @@
     "pl": "Sekcje ustawień",
     "fr": "Sections des paramètres",
     "vi": "Mục cài đặt",
-    "nl": "Instellingencategorieën"
+    "nl": "Instellingencategorieën",
+    "sv": "Inställningsavsnitt"
   },
   "stateOn": {
     "zh-tw": "開",
@@ -655,7 +701,8 @@
     "pl": "Wł.",
     "fr": "Activé",
     "vi": "Bật",
-    "nl": "Aan"
+    "nl": "Aan",
+    "sv": "På"
   },
   "stateOff": {
     "zh-tw": "關",
@@ -669,7 +716,8 @@
     "pl": "Wył.",
     "fr": "Désactivé",
     "vi": "Tắt",
-    "nl": "Uit"
+    "nl": "Uit",
+    "sv": "Av"
   },
   "stateAuto": {
     "zh-tw": "自動",
@@ -683,7 +731,8 @@
     "pl": "Automatycznie",
     "fr": "Automatique",
     "vi": "Tự động",
-    "nl": "Automatisch"
+    "nl": "Automatisch",
+    "sv": "Automatiskt"
   },
   "inputAlways": {
     "zh-tw": "一律顯示",
@@ -697,7 +746,8 @@
     "pl": "Zawsze pokazuj",
     "fr": "Toujours afficher",
     "vi": "Luôn hiển thị",
-    "nl": "Altijd tonen"
+    "nl": "Altijd tonen",
+    "sv": "Visa alltid"
   },
   "inputNever": {
     "zh-tw": "永不顯示",
@@ -711,7 +761,8 @@
     "pl": "Nigdy nie pokazuj",
     "fr": "Ne jamais afficher",
     "vi": "Không bao giờ hiển thị",
-    "nl": "Nooit tonen"
+    "nl": "Nooit tonen",
+    "sv": "Visa aldrig"
   },
   "inputWhenConnected": {
     "zh-tw": "僅在連線時顯示",
@@ -725,7 +776,8 @@
     "pl": "Pokazuj tylko po podłączeniu",
     "fr": "Afficher uniquement si connecté",
     "vi": "Chỉ hiển thị khi kết nối",
-    "nl": "Alleen tonen als verbonden"
+    "nl": "Alleen tonen als verbonden",
+    "sv": "Visa endast när ansluten"
   },
   "renameInput": {
     "zh-tw": "重新命名",
@@ -739,7 +791,8 @@
     "pl": "Zmień nazwę",
     "fr": "Renommer",
     "vi": "Đổi tên",
-    "nl": "Hernoemen"
+    "nl": "Hernoemen",
+    "sv": "Byt namn"
   },
   "inputName": {
     "zh-tw": "輸入來源名稱",
@@ -753,7 +806,8 @@
     "pl": "Nazwa wejścia",
     "fr": "Nom de l’entrée",
     "vi": "Tên đầu vào",
-    "nl": "Naam van de ingang"
+    "nl": "Naam van de ingang",
+    "sv": "Ingångens namn"
   },
   "inputNameHint": {
     "zh-tw": "顯示自訂名稱而非連接埠名稱",
@@ -767,7 +821,8 @@
     "pl": "Pokazuj własną nazwę zamiast nazwy portu",
     "fr": "Afficher un nom personnalisé au lieu du port",
     "vi": "Hiển thị tên tùy chỉnh thay vì cổng",
-    "nl": "Toon een eigen naam in plaats van de poort"
+    "nl": "Toon een eigen naam in plaats van de poort",
+    "sv": "Visa ett eget namn i stället för porten"
   },
   "clearName": {
     "zh-tw": "清除名稱",
@@ -781,7 +836,8 @@
     "pl": "Wyczyść nazwę",
     "fr": "Effacer le nom",
     "vi": "Xóa tên",
-    "nl": "Naam wissen"
+    "nl": "Naam wissen",
+    "sv": "Rensa namn"
   },
   "back": {
     "zh-tw": "返回",
@@ -795,7 +851,8 @@
     "pl": "Wstecz",
     "fr": "Retour",
     "vi": "Quay lại",
-    "nl": "Terug"
+    "nl": "Terug",
+    "sv": "Tillbaka"
   },
   "background": {
     "zh-tw": "背景",
@@ -809,7 +866,8 @@
     "pl": "Tło",
     "fr": "Fond d’écran",
     "vi": "Hình nền",
-    "nl": "Achtergrond"
+    "nl": "Achtergrond",
+    "sv": "Bakgrund"
   },
   "interface": {
     "zh-tw": "一般",
@@ -823,7 +881,8 @@
     "pl": "Ogólne",
     "fr": "Général",
     "vi": "Chung",
-    "nl": "Algemeen"
+    "nl": "Algemeen",
+    "sv": "Allmänt"
   },
   "system": {
     "zh-tw": "系統",
@@ -837,7 +896,8 @@
     "pl": "System",
     "fr": "Système",
     "vi": "Hệ thống",
-    "nl": "Systeem"
+    "nl": "Systeem",
+    "sv": "System"
   },
   "favorites": {
     "zh-tw": "我的最愛",
@@ -851,7 +911,8 @@
     "pl": "Ulubione",
     "fr": "Favoris",
     "vi": "Mục ưa thích",
-    "nl": "Favorieten"
+    "nl": "Favorieten",
+    "sv": "Favoriter"
   },
   "weather": {
     "zh-tw": "天氣",
@@ -865,7 +926,8 @@
     "pl": "Pogoda",
     "fr": "Météo",
     "vi": "Thời tiết",
-    "nl": "Weer"
+    "nl": "Weer",
+    "sv": "Väder"
   },
   "location": {
     "zh-tw": "地點",
@@ -879,7 +941,8 @@
     "pl": "Lokalizacja",
     "fr": "Lieu",
     "vi": "Vị trí",
-    "nl": "Locatie"
+    "nl": "Locatie",
+    "sv": "Plats"
   },
   "manageWeatherLocation": {
     "zh-tw": "設定地點",
@@ -893,7 +956,8 @@
     "pl": "Ustaw lokalizację",
     "fr": "Définir le lieu",
     "vi": "Thiết lập vị trí",
-    "nl": "Locatie instellen"
+    "nl": "Locatie instellen",
+    "sv": "Ställ in plats"
   },
   "locationResults": {
     "zh-tw": "地點搜尋結果",
@@ -907,7 +971,8 @@
     "pl": "Wyniki wyszukiwania",
     "fr": "Lieux trouvés",
     "vi": "Kết quả vị trí",
-    "nl": "Zoekresultaten"
+    "nl": "Zoekresultaten",
+    "sv": "Sökresultat"
   },
   "appNames": {
     "zh-tw": "應用程式名稱",
@@ -921,7 +986,8 @@
     "pl": "Nazwy aplikacji",
     "fr": "Noms des applications",
     "vi": "Tên ứng dụng",
-    "nl": "App-namen"
+    "nl": "App-namen",
+    "sv": "Appnamn"
   },
   "showOnHome": {
     "zh-tw": "在主畫面顯示",
@@ -935,7 +1001,8 @@
     "pl": "Pokazuj na ekranie Start",
     "fr": "Afficher sur l’Accueil",
     "vi": "Hiển thị trên Trang chính",
-    "nl": "Tonen op Start"
+    "nl": "Tonen op Start",
+    "sv": "Visa på Hem"
   },
   "showOnApps": {
     "zh-tw": "在應用程式頁面顯示",
@@ -949,7 +1016,8 @@
     "pl": "Pokazuj w Aplikacjach",
     "fr": "Afficher dans Applications",
     "vi": "Hiển thị trong Ứng dụng",
-    "nl": "Tonen in Apps"
+    "nl": "Tonen in Apps",
+    "sv": "Visa i Appar"
   },
   "clock24": {
     "zh-tw": "24 小時制",
@@ -963,7 +1031,8 @@
     "pl": "Zegar 24-godzinny",
     "fr": "Horloge 24 heures",
     "vi": "Đồng hồ 24 giờ",
-    "nl": "24-uursklok"
+    "nl": "24-uursklok",
+    "sv": "24-timmarsklocka"
   },
   "clockFormat": {
     "zh-tw": "時鐘格式",
@@ -977,7 +1046,8 @@
     "pl": "Format zegara",
     "fr": "Format de l’horloge",
     "vi": "Định dạng đồng hồ",
-    "nl": "Klokformaat"
+    "nl": "Klokformaat",
+    "sv": "Klockformat"
   },
   "clock": {
     "zh-tw": "時鐘",
@@ -991,7 +1061,8 @@
     "pl": "Zegar",
     "fr": "Horloge",
     "vi": "Đồng hồ",
-    "nl": "Klok"
+    "nl": "Klok",
+    "sv": "Klocka"
   },
   "timeFormat": {
     "zh-tw": "時間顯示",
@@ -1005,7 +1076,8 @@
     "pl": "Format czasu",
     "fr": "Format de l’heure",
     "vi": "Định dạng thời gian",
-    "nl": "Tijdnotatie"
+    "nl": "Tijdnotatie",
+    "sv": "Tidsformat"
   },
   "hour12": {
     "zh-tw": "12 小時制",
@@ -1019,7 +1091,8 @@
     "pl": "12-godzinny",
     "fr": "12 heures",
     "vi": "12 giờ",
-    "nl": "12-uurs"
+    "nl": "12-uurs",
+    "sv": "12 timmar"
   },
   "hour24": {
     "zh-tw": "24 小時制",
@@ -1033,7 +1106,8 @@
     "pl": "24-godzinny",
     "fr": "24 heures",
     "vi": "24 giờ",
-    "nl": "24-uurs"
+    "nl": "24-uurs",
+    "sv": "24 timmar"
   },
   "reducedMotion": {
     "zh-tw": "減少動態效果",
@@ -1047,7 +1121,8 @@
     "pl": "Ograniczenie ruchu",
     "fr": "Animations réduites",
     "vi": "Giảm chuyển động",
-    "nl": "Minder beweging"
+    "nl": "Minder beweging",
+    "sv": "Minskad rörelse"
   },
   "refreshApps": {
     "zh-tw": "重新整理應用程式和輸入來源",
@@ -1061,7 +1136,8 @@
     "pl": "Odśwież aplikacje i wejścia",
     "fr": "Actualiser les applications et entrées",
     "vi": "Làm mới ứng dụng & đầu vào",
-    "nl": "Apps en ingangen vernieuwen"
+    "nl": "Apps en ingangen vernieuwen",
+    "sv": "Uppdatera appar och ingångar"
   },
   "installUpdate": {
     "zh-tw": "安裝 {version}",
@@ -1075,7 +1151,8 @@
     "ru": "Установить {version}",
     "pl": "Zainstaluj {version}",
     "fr": "Installer {version}",
-    "vi": "Cài đặt {version}"
+    "vi": "Cài đặt {version}",
+    "sv": "Installera {version}"
   },
   "updateDownloading": {
     "zh-tw": "正在下載 {percent}%",
@@ -1089,7 +1166,8 @@
     "ru": "Загрузка {percent}%",
     "pl": "Pobieranie {percent}%",
     "fr": "Téléchargement {percent} %",
-    "vi": "Đang tải {percent} %"
+    "vi": "Đang tải {percent} %",
+    "sv": "Laddar ned {percent} %"
   },
   "updateInstalling": {
     "zh-tw": "正在安裝…",
@@ -1103,7 +1181,8 @@
     "ru": "Установка…",
     "pl": "Instalowanie…",
     "fr": "Installation…",
-    "vi": "Đang cài đặt…"
+    "vi": "Đang cài đặt…",
+    "sv": "Installerar…"
   },
   "updateFailed": {
     "zh-tw": "重試",
@@ -1117,7 +1196,8 @@
     "ru": "Повторить",
     "pl": "Spróbuj ponownie",
     "fr": "Réessayer",
-    "vi": "Thử lại"
+    "vi": "Thử lại",
+    "sv": "Försök igen"
   },
   "updateError": {
     "zh-tw": "更新未成功，請稍後重試。",
@@ -1131,7 +1211,8 @@
     "ru": "Не удалось обновить. Повторите попытку позже.",
     "pl": "Aktualizacja nie powiodła się. Spróbuj ponownie później.",
     "fr": "La mise à jour a échoué. Réessayez plus tard.",
-    "vi": "Cập nhật không thành công. Hãy thử lại sau."
+    "vi": "Cập nhật không thành công. Hãy thử lại sau.",
+    "sv": "Uppdateringen misslyckades. Försök igen senare."
   },
   "updateRestart": {
     "zh-tw": "更新安裝完成後，Luma 將重新啟動。",
@@ -1145,7 +1226,8 @@
     "ru": "Luma перезапустится после установки обновления.",
     "pl": "Luma uruchomi się ponownie po zainstalowaniu aktualizacji.",
     "fr": "Luma redémarre une fois la mise à jour installée.",
-    "vi": "Luma sẽ khởi động lại sau khi cài đặt bản cập nhật."
+    "vi": "Luma sẽ khởi động lại sau khi cài đặt bản cập nhật.",
+    "sv": "Luma startar om när uppdateringen har installerats."
   },
   "quitApp": {
     "zh-tw": "結束應用程式",
@@ -1159,7 +1241,8 @@
     "pl": "Zamknij aplikację",
     "fr": "Quitter l’application",
     "vi": "Thoát ứng dụng",
-    "nl": "App afsluiten"
+    "nl": "App afsluiten",
+    "sv": "Avsluta appen"
   },
   "language": {
     "zh-tw": "顯示語言",
@@ -1173,7 +1256,8 @@
     "pl": "Język",
     "fr": "Langue",
     "vi": "Ngôn ngữ",
-    "nl": "Taal"
+    "nl": "Taal",
+    "sv": "Språk"
   },
   "greetingName": {
     "zh-tw": "問候稱呼",
@@ -1187,7 +1271,8 @@
     "pl": "Imię w powitaniu",
     "fr": "Nom pour le message d’accueil",
     "vi": "Tên lời chào",
-    "nl": "Naam in de begroeting"
+    "nl": "Naam in de begroeting",
+    "sv": "Namn i hälsningen"
   },
   "greeting": {
     "zh-tw": "問候語",
@@ -1201,7 +1286,8 @@
     "pl": "Powitanie",
     "fr": "Message d’accueil",
     "vi": "Lời chào",
-    "nl": "Begroeting"
+    "nl": "Begroeting",
+    "sv": "Hälsning"
   },
   "name": {
     "zh-tw": "名稱",
@@ -1215,7 +1301,8 @@
     "pl": "Imię",
     "fr": "Nom",
     "vi": "Tên",
-    "nl": "Naam"
+    "nl": "Naam",
+    "sv": "Namn"
   },
   "greetingNightNamed": {
     "zh-tw": "{name}，還沒睡嗎？",
@@ -1229,7 +1316,8 @@
     "pl": "Jeszcze nie śpisz, {name}?",
     "fr": "Toujours debout, {name} ?",
     "vi": "Vẫn chưa ngủ sao, {name}?",
-    "nl": "Nog wakker, {name}?"
+    "nl": "Nog wakker, {name}?",
+    "sv": "Fortfarande uppe, {name}?"
   },
   "morningNamed": {
     "zh-tw": "{name}，早安。",
@@ -1243,7 +1331,8 @@
     "pl": "Dzień dobry, {name}.",
     "fr": "Bonjour, {name}.",
     "vi": "Chào buổi sáng, {name}.",
-    "nl": "Goedemorgen, {name}."
+    "nl": "Goedemorgen, {name}.",
+    "sv": "God morgon, {name}."
   },
   "afternoonNamed": {
     "zh-tw": "{name}，午安。",
@@ -1257,7 +1346,8 @@
     "pl": "Dzień dobry, {name}.",
     "fr": "Bon après-midi, {name}.",
     "vi": "Chào buổi chiều, {name}.",
-    "nl": "Goedemiddag, {name}."
+    "nl": "Goedemiddag, {name}.",
+    "sv": "God eftermiddag, {name}."
   },
   "eveningNamed": {
     "zh-tw": "{name}，晚安。",
@@ -1271,7 +1361,8 @@
     "pl": "Dobry wieczór, {name}.",
     "fr": "Bonsoir, {name}.",
     "vi": "Chào buổi tối, {name}.",
-    "nl": "Goedenavond, {name}."
+    "nl": "Goedenavond, {name}.",
+    "sv": "God kväll, {name}."
   },
   "english": {
     "zh-tw": "English",
@@ -1285,7 +1376,8 @@
     "pl": "English",
     "fr": "English",
     "vi": "English",
-    "nl": "English"
+    "nl": "English",
+    "sv": "English"
   },
   "german": {
     "zh-tw": "Deutsch",
@@ -1299,7 +1391,8 @@
     "pl": "Deutsch",
     "fr": "Deutsch",
     "vi": "Deutsch",
-    "nl": "Deutsch"
+    "nl": "Deutsch",
+    "sv": "Deutsch"
   },
   "chinese": {
     "zh-tw": "简体中文",
@@ -1313,7 +1406,8 @@
     "pl": "简体中文",
     "fr": "简体中文",
     "vi": "简体中文",
-    "nl": "简体中文"
+    "nl": "简体中文",
+    "sv": "简体中文"
   },
   "showWidget": {
     "zh-tw": "顯示小工具",
@@ -1327,7 +1421,8 @@
     "pl": "Pokazuj widżet",
     "fr": "Afficher le widget",
     "vi": "Hiển thị tiện ích",
-    "nl": "Widget tonen"
+    "nl": "Widget tonen",
+    "sv": "Visa widget"
   },
   "temperature": {
     "zh-tw": "溫度",
@@ -1341,7 +1436,8 @@
     "pl": "Temperatura",
     "fr": "Température",
     "vi": "Nhiệt độ",
-    "nl": "Temperatuur"
+    "nl": "Temperatuur",
+    "sv": "Temperatur"
   },
   "celsius": {
     "zh-tw": "攝氏度",
@@ -1355,7 +1451,8 @@
     "pl": "Celsjusz",
     "fr": "Celsius",
     "vi": "Độ C",
-    "nl": "Celsius"
+    "nl": "Celsius",
+    "sv": "Celsius"
   },
   "fahrenheit": {
     "zh-tw": "華氏度",
@@ -1369,7 +1466,8 @@
     "pl": "Fahrenheit",
     "fr": "Fahrenheit",
     "vi": "Độ F",
-    "nl": "Fahrenheit"
+    "nl": "Fahrenheit",
+    "sv": "Fahrenheit"
   },
   "cityPostcode": {
     "zh-tw": "城市或郵遞區號",
@@ -1383,7 +1481,8 @@
     "pl": "Miasto lub kod pocztowy",
     "fr": "Ville ou code postal",
     "vi": "Thành phố hoặc mã bưu chính",
-    "nl": "Plaats of postcode"
+    "nl": "Plaats of postcode",
+    "sv": "Stad eller postnummer"
   },
   "searchLocations": {
     "zh-tw": "搜尋地點",
@@ -1397,7 +1496,8 @@
     "pl": "Szukaj lokalizacji",
     "fr": "Rechercher un lieu",
     "vi": "Tìm kiếm vị trí",
-    "nl": "Locaties zoeken"
+    "nl": "Locaties zoeken",
+    "sv": "Sök platser"
   },
   "removeWeatherLocation": {
     "zh-tw": "移除天氣地點",
@@ -1411,7 +1511,8 @@
     "pl": "Usuń lokalizację pogody",
     "fr": "Supprimer le lieu météo",
     "vi": "Xóa vị trí thời tiết",
-    "nl": "Weerlocatie verwijderen"
+    "nl": "Weerlocatie verwijderen",
+    "sv": "Ta bort väderplats"
   },
   "enterCity": {
     "zh-tw": "請輸入至少兩個字元的城市或郵遞區號。",
@@ -1425,7 +1526,8 @@
     "pl": "Wpisz co najmniej dwa znaki nazwy miasta lub kodu pocztowego.",
     "fr": "Saisissez une ville ou un code postal d’au moins deux caractères.",
     "vi": "Nhập thành phố hoặc mã bưu chính với ít nhất 2 ký tự.",
-    "nl": "Voer een plaats of postcode in van minstens twee tekens."
+    "nl": "Voer een plaats of postcode in van minstens twee tekens.",
+    "sv": "Ange en stad eller ett postnummer med minst två tecken."
   },
   "noLocations": {
     "zh-tw": "找不到地點，請嘗試其他城市或郵遞區號。",
@@ -1439,7 +1541,8 @@
     "pl": "Nie znaleziono lokalizacji. Spróbuj innego miasta lub kodu pocztowego.",
     "fr": "Aucun lieu trouvé. Essayez une autre ville ou un autre code postal.",
     "vi": "Không tìm thấy vị trí. Hãy thử thành phố hoặc mã bưu chính khác.",
-    "nl": "Geen locaties gevonden. Probeer een andere plaats of postcode."
+    "nl": "Geen locaties gevonden. Probeer een andere plaats of postcode.",
+    "sv": "Inga platser hittades. Prova en annan stad eller ett annat postnummer."
   },
   "searchUnavailable": {
     "zh-tw": "無法搜尋地點。請檢查網路連線後重試。",
@@ -1453,7 +1556,8 @@
     "pl": "Wyszukiwanie lokalizacji jest niedostępne. Sprawdź połączenie i spróbuj ponownie.",
     "fr": "La recherche de lieu est indisponible. Vérifiez votre connexion et réessayez.",
     "vi": "Tìm kiếm vị trí hiện không khả dụng. Kiểm tra kết nối mạng và thử lại.",
-    "nl": "Locaties zoeken is niet beschikbaar. Controleer je verbinding en probeer het opnieuw."
+    "nl": "Locaties zoeken is niet beschikbaar. Controleer je verbinding en probeer het opnieuw.",
+    "sv": "Platssökningen är inte tillgänglig. Kontrollera anslutningen och försök igen."
   },
   "findApp": {
     "zh-tw": "搜尋應用程式",
@@ -1467,7 +1571,8 @@
     "pl": "Znajdź aplikację",
     "fr": "Rechercher une application",
     "vi": "Tìm ứng dụng",
-    "nl": "Zoek een app"
+    "nl": "Zoek een app",
+    "sv": "Hitta en app"
   },
   "clearCategory": {
     "zh-tw": "清除分類篩選",
@@ -1481,7 +1586,8 @@
     "pl": "Wyczyść filtr kategorii",
     "fr": "Effacer le filtre de catégorie",
     "vi": "Xóa bộ lọc danh mục",
-    "nl": "Categoriefilter wissen"
+    "nl": "Categoriefilter wissen",
+    "sv": "Rensa kategorifilter"
   },
   "appCategories": {
     "zh-tw": "應用程式分類",
@@ -1495,7 +1601,8 @@
     "pl": "Kategorie aplikacji",
     "fr": "Catégories d’applications",
     "vi": "Danh mục ứng dụng",
-    "nl": "App-categorieën"
+    "nl": "App-categorieën",
+    "sv": "Appkategorier"
   },
   "hidden": {
     "zh-tw": "已隱藏（{count}）",
@@ -1509,7 +1616,8 @@
     "pl": "Ukryte ({count})",
     "fr": "Masquées ({count})",
     "vi": "Đã ẩn ({count})",
-    "nl": "Verborgen ({count})"
+    "nl": "Verborgen ({count})",
+    "sv": "Dolda ({count})"
   },
   "noMatches": {
     "zh-tw": "這裡還沒有內容。",
@@ -1523,7 +1631,8 @@
     "pl": "Na razie nic tu nie ma.",
     "fr": "Rien ici. Pour l’instant.",
     "vi": "Chưa có gì ở đây.",
-    "nl": "Nog niets hier."
+    "nl": "Nog niets hier.",
+    "sv": "Inget här. Än."
   },
   "noHidden": {
     "zh-tw": "沒有隱藏的應用程式。",
@@ -1537,7 +1646,8 @@
     "pl": "Brak ukrytych aplikacji.",
     "fr": "Aucune application masquée.",
     "vi": "Không có ứng dụng nào bị ẩn.",
-    "nl": "Geen verborgen apps."
+    "nl": "Geen verborgen apps.",
+    "sv": "Inga dolda appar."
   },
   "roomForNew": {
     "zh-tw": "這裡可以放入新的應用程式。",
@@ -1551,7 +1661,8 @@
     "pl": "Trochę miejsca na coś nowego.",
     "fr": "Un peu de place pour quelque chose de nouveau.",
     "vi": "Một chút không gian cho điều mới mẻ.",
-    "nl": "Een beetje ruimte voor iets nieuws."
+    "nl": "Een beetje ruimte voor iets nieuws.",
+    "sv": "Lite plats för något nytt."
   },
   "findingApps": {
     "zh-tw": "正在尋找應用程式…",
@@ -1565,7 +1676,8 @@
     "pl": "Wyszukiwanie aplikacji…",
     "fr": "Recherche de vos applications…",
     "vi": "Đang tìm ứng dụng của bạn…",
-    "nl": "Je apps worden gezocht…"
+    "nl": "Je apps worden gezocht…",
+    "sv": "Letar efter dina appar…"
   },
   "noCategoryApps": {
     "zh-tw": "此分類中的應用程式會顯示在這裡。",
@@ -1579,7 +1691,8 @@
     "pl": "Tutaj pojawią się aplikacje z tej kategorii.",
     "fr": "Les applications de cette catégorie apparaîtront ici.",
     "vi": "Ứng dụng trong danh mục này sẽ xuất hiện ở đây.",
-    "nl": "Apps in deze categorie verschijnen hier."
+    "nl": "Apps in deze categorie verschijnen hier.",
+    "sv": "Appar i den här kategorin visas här."
   },
   "hiddenHint": {
     "zh-tw": "隱藏的應用程式會顯示在這裡。",
@@ -1593,7 +1706,8 @@
     "pl": "Tutaj pojawią się ukryte aplikacje.",
     "fr": "Les applications que vous masquez apparaîtront ici.",
     "vi": "Ứng dụng bạn ẩn sẽ xuất hiện ở đây.",
-    "nl": "Apps die je verbergt, verschijnen hier."
+    "nl": "Apps die je verbergt, verschijnen hier.",
+    "sv": "Appar du döljer visas här."
   },
   "noMatchesHint": {
     "zh-tw": "沒有與「{query}」相符的應用程式。請嘗試其他名稱。",
@@ -1607,7 +1721,8 @@
     "pl": "Brak aplikacji pasujących do „{query}”. Spróbuj innej nazwy.",
     "fr": "Aucune application ne correspond à « {query} ». Essayez un autre nom.",
     "vi": "Không có ứng dụng nào khớp với “{query}”. Hãy thử tên khác.",
-    "nl": "Geen apps gevonden voor “{query}”. Probeer een andere naam."
+    "nl": "Geen apps gevonden voor “{query}”. Probeer een andere naam.",
+    "sv": "Inga appar matchar ”{query}”. Prova ett annat namn."
   },
   "greetingNight": {
     "zh-tw": "稍等片刻。",
@@ -1621,7 +1736,8 @@
     "pl": "Jeszcze chwila.",
     "fr": "Encore un petit moment.",
     "vi": "Thêm một khoảnh khắc nữa.",
-    "nl": "Nog één momentje."
+    "nl": "Nog één momentje.",
+    "sv": "Ett ögonblick till."
   },
   "morning": {
     "zh-tw": "早安。",
@@ -1635,7 +1751,8 @@
     "pl": "Dzień dobry.",
     "fr": "Bonjour.",
     "vi": "Chào buổi sáng.",
-    "nl": "Goedemorgen."
+    "nl": "Goedemorgen.",
+    "sv": "God morgon."
   },
   "afternoon": {
     "zh-tw": "午安。",
@@ -1649,7 +1766,8 @@
     "pl": "Dzień dobry.",
     "fr": "Bon après-midi.",
     "vi": "Chào buổi chiều.",
-    "nl": "Goedemiddag."
+    "nl": "Goedemiddag.",
+    "sv": "God eftermiddag."
   },
   "evening": {
     "zh-tw": "晚安。",
@@ -1663,7 +1781,8 @@
     "pl": "Dobry wieczór.",
     "fr": "Bonsoir.",
     "vi": "Chào buổi tối.",
-    "nl": "Goedenavond."
+    "nl": "Goedenavond.",
+    "sv": "God kväll."
   },
   "aLittleHelp": {
     "zh-tw": "電視需要一點幫助。",
@@ -1677,7 +1796,8 @@
     "pl": "Przyda się pomoc telewizora.",
     "fr": "Un petit coup de main de votre TV.",
     "vi": "Một chút trợ giúp từ TV của bạn.",
-    "nl": "Een beetje hulp van je tv."
+    "nl": "Een beetje hulp van je tv.",
+    "sv": "Lite hjälp från din TV."
   },
   "makeFavorites": {
     "zh-tw": "將喜歡的應用程式加入我的最愛。",
@@ -1691,7 +1811,8 @@
     "pl": "Zrób miejsce na ulubione.",
     "fr": "Faites de la place à vos favoris.",
     "vi": "Dành chỗ cho các mục ưa thích của bạn.",
-    "nl": "Maak ruimte voor je favorieten."
+    "nl": "Maak ruimte voor je favorieten.",
+    "sv": "Gör plats för dina favoriter."
   },
   "pinHint": {
     "zh-tw": "找到喜歡的應用程式，長按 OK 將它固定在這裡。",
@@ -1705,7 +1826,8 @@
     "pl": "Znajdź ulubioną aplikację i przytrzymaj OK, aby ją tu przypiąć.",
     "fr": "Trouvez une application que vous aimez. Maintenez OK pour l’épingler ici.",
     "vi": "Tìm ứng dụng bạn thích. Giữ OK để ghim vào đây.",
-    "nl": "Zoek een app die je mooi vindt. Houd OK ingedrukt om hem hier vast te zetten."
+    "nl": "Zoek een app die je mooi vindt. Houd OK ingedrukt om hem hier vast te zetten.",
+    "sv": "Hitta en app du älskar. Håll in OK för att fästa den här."
   },
   "exploreApps": {
     "zh-tw": "瀏覽應用程式",
@@ -1719,7 +1841,8 @@
     "pl": "Przeglądaj aplikacje",
     "fr": "Explorer vos applications",
     "vi": "Khám phá ứng dụng của bạn",
-    "nl": "Ontdek je apps"
+    "nl": "Ontdek je apps",
+    "sv": "Utforska dina appar"
   },
   "moveApps": {
     "zh-tw": "移動應用程式",
@@ -1733,7 +1856,8 @@
     "pl": "Przenieś aplikacje",
     "fr": "Déplacer les applications",
     "vi": "Di chuyển ứng dụng",
-    "nl": "Apps verplaatsen"
+    "nl": "Apps verplaatsen",
+    "sv": "Flytta appar"
   },
   "inputsHeading": {
     "zh-tw": "輸入來源",
@@ -1747,7 +1871,8 @@
     "pl": "Wejścia",
     "fr": "Entrées",
     "vi": "Đầu vào",
-    "nl": "Ingangen"
+    "nl": "Ingangen",
+    "sv": "Ingångar"
   },
   "noInputs": {
     "zh-tw": "沒有可用的輸入來源。",
@@ -1761,7 +1886,8 @@
     "pl": "Brak wejść do wyświetlenia.",
     "fr": "Aucune entrée à afficher.",
     "vi": "Không có đầu vào nào để hiển thị.",
-    "nl": "Geen ingangen om te tonen."
+    "nl": "Geen ingangen om te tonen.",
+    "sv": "Inga ingångar att visa."
   },
   "findingInputs": {
     "zh-tw": "正在尋找輸入來源…",
@@ -1775,7 +1901,8 @@
     "pl": "Wyszukiwanie wejść…",
     "fr": "Recherche de vos entrées…",
     "vi": "Đang tìm đầu vào của bạn…",
-    "nl": "Je ingangen worden gezocht…"
+    "nl": "Je ingangen worden gezocht…",
+    "sv": "Letar efter dina ingångar…"
   },
   "physicalInputs": {
     "zh-tw": "電視的 HDMI 輸入來源會顯示在這裡。",
@@ -1789,7 +1916,8 @@
     "pl": "Tutaj pojawią się fizyczne wejścia HDMI telewizora.",
     "fr": "Les entrées HDMI physiques de votre TV apparaîtront ici.",
     "vi": "Các cổng đầu vào HDMI vật lý của TV sẽ xuất hiện ở đây.",
-    "nl": "De fysieke HDMI-ingangen van je tv verschijnen hier."
+    "nl": "De fysieke HDMI-ingangen van je tv verschijnen hier.",
+    "sv": "Din TV:s fysiska HDMI-ingångar visas här."
   },
   "refreshInputs": {
     "zh-tw": "重新整理輸入來源",
@@ -1803,7 +1931,8 @@
     "pl": "Odśwież wejścia",
     "fr": "Actualiser les entrées",
     "vi": "Làm mới đầu vào",
-    "nl": "Ingangen vernieuwen"
+    "nl": "Ingangen vernieuwen",
+    "sv": "Uppdatera ingångar"
   },
   "retry": {
     "zh-tw": "重試",
@@ -1817,7 +1946,8 @@
     "pl": "Spróbuj ponownie",
     "fr": "Réessayer",
     "vi": "Thử lại",
-    "nl": "Opnieuw proberen"
+    "nl": "Opnieuw proberen",
+    "sv": "Försök igen"
   },
   "open": {
     "zh-tw": "開啟",
@@ -1831,7 +1961,8 @@
     "pl": "Otwórz",
     "fr": "Ouvrir",
     "vi": "Mở",
-    "nl": "Openen"
+    "nl": "Openen",
+    "sv": "Öppna"
   },
   "select": {
     "zh-tw": "選取",
@@ -1845,7 +1976,8 @@
     "pl": "Wybierz",
     "fr": "Sélectionner",
     "vi": "Chọn",
-    "nl": "Selecteren"
+    "nl": "Selecteren",
+    "sv": "Välj"
   },
   "move": {
     "zh-tw": "移動",
@@ -1859,7 +1991,8 @@
     "pl": "Przenieś",
     "fr": "Déplacer",
     "vi": "Di chuyển",
-    "nl": "Verplaatsen"
+    "nl": "Verplaatsen",
+    "sv": "Flytta"
   },
   "done": {
     "zh-tw": "完成",
@@ -1873,7 +2006,8 @@
     "pl": "Gotowe",
     "fr": "Terminé",
     "vi": "Xong",
-    "nl": "Klaar"
+    "nl": "Klaar",
+    "sv": "Klar"
   },
   "close": {
     "zh-tw": "關閉",
@@ -1887,7 +2021,8 @@
     "pl": "Zamknij",
     "fr": "Fermer",
     "vi": "Đóng",
-    "nl": "Sluiten"
+    "nl": "Sluiten",
+    "sv": "Stäng"
   },
   "homeLabel": {
     "zh-tw": "主畫面",
@@ -1901,7 +2036,8 @@
     "pl": "Start",
     "fr": "Accueil",
     "vi": "Trang chính",
-    "nl": "Startpagina"
+    "nl": "Startpagina",
+    "sv": "Hem"
   },
   "options": {
     "zh-tw": "選項",
@@ -1915,7 +2051,8 @@
     "pl": "Opcje",
     "fr": "Options",
     "vi": "Tùy chọn",
-    "nl": "Opties"
+    "nl": "Opties",
+    "sv": "Alternativ"
   },
   "deleteApp": {
     "zh-tw": "刪除應用程式",
@@ -1929,7 +2066,8 @@
     "pl": "Usuń aplikację",
     "fr": "Supprimer l’app",
     "vi": "Xóa ứng dụng",
-    "nl": "App verwijderen"
+    "nl": "App verwijderen",
+    "sv": "Ta bort app"
   },
   "deleteAppWarning": {
     "zh-tw": "這將從電視解除安裝「{app}」，並可能刪除其資料。此操作無法復原。",
@@ -1943,7 +2081,8 @@
     "pl": "„{app}” zostanie odinstalowana z telewizora, a jej dane mogą zostać usunięte. Tej operacji nie można cofnąć.",
     "fr": "« {app} » sera désinstallée du téléviseur et ses données pourront être supprimées. Cette action est irréversible.",
     "vi": "Thao tác này sẽ gỡ cài đặt “{app}” khỏi TV và có thể xóa dữ liệu của ứng dụng. Không thể hoàn tác thao tác này.",
-    "nl": "Hiermee wordt “{app}” van je tv verwijderd en mogelijk ook de bijbehorende gegevens. Dit kan niet ongedaan worden gemaakt."
+    "nl": "Hiermee wordt “{app}” van je tv verwijderd en mogelijk ook de bijbehorende gegevens. Dit kan niet ongedaan worden gemaakt.",
+    "sv": "Detta avinstallerar ”{app}” från din TV och kan radera appens data. Det går inte att ångra."
   },
   "cancel": {
     "zh-tw": "取消",
@@ -1957,7 +2096,8 @@
     "pl": "Anuluj",
     "fr": "Annuler",
     "vi": "Hủy",
-    "nl": "Annuleren"
+    "nl": "Annuleren",
+    "sv": "Avbryt"
   },
   "deletingApp": {
     "zh-tw": "正在刪除應用程式…",
@@ -1971,7 +2111,8 @@
     "pl": "Usuwanie aplikacji…",
     "fr": "Suppression de l’app…",
     "vi": "Đang xóa ứng dụng…",
-    "nl": "App wordt verwijderd…"
+    "nl": "App wordt verwijderd…",
+    "sv": "Tar bort appen…"
   },
   "deleteAppError": {
     "zh-tw": "無法確認應用程式是否已刪除。重試前請重新整理應用程式清單。",
@@ -1985,7 +2126,8 @@
     "pl": "Nie udało się potwierdzić usunięcia. Odśwież aplikacje przed ponowną próbą.",
     "fr": "Impossible de confirmer la suppression. Actualisez les apps avant de réessayer.",
     "vi": "Không thể xác nhận việc xóa ứng dụng. Hãy làm mới danh sách ứng dụng để kiểm tra trước khi thử lại.",
-    "nl": "Het verwijderen kon niet worden bevestigd. Vernieuw de apps om dit te controleren voordat je het opnieuw probeert."
+    "nl": "Het verwijderen kon niet worden bevestigd. Vernieuw de apps om dit te controleren voordat je het opnieuw probeert.",
+    "sv": "Det gick inte att bekräfta att appen togs bort. Uppdatera apparna och kontrollera innan du försöker igen."
   },
   "appDeleted": {
     "zh-tw": "應用程式已刪除。",
@@ -1999,7 +2141,8 @@
     "pl": "Aplikacja usunięta.",
     "fr": "App supprimée.",
     "vi": "Đã xóa ứng dụng.",
-    "nl": "App verwijderd."
+    "nl": "App verwijderd.",
+    "sv": "Appen har tagits bort."
   },
   "connected": {
     "zh-tw": "已連線",
@@ -2013,7 +2156,8 @@
     "pl": "Podłączono",
     "fr": "Connecté",
     "vi": "Đã kết nối",
-    "nl": "Verbonden"
+    "nl": "Verbonden",
+    "sv": "Ansluten"
   },
   "noDevice": {
     "zh-tw": "未連線裝置",
@@ -2027,7 +2171,8 @@
     "pl": "Brak podłączonego urządzenia",
     "fr": "Aucun appareil connecté",
     "vi": "Chưa có thiết bị nào được kết nối",
-    "nl": "Geen apparaat verbonden"
+    "nl": "Geen apparaat verbonden",
+    "sv": "Ingen enhet ansluten"
   },
   "externalInput": {
     "zh-tw": "外部輸入來源",
@@ -2041,7 +2186,8 @@
     "pl": "Wejście zewnętrzne",
     "fr": "Entrée externe",
     "vi": "Đầu vào ngoài",
-    "nl": "Externe ingang"
+    "nl": "Externe ingang",
+    "sv": "Extern ingång"
   },
   "addFavorite": {
     "zh-tw": "加入我的最愛",
@@ -2055,7 +2201,8 @@
     "pl": "Dodaj do ulubionych",
     "fr": "Ajouter aux favoris",
     "vi": "Thêm vào mục ưa thích",
-    "nl": "Toevoegen aan favorieten"
+    "nl": "Toevoegen aan favorieten",
+    "sv": "Lägg till som favorit"
   },
   "removeFavorite": {
     "zh-tw": "從我的最愛中移除",
@@ -2069,7 +2216,8 @@
     "pl": "Usuń z ulubionych",
     "fr": "Retirer des favoris",
     "vi": "Xóa khỏi mục ưa thích",
-    "nl": "Verwijderen uit favorieten"
+    "nl": "Verwijderen uit favorieten",
+    "sv": "Ta bort som favorit"
   },
   "hideApp": {
     "zh-tw": "隱藏應用程式",
@@ -2083,7 +2231,8 @@
     "pl": "Ukryj aplikację",
     "fr": "Masquer l’application",
     "vi": "Ẩn ứng dụng",
-    "nl": "App verbergen"
+    "nl": "App verbergen",
+    "sv": "Dölj app"
   },
   "showApp": {
     "zh-tw": "顯示應用程式",
@@ -2097,7 +2246,8 @@
     "pl": "Pokaż aplikację",
     "fr": "Afficher l’application",
     "vi": "Hiện ứng dụng",
-    "nl": "App tonen"
+    "nl": "App tonen",
+    "sv": "Visa app"
   },
   "favorite": {
     "zh-tw": "我的最愛",
@@ -2111,7 +2261,8 @@
     "pl": "Ulubiona",
     "fr": "Favori",
     "vi": "Mục ưa thích",
-    "nl": "Favoriet"
+    "nl": "Favoriet",
+    "sv": "Favorit"
   },
   "tvSettings": {
     "zh-tw": "電視設定",
@@ -2125,7 +2276,8 @@
     "pl": "Ustawienia telewizora",
     "fr": "Paramètres de la TV",
     "vi": "Cài đặt TV",
-    "nl": "Tv-instellingen"
+    "nl": "Tv-instellingen",
+    "sv": "TV-inställningar"
   },
   "loadingWeather": {
     "zh-tw": "正在載入天氣…",
@@ -2139,7 +2291,8 @@
     "pl": "Wczytywanie pogody…",
     "fr": "Chargement de la météo…",
     "vi": "Đang tải thời tiết…",
-    "nl": "Weer wordt geladen…"
+    "nl": "Weer wordt geladen…",
+    "sv": "Läser in vädret…"
   },
   "weatherUnavailable": {
     "zh-tw": "無法取得天氣",
@@ -2153,7 +2306,8 @@
     "pl": "Pogoda niedostępna",
     "fr": "Météo indisponible",
     "vi": "Thời tiết không khả dụng",
-    "nl": "Weer niet beschikbaar"
+    "nl": "Weer niet beschikbaar",
+    "sv": "Vädret är inte tillgängligt"
   },
   "setWeatherLocation": {
     "zh-tw": "設定天氣地點",
@@ -2167,7 +2321,8 @@
     "pl": "Ustaw lokalizację pogody",
     "fr": "Définir le lieu météo",
     "vi": "Đặt vị trí thời tiết",
-    "nl": "Weerlocatie instellen"
+    "nl": "Weerlocatie instellen",
+    "sv": "Ställ in väderplats"
   },
   "configureWeather": {
     "zh-tw": "設定天氣地點",
@@ -2181,7 +2336,8 @@
     "pl": "Skonfiguruj lokalizację pogody",
     "fr": "Configurer le lieu météo",
     "vi": "Cấu hình vị trí thời tiết",
-    "nl": "Weerlocatie configureren"
+    "nl": "Weerlocatie configureren",
+    "sv": "Konfigurera väderplats"
   },
   "weatherInLocation": {
     "zh-tw": "{city}的天氣。設定天氣地點。",
@@ -2195,7 +2351,8 @@
     "pl": "Pogoda: {city}. Skonfiguruj lokalizację pogody.",
     "fr": "Météo à {city}. Configurer le lieu météo.",
     "vi": "Thời tiết tại {city}. Cấu hình vị trí thời tiết.",
-    "nl": "Weer in {city}. Weerlocatie configureren."
+    "nl": "Weer in {city}. Weerlocatie configureren.",
+    "sv": "Väder i {city}. Konfigurera väderplats."
   },
   "lastReading": {
     "zh-tw": "上次儲存的資料",
@@ -2209,7 +2366,8 @@
     "pl": "Ostatni zapisany odczyt",
     "fr": "Dernier relevé enregistré",
     "vi": "Số liệu lưu gần nhất",
-    "nl": "Laatst opgeslagen waarde"
+    "nl": "Laatst opgeslagen waarde",
+    "sv": "Senast sparade värde"
   },
   "selectClose": {
     "zh-tw": "選取",
@@ -2223,7 +2381,8 @@
     "pl": "Wybierz",
     "fr": "Sélectionner",
     "vi": "Chọn",
-    "nl": "Selecteren"
+    "nl": "Selecteren",
+    "sv": "Välj"
   },
   "closeDialog": {
     "zh-tw": "關閉",
@@ -2237,7 +2396,8 @@
     "pl": "Zamknij",
     "fr": "Fermer",
     "vi": "Đóng",
-    "nl": "Sluiten"
+    "nl": "Sluiten",
+    "sv": "Stäng"
   },
   "dismissNotification": {
     "zh-tw": "關閉通知",
@@ -2251,7 +2411,8 @@
     "pl": "Odrzuć powiadomienie",
     "fr": "Ignorer la notification",
     "vi": "Bỏ qua thông báo",
-    "nl": "Melding sluiten"
+    "nl": "Melding sluiten",
+    "sv": "Stäng avisering"
   },
   "opening": {
     "zh-tw": "正在開啟…",
@@ -2265,7 +2426,8 @@
     "pl": "Otwieranie…",
     "fr": "Ouverture…",
     "vi": "Đang mở…",
-    "nl": "Openen…"
+    "nl": "Openen…",
+    "sv": "Öppnar…"
   },
   "desktopPreview": {
     "zh-tw": "桌面預覽 · {app}將在電視上開啟。",
@@ -2279,7 +2441,8 @@
     "pl": "Podgląd na komputerze · {app} otworzy się na telewizorze.",
     "fr": "Aperçu sur ordinateur · {app} s’ouvrira sur votre TV.",
     "vi": "Bản xem trước trên máy tính · {app} sẽ mở trên TV của bạn.",
-    "nl": "Desktopvoorbeeld · {app} wordt geopend op je tv."
+    "nl": "Desktopvoorbeeld · {app} wordt geopend op je tv.",
+    "sv": "Skrivbordsförhandsvisning · {app} öppnas på din TV."
   },
   "favoriteRemoved": {
     "zh-tw": "已從我的最愛中移除 {app}。",
@@ -2293,7 +2456,8 @@
     "pl": "Usunięto {app} z ulubionych.",
     "fr": "{app} ne fait plus partie de vos favoris.",
     "vi": "Đã xóa {app} khỏi mục ưa thích.",
-    "nl": "{app} verwijderd uit favorieten."
+    "nl": "{app} verwijderd uit favorieten.",
+    "sv": "{app} har tagits bort från favoriterna."
   },
   "favoriteAdded": {
     "zh-tw": "已將 {app} 加入我的最愛。",
@@ -2307,7 +2471,8 @@
     "pl": "Dodano {app} do ulubionych.",
     "fr": "{app} fait maintenant partie de vos favoris.",
     "vi": "Đã thêm {app} vào mục ưa thích.",
-    "nl": "{app} toegevoegd aan favorieten."
+    "nl": "{app} toegevoegd aan favorieten.",
+    "sv": "{app} har lagts till bland favoriterna."
   },
   "appRestored": {
     "zh-tw": "{app}已恢復到應用程式庫。",
@@ -2321,7 +2486,8 @@
     "pl": "{app} jest z powrotem w bibliotece.",
     "fr": "{app} est de retour dans votre bibliothèque.",
     "vi": "{app} đã trở lại thư viện của bạn.",
-    "nl": "{app} staat weer in je bibliotheek."
+    "nl": "{app} staat weer in je bibliotheek.",
+    "sv": "{app} finns nu i biblioteket igen."
   },
   "appHidden": {
     "zh-tw": "已隱藏 {app}。你可以在「應用程式」中恢復。",
@@ -2335,7 +2501,8 @@
     "pl": "Ukryto {app}. Możesz ją przywrócić w Aplikacjach.",
     "fr": "Application {app} masquée. Vous pouvez la restaurer depuis Applications.",
     "vi": "Đã ẩn {app}. Bạn có thể khôi phục từ Ứng dụng.",
-    "nl": "{app} verborgen. Je kunt de app herstellen via Apps."
+    "nl": "{app} verborgen. Je kunt de app herstellen via Apps.",
+    "sv": "{app} är dold. Du kan återställa den från Appar."
   },
   "refreshNotice": {
     "zh-tw": "正在重新整理應用程式和輸入來源…",
@@ -2349,7 +2516,8 @@
     "pl": "Odświeżanie aplikacji i wejść…",
     "fr": "Actualisation de vos applications et entrées…",
     "vi": "Đang làm mới ứng dụng và đầu vào của bạn…",
-    "nl": "Je apps en ingangen worden vernieuwd…"
+    "nl": "Je apps en ingangen worden vernieuwd…",
+    "sv": "Uppdaterar dina appar och ingångar…"
   },
   "savedError": {
     "zh-tw": "無法儲存變更。",
@@ -2363,7 +2531,8 @@
     "pl": "Nie udało się zapisać zmian.",
     "fr": "Impossible d’enregistrer vos modifications.",
     "vi": "Không thể lưu các thay đổi của bạn.",
-    "nl": "Je wijzigingen konden niet worden opgeslagen."
+    "nl": "Je wijzigingen konden niet worden opgeslagen.",
+    "sv": "Dina ändringar kunde inte sparas."
   },
   "tvUnreachable": {
     "zh-tw": "無法連線至電視。",
@@ -2377,7 +2546,8 @@
     "pl": "Nie można połączyć się z telewizorem.",
     "fr": "Impossible de joindre votre TV.",
     "vi": "Không thể kết nối với TV của bạn.",
-    "nl": "Je tv is niet bereikbaar."
+    "nl": "Je tv is niet bereikbaar.",
+    "sv": "Det gick inte att nå din TV."
   },
   "appOpenError": {
     "zh-tw": "無法開啟此應用程式。",
@@ -2391,7 +2561,8 @@
     "pl": "Nie udało się otworzyć tej aplikacji.",
     "fr": "Impossible d’ouvrir cette application.",
     "vi": "Không thể mở ứng dụng này.",
-    "nl": "Deze app kon niet worden geopend."
+    "nl": "Deze app kon niet worden geopend.",
+    "sv": "Den här appen kunde inte öppnas."
   },
   "dismissSearch": {
     "zh-tw": "清除搜尋",
@@ -2405,7 +2576,8 @@
     "pl": "Wyczyść wyszukiwanie",
     "fr": "Effacer la recherche",
     "vi": "Xóa tìm kiếm",
-    "nl": "Zoekopdracht wissen"
+    "nl": "Zoekopdracht wissen",
+    "sv": "Rensa sökning"
   },
   "languageMenu": {
     "zh-tw": "顯示語言",
@@ -2419,7 +2591,8 @@
     "pl": "Język",
     "fr": "Langue",
     "vi": "Ngôn ngữ",
-    "nl": "Taal"
+    "nl": "Taal",
+    "sv": "Språk"
   },
   "slate": {
     "zh-tw": "石板",
@@ -2433,7 +2606,8 @@
     "pl": "Łupek",
     "fr": "Ardoise",
     "vi": "Đá phiến",
-    "nl": "Leisteen"
+    "nl": "Leisteen",
+    "sv": "Skiffer"
   },
   "midnight": {
     "zh-tw": "午夜",
@@ -2447,7 +2621,8 @@
     "pl": "Północ",
     "fr": "Minuit",
     "vi": "Nửa đêm",
-    "nl": "Middernacht"
+    "nl": "Middernacht",
+    "sv": "Midnatt"
   },
   "prism": {
     "zh-tw": "稜鏡",
@@ -2461,7 +2636,8 @@
     "pl": "Pryzmat",
     "fr": "Prisme",
     "vi": "Lăng kính",
-    "nl": "Prisma"
+    "nl": "Prisma",
+    "sv": "Prisma"
   },
   "monumentValley": {
     "zh-tw": "紀念碑谷",
@@ -2475,7 +2651,8 @@
     "pl": "Monument Valley",
     "fr": "Monument Valley",
     "vi": "Monument Valley",
-    "nl": "Monument Valley"
+    "nl": "Monument Valley",
+    "sv": "Monument Valley"
   },
   "sanFrancisco": {
     "zh-tw": "舊金山",
@@ -2489,7 +2666,8 @@
     "pl": "San Francisco",
     "fr": "San Francisco",
     "vi": "San Francisco",
-    "nl": "San Francisco"
+    "nl": "San Francisco",
+    "sv": "San Francisco"
   },
   "summit": {
     "zh-tw": "山巔",
@@ -2503,7 +2681,8 @@
     "pl": "Szczyt",
     "fr": "Sommet",
     "vi": "Đỉnh núi",
-    "nl": "Bergtop"
+    "nl": "Bergtop",
+    "sv": "Topp"
   },
   "forest": {
     "zh-tw": "森林",
@@ -2517,7 +2696,8 @@
     "pl": "Las",
     "fr": "Forêt",
     "vi": "Rừng già",
-    "nl": "Bos"
+    "nl": "Bos",
+    "sv": "Skog"
   },
   "yosemite": {
     "zh-tw": "優勝美地",
@@ -2531,7 +2711,8 @@
     "pl": "Yosemite",
     "fr": "Yosemite",
     "vi": "Yosemite",
-    "nl": "Yosemite"
+    "nl": "Yosemite",
+    "sv": "Yosemite"
   },
   "northernLights": {
     "zh-tw": "北極光",
@@ -2545,7 +2726,8 @@
     "pl": "Zorza polarna",
     "fr": "Aurores boréales",
     "vi": "Cực quang",
-    "nl": "Noorderlicht"
+    "nl": "Noorderlicht",
+    "sv": "Norrsken"
   },
   "liveTV": {
     "zh-tw": "電視直播",
@@ -2559,7 +2741,8 @@
     "pl": "Telewizja na żywo",
     "fr": "TV en direct",
     "vi": "TV trực tiếp",
-    "nl": "Live-tv"
+    "nl": "Live-tv",
+    "sv": "Live-TV"
   },
   "homebrew": {
     "zh-tw": "Homebrew Channel",
@@ -2573,7 +2756,8 @@
     "pl": "Homebrew",
     "fr": "Homebrew",
     "vi": "Homebrew",
-    "nl": "Homebrew"
+    "nl": "Homebrew",
+    "sv": "Homebrew"
   },
   "browser": {
     "zh-tw": "瀏覽器",
@@ -2587,7 +2771,8 @@
     "pl": "Przeglądarka",
     "fr": "Navigateur",
     "vi": "Trình duyệt",
-    "nl": "Browser"
+    "nl": "Browser",
+    "sv": "Webbläsare"
   },
   "categoryStreaming": {
     "zh-tw": "串流影音",
@@ -2601,7 +2786,8 @@
     "pl": "Streaming",
     "fr": "Streaming",
     "vi": "Phát trực tuyến",
-    "nl": "Streaming"
+    "nl": "Streaming",
+    "sv": "Streaming"
   },
   "categoryMusic": {
     "zh-tw": "音樂",
@@ -2615,7 +2801,8 @@
     "pl": "Muzyka",
     "fr": "Musique",
     "vi": "Âm nhạc",
-    "nl": "Muziek"
+    "nl": "Muziek",
+    "sv": "Musik"
   },
   "categoryGaming": {
     "zh-tw": "遊戲",
@@ -2629,7 +2816,8 @@
     "pl": "Gry",
     "fr": "Jeux",
     "vi": "Trò chơi",
-    "nl": "Games"
+    "nl": "Games",
+    "sv": "Spel"
   },
   "categoryUtilities": {
     "zh-tw": "工具",
@@ -2643,7 +2831,8 @@
     "pl": "Narzędzia",
     "fr": "Utilitaires",
     "vi": "Tiện ích",
-    "nl": "Hulpmiddelen"
+    "nl": "Hulpmiddelen",
+    "sv": "Verktyg"
   },
   "clearSkies": {
     "zh-tw": "晴朗",
@@ -2657,7 +2846,8 @@
     "pl": "Bezchmurnie",
     "fr": "Ciel dégagé",
     "vi": "Trời quang đãng",
-    "nl": "Heldere hemel"
+    "nl": "Heldere hemel",
+    "sv": "Klart väder"
   },
   "clearNight": {
     "zh-tw": "晴朗的夜晚",
@@ -2671,7 +2861,8 @@
     "pl": "Pogodna noc",
     "fr": "Nuit claire",
     "vi": "Đêm quang đãng",
-    "nl": "Heldere nacht"
+    "nl": "Heldere nacht",
+    "sv": "Klar natt"
   },
   "mostlyClear": {
     "zh-tw": "大致晴朗",
@@ -2685,7 +2876,8 @@
     "pl": "Przeważnie bezchmurnie",
     "fr": "Plutôt dégagé",
     "vi": "Trời hầu như quang đãng",
-    "nl": "Overwegend helder"
+    "nl": "Overwegend helder",
+    "sv": "Mestadels klart"
   },
   "partlyCloudy": {
     "zh-tw": "局部多雲",
@@ -2699,7 +2891,8 @@
     "pl": "Częściowe zachmurzenie",
     "fr": "Partiellement nuageux",
     "vi": "Có mây từng đợt",
-    "nl": "Half bewolkt"
+    "nl": "Half bewolkt",
+    "sv": "Delvis molnigt"
   },
   "overcast": {
     "zh-tw": "陰天",
@@ -2713,7 +2906,8 @@
     "pl": "Pochmurno",
     "fr": "Couvert",
     "vi": "Nhiều mây",
-    "nl": "Bewolkt"
+    "nl": "Bewolkt",
+    "sv": "Mulet"
   },
   "fog": {
     "zh-tw": "霧",
@@ -2727,7 +2921,8 @@
     "pl": "Mgła",
     "fr": "Brouillard",
     "vi": "Sương mù",
-    "nl": "Mist"
+    "nl": "Mist",
+    "sv": "Dimma"
   },
   "drizzle": {
     "zh-tw": "毛毛雨",
@@ -2741,7 +2936,8 @@
     "pl": "Mżawka",
     "fr": "Bruine",
     "vi": "Mưa phùn",
-    "nl": "Motregen"
+    "nl": "Motregen",
+    "sv": "Duggregn"
   },
   "rain": {
     "zh-tw": "雨",
@@ -2755,7 +2951,8 @@
     "pl": "Deszcz",
     "fr": "Pluie",
     "vi": "Mưa",
-    "nl": "Regen"
+    "nl": "Regen",
+    "sv": "Regn"
   },
   "snow": {
     "zh-tw": "雪",
@@ -2769,7 +2966,8 @@
     "pl": "Śnieg",
     "fr": "Neige",
     "vi": "Tuyết",
-    "nl": "Sneeuw"
+    "nl": "Sneeuw",
+    "sv": "Snö"
   },
   "thunderstorms": {
     "zh-tw": "雷雨",
@@ -2783,7 +2981,8 @@
     "pl": "Burze",
     "fr": "Orages",
     "vi": "Dông bão",
-    "nl": "Onweer"
+    "nl": "Onweer",
+    "sv": "Åskväder"
   },
   "currentWeather": {
     "zh-tw": "目前天氣",
@@ -2797,7 +2996,8 @@
     "pl": "Aktualna pogoda",
     "fr": "Météo actuelle",
     "vi": "Thời tiết hiện tại",
-    "nl": "Huidig weer"
+    "nl": "Huidig weer",
+    "sv": "Aktuellt väder"
   },
   "searching": {
     "zh-tw": "正在搜尋…",
@@ -2811,7 +3011,8 @@
     "pl": "Wyszukiwanie…",
     "fr": "Recherche…",
     "vi": "Đang tìm kiếm…",
-    "nl": "Zoeken…"
+    "nl": "Zoeken…",
+    "sv": "Söker…"
   },
   "space": {
     "zh-tw": "空格",
@@ -2825,7 +3026,8 @@
     "pl": "Spacja",
     "fr": "Espace",
     "vi": "Dấu cách",
-    "nl": "Spatie"
+    "nl": "Spatie",
+    "sv": "Mellanslag"
   },
   "delete": {
     "zh-tw": "刪除",
@@ -2839,7 +3041,8 @@
     "pl": "Usuń",
     "fr": "Supprimer",
     "vi": "Xóa",
-    "nl": "Wissen"
+    "nl": "Wissen",
+    "sv": "Radera"
   },
   "clear": {
     "zh-tw": "清除",
@@ -2853,7 +3056,8 @@
     "pl": "Wyczyść",
     "fr": "Effacer",
     "vi": "Xóa sạch",
-    "nl": "Leegmaken"
+    "nl": "Leegmaken",
+    "sv": "Rensa"
   },
   "hiddenLabel": {
     "zh-tw": "已隱藏",
@@ -2867,7 +3071,8 @@
     "pl": "Ukryte",
     "fr": "Masquées",
     "vi": "Đã ẩn",
-    "nl": "Verborgen"
+    "nl": "Verborgen",
+    "sv": "Dold"
   },
   "scrollTestApp": {
     "zh-tw": "捲動測試",
@@ -2881,7 +3086,8 @@
     "pl": "Test przewijania",
     "fr": "Test de défilement",
     "vi": "Kiểm tra cuộn",
-    "nl": "Scrolltest"
+    "nl": "Scrolltest",
+    "sv": "Rullningstest"
   },
   "scrollTestOnly": {
     "zh-tw": "捲動測試卡片，沒有可啟動的應用程式。",
@@ -2895,7 +3101,8 @@
     "pl": "Karta testowa do przewijania; brak aplikacji do uruchomienia.",
     "fr": "Carte de test pour le défilement ; aucune application à lancer.",
     "vi": "Thẻ thử nghiệm cuộn; không có ứng dụng để khởi chạy.",
-    "nl": "Testkaart om te scrollen; er is geen app om te starten."
+    "nl": "Testkaart om te scrollen; er is geen app om te starten.",
+    "sv": "Testkort för rullning; ingen app att starta."
   },
   "shortcuts": {
     "zh-tw": "捷徑",
@@ -2909,7 +3116,8 @@
     "pl": "Skróty",
     "fr": "Raccourcis",
     "vi": "Phím tắt",
-    "nl": "Snelkoppelingen"
+    "nl": "Snelkoppelingen",
+    "sv": "Genvägar"
   },
   "noTiles": {
     "zh-tw": "主畫面上的捷徑會傳送網路請求，例如傳送到 Home Assistant webhook。",
@@ -2923,7 +3131,8 @@
     "pl": "Skróty na ekranie Start wysyłają żądanie sieciowe, na przykład do webhooka Home Assistant.",
     "fr": "Les raccourcis sur l’Accueil envoient une requête web, par exemple vers un webhook Home Assistant.",
     "vi": "Thẻ phím tắt trên Trang chính gửi một yêu cầu web, ví dụ đến webhook của Home Assistant.",
-    "nl": "Snelkoppelingen op Start sturen een webverzoek, bijvoorbeeld naar een Home Assistant-webhook."
+    "nl": "Snelkoppelingen op Start sturen een webverzoek, bijvoorbeeld naar een Home Assistant-webhook.",
+    "sv": "Genvägsrutor på Hem skickar en webbförfrågan, till exempel till en Home Assistant-webhook."
   },
   "addTile": {
     "zh-tw": "新增捷徑",
@@ -2937,7 +3146,8 @@
     "pl": "Dodaj skrót",
     "fr": "Ajouter un raccourci",
     "vi": "Thêm phím tắt",
-    "nl": "Snelkoppeling toevoegen"
+    "nl": "Snelkoppeling toevoegen",
+    "sv": "Lägg till genväg"
   },
   "newTile": {
     "zh-tw": "新捷徑",
@@ -2951,7 +3161,8 @@
     "pl": "Nowy skrót",
     "fr": "Nouveau raccourci",
     "vi": "Phím tắt mới",
-    "nl": "Nieuwe snelkoppeling"
+    "nl": "Nieuwe snelkoppeling",
+    "sv": "Ny genväg"
   },
   "tileName": {
     "zh-tw": "捷徑名稱",
@@ -2965,7 +3176,8 @@
     "pl": "Nazwa skrótu",
     "fr": "Nom du raccourci",
     "vi": "Tên phím tắt",
-    "nl": "Naam van snelkoppeling"
+    "nl": "Naam van snelkoppeling",
+    "sv": "Genvägens namn"
   },
   "tileNameHint": {
     "zh-tw": "顯示在卡片上",
@@ -2979,7 +3191,8 @@
     "pl": "Wyświetlana na kafelku",
     "fr": "Affiché sur la vignette",
     "vi": "Hiển thị trên thẻ",
-    "nl": "Wordt op de tegel getoond"
+    "nl": "Wordt op de tegel getoond",
+    "sv": "Visas på rutan"
   },
   "url": {
     "zh-tw": "網址",
@@ -2993,7 +3206,8 @@
     "pl": "URL",
     "fr": "URL",
     "vi": "URL",
-    "nl": "URL"
+    "nl": "URL",
+    "sv": "URL"
   },
   "tileUrl": {
     "zh-tw": "網址 (URL)",
@@ -3007,7 +3221,8 @@
     "pl": "Adres internetowy (URL)",
     "fr": "Adresse web (URL)",
     "vi": "Địa chỉ web (URL)",
-    "nl": "Webadres (URL)"
+    "nl": "Webadres (URL)",
+    "sv": "Webbadress (URL)"
   },
   "tileUrlHint": {
     "zh-tw": "不含 http:// 的網址，例如 homeassistant.local:8123/api/webhook/…",
@@ -3021,7 +3236,8 @@
     "pl": "Adres bez http://, np. homeassistant.local:8123/api/webhook/…",
     "fr": "Adresse sans http://, par ex. homeassistant.local:8123/api/webhook/…",
     "vi": "Địa chỉ không có http://, ví dụ homeassistant.local:8123/api/webhook/…",
-    "nl": "Adres zonder http://, bijv. homeassistant.local:8123/api/webhook/…"
+    "nl": "Adres zonder http://, bijv. homeassistant.local:8123/api/webhook/…",
+    "sv": "Adress utan http://, t.ex. homeassistant.local:8123/api/webhook/…"
   },
   "icon": {
     "zh-tw": "圖示",
@@ -3035,7 +3251,8 @@
     "pl": "Ikona",
     "fr": "Icône",
     "vi": "Biểu tượng",
-    "nl": "Pictogram"
+    "nl": "Pictogram",
+    "sv": "Ikon"
   },
   "iconMoon": {
     "zh-tw": "月亮",
@@ -3049,7 +3266,8 @@
     "pl": "Księżyc",
     "fr": "Lune",
     "vi": "Mặt trăng",
-    "nl": "Maan"
+    "nl": "Maan",
+    "sv": "Måne"
   },
   "iconSun": {
     "zh-tw": "太陽",
@@ -3063,7 +3281,8 @@
     "pl": "Słońce",
     "fr": "Soleil",
     "vi": "Mặt trời",
-    "nl": "Zon"
+    "nl": "Zon",
+    "sv": "Sol"
   },
   "iconCloud": {
     "zh-tw": "雲",
@@ -3077,7 +3296,8 @@
     "pl": "Chmura",
     "fr": "Nuage",
     "vi": "Mây",
-    "nl": "Wolk"
+    "nl": "Wolk",
+    "sv": "Moln"
   },
   "iconTv": {
     "zh-tw": "電視",
@@ -3091,7 +3311,8 @@
     "pl": "Telewizor",
     "fr": "TV",
     "vi": "TV",
-    "nl": "Tv"
+    "nl": "Tv",
+    "sv": "TV"
   },
   "iconPower": {
     "zh-tw": "電源",
@@ -3105,7 +3326,8 @@
     "pl": "Zasilanie",
     "fr": "Marche/arrêt",
     "vi": "Nguồn",
-    "nl": "Aan/uit"
+    "nl": "Aan/uit",
+    "sv": "Ström"
   },
   "iconGlobe": {
     "zh-tw": "地球",
@@ -3119,7 +3341,8 @@
     "pl": "Glob",
     "fr": "Globe",
     "vi": "Quả địa cầu",
-    "nl": "Wereldbol"
+    "nl": "Wereldbol",
+    "sv": "Jordklot"
   },
   "iconClock": {
     "zh-tw": "時鐘",
@@ -3133,7 +3356,8 @@
     "pl": "Zegar",
     "fr": "Horloge",
     "vi": "Đồng hồ",
-    "nl": "Klok"
+    "nl": "Klok",
+    "sv": "Klocka"
   },
   "iconCoffee": {
     "zh-tw": "咖啡",
@@ -3147,7 +3371,8 @@
     "pl": "Kawa",
     "fr": "Café",
     "vi": "Cà phê",
-    "nl": "Koffie"
+    "nl": "Koffie",
+    "sv": "Kaffe"
   },
   "iconGaming": {
     "zh-tw": "遊戲控制器",
@@ -3161,7 +3386,8 @@
     "pl": "Kontroler",
     "fr": "Manette",
     "vi": "Tay cầm",
-    "nl": "Controller"
+    "nl": "Controller",
+    "sv": "Handkontroll"
   },
   "iconHeart": {
     "zh-tw": "愛心",
@@ -3175,7 +3401,8 @@
     "pl": "Serce",
     "fr": "Cœur",
     "vi": "Trái tim",
-    "nl": "Hart"
+    "nl": "Hart",
+    "sv": "Hjärta"
   },
   "iconLocation": {
     "zh-tw": "位置",
@@ -3189,7 +3416,8 @@
     "pl": "Lokalizacja",
     "fr": "Lieu",
     "vi": "Vị trí",
-    "nl": "Locatie"
+    "nl": "Locatie",
+    "sv": "Plats"
   },
   "iconThermometer": {
     "zh-tw": "溫度計",
@@ -3203,7 +3431,8 @@
     "pl": "Termometr",
     "fr": "Thermomètre",
     "vi": "Nhiệt kế",
-    "nl": "Thermometer"
+    "nl": "Thermometer",
+    "sv": "Termometer"
   },
   "iconSparkles": {
     "zh-tw": "閃光",
@@ -3217,7 +3446,8 @@
     "pl": "Iskierki",
     "fr": "Étincelles",
     "vi": "Lấp lánh",
-    "nl": "Sterretjes"
+    "nl": "Sterretjes",
+    "sv": "Gnistor"
   },
   "iconAlert": {
     "zh-tw": "提醒",
@@ -3231,7 +3461,8 @@
     "pl": "Alert",
     "fr": "Alerte",
     "vi": "Cảnh báo",
-    "nl": "Melding"
+    "nl": "Melding",
+    "sv": "Varning"
   },
   "iconEye": {
     "zh-tw": "眼睛",
@@ -3245,7 +3476,8 @@
     "pl": "Oko",
     "fr": "Œil",
     "vi": "Mắt",
-    "nl": "Oog"
+    "nl": "Oog",
+    "sv": "Öga"
   },
   "protocol": {
     "zh-tw": "通訊協定",
@@ -3259,7 +3491,8 @@
     "pl": "Protokół",
     "fr": "Protocole",
     "vi": "Giao thức",
-    "nl": "Protocol"
+    "nl": "Protocol",
+    "sv": "Protokoll"
   },
   "requestMethod": {
     "zh-tw": "請求方法",
@@ -3273,7 +3506,8 @@
     "pl": "Metoda żądania",
     "fr": "Méthode de requête",
     "vi": "Phương thức yêu cầu",
-    "nl": "Verzoekmethode"
+    "nl": "Verzoekmethode",
+    "sv": "HTTP-metod"
   },
   "sendNow": {
     "zh-tw": "立即傳送",
@@ -3287,7 +3521,8 @@
     "pl": "Wyślij teraz",
     "fr": "Envoyer maintenant",
     "vi": "Gửi ngay",
-    "nl": "Nu verzenden"
+    "nl": "Nu verzenden",
+    "sv": "Skicka nu"
   },
   "removeTile": {
     "zh-tw": "移除捷徑",
@@ -3301,7 +3536,8 @@
     "pl": "Usuń skrót",
     "fr": "Supprimer le raccourci",
     "vi": "Xóa phím tắt",
-    "nl": "Snelkoppeling verwijderen"
+    "nl": "Snelkoppeling verwijderen",
+    "sv": "Ta bort genväg"
   },
   "tileAdded": {
     "zh-tw": "已將 {tile} 新增到主畫面。",
@@ -3315,7 +3551,8 @@
     "pl": "Dodano {tile} do ekranu Start.",
     "fr": "{tile} a été ajouté à l’Accueil.",
     "vi": "Đã thêm {tile} vào Trang chính.",
-    "nl": "{tile} toegevoegd aan Start."
+    "nl": "{tile} toegevoegd aan Start.",
+    "sv": "{tile} har lagts till på Hem."
   },
   "tileRemoved": {
     "zh-tw": "已移除 {tile}。",
@@ -3329,7 +3566,8 @@
     "pl": "Usunięto {tile}.",
     "fr": "{tile} a été supprimé.",
     "vi": "Đã xóa {tile}.",
-    "nl": "{tile} verwijderd."
+    "nl": "{tile} verwijderd.",
+    "sv": "{tile} har tagits bort."
   },
   "tileSending": {
     "zh-tw": "正在傳送 {tile}…",
@@ -3343,7 +3581,8 @@
     "pl": "Wysyłanie: {tile}…",
     "fr": "Envoi de {tile}…",
     "vi": "Đang gửi {tile}…",
-    "nl": "{tile} wordt verzonden…"
+    "nl": "{tile} wordt verzonden…",
+    "sv": "Skickar {tile}…"
   },
   "tileSent": {
     "zh-tw": "{tile} 已傳送。",
@@ -3357,7 +3596,8 @@
     "pl": "Wysłano: {tile}.",
     "fr": "{tile} a été envoyé.",
     "vi": "Đã gửi {tile}.",
-    "nl": "{tile} verzonden."
+    "nl": "{tile} verzonden.",
+    "sv": "{tile} skickades."
   },
   "tileFailed": {
     "zh-tw": "無法傳送 {tile}。",
@@ -3371,7 +3611,8 @@
     "pl": "Nie udało się wysłać: {tile}.",
     "fr": "Impossible d’envoyer {tile}.",
     "vi": "Không thể gửi {tile}.",
-    "nl": "{tile} kon niet worden verzonden."
+    "nl": "{tile} kon niet worden verzonden.",
+    "sv": "{tile} kunde inte skickas."
   },
   "tileUrlInvalid": {
     "zh-tw": "請輸入包含主機名稱的有效 http:// 或 https:// 網址。",
@@ -3385,7 +3626,8 @@
     "pl": "Wpisz prawidłowy adres http:// lub https:// z nazwą hosta.",
     "fr": "Saisissez une adresse http:// ou https:// valide avec un nom d’hôte.",
     "vi": "Nhập một địa chỉ http:// hoặc https:// hợp lệ có tên máy chủ.",
-    "nl": "Voer een geldig http://- of https://-adres met een hostnaam in."
+    "nl": "Voer een geldig http://- of https://-adres met een hostnaam in.",
+    "sv": "Ange en giltig http://- eller https://-adress med ett värdnamn."
   },
   "tileIncomplete": {
     "zh-tw": "請先填寫名稱和網址。",
@@ -3399,7 +3641,8 @@
     "pl": "Najpierw dodaj nazwę i adres URL.",
     "fr": "Ajoutez d’abord un nom et une URL.",
     "vi": "Hãy thêm tên và URL trước.",
-    "nl": "Voeg eerst een naam en een URL toe."
+    "nl": "Voeg eerst een naam en een URL toe.",
+    "sv": "Lägg först till ett namn och en URL."
   },
   "tileLimit": {
     "zh-tw": "無法再新增更多捷徑。",
@@ -3413,7 +3656,8 @@
     "pl": "Nie można dodać więcej skrótów.",
     "fr": "Impossible d’ajouter d’autres raccourcis.",
     "vi": "Không thể thêm phím tắt nữa.",
-    "nl": "Er kunnen geen snelkoppelingen meer worden toegevoegd."
+    "nl": "Er kunnen geen snelkoppelingen meer worden toegevoegd.",
+    "sv": "Fler genvägar kan inte läggas till."
   },
   "editTilesElsewhere": {
     "zh-tw": "在手機或電腦上編輯",
@@ -3427,7 +3671,8 @@
     "pl": "Edytuj na telefonie lub komputerze",
     "fr": "Modifier sur un téléphone ou un ordinateur",
     "vi": "Chỉnh sửa trên điện thoại hoặc máy tính",
-    "nl": "Bewerken op telefoon of computer"
+    "nl": "Bewerken op telefoon of computer",
+    "sv": "Redigera på mobil eller dator"
   },
   "editTilesElsewhereHint": {
     "zh-tw": "在那裡輸入名稱和網址，無需使用遙控器",
@@ -3441,7 +3686,8 @@
     "pl": "Wpisuj tam nazwy i adresy zamiast pilotem",
     "fr": "Saisissez-y les noms et adresses plutôt qu’avec la télécommande",
     "vi": "Nhập tên và địa chỉ ở đó thay vì bằng điều khiển",
-    "nl": "Typ daar namen en adressen in plaats van met de afstandsbediening"
+    "nl": "Typ daar namen en adressen in plaats van met de afstandsbediening",
+    "sv": "Skriv namn och adresser där i stället för med fjärrkontrollen"
   },
   "tileEditorKeepOpen": {
     "zh-tw": "編輯時請保持此視窗開啟。請使用連線到同一網路的裝置。",
@@ -3455,7 +3701,8 @@
     "pl": "Nie zamykaj tego okna podczas edycji. Użyj urządzenia w tej samej sieci.",
     "fr": "Gardez cette fenêtre ouverte pendant la modification. Utilisez un appareil sur le même réseau.",
     "vi": "Giữ cửa sổ này mở trong khi chỉnh sửa. Dùng thiết bị kết nối cùng mạng.",
-    "nl": "Houd dit venster open terwijl je bewerkt. Gebruik een apparaat op hetzelfde netwerk."
+    "nl": "Houd dit venster open terwijl je bewerkt. Gebruik een apparaat op hetzelfde netwerk.",
+    "sv": "Låt det här fönstret vara öppet medan du redigerar. Använd en enhet på samma nätverk."
   },
   "tileEditorPrivate": {
     "zh-tw": "區域網路編輯 · 連結將在 10 分鐘後失效",
@@ -3469,7 +3716,8 @@
     "pl": "Edycja lokalna · Link wygasa po 10 minutach",
     "fr": "Modification locale · Ce lien expire dans 10 minutes",
     "vi": "Chỉnh sửa nội bộ · Liên kết này hết hạn sau 10 phút",
-    "nl": "Lokaal bewerken · Deze link verloopt over 10 minuten"
+    "nl": "Lokaal bewerken · Deze link verloopt over 10 minuten",
+    "sv": "Lokal redigering · Länken slutar gälla om 10 minuter"
   },
   "tileEditorError": {
     "zh-tw": "無法啟動區域網路編輯。請檢查網路連線，然後關閉並重新開啟此對話框。",
@@ -3483,7 +3731,8 @@
     "pl": "Nie udało się uruchomić edycji. Sprawdź połączenie z siecią i otwórz to okno ponownie.",
     "fr": "Impossible de démarrer la modification locale. Vérifiez le réseau, puis rouvrez cette fenêtre.",
     "vi": "Không thể bắt đầu chỉnh sửa nội bộ. Hãy kiểm tra kết nối mạng, rồi đóng và mở lại hộp thoại này.",
-    "nl": "Kan lokaal bewerken niet starten. Controleer je netwerkverbinding en sluit en heropen dit venster."
+    "nl": "Kan lokaal bewerken niet starten. Controleer je netwerkverbinding en sluit en heropen dit venster.",
+    "sv": "Det gick inte att starta den lokala redigeringen. Kontrollera nätverksanslutningen och öppna sedan dialogrutan igen."
   },
   "tileEditorStarting": {
     "zh-tw": "正在準備編輯連結…",
@@ -3497,7 +3746,8 @@
     "pl": "Przygotowywanie linku do edycji…",
     "fr": "Préparation du lien de modification…",
     "vi": "Đang chuẩn bị liên kết chỉnh sửa…",
-    "nl": "Bewerkingslink voorbereiden…"
+    "nl": "Bewerkingslink voorbereiden…",
+    "sv": "Förbereder redigeringslänk…"
   },
   "tileEditorEnded": {
     "zh-tw": "編輯工作階段已結束",
@@ -3511,6 +3761,7 @@
     "pl": "Sesja edycji zakończona",
     "fr": "Session de modification terminée",
     "vi": "Phiên chỉnh sửa đã kết thúc",
-    "nl": "Bewerksessie beëindigd"
+    "nl": "Bewerksessie beëindigd",
+    "sv": "Redigeringssessionen har avslutats"
   }
 }

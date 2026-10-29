@@ -813,7 +813,7 @@ Removing a city clears its cache. The `.weather.json` sidecar uses Unix-seconds 
 Mock servers accept only literal loopback HTTP origins and are refused in TV builds.
 
 `assets/messages.json` supplies Dutch, English, French, German, Italian, Polish, Portuguese (Brazil),
-Russian, Simplified Chinese, Spanish, Traditional Chinese and Vietnamese, including locale formatting
+Russian, Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese, including locale formatting
 and weather labels. App/device names and saved city names remain real data. No geolocation,
 runtime font/translation services or telemetry are used. Weather attribution: Open-Meteo,
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

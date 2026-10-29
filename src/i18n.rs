@@ -29,9 +29,10 @@ pub enum Language {
     Fr,
     Vi,
     Nl,
+    Sv,
 }
 impl Language {
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::De,
         Self::En,
         Self::Es,
@@ -40,6 +41,7 @@ impl Language {
         Self::Nl,
         Self::Pl,
         Self::Pt,
+        Self::Sv,
         Self::Vi,
         Self::Ru,
         Self::Zh,
@@ -59,6 +61,7 @@ impl Language {
             Self::Fr => "fr",
             Self::Vi => "vi",
             Self::Nl => "nl",
+            Self::Sv => "sv",
         }
     }
     pub fn name(self) -> &'static str {
@@ -75,6 +78,7 @@ impl Language {
             Self::Fr => "Français",
             Self::Vi => "Tiếng Việt",
             Self::Nl => "Nederlands",
+            Self::Sv => "Svenska",
         }
     }
     pub fn index(self) -> usize {
@@ -415,6 +419,34 @@ impl Language {
                 ][month]
             )
             .to_uppercase(),
+            Self::Sv => format!(
+                "{} {} {}",
+                [
+                    "måndag",
+                    "tisdag",
+                    "onsdag",
+                    "torsdag",
+                    "fredag",
+                    "lördag",
+                    "söndag"
+                ][weekday],
+                now.day(),
+                [
+                    "januari",
+                    "februari",
+                    "mars",
+                    "april",
+                    "maj",
+                    "juni",
+                    "juli",
+                    "augusti",
+                    "september",
+                    "oktober",
+                    "november",
+                    "december"
+                ][month]
+            )
+            .to_uppercase(),
         }
     }
     pub fn clock(self, now: OffsetDateTime, hour24: bool, seconds: bool) -> String {
@@ -471,6 +503,7 @@ pub fn deserialize_language<'de, D: Deserializer<'de>>(
             Some("fr") => Language::Fr,
             Some("vi") => Language::Vi,
             Some("nl") => Language::Nl,
+            Some("sv") => Language::Sv,
             _ => Language::En,
         },
     )
@@ -545,6 +578,7 @@ mod tests {
                 super::Language::Fr => "French",
                 super::Language::Vi => "Vietnamese",
                 super::Language::Nl => "Dutch",
+                super::Language::Sv => "Swedish",
             };
             assert!(
                 description.contains(name),
@@ -634,6 +668,12 @@ mod tests {
         );
         assert_eq!(Language::Nl.greeting(2, "Ana"), "Nog wakker, Ana?");
         assert_eq!(Language::Nl.category("Gaming"), "Games");
+        assert_eq!(
+            Language::Sv.format("favoriteAdded", &[("app", "Netflix")]),
+            "Netflix har lagts till i favoriter."
+        );
+        assert_eq!(Language::Sv.greeting(2, "Ana"), "Fortfarande uppe, Ana?");
+        assert_eq!(Language::Sv.category("Gaming"), "Spel");
         assert_eq!(Language::De.category("Gaming"), "Spiele");
         assert_eq!(Language::En.greeting(15, ""), "Good afternoon.");
         assert_eq!(Language::En.greeting(15, "  Ana "), "Good afternoon, Ana.");
@@ -661,6 +701,8 @@ mod tests {
         assert_eq!(Language::Vi.clock(now, true, false), "20:41");
         assert_eq!(Language::Nl.date(now), "WOENSDAG 21 OKTOBER");
         assert_eq!(Language::Nl.clock(now, true, false), "20:41");
+        assert_eq!(Language::Sv.date(now), "ONSDAG 21 OKTOBER");
+        assert_eq!(Language::Sv.clock(now, true, false), "20:41");
         assert_eq!(Language::Zh.clock(now, false, false), "下午8:41");
         assert_eq!(Language::Zh.clock(now, false, true), "下午8:41:00");
         assert_eq!(Language::En.clock(now, true, false), "20:41");
