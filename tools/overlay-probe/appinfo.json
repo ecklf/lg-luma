@@ -1,0 +1,12 @@
+{
+  "id": "com.ecklf.luma.overlayprobe",
+  "version": "0.0.1",
+  "vendor": "Luma",
+  "type": "qml",
+  "main": "main.qml",
+  "title": "Luma Overlay Probe",
+  "icon": "icon.png",
+  "noSplashOnLaunch": true,
+  "requiredACG": [],
+  "defaultWindowType": "overlay"
+}
