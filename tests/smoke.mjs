@@ -380,7 +380,9 @@ try {
     'settings,down,enter,down,down,down,down,enter,back',
   );
   assert.deepEqual(scaleBack.focus, { Setting: 8 });
-  await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
+  // Later scenarios render at normal scale; keep everything else they rely on, like favorites.
+  const scaled = JSON.parse(await fs.readFile(preferences, 'utf8'));
+  await fs.writeFile(preferences, JSON.stringify({ ...scaled, ui_scale: 'normal' }));
   assert.ok(system.ui_text.includes('Text rendering'));
   const updatePreview = await scenario('update-preview', 'settings,down,down,down,down,right', [
     '--test-update-version',
