@@ -10,6 +10,8 @@ use std::time::{Duration, Instant};
 
 pub const WIDGETS_SECTION: usize = 2;
 pub const SYSTEM_SECTION: usize = 3;
+/// System › Luma as Home screen.
+pub const HOME_TAKEOVER_ROW: usize = 9;
 pub const SECTION_COUNT: usize = 4;
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
@@ -1003,7 +1005,7 @@ impl State {
             }
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
-            Some(Subpage::HomeTakeover) => Target::Setting(8),
+            Some(Subpage::HomeTakeover) => Target::Setting(HOME_TAKEOVER_ROW),
             None => Target::Sidebar(self.section),
         };
         self.scroll = 0.;
@@ -1238,7 +1240,7 @@ impl State {
             }
             if matches!(
                 self.focus,
-                Target::Setting(0 | 1 | 4 | 6 | 7 | 8)
+                Target::Setting(0 | 1 | 4 | 7 | HOME_TAKEOVER_ROW)
                     | Target::Widget(_)
                     | Target::InputMode(_)
                     | Target::WeatherLocation
@@ -2173,7 +2175,7 @@ impl State {
                         }
                         return vec![];
                     }
-                    8 => {
+                    HOME_TAKEOVER_ROW => {
                         self.subpage = Some(Subpage::HomeTakeover);
                         self.focus = Target::Choice(if self.home_takeover { 0 } else { 1 });
                         self.scroll = 0.;

@@ -2605,7 +2605,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 ),
                 (5, language.t("quitApp"), "power", None, false),
                 (
-                    8,
+                    crate::state::HOME_TAKEOVER_ROW,
                     language.t("homeTakeover"),
                     "tv",
                     Some(language.t(if state.home_takeover {
