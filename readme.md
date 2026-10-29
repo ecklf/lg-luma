@@ -103,6 +103,7 @@ https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
 | LG C6 | `OLED65C6*`           | Unknown          |
 | LG C6 | `OLED77C6*`           | ✅               |
 | LG G5 | `OLED83G5WUA.BUSYDJR` | ✅               |
+| LG G5 | `OLED77G5WUA.DUSQLJR` | ✅               |
 
 </details>
 
@@ -119,7 +120,7 @@ https://github.com/ecklf/lg-luma/releases/latest/download/repo.json
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_2.14.0_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_2.15.2_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -271,7 +272,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_2.14.0_arm.ipk
+dist/com.ecklf.luma_2.15.2_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png

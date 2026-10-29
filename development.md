@@ -813,7 +813,7 @@ Removing a city clears its cache. The `.weather.json` sidecar uses Unix-seconds 
 Mock servers accept only literal loopback HTTP origins and are refused in TV builds.
 
 `assets/messages.json` supplies Dutch, English, French, German, Italian, Polish, Portuguese (Brazil),
-Russian, Simplified Chinese, Spanish, Traditional Chinese and Vietnamese, including locale formatting
+Russian, Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese, including locale formatting
 and weather labels. App/device names and saved city names remain real data. No geolocation,
 runtime font/translation services or telemetry are used. Weather attribution: Open-Meteo,
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
@@ -836,6 +836,8 @@ The read-only checker never downloads an IPK. A separate installer worker rechec
 requires the exact offered version, and accepts only this project's ARM release assets with a bounded
 size and SHA-256. It downloads into a private random directory and verifies both before handing off
 to `tv/self-update.sh`, detached through Homebrew Channel's root service into a systemd unit.
+The handoff escapes dollar signs for systemd as well as quoting for the
+exec service's shell, so systemd cannot expand the embedded script before `/bin/sh` runs it.
 The installer locks, stages and re-verifies a root-owned copy, waits for installation completion and
 checks the installed version before reopening Luma. Home takeover refreshes from the new package;
 failed reapplication attempts verified LG Home recovery. Atomic attempt-specific results and a log
