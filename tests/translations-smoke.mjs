@@ -134,7 +134,7 @@ try {
 
   const chinese = await scenario(
     'zh-home',
-    `${picker},${Array(10).fill('down').join(',')},enter,home,down`,
+    `${picker},${Array(11).fill('down').join(',')},enter,home,down`,
   );
   assert.equal(chinese.preferences.language, 'zh');
   for (const key of [
@@ -163,7 +163,7 @@ try {
   const forecasts = requests.filter((request) => request.path === '/v1/forecast').length;
   const changed = await scenario(
     'de-weather',
-    `${picker},${Array(10).fill('up').join(',')},enter,home,await-weather`,
+    `${picker},${Array(11).fill('up').join(',')},enter,home,await-weather`,
   );
   assert.equal(changed.preferences.language, 'de');
   contains(changed, 'partlyCloudy', 'de');
@@ -278,14 +278,14 @@ try {
     preferences,
     JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
   );
-  const vietnamesePicker = `${picker},${Array(7).fill('down').join(',')}`;
+  const vietnamesePicker = `${picker},${Array(8).fill('down').join(',')}`;
   const vietnameseFocused = await scenario('vi-picker', vietnamesePicker);
-  assert.deepEqual(vietnameseFocused.focus, { Choice: 8 });
+  assert.deepEqual(vietnameseFocused.focus, { Choice: 9 });
   assert.equal(vietnameseFocused.scroll, 0, 'The first ten language rows fit without scrolling');
   assert.ok(vietnameseFocused.ui_text.includes('Tiếng Việt'));
   const chineseFocused = await scenario('zh-picker-last', `${vietnamesePicker},down,down`);
-  assert.deepEqual(chineseFocused.focus, { Choice: 10 });
-  assert.ok(chineseFocused.scroll > 0, 'The eleventh language must scroll fully into view');
+  assert.deepEqual(chineseFocused.focus, { Choice: 11 });
+  assert.ok(chineseFocused.scroll > 0, 'Simplified Chinese must scroll fully into view');
   assert.ok(chineseFocused.ui_text.includes('简体中文'));
   const vietnamese = await scenario('vi-home', `${vietnamesePicker},enter,home,down`);
   assert.equal(vietnamese.preferences.language, 'vi');
@@ -341,9 +341,9 @@ try {
     preferences,
     JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
   );
-  const traditionalPicker = `${picker},${Array(10).fill('down').join(',')}`;
+  const traditionalPicker = `${picker},${Array(11).fill('down').join(',')}`;
   const traditionalFocused = await scenario('zh-tw-picker', traditionalPicker);
-  assert.deepEqual(traditionalFocused.focus, { Choice: 11 });
+  assert.deepEqual(traditionalFocused.focus, { Choice: 12 });
   assert.ok(traditionalFocused.scroll > 0);
   assert.ok(traditionalFocused.ui_text.includes('繁體中文'));
   const traditional = await scenario('zh-tw-home', `${traditionalPicker},enter,home,down`);

@@ -1,5 +1,23 @@
 # lg-luma
 
+## 2.15.3
+
+### Patch Changes
+
+- 166060e: Use consistent chevron spacing in settings breadcrumbs and highlight only the final item.
+
+## 2.15.2
+
+### Patch Changes
+
+- 7ee2a7e: Fix in-app updates failing before installation because systemd expanded variables in the installer script.
+
+## 2.15.1
+
+### Patch Changes
+
+- 3d881a2: Add Swedish (`sv`) translation: full `messages.json` catalog and locale registration, including localized date formatting. The bundled Inter subset already covers å, ä and ö.
+
 ## 2.15.0
 
 ### Minor Changes

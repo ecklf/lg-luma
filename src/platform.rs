@@ -375,6 +375,15 @@ impl Platform {
     }
 }
 
+/// Quote for the exec service's shell and systemd's ExecStart environment expansion. Shell
+/// quoting alone does not protect `$` variables inside the embedded installer script.
+/// Doubling dollars works on older TV systemd versions without --expand-environment=no.
+/// Leave `%` untouched: systemd-run passes ExecStart over D-Bus, not through unit-file parsing.
+fn update_argument(value: &str) -> String {
+    let escaped = value.replace('$', "$$");
+    format!("'{}'", escaped.replace('\'', "'\\''"))
+}
+
 /// Hands a downloaded, verified update to `tv/self-update.sh`, run as root through Homebrew
 /// Channel's exec in its own systemd unit: exec ends its children when the call returns, and the
 /// install closes Luma.
@@ -384,16 +393,15 @@ pub fn start_update(
     ipk: &std::path::Path,
 ) -> Result<(), String> {
     let directory = install_dir()?;
-    let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
     let command = format!(
         "systemd-run --unit=luma-update-{} --collect /bin/sh -c {} self-update {} {} {} {} {}",
         attempt,
-        quote(include_str!("../tv/self-update.sh")),
-        quote(&ipk.to_string_lossy()),
-        quote(&release.sha256),
-        quote(&release.version),
-        quote(&directory.to_string_lossy()),
-        quote(attempt),
+        update_argument(include_str!("../tv/self-update.sh")),
+        update_argument(&ipk.to_string_lossy()),
+        update_argument(&release.sha256),
+        update_argument(&release.version),
+        update_argument(&directory.to_string_lossy()),
+        update_argument(attempt),
     );
     let envelope = call(
         "luna://org.webosbrew.hbchannel.service/exec",
@@ -842,6 +850,40 @@ pub fn normalize_inputs(raw: &Value) -> Result<Vec<Input>, String> {
         });
     }
     Ok(inputs)
+}
+
+#[cfg(test)]
+mod update_argument_tests {
+    use super::*;
+
+    #[test]
+    fn installer_variables_are_escaped_and_printf_formats_are_preserved() {
+        let script = include_str!("../tv/self-update.sh");
+        let argument = update_argument(script);
+        assert!(argument.contains("$${#ATTEMPT}"));
+        assert!(argument.contains("$$(date +%T)"));
+        assert!(argument.contains("$$IPK"));
+        assert!(argument.contains("%s"));
+        assert!(!argument.contains("%%s"));
+    }
+
+    #[test]
+    fn exec_shell_preserves_systemd_escapes_and_argument_boundaries() {
+        for value in [
+            include_str!("../tv/self-update.sh"),
+            "path with 'quotes' and $VARIABLE ${BRACES} $(command) %n %% \\slashes",
+        ] {
+            let output = std::process::Command::new("/bin/sh")
+                .args(["-c", &format!("printf '%s' {}", update_argument(value))])
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            let argument = String::from_utf8(output.stdout).unwrap();
+            assert_eq!(argument, value.replace('$', "$$"));
+            // systemd reduces each escaped dollar pair, leaving expansion to /bin/sh.
+            assert_eq!(argument.replace("$$", "$"), value);
+        }
+    }
 }
 
 #[cfg(test)]
