@@ -473,7 +473,6 @@ fn sync_splash(background: &str) -> Result<(), String> {
     Ok(())
 }
 
-<<<<<<< HEAD
 /// Protect launcher identities and vendor system namespaces, never titles.
 /// Conservatively includes removable vendor apps until firmware provides a
 /// reliable cross-version removability flag.

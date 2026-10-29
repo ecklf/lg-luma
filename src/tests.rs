@@ -3213,7 +3213,7 @@ fn update_card_shows_progress_restores_retry_and_ignores_presses_while_busy() {
         !initial
             .controls
             .iter()
-            .any(|control| control.target == Target::Setting(8))
+            .any(|control| control.target == Target::Setting(9))
     );
     assert_eq!(
         state.activate(),
