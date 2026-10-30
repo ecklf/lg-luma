@@ -13,6 +13,8 @@ pub const SYSTEM_SECTION: usize = 3;
 pub const SECTION_COUNT: usize = 4;
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
+/// System › Luma as Home screen.
+pub const HOME_TAKEOVER_ROW: usize = 9;
 pub const APPS_COLUMNS: usize = 6;
 /// Automatic inventory retries before the error shows: with the 6.5 s Luna timeout about 50 s.
 pub const INVENTORY_RETRIES: u32 = 5;
@@ -161,6 +163,8 @@ pub enum Subpage {
     Temperature,
     Language,
     TextRendering,
+    /// System › Luma as Home: on (replace LG Home) or off.
+    HomeTakeover,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -198,6 +202,8 @@ pub enum Effect {
     Quit,
     Weather(weather::Command),
     UpdateDownload(String),
+    /// Replace LG Home with Luma (true) or restore it (false), through Homebrew's root service.
+    HomeTakeover(bool),
 }
 
 pub const KEYS: [&str; 40] = [
@@ -248,6 +254,8 @@ pub struct State {
     pub greeting_name_draft: String,
     pub input_name: String,
     pub recents: crate::recents::Recents,
+    /// Whether this instance runs as the TV's Home (the takeover is enabled).
+    pub home_takeover: bool,
 }
 
 impl State {
@@ -291,6 +299,7 @@ impl State {
             greeting_name_draft: String::new(),
             input_name: String::new(),
             recents: crate::recents::Recents::default(),
+            home_takeover: false,
         }
     }
 
@@ -997,6 +1006,7 @@ impl State {
             }
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
+            Some(Subpage::HomeTakeover) => Target::Setting(HOME_TAKEOVER_ROW),
             None => Target::Sidebar(self.section),
         };
         self.scroll = 0.;
@@ -1140,7 +1150,8 @@ impl State {
                         Subpage::ClockFormat
                         | Subpage::TimeFormat
                         | Subpage::Temperature
-                        | Subpage::TextRendering,
+                        | Subpage::TextRendering
+                        | Subpage::HomeTakeover,
                     ) => 2,
                     Some(Subpage::Language) => Language::ALL.len(),
                     Some(Subpage::DateFormat) => crate::model::DateFormat::ALL.len(),
@@ -1235,6 +1246,7 @@ impl State {
                     | Target::InputMode(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
+                    | Target::Setting(HOME_TAKEOVER_ROW)
             ) && matches!(direction, Direction::Right)
             {
                 return self.activate();
@@ -2169,6 +2181,15 @@ impl State {
                         }
                         return vec![];
                     }
+                    HOME_TAKEOVER_ROW => {
+                        self.subpage = Some(Subpage::HomeTakeover);
+                        self.focus = Target::Choice(if self.home_takeover { 0 } else { 1 });
+                        self.scroll = 0.;
+                        if !self.preferences.reduced_motion {
+                            self.panel_started = Some(Instant::now());
+                        }
+                        return vec![];
+                    }
                     5 => return vec![Effect::Quit],
                     7 => {
                         self.subpage = Some(Subpage::TextRendering);
@@ -2261,6 +2282,15 @@ impl State {
                             id,
                             [InputMode::On, InputMode::Off, InputMode::Auto][index.min(2)],
                         );
+                    }
+                    Some(Subpage::HomeTakeover) => {
+                        let enable = index == 0;
+                        self.close_subpage();
+                        return if enable == self.home_takeover {
+                            vec![]
+                        } else {
+                            vec![Effect::HomeTakeover(enable)]
+                        };
                     }
                     Some(Subpage::Temperature) => {
                         self.preferences.temperature_unit = if index == 1 {

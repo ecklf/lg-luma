@@ -177,6 +177,7 @@ pub enum Request {
     Launch(String),
     Uninstall(String),
     SyncSplash(String),
+    HomeTakeover(bool),
     Recent {
         generation: u64,
         command: crate::recents::Command,
@@ -189,6 +190,8 @@ pub enum Response {
         id: String,
         result: Result<(), String>,
     },
+    /// The takeover script started (with the requested state), or why it could not.
+    HomeTakeover(Result<bool, String>),
     Recent {
         generation: u64,
         command: crate::recents::Command,
@@ -337,6 +340,11 @@ impl Platform {
                         }
                     } else {
                         Ok(())
+                    }),
+                    Request::HomeTakeover(enable) => Response::HomeTakeover(if webos {
+                        home_takeover(enable).map(|()| enable)
+                    } else {
+                        Err("Replacing LG Home needs the TV".into())
                     }),
                     Request::SyncSplash(background) => {
                         if webos
@@ -525,6 +533,28 @@ pub fn inventory_confirms_removal(apps: &Value, id: &str) -> Result<bool, String
         present |= app_id == id;
     }
     Ok(!present)
+}
+
+/// Runs the README's takeover commands through Homebrew Channel's root service: `home.sh enable`
+/// (after disabling the autostart method, answering its prompt) or `disable`. The script closes
+/// this instance and starts the new Home, so it runs detached and the reply only says whether it
+/// started; its output goes to /tmp/luma-home-toggle.log.
+fn home_takeover(enable: bool) -> Result<(), String> {
+    let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
+    let script = if enable {
+        let app = quote(&install_dir()?.to_string_lossy());
+        format!("sh {app}/autostart.sh disable; printf 'y\\n' | sh {app}/home.sh enable")
+    } else {
+        "sh /var/lib/luma-home/home.sh disable".into()
+    };
+    let command = format!(
+        "if [ \"$(id -u)\" != 0 ]; then printf '%s\\n' '{{\"returnValue\":false,\"errorText\":\"Homebrew Channel needs root access\"}}'; exit 0; fi; ( {script} ) </dev/null >/tmp/luma-home-toggle.log 2>&1 & printf '%s\\n' '{{\"returnValue\":true}}'"
+    );
+    let envelope = call(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        json!({"command": command}),
+    )?;
+    command_reply(&envelope).map(|_| ())
 }
 
 fn raw_call(uri: &str, payload: &Value) -> Result<Value, String> {

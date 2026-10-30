@@ -2162,6 +2162,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
+                Some(Subpage::HomeTakeover) => language.t("homeTakeover"),
                 _ => "",
             };
             let mut path = vec![label];
@@ -2339,6 +2340,18 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     )
                 })
                 .collect(),
+            Subpage::HomeTakeover => vec![
+                (
+                    language.t("stateOn"),
+                    Some(language.t("homeTakeoverOnHint")),
+                    state.home_takeover,
+                ),
+                (
+                    language.t("stateOff"),
+                    Some(language.t("homeTakeoverOffHint")),
+                    !state.home_takeover,
+                ),
+            ],
         };
         for (index, (title, description, selected)) in options.into_iter().enumerate() {
             let h = if description.is_some() { 90.7 } else { 72. };
@@ -2636,6 +2649,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     true,
                 ),
                 (5, language.t("quitApp"), "power", None, false),
+                (
+                    crate::state::HOME_TAKEOVER_ROW,
+                    language.t("homeTakeover"),
+                    "tv",
+                    Some(language.t(if state.home_takeover {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
+                    true,
+                ),
             ]
             .into_iter()
             .enumerate()

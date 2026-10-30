@@ -360,6 +360,14 @@ fn effects(
                 });
             }
             Effect::Weather(command) => weather.send(command),
+            Effect::HomeTakeover(enable) => {
+                state.notify(state.preferences.language.t(if enable {
+                    "homeTakeoverStarting"
+                } else {
+                    "homeTakeoverStopping"
+                }));
+                platform.send(Request::HomeTakeover(enable));
+            }
         }
     }
     true
@@ -663,6 +671,7 @@ fn run() -> Result<(), String> {
     let mut wallpaper_service =
         wallpapers::Service::new(&preferences_path, !webos && !options.script.is_empty())?;
     let mut tile_editor_service = tile_editor::Service::new(!webos && !options.script.is_empty())?;
+    state.home_takeover = options.webos_home || platform::runs_as_lg_home();
     if options.test_extra_apps > 0 {
         eprintln!(
             "Luma scroll preview: explicit {}-app expansion; preferences {}",
@@ -1104,6 +1113,15 @@ fn run() -> Result<(), String> {
                         state.focus = state.first_content();
                         initial_focus = false;
                     }
+                }
+                Response::HomeTakeover(Err(error)) => {
+                    eprintln!("Luma Home takeover: {error}");
+                    state.notify(state.preferences.language.t("homeTakeoverError"));
+                }
+                // The script closes this instance next; until then the row shows the new state.
+                Response::HomeTakeover(Ok(enabled)) => {
+                    state.home_takeover = enabled;
+                    state.dirty = true;
                 }
                 Response::Launched(result) => {
                     state.launching = false;
