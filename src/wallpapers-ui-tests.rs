@@ -5,6 +5,7 @@ fn custom(index: u32) -> Wallpaper {
     Wallpaper {
         id: format!("custom-{index:032x}"),
         directory: PathBuf::from(format!("/preview/wallpapers/custom-{index:032x}")),
+        has_original: true,
     }
 }
 
@@ -28,11 +29,22 @@ fn upload_sits_left_of_rotation_and_both_remain_fixed_in_every_language() {
             .unwrap()
             .rect;
         assert!(cycle.x >= 640.);
-        assert_eq!(upload.x + upload.w + 20., cycle.x);
+        let gradient = before
+            .iter()
+            .find(|c| c.target == Target::WallpaperGradient)
+            .unwrap()
+            .rect;
+        assert!(upload.x >= 640., "{}: {}", language.code(), upload.x);
+        assert_eq!(upload.x + upload.w + 20., gradient.x);
+        assert_eq!(gradient.x + gradient.w + 20., cycle.x);
         assert_eq!(cycle.y, upload.y);
         state.scroll = 500.;
         let after = controls(&state);
-        for target in [Target::WallpaperCycle, Target::UploadWallpaper] {
+        for target in [
+            Target::WallpaperCycle,
+            Target::WallpaperGradient,
+            Target::UploadWallpaper,
+        ] {
             let old = before.iter().find(|c| c.target == target).unwrap();
             let new = after.iter().find(|c| c.target == target).unwrap();
             assert_eq!(
@@ -51,9 +63,14 @@ fn cycling_button_toggles_on_off_without_opening_a_page_or_moving_controls() {
     state.section = 1;
     state.focus = Target::UploadWallpaper;
     state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::WallpaperGradient);
+    state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::WallpaperCycle);
     state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::WallpaperGradient);
+    state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::UploadWallpaper);
+    state.direction(Direction::Right, &controls(&state));
     state.direction(Direction::Right, &controls(&state));
     assert!(!state.preferences.wallpaper_cycle);
     state.scroll = 300.;
@@ -96,7 +113,9 @@ fn cycling_button_toggles_on_off_without_opening_a_page_or_moving_controls() {
             .draw
             .iter()
             .find_map(|draw| match draw {
-                Draw::Text(label, rect, style, ..) if label == language.t("stateOn") => {
+                Draw::Text(label, rect, style, ..)
+                    if label == language.t("stateOn") && rect.x > button.x =>
+                {
                     Some((rect, style))
                 }
                 _ => None,
@@ -115,6 +134,59 @@ fn cycling_button_toggles_on_off_without_opening_a_page_or_moving_controls() {
         assert_eq!(state.activate(), vec![Effect::Save]);
         assert!(!state.preferences.wallpaper_cycle);
     }
+}
+
+#[test]
+fn gradient_toggle_is_saved_stable_and_switches_bundled_and_uploaded_images() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    state.focus = Target::WallpaperGradient;
+    state.scroll = 300.;
+    let defaults: crate::model::Preferences = serde_json::from_str("{}").unwrap();
+    assert!(defaults.wallpaper_gradient);
+    for language in crate::i18n::Language::ALL {
+        state.preferences.language = language;
+        let before = controls(&state);
+        assert_eq!(state.activate(), vec![Effect::Save]);
+        assert!(!state.preferences.wallpaper_gradient);
+        assert_eq!(state.focus, Target::WallpaperGradient);
+        assert_eq!(state.scroll, 300.);
+        assert!(state.overlay.is_none() && state.subpage.is_none());
+        let rendered = scene(&state);
+        assert!(
+            matches!(&rendered.draw[0], Draw::Image(path, ..) if path.ends_with("dunes-plain.jpg"))
+        );
+        for (old, new) in before.iter().zip(&rendered.controls) {
+            assert_eq!(old.target, new.target);
+            assert_eq!(
+                (old.rect.x, old.rect.y, old.rect.w),
+                (new.rect.x, new.rect.y, new.rect.w)
+            );
+        }
+        let saved = serde_json::to_string(&state.preferences).unwrap();
+        let restored: crate::model::Preferences = serde_json::from_str(&saved).unwrap();
+        assert!(!restored.wallpaper_gradient);
+        assert_eq!(state.activate(), vec![Effect::Save]);
+        assert!(
+            matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("dunes.jpg"))
+        );
+    }
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Background(1));
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::WallpaperGradient);
+    let item = custom(1);
+    state.preferences.background = item.id.clone();
+    state.set_wallpapers(vec![item]);
+    state.activate();
+    assert!(
+        matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("original.jpg"))
+    );
+    state.wallpapers[0].has_original = false;
+    assert!(
+        matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("thumbnail.jpg"))
+    );
 }
 
 #[test]

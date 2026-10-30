@@ -246,6 +246,7 @@ pub struct Preferences {
     pub text_rendering: crate::text_rendering::TextRendering,
     #[serde(deserialize_with = "crate::wallpaper_cycle::deserialize")]
     pub wallpaper_cycle: bool,
+    pub wallpaper_gradient: bool,
     /// Unix seconds of the last automatic or chosen wallpaper change, for the timed modes.
     pub wallpaper_changed: u64,
 }
@@ -276,6 +277,7 @@ impl Default for Preferences {
             language: Language::En,
             text_rendering: crate::text_rendering::TextRendering::default(),
             wallpaper_cycle: false,
+            wallpaper_gradient: true,
             wallpaper_changed: 0,
         }
     }

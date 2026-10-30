@@ -507,9 +507,23 @@ try {
     'Pointer focus preserves strip position',
   );
   await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
+  const gradientDisabled = await scenario(
+    'wallpaper-gradient-disabled',
+    'settings,down,down,enter,up,up,right,enter',
+  );
+  assert.equal(gradientDisabled.focus, 'WallpaperGradient');
+  assert.equal(gradientDisabled.preferences.wallpaper_gradient, false);
+  assert.ok(gradientDisabled.ui_text.includes('Gradient'));
+  const gradientRestored = await scenario('wallpaper-gradient-restored', 'home,down');
+  assert.equal(gradientRestored.preferences.wallpaper_gradient, false);
+  const gradientEnabled = await scenario(
+    'wallpaper-gradient-enabled',
+    'settings,down,down,enter,up,up,right,enter',
+  );
+  assert.equal(gradientEnabled.preferences.wallpaper_gradient, true);
   const cycleEnabled = await scenario(
     'wallpaper-cycle-enabled',
-    'settings,down,down,enter,up,up,right,enter',
+    'settings,down,down,enter,up,up,right,right,enter',
   );
   assert.equal(cycleEnabled.subpage, null);
   assert.equal(cycleEnabled.focus, 'WallpaperCycle');
@@ -523,7 +537,7 @@ try {
   );
   const cycleDisabled = await scenario(
     'wallpaper-cycle-disabled',
-    'settings,down,down,enter,up,up,right,enter',
+    'settings,down,down,enter,up,up,right,right,enter',
   );
   assert.equal(cycleDisabled.preferences.wallpaper_cycle, false);
   assert.ok(cycleDisabled.ui_text.includes('Rotation'));

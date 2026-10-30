@@ -1,4 +1,19 @@
 {
+  "wallpaperGradient": {
+    "en": "Gradient",
+    "de": "Verlauf",
+    "es": "Degradado",
+    "zh": "渐变",
+    "zh-tw": "漸層",
+    "pt": "Gradiente",
+    "it": "Sfumatura",
+    "ru": "Градиент",
+    "pl": "Gradient",
+    "fr": "Dégradé",
+    "vi": "Chuyển sắc",
+    "nl": "Verloop",
+    "sv": "Toning"
+  },
   "date": {
     "en": "Date",
     "de": "Datum",

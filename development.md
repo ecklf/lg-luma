@@ -276,7 +276,15 @@ updates, and normal/takeover launches using the shared preferences location use 
 Custom images are not used as LG's launch splash: runtime splash updates are skipped for them,
 and takeover boot staging uses a bundled fallback.
 
-The fixed **Rotation** button to the left of the upload action toggles cycling On/Off,
+The fixed actions are **Upload**, **Gradient**, and **Rotation**, from left to right.
+**Gradient** toggles readability shading immediately without moving the controls. Its
+`wallpaper_gradient` preference defaults to On for new and existing installations. Bundled assets
+include full-resolution `-plain` variants; new uploads retain a metadata-stripped `original.jpg`
+alongside the shaded image. Discovery checks for originals on the worker, not the SDL thread.
+Older uploads fall back to their unshaded thumbnail when Off; re-uploading restores full resolution.
+The setting does not affect gallery thumbnails or LG's static launch splash.
+
+The fixed **Rotation** button toggles cycling On/Off,
 defaulting to Off, without opening a subpage. All available images participate in gallery order;
 deleted and pending-deletion entries are excluded. The fixed 15-minute interval uses a persisted
 Unix timestamp; manual selection or enabling cycling restarts it, and a clock behind the last

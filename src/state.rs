@@ -73,6 +73,7 @@ pub enum Target {
     Background(usize),
     UploadWallpaper,
     WallpaperCycle,
+    WallpaperGradient,
     UseBackground,
     DeleteBackground,
     InputMode(String),
@@ -1389,6 +1390,8 @@ impl State {
                         self.focus(
                             if index == 2 {
                                 Target::WallpaperCycle
+                            } else if index == 1 {
+                                Target::WallpaperGradient
                             } else if index < 3 {
                                 Target::UploadWallpaper
                             } else {
@@ -1415,14 +1418,26 @@ impl State {
                     Direction::Down => self.focus(Target::Background(0), controls),
                     Direction::Up => self.focus(Target::Nav(2), controls),
                     Direction::Left => self.focus(Target::Sidebar(1), controls),
+                    Direction::Right => self.focus(Target::WallpaperGradient, controls),
+                }
+                return vec![];
+            }
+            if self.focus == Target::WallpaperGradient {
+                match direction {
                     Direction::Right => self.focus(Target::WallpaperCycle, controls),
+                    Direction::Left => self.focus(Target::UploadWallpaper, controls),
+                    Direction::Up => self.focus(Target::Nav(2), controls),
+                    Direction::Down => self.focus(
+                        Target::Background(1.min(self.background_count().saturating_sub(1))),
+                        controls,
+                    ),
                 }
                 return vec![];
             }
             if self.focus == Target::WallpaperCycle {
                 match direction {
                     Direction::Right => {}
-                    Direction::Left => self.focus(Target::UploadWallpaper, controls),
+                    Direction::Left => self.focus(Target::WallpaperGradient, controls),
                     Direction::Up => self.focus(Target::Nav(2), controls),
                     Direction::Down => self.focus(
                         Target::Background(2.min(self.background_count().saturating_sub(1))),
@@ -2174,6 +2189,10 @@ impl State {
             Target::WallpaperCycle => {
                 self.preferences.wallpaper_cycle = !self.preferences.wallpaper_cycle;
                 self.preferences.wallpaper_changed = unix_now();
+                return vec![Effect::Save];
+            }
+            Target::WallpaperGradient => {
+                self.preferences.wallpaper_gradient = !self.preferences.wallpaper_gradient;
                 return vec![Effect::Save];
             }
             Target::UseBackground => {

@@ -53,14 +53,23 @@ impl Assets {
 
     fn background(&self, state: &State, id: &str) -> String {
         if let Some(item) = state.wallpapers.iter().find(|item| item.id == id) {
-            return item.image();
+            return if state.preferences.wallpaper_gradient {
+                item.image()
+            } else {
+                item.unshaded_image()
+            };
         }
         let id = if BACKGROUNDS.iter().any(|(known, _)| *known == id) {
             id
         } else {
             "dunes"
         };
-        self.path(format!("wallpapers/{id}.jpg"))
+        let suffix = if state.preferences.wallpaper_gradient {
+            ""
+        } else {
+            "-plain"
+        };
+        self.path(format!("wallpapers/{id}{suffix}.jpg"))
     }
 
     fn width(&self, value: &str, style: TextStyle) -> f32 {
@@ -1767,8 +1776,11 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
         } else {
             (row.rect.h - 29.12) / 2.
         };
-    let compact_value_width = (row.target == Target::WallpaperCycle)
-        .then(|| rotation_value_width(assets, state.preferences.language));
+    let compact_value_width = matches!(
+        row.target,
+        Target::WallpaperCycle | Target::WallpaperGradient
+    )
+    .then(|| rotation_value_width(assets, state.preferences.language));
     let right_inset = if let Some(width) = compact_value_width {
         width + 24.2 + 24.
     } else if row.value.is_some() {
@@ -1845,7 +1857,10 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
             },
         );
     }
-    let scrollable = !matches!(row.target, Target::UploadWallpaper | Target::WallpaperCycle);
+    let scrollable = !matches!(
+        row.target,
+        Target::UploadWallpaper | Target::WallpaperCycle | Target::WallpaperGradient
+    );
     out.control(row.target, row.rect, scrollable);
 }
 
@@ -2394,6 +2409,12 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 .ceil()
                 .min(520.);
             let cycle_label = language.t("wallpaperCycle");
+            let gradient_label = language.t("wallpaperGradient");
+            let gradient_width = (assets.width(gradient_label, text(20.8, 550, -0.02))
+                + rotation_value_width(assets, language)
+                + 111.6)
+                .ceil()
+                .min(360.);
             let cycle_width = (assets.width(cycle_label, text(20.8, 550, -0.02))
                 + rotation_value_width(assets, language)
                 + 111.6)
@@ -2427,9 +2448,37 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 state,
                 assets,
                 Row {
+                    target: Target::WallpaperGradient,
+                    rect: Rect::new(
+                        1760. - cycle_width - 20. - gradient_width,
+                        164.8,
+                        gradient_width,
+                        64.,
+                    ),
+                    title: gradient_label,
+                    icon: Some(if state.preferences.wallpaper_gradient {
+                        "eye"
+                    } else {
+                        "eye-off"
+                    }),
+                    value: Some(language.t(if state.preferences.wallpaper_gradient {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
+                    description: None,
+                    selected: false,
+                    chevron: false,
+                },
+            );
+            row(
+                out,
+                state,
+                assets,
+                Row {
                     target: Target::UploadWallpaper,
                     rect: Rect::new(
-                        1760. - cycle_width - 20. - upload_width,
+                        1760. - cycle_width - 40. - gradient_width - upload_width,
                         164.8,
                         upload_width,
                         64.,

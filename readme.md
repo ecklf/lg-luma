@@ -235,6 +235,10 @@ Enable **Rotation** beside **Upload** to cycle through backgrounds on each Luma 
 15 minutes with a slow cross-fade. Rotation is off by default and leaves your manually chosen
 LG splash unchanged.
 
+Toggle **Gradient** beside **Rotation** to turn background shading on or off. It defaults to On
+and remembers your choice. Older uploads use their unshaded thumbnail when Off; re-upload for
+full resolution. This does not change LG's launch splash.
+
 ### Recent app switching
 
 Press **Back** on Home, or hold **Back** for 0.6 seconds from any page, to open Recent apps.

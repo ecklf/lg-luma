@@ -32,9 +32,22 @@ pub struct Wallpaper {
     pub id: String,
     #[serde(skip)]
     pub directory: PathBuf,
+    #[serde(skip)]
+    pub has_original: bool,
 }
 
 impl Wallpaper {
+    pub fn unshaded_image(&self) -> String {
+        // Older uploads retain only an unshaded thumbnail, not the original photo.
+        self.directory
+            .join(if self.has_original {
+                "original.jpg"
+            } else {
+                "thumbnail.jpg"
+            })
+            .to_string_lossy()
+            .into_owned()
+    }
     pub fn image(&self) -> String {
         self.directory
             .join("wallpaper.jpg")
@@ -192,6 +205,8 @@ fn catalog(directory: &Path) -> Vec<Wallpaper> {
         }) {
             continue;
         }
+        item.has_original = fs::symlink_metadata(path.join("original.jpg"))
+            .is_ok_and(|m| m.is_file() && m.len() > 0 && m.len() <= MAX_BODY as u64);
         item.directory = path;
         result.push(item);
         if result.len() == MAX_WALLPAPERS {
@@ -354,6 +369,7 @@ fn store(directory: &Path, bytes: &[u8], valid: impl Fn() -> bool) -> Result<Wal
         return Err("The wallpaper gallery is full (20 images)".into());
     }
     let mut image = decode(bytes)?;
+    let original = jpeg(&image, 94)?;
     let thumbnail =
         image::imageops::resize(&image, 480, 270, image::imageops::FilterType::Triangle);
     shade(&mut image);
@@ -378,9 +394,11 @@ fn store(directory: &Path, bytes: &[u8], valid: impl Fn() -> bool) -> Result<Wal
     let item = Wallpaper {
         id: id.clone(),
         directory: directory.join(&id),
+        has_original: true,
     };
     let result = (|| {
         write_new(&staging.join("wallpaper.jpg"), &image)?;
+        write_new(&staging.join("original.jpg"), &original)?;
         write_new(&staging.join("thumbnail.jpg"), &thumbnail)?;
         write_new(
             &staging.join("metadata.json"),
@@ -392,8 +410,13 @@ fn store(directory: &Path, bytes: &[u8], valid: impl Fn() -> bool) -> Result<Wal
         fs::rename(&staging, &item.directory).map_err(|e| e.to_string())
     })();
     if result.is_err() {
-        // Only the three files and fresh directory created by this operation.
-        for file in ["wallpaper.jpg", "thumbnail.jpg", "metadata.json"] {
+        // Only the files and fresh directory created by this operation.
+        for file in [
+            "wallpaper.jpg",
+            "original.jpg",
+            "thumbnail.jpg",
+            "metadata.json",
+        ] {
             let _ = fs::remove_file(staging.join(file));
         }
         let _ = fs::remove_dir(&staging);
