@@ -1,5 +1,15 @@
 # lg-luma
 
+## 2.16.0
+
+### Minor Changes
+
+- c47548c: Add an on/off gradient toggle beside the background rotation control, with the choice saved across launches.
+
+### Patch Changes
+
+- c667091: Keep favorite hearts visible on light app artwork with a dark circular backing in the app grid and options preview.
+
 ## 2.15.3
 
 ### Patch Changes
