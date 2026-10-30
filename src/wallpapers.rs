@@ -38,12 +38,12 @@ pub struct Wallpaper {
 
 impl Wallpaper {
     pub fn unshaded_image(&self) -> String {
-        // Older uploads retain only an unshaded thumbnail, not the original photo.
+        // Preserve full resolution for older uploads without an unshaded original.
         self.directory
             .join(if self.has_original {
                 "original.jpg"
             } else {
-                "thumbnail.jpg"
+                "wallpaper.jpg"
             })
             .to_string_lossy()
             .into_owned()

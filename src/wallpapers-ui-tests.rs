@@ -185,7 +185,7 @@ fn gradient_toggle_is_saved_stable_and_switches_bundled_and_uploaded_images() {
     );
     state.wallpapers[0].has_original = false;
     assert!(
-        matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("thumbnail.jpg"))
+        matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("wallpaper.jpg"))
     );
 }
 

@@ -104,7 +104,7 @@ fn uploads_retain_full_resolution_unshaded_images_and_discover_legacy_fallbacks(
     let legacy = catalog(&fixture.wallpapers());
     assert_eq!(legacy.len(), 1);
     assert!(!legacy[0].has_original);
-    assert_eq!(legacy[0].unshaded_image(), legacy[0].thumbnail());
+    assert_eq!(legacy[0].unshaded_image(), legacy[0].image());
 }
 
 #[test]

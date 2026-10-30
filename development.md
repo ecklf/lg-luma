@@ -281,7 +281,7 @@ The fixed actions are **Upload**, **Gradient**, and **Rotation**, from left to r
 `wallpaper_gradient` preference defaults to On for new and existing installations. Bundled assets
 include full-resolution `-plain` variants; new uploads retain a metadata-stripped `original.jpg`
 alongside the shaded image. Discovery checks for originals on the worker, not the SDL thread.
-Older uploads fall back to their unshaded thumbnail when Off; re-uploading restores full resolution.
+Older uploads keep their full-resolution shaded image when Off if no unshaded original exists.
 The setting does not affect gallery thumbnails or LG's static launch splash.
 
 The fixed **Rotation** button toggles cycling On/Off,

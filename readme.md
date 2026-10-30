@@ -236,8 +236,8 @@ Enable **Rotation** beside **Upload** to cycle through backgrounds on each Luma 
 LG splash unchanged.
 
 Toggle **Gradient** beside **Rotation** to turn background shading on or off. It defaults to On
-and remembers your choice. Older uploads use their unshaded thumbnail when Off; re-upload for
-full resolution. This does not change LG's launch splash.
+and remembers your choice. Older uploads without an unshaded copy keep their full-resolution
+shaded image. This does not change LG's launch splash.
 
 ### Recent app switching
 
