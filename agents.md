@@ -76,6 +76,18 @@ Match the current native design without on-screen weather credits; attribution r
 
 ## Assets
 
+When adding, removing or renaming a UI language, update `Language::ALL`/picker ordering in
+`src/i18n.rs`, bundled translations and required font coverage, `assets/homebrew-description.html`,
+and language lists in `development.md`/`readme.md` in the same change. Keep language choices sorted
+by displayed name and selection indices consistent. Update translation smoke navigation when ordering
+changes. The Homebrew description must name every supported language; keep the
+`homebrew_description_lists_every_supported_language` regression test exhaustive so a new enum
+variant cannot silently leave release-facing metadata outdated. Do not edit generated feed files.
+When adding or changing user-facing features, review `assets/homebrew-description.html` as well as
+the README/development docs so the Homebrew listing reflects major capabilities (including uploaded
+backgrounds and QR-managed webhook shortcuts), not just languages. Avoid claims for unverified TV
+behavior or features not yet implemented.
+
 SVG sources and fonts retain licenses in `assets/`. TV app artwork is resolved at runtime from
 inventory/installed manifests by `src/app_artwork.rs`, with an embedded Node 8-compatible elevated
 reader for jailed installations. Reads/decoding stay on its worker; GPU uploads stay on SDL.

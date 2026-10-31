@@ -39,14 +39,26 @@ function tv({ root = null, same = false, front = ['com.webos.app.home'] } = {}) 
   const state = { root, same, fronts: [...front], marker: false };
   Object.assign(context, {
     fs: {
-      existsSync: (file) => file === `${appDir}/luma` || (file === marker && state.marker),
+      existsSync: (file) =>
+        file === `${appDir}/luma` ||
+        (file === marker && state.marker) ||
+        (file === marker + '-target' && state.target),
       writeFileSync(file, data) {
+        if (file === marker + '-target') {
+          assert.equal(String(data), context.HOME + '\n');
+          state.target = true;
+          return;
+        }
         assert.equal(file, marker);
         assert.equal(String(data), 'com.ecklf.luma\n');
         calls.push('mark');
         state.marker = true;
       },
       unlinkSync(file) {
+        if (file === marker + '-target') {
+          state.target = false;
+          return;
+        }
         assert.equal(file, marker);
         calls.push('unmark');
         state.marker = false;
@@ -244,4 +256,36 @@ test('disable restores LG Home and removes the hook and helper even when LS2 cle
   assert.ok(removed.includes('/var/lib/luma-home/luma-early'));
   assert.ok(removed.includes('/var/lib/webosbrew/init.d/64-luma-home'));
   assert.equal(removed.filter((file) => file.startsWith('/var/luna-service2/')).length, 4);
+});
+
+test('fullhome uses its own executable, manifest and launch identity throughout apply and restore', () => {
+  const { context, calls, state } = tv({ front: ['com.webos.app.fullhome'] });
+  context.selectHome('com.webos.app.fullhome');
+  assert.equal(context.EXE, '/usr/bin/com.webos.app.fullhome');
+  assert.equal(context.TARGET, '/usr/palm/applications/com.webos.app.fullhome');
+  assert.equal(
+    context.homeMethod('Rockhopper release 5.6.2', {
+      ...lgHome,
+      id: context.HOME,
+      main: 'file://' + context.EXE,
+    }),
+    'executable',
+  );
+  context.applyExecutable({ method: 'executable', appDir }, true);
+  assert.ok(calls.includes(`mount --bind ${appDir}/luma /usr/bin/com.webos.app.fullhome`));
+  assert.equal(state.target, true);
+  context.restore({ method: 'executable', appDir });
+  assert.ok(calls.includes('umount /usr/bin/com.webos.app.fullhome'));
+  assert.equal(state.target, false);
+});
+
+test('saved Home target survives boot/disable; old configurations default to home', () => {
+  const context = load();
+  context.savedHome({ homeId: 'com.webos.app.fullhome' });
+  assert.equal(context.HOME, 'com.webos.app.fullhome');
+  context.savedHome({ method: 'executable' });
+  assert.equal(context.HOME, 'com.webos.app.home');
+  for (const id of ['../../etc/passwd', 'com.webos.app.livetv', '', null]) {
+    assert.throws(() => context.selectHome(id), /Unsupported Home target/);
+  }
 });
