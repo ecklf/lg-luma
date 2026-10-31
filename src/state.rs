@@ -13,7 +13,7 @@ pub const SYSTEM_SECTION: usize = 3;
 pub const SECTION_COUNT: usize = 4;
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
-/// System row registering Luma as a TV input (tv/tv-input.cjs). Rows 8–11 belong to other PRs.
+/// System row registering Luma as a TV input (luma-helper tv-input). Rows 8–11 belong to other PRs.
 pub const TV_INPUT_ROW: usize = 12;
 pub const APPS_COLUMNS: usize = 6;
 /// Automatic inventory retries before the error shows: with the 6.5 s Luna timeout about 50 s.
@@ -659,6 +659,31 @@ impl State {
         self.inventory_failures = 0;
         self.dirty = true;
         self.reconcile_focus();
+    }
+
+    /// Replace only input status; leave installed apps, artwork and saved preferences alone.
+    pub fn set_inputs(&mut self, inputs: Vec<crate::model::Input>) {
+        if self.inventory.inputs == inputs {
+            return;
+        }
+        self.inventory.inputs = inputs;
+        self.dirty = true;
+        self.reconcile_focus();
+        let missing = |id: &str| !self.inventory.inputs.iter().any(|input| input.id == id);
+        if self.page == Page::Settings
+            && (matches!(&self.subpage, Some(Subpage::Input(id)) if missing(id))
+                || matches!(&self.focus, Target::InputMode(id) if missing(id)))
+        {
+            self.subpage = Some(Subpage::Inputs);
+            self.scroll = 0.;
+            self.focus = self
+                .inventory
+                .inputs
+                .first()
+                .map_or(Target::Sidebar(WIDGETS_SECTION), |input| {
+                    Target::InputMode(input.id.clone())
+                });
+        }
     }
 
     /// A failed inventory load. Right after a cold boot, or when the TV is short of memory, the

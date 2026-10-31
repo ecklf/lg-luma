@@ -16,6 +16,7 @@ function run({
   checksum = true,
   method = 'executable',
   homeId = 'com.webos.app.home',
+  pretty = false,
 } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'luma-installer-'));
   const app = `${dir}/app`;
@@ -25,10 +26,18 @@ function run({
   for (const d of [app, homeState, bin]) fs.mkdirSync(d);
   const write = (file, contents) => fs.writeFileSync(file, contents, { mode: 0o755 });
   write(`${dir}/package.ipk`, 'test package');
-  write(`${app}/appinfo.json`, JSON.stringify({ version: '9.0.0' }));
-  write(`${homeState}/state.json`, JSON.stringify({ enabled: home, method, homeId }));
+  // tools/package.mjs and the native helper pretty-print; the saved stock manifest has its own
+  // "version" and "id", which must not be mistaken for Luma's version or the Home target.
+  const json = (value) => (pretty ? `${JSON.stringify(value, null, 2)}\n` : JSON.stringify(value));
+  write(`${app}/appinfo.json`, json({ id: 'com.ecklf.luma', version: '9.0.0', type: 'native' }));
+  write(
+    `${homeState}/state.json`,
+    json({ enabled: home, method, homeId, appDir: app, stock: { id: 'x', version: '1.0.0' } }),
+  );
   write(`${dir}/mounts`, '');
   write(`${bin}/id`, '#!/bin/sh\necho 0\n');
+  // The installer must not need the TV's Node runtime.
+  write(`${bin}/node`, '#!/bin/sh\nexit 127\n');
   write(`${bin}/stat`, '#!/bin/sh\necho "0 700"\n');
   write(`${bin}/sleep`, '#!/bin/sh\n/bin/sleep 0.01\n');
   write(
@@ -117,4 +126,13 @@ test('fullhome remains the launch and recovery target after an update', () => {
   const failed = run({ home: true, homeId, reapply: false });
   assert.match(failed.status.message, /LG Home restored/);
   assert.match(failed.calls, /restore[\s\S]*launch.*com.webos.app.fullhome/);
+});
+
+test('pretty-printed manifests and old configurations without a target are read without Node', () => {
+  for (const homeId of ['com.webos.app.fullhome', undefined]) {
+    const result = run({ home: true, homeId, pretty: true });
+    assert.equal(result.exit, 0, result.status.message);
+    assert.equal(result.status.state, 'success');
+    assert.match(result.calls, new RegExp(`launch.*${homeId ?? 'com.webos.app.home'}"`));
+  }
 });

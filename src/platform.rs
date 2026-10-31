@@ -174,6 +174,7 @@ pub fn redirect_to_home() -> Result<bool, String> {
 
 pub enum Request {
     Refresh,
+    RefreshInputs,
     Launch(String),
     Uninstall(String),
     SyncSplash(String),
@@ -186,6 +187,7 @@ pub enum Request {
 }
 pub enum Response {
     Inventory(Result<(Inventory, Option<String>), String>),
+    Inputs(Result<Vec<Input>, String>),
     Launched(Result<(), String>),
     Uninstalled {
         id: String,
@@ -258,17 +260,17 @@ impl Platform {
                     } else {
                         Ok((desktop_inventory.clone(), None))
                     }),
+                    Request::RefreshInputs => Response::Inputs(if webos {
+                        input_inventory()
+                    } else {
+                        Ok(desktop_inventory.inputs.clone())
+                    }),
                     Request::Uninstall(id) => {
                         // Validate again at the worker boundary, not just in the UI.
                         let result = uninstall_request(&id).and_then(|(_, _)| {
                             if webos {
-                                let quote =
-                                    |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
-                                let command = format!(
-                                    "/usr/bin/node -e {} {}",
-                                    quote(include_str!("../tv/uninstall-app.cjs")),
-                                    quote(&id)
-                                );
+                                let command =
+                                    helper_command("uninstall-app", std::slice::from_ref(&id))?;
                                 #[cfg(all(
                                     feature = "webos",
                                     target_os = "linux",
@@ -394,6 +396,16 @@ impl Platform {
     }
 }
 
+/// Homebrew remains the privilege boundary for normal app jails. Each argument is shell-quoted
+/// independently; there is no interpreter source and no untrusted command name.
+fn helper_command(operation: &str, arguments: &[String]) -> Result<String, String> {
+    let executable = install_dir()?.join("luma-helper");
+    let quote = |text: &str| format!("'{}'", text.replace('\'', "'\\''"));
+    let mut parts = vec![quote(&executable.to_string_lossy()), quote(operation)];
+    parts.extend(arguments.iter().map(|argument| quote(argument)));
+    Ok(parts.join(" "))
+}
+
 /// Quote for the exec service's shell and systemd's ExecStart environment expansion. Shell
 /// quoting alone does not protect `$` variables inside the embedded installer script.
 /// Doubling dollars works on older TV systemd versions without --expand-environment=no.
@@ -475,12 +487,21 @@ pub fn update_result_for(
 
 fn sync_splash(background: &str) -> Result<(), String> {
     let directory = install_dir()?;
-    let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
-    let command = format!(
-        "/usr/bin/node -e {} {}",
-        quote(include_str!("../tv/sync-splash.cjs")),
-        quote(&json!({"directory": directory, "background": background}).to_string())
-    );
+    // The executable/manifest Home already runs privileged. Avoid starting another process or
+    // queuing a Homebrew call behind its startup; file work still stays on the platform worker.
+    #[cfg(all(feature = "webos", unix))]
+    if unsafe { libc::geteuid() } == 0 {
+        return luma_tv_helper::files::sync_splash(
+            &luma_tv_helper::system::Tv,
+            &directory,
+            background,
+        )
+        .map(|_| ());
+    }
+    let command = helper_command(
+        "sync-splash",
+        &[json!({"directory":directory,"background":background}).to_string()],
+    )?;
     let envelope = call(
         "luna://org.webosbrew.hbchannel.service/exec",
         json!({"command": command}),
@@ -492,20 +513,18 @@ fn sync_splash(background: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Reads or changes whether LG lists Luma as a TV input, through the packaged root helper
-/// (tv/tv-input.cjs). It verifies LG's input list itself and rolls back an unlisted add.
+/// Reads or changes whether LG lists Luma as a TV input, through the packaged native helper
+/// (`luma-helper tv-input`). It verifies LG's input list itself and rolls back an unlisted add.
 fn tv_input(request: Option<bool>) -> Result<bool, String> {
-    let helper = install_dir()?.join("tv-input.cjs");
-    let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
-    let command = format!(
-        "/usr/bin/node {} {}",
-        quote(&helper.to_string_lossy()),
-        match request {
+    let command = helper_command(
+        "tv-input",
+        &[match request {
             None => "status",
             Some(true) => "enable",
             Some(false) => "disable",
         }
-    );
+        .to_owned()],
+    )?;
     let payload = json!({"command": command});
     // Up to three EIM calls of at most 4 s each: longer than the default Luna timeout.
     #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
@@ -640,12 +659,10 @@ pub fn read_app_icons(source: &app_artwork::Source) -> Result<Vec<Vec<u8>>, Stri
     if !cfg!(feature = "webos") {
         return Err("Installed artwork is only read on TV builds".into());
     }
-    let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
-    let command = format!(
-        "/usr/bin/node -e {} {}",
-        quote(include_str!("../tv/read-app-icon.cjs")),
-        quote(&serde_json::to_string(source).map_err(|e| e.to_string())?)
-    );
+    let command = helper_command(
+        "read-app-icon",
+        &[serde_json::to_string(source).map_err(|e| e.to_string())?],
+    )?;
     let envelope = call(
         "luna://org.webosbrew.hbchannel.service/exec",
         json!({"command": command}),
@@ -769,8 +786,7 @@ fn inventory() -> Result<(Inventory, Option<String>), String> {
         "luna://com.webos.applicationManager/listApps",
         "apps",
     )?)?;
-    let inputs = inventory_read("luna://com.webos.service.eim/getAllInputStatus", "devices")
-        .and_then(|raw| normalize_inputs(&raw));
+    let inputs = input_inventory();
     match inputs {
         Ok(inputs) => {
             eprintln!(
@@ -788,6 +804,11 @@ fn inventory() -> Result<(Inventory, Option<String>), String> {
             Some(format!("Inputs could not be refreshed: {error}")),
         )),
     }
+}
+
+fn input_inventory() -> Result<Vec<Input>, String> {
+    inventory_read("luna://com.webos.service.eim/getAllInputStatus", "devices")
+        .and_then(|raw| normalize_inputs(&raw))
 }
 
 fn title(value: Option<&str>, fallback: &str) -> String {
@@ -889,6 +910,7 @@ pub fn normalize_inputs(raw: &Value) -> Result<Vec<Input>, String> {
             id: id.into(),
             title: title(entry.get("label").and_then(Value::as_str), &port),
             port,
+            signal: entry.get("hdmiSignalExist").and_then(Value::as_bool),
             // Some firmware reports `connected: true` for every existing port;
             // `hdmiPlugIn` is the actual cable state where it is provided.
             connected: entry
