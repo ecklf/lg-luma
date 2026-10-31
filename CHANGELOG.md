@@ -1,5 +1,13 @@
 # lg-luma
 
+## 2.16.1
+
+### Patch Changes
+
+- 652d8e7: Choose black or white favorite hearts for contrast against the card background, without a circular backing.
+- 33f78cc: Refresh HDMI cable and signal status while Home or input settings are visible, without reloading apps or losing the last valid status on read failures. Preserve the existing cable-based Auto visibility and `hdmiPlugIn` priority, and show No signal when a connected cable has no signal.
+- 161a9a3: Replace TV-side Node helpers with a bounded native Rust helper and synchronize splash images directly from privileged Home processes.
+
 ## 2.16.0
 
 ### Minor Changes
