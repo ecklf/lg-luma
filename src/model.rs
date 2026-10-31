@@ -251,6 +251,79 @@ pub struct Preferences {
     pub wallpaper_gradient: bool,
     /// Unix seconds of the last automatic or chosen wallpaper change, for the timed modes.
     pub wallpaper_changed: u64,
+    /// Recommendations widget: a row of trending TMDB posters on Home.
+    #[serde(default)]
+    pub show_recommendations: bool,
+    /// TMDB API key (v3) the widget uses; empty disables the feed.
+    #[serde(default)]
+    pub tmdb_key: String,
+    /// What the recommendations widget shows: movies, shows, or both.
+    #[serde(default)]
+    pub rec_type: RecType,
+    /// How often the shown recommendations rotate / the list refreshes.
+    #[serde(default)]
+    pub rec_interval: RecInterval,
+    /// How many recommendation cards are visible at once (1–5); the rest scroll as a carousel.
+    #[serde(default = "default_rec_count")]
+    pub rec_count: u8,
+    /// Leave cartoons/anime (TMDB's Animation genre) out of the recommendations.
+    #[serde(default)]
+    pub rec_hide_animation: bool,
+}
+
+fn default_rec_count() -> u8 {
+    5
+}
+
+/// What the recommendations widget pulls from TMDB's trending feed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RecType {
+    Movies,
+    Shows,
+    #[default]
+    Both,
+}
+
+/// How often the recommendations rotate (and the cached TMDB list is refreshed).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RecInterval {
+    HalfHour,
+    #[default]
+    Hour,
+    SixHours,
+    Day,
+}
+
+impl RecInterval {
+    /// The rotation/refresh period in seconds.
+    pub fn seconds(self) -> i64 {
+        match self {
+            RecInterval::HalfHour => 30 * 60,
+            RecInterval::Hour => 60 * 60,
+            RecInterval::SixHours => 6 * 60 * 60,
+            RecInterval::Day => 24 * 60 * 60,
+        }
+    }
+    /// Cycles through the choices for the settings stepper.
+    pub fn next(self) -> Self {
+        match self {
+            RecInterval::HalfHour => RecInterval::Hour,
+            RecInterval::Hour => RecInterval::SixHours,
+            RecInterval::SixHours => RecInterval::Day,
+            RecInterval::Day => RecInterval::HalfHour,
+        }
+    }
+    /// i18n key for the current choice's label.
+    pub fn label_key(self) -> &'static str {
+        match self {
+            RecInterval::HalfHour => "recIntervalHalfHour",
+            RecInterval::Hour => "recIntervalHour",
+            RecInterval::SixHours => "recIntervalSixHours",
+            RecInterval::Day => "recIntervalDay",
+        }
+    }
 }
 
 impl Default for Preferences {
@@ -281,6 +354,12 @@ impl Default for Preferences {
             wallpaper_cycle: false,
             wallpaper_gradient: true,
             wallpaper_changed: 0,
+            show_recommendations: false,
+            tmdb_key: String::new(),
+            rec_type: RecType::Both,
+            rec_interval: RecInterval::Hour,
+            rec_count: 5,
+            rec_hide_animation: false,
         }
     }
 }

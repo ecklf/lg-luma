@@ -19,6 +19,7 @@ mod model;
 mod platform;
 mod raster;
 mod recents;
+mod recommendations;
 mod renderer;
 #[path = "scroll-preview.rs"]
 mod scroll_preview;
@@ -499,6 +500,96 @@ fn weather_tick(state: &mut State, service: &weather_service::Service, visible: 
     }
 }
 
+fn recommendations_tick(
+    state: &mut State,
+    service: &recommendations::Service,
+    cache_dir: &std::path::Path,
+    feed_cache: &std::path::Path,
+    visible: bool,
+) {
+    use time::OffsetDateTime;
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+    // Keep the view's poster path source in sync, even when the widget is off this frame.
+    if state.recommendations.cache_dir != cache_dir {
+        state.recommendations.cache_dir = cache_dir.to_path_buf();
+    }
+    // Only fetch while the Home page is actually on screen.
+    if visible && state.page == state::Page::Home {
+        let (language, region) = recommendations_locale(state);
+        let lang = state.preferences.language;
+        let labels = recommendations::DetailLabels {
+            season: lang.t("season").to_string(),
+            seasons: lang.t("seasons").to_string(),
+            // TMDB's composite TV genres that it leaves in English even for pt-BR; override by id
+            // so they read correctly in the UI language.
+            genres: [
+                (10759, "genreActionAdventure"),
+                (10765, "genreSciFiFantasy"),
+                (10768, "genreWarPolitics"),
+                (10762, "genreKids"),
+                (10763, "genreNews"),
+                (10766, "genreSoap"),
+                (10767, "genreTalk"),
+                (10764, "genreReality"),
+            ]
+            .into_iter()
+            .map(|(id, key)| (id as i64, lang.t(key).to_string()))
+            .collect(),
+        };
+        // The TV's apps the worker uses to filter/resolve launchable titles (lean id/title copy).
+        let installed: Vec<recommendations::InstalledApp> = state
+            .inventory
+            .apps
+            .iter()
+            .map(|app| recommendations::InstalledApp {
+                id: app.id.clone(),
+                title: app.title.clone(),
+            })
+            .collect();
+        if let Some(request) = state.recommendations.sync(
+            &state.preferences,
+            &language,
+            &region,
+            cache_dir,
+            &labels,
+            &installed,
+            now,
+        ) {
+            service.send(request);
+        }
+    }
+    while let Ok(response) = service.receiver.try_recv() {
+        match response {
+            recommendations::Response::Loaded { id, result } => {
+                let kind = state.preferences.rec_type;
+                if state.recommendations.accept(id, result, now, kind) {
+                    // Persist the fresh feed so the next launch shows it without a fetch.
+                    state.recommendations.save_cache(feed_cache);
+                }
+                // Posters are on disk; the renderer loads them by path when drawing. Just redraw.
+                state.dirty = true;
+            }
+        }
+    }
+}
+
+/// TMDB language tag and region for the current UI language (region defaults to the key's country).
+fn recommendations_locale(state: &State) -> (String, String) {
+    let language = state.preferences.language;
+    // TMDB accepts BCP-47-ish tags; use the UI language code, defaulting region to a sensible value.
+    let lang = match language.code() {
+        "pt" => "pt-BR".to_string(),
+        other => other.to_string(),
+    };
+    let region = match language.code() {
+        "pt" => "BR",
+        "en" => "US",
+        _ => "US",
+    }
+    .to_string();
+    (lang, region)
+}
+
 fn scripted_click(
     sdl: &sdl2::Sdl,
     window: &sdl2::video::Window,
@@ -694,6 +785,10 @@ fn run() -> Result<(), String> {
     }
     let weather_cache = weather_service::cache_path(&preferences_path);
     state.weather.cache = weather_service::load_cache(&weather_cache);
+    // Restore the last recommendations feed so the widget shows titles at once (no fetch until
+    // the interval expires or the user hits Refresh).
+    let recommendations_cache = recommendations::cache_path(&preferences_path);
+    state.recommendations.load_cache(&recommendations_cache);
     let weather_service = weather_service::Service::new(
         weather_service::Client::new(options.weather_test_server.as_deref())?,
         weather_cache,
@@ -705,6 +800,12 @@ fn run() -> Result<(), String> {
     );
     let webhook_service = webhook::Service::new();
     let update_service = update::Service::new(public_update_checks);
+    // Recommendations widget: TMDB client + a worker, and a disk cache dir for posters.
+    let recommendations_service = recommendations::Service::new(recommendations::Client::new(None));
+    let posters_cache_dir = preferences_path
+        .parent()
+        .map(|dir| dir.join("posters"))
+        .unwrap_or_else(|| std::env::temp_dir().join("luma-posters"));
     effects(
         vec![Effect::Refresh],
         &mut state,
@@ -1199,6 +1300,13 @@ fn run() -> Result<(), String> {
             state.notify(state.preferences.language.format(key, &[("tile", &title)]));
         }
         weather_tick(&mut state, &weather_service, visible);
+        recommendations_tick(
+            &mut state,
+            &recommendations_service,
+            &posters_cache_dir,
+            &recommendations_cache,
+            visible,
+        );
         if std::mem::take(&mut state.update_check_requested) {
             if let Some(version) = &options.test_update_version {
                 state.update_response(Ok(
@@ -1663,6 +1771,13 @@ fn run() -> Result<(), String> {
             platform.send(Request::RefreshInputs);
         }
         weather_tick(&mut state, &weather_service, visible);
+        recommendations_tick(
+            &mut state,
+            &recommendations_service,
+            &posters_cache_dir,
+            &recommendations_cache,
+            visible,
+        );
         // SDL-webOS disables text input when its own panel is dismissed, even
         // if it did not forward a Back/Return key to the application.
         if text_active

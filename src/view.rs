@@ -1355,6 +1355,297 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         }
         out.control(Target::Input(input.id.clone()), rect, true);
     }
+
+    recommendations_row(out, state, assets, now, input_y, inputs.len());
+}
+
+/// The trending recommendations (the widget). Three large cards with poster + title + meta
+/// Word-wrap `text` into at most two lines, each no wider than `width`, greedily. Splits on spaces
+/// so the whole string (e.g. "Ação e Aventura · 1 temporada · Netflix") is distributed across both
+/// lines instead of being clipped. Anything that still doesn't fit stays on line two (clipped).
+fn wrap_two_lines(assets: &Assets, text: &str, style: TextStyle, width: f32) -> (String, String) {
+    if assets.width(text, style) <= width {
+        return (text.to_string(), String::new());
+    }
+    let words: Vec<&str> = text.split(' ').collect();
+    let mut line1 = String::new();
+    let mut i = 0;
+    while i < words.len() {
+        let candidate = if line1.is_empty() {
+            words[i].to_string()
+        } else {
+            format!("{line1} {}", words[i])
+        };
+        if assets.width(&candidate, style) > width && !line1.is_empty() {
+            break;
+        }
+        line1 = candidate;
+        i += 1;
+    }
+    let line2 = words[i..].join(" ");
+    (line1, line2)
+}
+
+/// (genre · year · seasons/runtime), placed in the vertical flow below the inputs so it never
+/// overlaps them, and scrolls with the rest of the Home content via `s`.
+fn recommendations_row(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    now: OffsetDateTime,
+    input_y: f32,
+    input_count: usize,
+) {
+    use crate::state::Target;
+    if !state.preferences.show_recommendations || state.preferences.tmdb_key.trim().is_empty() {
+        return;
+    }
+    let language = state.preferences.language;
+    let interval = state.preferences.rec_interval.seconds();
+    let visible = (state.preferences.rec_count.clamp(5, 10)) as usize; // 5..=10 cards at once
+    let pool = crate::recommendations::MAX_ITEMS; // matches MAX_ITEMS fetched
+    let items = state
+        .recommendations
+        .visible(now.unix_timestamp(), interval, pool);
+
+    let cache_dir = state.posters_cache_dir();
+
+    // End of the inputs block: header (58.4) + ceil(count/3) rows of 126.4 each. Matches the
+    // actual input layout above, so the gap to Recommendations is the same as other sections.
+    let inputs_bottom = if input_count == 0 {
+        input_y
+    } else {
+        let rows = (input_count as f32 / 3.).ceil(); // 3 inputs per row, rounded up
+        input_y + 58.4 + rows * 126.4 - 22.4 // minus the inner padding below the last row
+    };
+    let title_y = inputs_bottom + 34.; // margin-top so the heading isn't glued to the inputs
+    let top = title_y + 46.; // heading -> cards gap
+
+    out.text(
+        language.t("recommendations"),
+        Rect::new(84., title_y, 1000., 31.),
+        text(23.2, 550, -0.035).leading(1.3),
+        WHITE,
+        false,
+    );
+
+    if items.is_empty() {
+        let message = if state.recommendations.loading {
+            language.t("loading")
+        } else if let Some(error) = &state.recommendations.error {
+            error.as_str()
+        } else {
+            language.t("recommendations")
+        };
+        out.text(
+            message,
+            Rect::new(84., top + 20., 1200., 28.),
+            text(18.4, 400, 0.).leading(1.3),
+            c(0xcccccc, 0.7),
+            false,
+        );
+        return;
+    }
+
+    // Size cards so poster + details fit on screen. The row shows `visible` cards plus a sliver
+    // of the next one (a faded peek, like Favorites) to signal there's more to the right.
+    let left = 84.;
+    let right = 1836.;
+    let usable = right - left;
+    let gap = 10.; // small gap so cards sit close together ("coladinhos")
+    // Reserve room for a peeking sliver of the next card (like Favorites), so cards are sized for
+    // `visible + PEEK` columns. Width is still driven by the chosen count, just slightly narrower
+    // to leave the hint space on the right.
+    const PEEK: f32 = 0.42; // fraction of a card that peeks past the strip
+    let card_w = ((usable - (visible as f32 - 1.) * gap) / (visible as f32 + PEEK)).floor();
+    let details_h = 80.; // title + up to two detail lines (genre·duration, then streaming)
+    let card_h = card_w * 3. / 2.; // full movie-poster height
+    let pitch = card_w + gap;
+    // The clip spans exactly `visible` columns; extra cards (carousel) are hidden beyond it.
+    let strip_w = visible as f32 * pitch - gap;
+    // A sliver of the NEXT card peeks past the full strip, faded, only to hint "there's more"
+    // (like the Favorites row). The focused card always sits within the full strip, never in this
+    // peek, so its title/details stay fully readable.
+    let peek = (card_w * PEEK).min(right - left - strip_w);
+    let clip_w = strip_w + peek;
+
+    // Carousel: the visible window starts at window_start (state-held, Netflix-style). The row
+    // only slides when navigation pushes the cursor out of the window, so going back keeps the
+    // row still until the cursor reaches the first visible card. Clamp so the window never runs
+    // past the end (items + refresh slot).
+    let slots = items.len() + 1; // +1 for the refresh card
+    let max_start = slots.saturating_sub(visible);
+    let first = state.recommendations.window_start.min(max_start);
+    let offset = first as f32 * pitch;
+
+    // Clip to the full strip plus the peek sliver of the next card.
+    let view_rect = Rect::new(left - 2., top - 4., clip_w + 4., card_h + details_h + 8.);
+    out.draw.push(Draw::Clip(Some(view_rect)));
+    // Fade only the peek sliver beyond the last full card, so the last FULL (and focusable) card
+    // is never faded. The fade spans just the peek region.
+    out.draw.push(Draw::EdgeFadeX(Some([
+        left - 2.,
+        left - 1.,
+        left + strip_w,
+        left + clip_w,
+    ])));
+
+    let title_style = text(20., 600, -0.02).leading(1.2);
+    // Same style as the Inputs/HDMI status line ("Nenhum dispositivo conectado").
+    let meta_style = text(16.8, 400, 0.).leading(1.5);
+    for (index, item) in items.iter().enumerate() {
+        let x = left + index as f32 * pitch - offset;
+        if x + card_w < 83. || x > 1837. {
+            continue; // fully off-screen
+        }
+        let rect = Rect::new(x, top, card_w, card_h);
+        let focused = state.focus == Target::Recommendation(index);
+        if let Some(path) = item
+            .poster_file(&cache_dir)
+            .filter(|p| p.is_file())
+            .and_then(|p| p.to_str().map(str::to_owned))
+        {
+            out.image(path, rect, 14., true);
+        } else {
+            out.shape(rect, 14., c(0x2c2c2e, 1.));
+        }
+        if focused {
+            out.ring(rect, 14.);
+        }
+        // Register the control tall enough to include the title + details line below the poster,
+        // so remote focus scrolls the Home content down far enough to reveal them (they sit at
+        // top + card_h + 34). The extra BOTTOM_MARGIN makes the scroll stop a little lower, so the
+        // details don't sit glued to the bottom edge of the screen.
+        const BOTTOM_MARGIN: f32 = 28.;
+        out.control(
+            Target::Recommendation(index),
+            Rect::new(x, top, card_w, card_h + details_h + BOTTOM_MARGIN),
+            true,
+        );
+
+        // Title always under the poster (thematic style).
+        out.text(
+            &item.title,
+            Rect::new(x, top + card_h + 8., card_w, 26.),
+            title_style,
+            WHITE,
+            false,
+        );
+        // Details ONLY for the focused card (like Free My TV): Genre · Duration · Streaming.
+        if focused {
+            if !item.detailed {
+                out.text(
+                    language.t("loading"),
+                    Rect::new(x, top + card_h + 34., card_w, 25.2),
+                    meta_style,
+                    c(0xe8e8e8, 0.48),
+                    false,
+                );
+            } else {
+                // Build the full detail string, then word-wrap it across up to two lines so the
+                // whole text ("Ação e Aventura · 1 temporada · Netflix") fits instead of being cut.
+                let mut parts: Vec<String> = Vec::new();
+                if !item.genre.is_empty() {
+                    parts.push(item.genre.clone());
+                }
+                if !item.detail.is_empty() {
+                    parts.push(item.detail.clone());
+                }
+                if let Some(svc) = state
+                    .recommendation_service_name(item)
+                    .or_else(|| item.services.first().cloned())
+                {
+                    parts.push(svc);
+                }
+                let full = parts.join("  ·  ");
+                let color = c(0xe8e8e8, 0.48);
+                let line1_y = top + card_h + 34.;
+                let avail = card_w - 2.;
+                let (line1, line2) = wrap_two_lines(assets, &full, meta_style, avail);
+                if !line1.is_empty() {
+                    out.text(
+                        &line1,
+                        Rect::new(x, line1_y, card_w, 25.2),
+                        meta_style,
+                        color,
+                        false,
+                    );
+                }
+                if !line2.is_empty() {
+                    out.text(
+                        &line2,
+                        Rect::new(x, line1_y + 24., card_w, 25.2),
+                        meta_style,
+                        color,
+                        false,
+                    );
+                }
+            }
+        }
+    }
+
+    // Refresh card at the end: same visual style as the Inputs/HDMI cards (shadow, rounded
+    // gradient, border, focus ring at radius 18.4), with a centered refresh glyph.
+    let refresh_index = items.len();
+    let rx = left + refresh_index as f32 * pitch - offset;
+    if rx + card_w >= 83. && rx <= 1837. {
+        let rect = Rect::new(rx, top, card_w, card_h);
+        let focused = state.focus == Target::Recommendation(refresh_index);
+        out.shadow(
+            rect,
+            18.4,
+            if focused { 34. } else { 4. },
+            if focused { 14. } else { 1. },
+            if focused { 0.4 } else { 0.01 },
+        );
+        out.draw.push(Draw::RoundedGradient(
+            rect,
+            18.4,
+            if focused {
+                c(0x30363c, 0.70)
+            } else {
+                c(0x20252b, 0.60)
+            },
+            if focused {
+                c(0x242a30, 0.65)
+            } else {
+                c(0x171c22, 0.55)
+            },
+        ));
+        out.border(
+            rect,
+            18.4,
+            1.,
+            c(0xffffff, if focused { 0.24 } else { 0.063 }),
+        );
+        if focused {
+            out.ring(rect, 18.4);
+        }
+        // Centered refresh glyph.
+        let icon = (card_w * 0.34).min(96.);
+        out.icon(
+            assets,
+            "refresh",
+            Rect::new(
+                rx + (card_w - icon) / 2.,
+                top + (card_h - icon) / 2.,
+                icon,
+                icon,
+            ),
+            c(0xffffff, if focused { 1.0 } else { 0.7 }),
+        );
+        out.control(Target::Recommendation(refresh_index), rect, true);
+        out.text(
+            language.t("recRefresh"),
+            Rect::new(rx, top + card_h + 8., card_w, 26.),
+            title_style,
+            WHITE,
+            false,
+        );
+    }
+
+    out.draw.push(Draw::EdgeFadeX(None));
+    out.draw.push(Draw::Clip(Some(state.content_viewport())));
 }
 
 struct WeatherSummary {
@@ -2168,6 +2459,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Weather) => language.t("weather"),
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
                 Some(Subpage::Inputs) => language.t("inputs"),
+                Some(Subpage::Recommendations) => language.t("recommendationsSettingsTitle"),
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
@@ -2249,6 +2541,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::Inputs
                 | Subpage::Greeting
                 | Subpage::Date
+                | Subpage::Recommendations
                 | Subpage::AppNames
                 | Subpage::Clock
         ) {
@@ -2259,6 +2552,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::Inputs => inputs_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::Date => date_settings(out, state, assets),
+                Subpage::Recommendations => recommendations_settings(out, state, assets),
                 Subpage::AppNames => app_name_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
                 _ => unreachable!(),
@@ -2348,6 +2642,8 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     )
                 })
                 .collect(),
+            // Subpages that aren't choice lists (their own renderer draws the rows).
+            Subpage::Recommendations => vec![],
         };
         for (index, (title, description, selected)) in options.into_iter().enumerate() {
             let h = if description.is_some() { 90.7 } else { 72. };
@@ -2545,6 +2841,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 (1, "weather", "weather-sun"),
                 (2, "shortcuts", "sparkles"),
                 (3, "inputs", "input-hdmi"),
+                (5, "recommendationsSettingsTitle", "sparkles"),
             ]
             .into_iter()
             .enumerate()
@@ -2839,6 +3136,150 @@ fn date_settings(out: &mut Scene, state: &State, assets: &Assets) {
             },
         );
     }
+}
+
+fn recommendations_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    use crate::model::RecType;
+    let language = state.preferences.language;
+    let prefs = &state.preferences;
+
+    // Toggle: show the widget on Home.
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::RecommendationsToggle,
+            rect: Rect::new(640., 164.8 - state.scroll, 1120., 72.),
+            title: language.t("showWidget"),
+            icon: None,
+            value: Some(language.t(if prefs.show_recommendations {
+                "stateOn"
+            } else {
+                "stateOff"
+            })),
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
+
+    // TMDB API key (opens the keyboard). Shows the live draft while typing; masked when set.
+    let key_description = if state.text_input_active() && state.keyboard_field == TextField::TmdbKey
+    {
+        format!("{}|", prefs.tmdb_key)
+    } else if prefs.tmdb_key.is_empty() {
+        language.t("stateOff").into()
+    } else {
+        "••••••••".into()
+    };
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::RecommendationsKey,
+            rect: Rect::new(640., 248.8 - state.scroll, 1120., 90.7),
+            title: language.t("tmdbKey"),
+            icon: Some("type"),
+            value: None,
+            description: Some(&key_description),
+            selected: false,
+            chevron: true,
+        },
+    );
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::RecommendationsKeyClear,
+            rect: Rect::new(640., 351.5 - state.scroll, 1120., 72.),
+            title: language.t("clearKey"),
+            icon: Some("refresh"),
+            value: None,
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
+
+    // Type: movies / shows / both (cycles on select).
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::RecommendationsType,
+            rect: Rect::new(640., 435.5 - state.scroll, 1120., 72.),
+            title: language.t("recType"),
+            icon: None,
+            value: Some(language.t(match prefs.rec_type {
+                RecType::Movies => "recTypeMovies",
+                RecType::Shows => "recTypeShows",
+                RecType::Both => "recTypeBoth",
+            })),
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
+
+    // Interval: how often the row rotates / the list refreshes (cycles on select).
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::RecommendationsInterval,
+            rect: Rect::new(640., 519.5 - state.scroll, 1120., 72.),
+            title: language.t("recInterval"),
+            icon: None,
+            value: Some(language.t(prefs.rec_interval.label_key())),
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
+
+    // Count: how many cards show at once (1–5); extras scroll as a carousel.
+    let count_value = prefs.rec_count.clamp(5, 10).to_string();
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::RecommendationsCount,
+            rect: Rect::new(640., 603.5 - state.scroll, 1120., 72.),
+            title: language.t("recCount"),
+            icon: None,
+            value: Some(&count_value),
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
+
+    // Hide animation: leave cartoons/anime out of the recommendations.
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::RecommendationsHideAnimation,
+            rect: Rect::new(640., 687.5 - state.scroll, 1120., 72.),
+            title: language.t("recHideAnimation"),
+            icon: None,
+            value: Some(language.t(if prefs.rec_hide_animation {
+                "stateOn"
+            } else {
+                "stateOff"
+            })),
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
 }
 
 fn clock_settings(out: &mut Scene, state: &State, assets: &Assets) {
@@ -3478,6 +3919,7 @@ fn keyboard(out: &mut Scene, state: &State, assets: &Assets) {
             TextField::Name => language.t("greetingName"),
             TextField::InputName => language.t("inputName"),
             TextField::Apps => language.t("findApp"),
+            TextField::TmdbKey => language.t("tmdbKey"),
         },
         Rect::new(389., 324., 1000., 44.),
         text(37.6, 500, -0.055).leading(1.1),
