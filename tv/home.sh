@@ -5,7 +5,7 @@ SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd) || exit 1
 COMMAND=${1:-boot}
 case "$COMMAND" in
   enable|disable|restore|status|apply|boot|early|pin|unpin|startup-home) ;;
-  *) printf '%s\n' 'Usage: home.sh enable [APP_DIR] | disable | restore | status' >&2; exit 1 ;;
+  *) printf '%s\n' 'Usage: home.sh enable [APP_DIR] [HOME_ID] | disable | restore | status' >&2; exit 1 ;;
 esac
 [ "$(id -u)" = 0 ] || { printf '%s\n' 'Run as root.' >&2; exit 1; }
 [ -x /usr/bin/node ] || { printf '%s\n' 'The TV Node.js runtime is missing.' >&2; exit 1; }
@@ -14,7 +14,7 @@ if [ "$COMMAND" = enable ] && grep -q 'release [56]\.' /etc/starfish-release 2>/
     'Enabling Luma Home (webOS 5/6) will:' \
     '  1. Close any running normal Luma instance.' \
     "  2. Create $STATE with integration scripts and saved state." \
-    "  3. Bind-mount Luma's executable over /usr/bin/com.webos.app.home." \
+    "  3. Bind-mount Luma's executable over the selected LG Home executable." \
     "     LG's Home manifest and role stay; Luma registers with SAM itself." \
     '  4. Stop the previous Home process and launch Luma as Home.' \
     '  5. Install /var/lib/webosbrew/init.d/64-luma-home to reapply the mount at cold boot.' \
@@ -42,6 +42,8 @@ elif [ "$COMMAND" = enable ]; then
     ''
 fi
 if [ "$COMMAND" = enable ]; then
+  printf '%s\n' "Selected Home target: ${3:-saved target, otherwise com.webos.app.home}"
+
   while :; do
     printf '%s' 'Apply these changes? [y/n]: '
     if ! IFS= read -r answer; then
@@ -58,7 +60,6 @@ fi
 [ ! -L "$STATE" ] || exit 1
 if [ ! -d "$STATE" ]; then mkdir -m 755 "$STATE" || exit 1; fi
 [ "$(stat -c %u "$STATE")" = 0 ] || exit 1
-EXE=/usr/bin/com.webos.app.home
 MARKER=/var/run/luma-home
 # bootd opens physicalLastSourceAppId from EIM's lastinput at every power-on: Live TV before Luma.
 # A read-only copy naming Home is bind-mounted over it (EIM's in-place rewrite then fails
@@ -82,6 +83,15 @@ pin_lastinput() {
 # The boot fast path uses the JSON prepared when the owner opts in; restoration uses Node's
 # JSON parser below, never a key-order-dependent text substitution.
 if [ "$COMMAND" = pin ]; then pin_lastinput; exit; fi
+if [ "$COMMAND" = early ] || [ "$COMMAND" = boot ]; then
+  # The Home target chosen at enable (home.cjs selectHome); configurations without one use home.
+  HOME_ID=$(sed -n 's/^  "homeId": "\([^"]*\)".*/\1/p' "$STATE/state.json" 2>/dev/null)
+  case "${HOME_ID:=com.webos.app.home}" in
+    com.webos.app.home|com.webos.app.fullhome) ;;
+    *) printf '%s\n' "Unsupported Home target: $HOME_ID" >&2; exit 1 ;;
+  esac
+  EXE=/usr/bin/$HOME_ID
+fi
 if [ "$COMMAND" = early ]; then
   # From luma-early, ~18 s into a cold boot (see src/bin/luma-early.rs): the executable method's
   # mount without Node, which would cost seconds under boot load. Opens nothing; the key filter
@@ -104,6 +114,8 @@ if [ "$COMMAND" = early ]; then
     done
   fi
   [ "$(stat -c '%d %i' "$app/luma")" = "$(stat -c '%d %i' "$EXE")" ] || exit 1
+  # Luma registers with SAM under this identity (src/platform.rs), as after home.cjs apply.
+  printf '%s\n' "$HOME_ID" >"$MARKER-target"
   printf '%s\n' com.ecklf.luma >"$MARKER"
   pin_lastinput || printf '%s early: lastinput not pinned\n' "$(date)" >>"$STATE/boot.log"
   printf '%s early: Luma is Home (uptime %s)\n' "$(date)" "$(cut -d' ' -f1 /proc/uptime)" >>"$STATE/boot.log"
@@ -120,4 +132,4 @@ if [ "$COMMAND" = boot ]; then
 fi
 exec 9>"$STATE/lock"
 flock -n 9 || { printf '%s\n' 'Luma Home integration is already being changed.' >&2; exit 1; }
-exec /usr/bin/node "$SCRIPT_DIR/home.cjs" "$COMMAND" "${2:-$SCRIPT_DIR}"
+exec /usr/bin/node "$SCRIPT_DIR/home.cjs" "$COMMAND" "${2:-$SCRIPT_DIR}" "${3:-}"

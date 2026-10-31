@@ -31,6 +31,21 @@ var FILTER = STATE + '/home-filter.js';
 var KEY_FILTERS = 'com.webos.surfacemanager.keyFilters';
 var FILTER_HANDLER = 'lumaHomeKey';
 
+// Firmware may route the Home key to fullhome instead of home. Keep the choice explicit:
+// the foreground app alone cannot tell which app a future Home key will launch.
+function selectHome(id) {
+  if (id !== 'com.webos.app.home' && id !== 'com.webos.app.fullhome') {
+    throw new Error('Unsupported Home target: ' + id);
+  }
+  HOME = id;
+  TARGET = '/usr/palm/applications/' + HOME;
+  EXE = '/usr/bin/' + HOME;
+}
+
+function savedHome(config) {
+  selectHome((config && config.homeId) || 'com.webos.app.home');
+}
+
 function read(file) {
   return fs.readFileSync(file, 'utf8');
 }
@@ -312,7 +327,7 @@ function unmountExe() {
 }
 
 function homeMethod(release, stock) {
-  if (/release\s+(10|11)\./.test(release)) return 'manifest';
+  if (/release\s+(10|11)\./.test(release) && HOME === 'com.webos.app.home') return 'manifest';
   if (
     /release\s+[56]\./.test(release) &&
     stock &&
@@ -476,6 +491,7 @@ function restoreExecutable(config) {
   var root = exeMount();
   if (root && !exeOwned(root)) throw new Error('Another integration is mounted over LG Home');
   if (fs.existsSync(MARKER)) fs.unlinkSync(MARKER);
+  if (fs.existsSync(MARKER + '-target')) fs.unlinkSync(MARKER + '-target');
   var inputError = null;
   try {
     lastInput('unpin');
@@ -499,6 +515,7 @@ function applyExecutable(config, open) {
     if (root && !exeMounted(config.appDir)) unmountExe();
     if (!exeMounted(config.appDir)) run('/bin/mount', ['--bind', config.appDir + '/luma', EXE]);
     if (!exeMounted(config.appDir)) throw new Error('The Home bind mount did not take');
+    fs.writeFileSync(MARKER + '-target', HOME + '\n', { mode: 420 });
     fs.writeFileSync(MARKER, APP + '\n', { mode: 420 });
     stopHome(config.appDir);
     lastInput('pin');
@@ -577,7 +594,8 @@ function stageSplash(appDir) {
   candidates.push(appDir + '/preferences.json');
   for (var i = 0; i < candidates.length; i++) {
     try {
-      var saved = json(candidates[i]).background;
+      var preferences = json(candidates[i]);
+      var saved = preferences.splash_background || preferences.background;
       if (typeof saved === 'string' && /^[a-z0-9-]{1,32}$/.test(saved)) {
         background = saved;
         break;
@@ -620,12 +638,19 @@ function apply(config, open) {
   }
 }
 
+// The key filter launches the selected Home target (selectHome allows only known ids).
+function filterSource(source) {
+  var line = "var lumaHomeTarget = 'com.webos.app.home';";
+  if (source.split(line).length !== 2) throw new Error('home-filter.js has no Home target line');
+  return source.replace(line, "var lumaHomeTarget = '" + HOME + "';");
+}
+
 function installScripts() {
   ['home.sh', 'home.cjs', 'home-filter.js'].forEach(function (name) {
     var target = STATE + '/' + name;
     var data = fs.readFileSync(path.join(__dirname, name));
     if (name === 'home-filter.js')
-      data = String(data).replace(
+      data = filterSource(String(data)).replace(
         'var lumaHomeInputOverride = false;',
         'var lumaHomeInputOverride = ' + fs.existsSync(INPUT_FLAG) + ';'
       );
@@ -758,6 +783,12 @@ function installHook() {
 }
 
 function install(appDir) {
+  var existing = fs.existsSync(CONFIG) ? json(CONFIG) : null;
+  var requested = process.argv[4] || (existing && existing.homeId) || 'com.webos.app.home';
+  if (existing && existing.enabled && requested !== (existing.homeId || 'com.webos.app.home')) {
+    throw new Error('Disable the existing Home integration before changing its target');
+  }
+  selectHome(requested);
   appDir = fs.realpathSync(appDir);
   var app = json(appDir + '/appinfo.json');
   if (app.id !== APP || app.type !== 'native' || app.main !== 'luma') {
@@ -783,7 +814,7 @@ function install(appDir) {
   closeNormal();
   if (method === 'executable') {
     installScripts();
-    var exeConfig = { enabled: false, method: method, appDir: appDir, stock: stock };
+    var exeConfig = { enabled: false, method: method, homeId: HOME, appDir: appDir, stock: stock };
     writeJson(CONFIG, exeConfig);
     installHook();
     apply(exeConfig, true);
@@ -809,7 +840,7 @@ function install(appDir) {
   writeJson(STAGE + '/appinfo.json', app);
   fs.writeFileSync(STAGE + '/.luma-home', APP + '\n', { mode: 420 });
   installScripts();
-  var config = { enabled: false, method: method, appDir: appDir, stock: stock };
+  var config = { enabled: false, method: method, homeId: HOME, appDir: appDir, stock: stock };
   writeJson(CONFIG, config);
   installHook();
   apply(config, true);
@@ -830,10 +861,17 @@ try {
     restoreInputPolicy();
   } else if (command === 'status') {
     var saved = fs.existsSync(CONFIG) ? json(CONFIG) : null;
+    savedHome(saved);
     console.log(
       JSON.stringify(
         {
           enabled: !!(saved && saved.enabled),
+          homeId: HOME,
+          homeKeyVerified: null,
+          note: 'A mount does not verify Home-key routing. Press Home to test; some firmware uses com.webos.app.fullhome.',
+          availableTargets: ['com.webos.app.home', 'com.webos.app.fullhome'].filter(function (id) {
+            return fs.existsSync('/usr/palm/applications/' + id + '/appinfo.json');
+          }),
           method: saved ? saved.method || 'manifest' : null,
           mounted: saved && saved.method === 'executable' ? exeMounted(saved.appDir) : mounted(),
           bootHook: hookOwned(),
@@ -849,6 +887,7 @@ try {
   } else if (command === 'apply' || command === 'disable' || command === 'restore') {
     if (!fs.existsSync(CONFIG)) throw new Error('Luma Home has not been enabled');
     var config = json(CONFIG);
+    savedHome(config);
     if (command === 'apply' && config.enabled) {
       apply(config, false);
     } else {
