@@ -67,7 +67,8 @@ pub enum Draw {
     Text(String, Rect, TextStyle, Color, bool),
     Image(String, Rect, f32, bool),
     TintedImage(String, Rect, f32, bool, Color),
-    AppImage(Arc<crate::app_artwork::Artwork>, Rect, Color),
+    /// Installed icon and its backdrop, composited before opacity and edge fading.
+    AppImage(Arc<crate::app_artwork::Artwork>, Rect, f32, Color),
     Clip(Option<Rect>),
     EdgeFade(Option<[f32; 4]>),
     /// Horizontal counterpart: [left fade-in start, end, right fade-out start, end].
@@ -188,6 +189,7 @@ enum BatchKind {
         texture: GLuint,
         start: usize,
         count: usize,
+        backdrop: Option<[[u8; 3]; 2]>,
     },
     Vector {
         path: String,
@@ -571,9 +573,10 @@ impl Renderer {
         color: Color,
         texture: GLuint,
     ) {
-        self.gradient_quad(rect, uv, radius, border, [color, color], texture);
+        self.gradient_quad(rect, uv, radius, border, [color, color], texture, None);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn gradient_quad(
         &mut self,
         rect: Rect,
@@ -582,6 +585,7 @@ impl Renderer {
         border: f32,
         colors: [Color; 2],
         texture: GLuint,
+        backdrop: Option<[[u8; 3]; 2]>,
     ) {
         if rect.w <= 0. || rect.h <= 0. {
             return;
@@ -607,12 +611,18 @@ impl Renderer {
                 border,
             ]);
         }
-        self.paint_batch(start, 6, texture);
+        self.paint_batch(start, 6, texture, backdrop);
     }
 
     /// Appends `count` paint vertices from `start`, merged into the previous batch when it uses
     /// the same texture, clip and fade.
-    fn paint_batch(&mut self, start: usize, count: usize, texture: GLuint) {
+    fn paint_batch(
+        &mut self,
+        start: usize,
+        count: usize,
+        texture: GLuint,
+        backdrop: Option<[[u8; 3]; 2]>,
+    ) {
         if let Some(batch) = self.batches.last_mut() {
             let same_clip = match (batch.clip, self.clip) {
                 (None, None) => true,
@@ -624,9 +634,11 @@ impl Renderer {
                 && let BatchKind::Paint {
                     texture: previous,
                     count: batch_count,
+                    backdrop: previous_backdrop,
                     ..
                 } = &mut batch.kind
                 && *previous == texture
+                && *previous_backdrop == backdrop
             {
                 *batch_count += count;
                 return;
@@ -637,6 +649,7 @@ impl Renderer {
                 texture,
                 start,
                 count,
+                backdrop,
             },
             clip: self.clip,
             fade: self.fade,
@@ -687,7 +700,7 @@ impl Renderer {
                 ]);
             }
         }
-        self.paint_batch(start, STRIPS * 6, texture);
+        self.paint_batch(start, STRIPS * 6, texture, None);
     }
 
     fn text(&mut self, text: &str, rect: Rect, style: TextStyle, color: Color, centered: bool) {
@@ -1086,7 +1099,13 @@ impl Renderer {
         });
     }
 
-    fn app_image(&mut self, image: &crate::app_artwork::Artwork, rect: Rect, tint: Color) {
+    fn app_image(
+        &mut self,
+        image: &crate::app_artwork::Artwork,
+        rect: Rect,
+        radius: f32,
+        tint: Color,
+    ) {
         let entry = self.textures.entry(image.key.clone()).or_insert_with(|| {
             Some(texture(
                 image.pixels.width(),
@@ -1098,17 +1117,24 @@ impl Renderer {
             return;
         };
         texture.frame = self.frame;
-        let scale = (rect.w / texture.width as f32).min(rect.h / texture.height as f32);
+        let scale =
+            (rect.w * 0.68 / texture.width as f32).min(rect.h * 0.68 / texture.height as f32);
         let w = texture.width as f32 * scale;
         let h = texture.height as f32 * scale;
         let id = texture.id;
-        self.quad(
-            Rect::new(rect.x + (rect.w - w) / 2., rect.y + (rect.h - h) / 2., w, h),
-            [0., 0., 1., 1.],
-            plain_radius(0.),
+        self.gradient_quad(
+            rect,
+            [
+                0.5 - rect.w / (2. * w),
+                0.5 - rect.h / (2. * h),
+                0.5 + rect.w / (2. * w),
+                0.5 + rect.h / (2. * h),
+            ],
+            radius,
             0.,
-            tint,
+            [tint; 2],
             id,
+            Some(image.backdrop),
         );
     }
 
@@ -1224,6 +1250,7 @@ impl Renderer {
                     0.,
                     [*top, *bottom],
                     self.white.id,
+                    None,
                 ),
                 Draw::Shadow(rect, radius, blur, color) => self.quad(
                     rect.inset(-*blur),
@@ -1242,7 +1269,9 @@ impl Renderer {
                 Draw::TintedImage(path, rect, radius, contain, tint) => {
                     self.image(path, *rect, *radius, *contain, *tint)
                 }
-                Draw::AppImage(image, rect, tint) => self.app_image(image, *rect, *tint),
+                Draw::AppImage(image, rect, radius, tint) => {
+                    self.app_image(image, *rect, *radius, *tint)
+                }
                 Draw::Clip(clip) => self.clip = *clip,
                 Draw::EdgeFade(fade) => self.set_fade(0, *fade),
                 Draw::EdgeFadeX(fade) => self.set_fade(4, *fade),
@@ -1347,6 +1376,7 @@ impl Renderer {
                         texture,
                         start,
                         count,
+                        backdrop,
                     } => {
                         if !paint_bound {
                             gl::UseProgram(self.program);
@@ -1367,6 +1397,22 @@ impl Renderer {
                             paint_bound = true;
                         }
                         gl::BindTexture(gl::TEXTURE_2D, *texture);
+                        gl::Uniform1i(
+                            gl::GetUniformLocation(self.program, c"u_app".as_ptr()),
+                            i32::from(backdrop.is_some()),
+                        );
+                        if let Some(stops) = backdrop {
+                            for (name, rgb) in
+                                [(c"u_app_top", stops[0]), (c"u_app_bottom", stops[1])]
+                            {
+                                gl::Uniform3f(
+                                    gl::GetUniformLocation(self.program, name.as_ptr()),
+                                    rgb[0] as f32 / 255.,
+                                    rgb[1] as f32 / 255.,
+                                    rgb[2] as f32 / 255.,
+                                );
+                            }
+                        }
                         gl::DrawArrays(gl::TRIANGLES, *start as i32, *count as i32);
                     }
                     BatchKind::Vector { path, rect, tint } => {

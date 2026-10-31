@@ -540,7 +540,7 @@ fn grid_and_options_use_matching_adaptive_hearts_without_a_backing_circle() {
 }
 
 #[test]
-fn visible_cards_switch_from_fallback_to_installed_artwork_without_an_icon_map() {
+fn visible_cards_switch_from_fallback_to_a_single_composited_installed_surface() {
     let assets = crate::view::Assets {
         root: PathBuf::new(),
         version: "test".into(),
@@ -581,15 +581,30 @@ fn visible_cards_switch_from_fallback_to_installed_artwork_without_an_icon_map()
             .iter()
             .any(|draw| matches!(draw, crate::renderer::Draw::AppImage(..)))
     });
-    let image = scene()
+    let loaded = scene();
+    let (image, face, radius) = loaded
         .draw
-        .into_iter()
+        .iter()
         .find_map(|draw| match draw {
-            crate::renderer::Draw::AppImage(image, _, _) => Some(image),
+            crate::renderer::Draw::AppImage(image, rect, radius, _) => Some((image, rect, radius)),
             _ => None,
         })
         .unwrap();
     assert_eq!(image.backdrop, [[24, 40, 56]; 2]);
+    assert!(*radius > 0.);
+    // The image command covers the entire rounded face, not just the inset icon.
+    // A separate backdrop would be faded twice under the icon and expose its box.
+    let same_face =
+        |r: &crate::state::Rect| r.x == face.x && r.y == face.y && r.w == face.w && r.h == face.h;
+    assert!(loaded.draw.iter().any(|draw| matches!(draw,
+        crate::renderer::Draw::Shape(rect, r, border, _) if same_face(rect) && r == radius && *border == 1.
+    )));
+    assert!(!loaded.draw.iter().any(|draw| match draw {
+        crate::renderer::Draw::Shape(rect, _, border, _) => same_face(rect) && *border == 0.,
+        crate::renderer::Draw::RoundedGradient(rect, ..)
+        | crate::renderer::Draw::Image(_, rect, ..) => same_face(rect),
+        _ => false,
+    }));
 }
 
 #[test]

@@ -256,7 +256,7 @@ impl Scene {
                 | Draw::Shadow(_, _, _, color)
                 | Draw::Text(_, _, _, color, _)
                 | Draw::TintedImage(_, _, _, _, color)
-                | Draw::AppImage(_, _, color) => apply(color),
+                | Draw::AppImage(_, _, _, color) => apply(color),
                 Draw::RoundedGradient(_, _, a, b) => {
                     apply(a);
                     apply(b);
@@ -923,19 +923,9 @@ fn app_face(
     } else {
         c(0xffffff, 1.)
     };
-    if let Some([top, bottom]) = artwork.as_ref().map(|image| image.backdrop) {
-        let color = |rgb: [u8; 3]| rgb.map(|c| c as f32 / 255.);
-        let [top, bottom] = [color(top), color(bottom)];
-        if top == bottom {
-            out.shape(rect, radius, [top[0], top[1], top[2], 1.]);
-        } else {
-            out.draw.push(Draw::RoundedGradient(
-                rect,
-                radius,
-                [top[0], top[1], top[2], 1.],
-                [bottom[0], bottom[1], bottom[2], 1.],
-            ));
-        }
+    let installed = artwork.is_some();
+    if let Some(image) = artwork {
+        out.draw.push(Draw::AppImage(image, rect, radius, [1.; 4]));
     } else {
         out.image(
             assets.path(format!("surfaces/{}.png", app.brand)),
@@ -959,18 +949,7 @@ fn app_face(
             0.,
             true,
         );
-    } else if let Some(image) = artwork {
-        out.draw.push(Draw::AppImage(
-            image,
-            Rect::new(
-                rect.x + rect.w * 0.16,
-                rect.y + rect.h * 0.16,
-                rect.w * 0.68,
-                rect.h * 0.68,
-            ),
-            [1.; 4],
-        ));
-    } else {
+    } else if !installed {
         brand_mark(out, assets, app, rect, language);
     }
     favorite_color
