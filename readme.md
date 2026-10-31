@@ -180,6 +180,14 @@ bind-mounts Luma's executable over LG's `/usr/bin/com.webos.app.home`. LG's Home
 in place and Luma registers with SAM itself, so the Home key brings the running Luma back instead
 of restarting it. The commands and the cold-boot hook are the same.
 
+A cold boot opens Luma at about 20 s instead of after the Homebrew hook (~50 s or later). The
+Homebrew hooks start late, but LG's service hub reads `/var/luna-service2` at `core-boot-done`.
+`home.sh enable` therefore also registers a small root helper there (`com.webos.service.lumahome`,
+a copy of the package's `luma-early` in `/var/lib/luma-home`) and adds a compositor key filter
+(`home-filter.js`) to LG's chain. While the TV boots, the filter asks the helper to mount Luma and
+then opens Home. If this fails, the cold-boot hook mounts Luma as before. Keys pass through the
+filter unchanged, and `home.sh disable` removes both.
+
 </details>
 
 <details>

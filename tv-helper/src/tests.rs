@@ -11,6 +11,7 @@ use std::{
 };
 const DIR: &str = "/media/developer/apps/usr/palm/applications/com.ecklf.luma";
 const EXE: &str = "/usr/bin/com.webos.app.home";
+const FILTER_SOURCE: &str = include_str!("../../tv/home-filter.js");
 struct Fixture {
     root: PathBuf,
     calls: RefCell<Vec<String>>,
@@ -24,6 +25,10 @@ struct Fixture {
     pauses: Cell<usize>,
     fail_unmount: Cell<bool>,
     stuck: Cell<bool>,
+    /// LG's com.webos.surfacemanager.keyFilters chain in com.webos.service.config.
+    filters: RefCell<Vec<Value>>,
+    fail_config: Cell<bool>,
+    fail_ls_control: Cell<bool>,
 }
 impl Fixture {
     fn new() -> Self {
@@ -53,6 +58,12 @@ impl Fixture {
             pauses: Cell::new(0),
             fail_unmount: Cell::new(false),
             stuck: Cell::new(false),
+            filters: RefCell::new(vec![
+                json!({"handler":"handleScreenSaver","file":"/usr/lib/qt5/qml/KeyFilters/systemUi.js"}),
+                json!({"handler":"handleSystemKeys","file":"/usr/lib/qt5/qml/KeyFilters/systemUi.js"}),
+            ]),
+            fail_config: Cell::new(false),
+            fail_ls_control: Cell::new(false),
         };
         for dir in [
             "/var/lib/luma-home/app",
@@ -74,6 +85,8 @@ impl Fixture {
         f.put_json(&format!("{DIR}/appinfo.json"),json!({"id":APP,"type":"native","main":"luma","icon":"app-icon.png","largeIcon":"app-icon-large.png","supportGIP":true}));
         f.put(&format!("{DIR}/luma"), b"native-luma");
         f.put(&format!("{DIR}/luma-helper"), b"native-helper");
+        f.put(&format!("{DIR}/luma-early"), b"native-early");
+        f.put(&format!("{DIR}/home-filter.js"), FILTER_SOURCE.as_bytes());
         f.put(&format!("{DIR}/home.sh"), b"#!/bin/sh\n");
         f.put(&format!("{DIR}/splash.png"), b"default");
         for name in ["dunes", "forest", "prism"] {
@@ -195,6 +208,18 @@ impl System for Fixture {
             self.unmount(args.last().unwrap());
             return Ok(ok(json!({})));
         }
+        if program == "/usr/sbin/ls-control" {
+            let fail = self.fail_ls_control.get();
+            return Ok(Output {
+                stdout: vec![],
+                stderr: if fail {
+                    b"ls-control failed".to_vec()
+                } else {
+                    vec![]
+                },
+                success: !fail,
+            });
+        }
         if program != "/usr/bin/luna-send" {
             panic!("Unexpected system command: {program}");
         }
@@ -237,6 +262,20 @@ impl System for Fixture {
                     ),
                 )?;
                 json!({"returnValue":true,"appInfo":app})
+            }
+            "getConfigs" if self.fail_config.get() => {
+                json!({"returnValue":false,"errorText":"config service unavailable"})
+            }
+            "getConfigs" => {
+                json!({"returnValue":true,"configs":{"com.webos.surfacemanager.keyFilters":*self.filters.borrow()}})
+            }
+            "setConfigs" => {
+                *self.filters.borrow_mut() =
+                    payload["configs"]["com.webos.surfacemanager.keyFilters"]
+                        .as_array()
+                        .unwrap()
+                        .clone();
+                json!({"returnValue":true})
             }
             "blockSystemApp" | "releaseBlockSystemApp" | "addDevice" | "deleteDevice" => {
                 json!({"returnValue":true})
@@ -954,4 +993,132 @@ fn persistent_preferences_win_over_package_local_migration_and_active_stages_ref
         f.read("/usr/palm/applications/com.webos.app.home/splash.png"),
         b"prism"
     );
+}
+const LS2_SERVICE: &str = "/var/luna-service2/services.d/com.webos.service.lumahome.service";
+fn ours(f: &Fixture) -> usize {
+    f.filters
+        .borrow()
+        .iter()
+        .filter(|e| e["file"] == home::FILTER)
+        .count()
+}
+#[test]
+fn the_early_helper_is_a_dynamic_ls2_service_only_the_key_filter_may_call() {
+    let files = home::early_files();
+    let ls2 = "/var/luna-service2";
+    let name = home::EARLY;
+    assert_eq!(
+        files.keys().cloned().collect::<Vec<_>>(),
+        vec![
+            format!("{ls2}/api-permissions.d/{name}.json"),
+            format!("{ls2}/manifests.d/{name}.json"),
+            format!("{ls2}/roles.d/{name}.json"),
+            format!("{ls2}/services.d/{name}.service"),
+        ]
+    );
+    assert_eq!(
+        files[&format!("{ls2}/services.d/{name}.service")],
+        format!("[D-BUS Service]\nName={name}\nExec=/var/lib/luma-home/luma-early\nType=dynamic\n")
+    );
+    let role: Value = serde_json::from_str(&files[&format!("{ls2}/roles.d/{name}.json")]).unwrap();
+    // Not under /media/developer: ls-hubd would treat it as a developer-mode service.
+    assert_eq!(role["exeName"], "/var/lib/luma-home/luma-early");
+    assert_eq!(role["allowedNames"], json!([name]));
+    assert_eq!(
+        role["permissions"],
+        json!([{"service":name,"inbound":["com.webos.starfish.keyfilters"],"outbound":[]}])
+    );
+    // "all" is the only API group LG grants the key filter.
+    let api: Value =
+        serde_json::from_str(&files[&format!("{ls2}/api-permissions.d/{name}.json")]).unwrap();
+    assert_eq!(api, json!({"all":[format!("{name}/prepare")]}));
+    let manifest: Value =
+        serde_json::from_str(&files[&format!("{ls2}/manifests.d/{name}.json")]).unwrap();
+    // ls-hubd ignores the whole manifest unless its version is x.y.z.
+    let version = manifest["version"].as_str().unwrap();
+    assert_eq!(version.split('.').count(), 3);
+    assert!(version.split('.').all(|p| p.parse::<u32>().is_ok()));
+    let mut listed: Vec<String> = ["serviceFiles", "roleFiles", "apiPermissionFiles"]
+        .iter()
+        .flat_map(|k| manifest[*k].as_array().unwrap().clone())
+        .map(|v| v.as_str().unwrap().to_owned())
+        .collect();
+    listed.sort();
+    let mut expected: Vec<String> = files
+        .keys()
+        .filter(|f| !f.contains("/manifests.d/"))
+        .cloned()
+        .collect();
+    expected.sort();
+    assert_eq!(listed, expected);
+}
+#[test]
+fn the_key_filter_is_appended_once_to_lg_filter_chain_and_removed_again() {
+    let ours = json!({"file":home::FILTER,"handler":"lumaHomeKey"});
+    let lg = vec![
+        json!({"file":"/usr/lib/qml/filters/screensaver.js","handler":"handleScreenSaver"}),
+        json!({"file":"/usr/lib/qml/filters/magic.js","handler":"handleMagic"}),
+    ];
+    let with = [lg.clone(), vec![ours.clone()]].concat();
+    assert_eq!(home::key_filters(&lg, true), with);
+    assert_eq!(home::key_filters(&with, true), with);
+    assert_eq!(
+        home::key_filters(&[vec![ours.clone()], lg.clone()].concat(), false),
+        lg
+    );
+}
+#[test]
+fn enable_installs_the_early_start_and_disable_removes_it_again() {
+    let f = Fixture::new();
+    home::dispatch(&f, "enable", Some(DIR), None).unwrap();
+    assert_eq!(f.read("/var/lib/luma-home/luma-early"), b"native-early");
+    assert!(system::exists(&f, LS2_SERVICE));
+    assert_eq!(ours(&f), 1);
+    assert!(
+        f.calls()
+            .iter()
+            .any(|c| c.contains("ls-control scan-volatile-dirs"))
+    );
+    assert!(!system::exists(&f, "/var/lib/luma-home/home.cjs"));
+    let filter = String::from_utf8(f.read(home::FILTER)).unwrap();
+    assert!(filter.contains("var lumaHomeTarget = 'com.webos.app.home';"));
+    let status = home::dispatch(&f, "status", None, None).unwrap();
+    assert_eq!(status["earlyStart"], true);
+    home::dispatch(&f, "disable", None, None).unwrap();
+    assert!(!system::exists(&f, LS2_SERVICE));
+    assert!(!system::exists(&f, "/var/lib/luma-home/luma-early"));
+    assert_eq!(ours(&f), 0);
+    assert_eq!(f.filters.borrow().len(), 2);
+}
+#[test]
+fn a_failed_early_install_still_leaves_luma_as_home() {
+    let f = Fixture::new();
+    f.fail_ls_control.set(true);
+    home::dispatch(&f, "enable", Some(DIR), None).unwrap();
+    assert!(home::load(&f).unwrap().unwrap().enabled);
+    assert!(system::same_file(&f, EXE, format!("{DIR}/luma")));
+}
+#[test]
+fn disable_restores_lg_home_and_removes_the_hook_and_helper_even_when_ls2_cleanup_fails() {
+    let f = Fixture::new();
+    home::dispatch(&f, "enable", Some(DIR), None).unwrap();
+    f.fail_config.set(true);
+    f.fail_ls_control.set(true);
+    home::dispatch(&f, "disable", None, None).unwrap();
+    assert_eq!(f.read(EXE), b"stock-com.webos.app.home");
+    assert!(!system::exists(
+        &f,
+        "/var/lib/webosbrew/init.d/64-luma-home"
+    ));
+    assert!(!system::exists(&f, "/var/lib/luma-home/luma-early"));
+    for file in home::early_files().keys() {
+        assert!(!system::exists(&f, file));
+    }
+}
+#[test]
+fn installed_filter_template_names_the_selected_target() {
+    let installed = home::filter_source(FILTER_SOURCE, home::FULL_HOME).unwrap();
+    assert!(installed.contains("var lumaHomeTarget = 'com.webos.app.fullhome';"));
+    assert!(home::filter_source("var other = 1;", home::HOME).is_err());
+    assert!(home::filter_source(FILTER_SOURCE, "com.webos.app.livetv").is_err());
 }
