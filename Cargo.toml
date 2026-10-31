@@ -9,14 +9,15 @@ license = "MIT"
 description = "A remote-first native launcher for rooted LG webOS TVs"
 
 [workspace]
-members = ["vector-geometry", "tools/vector-assets"]
+members = ["vector-geometry", "tools/vector-assets", "tv-helper"]
 resolver = "3"
 
 [features]
 default = []
-webos = ["dep:libc"]
+webos = ["dep:libc", "luma-tv-helper/webos"]
 
 [dependencies]
+luma-tv-helper = { path = "tv-helper" }
 getrandom = "0.2"
 gl = "0.14"
 if-addrs = "0.14"

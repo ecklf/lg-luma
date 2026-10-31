@@ -3083,6 +3083,7 @@ pub fn input_status(input: &Input, renamed: bool, language: Language) -> String 
     parts.push(match input.connected {
         Some(false) => language.t("noDevice"),
         None => language.t("externalInput"),
+        Some(true) if input.signal == Some(false) => language.t("noSignal"),
         Some(true) => language.t("connected"),
     });
     parts.join(" · ")
