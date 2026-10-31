@@ -1563,6 +1563,7 @@ fn weather_units_save_without_replacing_celsius_cache_and_hide_keeps_city() {
             code: 2,
             is_day: true,
         },
+        details: None,
     });
     state.focus = Target::WeatherTemperature;
     state.activate();
@@ -3268,4 +3269,150 @@ fn update_card_shows_progress_restores_retry_and_ignores_presses_while_busy() {
     assert_eq!(state.update, InstallStatus::Idle);
     state.install_response(Response::Finished(Ok(())));
     assert_eq!(state.update_status, Status::Unchecked);
+}
+
+fn weather_with_details(state: &mut State) {
+    let place = crate::weather::Location {
+        name: "Vienna".into(),
+        region: "Vienna".into(),
+        country: "Austria".into(),
+        latitude: 48.2085,
+        longitude: 16.3721,
+    };
+    state.preferences.weather_location = Some(place.clone());
+    let hours = (0..8)
+        .map(|index| crate::weather::Hour {
+            time: index * 3600,
+            temperature: 12. + index as f64,
+            code: 2,
+            is_day: true,
+            rain: Some(10 * index as u8),
+        })
+        .collect();
+    state.weather.cache = Some(crate::weather::Cache {
+        key: place.key(),
+        updated_at: 0,
+        reading: crate::weather::Reading {
+            temperature: 12.4,
+            code: 2,
+            is_day: true,
+        },
+        details: Some(crate::weather::Details {
+            offset: 0,
+            high: Some(15.1),
+            low: Some(6.6),
+            sunrise: Some(6 * 3600 + 52 * 60),
+            sunset: Some(17 * 3600 + 31 * 60),
+            uv: Some(3.2),
+            hours,
+            air: Some(12.),
+            air_requested: true,
+        }),
+    });
+}
+
+#[test]
+fn weather_details_are_switched_in_settings_and_left_returns_to_widgets() {
+    let mut state = ready();
+    state.open(2);
+    state.focus = Target::Widget(1);
+    state.activate();
+    assert_eq!(state.subpage, Some(crate::state::Subpage::Weather));
+    state.focus = Target::WeatherTemperature;
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::WeatherDetail(0));
+    for index in 0..crate::state::WEATHER_DETAILS.len() {
+        state.focus = Target::WeatherDetail(index);
+        assert!(controls(&state).iter().any(|c| c.target == state.focus));
+        assert_eq!(state.activate(), vec![Effect::Save]);
+        assert!(state.preferences.weather_detail(index));
+    }
+    assert!(
+        state
+            .direction(Direction::Right, &controls(&state))
+            .is_empty()
+    );
+    assert!(state.preferences.weather_hourly, "Right does not switch");
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::WeatherCard);
+    assert!(state.preferences.weather_card, "the card is on by default");
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!state.preferences.weather_card);
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::Widget(1));
+}
+
+#[test]
+fn weather_details_and_hours_leave_favorites_and_inputs_in_place() {
+    let mut state = ready();
+    weather_with_details(&mut state);
+    let positions = |scene: &view::Scene| -> Vec<_> {
+        scene
+            .controls
+            .iter()
+            .filter(|c| matches!(c.target, Target::App(_) | Target::Input(_)))
+            .map(|c| (c.target.clone(), c.rect.x, c.rect.y))
+            .collect()
+    };
+    let card = |scene: &view::Scene| {
+        scene.draw.iter().find_map(|draw| match draw {
+            crate::renderer::Draw::RoundedGradient(rect, ..) if rect.x > 1300. => Some(*rect),
+            _ => None,
+        })
+    };
+    let line = ["Vienna", "12°C", "Partly cloudy"];
+    let plain = scene(&state);
+    let text = scene_text_of(&plain);
+    assert!(line.iter().all(|part| text.iter().any(|t| t == part)));
+    assert!(!text.iter().any(|t| t.contains('↑') || t == "Now"));
+    assert!(card(&plain).is_none());
+
+    state.preferences.weather_high_low = true;
+    state.preferences.weather_air = true;
+    state.preferences.weather_rain = true;
+    state.preferences.weather_sun = true;
+    state.preferences.weather_hourly = true;
+    let detailed = scene(&state);
+    assert_eq!(positions(&plain), positions(&detailed));
+    let text = scene_text_of(&detailed);
+    // The short line under the greeting stays as it was.
+    assert!(line.iter().all(|part| text.iter().any(|t| t == part)));
+    let joined = text.join("\n");
+    for expected in [
+        "↑15° ↓7°",
+        "Air: good",
+        "UV 3",
+        // The most likely of the current hour and the two after it.
+        "Rain chance 20%",
+        "Sunrise 6:52 AM",
+        "Sunset 5:31 PM",
+        // Five hours from the current one.
+        "Now",
+        "4:00 AM",
+        "16°",
+    ] {
+        assert!(joined.contains(expected), "{expected} in {joined}");
+    }
+    assert!(!joined.contains("5:00 AM"));
+    let rect = card(&detailed).expect("weather card");
+    assert!(rect.x + rect.w <= 1836.1 && rect.w <= 0.3 * 1752. + 1.);
+    assert!(rect.y >= 120. && rect.y + rect.h <= 478.5);
+
+    // Without the card the same details sit straight on the wallpaper.
+    state.preferences.weather_card = false;
+    let bare = scene(&state);
+    assert!(card(&bare).is_none());
+    assert!(scene_text_of(&bare).join("\n").contains("Air: good"));
+    assert_eq!(positions(&plain), positions(&bare));
+}
+
+fn scene_text_of(scene: &view::Scene) -> Vec<String> {
+    scene
+        .draw
+        .iter()
+        .filter_map(|draw| match draw {
+            crate::renderer::Draw::Text(text, ..) => Some(text.clone()),
+            _ => None,
+        })
+        .collect()
 }
