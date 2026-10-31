@@ -72,8 +72,14 @@ wait "$SEND" 2>/dev/null || true
 SEND=
 head -c 4000 "$OUT" >>"$LOG"
 grep -q '"state": *"installed"' "$OUT" || fail 'Package installation failed or timed out; see /var/lib/luma-update/update.log.'
+# A top-level string value from appinfo.json or state.json, minified or pretty-printed, without
+# Node. Neither file nests the key; callers compare or allowlist the value, so a miss fails safe.
+json_string() {
+  [ -f "$1" ] || return 1
+  tr -d '\n' <"$1" | sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p"
+}
 installed() {
-  node -e 'try { process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).version); } catch (e) { process.exit(1); }' "$APP_DIR/appinfo.json"
+  json_string "$APP_DIR/appinfo.json" version
 }
 i=0
 while [ "$(installed)" != "$VERSION" ] && [ $i -lt 30 ]; do i=$((i + 1)); sleep 1; done
@@ -83,7 +89,8 @@ launch() {
   printf '%s\n' "$reply" >>"$LOG"
   printf '%s\n' "$reply" | grep -q '"returnValue": *true'
 }
-HOME_ID=$(node -e 'try { var c = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(c.homeId || "com.webos.app.home"); } catch (e) { process.stdout.write("com.webos.app.home"); }' "$HOME_STATE/state.json")
+HOME_ID=$(json_string "$HOME_STATE/state.json" homeId)
+HOME_ID=${HOME_ID:-com.webos.app.home}
 case "$HOME_ID" in
   com.webos.app.home|com.webos.app.fullhome) ;;
   *) fail 'The saved Home target is invalid.' ;;

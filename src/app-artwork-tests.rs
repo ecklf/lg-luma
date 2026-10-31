@@ -449,7 +449,98 @@ fn decoded_cache_evicts_old_icons_when_scrolling_through_many_apps() {
 }
 
 #[test]
-fn visible_cards_switch_from_fallback_to_installed_artwork_without_an_icon_map() {
+fn favorite_badge_uses_the_local_gradient_and_maximum_black_white_contrast() {
+    let mut artwork = decode(&encoded(ImageFormat::Png, 32, 32, [255; 4])).unwrap();
+    assert!(artwork.dark_badge(0.));
+    artwork.backdrop = [[0; 3]; 2];
+    assert!(!artwork.dark_badge(0.));
+    artwork.backdrop = [[255; 3], [0; 3]];
+    assert!(artwork.dark_badge(19.2 / 154.4));
+    assert!(!artwork.dark_badge(1.));
+    // Choose by linear luminance, not an arbitrary sRGB brightness threshold.
+    for value in 0..=255 {
+        artwork.backdrop = [[value; 3]; 2];
+        let background = luminance([value; 3]);
+        let foreground = if artwork.dark_badge(0.125) { 0. } else { 1. };
+        assert!(
+            super::contrast(foreground, background) >= super::contrast(1. - foreground, background)
+        );
+        assert!(super::contrast(foreground, background) >= 4.5);
+    }
+}
+
+#[test]
+fn grid_and_options_use_matching_adaptive_hearts_without_a_backing_circle() {
+    use crate::{renderer::Draw, state::Target};
+    for (pixel, expected) in [([255; 4], [0., 0., 0., 1.]), ([0, 0, 0, 255], [1.; 4])] {
+        let assets = crate::view::Assets {
+            root: PathBuf::new(),
+            version: "test".into(),
+            metrics: Default::default(),
+            artwork: Service::with_loader(true, move |_| {
+                decode(&encoded(ImageFormat::Png, 32, 32, pixel))
+            }),
+        };
+        let apps = crate::platform::normalize_apps(&json!([
+            {"id":"regional.app", "title":"Regional App"}
+        ]))
+        .unwrap();
+        let mut state = crate::state::State::new(crate::model::Preferences {
+            favorites: Some(vec!["regional.app".into()]),
+            reduced_motion: true,
+            ..Default::default()
+        });
+        state.set_inventory(
+            crate::model::Inventory {
+                apps,
+                inputs: vec![],
+            },
+            None,
+        );
+        state.open(1);
+        state.focus = Target::App("regional.app".into());
+        let render = |state: &crate::state::State| {
+            crate::view::scene_with_pill(
+                state,
+                &assets,
+                800.,
+                100.,
+                time::OffsetDateTime::UNIX_EPOCH,
+            )
+        };
+        poll_until(&assets.artwork, || {
+            render(&state)
+                .draw
+                .iter()
+                .any(|draw| matches!(draw, Draw::AppImage(..)))
+        });
+        for popup in [false, true] {
+            if popup {
+                state.options();
+            }
+            let scene = render(&state);
+            let colors: Vec<_> = scene
+                .draw
+                .iter()
+                .filter_map(|draw| match draw {
+                    Draw::TintedImage(path, rect, _, _, color)
+                        if path.ends_with("heart-filled.lvec") && rect.w == 16. =>
+                    {
+                        Some(*color)
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(colors, vec![expected; if popup { 2 } else { 1 }]);
+            assert!(!scene.draw.iter().any(|draw| matches!(draw,
+                Draw::Shape(rect, radius, _, _) if rect.w == 28. && rect.h == 28. && *radius == 14.
+            )));
+        }
+    }
+}
+
+#[test]
+fn visible_cards_switch_from_fallback_to_a_single_composited_installed_surface() {
     let assets = crate::view::Assets {
         root: PathBuf::new(),
         version: "test".into(),
@@ -490,15 +581,30 @@ fn visible_cards_switch_from_fallback_to_installed_artwork_without_an_icon_map()
             .iter()
             .any(|draw| matches!(draw, crate::renderer::Draw::AppImage(..)))
     });
-    let image = scene()
+    let loaded = scene();
+    let (image, face, radius) = loaded
         .draw
-        .into_iter()
+        .iter()
         .find_map(|draw| match draw {
-            crate::renderer::Draw::AppImage(image, _, _) => Some(image),
+            crate::renderer::Draw::AppImage(image, rect, radius, _) => Some((image, rect, radius)),
             _ => None,
         })
         .unwrap();
     assert_eq!(image.backdrop, [[24, 40, 56]; 2]);
+    assert!(*radius > 0.);
+    // The image command covers the entire rounded face, not just the inset icon.
+    // A separate backdrop would be faded twice under the icon and expose its box.
+    let same_face =
+        |r: &crate::state::Rect| r.x == face.x && r.y == face.y && r.w == face.w && r.h == face.h;
+    assert!(loaded.draw.iter().any(|draw| matches!(draw,
+        crate::renderer::Draw::Shape(rect, r, border, _) if same_face(rect) && r == radius && *border == 1.
+    )));
+    assert!(!loaded.draw.iter().any(|draw| match draw {
+        crate::renderer::Draw::Shape(rect, _, border, _) => same_face(rect) && *border == 0.,
+        crate::renderer::Draw::RoundedGradient(rect, ..)
+        | crate::renderer::Draw::Image(_, rect, ..) => same_face(rect),
+        _ => false,
+    }));
 }
 
 #[test]

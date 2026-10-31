@@ -290,13 +290,14 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "luma"
-version = "2.16.0"
+version = "2.16.2"
 dependencies = [
  "getrandom",
  "gl",
  "if-addrs",
  "image",
  "libc",
+ "luma-tv-helper",
  "luma-vector-geometry",
  "owned_ttf_parser",
  "qrcodegen",
@@ -306,6 +307,15 @@ dependencies = [
  "serde_json",
  "time",
  "ureq",
+]
+
+[[package]]
+name = "luma-tv-helper"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

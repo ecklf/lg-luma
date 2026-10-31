@@ -13,6 +13,9 @@ mod recent_tests;
 #[path = "wallpapers-ui-tests.rs"]
 mod wallpaper_tests;
 
+#[path = "input-refresh-tests.rs"]
+mod input_refresh_tests;
+
 fn ready() -> State {
     let mut state = State::new(Preferences::default());
     state.set_inventory(demo_inventory(), None);
@@ -463,6 +466,7 @@ fn auto_input_visibility_requires_a_positive_connection_report() {
         title: "Console".into(),
         port: "HDMI 1".into(),
         connected: None,
+        signal: None,
     };
     assert!(!preferences.input_visible(&input));
     input.connected = Some(true);
@@ -1254,24 +1258,11 @@ fn opening_side_popup_preserves_card_artwork_geometry_with_or_without_captions()
             let hearts = |draws: &[crate::renderer::Draw]| {
                 draws
                     .iter()
-                    .enumerate()
-                    .filter_map(|(index, draw)| match draw {
+                    .filter_map(|draw| match draw {
                         crate::renderer::Draw::Image(path, rect, ..)
                         | crate::renderer::Draw::TintedImage(path, rect, ..)
                             if path.contains("heart-filled") && rect.x < 350. =>
                         {
-                            let crate::renderer::Draw::Shape(backing, radius, border, color) =
-                                &draws[index - 1]
-                            else {
-                                panic!("Favorite heart must have a contrast backing");
-                            };
-                            assert_eq!(*radius, 14.);
-                            assert_eq!(*border, 0.);
-                            assert_eq!((backing.w, backing.h), (28., 28.));
-                            assert!((backing.x + 6. - rect.x).abs() < 0.001);
-                            assert!((backing.y + 6. - rect.y).abs() < 0.001);
-                            assert!(color[..3].iter().all(|channel| *channel < 0.1));
-                            assert!(color[3] >= 0.79);
                             Some([rect.x, rect.y, rect.w, rect.h])
                         }
                         _ => None,
@@ -1963,6 +1954,7 @@ fn custom_input_names_keep_the_label_port_and_status_as_detail() {
         title: "AVR-X1800H".into(),
         port: "HDMI 2".into(),
         connected: Some(true),
+        signal: None,
     };
     let language = preferences.language;
     let status = |preferences: &Preferences| {

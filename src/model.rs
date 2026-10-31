@@ -80,12 +80,14 @@ impl App {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Input {
     pub id: String,
     pub title: String,
     pub port: String,
     pub connected: Option<bool>,
+    /// Optional signal information; never overrides the cable state or Auto visibility.
+    pub signal: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -576,18 +578,21 @@ pub fn demo_inventory() -> Inventory {
                 title: "PlayStation 5".into(),
                 port: "HDMI 1".into(),
                 connected: Some(true),
+                signal: None,
             },
             Input {
                 id: "com.webos.app.hdmi2".into(),
                 title: "Apple TV".into(),
                 port: "HDMI 2".into(),
                 connected: Some(true),
+                signal: None,
             },
             Input {
                 id: "com.webos.app.hdmi3".into(),
                 title: "HDMI 3".into(),
                 port: "HDMI 3".into(),
                 connected: Some(false),
+                signal: None,
             },
         ],
     };

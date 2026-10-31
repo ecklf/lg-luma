@@ -2174,6 +2174,21 @@
     "nl": "Verbonden",
     "sv": "Ansluten"
   },
+  "noSignal": {
+    "en": "No signal",
+    "de": "Kein Signal",
+    "es": "Sin señal",
+    "zh": "无信号",
+    "pt": "Sem sinal",
+    "it": "Nessun segnale",
+    "ru": "Нет сигнала",
+    "pl": "Brak sygnału",
+    "fr": "Aucun signal",
+    "nl": "Geen signaal",
+    "sv": "Ingen signal",
+    "vi": "Không có tín hiệu",
+    "zh-tw": "無訊號"
+  },
   "noDevice": {
     "zh-tw": "未連線裝置",
     "en": "No device connected",

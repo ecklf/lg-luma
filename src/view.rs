@@ -256,7 +256,7 @@ impl Scene {
                 | Draw::Shadow(_, _, _, color)
                 | Draw::Text(_, _, _, color, _)
                 | Draw::TintedImage(_, _, _, _, color)
-                | Draw::AppImage(_, _, color) => apply(color),
+                | Draw::AppImage(_, _, _, color) => apply(color),
                 Draw::RoundedGradient(_, _, a, b) => {
                     apply(a);
                     apply(b);
@@ -845,6 +845,7 @@ fn tile(
         9. + 5. * amount,
         0.165 + 0.235 * amount,
     );
+
     if home && amount > 0. {
         // Two inexpensive GPU distance-field glows, with no texture blur or CPU readback.
         out.draw.push(Draw::Shadow(
@@ -853,12 +854,17 @@ fn tile(
             32.,
             c(0xdceaff, 0.32 * amount),
         ));
-        out.draw
-            .push(Draw::Shadow(rect, 19.2, 10., c(0xffffff, 0.45 * amount)));
+        out.draw.push(Draw::Shadow(
+            rect,
+            19.2,
+            10.,
+            c(0xffffff, 0.45 * amount),
+        ));
     }
-    app_face(out, assets, app, rect, state.preferences.language, 19.2);
+    let favorite_color = app_face(out, assets, app, rect, state.preferences.language, 19.2);
+
     if pinned {
-        favorite_badge(out, assets, rect);
+        favorite_badge(out, assets, rect, favorite_color);
     }
     if state.moving.as_ref() == Some(&app.id) {
         let indicator = Rect::new(
@@ -925,11 +931,9 @@ fn tile(
     }
 }
 
-fn favorite_badge(out: &mut Scene, assets: &Assets, card: Rect) {
+fn favorite_badge(out: &mut Scene, assets: &Assets, card: Rect, color: Color) {
     let icon = Rect::new(card.x + card.w - 27.2, card.y + 11.2, 16., 16.);
-    // Keep the white heart legible even over white installed artwork.
-    out.shape(icon.inset(-6.), 14., c(0x101318, 0.79));
-    out.icon(assets, "heart-filled", icon, c(0xffffff, 0.9));
+    out.icon(assets, "heart-filled", icon, color);
 }
 
 /// Shared card artwork for Home, Apps and Recents. Curated vectors always take
@@ -941,7 +945,7 @@ fn app_face(
     rect: Rect,
     language: Language,
     radius: f32,
-) {
+) -> Color {
     let logo = crate::branding::for_key(&app.brand);
     let artwork = logo
         .is_none()
@@ -951,19 +955,19 @@ fn app_face(
                 .and_then(|source| assets.artwork.get(source))
         })
         .flatten();
-    if let Some([top, bottom]) = artwork.as_ref().map(|image| image.backdrop) {
-        let color = |rgb: [u8; 3]| rgb.map(|c| c as f32 / 255.);
-        let [top, bottom] = [color(top), color(bottom)];
-        if top == bottom {
-            out.shape(rect, radius, [top[0], top[1], top[2], 1.]);
-        } else {
-            out.draw.push(Draw::RoundedGradient(
-                rect,
-                radius,
-                [top[0], top[1], top[2], 1.],
-                [bottom[0], bottom[1], bottom[2], 1.],
-            ));
-        }
+    // The heart's centre is 19.2px below the top, outside the inset installed icon.
+    // Bundled and generic surfaces are dark, so their badge remains white.
+    let favorite_color = if artwork
+        .as_ref()
+        .is_some_and(|image| image.dark_badge(19.2 / rect.h))
+    {
+        c(0x000000, 1.)
+    } else {
+        c(0xffffff, 1.)
+    };
+    let installed = artwork.is_some();
+    if let Some(image) = artwork {
+        out.draw.push(Draw::AppImage(image, rect, radius, [1.; 4]));
     } else {
         out.image(
             assets.path(format!("surfaces/{}.png", app.brand)),
@@ -987,20 +991,10 @@ fn app_face(
             0.,
             true,
         );
-    } else if let Some(image) = artwork {
-        out.draw.push(Draw::AppImage(
-            image,
-            Rect::new(
-                rect.x + rect.w * 0.16,
-                rect.y + rect.h * 0.16,
-                rect.w * 0.68,
-                rect.h * 0.68,
-            ),
-            [1.; 4],
-        ));
-    } else {
+    } else if !installed {
         brand_mark(out, assets, app, rect, language);
     }
+    favorite_color
 }
 
 fn caption_height(state: &State, assets: &Assets, app: &App, width: f32) -> f32 {
@@ -3119,6 +3113,7 @@ pub fn input_status(input: &Input, renamed: bool, language: Language) -> String 
     parts.push(match input.connected {
         Some(false) => language.t("noDevice"),
         None => language.t("externalInput"),
+        Some(true) if input.signal == Some(false) => language.t("noSignal"),
         Some(true) => language.t("connected"),
     });
     parts.join(" · ")
@@ -3247,9 +3242,9 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
         out.image(path, card, 16., false);
         out.border(card, 16., 1., c(0xffffff, 0.086));
     } else if let Some(app) = app.filter(|_| !shortcut) {
-        app_face(out, assets, app, card, language, 19.2);
+        let favorite_color = app_face(out, assets, app, card, language, 19.2);
         if favorite {
-            favorite_badge(out, assets, card);
+            favorite_badge(out, assets, card, favorite_color);
         }
     }
     let panel_start = out.draw.len();
