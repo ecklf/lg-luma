@@ -753,6 +753,13 @@ than `event`; `platform::Lifecycle::from_reply` reads both and feeds the same `r
 handling as v2.
 
 - Startup does not wait for SAM. Until it answers, Home is simply unregistered.
+- When SAM starts Home with a nonempty `preload` launch parameter, Luma creates its window
+  hidden and starts unfocused, without presenting frames. A later lifecycle `relaunch` uses
+  the existing restore/show/raise path. This applies to both Home identities and integration
+  methods, independently of registration success; normal Luma tile launches are unchanged.
+  Manually verify that preload leaves an active app or HDMI input in front, Home reveals Luma,
+  and Home still works with registration refused or `/var/lib/luma-home/no-lifecycle` present
+  (SAM's restart fallback). Hidden-window behavior requires TV verification.
 - No answer within 10 s, a refused answer or the child ending before an answer kills and reaps
   the child and leaves Home unregistered, as before this integration: SAM restarts it per Home
   key. Once SAM has accepted the registration, losing it (a later `returnValue: false` or the

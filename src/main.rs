@@ -63,6 +63,8 @@ use time::OffsetDateTime;
 #[derive(Default)]
 struct Options {
     webos_home: bool,
+    /// SAM preload launches must stay in the background until an ordinary Home launch.
+    preload: Option<String>,
     assets: Option<PathBuf>,
     preferences: Option<PathBuf>,
     screenshot: Option<PathBuf>,
@@ -81,6 +83,26 @@ struct Options {
 }
 
 impl Options {
+    fn apply_launch_metadata(&mut self, metadata: &serde_json::Value) {
+        // Luma's staged Home passes nid; LG's executable-based Home passes appId.
+        self.webos_home = ["nid", "appId"].iter().any(|key| {
+            metadata
+                .get(key)
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(platform::is_home_id)
+        }) || platform::runs_as_lg_home();
+        self.preload = self
+            .webos_home
+            .then(|| metadata.get("preload").and_then(serde_json::Value::as_str))
+            .flatten()
+            .filter(|mode| !mode.is_empty())
+            .map(str::to_owned);
+    }
+
+    fn start_hidden(&self) -> bool {
+        self.webos_home && self.preload.is_some()
+    }
+
     fn parse() -> Result<Self, String> {
         let mut result = Self::default();
         let mut args = std::env::args().skip(1).peekable();
@@ -96,17 +118,7 @@ impl Options {
             if let Some(argument) = args.next() {
                 let metadata: serde_json::Value =
                     serde_json::from_str(&argument).map_err(|error| error.to_string())?;
-                // Luma's own Home manifest passes "nid"; LG's Home manifest (Luma run in
-                // place of LG's Home executable) passes "appId" with lifecycle v2.
-                result.webos_home = metadata
-                    .get("nid")
-                    .and_then(serde_json::Value::as_str)
-                    .is_some_and(platform::is_home_id)
-                    || metadata
-                        .get("appId")
-                        .and_then(serde_json::Value::as_str)
-                        .is_some_and(platform::is_home_id)
-                    || platform::runs_as_lg_home();
+                result.apply_launch_metadata(&metadata);
             }
             eprintln!("Luma webOS launch parameters accepted");
         }
@@ -753,9 +765,16 @@ fn run() -> Result<(), String> {
     } else {
         Size::new(1280, 720)
     });
+    let start_hidden = options.start_hidden();
+    if let Some(mode) = &options.preload {
+        eprintln!("Luma launch: preload={mode}; starting hidden until Home is launched");
+    }
     let create_window = || {
         let mut builder = video.window("Luma", requested.width, requested.height);
         builder.opengl().allow_highdpi().position_centered();
+        if start_hidden {
+            builder.hidden();
+        }
         if options.fullscreen || (webos && options.resolution.is_none()) {
             builder.fullscreen_desktop();
         } else if webos {
@@ -935,7 +954,7 @@ fn run() -> Result<(), String> {
         };
     // Whether a staged Home's relaunch reached the front; see platform::ForegroundCheck.
     let mut foreground = platform::ForegroundCheck::default();
-    let mut focused = true;
+    let mut focused = !start_hidden;
     let mut press: Option<Press> = None;
     let mut back_button = BackButton::default();
     let initial_nav = view::navigation(&assets, state.preferences.language);
@@ -944,7 +963,7 @@ fn run() -> Result<(), String> {
     let mut last_frame = Instant::now();
     let mut last_minute = None;
     let mut frame = 0u64;
-    let mut visible = true;
+    let mut visible = !start_hidden;
     let mut running = true;
     let mut queued_event = None;
     let mut text_active = false;
