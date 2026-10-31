@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Background · Luma</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="app.css" />
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand"><img src="luma-mark.svg" alt="" /><span>luma</span></div>
+      </header>
+      <h1>Add a background</h1>
+      <p class="intro">Choose a photo for your TV.</p>
+      <label class="picker" id="picker">
+        <input id="file" type="file" accept="image/jpeg,image/png,image/webp" />
+        <span class="picker-icon" aria-hidden="true">↑</span>
+        <span class="picker-title" id="picker-title">Choose an image</span>
+        <span class="picker-hint">JPG, PNG or WebP <i>·</i> Up to 16 MiB / 32 MP</span>
+      </label>
+      <form id="editor" hidden>
+        <div class="preview">
+          <canvas
+            id="preview"
+            width="960"
+            height="540"
+            aria-label="Drag to adjust the 16:9 crop."
+          ></canvas>
+          <span class="ratio">JPEG <i>·</i> 1920 × 1080</span>
+        </div>
+        <label class="zoom" for="zoom"
+          ><span>Zoom</span><input id="zoom" type="range" min="1" max="3" step="0.01" value="1"
+        /></label>
+        <div class="actions">
+          <button id="change" type="button" class="secondary">Choose another</button>
+          <button id="submit" type="submit">Save to TV</button>
+        </div>
+      </form>
+      <section id="success" class="success" aria-live="polite" hidden>
+        <span class="success-mark" aria-hidden="true">✓</span>
+        <h2>Success</h2>
+        <p>Your background was uploaded to</p>
+        <code id="success-path"></code>
+        <button id="another" type="button">Add another one</button>
+      </section>
+      <p id="status" role="status" aria-live="polite"></p>
+      <footer id="storage-footer">
+        <span>Stored on this TV at</span>
+        <code id="storage-path">Finding storage location…</code>
+      </footer>
+    </main>
+  </body>
+</html>

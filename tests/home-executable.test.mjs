@@ -5,6 +5,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 const script = await fs.readFile(new URL('../tv/home.cjs', import.meta.url), 'utf8');
+const fsSource = await fs.readFile(new URL('../tv/home-filter.js', import.meta.url), 'utf8');
 const exe = '/usr/bin/com.webos.app.home';
 const appDir = '/media/developer/apps/usr/palm/applications/com.ecklf.luma';
 const marker = '/var/run/luma-home';
@@ -39,14 +40,26 @@ function tv({ root = null, same = false, front = ['com.webos.app.home'] } = {}) 
   const state = { root, same, fronts: [...front], marker: false };
   Object.assign(context, {
     fs: {
-      existsSync: (file) => file === `${appDir}/luma` || (file === marker && state.marker),
+      existsSync: (file) =>
+        file === `${appDir}/luma` ||
+        (file === marker && state.marker) ||
+        (file === marker + '-target' && state.target),
       writeFileSync(file, data) {
+        if (file === marker + '-target') {
+          assert.equal(String(data), context.HOME + '\n');
+          state.target = true;
+          return;
+        }
         assert.equal(file, marker);
         assert.equal(String(data), 'com.ecklf.luma\n');
         calls.push('mark');
         state.marker = true;
       },
       unlinkSync(file) {
+        if (file === marker + '-target') {
+          state.target = false;
+          return;
+        }
         assert.equal(file, marker);
         calls.push('unmark');
         state.marker = false;
@@ -348,4 +361,76 @@ test('changing the input policy replaces the live QML context even if the filter
   context.writeInputFilter();
   assert.deepEqual(calls, [false, 'settle', true]);
   assert.equal(source, 'var lumaHomeInputOverride = false;');
+});
+
+test('fullhome uses its own executable, manifest and launch identity throughout apply and restore', () => {
+  const { context, calls, state } = tv({ front: ['com.webos.app.fullhome'] });
+  context.selectHome('com.webos.app.fullhome');
+  assert.equal(context.EXE, '/usr/bin/com.webos.app.fullhome');
+  assert.equal(context.TARGET, '/usr/palm/applications/com.webos.app.fullhome');
+  assert.equal(
+    context.homeMethod('Rockhopper release 5.6.2', {
+      ...lgHome,
+      id: context.HOME,
+      main: 'file://' + context.EXE,
+    }),
+    'executable',
+  );
+  context.applyExecutable({ method: 'executable', appDir }, true);
+  assert.ok(calls.includes(`mount --bind ${appDir}/luma /usr/bin/com.webos.app.fullhome`));
+  assert.equal(state.target, true);
+  context.restore({ method: 'executable', appDir });
+  assert.ok(calls.includes('umount /usr/bin/com.webos.app.fullhome'));
+  assert.equal(state.target, false);
+});
+
+test('saved Home target survives boot/disable; old configurations default to home', () => {
+  const context = load();
+  context.savedHome({ homeId: 'com.webos.app.fullhome' });
+  assert.equal(context.HOME, 'com.webos.app.fullhome');
+  context.savedHome({ method: 'executable' });
+  assert.equal(context.HOME, 'com.webos.app.home');
+  for (const id of ['../../etc/passwd', 'com.webos.app.livetv', '', null]) {
+    assert.throws(() => context.selectHome(id), /Unsupported Home target/);
+  }
+});
+
+test('the installed key filter launches the selected Home target', () => {
+  const context = load();
+  context.selectHome('com.webos.app.fullhome');
+  const installed = context.filterSource(fsSource);
+  assert.ok(installed.includes("var lumaHomeTarget = 'com.webos.app.fullhome';"));
+  assert.ok(!installed.includes("var lumaHomeTarget = 'com.webos.app.home';"));
+  assert.throws(() => context.filterSource('var other = 1;'), /no Home target line/);
+});
+
+test('startup-home pins the selected fullhome target', () => {
+  const context = load();
+  const files = new Map([
+    [
+      '/var/lib/eim/lastinput',
+      JSON.stringify({
+        appId: 'com.webos.app.hdmi1',
+        physicalLastSourceAppId: 'com.webos.app.hdmi1',
+      }),
+    ],
+  ]);
+  Object.assign(context, {
+    fs: {
+      existsSync: (f) => files.has(f),
+      writeFileSync: (f, d) => files.set(f.replace(/\.new$/, ''), d),
+      renameSync() {},
+      unlinkSync: (f) => files.delete(f),
+    },
+    read: (f) => files.get(f),
+    execFileSync() {},
+    inputSettings: () => ({ settings: { lastInputApp: 'com.webos.app.hdmi1' } }),
+    writeInputFilter() {},
+  });
+  context.savedHome({ homeId: 'com.webos.app.fullhome' });
+  context.configureInputPolicy({ enabled: true, method: 'executable' }, true);
+  assert.equal(
+    JSON.parse(files.get('/var/lib/luma-home/lastinput')).physicalLastSourceAppId,
+    'com.webos.app.fullhome',
+  );
 });

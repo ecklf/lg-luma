@@ -14,6 +14,8 @@ var lumaHomeLaunches = 0;
 var lumaHomeShown = false; // Home came to the front after a launch from here
 var lumaHomeInputOverride = false; // Changed only by explicit startup-home opt-in.
 var lumaHomeLastInput = null; // general/lastInputApp, null until the settings service answers
+// The selected Home target; home.cjs installScripts writes it into the installed copy.
+var lumaHomeTarget = 'com.webos.app.home';
 
 function lumaHomeParse(payload) {
   return typeof payload === 'string' ? JSON.parse(payload) : payload;
@@ -99,16 +101,16 @@ function lumaHomePinInput() {
   if (
     !lumaHomeInputOverride ||
     lumaHomeLastInput === null ||
-    lumaHomeLastInput === 'com.webos.app.home' ||
+    lumaHomeLastInput === lumaHomeTarget ||
     !lumaHomeFront ||
     lumaHomeIsInput(lumaHomeFront)
   )
     return;
-  lumaHomeLastInput = 'com.webos.app.home';
+  lumaHomeLastInput = lumaHomeTarget;
   lunaCall.send(
     'com.webos.settingsservice',
     '/setSystemSettings',
-    JSON.stringify({ category: 'general', settings: { lastInputApp: 'com.webos.app.home' } }),
+    JSON.stringify({ category: 'general', settings: { lastInputApp: lumaHomeTarget } }),
     function () {}
   );
 }
@@ -139,7 +141,7 @@ function lumaHomeOpen() {
   if (
     lumaHomeEarly !== 'ready' ||
     lumaHomeShown ||
-    lumaHomeFront === 'com.webos.app.home' ||
+    lumaHomeFront === lumaHomeTarget ||
     lumaHomeLaunches >= 2
   )
     return;
@@ -148,7 +150,7 @@ function lumaHomeOpen() {
   lunaCall.send(
     'com.webos.applicationManager',
     '/launch',
-    JSON.stringify({ id: 'com.webos.app.home' }),
+    JSON.stringify({ id: lumaHomeTarget }),
     function () {}
   );
   // Right after the snapshot's Home stopped, SAM can accept a launch without starting anything.
@@ -189,7 +191,7 @@ function init() {
         try {
           var r = lumaHomeParse(payload);
           lumaHomeFront = (r && r.appId) || '';
-          if (lumaHomeFront === 'com.webos.app.home' && lumaHomeLaunches) lumaHomeShown = true;
+          if (lumaHomeFront === lumaHomeTarget && lumaHomeLaunches) lumaHomeShown = true;
           else lumaHomeOpen();
           lumaHomeSplashCheck();
           lumaHomePinInput();

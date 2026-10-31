@@ -1,4 +1,5 @@
 name: Release PR
+run-name: 'Prepare Version Packages · ${{ github.sha }}'
 
 on:
   push:
@@ -67,6 +68,15 @@ jobs:
                 '',
                 'Synchronize package.json, appinfo.json, the root Cargo.toml, Cargo.lock and the README IPK examples.',
                 'Merging this PR into main publishes the verified IPK and Homebrew feed after CI passes.',
+                '',
+                '**Rollout after merge**',
+                '',
+                '1. The main-commit CI run verifies the merged Version Packages PR and version increase.',
+                '2. Checks and shared assets prepare once, then four smoke jobs and the ARM package run in parallel.',
+                '3. All validation must succeed before the publish job uploads the release and Homebrew feed.',
+                `4. Follow the [CI runs](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/workflows/ci.yml) and their Release rollout summary for publication status.`,
+                '',
+                'The dispatched version-branch run is validation only and never publishes. If publication fails after merge, rerun failed jobs on the original main-commit CI run.',
               ].join('\n'),
             });
             // GITHUB_TOKEN-created PRs do not trigger pull_request workflows.
@@ -76,3 +86,8 @@ jobs:
               workflow_id: 'ci.yml',
               ref: pull.head.ref,
             });
+            await core.summary.addHeading(`Luma ${version}: Version Packages`)
+              .addLink(`Review PR #${pull_number}`, pull.html_url)
+              .addRaw('\n\nVersion-branch validation dispatched. This does not publish. Merge the PR to start release eligibility, parallel validation/package jobs, and guarded publication on main.\n')
+              .addLink('Follow CI rollout', `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/workflows/ci.yml`)
+              .write();

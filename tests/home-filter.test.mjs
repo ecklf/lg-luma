@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const script = await fs.readFile(new URL('../tv/home-filter.js', import.meta.url), 'utf8');
 
 // LG's compositor filter context: luna calls, a timer, and subscriptions the test drives.
-function compositor({ window = false, inputOverride = true } = {}) {
+function compositor({ window = false, inputOverride = true, source = script } = {}) {
   const calls = [];
   const splashes = [];
   const subscriptions = {};
@@ -38,7 +38,7 @@ function compositor({ window = false, inputOverride = true } = {}) {
       },
     },
   });
-  vm.runInContext(script, context);
+  vm.runInContext(source, context);
   context.lumaHomeInputOverride = inputOverride;
   context.init();
   const emit = (method, value) => subscriptions[method](JSON.stringify(value));
@@ -212,4 +212,20 @@ test('ordinary Home takeover never overrides Back/Exit', () => {
   tv.lastInput('com.webos.app.hdmi2');
   tv.front('netflix');
   assert.deepEqual(tv.calls, []);
+});
+
+test('with fullhome selected, the filter launches and recognizes fullhome', () => {
+  const line = "var lumaHomeTarget = 'com.webos.app.home';";
+  assert.ok(script.includes(line));
+  const tv = compositor({
+    source: script.replace(line, "var lumaHomeTarget = 'com.webos.app.fullhome';"),
+  });
+  tv.boot(false);
+  tv.front('com.webos.app.livetv');
+  tv.early(true);
+  assert.deepEqual(tv.calls, ['/launch com.webos.app.fullhome']);
+  tv.front('com.webos.app.fullhome');
+  tv.front('com.webos.app.hdmi1');
+  tv.timers.find(([ms]) => ms === 8000)[1]();
+  assert.deepEqual(tv.calls, ['/launch com.webos.app.fullhome']);
 });
