@@ -85,7 +85,7 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     manifest.largeIcon,
     'autostart.sh',
     'home.sh',
-    'home.cjs',
+    'luma-helper',
     'splash.png',
     'lib/libSDL2-2.0.so.0',
     'licenses/sdl2.txt',
@@ -126,17 +126,19 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     if (!owned.some((file) => file.name.endsWith(`/${required}`) && file.data.length > 0))
       throw new Error(`Package is missing ${required}.`);
   }
-  const executable = owned.find((file) => file.name.endsWith(`/${manifest.main}`))?.data;
-  if (
-    !executable ||
-    executable.length < 52 ||
-    executable.subarray(0, 4).toString('hex') !== '7f454c46' ||
-    executable[4] !== 1 ||
-    executable[5] !== 1 ||
-    executable.readUInt16LE(18) !== 40 ||
-    (executable.readUInt32LE(36) & 0x400) !== 0
-  )
-    throw new Error('Packaged executable must be an ARM soft-float ELF.');
+  for (const name of [manifest.main, 'luma-helper']) {
+    const executable = owned.find((file) => file.name.endsWith(`/${name}`))?.data;
+    if (
+      !executable ||
+      executable.length < 52 ||
+      executable.subarray(0, 4).toString('hex') !== '7f454c46' ||
+      executable[4] !== 1 ||
+      executable[5] !== 1 ||
+      executable.readUInt16LE(18) !== 40 ||
+      (executable.readUInt32LE(36) & 0x400) !== 0
+    )
+      throw new Error(`Packaged ${name} must be an ARM soft-float ELF.`);
+  }
   const controlArchive = archive.find((entry) => entry.name === 'control.tar.gz');
   const control = entries(gunzipSync(controlArchive.data))
     .find((file) => file.name.replace(/^\.\//, '') === 'control')
@@ -167,6 +169,7 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
       file.type === '5' ||
       file.name.endsWith('/autostart.sh') ||
       file.name.endsWith('/home.sh') ||
+      file.name.endsWith('/luma-helper') ||
       file.name.endsWith(`/${manifest.main}`);
     file.header.write(executable ? '0000755\0' : '0000644\0', 100, 8, 'ascii');
     file.header.fill(32, 148, 156);
