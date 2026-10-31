@@ -34,6 +34,7 @@
     "assets:brands": "node tools/brand-assets.mjs",
     "assets:fonts": "node tools/font-assets.mjs",
     "runtime": "node tools/webos-runtime.mjs",
+    "probe:overlay": "node tools/overlay-probe.mjs",
     "sdk": "node tools/setup-webos-sdk.mjs",
     "test:weather": "node tests/weather-smoke.mjs",
     "test:translations": "node tests/translations-smoke.mjs",

@@ -190,6 +190,10 @@ System text events update app/location queries; Done/Back stops editing and rest
 
 ### Recent apps
 
+An isolated, opt-in firmware overlay diagnostic is documented in
+[`docs/overlay-probe.md`](docs/overlay-probe.md). It uses a separate QML app and does
+not change the native launcher or make Recent apps available above other apps.
+
 Press Back on Home to open Recent apps, or hold Back (Escape on desktop) for 600 ms from any page.
 Short Back navigates on release. Back in an overlay, the system keyboard or
 move mode keeps its immediate dismissal behavior; Backspace keeps its editing/navigation role.
