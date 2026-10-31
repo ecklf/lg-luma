@@ -78,6 +78,18 @@ pub struct Artwork {
     pub backdrop: [[u8; 3]; 2],
 }
 
+impl Artwork {
+    /// The badge sits outside the inset icon, directly over this card gradient.
+    pub fn dark_badge(&self, y: f32) -> bool {
+        let y = y.clamp(0., 1.);
+        let rgb = std::array::from_fn(|i| {
+            (self.backdrop[0][i] as f32 * (1. - y) + self.backdrop[1][i] as f32 * y).round() as u8
+        });
+        let background = luminance(rgb);
+        contrast(0., background) > contrast(1., background)
+    }
+}
+
 fn read_bounded(path: &Path, limit: usize) -> Option<Vec<u8>> {
     let file = File::open(path).ok()?;
     let metadata = file.metadata().ok()?;
