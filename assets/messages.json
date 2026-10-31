@@ -3793,5 +3793,35 @@
     "vi": "Phiên chỉnh sửa đã kết thúc",
     "nl": "Bewerksessie beëindigd",
     "sv": "Redigeringssessionen har avslutats"
+  },
+  "tvInput": {
+    "en": "Show as TV input",
+    "de": "Luma als TV-Eingang",
+    "es": "Luma como entrada de TV",
+    "zh": "将 Luma 作为电视输入源",
+    "zh-tw": "將 Luma 作為電視輸入來源",
+    "pt": "Luma como entrada da TV",
+    "it": "Luma come ingresso TV",
+    "ru": "Luma как вход ТВ",
+    "pl": "Luma jako wejście TV",
+    "fr": "Luma comme entrée TV",
+    "vi": "Luma làm đầu vào TV",
+    "nl": "Luma als tv-ingang",
+    "sv": "Luma som TV-ingång"
+  },
+  "tvInputError": {
+    "en": "Could not change the TV input. This TV may not support it.",
+    "de": "Der TV-Eingang konnte nicht geändert werden. Dieser Fernseher unterstützt das möglicherweise nicht.",
+    "es": "No se pudo cambiar la entrada de TV. Es posible que este televisor no lo admita.",
+    "zh": "无法更改电视输入源。此电视可能不支持该功能。",
+    "zh-tw": "無法變更電視輸入來源。這台電視可能不支援此功能。",
+    "pt": "Não foi possível alterar a entrada da TV. Esta TV pode não oferecer suporte.",
+    "it": "Impossibile modificare l’ingresso TV. Questo televisore potrebbe non supportarlo.",
+    "ru": "Не удалось изменить вход ТВ. Возможно, этот телевизор его не поддерживает.",
+    "pl": "Nie udało się zmienić wejścia TV. Ten telewizor może tego nie obsługiwać.",
+    "fr": "Impossible de modifier l’entrée TV. Ce téléviseur ne le prend peut-être pas en charge.",
+    "vi": "Không thể thay đổi đầu vào TV. TV này có thể không hỗ trợ.",
+    "nl": "De tv-ingang kon niet worden gewijzigd. Deze tv ondersteunt dit mogelijk niet.",
+    "sv": "Det gick inte att ändra TV-ingången. Den här TV:n stöder kanske inte det."
   }
 }
