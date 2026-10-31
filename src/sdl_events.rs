@@ -4,6 +4,7 @@ use sdl2::{EventPump, event::Event, keyboard::Keycode, sys};
 use std::mem::MaybeUninit;
 
 pub const WEBOS_EXIT_KEYCODE: i32 = (1 << 30) | 505;
+pub const WEBOS_HOME_KEYCODE: i32 = (1 << 30) | 384;
 
 pub fn decode(mut raw: sys::SDL_Event, webos: bool) -> Event {
     // SAFETY: SDL always initializes the type tag; only keyboard variants have
@@ -16,7 +17,10 @@ pub fn decode(mut raw: sys::SDL_Event, webos: bool) -> Event {
             let scancode = std::ptr::addr_of!(raw.key.keysym.scancode)
                 .cast::<u32>()
                 .read();
-            if webos && scancode == 482 {
+            if webos && scancode == 384 {
+                raw.key.keysym.scancode = sys::SDL_Scancode::SDL_SCANCODE_AC_HOME;
+                raw.key.keysym.sym = WEBOS_HOME_KEYCODE;
+            } else if webos && scancode == 482 {
                 raw.key.keysym.scancode = sys::SDL_Scancode::SDL_SCANCODE_AC_BACK;
                 raw.key.keysym.sym = i32::from(Keycode::AcBack);
             } else if webos && scancode == 505 {

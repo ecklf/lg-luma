@@ -105,7 +105,7 @@ impl Client {
             &[
                 ("name", query),
                 ("count", "6"),
-                ("language", language.code()),
+                ("language", language.geocoding_code()),
                 ("format", "json"),
             ],
         )?)

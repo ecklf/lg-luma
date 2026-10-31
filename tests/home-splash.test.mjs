@@ -106,6 +106,17 @@ test('production and developer installs follow native preference precedence', ()
   assert.equal(fixture({ preferences }).splash(), 'forest');
 });
 
+test('automatic rotation cannot replace the manual splash during boot restaging', () => {
+  for (const production of [false, true]) {
+    const preferences = {
+      [internal]: { background: 'prism', splash_background: 'forest', wallpaper_cycle: true },
+    };
+    assert.equal(fixture({ production, preferences }).splash(), 'forest');
+    preferences[internal].background = 'dunes';
+    assert.equal(fixture({ production, preferences }).splash(), 'forest');
+  }
+});
+
 test('root Home stages app-owned preferences before a root-owned takeover fallback', () => {
   const preferences = {
     [developer]: { background: 'forest' },

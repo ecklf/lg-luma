@@ -122,6 +122,24 @@ fn native_key(scancode: u32, keycode: i32, down: bool) -> sdl2::event::Event {
 }
 
 #[test]
+fn native_home_survives_an_unmapped_or_layout_dependent_keycode() {
+    use sdl2::{event::Event, keyboard::Keycode};
+    for down in [true, false] {
+        for keycode in [
+            0,
+            crate::sdl_events::WEBOS_HOME_KEYCODE,
+            i32::from(Keycode::LGui),
+        ] {
+            let key = match native_key(384, keycode, down) {
+                Event::KeyDown { keycode, .. } | Event::KeyUp { keycode, .. } => keycode.unwrap(),
+                _ => panic!("Not a keyboard event"),
+            };
+            assert_eq!(i32::from(key), crate::sdl_events::WEBOS_HOME_KEYCODE);
+        }
+    }
+}
+
+#[test]
 fn native_back_and_exit_survive_an_unmapped_or_layout_dependent_keycode() {
     use sdl2::{event::Event, keyboard::Keycode};
     for down in [true, false] {
