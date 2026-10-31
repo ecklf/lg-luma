@@ -163,9 +163,13 @@ Back from Greeting restores its Widgets row; App names returns to General. Input
 also uses **Clear name**.
 Choice checkmarks identify saved values, while the bright row fill identifies only the current focus.
 
-Home favorites form one horizontal strip, never a second row. Left/Right follows saved order,
+Home favorites form one horizontal strip, never a second row. Opening Home with the Home button
+or returning with Back focuses the first visible favorite,
+resetting the strip to its beginning. Without favorites, focus falls back to Browse apps (or Retry
+after an inventory error). Left/Right between top navigation tabs keeps focus in the header.
+Left/Right within favorites follows saved order,
 including reorder mode, and reveals complete cards. Up returns to Home navigation; Down enters
-the nearest input in the first row. The strip position survives page changes. Wheel movement over
+the nearest input in the first row. The strip position survives top-tab page changes. Wheel movement over
 favorites scrolls horizontally; elsewhere it scrolls vertically. Pointer hover/down never moves
 the clicked control. Apps Up/Down follows the six-column grid order, including offscreen rows,
 and only the first row's Up route reaches the category toolbar. Scrolling Apps content fades into
