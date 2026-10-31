@@ -466,7 +466,7 @@ fn gallery_and_grid_navigation_scroll_to_keep_focus_visible() {
         has_original: true,
     }]);
     state.open(2);
-    state.section = 1;
+    state.section = crate::state::BACKGROUND_SECTION;
     state.focus = Target::Background(0);
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Background(3));
@@ -484,7 +484,10 @@ fn gallery_and_grid_navigation_scroll_to_keep_focus_visible() {
     assert!(control.rect.y >= viewport.y);
     assert!(control.rect.y + control.rect.h <= viewport.y + viewport.h);
     state.direction(Direction::Left, &controls(&state));
-    assert_eq!(state.focus, Target::Sidebar(1));
+    assert_eq!(
+        state.focus,
+        Target::Sidebar(crate::state::BACKGROUND_SECTION)
+    );
     state.open(1);
     let last = state.apps().last().unwrap().id.clone();
     state.focus(Target::App(last), &controls(&state));
@@ -1021,8 +1024,8 @@ fn background_sidebar_right_focuses_upload_and_ok_restores_the_applied_backgroun
     let mut state = ready();
     state.open(2);
     state.preferences.background = "forest".into();
-    state.focus = Target::Sidebar(1);
-    state.section = 1;
+    state.focus = Target::Sidebar(crate::state::BACKGROUND_SECTION);
+    state.section = crate::state::BACKGROUND_SECTION;
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::UploadWallpaper);
     assert_eq!(state.preferences.background, "forest");
@@ -2111,6 +2114,127 @@ fn prewarm_waits_while_recents_replaces_the_page() {
         Some(Page::Settings)
     );
     assert_eq!(crate::next_prewarm(&mut jobs, &state, true), None);
+}
+
+#[test]
+fn interface_scale_defaults_to_normal_and_recovers_from_unknown_values() {
+    use crate::model::UiSize;
+    assert_eq!(Preferences::default().ui_scale, UiSize::Normal);
+    let preferences: Preferences =
+        serde_json::from_value(json!({"ui_scale": "larger", "show_home_names": true})).unwrap();
+    assert_eq!(preferences.ui_scale, UiSize::Larger);
+    for broken in [json!("huge"), json!(3), json!({"clock": "large"})] {
+        let preferences: Preferences =
+            serde_json::from_value(json!({"ui_scale": broken, "show_home_names": true})).unwrap();
+        assert_eq!(preferences.ui_scale, UiSize::Normal);
+        assert!(preferences.show_home_names);
+    }
+    let restored: Preferences =
+        serde_json::from_value(serde_json::to_value(&preferences).unwrap()).unwrap();
+    assert_eq!(restored.ui_scale, UiSize::Larger);
+    assert_eq!(UiSize::Normal.scale(), 1.);
+    assert_eq!(UiSize::Large.scale(), 1.25);
+    assert_eq!(UiSize::Larger.scale(), 1.5);
+}
+
+#[test]
+fn interface_scale_is_chosen_like_input_visibility_and_stays_open() {
+    use crate::model::UiSize;
+    use crate::state::Subpage;
+    let mut state = ready();
+    state.open(2);
+    state.direction(Direction::Down, &controls(&state));
+    state.direction(Direction::Right, &controls(&state));
+    for _ in 0..5 {
+        state.direction(Direction::Down, &controls(&state));
+    }
+    assert_eq!(
+        state.focus,
+        Target::Setting(crate::state::INTERFACE_SCALE_ROW)
+    );
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.subpage, Some(Subpage::Appearance));
+    assert_eq!(state.focus, Target::Choice(0));
+    state.direction(Direction::Down, &controls(&state));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.ui_scale, UiSize::Larger);
+    assert_eq!(state.subpage, Some(Subpage::Appearance));
+    assert_eq!(state.focus, Target::Choice(2));
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.subpage, None);
+    assert_eq!(
+        state.focus,
+        Target::Setting(crate::state::INTERFACE_SCALE_ROW)
+    );
+    // Reopening starts on the chosen scale; Back returns to the row.
+    state.activate();
+    assert_eq!(state.focus, Target::Choice(2));
+    state.back();
+    assert_eq!(
+        state.focus,
+        Target::Setting(crate::state::INTERFACE_SCALE_ROW)
+    );
+}
+
+#[test]
+fn interface_scale_and_text_rendering_keep_independent_settings_and_navigation() {
+    use crate::{
+        model::UiSize,
+        state::{INTERFACE_SCALE_ROW, SYSTEM_SECTION, Subpage},
+        text_rendering::TextRendering,
+    };
+    let mut state = ready();
+    state.open(2);
+    state.focus = Target::Setting(INTERFACE_SCALE_ROW);
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::Appearance));
+    state.focus = Target::Choice(2);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.ui_scale, UiSize::Larger);
+    state.back();
+    assert_eq!(state.focus, Target::Setting(INTERFACE_SCALE_ROW));
+    state.section = SYSTEM_SECTION;
+    state.focus = Target::Setting(7);
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::TextRendering));
+    state.focus = Target::Choice(1);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.focus, Target::Setting(7));
+    assert_eq!(state.preferences.text_rendering, TextRendering::Analytic);
+    assert_eq!(state.preferences.ui_scale, UiSize::Larger);
+    let restored: Preferences =
+        serde_json::from_value(serde_json::to_value(&state.preferences).unwrap()).unwrap();
+    assert_eq!(restored.text_rendering, TextRendering::Analytic);
+    assert_eq!(restored.ui_scale, UiSize::Larger);
+}
+
+#[test]
+fn interface_scale_enlarges_the_clock_and_the_preview_is_not_focusable() {
+    use crate::model::UiSize;
+    let text_size = |scene: &view::Scene, needle: &str| {
+        scene.draw.iter().find_map(|draw| match draw {
+            crate::renderer::Draw::Text(text, _, style, ..) if text.contains(needle) => {
+                Some(style.size)
+            }
+            _ => None,
+        })
+    };
+    let mut state = ready();
+    state.open(2);
+    state.subpage = Some(crate::state::Subpage::Appearance);
+    state.focus = Target::Choice(0);
+    let normal = scene(&state);
+    let clock = text_size(&normal, "AM").expect("clock");
+    state.preferences.ui_scale = UiSize::Larger;
+    let larger = scene(&state);
+    assert!((text_size(&larger, "AM").unwrap() - clock * 1.5).abs() < 0.01);
+    // The preview draws categories and search, but only the options take focus.
+    assert!(text_size(&larger, "Streaming").is_some());
+    assert!(!larger.controls.iter().any(|c| matches!(
+        c.target,
+        Target::Filter(_) | Target::Search | Target::App(_)
+    )));
 }
 
 #[test]

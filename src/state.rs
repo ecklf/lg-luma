@@ -1,13 +1,15 @@
 use crate::i18n::Language;
 use crate::model::{
     App, BACKGROUNDS, CATEGORIES, CUSTOM_TILE_PREFIX, CustomTile, INPUT_NAME_LIMIT, InputMode,
-    Inventory, Preferences, clean_input_name,
+    Inventory, Preferences, UiSize, clean_input_name,
 };
 use crate::text_rendering::TextRendering;
 use crate::weather::{self, Unit};
 use serde::Serialize;
 use std::time::{Duration, Instant};
 
+pub const BACKGROUND_SECTION: usize = 1;
+pub const INTERFACE_SCALE_ROW: usize = 8;
 pub const WIDGETS_SECTION: usize = 2;
 pub const SYSTEM_SECTION: usize = 3;
 pub const SECTION_COUNT: usize = 4;
@@ -160,6 +162,8 @@ pub enum Subpage {
     WeatherLocation,
     Temperature,
     Language,
+    /// General › Interface scale: Normal, Large or Extra large, with a live preview.
+    Appearance,
     TextRendering,
 }
 
@@ -968,7 +972,7 @@ impl State {
 
     fn section_entry(&self) -> Target {
         match self.section {
-            1 => Target::Background(
+            BACKGROUND_SECTION => Target::Background(
                 (0..self.background_count())
                     .position(|index| {
                         self.background_id(index) == Some(self.preferences.background.as_str())
@@ -1021,6 +1025,7 @@ impl State {
                 Target::WeatherTemperature
             }
             Some(Subpage::Language) => Target::Setting(4),
+            Some(Subpage::Appearance) => Target::Setting(INTERFACE_SCALE_ROW),
             Some(Subpage::TextRendering) => Target::Setting(7),
             None => Target::Sidebar(self.section),
         };
@@ -1168,6 +1173,7 @@ impl State {
                         | Subpage::TextRendering,
                     ) => 2,
                     Some(Subpage::Language) => Language::ALL.len(),
+                    Some(Subpage::Appearance) => UiSize::ALL.len(),
                     Some(Subpage::DateFormat) => crate::model::DateFormat::ALL.len(),
                     _ => 3,
                 };
@@ -1255,7 +1261,7 @@ impl State {
             }
             if matches!(
                 self.focus,
-                Target::Setting(0 | 1 | 4 | 7)
+                Target::Setting(0 | 1 | 4 | 7 | INTERFACE_SCALE_ROW)
                     | Target::Widget(_)
                     | Target::InputMode(_)
                     | Target::WeatherLocation
@@ -2204,6 +2210,15 @@ impl State {
                         }
                         return vec![];
                     }
+                    INTERFACE_SCALE_ROW => {
+                        self.subpage = Some(Subpage::Appearance);
+                        self.focus = Target::Choice(self.preferences.ui_scale.index());
+                        self.scroll = 0.;
+                        if !self.preferences.reduced_motion {
+                            self.panel_started = Some(Instant::now());
+                        }
+                        return vec![];
+                    }
                     _ => return vec![Effect::Reload],
                 }
                 return vec![Effect::Save];
@@ -2293,6 +2308,11 @@ impl State {
                         } else {
                             Unit::Celsius
                         }
+                    }
+                    // The scale stays open, so its preview and the screen show the choice.
+                    Some(Subpage::Appearance) => {
+                        self.preferences.ui_scale = UiSize::ALL[index.min(UiSize::ALL.len() - 1)];
+                        return vec![Effect::Save];
                     }
                     Some(Subpage::Language) => {
                         self.preferences.language =

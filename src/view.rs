@@ -1,7 +1,7 @@
 //! Screen geometry and styling mirror the web UI's 1920×1080 / 16px-rem layout.
 use crate::{
     i18n::Language,
-    model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode},
+    model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode, UiSize},
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
         APPS_COLUMNS, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT,
@@ -712,10 +712,11 @@ fn header(
         state.preferences.hour_24,
         state.preferences.show_seconds,
     );
+    let k = state.preferences.ui_scale.scale();
     out.text(
         clock,
-        Rect::new(84., 62.4, 300., 28.8),
-        text(24., 500, -0.03),
+        Rect::new(84., 76.8 - 14.4 * k, 300. * k, 28.8 * k),
+        text(24. * k, 500, -0.03),
         WHITE,
         false,
     );
@@ -875,7 +876,12 @@ fn tile(
                 rect.w - 8.,
                 caption_height,
             ),
-            text(20.8, if focused { 600 } else { 550 }, -0.02).leading(1.4),
+            text(
+                20.8 * caption_scale(state),
+                if focused { 600 } else { 550 },
+                -0.02,
+            )
+            .leading(1.4),
             if focused {
                 c(0xffffff, 1.)
             } else {
@@ -978,7 +984,7 @@ fn caption_height(state: &State, assets: &Assets, app: &App, width: f32) -> f32 
         }
     );
     let style = text(
-        20.8,
+        20.8 * caption_scale(state),
         if state.focus == Target::App(app.id.clone()) {
             600
         } else {
@@ -987,7 +993,12 @@ fn caption_height(state: &State, assets: &Assets, app: &App, width: f32) -> f32 
         -0.02,
     )
     .leading(1.4);
-    (assets.lines(&title, style, width - 8.) as f32 * style.size * style.line_height).max(58.24)
+    (assets.lines(&title, style, width - 8.) as f32 * style.size * style.line_height)
+        .max(58.24 * caption_scale(state))
+}
+
+fn caption_scale(state: &State) -> f32 {
+    state.preferences.ui_scale.scale()
 }
 
 fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language: Language) {
@@ -1216,7 +1227,7 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
                 18.4 + apps
                     .iter()
                     .map(|app| caption_height(state, assets, app, HOME_TILE_WIDTH))
-                    .fold(58.24, f32::max)
+                    .fold(58.24 * caption_scale(state), f32::max)
             } else {
                 0.
             };
@@ -1327,18 +1338,27 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             ),
             c(0xdedede, 1.),
         );
+        // The status line grows with the setting, the larger title by half as much.
+        let k = state.preferences.ui_scale.scale();
+        let title_k = 1. + (k - 1.) / 2.;
+        let top = 24.3 - (28.8 * (title_k - 1.) + 25.2 * (k - 1.)) / 2.;
         out.text(
             state.preferences.input_title(input),
-            Rect::new(rect.x + 93., rect.y + 24.3, 450., 28.8),
-            text(24., 500, -0.03),
+            Rect::new(rect.x + 93., rect.y + top, 450., 28.8 * title_k),
+            text(24. * title_k, 500, -0.03),
             WHITE,
             false,
         );
         out.text(
             input_status(input, name.is_some(), language),
-            Rect::new(rect.x + 93., rect.y + 57.4, 450., 25.2),
-            text(16.8, 400, 0.).leading(1.5),
-            c(0xe8e8e8, 0.48),
+            Rect::new(
+                rect.x + 93.,
+                rect.y + top + 28.8 * title_k + 4.3,
+                450.,
+                25.2 * k,
+            ),
+            text(16.8 * k, 400, 0.).leading(1.5),
+            c(0xe8e8e8, if k > 1. { 0.62 } else { 0.48 }),
             false,
         );
         if focused {
@@ -1506,49 +1526,20 @@ fn library(out: &mut Scene, state: &State, assets: &Assets) {
     library_toolbar(out, state, assets);
 }
 
+/// The toolbar stays centred on the line it sits on at normal scale, clear of the grid.
+const TOOLBAR_CENTER: f32 = 192.8;
+
 fn library_toolbar(out: &mut Scene, state: &State, assets: &Assets) {
-    let language = state.preferences.language;
-    let mut x = 84.;
-    for (index, label) in CATEGORIES.into_iter().enumerate() {
-        let label = language.category(label);
-        let width = assets.width(label, text(20.8, 550, -0.02)) + 40.;
-        let rect = Rect::new(x, 164.8, width, 56.);
-        filter(
-            out,
-            state,
-            Target::Filter(index + 1),
-            rect,
-            label,
-            state.filter == index + 1,
-        );
-        x += width + 7.2;
-    }
-    if state.hidden_count() > 0 {
-        let label = language.format("hidden", &[("count", &state.hidden_count().to_string())]);
-        let rect = Rect::new(
-            x,
-            164.8,
-            assets.width(&label, text(20.8, 550, -0.02)) + 40.,
-            56.,
-        );
-        filter(
-            out,
-            state,
-            Target::Filter(5),
-            rect,
-            &label,
-            state.filter == 5,
-        );
-        x += rect.w + 7.2;
-    }
+    let k = state.preferences.ui_scale.scale();
+    let x = category_chips(out, state, assets, 84., TOOLBAR_CENTER);
     if state.filter != 0 {
-        let rect = Rect::new(x, 164.8, 56., 56.);
+        let rect = Rect::new(x, TOOLBAR_CENTER - 28. * k, 56. * k, 56. * k);
         let focused = state.focus == Target::ClearFilter;
         out.pill(rect, focused, false);
         out.icon(
             assets,
             "close",
-            rect.inset(16.),
+            rect.inset(16. * k),
             if focused {
                 c(0x2c2c2c, 1.)
             } else {
@@ -1557,8 +1548,51 @@ fn library_toolbar(out: &mut Scene, state: &State, assets: &Assets) {
         );
         out.control(Target::ClearFilter, rect, false);
     }
-    let search = Rect::new(1532., 164.8, 304., 56.);
-    let focused = matches!(state.focus, Target::Search | Target::ClearSearch);
+    search_field(out, state, assets, 1836., TOOLBAR_CENTER, true);
+}
+
+/// The category filter chips from `x`, centred on `y`; returns where the row ends.
+fn category_chips(out: &mut Scene, state: &State, assets: &Assets, mut x: f32, y: f32) -> f32 {
+    let language = state.preferences.language;
+    let k = state.preferences.ui_scale.scale();
+    let style = text(20.8 * k, 550, -0.02);
+    let h = 56. * k;
+    for (index, label) in CATEGORIES.into_iter().enumerate() {
+        let label = language.category(label);
+        let width = assets.width(label, style) + 40. * k;
+        filter(
+            out,
+            state,
+            Target::Filter(index + 1),
+            Rect::new(x, y - h / 2., width, h),
+            label,
+            state.filter == index + 1,
+        );
+        x += width + 7.2 * k;
+    }
+    if state.hidden_count() > 0 {
+        let label = language.format("hidden", &[("count", &state.hidden_count().to_string())]);
+        let rect = Rect::new(x, y - h / 2., assets.width(&label, style) + 40. * k, h);
+        filter(
+            out,
+            state,
+            Target::Filter(5),
+            rect,
+            &label,
+            state.filter == 5,
+        );
+        x += rect.w + 7.2 * k;
+    }
+    x
+}
+
+/// The app search field, right-aligned at `right` and centred on `y`.
+fn search_field(out: &mut Scene, state: &State, assets: &Assets, right: f32, y: f32, live: bool) {
+    let language = state.preferences.language;
+    let k = state.preferences.ui_scale.scale();
+    let search = Rect::new(right - 304. * k, y - 28. * k, 304. * k, 56. * k);
+    let focused = live && matches!(state.focus, Target::Search | Target::ClearSearch);
+    let query = if live { state.query.as_str() } else { "" };
     out.shape(
         search,
         48.,
@@ -1580,32 +1614,37 @@ fn library_toolbar(out: &mut Scene, state: &State, assets: &Assets) {
     out.icon(
         assets,
         "search",
-        Rect::new(search.x + 19.4, search.y + 18.4, 19.2, 19.2),
+        Rect::new(search.x + 19.4 * k, search.y + 18.4 * k, 19.2 * k, 19.2 * k),
         c(0xeeeeee, 0.73),
     );
     out.text(
-        if state.query.is_empty() {
+        if query.is_empty() {
             language.t("findApp")
         } else {
-            &state.query
+            query
         },
         Rect::new(
-            search.x + 49.8,
-            search.y + (search.h - 29.12) / 2.,
-            if state.query.is_empty() { 234. } else { 202. },
-            29.12,
+            search.x + 49.8 * k,
+            search.y + (search.h - 29.12 * k) / 2.,
+            if query.is_empty() { 234. * k } else { 202. * k },
+            29.12 * k,
         ),
-        text(20.8, 550, -0.02).leading(1.4),
-        c(0xeeeeee, if state.query.is_empty() { 0.73 } else { 1. }),
+        text(20.8 * k, 550, -0.02).leading(1.4),
+        c(0xeeeeee, if query.is_empty() { 0.73 } else { 1. }),
         false,
     );
     out.control(Target::Search, search, false);
-    if !state.query.is_empty() {
-        let clear = Rect::new(search.x + search.w - 45.8, search.y + 14.8, 26.4, 26.4);
-        out.shape(clear, 13.2, c(0xffffff, 0.055));
-        out.icon(assets, "close", clear.inset(5.2), WHITE);
+    if !query.is_empty() {
+        let clear = Rect::new(
+            search.x + search.w - 45.8 * k,
+            search.y + 14.8 * k,
+            26.4 * k,
+            26.4 * k,
+        );
+        out.shape(clear, 13.2 * k, c(0xffffff, 0.055));
+        out.icon(assets, "close", clear.inset(5.2 * k), WHITE);
         if state.focus == Target::ClearSearch {
-            out.border(clear.inset(-2.), 15.2, 2., WHITE);
+            out.border(clear.inset(-2.), 13.2 * k + 2., 2., WHITE);
         }
         out.control(Target::ClearSearch, clear, false);
     }
@@ -1656,7 +1695,7 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
                 18.4 + row
                     .iter()
                     .map(|app| caption_height(state, assets, app, 270.))
-                    .fold(58.24, f32::max)
+                    .fold(58.24 * caption_scale(state), f32::max)
             } else {
                 0.
             };
@@ -1677,14 +1716,20 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
 
 fn filter(out: &mut Scene, state: &State, target: Target, rect: Rect, label: &str, selected: bool) {
     let focused = state.focus == target;
+    let k = rect.h / 56.;
     out.pill(rect, focused, selected);
     if selected && !focused {
         out.border(rect, rect.h / 2., 1.5, c(0xffffff, 0.35));
     }
     out.text(
         label,
-        Rect::new(rect.x, rect.y + (rect.h - 29.12) / 2., rect.w, 29.12),
-        text(20.8, 550, -0.02).leading(1.4),
+        Rect::new(
+            rect.x,
+            rect.y + (rect.h - 29.12 * k) / 2.,
+            rect.w,
+            29.12 * k,
+        ),
+        text(20.8 * k, 550, -0.02).leading(1.4),
         if focused {
             c(0x2c2c2c, 1.)
         } else {
@@ -2161,6 +2206,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Inputs) => language.t("inputs"),
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
+                Some(Subpage::Appearance) => language.t("uiScale"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
                 _ => "",
             };
@@ -2329,6 +2375,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 .into_iter()
                 .map(|option| (option.name(), None, option == language))
                 .collect(),
+            Subpage::Appearance => UiSize::ALL
+                .into_iter()
+                .map(|size| {
+                    let (name, hint) = size.keys();
+                    (
+                        language.t(name),
+                        Some(language.t(hint)),
+                        size == state.preferences.ui_scale,
+                    )
+                })
+                .collect(),
             Subpage::TextRendering => crate::text_rendering::TextRendering::ALL
                 .into_iter()
                 .map(|mode| {
@@ -2361,6 +2418,9 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         if let Subpage::Input(id) = subpage {
             input_name_rows(out, state, assets, id, 164.8 + 3. * 102.7 + 16. - s);
         }
+        if *subpage == Subpage::Appearance {
+            appearance_preview(out, state, assets, 164.8 + 3. * 102.7 + 8. - s);
+        }
         if let Some(opened) = state.panel_started {
             out.fade(start, (opened.elapsed().as_secs_f32() / 0.15).min(1.), 1.);
         }
@@ -2382,6 +2442,13 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                         language.t("stateOff")
                     }),
                     false,
+                ),
+                (
+                    crate::state::INTERFACE_SCALE_ROW,
+                    "uiScale",
+                    "grid",
+                    Some(language.t(state.preferences.ui_scale.keys().0)),
+                    true,
                 ),
             ]
             .into_iter()
@@ -2659,6 +2726,45 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         }
         _ => {}
     }
+}
+
+/// General › Interface scale: below the options, the chosen scale at its real size, drawn with
+/// the pages' own code (category chips, the search field, favourite tiles with names). The clock
+/// and the hints are on this screen already and change in place.
+fn appearance_preview(out: &mut Scene, state: &State, assets: &Assets, top: f32) {
+    let language = state.preferences.language;
+    let k = state.preferences.ui_scale.scale();
+    let panel = Rect::new(640., top, 1120., 982.4 - top);
+    out.shape(panel, 22., c(0x0a0d12, 0.42));
+    out.border(panel, 22., 1., c(0xffffff, 0.12));
+    out.text(
+        language.t("sample"),
+        Rect::new(panel.x + 26., panel.y + 16., 600., 24.),
+        text(17.6, 500, 0.04),
+        c(0xf0f0f0, 0.55),
+        false,
+    );
+    // Its controls are dropped, so the preview never takes focus.
+    let controls = out.controls.len();
+    let chips = panel.y + 56. + 28. * k;
+    category_chips(out, state, assets, panel.x + 32., chips);
+    search_field(out, state, assets, panel.x + panel.w - 32., chips, false);
+    let favorites = state.preferences.favorites(&state.inventory.apps);
+    let apps = favorites
+        .iter()
+        .filter(|id| !state.preferences.hidden.contains(id))
+        .filter_map(|id| state.inventory.apps.iter().find(|app| &app.id == id))
+        .take(3);
+    for (index, app) in apps.enumerate() {
+        let rect = Rect::new(
+            panel.x + 32. + index as f32 * HOME_TILE_PITCH,
+            chips + 28. * k + 28.,
+            HOME_TILE_WIDTH,
+            FACE_HEIGHT,
+        );
+        tile(out, state, assets, app, rect, true, false);
+    }
+    out.controls.truncate(controls);
 }
 
 fn inputs_settings(out: &mut Scene, state: &State, assets: &Assets) {
