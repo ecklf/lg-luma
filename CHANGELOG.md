@@ -1,5 +1,11 @@
 # lg-luma
 
+## 2.16.2
+
+### Patch Changes
+
+- c635023: Fix rectangular seams around installed app icons when favorite cards fade at the screen edges.
+
 ## 2.16.1
 
 ### Patch Changes
