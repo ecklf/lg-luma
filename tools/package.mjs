@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import sharp from 'sharp';
 import { prepareWebosRuntime, verifyWebosSdl } from './webos-runtime.mjs';
 import { normalizeAndVerifyPackage } from './ipk.mjs';
 
@@ -20,18 +21,22 @@ if (
   );
 }
 const binary = path.join(root, 'target/armv7-unknown-linux-gnueabi/release/luma');
-const bytes = await fs.readFile(binary);
-if (
-  bytes.length < 52 ||
-  bytes.subarray(0, 4).toString('hex') !== '7f454c46' ||
-  bytes[4] !== 1 ||
-  bytes[5] !== 1 ||
-  bytes.readUInt16LE(18) !== 40 ||
-  (bytes.readUInt32LE(36) & 0x400) !== 0
-) {
-  throw new Error(
-    'Packaging requires a 32-bit little-endian ARM soft-float ELF from build-webos.sh.',
-  );
+// Early Home helper for the webOS 5/6 Home integration (src/bin/luma-early.rs).
+const earlyBinary = path.join(root, 'target/armv7-unknown-linux-gnueabi/release/luma-early');
+for (const file of [binary, earlyBinary]) {
+  const bytes = await fs.readFile(file);
+  if (
+    bytes.length < 52 ||
+    bytes.subarray(0, 4).toString('hex') !== '7f454c46' ||
+    bytes[4] !== 1 ||
+    bytes[5] !== 1 ||
+    bytes.readUInt16LE(18) !== 40 ||
+    (bytes.readUInt32LE(36) & 0x400) !== 0
+  ) {
+    throw new Error(
+      'Packaging requires a 32-bit little-endian ARM soft-float ELF from build-webos.sh.',
+    );
+  }
 }
 const out = path.join(root, '.build');
 const dist = path.join(root, 'dist');
@@ -73,6 +78,8 @@ await fs.mkdir(stage, { recursive: true });
 await fs.mkdir(dist, { recursive: true });
 await fs.copyFile(binary, path.join(stage, manifest.main));
 await fs.chmod(path.join(stage, manifest.main), 0o755);
+await fs.copyFile(earlyBinary, path.join(stage, 'luma-early'));
+await fs.chmod(path.join(stage, 'luma-early'), 0o755);
 await fs.cp(path.join(out, 'assets'), path.join(stage, 'assets'), {
   recursive: true,
   filter: (source) =>
@@ -96,7 +103,7 @@ for (const file of await fs.readdir(path.join(out, 'assets/splash')))
   await fs.copyFile(path.join(out, 'assets/splash', file), path.join(stage, 'splash', file));
 await fs.copyFile(path.join(out, 'assets/splash/dunes.png'), path.join(stage, 'splash.png'));
 await fs.chmod(path.join(stage, 'autostart.sh'), 0o755);
-for (const file of ['home.sh', 'luma-helper']) {
+for (const file of ['home.sh', 'luma-helper', 'home-filter.js']) {
   await fs.copyFile(
     path.join(
       root,
@@ -105,8 +112,13 @@ for (const file of ['home.sh', 'luma-helper']) {
     ),
     path.join(stage, file),
   );
-  await fs.chmod(path.join(stage, file), 0o755);
+  await fs.chmod(path.join(stage, file), file.endsWith('.js') ? 0o644 : 0o755);
 }
+// The cold-boot loading screen of the webOS 5/6 Home integration (home-filter.js) shows it 1:1.
+await sharp(path.join(root, 'tv/boot-logo.svg'), { density: 72 * (160 / 82) })
+  .resize(160, 160)
+  .png()
+  .toFile(path.join(stage, 'boot-logo.png'));
 await fs.copyFile(path.join(root, 'license'), path.join(stage, 'LICENSE'));
 await fs.copyFile(path.join(root, 'assets.md'), path.join(stage, 'ASSETS.md'));
 await fs.mkdir(path.join(stage, 'lib'));
