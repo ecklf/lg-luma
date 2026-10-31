@@ -1107,9 +1107,11 @@ fn run() -> Result<(), String> {
                             .filter(|app| crate::branding::for_key(&app.brand).is_none())
                             .filter_map(|app| app.icon.clone()),
                     );
+                    // The wallpaper-first Home starts in the header, with the favourites lowered.
                     if initial_focus
                         && state.focus == Target::Nav(0)
                         && state.page == state::Page::Home
+                        && !state.preferences.landing_layout
                     {
                         state.focus = state.first_content();
                     }

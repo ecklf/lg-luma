@@ -506,7 +506,6 @@ try {
     Math.abs(edgeLeft.home_scroll - 281.6) < 0.01,
     'Pointer focus preserves strip position',
   );
-  await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
   const gradientDisabled = await scenario(
     'wallpaper-gradient-disabled',
     'settings,down,down,enter,up,up,right,enter',
@@ -541,6 +540,29 @@ try {
   );
   assert.equal(cycleDisabled.preferences.wallpaper_cycle, false);
   assert.ok(cycleDisabled.ui_text.includes('Rotation'));
+  await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
+  const landingSetting = await scenario(
+    'landing-setting',
+    'settings,down,enter,down,down,down,down,enter',
+  );
+  assert.deepEqual(landingSetting.focus, { Setting: 11 });
+  assert.equal(landingSetting.preferences.landing_layout, true);
+  assert.ok(landingSetting.ui_text.includes('Wallpaper-first Home'));
+  const landing = await scenario('landing', 'home');
+  assert.deepEqual(landing.focus, { Nav: 0 }, 'The wallpaper-first Home starts in the header');
+  const landingDown = await scenario('landing-down', 'home,down');
+  assert.deepEqual(landingDown.focus, { App: 'netflix' });
+  assert.equal(landingDown.scroll, 0);
+  for (const reducedMotion of [false, true]) {
+    await fs.writeFile(
+      preferences,
+      JSON.stringify({ show_weather: false, landing_layout: true, reduced_motion: reducedMotion }),
+    );
+    const clicked = await scenario(`landing-pointer-${reducedMotion}`, 'home,click:220:880');
+    assert.deepEqual(clicked.focus, { App: 'netflix' });
+    assert.ok(clicked.ui_text.includes('Desktop preview · Netflix will open on your TV'));
+    assert.equal(clicked.scroll, 0);
+  }
   console.log(
     'Native smoke checks passed: rendering/alpha, navigation, persistence, SDL pointer input, DPI-aware glyphs, 4K capture and presentation profiling.',
   );

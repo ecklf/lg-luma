@@ -3793,5 +3793,20 @@
     "vi": "Phiên chỉnh sửa đã kết thúc",
     "nl": "Bewerksessie beëindigd",
     "sv": "Redigeringssessionen har avslutats"
+  },
+  "landingLayout": {
+    "en": "Wallpaper-first Home",
+    "de": "Startseite mit Hintergrund",
+    "es": "Inicio con fondo",
+    "zh": "壁纸优先主页",
+    "zh-tw": "桌布優先主畫面",
+    "pt": "Início com plano de fundo",
+    "it": "Home con sfondo",
+    "ru": "Главная с обоями",
+    "pl": "Ekran główny z tapetą",
+    "fr": "Accueil avec fond d’écran",
+    "vi": "Trang chủ ưu tiên hình nền",
+    "nl": "Start met achtergrond",
+    "sv": "Hem med bakgrundsbild"
   }
 }
