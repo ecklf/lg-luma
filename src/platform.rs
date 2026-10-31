@@ -380,6 +380,85 @@ fn helper_command(operation: &str, arguments: &[String]) -> Result<String, Strin
     Ok(parts.join(" "))
 }
 
+/// Quote for the exec service's shell and systemd's ExecStart environment expansion. Shell
+/// quoting alone does not protect `$` variables inside the embedded installer script.
+/// Doubling dollars works on older TV systemd versions without --expand-environment=no.
+/// Leave `%` untouched: systemd-run passes ExecStart over D-Bus, not through unit-file parsing.
+fn update_argument(value: &str) -> String {
+    let escaped = value.replace('$', "$$");
+    format!("'{}'", escaped.replace('\'', "'\\''"))
+}
+
+/// Hands a downloaded, verified update to `tv/self-update.sh`, run as root through Homebrew
+/// Channel's exec in its own systemd unit: exec ends its children when the call returns, and the
+/// install closes Luma.
+pub fn start_update(
+    release: &crate::update::Release,
+    attempt: &str,
+    ipk: &std::path::Path,
+) -> Result<(), String> {
+    let directory = install_dir()?;
+    let command = format!(
+        "systemd-run --unit=luma-update-{} --collect /bin/sh -c {} self-update {} {} {} {} {}",
+        attempt,
+        update_argument(include_str!("../tv/self-update.sh")),
+        update_argument(&ipk.to_string_lossy()),
+        update_argument(&release.sha256),
+        update_argument(&release.version),
+        update_argument(&directory.to_string_lossy()),
+        update_argument(attempt),
+    );
+    let envelope = call(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        json!({"command": command}),
+    )?;
+    // systemd-run prints nothing on stdout once the unit started; only its exit status counts.
+    // A transport error can be ambiguous: the worker preserves the IPK and observes the result.
+    for key in ["returnCode", "exitCode"] {
+        if let Some(code) = envelope.get(key)
+            && code != 0
+            && code != "0"
+        {
+            let stderr = envelope.get("stderrString").and_then(Value::as_str);
+            return Err(format!(
+                "The installer could not be started ({key}={code}): {}",
+                output_excerpt(stderr.unwrap_or(""))
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Read only the root-owned result; the caller matches its unguessable attempt ID.
+pub fn update_result_for(
+    attempt: Option<&str>,
+) -> Result<Option<crate::update::InstallResult>, String> {
+    let file = match attempt {
+        Some(id) if id.len() == 32 && id.bytes().all(|b| b.is_ascii_hexdigit()) => {
+            format!("result.{id}.json")
+        }
+        Some(_) => return Err("Invalid update attempt".into()),
+        None => "result.json".into(),
+    };
+    let envelope = call(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        json!({
+            "command": format!("cat /var/lib/luma-update/{file} 2>/dev/null || true")
+        }),
+    )?;
+    let output = envelope
+        .get("stdoutString")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim();
+    if output.is_empty() {
+        return Ok(None);
+    }
+    serde_json::from_str(output)
+        .map(Some)
+        .map_err(|e| format!("Invalid installer result: {e}"))
+}
+
 fn sync_splash(background: &str) -> Result<(), String> {
     let directory = install_dir()?;
     // The executable/manifest Home already runs privileged. Avoid starting another process or
@@ -413,6 +492,7 @@ fn sync_splash(background: &str) -> Result<(), String> {
 /// reliable cross-version removability flag.
 pub fn can_uninstall(id: &str) -> bool {
     valid_app_id(id)
+        && !id.starts_with(crate::model::CUSTOM_TILE_PREFIX)
         && !crate::scroll_preview::is_placeholder(id)
         && !["com.webos.", "com.palm.", "com.lge."]
             .iter()
@@ -782,6 +862,40 @@ pub fn normalize_inputs(raw: &Value) -> Result<Vec<Input>, String> {
         });
     }
     Ok(inputs)
+}
+
+#[cfg(test)]
+mod update_argument_tests {
+    use super::*;
+
+    #[test]
+    fn installer_variables_are_escaped_and_printf_formats_are_preserved() {
+        let script = include_str!("../tv/self-update.sh");
+        let argument = update_argument(script);
+        assert!(argument.contains("$${#ATTEMPT}"));
+        assert!(argument.contains("$$(date +%T)"));
+        assert!(argument.contains("$$IPK"));
+        assert!(argument.contains("%s"));
+        assert!(!argument.contains("%%s"));
+    }
+
+    #[test]
+    fn exec_shell_preserves_systemd_escapes_and_argument_boundaries() {
+        for value in [
+            include_str!("../tv/self-update.sh"),
+            "path with 'quotes' and $VARIABLE ${BRACES} $(command) %n %% \\slashes",
+        ] {
+            let output = std::process::Command::new("/bin/sh")
+                .args(["-c", &format!("printf '%s' {}", update_argument(value))])
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            let argument = String::from_utf8(output.stdout).unwrap();
+            assert_eq!(argument, value.replace('$', "$$"));
+            // systemd reduces each escaped dollar pair, leaving expansion to /bin/sh.
+            assert_eq!(argument.replace("$$", "$"), value);
+        }
+    }
 }
 
 #[cfg(test)]

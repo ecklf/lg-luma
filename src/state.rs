@@ -1,17 +1,18 @@
 use crate::i18n::Language;
 use crate::model::{
-    App, BACKGROUNDS, CATEGORIES, INPUT_NAME_LIMIT, InputMode, Inventory, Preferences,
-    clean_input_name,
+    App, BACKGROUNDS, CATEGORIES, CUSTOM_TILE_PREFIX, CustomTile, INPUT_NAME_LIMIT, InputMode,
+    Inventory, Preferences, clean_input_name,
 };
 use crate::text_rendering::TextRendering;
 use crate::weather::{self, Unit};
 use serde::Serialize;
 use std::time::{Duration, Instant};
 
-pub const WEATHER_SECTION: usize = 2;
-pub const INPUTS_SECTION: usize = 3;
-pub const SYSTEM_SECTION: usize = 4;
-pub const SECTION_COUNT: usize = 5;
+pub const WIDGETS_SECTION: usize = 2;
+pub const SYSTEM_SECTION: usize = 3;
+pub const SECTION_COUNT: usize = 4;
+pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
+pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
 pub const APPS_COLUMNS: usize = 6;
 /// Automatic inventory retries before the error shows: with the 6.5 s Luna timeout about 50 s.
 pub const INVENTORY_RETRIES: u32 = 5;
@@ -45,6 +46,8 @@ pub enum Page {
 pub enum Target {
     Nav(usize),
     TvSettings,
+    InstallUpdate,
+    CheckUpdates,
     Recent(String),
     RecentEmpty,
     RecentRetry,
@@ -57,8 +60,12 @@ pub enum Target {
     ClearSearch,
     Sidebar(usize),
     Setting(usize),
+    Widget(usize),
     GreetingName,
     GreetingNameClear,
+    GreetingToggle,
+    DateToggle,
+    DateFormat,
     AppNamesHome,
     AppNamesApps,
     ClockFormat,
@@ -66,6 +73,7 @@ pub enum Target {
     Background(usize),
     UploadWallpaper,
     WallpaperCycle,
+    WallpaperGradient,
     UseBackground,
     DeleteBackground,
     InputMode(String),
@@ -88,6 +96,10 @@ pub enum Target {
     WeatherSearch,
     WeatherClear,
     WeatherResult(usize),
+    Tile(String),
+    TileTest(String),
+    TileRemove(String),
+    TileEditor,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -127,6 +139,7 @@ pub enum Overlay {
     Keyboard,
     SystemKeyboard,
     WallpaperUpload,
+    TileEditor,
     BackgroundOptions { id: String, restore: Target },
     BackgroundDelete { id: String, restore: Target },
 }
@@ -135,6 +148,11 @@ pub enum Overlay {
 pub enum Subpage {
     AppNames,
     Greeting,
+    Date,
+    DateFormat,
+    Weather,
+    Shortcuts,
+    Inputs,
     Clock,
     ClockFormat,
     TimeFormat,
@@ -175,8 +193,11 @@ pub enum Effect {
         generation: u64,
         command: crate::recents::Command,
     },
+    /// Fire-and-forget HTTP request for a custom tile, off the SDL thread.
+    FireWebhook(CustomTile),
     Quit,
     Weather(weather::Command),
+    UpdateDownload(String),
 }
 
 pub const KEYS: [&str; 40] = [
@@ -205,6 +226,9 @@ pub struct State {
     pub uninstalling: Option<String>,
     pub notice: Option<(String, Instant)>,
     pub error: Option<String>,
+    pub available_update: Option<String>,
+    pub update_status: crate::update::Status,
+    pub update_check_requested: bool,
     /// Inventory loads that failed in a row while no apps were shown yet.
     pub inventory_failures: u32,
     pub dirty: bool,
@@ -215,6 +239,9 @@ pub struct State {
     pub wallpapers: Vec<crate::wallpapers::Wallpaper>,
     pub deleting_wallpaper: Option<String>,
     pub wallpaper_upload: Option<Result<crate::wallpapers::Session, String>>,
+    pub tile_editor: Option<Result<crate::companion::Session, String>>,
+    /// Luma update (Settings → System), driven by the update worker.
+    pub update: crate::update::InstallStatus,
     pub panel_started: Option<Instant>,
     pub weather: weather::Weather,
     pub keyboard_field: TextField,
@@ -244,6 +271,9 @@ impl State {
             uninstalling: None,
             notice: None,
             error: None,
+            available_update: None,
+            update_status: crate::update::Status::Unchecked,
+            update_check_requested: false,
             inventory_failures: 0,
             dirty: true,
             pointer: false,
@@ -253,6 +283,8 @@ impl State {
             wallpapers: vec![],
             deleting_wallpaper: None,
             wallpaper_upload: None,
+            tile_editor: None,
+            update: crate::update::InstallStatus::default(),
             panel_started: None,
             weather: weather::Weather::default(),
             keyboard_field: TextField::Apps,
@@ -264,6 +296,77 @@ impl State {
 
     pub fn notify(&mut self, text: impl Into<String>) {
         self.notice = Some((text.into(), Instant::now()));
+        self.dirty = true;
+    }
+
+    pub fn update_response(&mut self, result: Result<Option<String>, String>) {
+        match result {
+            Ok(latest) => {
+                let announce = latest.is_some() && latest != self.available_update;
+                self.available_update = latest;
+                self.update_status = crate::update::Status::Checked;
+                if announce {
+                    self.notify(self.preferences.language.t("updateAvailable"));
+                }
+            }
+            Err(error) => {
+                eprintln!("Luma update check: {error}");
+                self.update_status = crate::update::Status::Failed;
+            }
+        }
+        if matches!(self.focus, Target::CheckUpdates | Target::InstallUpdate) {
+            let target = if self.available_update.is_some() {
+                Target::InstallUpdate
+            } else {
+                Target::CheckUpdates
+            };
+            if self.focus != target {
+                self.focus = target;
+                self.pressed = None;
+            }
+        }
+        self.dirty = true;
+    }
+
+    pub fn update_busy(&self) -> bool {
+        self.update_status == crate::update::Status::Checking
+            || matches!(
+                self.update,
+                crate::update::InstallStatus::Downloading(_)
+                    | crate::update::InstallStatus::Installing(_)
+            )
+    }
+
+    pub fn install_response(&mut self, response: crate::update::Response) {
+        use crate::update::{InstallStatus, Response};
+        match response {
+            Response::Progress(percent) => self.update = InstallStatus::Downloading(percent),
+            Response::Installing(version) => {
+                self.update = InstallStatus::Installing(version);
+                self.notify(self.preferences.language.t("updateRestart"));
+            }
+            Response::Finished(result) => {
+                self.available_update = None;
+                match result {
+                    Ok(()) => {
+                        self.update = InstallStatus::Idle;
+                        // This process may still run the old executable. Recheck rather
+                        // than claim that its in-memory version was replaced.
+                        self.update_status = crate::update::Status::Unchecked;
+                    }
+                    Err(error) => {
+                        eprintln!("Luma update: {error}");
+                        self.update = InstallStatus::Failed(error);
+                        self.update_status = crate::update::Status::Failed;
+                        self.notify(self.preferences.language.t("updateError"));
+                    }
+                }
+                if self.focus == Target::InstallUpdate {
+                    self.focus = Target::CheckUpdates;
+                    self.pressed = None;
+                }
+            }
+        }
         self.dirty = true;
     }
 
@@ -332,6 +435,20 @@ impl State {
                     .is_some_and(|(_, start)| start.elapsed() < Duration::from_millis(120)))
     }
 
+    /// Home's lifecycle relaunch returns directly to Home, even from an overlay.
+    pub fn return_home(&mut self) -> Vec<Effect> {
+        // Commit keyboard drafts before open() clears their settings subpage.
+        let pending = self.finish_text_input();
+        self.recents.pending = None;
+        self.recents.visibility = 0.;
+        self.recents.closing_focus = None;
+        self.wallpaper_upload = None;
+        self.pointer = false;
+        self.pressed = None;
+        self.open(0);
+        pending
+    }
+
     pub fn open(&mut self, index: usize) {
         self.weather.cancel_search();
         self.page = match index {
@@ -392,6 +509,22 @@ impl State {
         Rect::new(64., 108.8, 1792., 1080. - 108.8)
     }
 
+    fn scroll_bottom(&self) -> f32 {
+        let viewport = self.content_viewport();
+        viewport.y + viewport.h
+            - if self.page == Page::Settings {
+                if self.subpage == Some(Subpage::Language)
+                    || (self.section == 1 && self.subpage.is_none())
+                {
+                    SETTINGS_LIST_BOTTOM_PADDING
+                } else {
+                    SETTINGS_BOTTOM_PADDING
+                }
+            } else {
+                12.
+            }
+    }
+
     pub fn favorites_viewport(&self) -> Rect {
         let content = self.content_viewport();
         let left = if self.home_scroll > 0. {
@@ -400,6 +533,11 @@ impl State {
             0.
         };
         Rect::new(left, content.y, HOME_FADE_RIGHT - left, content.h)
+    }
+
+    pub fn apps_viewport(&self) -> Rect {
+        let content = self.content_viewport();
+        Rect::new(content.x, 244.8, content.w, content.y + content.h - 244.8)
     }
 
     pub fn backgrounds_viewport(&self) -> Rect {
@@ -417,6 +555,8 @@ impl State {
                         self.favorites_viewport()
                     } else if matches!(control.target, Target::Background(_)) {
                         self.backgrounds_viewport()
+                    } else if self.page == Page::Apps {
+                        self.apps_viewport()
                     } else {
                         self.content_viewport()
                     };
@@ -450,7 +590,7 @@ impl State {
         if favorites {
             self.scroll_favorites((if x != 0 { x } else { -y }) as f32 * HOME_TILE_PITCH);
         } else {
-            let bottom = self.content_viewport().y + self.content_viewport().h - 12.;
+            let bottom = self.scroll_bottom();
             let max = controls
                 .iter()
                 .filter(|c| {
@@ -490,6 +630,7 @@ impl State {
 
     pub fn set_inventory(&mut self, next: Inventory, warning: Option<String>) {
         self.inventory.apps = next.apps;
+        self.sync_custom_tiles();
         if let Some(warning) = warning {
             self.notify(warning);
         } else {
@@ -506,9 +647,15 @@ impl State {
     /// Homebrew service that reads the inventory can take longer than one request allows. While
     /// no apps are shown yet, the screen keeps loading and the caller retries after the returned
     /// delay; the error and its Retry button only appear once those retries are used up.
+    /// Custom tiles come from preferences, not the TV, so they don't count as loaded apps.
     pub fn inventory_failed(&mut self, error: String) -> Option<Duration> {
         self.dirty = true;
-        if self.inventory.apps.is_empty() && self.inventory_failures < INVENTORY_RETRIES {
+        let no_tv_apps = self
+            .inventory
+            .apps
+            .iter()
+            .all(|app| app.id.starts_with(CUSTOM_TILE_PREFIX));
+        if no_tv_apps && self.inventory_failures < INVENTORY_RETRIES {
             self.inventory_failures += 1;
             return Some(INVENTORY_RETRY_DELAY);
         }
@@ -516,6 +663,17 @@ impl State {
         self.loading = false;
         self.error = Some(error);
         None
+    }
+
+    /// Custom webhook tiles are never read from the TV. They are merged into
+    /// the inventory on every refresh and edit, so favoriting, hiding and
+    /// search treat them like any other app.
+    pub fn sync_custom_tiles(&mut self) {
+        self.inventory
+            .apps
+            .retain(|app| !app.id.starts_with(CUSTOM_TILE_PREFIX));
+        self.inventory.apps.extend(self.preferences.custom_apps());
+        self.dirty = true;
     }
 
     pub fn reconcile_focus(&mut self) {
@@ -599,14 +757,14 @@ impl State {
                 let top = if matches!(self.focus, Target::Background(_)) {
                     self.backgrounds_viewport().y + 8.
                 } else if self.page == Page::Apps {
-                    164.8
+                    self.apps_viewport().y + 8.
                 } else {
                     120.8
                 };
                 if control.rect.y < top {
                     self.scroll = (self.scroll + control.rect.y - top).max(0.);
                 }
-                let bottom = self.content_viewport().y + self.content_viewport().h - 12.;
+                let bottom = self.scroll_bottom();
                 if control.rect.y + control.rect.h > bottom {
                     self.scroll += control.rect.y + control.rect.h - bottom;
                 }
@@ -792,14 +950,9 @@ impl State {
                     })
                     .unwrap_or(0),
             ),
-            WEATHER_SECTION => Target::WeatherToggle,
-            SYSTEM_SECTION => Target::Setting(3),
-            INPUTS_SECTION => self
-                .inventory
-                .inputs
-                .first()
-                .map(|input| Target::InputMode(input.id.clone()))
-                .unwrap_or(Target::Setting(3)),
+            WIDGETS_SECTION => Target::Widget(4),
+            SYSTEM_SECTION if self.available_update.is_some() => Target::InstallUpdate,
+            SYSTEM_SECTION => Target::CheckUpdates,
             _ => Target::Setting(0),
         }
     }
@@ -812,7 +965,15 @@ impl State {
         self.pointer = false;
         self.focus = match self.subpage.take() {
             Some(Subpage::AppNames) => Target::Setting(0),
-            Some(Subpage::Greeting) => Target::Setting(6),
+            Some(Subpage::Greeting) => Target::Widget(0),
+            Some(Subpage::Date) => Target::Widget(4),
+            Some(Subpage::DateFormat) => {
+                self.subpage = Some(Subpage::Date);
+                Target::DateFormat
+            }
+            Some(Subpage::Weather) => Target::Widget(1),
+            Some(Subpage::Shortcuts) => Target::Widget(2),
+            Some(Subpage::Inputs) => Target::Widget(3),
             Some(Subpage::Clock) => Target::Setting(1),
             Some(Subpage::ClockFormat) => {
                 self.subpage = Some(Subpage::Clock);
@@ -822,9 +983,18 @@ impl State {
                 self.subpage = Some(Subpage::Clock);
                 Target::ClockTimeFormat
             }
-            Some(Subpage::Input(id)) => Target::InputMode(id),
-            Some(Subpage::WeatherLocation) => Target::WeatherLocation,
-            Some(Subpage::Temperature) => Target::WeatherTemperature,
+            Some(Subpage::Input(id)) => {
+                self.subpage = Some(Subpage::Inputs);
+                Target::InputMode(id)
+            }
+            Some(Subpage::WeatherLocation) => {
+                self.subpage = Some(Subpage::Weather);
+                Target::WeatherLocation
+            }
+            Some(Subpage::Temperature) => {
+                self.subpage = Some(Subpage::Weather);
+                Target::WeatherTemperature
+            }
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
             None => Target::Sidebar(self.section),
@@ -843,7 +1013,10 @@ impl State {
             // The TV keyboard owns its arrows until Done/Back dismisses it.
             return vec![];
         }
-        if matches!(self.overlay, Some(Overlay::WallpaperUpload)) {
+        if matches!(
+            self.overlay,
+            Some(Overlay::WallpaperUpload | Overlay::TileEditor)
+        ) {
             return vec![];
         }
         if let Some(id) = self.moving.clone() {
@@ -919,10 +1092,15 @@ impl State {
                     return vec![];
                 }
             }
-            let setting_rows = match self.subpage {
-                Some(Subpage::Greeting) => Some([Target::GreetingName, Target::GreetingNameClear]),
-                Some(Subpage::AppNames) => Some([Target::AppNamesHome, Target::AppNamesApps]),
-                Some(Subpage::Clock) => Some([Target::ClockFormat, Target::ClockTimeFormat]),
+            let setting_rows: Option<&[Target]> = match self.subpage {
+                Some(Subpage::Greeting) => Some(&[
+                    Target::GreetingToggle,
+                    Target::GreetingName,
+                    Target::GreetingNameClear,
+                ]),
+                Some(Subpage::AppNames) => Some(&[Target::AppNamesHome, Target::AppNamesApps]),
+                Some(Subpage::Date) => Some(&[Target::DateToggle, Target::DateFormat]),
+                Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
                 _ => None,
             };
             if let Some(rows) = setting_rows
@@ -934,15 +1112,20 @@ impl State {
                         if index == 0 {
                             Target::Nav(2)
                         } else {
-                            rows[0].clone()
+                            rows[index - 1].clone()
                         },
                         controls,
                     ),
-                    Direction::Down if index == 0 => self.focus(rows[1].clone(), controls),
+                    Direction::Down if index + 1 < rows.len() => {
+                        self.focus(rows[index + 1].clone(), controls)
+                    }
                     Direction::Right
                         if matches!(
                             self.focus,
-                            Target::GreetingName | Target::ClockFormat | Target::ClockTimeFormat
+                            Target::GreetingName
+                                | Target::ClockFormat
+                                | Target::ClockTimeFormat
+                                | Target::DateFormat
                         ) =>
                     {
                         return self.activate();
@@ -960,6 +1143,7 @@ impl State {
                         | Subpage::TextRendering,
                     ) => 2,
                     Some(Subpage::Language) => Language::ALL.len(),
+                    Some(Subpage::DateFormat) => crate::model::DateFormat::ALL.len(),
                     _ => 3,
                 };
                 match direction {
@@ -1007,7 +1191,11 @@ impl State {
             if let Target::Sidebar(index) = self.focus {
                 match direction {
                     Direction::Right => {
-                        let entry = self.section_entry();
+                        let entry = if self.section == 1 {
+                            Target::UploadWallpaper
+                        } else {
+                            self.section_entry()
+                        };
                         self.focus(entry, controls);
                     }
                     Direction::Up => self.focus(
@@ -1025,9 +1213,25 @@ impl State {
                 }
                 return vec![];
             }
+            if (matches!(
+                self.focus,
+                Target::TileEditor
+                    | Target::Tile(_)
+                    | Target::InputMode(_)
+                    | Target::WeatherToggle
+                    | Target::WeatherLocation
+                    | Target::WeatherTemperature
+                    | Target::Widget(_)
+            ) || (self.focus == Target::Setting(3) && self.subpage == Some(Subpage::Inputs)))
+                && matches!(direction, Direction::Left)
+            {
+                self.close_subpage();
+                return vec![];
+            }
             if matches!(
                 self.focus,
-                Target::Setting(0 | 1 | 4 | 6 | 7)
+                Target::Setting(0 | 1 | 4 | 7)
+                    | Target::Widget(_)
                     | Target::InputMode(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
@@ -1048,7 +1252,7 @@ impl State {
                     .first()
                     .is_some_and(|input| &input.id == id)
             {
-                self.focus(Target::Sidebar(INPUTS_SECTION), controls);
+                self.focus(Target::Nav(2), controls);
                 return vec![];
             }
             if self.focus == Target::Setting(0) && matches!(direction, Direction::Up) {
@@ -1184,7 +1388,11 @@ impl State {
                     }
                     Direction::Up => {
                         self.focus(
-                            if index < 3 {
+                            if index == 2 {
+                                Target::WallpaperCycle
+                            } else if index == 1 {
+                                Target::WallpaperGradient
+                            } else if index < 3 {
                                 Target::UploadWallpaper
                             } else {
                                 Target::Background(index - 3)
@@ -1207,22 +1415,34 @@ impl State {
             }
             if self.focus == Target::UploadWallpaper {
                 match direction {
+                    Direction::Down => self.focus(Target::Background(0), controls),
+                    Direction::Up => self.focus(Target::Nav(2), controls),
+                    Direction::Left => self.focus(Target::Sidebar(1), controls),
+                    Direction::Right => self.focus(Target::WallpaperGradient, controls),
+                }
+                return vec![];
+            }
+            if self.focus == Target::WallpaperGradient {
+                match direction {
+                    Direction::Right => self.focus(Target::WallpaperCycle, controls),
+                    Direction::Left => self.focus(Target::UploadWallpaper, controls),
+                    Direction::Up => self.focus(Target::Nav(2), controls),
                     Direction::Down => self.focus(
-                        Target::Background(2.min(self.background_count().saturating_sub(1))),
+                        Target::Background(1.min(self.background_count().saturating_sub(1))),
                         controls,
                     ),
-                    Direction::Up => self.focus(Target::Nav(2), controls),
-                    Direction::Left => self.focus(Target::WallpaperCycle, controls),
-                    Direction::Right => {}
                 }
                 return vec![];
             }
             if self.focus == Target::WallpaperCycle {
                 match direction {
-                    Direction::Right => self.focus(Target::UploadWallpaper, controls),
-                    Direction::Left => self.focus(Target::Sidebar(1), controls),
+                    Direction::Right => {}
+                    Direction::Left => self.focus(Target::WallpaperGradient, controls),
                     Direction::Up => self.focus(Target::Nav(2), controls),
-                    Direction::Down => self.focus(Target::Background(0), controls),
+                    Direction::Down => self.focus(
+                        Target::Background(2.min(self.background_count().saturating_sub(1))),
+                        controls,
+                    ),
                 }
                 return vec![];
             }
@@ -1328,6 +1548,17 @@ impl State {
                 }
                 self.dirty = true;
             }
+        } else if let Target::Tile(id) = &self.focus {
+            if self.preferences.custom_tile(id).is_none() {
+                return;
+            }
+            self.overlay = Some(Overlay::Options {
+                id: id.clone(),
+                restore: self.focus.clone(),
+            });
+            self.focus = Target::TileTest(id.clone());
+            self.panel_started = (!self.preferences.reduced_motion).then(Instant::now);
+            self.dirty = true;
         } else if let Target::App(id) = &self.focus {
             self.overlay = Some(Overlay::Options {
                 id: id.clone(),
@@ -1515,6 +1746,63 @@ impl State {
         }
     }
 
+    /// Applies the tile list edited on a phone or computer. New tiles join
+    /// the end of the Home favorites and removed ones leave favorites and hidden apps.
+    pub fn replace_tiles(&mut self, tiles: Vec<CustomTile>) -> Vec<Effect> {
+        let removed: Vec<_> = self
+            .preferences
+            .custom_tiles
+            .iter()
+            .filter(|old| !tiles.iter().any(|tile| tile.id == old.id))
+            .map(|old| old.id.clone())
+            .collect();
+        for id in &removed {
+            self.preferences.remove_tile(id);
+        }
+        let added: Vec<_> = tiles
+            .iter()
+            .filter(|tile| self.preferences.custom_tile(&tile.id).is_none())
+            .map(|tile| tile.id.clone())
+            .collect();
+        self.preferences.custom_tiles = tiles;
+        self.preferences.sanitize();
+        self.sync_custom_tiles();
+        if let Target::Tile(id) | Target::TileRemove(id) | Target::TileTest(id) = &self.focus
+            && self.preferences.custom_tile(id).is_none()
+        {
+            if matches!(
+                &self.overlay,
+                Some(Overlay::Options {
+                    restore: Target::Tile(_),
+                    ..
+                })
+            ) {
+                self.overlay = None;
+                self.panel_started = None;
+            }
+            self.focus = Target::TileEditor;
+        }
+        if !added.is_empty() {
+            let mut favorites = self.preferences.favorites(&self.inventory.apps);
+            for id in added {
+                if self.preferences.custom_tile(&id).is_some() && !favorites.contains(&id) {
+                    favorites.push(id);
+                }
+            }
+            self.preferences.favorites = Some(favorites);
+        }
+        vec![Effect::Save]
+    }
+
+    fn send_tile(&mut self, tile: CustomTile) -> Vec<Effect> {
+        self.notify(
+            self.preferences
+                .language
+                .format("tileSending", &[("tile", &tile.title)]),
+        );
+        vec![Effect::FireWebhook(tile)]
+    }
+
     pub fn delete_surrounding_text(&mut self, offset: i32, length: i32) {
         if !self.text_input_active() || length <= 0 {
             return;
@@ -1621,6 +1909,12 @@ impl State {
             return vec![];
         }
         self.dirty = true;
+        if self.page != Page::Apps
+            && let Target::App(id) = &self.focus
+            && let Some(tile) = self.preferences.custom_tile(id).cloned()
+        {
+            return self.send_tile(tile);
+        }
         match self.focus.clone() {
             Target::Nav(index) => self.open(index),
             Target::Browse => self.open(1),
@@ -1630,6 +1924,12 @@ impl State {
             Target::UploadWallpaper => {
                 self.wallpaper_upload = None;
                 self.overlay = Some(Overlay::WallpaperUpload);
+                self.focus = Target::CloseDialog;
+                self.pressed = None;
+            }
+            Target::TileEditor => {
+                self.tile_editor = None;
+                self.overlay = Some(Overlay::TileEditor);
                 self.focus = Target::CloseDialog;
                 self.pressed = None;
             }
@@ -1644,6 +1944,9 @@ impl State {
                 {
                     let id = id.clone();
                     self.back();
+                    if let Some(tile) = self.preferences.custom_tile(&id).cloned() {
+                        return self.send_tile(tile);
+                    }
                     return vec![Effect::Launch(id)];
                 }
             }
@@ -1666,7 +1969,7 @@ impl State {
             }
             Target::WeatherConfigure => {
                 self.open(2);
-                self.section = WEATHER_SECTION;
+                self.section = WIDGETS_SECTION;
                 self.open_location();
                 self.open_keyboard(TextField::Location);
             }
@@ -1686,6 +1989,22 @@ impl State {
                 }
             }
             Target::WeatherQuery => self.open_keyboard(TextField::Location),
+            Target::GreetingToggle => {
+                self.preferences.show_greeting = !self.preferences.show_greeting;
+                return vec![Effect::Save];
+            }
+            Target::DateToggle => {
+                self.preferences.show_date = !self.preferences.show_date;
+                return vec![Effect::Save];
+            }
+            Target::DateFormat => {
+                self.subpage = Some(Subpage::DateFormat);
+                self.focus = Target::Choice(self.preferences.date_format.index());
+                self.scroll = 0.;
+                if !self.preferences.reduced_motion {
+                    self.panel_started = Some(Instant::now());
+                }
+            }
             Target::GreetingName => self.open_keyboard(TextField::Name),
             Target::GreetingNameClear => {
                 self.preferences.greeting_name.clear();
@@ -1718,6 +2037,73 @@ impl State {
                 }
             }
             Target::InputRename => self.open_keyboard(TextField::InputName),
+            Target::Widget(index) => {
+                let (subpage, focus) = match index {
+                    0 => (Subpage::Greeting, Target::GreetingToggle),
+                    1 => (Subpage::Weather, Target::WeatherToggle),
+                    2 => (Subpage::Shortcuts, Target::TileEditor),
+                    4 => (Subpage::Date, Target::DateToggle),
+                    3 => (
+                        Subpage::Inputs,
+                        self.inventory
+                            .inputs
+                            .first()
+                            .map(|input| Target::InputMode(input.id.clone()))
+                            .unwrap_or(Target::Setting(3)),
+                    ),
+                    _ => return vec![],
+                };
+                self.section = WIDGETS_SECTION;
+                self.subpage = Some(subpage);
+                self.focus = focus;
+                self.scroll = 0.;
+                if !self.preferences.reduced_motion {
+                    self.panel_started = Some(Instant::now());
+                }
+            }
+            Target::InstallUpdate => {
+                if !self.update_busy()
+                    && let Some(version) = &self.available_update
+                {
+                    let version = version.clone();
+                    self.update = crate::update::InstallStatus::Downloading(0);
+                    return vec![Effect::UpdateDownload(version)];
+                }
+            }
+            Target::CheckUpdates => {
+                if !self.update_busy() {
+                    self.update = crate::update::InstallStatus::Idle;
+                    self.update_status = crate::update::Status::Checking;
+                    self.update_check_requested = true;
+                    self.dirty = true;
+                }
+            }
+            Target::Tile(_) => self.options(),
+            Target::TileTest(id) => {
+                if matches!(&self.overlay, Some(Overlay::Options { id: current, restore: Target::Tile(_), .. }) if current == &id)
+                    && let Some(tile) = self.preferences.custom_tile(&id).cloned()
+                {
+                    return self.send_tile(tile);
+                }
+            }
+            Target::TileRemove(id) => {
+                if matches!(&self.overlay, Some(Overlay::Options { id: current, restore: Target::Tile(_), .. }) if current == &id)
+                    && let Some(tile) = self.preferences.remove_tile(&id)
+                {
+                    self.overlay = None;
+                    self.notify(
+                        self.preferences
+                            .language
+                            .format("tileRemoved", &[("tile", &tile.title)]),
+                    );
+                    self.subpage = Some(Subpage::Shortcuts);
+                    self.panel_started = None;
+                    self.scroll = 0.;
+                    self.sync_custom_tiles();
+                    self.focus = Target::TileEditor;
+                    return vec![Effect::Save];
+                }
+            }
             Target::InputNameReset => {
                 if let Some(Subpage::Input(id)) = &self.subpage
                     && self.preferences.input_names.remove(id).is_some()
@@ -1793,15 +2179,6 @@ impl State {
                         }
                         return vec![];
                     }
-                    6 => {
-                        self.subpage = Some(Subpage::Greeting);
-                        self.focus = Target::GreetingName;
-                        self.scroll = 0.;
-                        if !self.preferences.reduced_motion {
-                            self.panel_started = Some(Instant::now());
-                        }
-                        return vec![];
-                    }
                     _ => return vec![Effect::Reload],
                 }
                 return vec![Effect::Save];
@@ -1812,6 +2189,10 @@ impl State {
             Target::WallpaperCycle => {
                 self.preferences.wallpaper_cycle = !self.preferences.wallpaper_cycle;
                 self.preferences.wallpaper_changed = unix_now();
+                return vec![Effect::Save];
+            }
+            Target::WallpaperGradient => {
+                self.preferences.wallpaper_gradient = !self.preferences.wallpaper_gradient;
                 return vec![Effect::Save];
             }
             Target::UseBackground => {
@@ -1872,6 +2253,9 @@ impl State {
                 match self.subpage.clone() {
                     Some(Subpage::ClockFormat) => self.preferences.hour_24 = index == 1,
                     Some(Subpage::TimeFormat) => self.preferences.show_seconds = index == 1,
+                    Some(Subpage::DateFormat) => {
+                        self.preferences.date_format = crate::model::DateFormat::ALL[index.min(3)];
+                    }
                     Some(Subpage::Input(id)) => {
                         self.preferences.input_modes.insert(
                             id,
@@ -1900,8 +2284,12 @@ impl State {
                     Some(
                         Subpage::WeatherLocation
                         | Subpage::Greeting
+                        | Subpage::Date
                         | Subpage::AppNames
-                        | Subpage::Clock,
+                        | Subpage::Clock
+                        | Subpage::Weather
+                        | Subpage::Shortcuts
+                        | Subpage::Inputs,
                     ) => {
                         return vec![];
                     }
@@ -2065,6 +2453,12 @@ impl State {
             if matches!(overlay, Overlay::WallpaperUpload) {
                 self.wallpaper_upload = None;
                 self.focus = Target::UploadWallpaper;
+                self.pressed = None;
+                return vec![];
+            }
+            if matches!(overlay, Overlay::TileEditor) {
+                self.tile_editor = None;
+                self.focus = Target::TileEditor;
                 self.pressed = None;
                 return vec![];
             }

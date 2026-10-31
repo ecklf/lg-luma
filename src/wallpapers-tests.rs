@@ -1,5 +1,9 @@
 use super::*;
-use std::sync::atomic::AtomicUsize;
+use crate::companion::TOKEN_ALPHABET;
+use std::{
+    net::{Ipv4Addr, TcpListener},
+    sync::atomic::AtomicUsize,
+};
 
 struct Fixture(PathBuf);
 impl Fixture {
@@ -84,6 +88,23 @@ fn upload_tokens_are_eight_unbiased_alphanumeric_characters() {
     }
     let distinct: std::collections::HashSet<_> = tokens.iter().collect();
     assert_eq!(distinct.len(), tokens.len());
+}
+
+#[test]
+fn uploads_retain_full_resolution_unshaded_images_and_discover_legacy_fallbacks() {
+    let fixture = Fixture::new();
+    let item = store(&fixture.wallpapers(), &image(1920, 1080), || true).unwrap();
+    assert!(item.has_original);
+    let original = image::open(item.unshaded_image()).unwrap().to_rgb8();
+    let shaded = image::open(item.image()).unwrap().to_rgb8();
+    assert_eq!(original.dimensions(), (1920, 1080));
+    assert_ne!(original.get_pixel(960, 1000), shaded.get_pixel(960, 1000));
+    assert!(catalog(&fixture.wallpapers())[0].has_original);
+    fs::remove_file(item.directory.join("original.jpg")).unwrap();
+    let legacy = catalog(&fixture.wallpapers());
+    assert_eq!(legacy.len(), 1);
+    assert!(!legacy[0].has_original);
+    assert_eq!(legacy[0].unshaded_image(), legacy[0].image());
 }
 
 #[test]
@@ -217,6 +238,7 @@ fn gallery_capacity_is_checked_before_decoding_or_creating_another_upload() {
             &serde_json::to_vec(&Wallpaper {
                 id,
                 directory: directory.clone(),
+                has_original: false,
             })
             .unwrap(),
         )
