@@ -44,7 +44,8 @@ async function fixture({ helper = true, relative = false } = {}) {
       timeout: 10000,
     });
   const recorded = async () => {
-    for (let i = 0; i < 100; i++) {
+    // Long enough for a real 5 s sleep where the shell runs sleep as a builtin (busybox ash).
+    for (let i = 0; i < 200; i++) {
       const text = await fs.readFile(calls, 'utf8').catch(() => '');
       if (text) return text.trim().split('\n');
       await new Promise((resolve) => setTimeout(resolve, 50));

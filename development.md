@@ -1028,7 +1028,8 @@ splash directly through the same Rust library on the platform worker. Normal jai
 retain Homebrew Channel as the privilege boundary, executing the installed helper with individually
 quoted arguments. The helper retains bounded file reads, combined stdout/stderr caps, timeouts,
 protected application IDs and completion-based uninstall replies. `luna-send` is still used for
-root-side LS2 operations; Node is no longer required by these helpers.
+root-side LS2 operations; Node is no longer required by these helpers or by `tv/self-update.sh`,
+which reads its two JSON fields with POSIX tools.
 
 `home.sh` retains its explicit confirmation and filesystem lock. Enabling Home copies both that
 script and the native helper into `/var/lib/luma-home`, so recovery remains available after the
