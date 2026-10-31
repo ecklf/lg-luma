@@ -369,7 +369,7 @@ try {
   assert.ok(!system.ui_text.includes('Luma update'));
   assert.ok(system.ui_text.includes('Quit app'));
   assert.ok(system.ui_text.includes('Text rendering'));
-  assert.ok(system.ui_text.includes('Luma as TV input'));
+  assert.ok(system.ui_text.includes('Show as TV input'));
   assert.ok(!system.ui_text.includes('On'));
   // Desktop previews keep the registration in memory, so the row can be toggled safely.
   const tvInput = await scenario(

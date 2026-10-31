@@ -223,7 +223,7 @@ Test on a spare button first. Disable the mapping in Input Hook to restore norma
 
 ### TV Input Method
 
-Turn on **Settings → System → Luma as TV input** to list Luma in LG's input picker. Luma runs
+Turn on **Settings → System → Show as TV input** to list Luma in LG's input picker. Luma runs
 `luma-helper tv-input` through Homebrew Channel's root service; over SSH,
 `/media/developer/apps/usr/palm/applications/com.ecklf.luma/luma-helper tv-input enable` does the
 same (use `/media/cryptofs/apps/usr/palm/applications/com.ecklf.luma` for Homebrew installs). The helper
