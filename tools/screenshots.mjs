@@ -36,7 +36,7 @@ try {
     ['home', 'home,down'],
     ['apps', 'apps,down'],
     ['settings', 'settings,down'],
-    ['inputs', 'settings,down,down,down,down,enter'],
+    ['inputs', 'settings,down,down,down,enter,down,down,down,enter'],
   ]) {
     // Independent state makes screenshots stable regardless of capture order.
     await fs.writeFile(preferences, JSON.stringify(configuration));

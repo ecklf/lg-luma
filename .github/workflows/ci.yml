@@ -1,4 +1,5 @@
 name: CI
+run-name: "${{ github.event_name == 'push' && format('Main validation and release eligibility · {0}', github.event.head_commit.message) || github.event_name == 'workflow_dispatch' && format('Version/branch validation · {0} (no publication)', github.ref_name) || format('PR #{0} · {1}', github.event.pull_request.number, github.event.pull_request.title) }}"
 
 on:
   push:
@@ -15,8 +16,7 @@ concurrency:
 
 jobs:
   release-gate:
-    name: Identify a merged version PR
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Release eligibility
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -24,22 +24,34 @@ jobs:
       pull-requests: read
     outputs:
       publish: ${{ steps.gate.outputs.result }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
+      - name: Identify app version
+        id: version
+        run: |
+          echo "tag=v$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
       - name: Require a merged Changesets PR and a version increase
         id: gate
         uses: actions/github-script@v8
         with:
           script: |
             const { isReleaseMerge } = await import(`${process.env.GITHUB_WORKSPACE}/tools/release-gate.mjs`);
-            return isReleaseMerge({ github, context });
+            const publish = await isReleaseMerge({ github, context });
+            await core.summary
+              .addHeading(`Luma ${process.env.RELEASE_TAG}`)
+              .addRaw(publish
+                ? 'Release authorized: this main commit merged Version Packages with a version increase. Publication waits for checks, all four smoke suites, and the verified ARM package.'
+                : 'Validation only: this run cannot publish. Merge the Version Packages PR to start the eligible main-commit release run.')
+              .write();
+            return publish;
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
 
-  build:
-    name: Rust checks, rendering, and native package
+  prepare:
+    name: Checks, unit tests, and shared desktop assets
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    outputs:
-      tag: ${{ steps.package.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -52,11 +64,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.93.0
         with:
           components: rustfmt, clippy
-          targets: armv7-unknown-linux-gnueabi
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: webos-${{ hashFiles('tools/build-webos.sh', 'tools/setup-webos-sdk.mjs', 'tools/webos-runtime.mjs') }}
+          key: desktop
       - name: Install desktop and asset dependencies
         run: |
           apt_options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
@@ -72,10 +83,101 @@ jobs:
         run: pnpm test
       - name: Generate native assets
         run: pnpm assets
-      - name: Exercise desktop rendering and mocked weather
+      - name: Build shared desktop preview
+        run: cargo build --locked --package luma --no-default-features
+      - name: Bundle shared smoke inputs
+        run: tar -czf smoke-inputs.tar.gz .build/assets target/debug/luma
+      - uses: actions/upload-artifact@v7
+        with:
+          name: smoke-inputs
+          path: smoke-inputs.tar.gz
+          retention-days: 1
+
+  smoke:
+    name: Smoke / ${{ matrix.suite }}
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: Navigation and rendering
+            script: tests/smoke.mjs
+            artifact: navigation
+          - suite: Brand gallery
+            script: tests/brands-smoke.mjs
+            artifact: brands
+          - suite: Mock weather
+            script: tests/weather-smoke.mjs
+            artifact: weather
+          - suite: Translations
+            script: tests/translations-smoke.mjs
+            artifact: translations
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install desktop rendering dependencies
+        run: |
+          apt_options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+          sudo apt-get "${apt_options[@]}" update
+          sudo apt-get "${apt_options[@]}" install -y --no-install-recommends libsdl2-2.0-0 libgl1-mesa-dri xvfb xauth
+      - uses: actions/download-artifact@v8
+        with:
+          name: smoke-inputs
+      - run: tar -xzf smoke-inputs.tar.gz
+      - name: Run isolated smoke suite
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
-        run: xvfb-run -a -s '-screen 0 1920x1080x24' pnpm test:smoke
+          LUMA_SMOKE_SKIP_BUILD: '1'
+        run: xvfb-run -a -s '-screen 0 1920x1080x24' node "${{ matrix.script }}"
+      - name: Upload native rendering diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-rendering-${{ matrix.artifact }}
+          if-no-files-found: ignore
+          retention-days: 7
+          include-hidden-files: true
+          path: |
+            .build/*.png
+            .build/*-render.json
+
+  package:
+    name: Verified ARM IPK and Homebrew feed
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.package.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@1.93.0
+        with:
+          targets: armv7-unknown-linux-gnueabi
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: webos-${{ hashFiles('tools/build-webos.sh', 'tools/setup-webos-sdk.mjs', 'tools/webos-runtime.mjs') }}
+      - name: Install cross-build dependencies
+        run: |
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends pkg-config
+      - uses: actions/download-artifact@v8
+        with:
+          name: smoke-inputs
+      - name: Restore generated native assets
+        run: tar -xzf smoke-inputs.tar.gz .build/assets
       - name: Set up the webOS SDK
         run: pnpm sdk
       - name: Cross-build and verify the native IPK and Homebrew feed
@@ -96,22 +198,30 @@ jobs:
             dist/repo.json
             dist/description.html
             dist/app-icon-large.png
-      - name: Upload native rendering diagnostics
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: native-rendering
-          if-no-files-found: ignore
-          retention-days: 7
-          include-hidden-files: true
-          path: |
-            .build/*.png
-            .build/*-render.json
+  build:
+    # Preserve the existing required-check name as the aggregate of all jobs.
+    name: Rust checks, rendering, and native package
+    needs: [prepare, smoke, package]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all validation jobs to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node <<'NODE'
+          const jobs = JSON.parse(process.env.RESULTS);
+          for (const [name, job] of Object.entries(jobs)) {
+            console.log(`${name}: ${job.result}`);
+            if (job.result !== 'success') process.exitCode = 1;
+          }
+          NODE
 
   release:
     name: Publish release and Homebrew feed
-    if: needs.release-gate.outputs.publish == 'true'
-    needs: [build, release-gate]
+    if: needs.release-gate.outputs.publish == 'true' && needs.build.result == 'success'
+    needs: [build, package, release-gate]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -125,7 +235,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ needs.build.outputs.tag }}
+          RELEASE_TAG: ${{ needs.package.outputs.tag }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -137,6 +247,7 @@ jobs:
             --jq ".[] | select(.tag_name == \"$RELEASE_TAG\") | .draft")"
           if [ "$state" = false ]; then
             printf 'Release %s is already published; skipping.\n' "$RELEASE_TAG"
+            echo "### Already published: [$RELEASE_TAG]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG)" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
@@ -160,3 +271,36 @@ jobs:
               --generate-notes \
               --title "Luma ${RELEASE_TAG#v}"
           fi
+          echo "### Published [$RELEASE_TAG]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG)" >> "$GITHUB_STEP_SUMMARY"
+
+  summary:
+    name: Release rollout summary
+    if: always()
+    needs: [release-gate, prepare, smoke, package, build, release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Summarize validation and publication
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          RELEASE_TAG: ${{ needs.release-gate.outputs.tag }}
+          PUBLISH: ${{ needs.release-gate.outputs.publish }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const jobs = JSON.parse(process.env.RESULTS);
+          const repo = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}`;
+          const eligible = process.env.PUBLISH === 'true';
+          const gateFailed = jobs['release-gate'].result !== 'success';
+          const status = eligible
+            ? jobs.release.result === 'success' ? 'Publication job succeeded' : 'Release not published by this run'
+            : gateFailed ? 'Release eligibility could not be determined. Publication is blocked.' : 'Validation only, no publication authorized';
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+            `## Luma ${process.env.RELEASE_TAG} rollout`, '', status, '',
+            '| Stage | Result |', '| --- | --- |',
+            ...Object.entries(jobs).map(([name, job]) => `| ${name} | ${job.result} |`), '',
+            `[Run and artifacts](${repo}/actions/runs/${process.env.GITHUB_RUN_ID})`, '',
+            eligible ? `[Release page](${repo}/releases/tag/${process.env.RELEASE_TAG})` : 'Merge Version Packages to main to start the release run.', '',
+            eligible && jobs.release.result !== 'success' ? 'Retry failed jobs on this original main-commit run after resolving failures. Manual dispatch does not publish.' : '',
+          ].join('\n'));
+          NODE

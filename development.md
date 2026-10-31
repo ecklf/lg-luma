@@ -16,9 +16,12 @@ dist/                        Generated ARM IPK, checksum and Homebrew feed
 .build/                      Generated assets, SDK/runtime caches and rendering diagnostics
 ```
 
-React, JSX, Vite, browser tests and web rendering are no longer part of the project. Node/pnpm
+The launcher is rendered natively, without React, JSX, Vite or a browser runtime. Node/pnpm
 remain build/deployment tools for Sharp, the webOS CLI and formatting/linting. The installed app
-is the Rust executable `luma`, with app ID `com.ecklf.luma`.
+is the Rust executable `luma`, with app ID `com.ecklf.luma`. The companion pages in
+`assets/wallpaper-upload/` and `assets/tile-editor/` are plain HTML/CSS/JavaScript, embedded in the
+native executable and served temporarily to the owner's phone or computer; they do not render the
+TV interface.
 
 ## Toolchain and commands
 
@@ -88,7 +91,7 @@ It does not execute the test suites. A desktop display is required; on headless 
 | OK or Back in move mode       | Finish reordering without launching                           |
 | Escape / Back / Backspace     | Parent navigation, overlay dismissal or Recent apps from Home |
 | Hold Back / Escape for 600 ms | Open Recent apps while Luma is focused                        |
-| Menu / M / right-click        | App options side popup                                        |
+| Menu / M / right-click        | App or background options side popup                          |
 | Pointer / wheel               | Hover, click, hold and scrolling                              |
 | F5                            | Refresh inventory                                             |
 
@@ -100,6 +103,11 @@ and the vector power-icon **Quit app** action separately from General preference
 On Apps, OK or a normal pointer click on an app opens its side popup, with **Open** first and focused by
 default, followed by favorite, hide/show and **Delete app** actions. A second OK launches the app.
 Home favorites, Inputs and Recent apps launch directly. Hold OK on Home still reorders favorites.
+Background cards open the same side popup with **Use background** first and **Delete background**
+only for inactive backgrounds. Deletion requires confirmation with **Cancel** focused by default.
+Uploaded images are deleted on the wallpaper worker; bundled assets remain in the package, with
+their gallery removal persisted in preferences. The active background is protected in both the
+UI and deletion worker. Back restores the gallery card by identity even after catalog changes.
 LG's Settings and More buttons retain their system menus, with no custom key interception.
 Deletion opens a separate confirmation with **Cancel** focused by default. Cancel or Back returns
 to the side popup. Once deletion is sent, dismissal does not cancel the platform operation.
@@ -130,13 +138,29 @@ General has an **App names** subpage with independent **Show on Home** and **Sho
 Home captions default to off and Apps captions default to on, stored independently in `show_home_names`
 and `show_app_names`. The legacy `show_names` preference does not override these defaults. Hidden
 captions do not reserve layout space.
+**Settings → Widgets** groups **Date**, **Greeting**, **Weather**, **Shortcuts**, and **Inputs** as separate subpages.
+Weather location and temperature choices return to Weather; Back from a widget returns to its row
+in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row.
+Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
+reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
+with a tighter 48-pixel spacing for Languages and Backgrounds.
+**Widgets → Greeting → Show widget** is the first row and hides only the greeting text, preserving the saved name,
+date and weather. Weather moves directly below the date when the greeting is hidden, without
+moving favorites or inputs. It defaults to enabled for existing and new installations.
+**Widgets → Date** contains **Show widget** (enabled by default) and **Date format**. Choose the
+existing localized weekday/month/day display (default), `DD.MM.YYYY`, `MM/DD/YYYY`, or `YYYY-MM-DD`.
+Choosing a format returns to its Date row; Back from Date restores its Widgets row. Hiding the
+date removes its reserved space above the greeting/weather and preserves the chosen format.
+Lists render behind the fixed sidebar, navigation and background actions, without viewport clipping
+or edge fades. Pointer interaction and remote focus retain their safe content viewports.
 The **Greeting** subpage contains **Name** and **Clear name**. Selecting Name opens the text keyboard
 (the system keyboard on the TV) and the name is appended to the Home greeting ("Good evening, Ana.").
 Long greetings scale down to fit their existing single-line area, centred vertically without
 moving the weather summary or favorite cards. Short greetings retain their original size.
 The keyboard starts empty; closing it without a name preserves the saved value. Clear name removes
 it. Preferences are saved when the keyboard closes, including automatic system-keyboard dismissal.
-Back from either subpage restores its General row. Input name removal also uses **Clear name**.
+Back from Greeting restores its Widgets row; App names returns to General. Input name removal
+also uses **Clear name**.
 Choice checkmarks identify saved values, while the bright row fill identifies only the current focus.
 
 Home favorites form one horizontal strip, never a second row. Left/Right follows saved order,
@@ -224,6 +248,109 @@ pnpm dev --script recents,await-recents
 `hold-back` is also a scripted opening action. Desktop smoke scenarios render normal, close-one,
 empty, launch, pointer and Home Back flows; unit tests cover hold timing, cancelled
 presses, stale responses, failures, navigation, reduced motion, reversible crossfades and consistent card artwork.
+
+## Custom wallpaper uploads
+
+**Settings → Background → Add a background** opens a native modal with a QR code and a
+temporary HTTP URL. On a phone or computer on the same network, choose a JPEG, PNG or WebP,
+enter a name, then drag the preview or use the zoom/position sliders to compose a 16:9 crop.
+**Add to TV** adds the named image to the gallery without selecting it. Close the TV modal
+and choose its thumbnail to use it. The upload page is currently English; the TV modal is localized.
+
+The phone accepts files up to 16 MiB and 32 megapixels, applies image orientation, and exports
+only the selected 1920×1080 JPEG crop. The native worker independently verifies the image format,
+exact output dimensions, a 12 MiB transport cap and a 32 MiB decoder allocation limit. It strips
+source metadata by re-encoding, generates a 480×270 thumbnail, and applies the same base opacity
+and readability gradients as bundled wallpapers. Processing and discovery run off the SDL thread;
+GPU uploads remain on SDL. Nothing is fetched from external services.
+
+The gallery holds up to 20 uploaded images under `wallpapers/custom-<random-id>/` beside the
+selected preferences file. The phone page shows this resolved absolute directory path. Names are
+trimmed, control-free and limited to 40 characters; they
+never become file paths. Files and metadata are committed in a new directory by atomic rename,
+with immutable paths so existing GPU texture caches cannot show an older upload. Root Home
+preserves the app storage owner's UID/GID for new directories and files. Preferences retain only
+the generated selected ID. Invalid metadata and entries with missing files are skipped; an unavailable selected image
+renders the bundled default without destroying the saved selection. These files survive app
+updates, and normal/takeover launches using the shared preferences location use the same gallery.
+Custom images are not used as LG's launch splash: runtime splash updates are skipped for them,
+and takeover boot staging uses a bundled fallback.
+
+The fixed actions are **Upload**, **Gradient**, and **Rotation**, from left to right.
+**Gradient** toggles readability shading immediately without moving the controls. Its
+`wallpaper_gradient` preference defaults to On for new and existing installations. Bundled assets
+include full-resolution `-plain` variants; new uploads retain a metadata-stripped `original.jpg`
+alongside the shaded image. Discovery checks for originals on the worker, not the SDL thread.
+Older uploads keep their full-resolution shaded image when Off if no unshaded original exists.
+The setting does not affect gallery thumbnails or LG's static launch splash.
+
+The fixed **Rotation** button toggles cycling On/Off,
+defaulting to Off, without opening a subpage. All available images participate in gallery order;
+deleted and pending-deletion entries are excluded. The fixed 15-minute interval uses a persisted
+Unix timestamp; manual selection or enabling cycling restarts it, and a clock behind the last
+change waits. On process start, rotation advances once after the gallery catalog loads, or after
+three seconds if the catalog is delayed. Changes wait until Luma is focused, visible, idle, and outside overlays. Automatic
+changes use a 1.6-second fade (instant with reduced motion) and save without refreshing LG's splash.
+`splash_background` preserves the manual selection across unrelated saves, package restaging, and
+process restarts; old preferences fall back to `background`. Old duration preferences load as On,
+while former per-image exclusions are ignored.
+
+The native process binds an ephemeral port on one private/link-local IPv4 interface only while
+the upload modal is open and visible, with a fixed ten-minute session lifetime. Closing the modal,
+hiding Luma or exiting invalidates the session. On TV, losing focus also closes the modal and
+invalidates the session; desktop previews keep it alive when switching to a browser. An unpredictable 128-bit capability
+URL, exact Host/Origin checks, a custom upload header, no CORS, and restrictive browser security
+headers limit access. The 8-character case-sensitive base-58 token has about 47 bits of entropy;
+each session accepts at most 64 local requests and expires after ten minutes. HTTP is **not
+encrypted**; use a trusted local network. The URL is not logged.
+The branded code follows the small center-logo approach shown in
+[Vercel's QR example](https://github.com/vercel/examples/tree/main/container-images/demo/apps/qr):
+Luma uses high error correction, light modules on the modal's dark background, and a compact center
+mark. QR readers vary in their support for inverted polarity; the URL remains visible as a manual
+fallback.
+Requests are serialized and bounded by header/body sizes and a deadline, with cancellation checks
+while reading and before committing. No user-controlled path is opened by the server. No privileged
+helper or permanent system service is installed. Networks with client isolation, IPv6-only access
+or an inbound firewall may prevent the phone reaching the server; this needs manual TV verification.
+
+`pnpm test:wallpapers` checks browser crop/name math. Rust wallpaper tests use generated images,
+isolated temporary storage and loopback HTTP only. Scripted desktop runs bind the upload server
+to loopback rather than the real LAN; `await-upload` waits for the modal's link or error state.
+Verify the QR code, phone drag/zoom, upload,
+TV selection/restart, normal/takeover access, cancellation and timeout on real hardware; desktop
+checks do not establish webOS jail networking permissions or TV/browser behavior.
+
+## Shortcut editing on a phone or computer
+
+**Settings → Widgets → Shortcuts → Configure** opens the same QR modal as the wallpaper
+upload, served by its own worker (`src/tile-editor.rs`). Both share `src/companion.rs`: interface
+choice, token, QR code, request parsing, Host/Origin checks and security headers are identical,
+including the ten-minute lifetime and invalidation on close, focus loss, hiding or exit. A page load
+needs about six requests, so a session accepts up to 256 instead of 64. The page is English, like
+the upload page.
+
+When the modal opens, the worker takes a copy of the saved tiles and serves `tiles.json` (tiles,
+choosable icons with their bundled SVG markup, and the limit). `POST save`, `remove` and `send`
+need the session token in `X-Luma-Token` and a JSON body of at most 4 KiB. Saves are validated with
+the preference validation rules (`clean_input_name`, `valid_tile_url`, `TILE_ICONS`, `TILE_LIMIT`,
+`new_tile_id`).
+Creation and editing are available only on this companion page, which uses a flat background.
+The TV lists saved shortcuts as selectable description rows matching HDMI settings. Pressing one
+opens a popup with **Test shortcut** and **Remove shortcut**; Back returns to the same row.
+The System version retains a separate muted, non-interactive surface. Removal clears the
+shortcut from preferences, favorites and hidden apps without attempting a platform uninstall.
+Each accepted companion change sends the complete list back to the launcher:
+new tiles join the end of the Home favorites, removed ones leave favorites and hidden apps, and
+preferences are saved. Accepted changes are revisioned and queued before replying to the page;
+reopening retains the worker's latest list until the launcher acknowledges every pending revision.
+Changes are applied even if the modal closed meanwhile, since the page was already told they were
+saved. The TV modal blocks other input, so the two editors never interleave.
+`send` makes the request from the TV with the same client as a tile press (five-second timeout, no
+redirects or proxy) without saving, and reports the result to the page.
+
+`pnpm test:tiles` checks the page helpers. Rust tests cover validation, the routes, header checks
+and session rotation over loopback; `await-tile-editor` waits for the modal's link in scripted runs.
+Verify scanning, editing and a test request against a real webhook on TV hardware.
 
 ## Splash images
 
@@ -561,7 +688,10 @@ is bound to that executable path. Luma detects this (`platform::runs_as_lg_home`
   registers with SAM itself through `registerApp` (lifecycle v2) on its own LS2 connection.
   `luna::subscribe` waits up to 10 s for SAM's first reply (`registered`); a failed connection,
   call or refused registration is a startup error, so Luma exits and SAM starts Home afresh.
-  `relaunch` raises the window and refreshes the inventory, `close` and a later
+  Home-replacement mode also claims SDL-webOS's Home key, returning directly to the Home tab
+  when SAM does not relaunch an already-foreground Home. Normal app-tile launches do not claim it.
+  `relaunch` returns to Luma's Home tab, dismisses overlays, raises the window and refreshes
+  the inventory. Keyboard edits are saved before leaving their subpage. `close` and a later
   `returnValue: false` (registration lost) quit. SAM keeps the process across Home launches and
   standby (`pause`, reason `keepAlive`) instead of restarting it;
 - resolves `assets/`, `lib/` (extra RPATH) and the splash directory from the installed package,
@@ -690,10 +820,51 @@ failure retries after five minutes. Unit changes convert unrounded cached Celsiu
 Removing a city clears its cache. The `.weather.json` sidecar uses Unix-seconds timestamps.
 Mock servers accept only literal loopback HTTP origins and are refused in TV builds.
 
-`assets/messages.json` supplies English/German/Spanish/Simplified Chinese, including locale formatting
+`assets/messages.json` supplies Dutch, English, French, German, Italian, Polish, Portuguese (Brazil),
+Russian, Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese, including locale formatting
 and weather labels. App/device names and saved city names remain real data. No geolocation,
 runtime font/translation services or telemetry are used. Weather attribution: Open-Meteo,
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+## Update availability
+
+On interactive desktop or TV startup a separate worker checks
+`https://github.com/ecklf/lg-luma/releases/latest/download/repo.json` once per process automatically.
+**Settings → System → Check again** retries on the same worker, with one request in flight at a time.
+It only reads the `com.ecklf.luma` package/manifest version and compares numeric major/minor/patch
+components with the compiled version. Equal, older, malformed or prerelease versions do not offer
+updates. HTTP is HTTPS-only with bounded redirects, a ten-second timeout, a 256 KiB reply limit and
+no proxy; failures are logged without interrupting launch and the status card offers retry.
+Scripted captures and simulated update previews do not contact GitHub. Interactive desktop checks
+use the same endpoint and worker as TV. The card shows the current version and only reports
+**No newer version found** after a successful check, never while unchecked or offline.
+A newer version shows an **Update available** notice and a **Settings → System** card with both
+versions. Its **Install {version}** button explicitly starts installation on interactive TV runs.
+The read-only checker never downloads an IPK. A separate installer worker rechecks release metadata,
+requires the exact offered version, and accepts only this project's ARM release assets with a bounded
+size and SHA-256. It downloads into a private random directory and verifies both before handing off
+to `tv/self-update.sh`, detached through Homebrew Channel's root service into a systemd unit.
+The handoff escapes dollar signs for systemd as well as quoting for the
+exec service's shell, so systemd cannot expand the embedded script before `/bin/sh` runs it.
+The installer locks, stages and re-verifies a root-owned copy, waits for installation completion and
+checks the installed version before reopening Luma. Home takeover refreshes from the new package;
+failed reapplication attempts verified LG Home recovery. Atomic attempt-specific results and a log
+persist in `/var/lib/luma-update`. The card displays progress, ignores repeated presses while busy,
+and returns to **Check again** after failure. On restart the installer worker observes an unfinished
+attempt or reports its persisted failure. Desktop and scripted/simulated runs cannot install.
+
+Preview the update card without a network request:
+
+```sh
+cargo run -- --test-update-version 99.0.0 --script settings,down,down,down,down,right
+# Alternatively: LUMA_TEST_UPDATE_VERSION=99.0.0 cargo run
+```
+
+The flag overrides the environment variable and accepts the current or a newer numeric version.
+Use the current version to preview the up-to-date card and **Check again** without HTTP. It is logged as
+a simulated update, stored only in memory, and disables the public feed check even on TV. Open
+**Settings → System** to see it. The install action is rejected locally without HTTP, Luna calls or
+package installation in these previews.
 
 ## Compatibility
 
@@ -724,8 +895,15 @@ pnpm assets
 xvfb-run -a pnpm test:smoke
 ```
 
-CI uses this native-only flow, then cross-links with a pinned Linux SDK, inspects/normalizes the
-actual ARM IPK and generates checksums/feed. It uploads release/rendering artifacts on PRs,
+CI prepares checks, unit tests, native assets and the desktop binary once. Four independent
+jobs run navigation/rendering, the brand gallery, mocked weather and translations in parallel,
+each with its own Xvfb display, scratch preferences and diagnostic artifact. They consume a
+same-run tar archive that preserves the binary's executable mode and use `LUMA_SMOKE_SKIP_BUILD=1`
+to avoid compiling the same executable again. Local smoke commands still build by default.
+The ARM package job runs alongside these suites using the shared assets, cross-links with a
+pinned Linux SDK, inspects/normalizes the actual IPK and generates checksums/feed. The existing
+**Rust checks, rendering, and native package** check remains as an aggregate that requires every
+preparation, smoke and package job to succeed. It uploads release/rendering artifacts on PRs,
 main-branch pushes and manual runs. `pnpm check` also validates synchronized release versions,
 and `pnpm test:release` covers version synchronization and the publish gate, including the real
 Changesets version command in an isolated fixture. Host CI cannot prove hardware compatibility,
@@ -793,6 +971,16 @@ also pass the existing checks, desktop smoke tests and native packaging build. O
 unmerged PRs and manual CI runs do not publish. To retry a failed publication, rerun the original
 CI run for the merged version PR's main-branch commit.
 
+The Actions graph now shows **Release eligibility → shared preparation → four parallel smoke
+suites + ARM package → aggregate validation → Publish release and Homebrew feed**. Eligibility
+runs on PRs and manual dispatches too, explicitly reporting validation-only rather than leaving
+a skipped job to interpret. The **Release rollout summary** runs even when earlier jobs fail,
+listing stage results, the run/artifact link, release eligibility and retry instructions.
+The Release PR workflow also links the generated Version Packages PR and explains the rollout
+in its summary and PR body. A version-branch dispatch validates only, while the main push after
+merging is the publication candidate. Shared assets and release artifacts are always from that
+same workflow run and commit, never from a previous PR build.
+
 Publication retains the existing guards: an already-published version is skipped, a draft can be
 resumed, and a tag pointing at another commit requires a new app version. `pnpm version:check`
 checks synchronization without writing files. `pnpm version:sync` repairs metadata from the
@@ -809,3 +997,25 @@ HTML alongside the feed and IPK, so the feed and its description must be publish
 Key modules: `state.rs` focus/preferences, `view.rs` geometry, `renderer.rs` GPU caches/draws,
 `font.rs` lazy metrics/outlines, `vector.rs` GPU mesh upload, `platform.rs` worker/inventory,
 `luna.rs` LS2, `weather*.rs` scheduling/HTTPS/cache, `storage.rs` atomic JSON, and `main.rs` SDL loop.
+
+### Home-key routing on webOS 5/6 (#109)
+
+`home.sh status` reports the selected `homeId` and installed Home candidates. `mounted`,
+`enabled` and `bootHook` describe integration files, not a successful remote Home-key test;
+`homeKeyVerified` therefore remains `null` (unknown). LG Home can be an overlay, so foreground app
+identity alone is not sufficient evidence that Luma rendered or received the Home key.
+
+If diagnostics on the affected TV establish that Home opens `com.webos.app.fullhome`, disable
+existing takeover first, then explicitly select that target:
+
+```sh
+sh /var/lib/luma-home/home.sh disable
+sh /media/developer/apps/usr/palm/applications/com.ecklf.luma/home.sh enable /media/developer/apps/usr/palm/applications/com.ecklf.luma com.webos.app.fullhome
+```
+
+Use the installed package directory on production installations. The selected target is saved
+for boot, package reapply and restore; no input remapping or Linux key-code assumption is used.
+The original `home` target remains the default. Press Home from another app to verify, then test
+disable restores LG's dashboard. This is a targeted compatibility option, not confirmation of
+the unreported cause of #109. The reporter's device still needs to establish which Home app
+receives the key. Do not infer support for webOS 4 from this option.

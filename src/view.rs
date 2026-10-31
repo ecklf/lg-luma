@@ -6,7 +6,7 @@ use crate::{
     state::{
         APPS_COLUMNS, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT,
         HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State,
-        Subpage, TV_INPUT_ROW, Target, TextField, TvInput, WEATHER_SECTION,
+        Subpage, TV_INPUT_ROW, Target, TextField, TvInput, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -36,7 +36,8 @@ impl Assets {
             std::fs::read(root.join(file))
                 .map_err(|e| format!("Native assets are missing: {e}. Run pnpm assets."))
         };
-        let version = String::from_utf8(load("version.txt")?).map_err(|e| e.to_string())?;
+        // Generated artwork may outlive a binary rebuild; version the running app, not the assets.
+        let version = env!("CARGO_PKG_VERSION").to_owned();
         let metrics =
             serde_json::from_slice(&load("font-metrics.json")?).map_err(|e| e.to_string())?;
         Ok(Self {
@@ -48,6 +49,27 @@ impl Assets {
     }
     fn path(&self, path: impl AsRef<Path>) -> String {
         self.root.join(path).to_string_lossy().into_owned()
+    }
+
+    fn background(&self, state: &State, id: &str) -> String {
+        if let Some(item) = state.wallpapers.iter().find(|item| item.id == id) {
+            return if state.preferences.wallpaper_gradient {
+                item.image()
+            } else {
+                item.unshaded_image()
+            };
+        }
+        let id = if BACKGROUNDS.iter().any(|(known, _)| *known == id) {
+            id
+        } else {
+            "dunes"
+        };
+        let suffix = if state.preferences.wallpaper_gradient {
+            ""
+        } else {
+            "-plain"
+        };
+        self.path(format!("wallpapers/{id}{suffix}.jpg"))
     }
 
     fn width(&self, value: &str, style: TextStyle) -> f32 {
@@ -254,6 +276,194 @@ impl Scene {
     }
 }
 
+/// The strings a companion dialog shows around its QR code, as message keys.
+struct Companion {
+    title: &'static str,
+    keep_open: &'static str,
+    private: &'static str,
+    error: &'static str,
+    starting: &'static str,
+}
+
+fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
+    companion(
+        out,
+        state,
+        assets,
+        state.wallpaper_upload.as_ref(),
+        Companion {
+            title: "uploadWallpaper",
+            keep_open: "wallpaperUploadKeepOpen",
+            private: "wallpaperUploadPrivate",
+            error: "wallpaperUploadError",
+            starting: "wallpaperUploadStarting",
+        },
+    );
+}
+
+fn tile_editor(out: &mut Scene, state: &State, assets: &Assets) {
+    companion(
+        out,
+        state,
+        assets,
+        state.tile_editor.as_ref(),
+        Companion {
+            title: "editTilesElsewhere",
+            keep_open: "tileEditorKeepOpen",
+            private: "tileEditorPrivate",
+            error: "tileEditorError",
+            starting: "tileEditorStarting",
+        },
+    );
+}
+
+/// A QR code and address for a page on the owner's phone or computer, with a Close button.
+fn companion(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    session: Option<&Result<crate::companion::Session, String>>,
+    strings: Companion,
+) {
+    let language = state.preferences.language;
+    let panel = Rect::new(520., 144., 880., 816.);
+    out.modal = Some(panel);
+    out.shadow(panel, 24., 40., 12., 0.3);
+    out.shape(panel, 24., c(0x1b2023, 1.));
+    out.border(panel, 24., 1., c(0xffffff, 0.09));
+    out.text(
+        language.t(strings.title),
+        Rect::new(584., 198., 752., 48.),
+        text(32., 550, -0.02),
+        WHITE,
+        true,
+    );
+    out.text(
+        language.t("wallpaperUploadHint"),
+        Rect::new(604., 264., 712., 32.),
+        text(19., 400, 0.).leading(1.5),
+        c(0xffffff, 0.65),
+        true,
+    );
+    match session {
+        Some(Ok(session)) => {
+            let scale = (336. / (session.qr_size + 8) as f32).floor();
+            let size = (session.qr_size + 8) as f32 * scale;
+            let x = (1920. - size) / 2.;
+            let y = 310.;
+            // Invert the normal QR polarity to blend into the dark modal, while
+            // retaining a high-contrast foreground and the full quiet zone.
+            let background = c(0x1b2023, 1.);
+            let modules = c(0xf5f4ef, 1.);
+            out.shape(Rect::new(x, y, size, size), 0., background);
+            for row in 0..session.qr_size {
+                // Merge contiguous modules so QR rendering stays a few hundred quads.
+                let mut column = 0;
+                while column < session.qr_size {
+                    let mark_start = (session.qr_size - 11) / 2;
+                    let in_mark = (mark_start..mark_start + 11).contains(&row)
+                        && (mark_start..mark_start + 11).contains(&column);
+                    if in_mark {
+                        column += 1;
+                        continue;
+                    }
+                    if !session.qr[(row * session.qr_size + column) as usize] {
+                        column += 1;
+                        continue;
+                    }
+                    let start = column;
+                    while column < session.qr_size {
+                        let in_mark = (mark_start..mark_start + 11).contains(&row)
+                            && (mark_start..mark_start + 11).contains(&column);
+                        if in_mark || !session.qr[(row * session.qr_size + column) as usize] {
+                            break;
+                        }
+                        column += 1;
+                    }
+                    out.shape(
+                        Rect::new(
+                            x + (start + 4) as f32 * scale,
+                            y + (row + 4) as f32 * scale,
+                            (column - start) as f32 * scale,
+                            scale,
+                        ),
+                        0.,
+                        modules,
+                    );
+                }
+            }
+            let mark_start = (session.qr_size - 11) / 2;
+            let mark_plate = Rect::new(
+                x + (mark_start + 4) as f32 * scale,
+                y + (mark_start + 4) as f32 * scale,
+                11. * scale,
+                11. * scale,
+            );
+            out.shape(mark_plate, 1.1 * scale, background);
+            let mark = Rect::new(
+                mark_plate.x + 1.25 * scale,
+                mark_plate.y + 1.25 * scale,
+                8.5 * scale,
+                8.5 * scale,
+            );
+            out.icon(assets, "luma-mark", mark, WHITE);
+            out.text(
+                language.t("wallpaperUploadBrowser"),
+                Rect::new(604., 670., 712., 32.),
+                text(19., 400, 0.).leading(1.5),
+                c(0xffffff, 0.65),
+                true,
+            );
+            let display_url = session.url.trim_end_matches('/');
+            out.text(
+                display_url,
+                Rect::new(568., 716., 784., 36.),
+                assets.fit_text(display_url, text(26., 600, 0.), 784.),
+                WHITE,
+                true,
+            );
+            out.text(
+                language.t(strings.keep_open),
+                Rect::new(604., 766., 712., 52.),
+                text(16., 400, 0.).leading(1.4),
+                c(0xffffff, 0.75),
+                true,
+            );
+            out.text(
+                language.t(strings.private),
+                Rect::new(604., 820., 712., 22.),
+                text(15., 400, 0.),
+                c(0xffffff, 0.5),
+                true,
+            );
+        }
+        result => {
+            let key = if result.is_some() {
+                strings.error
+            } else {
+                strings.starting
+            };
+            out.text(
+                language.t(key),
+                Rect::new(604., 470., 712., 90.),
+                text(22., 450, 0.).leading(1.5),
+                c(0xffffff, 0.75),
+                true,
+            );
+        }
+    }
+    let close = Rect::new(812., 862., 296., 56.);
+    out.pill(close, state.focus == Target::CloseDialog, false);
+    out.text(
+        language.t("close"),
+        Rect::new(close.x, close.y + 15., close.w, 28.),
+        text(20., 550, 0.),
+        c(0x171c20, 1.),
+        true,
+    );
+    out.control(Target::CloseDialog, close, false);
+}
+
 fn c(rgb: u32, alpha: f32) -> Color {
     [
         ((rgb >> 16) & 255) as f32 / 255.,
@@ -301,14 +511,14 @@ pub fn scene_with_pill(
     let mut out = Scene::new();
     if let Some((previous, start)) = &state.previous_background {
         out.image(
-            assets.path(format!("wallpapers/{previous}.jpg")),
+            assets.background(state, previous),
             Rect::new(0., 0., 1920., 1080.),
             0.,
             false,
         );
-        let alpha = (start.elapsed().as_secs_f32() / 0.4).min(1.);
+        let alpha = (start.elapsed().as_secs_f32() / state.background_fade).min(1.);
         out.draw.push(Draw::TintedImage(
-            assets.path(format!("wallpapers/{}.jpg", state.preferences.background)),
+            assets.background(state, &state.preferences.background),
             Rect::new(0., 0., 1920., 1080.),
             0.,
             false,
@@ -316,7 +526,7 @@ pub fn scene_with_pill(
         ));
     } else {
         out.image(
-            assets.path(format!("wallpapers/{}.jpg", state.preferences.background)),
+            assets.background(state, &state.preferences.background),
             Rect::new(0., 0., 1920., 1080.),
             0.,
             false,
@@ -337,10 +547,8 @@ pub fn scene_with_pill(
     }
     let viewport = state.content_viewport();
     let main_bottom = viewport.y + viewport.h;
-    out.draw.push(Draw::Clip(Some(viewport)));
-    if state.page == Page::Apps {
-        out.draw
-            .push(Draw::EdgeFade(Some([MAIN_TOP, 152.8, 1080., 1104.])));
+    if state.page == Page::Home {
+        out.draw.push(Draw::Clip(Some(viewport)));
     }
     match state.page {
         Page::Home => home(&mut out, state, assets, now),
@@ -386,11 +594,20 @@ pub fn scene_with_pill(
     out.draw.push(Draw::EdgeFade(None));
     out.draw.push(Draw::Clip(None));
     header(&mut out, state, assets, now, pill_x, pill_width);
-    footer(&mut out, state, assets);
-    if let Some(overlay @ (Overlay::Options { .. } | Overlay::Delete { .. } | Overlay::Keyboard)) =
-        &state.overlay
+    if let Some(
+        overlay @ (Overlay::Options { .. }
+        | Overlay::Delete { .. }
+        | Overlay::BackgroundOptions { .. }
+        | Overlay::BackgroundDelete { .. }
+        | Overlay::Keyboard
+        | Overlay::WallpaperUpload
+        | Overlay::TileEditor),
+    ) = &state.overlay
     {
         let anchor = match overlay {
+            Overlay::BackgroundOptions { id, .. } => out.controls.iter()
+                .find(|control| matches!(control.target, Target::Background(index) if state.background_id(index) == Some(id.as_str())))
+                .map(|control| Rect::new(control.rect.x, control.rect.y, control.rect.w, 202.5)),
             Overlay::Options { id, .. } => out
                 .controls
                 .iter()
@@ -416,21 +633,31 @@ pub fn scene_with_pill(
         out.controls.clear();
         let start = out.draw.len();
         out.shape(Rect::new(0., 0., 1920., 1080.), 0., c(0x080b12, 0.70));
-        if matches!(overlay, Overlay::Options { .. })
-            && let Some(opened) = state.panel_started
+        if matches!(
+            overlay,
+            Overlay::Options { .. } | Overlay::BackgroundOptions { .. }
+        ) && let Some(opened) = state.panel_started
         {
             // The lifted card stays opaque while the backdrop and popup fade.
             // Fading it over its dimmed parent copy causes a brightness dip.
             out.fade(start, (opened.elapsed().as_secs_f32() / 0.12).min(1.), 1.);
         }
         match overlay {
-            Overlay::Options { id, .. } => options(&mut out, state, assets, id, anchor),
-            Overlay::Delete { id, .. } => delete_confirmation(&mut out, state, assets, id),
+            Overlay::Options { id, .. } | Overlay::BackgroundOptions { id, .. } => {
+                options(&mut out, state, assets, id, anchor)
+            }
+            Overlay::Delete { id, .. } | Overlay::BackgroundDelete { id, .. } => {
+                delete_confirmation(&mut out, state, assets, id)
+            }
             Overlay::Keyboard => keyboard(&mut out, state, assets),
+            Overlay::WallpaperUpload => wallpaper_upload(&mut out, state, assets),
+            Overlay::TileEditor => tile_editor(&mut out, state, assets),
             Overlay::SystemKeyboard | Overlay::Recents { .. } => {}
         }
-        if !matches!(overlay, Overlay::Options { .. })
-            && let Some(opened) = state.panel_started
+        if !matches!(
+            overlay,
+            Overlay::Options { .. } | Overlay::BackgroundOptions { .. }
+        ) && let Some(opened) = state.panel_started
         {
             out.fade(start, (opened.elapsed().as_secs_f32() / 0.12).min(1.), 1.);
         }
@@ -487,8 +714,8 @@ fn header(
     );
     out.text(
         clock,
-        Rect::new(84., 64.8, 300., 24.),
-        text(20., 500, -0.03),
+        Rect::new(84., 62.4, 300., 28.8),
+        text(24., 500, -0.03),
         WHITE,
         false,
     );
@@ -524,13 +751,24 @@ fn header(
         );
         out.control(Target::Nav(index), rect, false);
     }
-    let rect = Rect::new(1786.4, 52., 49.6, 49.6);
+    let button_size = 60.;
+    let rect = Rect::new(
+        1836. - button_size,
+        nav.y + (nav.h - button_size) / 2.,
+        button_size,
+        button_size,
+    );
     let focused = state.focus == Target::TvSettings;
     out.pill(rect, focused, false);
     out.icon(
         assets,
         "settings",
-        Rect::new(1799.6, 65.2, 23.2, 23.2),
+        Rect::new(
+            rect.x + (rect.w - 23.2) / 2.,
+            rect.y + (rect.h - 23.2) / 2.,
+            23.2,
+            23.2,
+        ),
         if focused {
             c(0x2c2c2c, 1.)
         } else {
@@ -565,7 +803,12 @@ fn tile(
     } else {
         state.content_viewport()
     };
-    if rect.y + rect.h + label_height < MAIN_TOP
+    let top = if state.page == Page::Apps {
+        0.
+    } else {
+        MAIN_TOP
+    };
+    if rect.y + rect.h + label_height < top
         || rect.y > 1054.
         || rect.x + rect.w + 40. < viewport.x
         || rect.x - 40. > viewport.x + viewport.w
@@ -583,12 +826,7 @@ fn tile(
     );
     app_face(out, assets, app, rect, state.preferences.language, 19.2);
     if pinned {
-        out.icon(
-            assets,
-            "heart-filled",
-            Rect::new(rect.x + rect.w - 27.2, rect.y + 11.2, 16., 16.),
-            c(0xffffff, 0.9),
-        );
+        favorite_badge(out, assets, rect);
     }
     if state.moving.as_ref() == Some(&app.id) {
         let indicator = Rect::new(
@@ -637,7 +875,7 @@ fn tile(
                 rect.w - 8.,
                 caption_height,
             ),
-            text(17.6, if focused { 550 } else { 450 }, -0.02).leading(1.4),
+            text(20.8, if focused { 600 } else { 550 }, -0.02).leading(1.4),
             if focused {
                 c(0xffffff, 1.)
             } else {
@@ -649,6 +887,13 @@ fn tile(
     if state.moving.is_some() && state.moving.as_ref() != Some(&app.id) {
         out.fade(start, 0.48, 1.);
     }
+}
+
+fn favorite_badge(out: &mut Scene, assets: &Assets, card: Rect) {
+    let icon = Rect::new(card.x + card.w - 27.2, card.y + 11.2, 16., 16.);
+    // Keep the white heart legible even over white installed artwork.
+    out.shape(icon.inset(-6.), 14., c(0x101318, 0.79));
+    out.icon(assets, "heart-filled", icon, c(0xffffff, 0.9));
 }
 
 /// Shared card artwork for Home, Apps and Recents. Curated vectors always take
@@ -733,16 +978,16 @@ fn caption_height(state: &State, assets: &Assets, app: &App, width: f32) -> f32 
         }
     );
     let style = text(
-        17.6,
+        20.8,
         if state.focus == Target::App(app.id.clone()) {
-            550
+            600
         } else {
-            450
+            550
         },
         -0.02,
     )
     .leading(1.4);
-    (assets.lines(&title, style, width - 8.) as f32 * style.size * style.line_height).max(49.28)
+    (assets.lines(&title, style, width - 8.) as f32 * style.size * style.line_height).max(58.24)
 }
 
 fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language: Language) {
@@ -809,6 +1054,7 @@ fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language:
                 "browser" => ("globe", language.t("browser")),
                 "moonlight" => ("moonlight", "Moonlight"),
                 "gaming" => ("gaming", app.title.as_str()),
+                "custom" => (app.mark, app.title.as_str()),
                 _ => ("generic", app.title.as_str()),
             };
             let font = if brand == "generic" {
@@ -866,27 +1112,47 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     let shift = summary
         .as_ref()
         .map_or(0., |summary| (summary.height + 18.4) / 2.);
-    let date = language.date(now);
-    out.text(
-        date,
-        Rect::new(84., 227.2 - shift - s, 1200., 17.),
-        text(14.4, 600, 0.12),
-        c(0xf5f5f5, 0.72),
-        false,
-    );
-    let greeting = language.greeting(now.hour(), &state.preferences.greeting_name);
-    let greeting_style = text(90.4, 500, -0.065).leading(1.05);
-    let fitted = assets.fit_text(&greeting, greeting_style, 1500.);
-    let height = 95. * fitted.size / greeting_style.size;
-    out.text(
-        &greeting,
-        Rect::new(84., 265. + (95. - height) / 2. - shift - s, 1500., height),
-        fitted,
-        WHITE,
-        false,
-    );
+    let top = 223.2 - shift - s;
+    let date_height = if state.preferences.show_date {
+        41.8
+    } else {
+        0.
+    };
+    if state.preferences.show_date {
+        out.text(
+            state.preferences.date_format.format(language, now),
+            Rect::new(84., top, 1200., 24.),
+            text(18.4, 600, 0.12),
+            c(0xf5f5f5, 0.72),
+            false,
+        );
+    }
+    if state.preferences.show_greeting {
+        let greeting = language.greeting(now.hour(), &state.preferences.greeting_name);
+        let greeting_style = text(90.4, 500, -0.065).leading(1.05);
+        let fitted = assets.fit_text(&greeting, greeting_style, 1500.);
+        let height = 95. * fitted.size / greeting_style.size;
+        out.text(
+            &greeting,
+            Rect::new(84., top + date_height + (95. - height) / 2., 1500., height),
+            fitted,
+            WHITE,
+            false,
+        );
+    }
     if let Some(summary) = summary {
-        weather_summary(out, state, assets, summary, 265. - shift + 94.92 + 18.4 - s);
+        let greeting_height = if state.preferences.show_greeting {
+            94.92 + 18.4
+        } else {
+            0.
+        };
+        weather_summary(
+            out,
+            state,
+            assets,
+            summary,
+            top + date_height + greeting_height,
+        );
     }
     out.text(
         language.t("favorites"),
@@ -950,7 +1216,7 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
                 18.4 + apps
                     .iter()
                     .map(|app| caption_height(state, assets, app, HOME_TILE_WIDTH))
-                    .fold(49.28, f32::max)
+                    .fold(58.24, f32::max)
             } else {
                 0.
             };
@@ -1070,8 +1336,8 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         );
         out.text(
             input_status(input, name.is_some(), language),
-            Rect::new(rect.x + 93., rect.y + 58.7, 450., 20.),
-            text(13.12, 400, 0.).leading(1.5),
+            Rect::new(rect.x + 93., rect.y + 57.4, 450., 25.2),
+            text(16.8, 400, 0.).leading(1.5),
             c(0xe8e8e8, 0.48),
             false,
         );
@@ -1236,13 +1502,17 @@ fn weather_summary(
 }
 
 fn library(out: &mut Scene, state: &State, assets: &Assets) {
+    library_grid(out, state, assets);
+    library_toolbar(out, state, assets);
+}
+
+fn library_toolbar(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
-    let s = state.scroll;
     let mut x = 84.;
     for (index, label) in CATEGORIES.into_iter().enumerate() {
         let label = language.category(label);
-        let width = assets.width(label, text(16., 400, 0.)) + 35.6;
-        let rect = Rect::new(x, 171.4 - s, width, 42.8);
+        let width = assets.width(label, text(20.8, 550, -0.02)) + 40.;
+        let rect = Rect::new(x, 164.8, width, 56.);
         filter(
             out,
             state,
@@ -1257,9 +1527,9 @@ fn library(out: &mut Scene, state: &State, assets: &Assets) {
         let label = language.format("hidden", &[("count", &state.hidden_count().to_string())]);
         let rect = Rect::new(
             x,
-            171.4 - s,
-            assets.width(&label, text(16., 400, 0.)) + 35.6,
-            42.8,
+            164.8,
+            assets.width(&label, text(20.8, 550, -0.02)) + 40.,
+            56.,
         );
         filter(
             out,
@@ -1272,15 +1542,22 @@ fn library(out: &mut Scene, state: &State, assets: &Assets) {
         x += rect.w + 7.2;
     }
     if state.filter != 0 {
-        let rect = Rect::new(x, 176.8 - s, 32., 32.);
-        out.shape(rect, 16., c(0x23282c, 0.5));
-        out.icon(assets, "close", rect.inset(8.), c(0xeeeeee, 0.73));
-        if state.focus == Target::ClearFilter {
-            out.border(rect.inset(-2.), 18., 2., WHITE);
-        }
-        out.control(Target::ClearFilter, rect, true);
+        let rect = Rect::new(x, 164.8, 56., 56.);
+        let focused = state.focus == Target::ClearFilter;
+        out.pill(rect, focused, false);
+        out.icon(
+            assets,
+            "close",
+            rect.inset(16.),
+            if focused {
+                c(0x2c2c2c, 1.)
+            } else {
+                c(0xeeeeee, 0.73)
+            },
+        );
+        out.control(Target::ClearFilter, rect, false);
     }
-    let search = Rect::new(1532., 164.8 - s, 304., 56.);
+    let search = Rect::new(1532., 164.8, 304., 56.);
     let focused = matches!(state.focus, Target::Search | Target::ClearSearch);
     out.shape(
         search,
@@ -1314,15 +1591,15 @@ fn library(out: &mut Scene, state: &State, assets: &Assets) {
         },
         Rect::new(
             search.x + 49.8,
-            search.y + 17.8,
+            search.y + (search.h - 29.12) / 2.,
             if state.query.is_empty() { 234. } else { 202. },
-            22.,
+            29.12,
         ),
-        text(16.8, 400, -0.02),
+        text(20.8, 550, -0.02).leading(1.4),
         c(0xeeeeee, if state.query.is_empty() { 0.73 } else { 1. }),
         false,
     );
-    out.control(Target::Search, search, true);
+    out.control(Target::Search, search, false);
     if !state.query.is_empty() {
         let clear = Rect::new(search.x + search.w - 45.8, search.y + 14.8, 26.4, 26.4);
         out.shape(clear, 13.2, c(0xffffff, 0.055));
@@ -1330,8 +1607,13 @@ fn library(out: &mut Scene, state: &State, assets: &Assets) {
         if state.focus == Target::ClearSearch {
             out.border(clear.inset(-2.), 15.2, 2., WHITE);
         }
-        out.control(Target::ClearSearch, clear, true);
+        out.control(Target::ClearSearch, clear, false);
     }
+}
+
+fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let s = state.scroll;
     let favorites = state.preferences.favorites(&state.inventory.apps);
     let apps = state.apps();
     if apps.is_empty() {
@@ -1374,7 +1656,7 @@ fn library(out: &mut Scene, state: &State, assets: &Assets) {
                 18.4 + row
                     .iter()
                     .map(|app| caption_height(state, assets, app, 270.))
-                    .fold(49.28, f32::max)
+                    .fold(58.24, f32::max)
             } else {
                 0.
             };
@@ -1394,24 +1676,49 @@ fn library(out: &mut Scene, state: &State, assets: &Assets) {
 }
 
 fn filter(out: &mut Scene, state: &State, target: Target, rect: Rect, label: &str, selected: bool) {
-    if selected {
-        out.shape(rect, 32., c(0xffffff, 0.11));
-        out.border(rect, 32., 1., c(0xffffff, 0.07));
-    }
-    if state.focus == target && !state.pointer {
-        out.border(rect.inset(-7.), 39., 2., c(0xf0f0f0, 0.95));
+    let focused = state.focus == target;
+    out.pill(rect, focused, selected);
+    if selected && !focused {
+        out.border(rect, rect.h / 2., 1.5, c(0xffffff, 0.35));
     }
     out.text(
         label,
-        Rect::new(rect.x, rect.y + 11.4, rect.w, 20.),
-        text(16., 400, 0.),
-        c(
-            if selected { 0xf5f5f5 } else { 0xf0f0f0 },
-            if selected { 1. } else { 0.66 },
-        ),
+        Rect::new(rect.x, rect.y + (rect.h - 29.12) / 2., rect.w, 29.12),
+        text(20.8, 550, -0.02).leading(1.4),
+        if focused {
+            c(0x2c2c2c, 1.)
+        } else {
+            c(0xeeeeee, if selected { 1. } else { 0.73 })
+        },
         true,
     );
-    out.control(target, rect, true);
+    out.control(target, rect, false);
+}
+
+/// The existing System status card owns the only update action.
+fn update_value(state: &State) -> String {
+    use crate::update::{InstallStatus, Status};
+    let language = state.preferences.language;
+    match &state.update {
+        InstallStatus::Idle => {
+            if let Some(version) = &state.available_update {
+                language.format("installUpdate", &[("version", version)])
+            } else {
+                language
+                    .t(if state.update_status == Status::Checking {
+                        "checkingUpdates"
+                    } else {
+                        "checkAgain"
+                    })
+                    .to_owned()
+            }
+        }
+        InstallStatus::Downloading(percent) => {
+            language.format("updateDownloading", &[("percent", &percent.to_string())])
+        }
+        InstallStatus::Installing(_) => language.t("updateInstalling").to_owned(),
+        InstallStatus::Failed(_) => language.t("updateFailed").to_owned(),
+    }
 }
 
 struct Row<'a> {
@@ -1424,6 +1731,14 @@ struct Row<'a> {
     selected: bool,
     chevron: bool,
 }
+fn rotation_value_width(assets: &Assets, language: Language) -> f32 {
+    ["stateOn", "stateOff"]
+        .into_iter()
+        .map(|key| assets.width(language.t(key), text(18.4, 450, 0.)))
+        .fold(0., f32::max)
+        .ceil()
+}
+
 fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
     let focused = state.focus == row.target;
     let bright = focused;
@@ -1436,8 +1751,7 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
             c(0xe5e5e5, 1.),
         ));
     } else {
-        out.shape(row.rect, radius, c(0x171c20, 0.72));
-        out.border(row.rect, radius, 1., c(0xffffff, 0.07));
+        settings_surface(out, row.rect, radius);
     }
     let color = if bright {
         c(0x2c2c2c, 1.)
@@ -1464,7 +1778,21 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
         } else {
             (row.rect.h - 29.12) / 2.
         };
-    let title_width = row.rect.w - (x - row.rect.x) - if row.value.is_some() { 210. } else { 64. };
+    let compact_value_width = matches!(
+        row.target,
+        Target::WallpaperCycle | Target::WallpaperGradient
+    )
+    .then(|| rotation_value_width(assets, state.preferences.language));
+    let right_inset = if let Some(width) = compact_value_width {
+        width + 24.2 + 24.
+    } else if row.value.is_some() {
+        210.
+    } else if matches!(row.target, Target::UploadWallpaper | Target::WallpaperCycle) {
+        24.2
+    } else {
+        64.
+    };
+    let title_width = row.rect.w - (x - row.rect.x) - right_inset;
     let title_height = if row.description.is_some() {
         assets.lines(row.title, text(20.8, 550, -0.02), title_width) as f32 * 29.12
     } else {
@@ -1496,12 +1824,13 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
         );
     }
     if let Some(value) = row.value {
+        let value_width = compact_value_width.unwrap_or(170.);
         out.text(
             value,
             Rect::new(
-                row.rect.x + row.rect.w - 194.2 - if row.chevron { 34.4 } else { 0. },
+                row.rect.x + row.rect.w - value_width - 24.2 - if row.chevron { 34.4 } else { 0. },
                 row.rect.y + (row.rect.h - 23.) / 2.,
-                170.,
+                value_width,
                 24.,
             ),
             text(18.4, 450, 0.).right(),
@@ -1530,7 +1859,11 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
             },
         );
     }
-    out.control(row.target, row.rect, true);
+    let scrollable = !matches!(
+        row.target,
+        Target::UploadWallpaper | Target::WallpaperCycle | Target::WallpaperGradient
+    );
+    out.control(row.target, row.rect, scrollable);
 }
 
 fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
@@ -1766,14 +2099,18 @@ fn location_settings(out: &mut Scene, state: &State, assets: &Assets) {
 }
 
 fn settings(out: &mut Scene, state: &State, assets: &Assets) {
+    settings_content(out, state, assets);
+    settings_sidebar(out, state, assets);
+}
+
+fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
-    let s = state.scroll;
-    for (index, key) in ["interface", "background", "weather", "inputs", "system"]
+    for (index, key) in ["interface", "background", "widgets", "system"]
         .into_iter()
         .enumerate()
     {
         let label = language.t(key);
-        let rect = Rect::new(160., 164.8 + index as f32 * 84. - s, 403.2, 72.);
+        let rect = Rect::new(160., 164.8 + index as f32 * 84., 403.2, 72.);
         let focused = state.focus == Target::Sidebar(index);
         out.pill(rect, focused, state.section == index);
         let color = if focused {
@@ -1784,69 +2121,87 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             c(0xeeeeee, 0.73)
         };
         if state.section == index && state.subpage.is_some() {
-            let clock_path = match state.subpage {
-                Some(Subpage::ClockFormat) => Some(format!(
-                    "{} › {}",
-                    language.t("clock"),
-                    language.t("clockFormat")
-                )),
-                Some(Subpage::TimeFormat) => Some(format!(
-                    "{} › {}",
-                    language.t("clock"),
-                    language.t("timeFormat")
-                )),
+            let nested_path = match &state.subpage {
+                Some(Subpage::DateFormat) => {
+                    Some(vec![language.t("date"), language.t("dateFormat")])
+                }
+                Some(Subpage::ClockFormat) => {
+                    Some(vec![language.t("clock"), language.t("clockFormat")])
+                }
+                Some(Subpage::TimeFormat) => {
+                    Some(vec![language.t("clock"), language.t("timeFormat")])
+                }
+                Some(Subpage::WeatherLocation | Subpage::Temperature) => Some(vec![
+                    language.t("weather"),
+                    language.t(if state.subpage == Some(Subpage::WeatherLocation) {
+                        "location"
+                    } else {
+                        "temperature"
+                    }),
+                ]),
+                Some(Subpage::Input(id)) => Some(vec![
+                    language.t("inputs"),
+                    state
+                        .inventory
+                        .inputs
+                        .iter()
+                        .find(|input| &input.id == id)
+                        .map_or(language.t("inputs"), |input| {
+                            state.preferences.input_title(input)
+                        }),
+                ]),
                 _ => None,
             };
             let sub = match &state.subpage {
                 Some(Subpage::AppNames) => language.t("appNames"),
                 Some(Subpage::Greeting) => language.t("greeting"),
+                Some(Subpage::Date) => language.t("date"),
+                Some(Subpage::Weather) => language.t("weather"),
+                Some(Subpage::Shortcuts) => language.t("shortcuts"),
+                Some(Subpage::Inputs) => language.t("inputs"),
                 Some(Subpage::Clock) => language.t("clock"),
-                Some(Subpage::ClockFormat | Subpage::TimeFormat) => clock_path.as_deref().unwrap(),
-                Some(Subpage::Input(id)) => state
-                    .inventory
-                    .inputs
-                    .iter()
-                    .find(|input| &input.id == id)
-                    .map_or(language.t("inputs"), |input| {
-                        state.preferences.input_title(input)
-                    }),
-                Some(Subpage::WeatherLocation) => language.t("location"),
-                Some(Subpage::Temperature) => language.t("temperature"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
-                None => "",
+                _ => "",
             };
-            let parent_width = assets.width(label, text(20.8, 550, -0.02)) + 2.;
-            out.text(
-                label,
-                Rect::new(rect.x + 24.2, rect.y + 23.5, parent_width, 25.),
-                text(20.8, 550, -0.02),
-                [color[0], color[1], color[2], color[3] * 0.7],
-                false,
-            );
-            out.icon(
-                assets,
-                "right",
-                Rect::new(rect.x + 24.2 + parent_width + 5., rect.y + 27., 17., 17.),
-                [color[0], color[1], color[2], color[3] * 0.6],
-            );
-            let sub_width = rect.w - 24.2 - parent_width - 28. - 24.2;
-            let mut sub_style = text(20.8, 550, -0.02);
-            if clock_path.is_some() {
-                sub_style.size *= (sub_width / assets.width(sub, sub_style)).min(1.);
+            let mut path = vec![label];
+            path.extend(nested_path.unwrap_or_else(|| vec![sub]));
+            let gap = 6.;
+            let chevron_size = 17.;
+            let separators_width = (path.len() - 1) as f32 * (gap * 2. + chevron_size);
+            let mut style = text(20.8, 550, -0.02);
+            let text_width: f32 = path.iter().map(|part| assets.width(part, style)).sum();
+            style.size *= ((rect.w - 48.4 - separators_width) / text_width).min(1.);
+            let muted = if focused {
+                c(0x2c2c2c, 0.7)
+            } else {
+                c(0xeeeeee, 0.73)
+            };
+            let mut x = rect.x + 24.2;
+            for (position, &part) in path.iter().enumerate() {
+                if position > 0 {
+                    out.icon(
+                        assets,
+                        "right",
+                        Rect::new(x + gap, rect.y + 27., chevron_size, chevron_size),
+                        muted,
+                    );
+                    x += gap * 2. + chevron_size;
+                }
+                let width = assets.width(part, style);
+                out.text(
+                    part,
+                    Rect::new(x, rect.y + 23.5, width + 2., 25.),
+                    style,
+                    if position == path.len() - 1 {
+                        color
+                    } else {
+                        muted
+                    },
+                    false,
+                );
+                x += width;
             }
-            out.text(
-                sub,
-                Rect::new(
-                    rect.x + 24.2 + parent_width + 28.,
-                    rect.y + 23.5,
-                    sub_width,
-                    25.,
-                ),
-                sub_style,
-                color,
-                false,
-            );
         } else {
             out.text(
                 label,
@@ -1868,17 +2223,33 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 );
             }
         }
-        out.control(Target::Sidebar(index), rect, true);
+        out.control(Target::Sidebar(index), rect, false);
     }
+}
+
+fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let s = state.scroll;
     if let Some(subpage) = &state.subpage {
         let start = out.draw.len();
         if matches!(
             subpage,
-            Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames | Subpage::Clock
+            Subpage::WeatherLocation
+                | Subpage::Weather
+                | Subpage::Shortcuts
+                | Subpage::Inputs
+                | Subpage::Greeting
+                | Subpage::Date
+                | Subpage::AppNames
+                | Subpage::Clock
         ) {
             match subpage {
                 Subpage::WeatherLocation => location_settings(out, state, assets),
+                Subpage::Weather => weather_settings(out, state, assets),
+                Subpage::Shortcuts => shortcut_settings(out, state, assets),
+                Subpage::Inputs => inputs_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
+                Subpage::Date => date_settings(out, state, assets),
                 Subpage::AppNames => app_name_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
                 _ => unreachable!(),
@@ -1889,6 +2260,16 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             return;
         }
         let options: Vec<(&str, Option<&str>, bool)> = match subpage {
+            Subpage::DateFormat => crate::model::DateFormat::ALL
+                .iter()
+                .map(|format| {
+                    (
+                        format.label(language),
+                        None,
+                        *format == state.preferences.date_format,
+                    )
+                })
+                .collect(),
             Subpage::ClockFormat => vec![
                 (language.t("hour12"), None, !state.preferences.hour_24),
                 (language.t("hour24"), None, state.preferences.hour_24),
@@ -1934,7 +2315,14 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     state.preferences.temperature_unit == Unit::Fahrenheit,
                 ),
             ],
-            Subpage::WeatherLocation | Subpage::Greeting | Subpage::AppNames | Subpage::Clock => {
+            Subpage::WeatherLocation
+            | Subpage::Weather
+            | Subpage::Shortcuts
+            | Subpage::Inputs
+            | Subpage::Greeting
+            | Subpage::Date
+            | Subpage::AppNames
+            | Subpage::Clock => {
                 unreachable!()
             }
             Subpage::Language => Language::ALL
@@ -1983,6 +2371,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             for (position, (index, key, icon, value, chevron)) in [
                 (0, "appNames", "type", None, true),
                 (1, "clock", "clock", None, true),
+                (4, "language", "language", Some(language.name()), true),
                 (
                     2,
                     "reducedMotion",
@@ -1993,18 +2382,6 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                         language.t("stateOff")
                     }),
                     false,
-                ),
-                (4, "language", "language", Some(language.name()), true),
-                (
-                    6,
-                    "greeting",
-                    "type",
-                    Some(if state.preferences.greeting_name.trim().is_empty() {
-                        language.t("stateOff")
-                    } else {
-                        state.preferences.greeting_name.as_str()
-                    }),
-                    true,
                 ),
             ]
             .into_iter()
@@ -2028,22 +2405,117 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
             }
         }
         1 => {
-            for (index, (id, _title)) in BACKGROUNDS.iter().enumerate() {
+            let actions_start = out.draw.len();
+            let upload_label = language.t("uploadWallpaper");
+            let upload_width = (assets.width(upload_label, text(20.8, 550, -0.02)) + 88.)
+                .ceil()
+                .min(520.);
+            let cycle_label = language.t("wallpaperCycle");
+            let gradient_label = language.t("wallpaperGradient");
+            let gradient_width = (assets.width(gradient_label, text(20.8, 550, -0.02))
+                + rotation_value_width(assets, language)
+                + 111.6)
+                .ceil()
+                .min(360.);
+            let cycle_width = (assets.width(cycle_label, text(20.8, 550, -0.02))
+                + rotation_value_width(assets, language)
+                + 111.6)
+                .ceil()
+                .min(520.);
+            row(
+                out,
+                state,
+                assets,
+                Row {
+                    target: Target::WallpaperCycle,
+                    rect: Rect::new(1760. - cycle_width, 164.8, cycle_width, 64.),
+                    title: cycle_label,
+                    icon: Some(if state.preferences.wallpaper_cycle {
+                        "refresh"
+                    } else {
+                        "refresh-off"
+                    }),
+                    value: Some(language.t(if state.preferences.wallpaper_cycle {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
+                    description: None,
+                    selected: false,
+                    chevron: false,
+                },
+            );
+            row(
+                out,
+                state,
+                assets,
+                Row {
+                    target: Target::WallpaperGradient,
+                    rect: Rect::new(
+                        1760. - cycle_width - 20. - gradient_width,
+                        164.8,
+                        gradient_width,
+                        64.,
+                    ),
+                    title: gradient_label,
+                    icon: Some(if state.preferences.wallpaper_gradient {
+                        "eye"
+                    } else {
+                        "eye-off"
+                    }),
+                    value: Some(language.t(if state.preferences.wallpaper_gradient {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
+                    description: None,
+                    selected: false,
+                    chevron: false,
+                },
+            );
+            row(
+                out,
+                state,
+                assets,
+                Row {
+                    target: Target::UploadWallpaper,
+                    rect: Rect::new(
+                        1760. - cycle_width - 40. - gradient_width - upload_width,
+                        164.8,
+                        upload_width,
+                        64.,
+                    ),
+                    title: upload_label,
+                    icon: Some("upload"),
+                    value: None,
+                    description: None,
+                    selected: false,
+                    chevron: false,
+                },
+            );
+            // Fixed actions sit above the gallery, without cutting off scrolling cards.
+            let actions = out.draw.split_off(actions_start);
+            for index in 0..state.background_count() {
+                let id = state.background_id(index).unwrap();
+                let custom = state.wallpapers.iter().find(|item| item.id == id);
                 let rect = Rect::new(
                     640. + (index % 3) as f32 * 380.,
-                    164.8 + (index / 3) as f32 * 264.3 - s,
+                    252.8 + (index / 3) as f32 * 226.5 - s,
                     360.,
                     202.5,
                 );
                 out.shadow(rect, 16., 15., 3., 0.13);
                 out.image(
-                    assets.path(format!("thumbnails/{id}.jpg")),
+                    custom.map_or_else(
+                        || assets.path(format!("thumbnails/{id}.jpg")),
+                        |item| item.thumbnail(),
+                    ),
                     rect,
                     16.,
                     false,
                 );
                 out.border(rect, 16., 1., c(0xffffff, 0.086));
-                if state.preferences.background == *id {
+                if state.preferences.background == id {
                     out.border(rect.inset(-2.), 18., 2., c(0xdedede, 1.));
                     out.border(rect.inset(-7.), 23., 3., c(0xdedede, 0.10));
                     let check = Rect::new(rect.x + rect.w - 28., rect.y + rect.h - 28., 21.6, 21.6);
@@ -2053,22 +2525,97 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 if state.focus == Target::Background(index) {
                     out.ring(rect, 16.);
                 }
-                out.text(
-                    language.wallpaper(id),
-                    Rect::new(rect.x + 4., rect.y + rect.h + 12., 352., 26.),
-                    text(18.4, 500, -0.02).leading(1.4),
-                    c(0xf0f0f0, 0.87),
-                    false,
-                );
-                out.control(
-                    Target::Background(index),
-                    Rect::new(rect.x, rect.y, rect.w, rect.h + 37.8),
-                    true,
+                out.control(Target::Background(index), rect, true);
+            }
+            out.draw.extend(actions);
+        }
+        WIDGETS_SECTION => {
+            for (index, (widget, key, icon)) in [
+                (4, "date", "clock"),
+                (0, "greeting", "type"),
+                (1, "weather", "weather-sun"),
+                (2, "shortcuts", "sparkles"),
+                (3, "inputs", "input-hdmi"),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                row(
+                    out,
+                    state,
+                    assets,
+                    Row {
+                        target: Target::Widget(widget),
+                        rect: Rect::new(640., 164.8 + index as f32 * 84. - s, 1120., 72.),
+                        title: language.t(key),
+                        icon: Some(icon),
+                        value: None,
+                        description: None,
+                        selected: false,
+                        chevron: true,
+                    },
                 );
             }
         }
-        WEATHER_SECTION => weather_settings(out, state, assets),
         SYSTEM_SECTION => {
+            let rect = Rect::new(640., 164.8 - s, 1120., 220.);
+            let title = if matches!(state.update, crate::update::InstallStatus::Failed(_)) {
+                "updateError"
+            } else if state.available_update.is_some() {
+                "updateAvailable"
+            } else {
+                match state.update_status {
+                    crate::update::Status::Unchecked => "checkForUpdates",
+                    crate::update::Status::Checking => "checkingUpdates",
+                    crate::update::Status::Checked => "latestVersionInstalled",
+                    crate::update::Status::Failed => "updateCheckFailed",
+                }
+            };
+            settings_surface(out, rect, 20.);
+            out.text(
+                language.t(title),
+                Rect::new(rect.x + 24.2, rect.y + 24., rect.w - 48.4, 34.),
+                text(24., 550, -0.02).leading(1.4),
+                WHITE,
+                false,
+            );
+            out.text(
+                if let Some(latest) = &state.available_update {
+                    language.format(
+                        "updateVersions",
+                        &[("current", assets.version.trim()), ("latest", latest)],
+                    )
+                } else {
+                    language.format("currentVersion", &[("current", assets.version.trim())])
+                },
+                Rect::new(rect.x + 24.2, rect.y + 74., rect.w - 48.4, 32.),
+                text(20.8, 450, -0.02).leading(1.4),
+                c(0xeeeeee, 0.73),
+                false,
+            );
+            row(
+                out,
+                state,
+                assets,
+                Row {
+                    target: if state.available_update.is_some() {
+                        Target::InstallUpdate
+                    } else {
+                        Target::CheckUpdates
+                    },
+                    rect: Rect::new(rect.x + 24., rect.y + 132., rect.w - 48., 64.),
+                    title: &update_value(state),
+                    icon: Some(if state.available_update.is_some() {
+                        "arrow"
+                    } else {
+                        "refresh"
+                    }),
+                    value: None,
+                    description: None,
+                    selected: false,
+                    chevron: false,
+                },
+            );
             for (position, (index, title, icon, value, chevron)) in [
                 (
                     3,
@@ -2111,7 +2658,7 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                     assets,
                     Row {
                         target: Target::Setting(index),
-                        rect: Rect::new(640., 164.8 + position as f32 * 84. - s, 1120., 72.),
+                        rect: Rect::new(640., 408.8 + position as f32 * 84. - s, 1120., 72.),
                         title,
                         icon: Some(icon),
                         value,
@@ -2122,73 +2669,77 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
                 );
             }
         }
-        _ => {
-            for (index, input) in state.inventory.inputs.iter().enumerate() {
-                let mode = state
-                    .preferences
-                    .input_modes
-                    .get(&input.id)
-                    .copied()
-                    .unwrap_or_default();
-                row(
-                    out,
-                    state,
-                    assets,
-                    Row {
-                        target: Target::InputMode(input.id.clone()),
-                        rect: Rect::new(640., 164.8 + index as f32 * 102.7 - s, 1120., 90.7),
-                        title: state.preferences.input_title(input),
-                        icon: Some(&format!(
-                            "input-{}",
-                            input_icon(input, state.preferences.input_name(input))
-                        )),
-                        value: Some(language.t(match mode {
-                            InputMode::On => "stateOn",
-                            InputMode::Off => "stateOff",
-                            InputMode::Auto => "stateAuto",
-                        })),
-                        description: Some(&input_status(
-                            input,
-                            state.preferences.input_name(input).is_some(),
-                            language,
-                        )),
-                        selected: false,
-                        chevron: true,
-                    },
-                );
-            }
-            let mut y = 164.8 + state.inventory.inputs.len() as f32 * 102.7 + 16. - s;
-            if state.inventory.inputs.is_empty() {
-                out.text(
-                    language.t("noInputs"),
-                    Rect::new(664., 165. - s, 1000., 26.),
-                    text(16.8, 400, 0.).leading(1.5),
-                    c(0xf5f5f5, 0.72),
-                    false,
-                );
-                y += 36.;
-            }
-            row(
-                out,
-                state,
-                assets,
-                Row {
-                    target: Target::Setting(3),
-                    rect: Rect::new(640., y, 1120., 72.),
-                    title: if state.loading {
-                        language.t("refreshNotice")
-                    } else {
-                        language.t("refreshInputs")
-                    },
-                    icon: Some("refresh"),
-                    value: None,
-                    description: None,
-                    selected: false,
-                    chevron: false,
-                },
-            );
-        }
+        _ => {}
     }
+}
+
+fn inputs_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let s = state.scroll;
+    for (index, input) in state.inventory.inputs.iter().enumerate() {
+        let mode = state
+            .preferences
+            .input_modes
+            .get(&input.id)
+            .copied()
+            .unwrap_or_default();
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::InputMode(input.id.clone()),
+                rect: Rect::new(640., 164.8 + index as f32 * 102.7 - s, 1120., 90.7),
+                title: state.preferences.input_title(input),
+                icon: Some(&format!(
+                    "input-{}",
+                    input_icon(input, state.preferences.input_name(input))
+                )),
+                value: Some(language.t(match mode {
+                    InputMode::On => "stateOn",
+                    InputMode::Off => "stateOff",
+                    InputMode::Auto => "stateAuto",
+                })),
+                description: Some(&input_status(
+                    input,
+                    state.preferences.input_name(input).is_some(),
+                    language,
+                )),
+                selected: false,
+                chevron: true,
+            },
+        );
+    }
+    let mut y = 164.8 + state.inventory.inputs.len() as f32 * 102.7 + 16. - s;
+    if state.inventory.inputs.is_empty() {
+        out.text(
+            language.t("noInputs"),
+            Rect::new(664., 165. - s, 1000., 26.),
+            text(16.8, 400, 0.).leading(1.5),
+            c(0xf5f5f5, 0.72),
+            false,
+        );
+        y += 36.;
+    }
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::Setting(3),
+            rect: Rect::new(640., y, 1120., 72.),
+            title: if state.loading {
+                language.t("refreshNotice")
+            } else {
+                language.t("refreshInputs")
+            },
+            icon: Some("refresh"),
+            value: None,
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
 }
 
 fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
@@ -2206,7 +2757,7 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
         assets,
         Row {
             target: Target::GreetingName,
-            rect: Rect::new(640., 164.8 - state.scroll, 1120., 90.7),
+            rect: Rect::new(640., 248.8 - state.scroll, 1120., 90.7),
             title: language.t("name"),
             icon: Some("type"),
             value: None,
@@ -2222,7 +2773,7 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
         assets,
         Row {
             target: Target::GreetingNameClear,
-            rect: Rect::new(640., 267.5 - state.scroll, 1120., 72.),
+            rect: Rect::new(640., 351.5 - state.scroll, 1120., 72.),
             title: language.t("clearName"),
             icon: Some("refresh"),
             value: None,
@@ -2231,6 +2782,66 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
             chevron: false,
         },
     );
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::GreetingToggle,
+            rect: Rect::new(640., 164.8 - state.scroll, 1120., 72.),
+            title: language.t("showWidget"),
+            icon: None,
+            value: Some(language.t(if state.preferences.show_greeting {
+                "stateOn"
+            } else {
+                "stateOff"
+            })),
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
+}
+
+fn date_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    for (index, (target, title, value, chevron)) in [
+        (
+            Target::DateToggle,
+            "showWidget",
+            language.t(if state.preferences.show_date {
+                "stateOn"
+            } else {
+                "stateOff"
+            }),
+            false,
+        ),
+        (
+            Target::DateFormat,
+            "dateFormat",
+            state.preferences.date_format.label(language),
+            true,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target,
+                rect: Rect::new(640., 164.8 + index as f32 * 84. - state.scroll, 1120., 72.),
+                title: language.t(title),
+                icon: None,
+                value: Some(value),
+                description: None,
+                selected: false,
+                chevron,
+            },
+        );
+    }
 }
 
 fn clock_settings(out: &mut Scene, state: &State, assets: &Assets) {
@@ -2356,6 +2967,85 @@ fn input_name_rows(out: &mut Scene, state: &State, assets: &Assets, id: &str, y:
     }
 }
 
+fn settings_surface(out: &mut Scene, rect: Rect, radius: f32) {
+    out.shape(rect, radius, c(0x171c20, 0.72));
+    out.border(rect, radius, 1., c(0xffffff, 0.07));
+}
+
+fn shortcut_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let tiles = &state.preferences.custom_tiles;
+    for (index, tile) in tiles.iter().enumerate() {
+        let description = format!("{} · {}", tile.method.label(), shorten(&tile.url));
+        let y = 248.8 + index as f32 * 102.7 - state.scroll;
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::Tile(tile.id.clone()),
+                rect: Rect::new(640., y, 1120., 90.7),
+                title: &tile.title,
+                icon: Some(tile.icon()),
+                value: None,
+                description: Some(&description),
+                selected: false,
+                chevron: false,
+            },
+        );
+    }
+    if tiles.is_empty() {
+        let rect = Rect::new(640., 248.8 - state.scroll, 1120., 220.);
+        settings_surface(out, rect, 20.);
+        out.icon(
+            assets,
+            "sparkles",
+            Rect::new(rect.x + (rect.w - 32.) / 2., rect.y + 28., 32., 32.),
+            c(0xeeeeee, 0.73),
+        );
+        out.text(
+            language.t("noTiles"),
+            Rect::new(rect.x + 32., rect.y + 80., rect.w - 64., 34.),
+            text(24., 550, -0.02).leading(1.4),
+            WHITE,
+            true,
+        );
+        out.text(
+            language.t("addFirstShortcutHint"),
+            Rect::new(rect.x + 80., rect.y + 130., rect.w - 160., 56.),
+            text(18.4, 400, 0.).leading(1.5),
+            c(0xf5f5f5, 0.73),
+            true,
+        );
+    }
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::TileEditor,
+            rect: Rect::new(640., 164.8 - state.scroll, 1120., 72.),
+            title: language.t("configure"),
+            icon: Some("settings"),
+            value: None,
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
+}
+
+/// URLs have no break opportunities, so long ones are cut to a single line.
+fn shorten(text: &str) -> String {
+    const MAX: usize = 96;
+    let count = text.chars().count();
+    if count <= MAX {
+        text.into()
+    } else {
+        format!("{}…", text.chars().take(MAX - 1).collect::<String>())
+    }
+}
+
 /// A custom name such as "PS5" can choose the icon; otherwise the TV's label.
 fn input_icon(input: &Input, custom: Option<&str>) -> &'static str {
     custom
@@ -2408,83 +3098,6 @@ pub fn input_status(input: &Input, renamed: bool, language: Language) -> String 
         Some(true) => language.t("connected"),
     });
     parts.join(" · ")
-}
-
-fn keycap(out: &mut Scene, label: &str, x: f32, y: f32, w: f32, small: bool) {
-    let h = if small { 16. } else { 23.2 };
-    out.border(
-        Rect::new(x, y, w, h),
-        4.8,
-        1.,
-        c(0xffffff, if small { 0.125 } else { 0.20 }),
-    );
-    out.text(
-        label,
-        Rect::new(x, y + if small { 2. } else { 4.2 }, w, h),
-        text(if small { 8. } else { 11.52 }, 500, 0.),
-        c(0xf3f3f3, 0.64),
-        true,
-    );
-}
-
-fn footer(out: &mut Scene, state: &State, assets: &Assets) {
-    let language = state.preferences.language;
-    let style = text(14.4, 400, 0.005);
-    if matches!(state.page, Page::Home | Page::Apps) && state.moving.is_none() {
-        return;
-    }
-    let color = c(0xeeeeee, 0.37);
-    if state.moving.is_some() {
-        keycap(out, "← →", 84., 1030.4, 42., false);
-        out.text(
-            language.t("move"),
-            Rect::new(134., 1033., 100., 20.),
-            text(14.4, 400, 0.005),
-            color,
-            false,
-        );
-        let second_x = 134. + assets.width(language.t("move"), style) + 25.6;
-        keycap(out, "OK/Back", second_x, 1030.4, 62., false);
-        out.text(
-            language.t("done"),
-            Rect::new(second_x + 70., 1033., 150., 20.),
-            text(14.4, 400, 0.005),
-            color,
-            false,
-        );
-    } else {
-        let label = language.t(if state.page == Page::Settings {
-            "select"
-        } else {
-            "options"
-        });
-        let second_x = 119. + assets.width(label, style) + 25.6;
-        keycap(out, "OK", 84., 1030.4, 27., false);
-        out.text(
-            label,
-            Rect::new(119., 1033., 100., 20.),
-            text(14.4, 400, 0.005),
-            color,
-            false,
-        );
-        if state.page == Page::Settings {
-            keycap(out, "Back", second_x, 1030.4, 39., false);
-            out.text(
-                language.t("homeLabel"),
-                Rect::new(second_x + 47., 1033., 180., 20.),
-                text(14.4, 400, 0.005),
-                color,
-                false,
-            );
-            out.text(
-                format!("v{}", assets.version.trim()),
-                Rect::new(1775., 1037., 61., 16.),
-                text(12.48, 400, 0.),
-                c(0xf5f5f5, 0.56),
-                false,
-            );
-        }
-    }
 }
 
 struct EmptyState<'a> {
@@ -2562,14 +3175,34 @@ fn empty(out: &mut Scene, state: &State, assets: &Assets, content: EmptyState<'_
 
 fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Option<Rect>) {
     let language = state.preferences.language;
+    let shortcut = matches!(
+        &state.overlay,
+        Some(Overlay::Options {
+            restore: Target::Tile(_),
+            ..
+        })
+    );
+    let background = matches!(state.overlay, Some(Overlay::BackgroundOptions { .. }));
     let app = state.inventory.apps.iter().find(|app| app.id == id);
     let favorite = state
         .preferences
         .favorites(&state.inventory.apps)
         .iter()
         .any(|item| item == id);
-    let deletable = crate::platform::can_uninstall(id);
-    let height = if deletable { 329.6 } else { 252.8 };
+    let deletable = if background {
+        state.can_delete_background(id) && state.deleting_wallpaper.is_none()
+    } else {
+        crate::platform::can_uninstall(id)
+    };
+    let height = if shortcut {
+        176.
+    } else if background {
+        if deletable { 176. } else { 99.2 }
+    } else if deletable {
+        329.6
+    } else {
+        252.8
+    };
     let card = anchor.unwrap_or(Rect::new(460., 380., 256., 153.6));
     let x = if card.x + card.w + 32. + 520. <= 1836. {
         card.x + card.w + 32.
@@ -2578,15 +3211,21 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
     };
     let panel = Rect::new(x, card.y.clamp(164., 974. - height), 520., height);
     // Lift the selected card out of the dimmed grid without moving its hit region.
-    if let Some(app) = app {
+    if background {
+        let path = state
+            .wallpapers
+            .iter()
+            .find(|item| item.id == id)
+            .map_or_else(
+                || assets.path(format!("thumbnails/{id}.jpg")),
+                |item| item.thumbnail(),
+            );
+        out.image(path, card, 16., false);
+        out.border(card, 16., 1., c(0xffffff, 0.086));
+    } else if let Some(app) = app.filter(|_| !shortcut) {
         app_face(out, assets, app, card, language, 19.2);
         if favorite {
-            out.icon(
-                assets,
-                "heart-filled",
-                Rect::new(card.x + card.w - 27.2, card.y + 11.2, 16., 16.),
-                c(0xffffff, 0.9),
-            );
+            favorite_badge(out, assets, card);
         }
     }
     let panel_start = out.draw.len();
@@ -2600,26 +3239,39 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
     ));
     out.border(panel, 27.2, 1., c(0xffffff, 0.12));
     let hidden = state.preferences.hidden.iter().any(|item| item == id);
-    for (row, (target, label)) in [
-        (Target::OpenApp, language.t("open")),
-        (
-            Target::Option(0),
-            if favorite {
-                language.t("removeFavorite")
-            } else {
-                language.t("addFavorite")
-            },
-        ),
-        (
-            Target::Option(1),
-            language.t(if hidden { "showApp" } else { "hideApp" }),
-        ),
-        (Target::Option(2), language.t("deleteApp")),
-    ]
-    .into_iter()
-    .take(if deletable { 4 } else { 3 })
-    .enumerate()
-    {
+    let actions = if shortcut {
+        vec![
+            (Target::TileTest(id.into()), language.t("testShortcut")),
+            (Target::TileRemove(id.into()), language.t("removeTile")),
+        ]
+    } else if background {
+        let mut actions = vec![(Target::UseBackground, language.t("useBackground"))];
+        if deletable {
+            actions.push((Target::DeleteBackground, language.t("deleteBackground")));
+        }
+        actions
+    } else {
+        vec![
+            (Target::OpenApp, language.t("open")),
+            (
+                Target::Option(0),
+                if favorite {
+                    language.t("removeFavorite")
+                } else {
+                    language.t("addFavorite")
+                },
+            ),
+            (
+                Target::Option(1),
+                language.t(if hidden { "showApp" } else { "hideApp" }),
+            ),
+            (Target::Option(2), language.t("deleteApp")),
+        ]
+        .into_iter()
+        .take(if deletable { 4 } else { 3 })
+        .collect()
+    };
+    for (row, (target, label)) in actions.into_iter().enumerate() {
         let rect = Rect::new(
             panel.x + 16.,
             panel.y + 16. + row as f32 * 76.8,
@@ -2627,7 +3279,10 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
             67.2,
         );
         let focused = state.focus == target;
-        let destructive = target == Target::Option(2);
+        let destructive = matches!(
+            target,
+            Target::Option(2) | Target::DeleteBackground | Target::TileRemove(_)
+        );
         let label_style = text(20.8, 600, -0.02);
         let label_height = label_style.size * label_style.line_height;
         let label_color = if destructive || !focused {
@@ -2659,7 +3314,8 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
         out.icon(
             assets,
             match &target {
-                Target::OpenApp => "arrow",
+                Target::OpenApp | Target::TileTest(_) => "arrow",
+                Target::UseBackground => "check",
                 Target::Option(0) => {
                     if favorite {
                         "heart-filled"
@@ -2692,6 +3348,27 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
 
 fn delete_confirmation(out: &mut Scene, state: &State, assets: &Assets, id: &str) {
     let language = state.preferences.language;
+    let background = matches!(state.overlay, Some(Overlay::BackgroundDelete { .. }));
+    let deleting = if background {
+        state.deleting_wallpaper.as_deref() == Some(id)
+    } else {
+        state.uninstalling.as_deref() == Some(id)
+    };
+    let warning_key = if background {
+        "deleteBackgroundWarning"
+    } else {
+        "deleteAppWarning"
+    };
+    let deleting_key = if background {
+        "deletingBackground"
+    } else {
+        "deletingApp"
+    };
+    let delete_key = if background {
+        "deleteBackground"
+    } else {
+        "deleteApp"
+    };
     let title = state
         .inventory
         .apps
@@ -2700,18 +3377,14 @@ fn delete_confirmation(out: &mut Scene, state: &State, assets: &Assets, id: &str
         .map_or(id, |app| app.title.as_str());
     let body_style = text(20.8, 600, -0.02).leading(1.5);
     let body = language.format(
-        if state.uninstalling.as_deref() == Some(id) {
-            "deletingApp"
-        } else {
-            "deleteAppWarning"
-        },
+        if deleting { deleting_key } else { warning_key },
         &[("app", title)],
     );
     // Status changes must not move the confirmation buttons under the pointer.
-    let warning = language.format("deleteAppWarning", &[("app", title)]);
+    let warning = language.format(warning_key, &[("app", title)]);
     let body_height = assets
         .lines(&warning, body_style, 568.)
-        .max(assets.lines(language.t("deletingApp"), body_style, 568.))
+        .max(assets.lines(language.t(deleting_key), body_style, 568.))
         .max(1) as f32
         * 31.2;
     let height = 244. + body_height;
@@ -2733,7 +3406,7 @@ fn delete_confirmation(out: &mut Scene, state: &State, assets: &Assets, id: &str
         true,
     );
     for (index, (target, label)) in [
-        (Target::ConfirmDelete, "deleteApp"),
+        (Target::ConfirmDelete, delete_key),
         (Target::CancelDelete, "cancel"),
     ]
     .into_iter()
@@ -2746,7 +3419,7 @@ fn delete_confirmation(out: &mut Scene, state: &State, assets: &Assets, id: &str
             68.,
         );
         let focused = state.focus == target;
-        let disabled = target == Target::ConfirmDelete && state.uninstalling.is_some();
+        let disabled = target == Target::ConfirmDelete && deleting;
         let label_style = text(20.8, 600, -0.02);
         let label_height = label_style.size * label_style.line_height;
         out.shape(
@@ -2929,6 +3602,145 @@ mod tests {
     }
 
     #[test]
+    fn settings_breadcrumbs_use_equal_gaps_and_only_highlight_the_leaf() {
+        let assets = assets();
+        let mut state = State::new(Preferences::default());
+        state.open(2);
+        state.section = 2;
+        state.subpage = Some(Subpage::DateFormat);
+        for language in Language::ALL {
+            state.preferences.language = language;
+            for focused in [false, true] {
+                state.focus = if focused {
+                    Target::Sidebar(2)
+                } else {
+                    Target::Setting(0)
+                };
+                let mut scene = Scene::new();
+                settings_sidebar(&mut scene, &state, &assets);
+                let parts: Vec<_> = scene
+                    .draw
+                    .iter()
+                    .filter_map(|draw| match draw {
+                        Draw::Text(label, rect, style, color, _)
+                            if (rect.y - 356.3).abs() < 0.001 =>
+                        {
+                            Some((label, rect, style, color))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(parts.len(), 3);
+                assert_eq!(parts[0].0, language.t("widgets"));
+                assert_eq!(parts[1].0, language.t("date"));
+                assert_eq!(parts[2].0, language.t("dateFormat"));
+                assert_eq!(parts[0].3, parts[1].3);
+                assert!(parts[2].3[3] > parts[1].3[3]);
+                let chevrons: Vec<_> = scene
+                    .draw
+                    .iter()
+                    .filter_map(|draw| match draw {
+                        Draw::TintedImage(_, rect, _, _, color)
+                            if (rect.y - 359.8).abs() < 0.001 =>
+                        {
+                            assert_eq!(color, parts[0].3);
+                            Some(rect)
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(chevrons.len(), 2);
+                for (index, chevron) in chevrons.iter().enumerate() {
+                    let (label, rect, style, _) = parts[index];
+                    let left_gap = chevron.x - rect.x - assets.width(label, *style);
+                    let right_gap = parts[index + 1].1.x - chevron.x - chevron.w;
+                    assert!((left_gap - 6.).abs() < 0.001);
+                    assert!((right_gap - 6.).abs() < 0.001);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn upload_button_padding_tracks_the_label_in_every_language() {
+        let assets = assets();
+        let mut state = State::new(Preferences::default());
+        state.open(2);
+        state.section = 1;
+        for language in Language::ALL {
+            state.preferences.language = language;
+            let label = language.t("uploadWallpaper");
+            let label_width = assets.width(label, text(20.8, 550, -0.02));
+            let mut scene = Scene::new();
+            settings(&mut scene, &state, &assets);
+            let button = scene
+                .controls
+                .iter()
+                .find(|control| control.target == Target::UploadWallpaper)
+                .unwrap()
+                .rect;
+            let title = scene
+                .draw
+                .iter()
+                .find_map(|draw| match draw {
+                    Draw::Text(value, rect, ..) if value == label => Some(rect),
+                    _ => None,
+                })
+                .unwrap();
+            let right_padding = button.x + button.w - title.x - label_width;
+            assert!((24.2..25.6).contains(&right_padding));
+        }
+    }
+
+    #[test]
+    fn auto_rotation_keeps_a_compact_gap_and_right_aligned_state() {
+        let assets = assets();
+        let mut state = State::new(Preferences::default());
+        state.open(2);
+        state.section = 1;
+        let label = state.preferences.language.t("wallpaperCycle");
+        let label_width = assets.width(label, text(20.8, 550, -0.02));
+        for enabled in [false, true] {
+            state.preferences.wallpaper_cycle = enabled;
+            let mut scene = Scene::new();
+            settings(&mut scene, &state, &assets);
+            let button = scene
+                .controls
+                .iter()
+                .find(|control| control.target == Target::WallpaperCycle)
+                .unwrap()
+                .rect;
+            let title = scene
+                .draw
+                .iter()
+                .find_map(|draw| match draw {
+                    Draw::Text(value, rect, ..) if value == label => Some(rect),
+                    _ => None,
+                })
+                .unwrap();
+            let state_label =
+                state
+                    .preferences
+                    .language
+                    .t(if enabled { "stateOn" } else { "stateOff" });
+            let (value, style) = scene
+                .draw
+                .iter()
+                .find_map(|draw| match draw {
+                    Draw::Text(label, rect, style, ..) if label == state_label => {
+                        Some((rect, style))
+                    }
+                    _ => None,
+                })
+                .unwrap();
+            assert!(style.align_right);
+            assert!((button.x + button.w - value.x - value.w - 24.2).abs() < 0.001);
+            assert!((24. ..25.).contains(&(value.x - title.x - label_width)));
+            assert!(button.w < 320.);
+        }
+    }
+
+    #[test]
     fn short_greetings_keep_their_original_style_and_geometry() {
         let assets = assets();
         for name in ["", "Ana"] {
@@ -3038,6 +3850,71 @@ mod tests {
                     (before.rect.x, before.rect.y, before.rect.w, before.rect.h),
                     (after.rect.x, after.rect.y, after.rect.w, after.rect.h)
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn hidden_home_widgets_collapse_without_moving_favorites_or_inputs() {
+        let assets = assets();
+        let mut state = State::new(Preferences::default());
+        state.set_inventory(demo_inventory(), None);
+        let mut original = Scene::new();
+        home(&mut original, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+        let weather_y = |scene: &Scene| {
+            scene
+                .controls
+                .iter()
+                .find(|control| control.target == Target::WeatherConfigure)
+                .unwrap()
+                .rect
+                .y
+        };
+        let original_y = weather_y(&original);
+        for show_date in [false, true] {
+            for show_greeting in [false, true] {
+                state.preferences.show_date = show_date;
+                state.preferences.show_greeting = show_greeting;
+                let mut rendered = Scene::new();
+                home(&mut rendered, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+                let removed = if show_date { 0. } else { 41.8 }
+                    + if show_greeting { 0. } else { 94.92 + 18.4 };
+                assert!((weather_y(&rendered) - (original_y - removed)).abs() < 0.001);
+                for control in original
+                    .controls
+                    .iter()
+                    .filter(|control| matches!(control.target, Target::App(_) | Target::Input(_)))
+                {
+                    let other = rendered
+                        .controls
+                        .iter()
+                        .find(|other| other.target == control.target)
+                        .unwrap();
+                    assert_eq!(
+                        (control.rect.x, control.rect.y),
+                        (other.rect.x, other.rect.y)
+                    );
+                }
+                if show_date && !show_greeting {
+                    let date_y = rendered
+                        .draw
+                        .iter()
+                        .find_map(|draw| match draw {
+                            Draw::Text(label, rect, ..)
+                                if label
+                                    == &state
+                                        .preferences
+                                        .language
+                                        .date(OffsetDateTime::UNIX_EPOCH) =>
+                            {
+                                Some(rect.y)
+                            }
+                            _ => None,
+                        })
+                        .unwrap();
+                    // Weather's control includes padding around the summary itself.
+                    assert!((weather_y(&rendered) - date_y).abs() < 60.);
+                }
             }
         }
     }

@@ -1,5 +1,150 @@
 # lg-luma
 
+## 2.16.0
+
+### Minor Changes
+
+- c47548c: Add an on/off gradient toggle beside the background rotation control, with the choice saved across launches.
+
+### Patch Changes
+
+- c667091: Keep favorite hearts visible on light app artwork with a dark circular backing in the app grid and options preview.
+
+## 2.15.3
+
+### Patch Changes
+
+- 166060e: Use consistent chevron spacing in settings breadcrumbs and highlight only the final item.
+
+## 2.15.2
+
+### Patch Changes
+
+- 7ee2a7e: Fix in-app updates failing before installation because systemd expanded variables in the installer script.
+
+## 2.15.1
+
+### Patch Changes
+
+- 3d881a2: Add Swedish (`sv`) translation: full `messages.json` catalog and locale registration, including localized date formatting. The bundled Inter subset already covers å, ä and ö.
+
+## 2.15.0
+
+### Minor Changes
+
+- a2580d9: Install verified Luma releases from the existing Settings → System update card, with download/install progress and retry after failure. Installation uses Homebrew Channel's root service and a detached systemd unit, persists outcomes across restarts, and refreshes Home takeover with recovery on failure. Desktop and scripted previews cannot install updates.
+
+### Patch Changes
+
+- ad3bb27: Add date widget visibility and localized or numeric date formats. Remove the greeting's empty space when hidden so weather moves directly below the date.
+
+## 2.14.0
+
+### Minor Changes
+
+- 3b610ec: Add a Show on Home toggle under Widgets → Greeting to hide the greeting without clearing its saved
+  name or hiding the date and weather. Existing installations keep the greeting enabled.
+- 3b610ec: Check the official release feed in the background on TV startup and show an Update available notice
+  and System settings card for newer versions. Open Homebrew Channel from the card to update safely
+  through the existing installer. Offline failures are non-disruptive and desktop tests stay offline.
+- 3b610ec: Consolidate the System version and update information into one status card. Show up-to-date status
+  after a successful check, with Check again, checking and retryable failure states. Keep the Homebrew
+  Channel CTA for available updates and support up-to-date previews with the current version.
+
+### Patch Changes
+
+- 3b610ec: Remove the Apps page's top clipping and edge fade so cards scroll behind the fixed navigation.
+  Keep categories, search and their clear controls fixed above the scrolling grid, with protected
+  pointer interaction and remote focus visibility.
+- 3b610ec: Give app categories pill surfaces matching search, with larger, heavier category and search labels.
+- 3b610ec: Place background Upload left of Rotation with matching remote navigation. Enlarge app captions
+  on Home and Apps and increase their weight, retaining space for wrapped names.
+- 3b610ec: Enable live update checks and Check again in interactive desktop runs using the same endpoint as
+  TV. Keep scripted captures and simulated-version previews offline.
+- 3b610ec: Move Greeting's visibility toggle to the first row and label it Show widget, matching Weather.
+- 3b610ec: Enlarge the clock, Home weekday/date and input descriptions for better TV readability.
+- 3b610ec: Refresh the Homebrew Channel listing to describe uploaded backgrounds, rotation, QR-managed webhook
+  shortcuts and current customization options.
+- 3b610ec: Update the Homebrew Channel description to list all supported languages and add regression coverage
+  to keep future language additions reflected in release metadata.
+- 3b610ec: Place Language above Reduced motion, sort language choices alphabetically by their displayed names,
+  and show a readable empty-state card when no shortcuts are saved.
+- 3b610ec: Let Settings lists scroll behind fixed navigation, sidebar and background actions without viewport
+  clipping or edge fades. Preserve fixed-control pointer priority and remote focus visibility.
+- 3b610ec: Increase version and shortcut row opacity, match shortcut description cards to HDMI settings rows,
+  and make shortcut removal buttons circular.
+- 3b610ec: Simplify the shortcut empty-state hint to explain that Configure adds the first shortcut.
+- 3b610ec: Open shortcut test/removal actions in a popup from selectable Settings rows, lighten the System
+  version surface, and refine category focus/active styling with a full-height clear button.
+- 3b610ec: Reduce Languages and Backgrounds bottom scroll padding from 64 to 48 logical pixels.
+- 3b610ec: Add Traditional Chinese (繁體中文) immediately after Simplified Chinese, with translated interface
+  text, persisted language selection, Chinese date/time formatting and verified bundled glyph coverage.
+  Update Homebrew metadata and use the provider's Chinese locale for geocoding.
+- 3b610ec: Enlarge the TV Settings button to 60px and center it alongside the top navigation bar.
+- 3b610ec: Add --test-update-version and LUMA_TEST_UPDATE_VERSION to preview the update card without contacting
+  GitHub or persisting simulated update metadata.
+  Display the running binary's version rather than a potentially stale generated-artwork version.
+
+## 2.13.0
+
+### Minor Changes
+
+- 13211ee: Add shortcut tiles that send a GET or POST request instead of launching an app, for example to a
+  Home Assistant webhook. Create, edit, test and remove them in Settings › Shortcuts, or scan a QR
+  code there to edit them on a phone or computer instead of with the remote.
+- ffcf8ed: Group Greeting, Weather, Shortcuts and Inputs under Settings → Widgets. Create and edit shortcuts
+  through Configure's phone/computer QR page, with passive shortcut rows and separate TV removal
+  buttons. Preserve existing preferences, increase Settings list bottom spacing and use a flat
+  background on the shortcut web page.
+
+### Patch Changes
+
+- 61b673d: Focus the rotation button when pressing Right from the Background settings sidebar instead of the active background.
+- 61b673d: Remove excess right padding from the Upload button by sizing it to its localized label.
+- 61b673d: Keep the background upload modal and session open when the desktop preview loses focus, so switching to a browser does not interrupt uploads. TV focus-loss and window hiding behavior are unchanged.
+- 61b673d: Remove the background gradient from the wallpaper upload page for a flat dark appearance.
+- 13211ee: Keep shortcut context-menu actions on the webhook path, prevent platform app deletion of shortcuts,
+  and preserve accepted phone-editor changes when its dialog is reopened before pending saves are applied.
+- 61b673d: Shorten the Background settings upload button label to “Upload” in every language.
+
+## 2.12.0
+
+### Minor Changes
+
+- efb6f3b: Return to Luma's Home tab when the remote Home button relaunches an existing Home-takeover instance, dismissing overlays and preserving keyboard edits. Normal-tile launches retain LG's system Home-button behavior.
+- 8430690: Add a Rotation On/Off button beside the upload action, defaulting to Off with a crossed-out rotation icon. When enabled, all available backgrounds advance on each Luma restart and every 15 minutes, with a slow cross-fade while preserving the manually chosen LG splash (#96).
+
+### Patch Changes
+
+- cb47502: Allow an explicit fullhome takeover target, preserve its native lifecycle identity, and distinguish mount status from Home-key verification.
+- 1abd414: Handle the remote Home key directly while Luma runs as the Home replacement, returning from Apps, Settings and overlays even when webOS does not send a lifecycle relaunch for an already-foreground Home. Normal app-tile launches retain system Home-key routing.
+
+## 2.11.0
+
+### Minor Changes
+
+- 90aa848: Upload named custom wallpapers from a phone or computer using a temporary local URL and QR code in Background settings. Preview and adjust a 16:9 crop before adding it to the TV's persistent wallpaper gallery.
+- 90aa848: Add app-style side popups for backgrounds, with selection and confirmed deletion of any background except the active one. Persist removal of bundled backgrounds from the gallery and delete uploaded files on the wallpaper worker.
+
+### Patch Changes
+
+- 90aa848: Balance background upload button and dialog padding, and make the non-interactive System version row more transparent.
+- 90aa848: Separate QR and browser instructions in the background upload dialog, simplify the displayed URL, and remind users to keep the dialog open during upload.
+- 90aa848: Place the background upload action in a compact, right-aligned button above the gallery.
+- 90aa848: Complete Vietnamese and Dutch translations for background selection, deletion, and upload messages.
+- 148d4eb: Add Dutch (`nl`) translation: full `messages.json` catalog and locale registration in `i18n.rs` (language list, display name and localized date formatting such as « WOENSDAG 21 OKTOBER »). The bundled Inter subset already covers Dutch, so no font changes are needed.
+- 90aa848: Scroll only the background gallery while keeping the settings sidebar and upload button fixed. Clip gallery drawing and pointer targets below the upload action and keep remote-focused cards fully visible.
+- 90aa848: Make the background upload URL larger and heavier for easier reading on TV.
+- 90aa848: Display the System version in a full-width, non-interactive settings row with clearer text.
+- 90aa848: Rename the background upload button and dialog title to “Upload background” across all languages.
+
+## 2.10.3
+
+### Patch Changes
+
+- df0f4bb: Scale long Home greetings down to fit their existing single-line area without cropping names or moving weather and favorites. Keep LG's system keyboard and its existing name-entry behavior unchanged.
+- 49df652: Add Vietnamese (`vi`) translation: full `messages.json` catalog, locale registration in `i18n.rs` (language list, display name, and localized date formatting), and Latin Extended Additional (U+1EA0-1EF9) glyphs in the bundled Inter font so Vietnamese letters no longer fall back to the CJK font.
+
 ## 2.10.2
 
 ### Patch Changes
