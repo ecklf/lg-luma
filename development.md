@@ -173,6 +173,19 @@ the existing wallpaper at the header/footer, with one alpha mask for surfaces, s
 vector icons/logos and text. The wallpaper/header are unmasked; no blur texture is needed.
 
 TV editing uses the system keyboard through SDL-webOS. Desktop editing uses the custom panel.
+
+HDMI status refreshes every two seconds while the TV's Home or input settings are visible and
+focused. Only inputs are read on the existing platform worker; installed apps, artwork and saved
+preferences are not reloaded. At most one input read is queued, errors retain the last valid data
+and retry after ten seconds, and an unchanged snapshot does not redraw. Holds, reordering, overlays,
+loading and hidden/unfocused pages pause polling and defer pending snapshots, keeping pointer
+targets stationary through release. A later complete inventory supersedes deferred input data.
+Auto visibility remains cable-based: boolean `hdmiPlugIn` takes priority over `connected`, with
+the existing fallback when unavailable or malformed. Optional boolean `hdmiSignalExist` changes
+only the detail to **No signal** when a cable is present. A stale positive signal cannot override
+an unplugged cable. A powered dongle stays visible in Auto even without signal; On/Off overrides
+and older firmware without signal information retain their behavior.
+
 System text events update app/location queries; Done/Back stops editing and restores focus.
 
 ### Recent apps

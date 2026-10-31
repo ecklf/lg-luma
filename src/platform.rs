@@ -174,6 +174,7 @@ pub fn redirect_to_home() -> Result<bool, String> {
 
 pub enum Request {
     Refresh,
+    RefreshInputs,
     Launch(String),
     Uninstall(String),
     SyncSplash(String),
@@ -184,6 +185,7 @@ pub enum Request {
 }
 pub enum Response {
     Inventory(Result<(Inventory, Option<String>), String>),
+    Inputs(Result<Vec<Input>, String>),
     Launched(Result<(), String>),
     Uninstalled {
         id: String,
@@ -250,6 +252,11 @@ impl Platform {
                         inventory()
                     } else {
                         Ok((desktop_inventory.clone(), None))
+                    }),
+                    Request::RefreshInputs => Response::Inputs(if webos {
+                        input_inventory()
+                    } else {
+                        Ok(desktop_inventory.inputs.clone())
                     }),
                     Request::Uninstall(id) => {
                         // Validate again at the worker boundary, not just in the UI.
@@ -721,8 +728,7 @@ fn inventory() -> Result<(Inventory, Option<String>), String> {
         "luna://com.webos.applicationManager/listApps",
         "apps",
     )?)?;
-    let inputs = inventory_read("luna://com.webos.service.eim/getAllInputStatus", "devices")
-        .and_then(|raw| normalize_inputs(&raw));
+    let inputs = input_inventory();
     match inputs {
         Ok(inputs) => {
             eprintln!(
@@ -740,6 +746,11 @@ fn inventory() -> Result<(Inventory, Option<String>), String> {
             Some(format!("Inputs could not be refreshed: {error}")),
         )),
     }
+}
+
+fn input_inventory() -> Result<Vec<Input>, String> {
+    inventory_read("luna://com.webos.service.eim/getAllInputStatus", "devices")
+        .and_then(|raw| normalize_inputs(&raw))
 }
 
 fn title(value: Option<&str>, fallback: &str) -> String {
@@ -841,6 +852,7 @@ pub fn normalize_inputs(raw: &Value) -> Result<Vec<Input>, String> {
             id: id.into(),
             title: title(entry.get("label").and_then(Value::as_str), &port),
             port,
+            signal: entry.get("hdmiSignalExist").and_then(Value::as_bool),
             // Some firmware reports `connected: true` for every existing port;
             // `hdmiPlugIn` is the actual cable state where it is provided.
             connected: entry
