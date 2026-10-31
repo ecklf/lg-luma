@@ -1019,3 +1019,12 @@ The original `home` target remains the default. Press Home from another app to v
 disable restores LG's dashboard. This is a targeted compatibility option, not confirmation of
 the unreported cause of #109. The reporter's device still needs to establish which Home app
 receives the key. Do not infer support for webOS 4 from this option.
+
+## Custom Home focus prototype
+
+This working copy adds critically damped per-app focus animation on Home: 7% enlargement,
+5 logical pixels of lift and two soft GPU glows instead of the thick selection ring.
+Other pages retain their existing focus treatment. Remote retargeting preserves the current
+position and velocity; pointer hitboxes remain fixed. Reduced Motion snaps to the end state.
+Settled animation does not request additional frames. This is a custom prototype, not an
+upstream release or a guarantee of TV frame rate; validate on the target LG before takeover.

@@ -207,6 +207,7 @@ pub const KEYS: [&str; 40] = [
 ];
 
 pub struct State {
+    pub home_focus: crate::home_focus::HomeFocus,
     pub page: Page,
     pub focus: Target,
     pub inventory: Inventory,
@@ -253,6 +254,7 @@ pub struct State {
 impl State {
     pub fn new(preferences: Preferences) -> Self {
         Self {
+            home_focus: crate::home_focus::HomeFocus::default(),
             page: Page::Home,
             focus: Target::Nav(0),
             inventory: Inventory::default(),
@@ -422,10 +424,23 @@ impl State {
         }
     }
 
+    pub fn animate_home_focus(&mut self, dt: f32) {
+        let selected = match &self.focus {
+            Target::App(id) if self.page == Page::Home && self.overlay.is_none() => {
+                Some(id.as_str())
+            }
+            _ => None,
+        };
+        self.dirty |= self
+            .home_focus
+            .advance(selected, dt, self.preferences.reduced_motion);
+    }
+
     pub fn animating(&self) -> bool {
         ((self.recents_open() || self.recents.visibility > 0.)
             && (self.recents.visibility != if self.recents_open() { 1. } else { 0. }
                 || self.recents.cards_animating(self.pointer)))
+            || self.home_focus.animating()
             || self.previous_background.is_some()
             || self.panel_started.is_some()
             || (!self.preferences.reduced_motion
