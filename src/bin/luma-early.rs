@@ -3,7 +3,7 @@
 //! LG's Homebrew init.d hooks run only ~50 s into a cold boot, so `home.sh boot` mounts Luma over
 //! LG's Home executable long after the TV showed Live TV and LG's Home. ls-hubd, however, reads
 //! the LS2 definitions in /var/luna-service2 at core-boot-done (snapshot-resume-jobs:
-//! `ls-control scan-volatile-dirs`, ~17 s) and starts dynamic services as root. `home.cjs enable`
+//! `ls-control scan-volatile-dirs`, ~17 s) and starts dynamic services as root. `home.sh enable`
 //! registers this program there as `com.webos.service.lumahome`; the compositor key filter
 //! (`home-filter.js`) calls its one method while the TV boots and opens Home once it succeeded.
 //!

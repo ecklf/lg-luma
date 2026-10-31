@@ -11,6 +11,8 @@ mod diagnostics;
 mod egl_damage;
 mod font;
 mod i18n;
+#[path = "input-refresh.rs"]
+mod input_refresh;
 #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
 mod luna;
 mod model;
@@ -450,6 +452,23 @@ fn compose(
 fn wallpaper_upload_active(state: &State, webos: bool, focused: bool, visible: bool) -> bool {
     // Desktop users need to switch to a browser without invalidating the upload URL.
     visible && (!webos || focused) && matches!(state.overlay, Some(Overlay::WallpaperUpload))
+}
+
+fn input_refresh_active(state: &State, webos: bool, focused: bool, visible: bool) -> bool {
+    webos
+        && focused
+        && visible
+        && !state.loading
+        && state.overlay.is_none()
+        && state.moving.is_none()
+        && state.pressed.is_none()
+        && state.recents.visibility == 0.
+        && (state.page == state::Page::Home
+            || (state.page == state::Page::Settings
+                && matches!(
+                    state.subpage,
+                    Some(state::Subpage::Inputs | state::Subpage::Input(_))
+                )))
 }
 
 fn weather_tick(state: &mut State, service: &weather_service::Service, visible: bool) {
@@ -935,6 +954,7 @@ fn run() -> Result<(), String> {
     let launched = Instant::now();
     // When to ask for the inventory again after a failed load (State::inventory_failed).
     let mut inventory_retry: Option<Instant> = None;
+    let mut input_refresh = input_refresh::Refresh::default();
     let scripted_input = !options.script.is_empty();
     let mut scene = compose(
         &mut state,
@@ -1062,6 +1082,9 @@ fn run() -> Result<(), String> {
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
                 Response::Inventory(Ok((mut inventory, warning))) => {
+                    if warning.is_none() {
+                        input_refresh.superseded(Instant::now());
+                    }
                     prewarm = vec![state::Page::Settings, state::Page::Apps];
                     if std::mem::take(&mut state.reload_artwork) {
                         assets.artwork.reset();
@@ -1103,6 +1126,11 @@ fn run() -> Result<(), String> {
                     } else if initial_focus {
                         state.focus = state.first_content();
                         initial_focus = false;
+                    }
+                }
+                Response::Inputs(result) => {
+                    if let Err(error) = input_refresh.completed(Instant::now(), result) {
+                        eprintln!("Luma HDMI refresh: {error}");
                     }
                 }
                 Response::Launched(result) => {
@@ -1623,6 +1651,16 @@ fn run() -> Result<(), String> {
         if inventory_retry.is_some_and(|at| Instant::now() >= at) {
             inventory_retry = None;
             platform.send(Request::Refresh);
+        }
+        // Process queued pointer-down/up events first: keep their displayed hit targets
+        // stable until release, even if an input reply arrived in the same event-loop turn.
+        let inputs_active =
+            input_refresh_active(&state, webos, focused, visible) && press.is_none();
+        if let Some(inputs) = input_refresh.take_pending(inputs_active) {
+            state.set_inputs(inputs);
+        }
+        if input_refresh.due(Instant::now(), inputs_active) {
+            platform.send(Request::RefreshInputs);
         }
         weather_tick(&mut state, &weather_service, visible);
         // SDL-webOS disables text input when its own panel is dismissed, even
