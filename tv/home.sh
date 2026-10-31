@@ -1,14 +1,22 @@
 #!/bin/sh
 # Optional native Home replacement. The webosbrew hook has no .sh suffix.
 STATE=/var/lib/luma-home
-SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd) || exit 1
+# The cold-boot hook is a symlink to the copied $STATE/home.sh: find luma-helper beside its target.
+SCRIPT=$0
+if [ -L "$SCRIPT" ]; then
+  LINK=$(readlink "$SCRIPT") || exit 1
+  case "$LINK" in /*) SCRIPT=$LINK ;; *) SCRIPT=$(dirname -- "$SCRIPT")/$LINK ;; esac
+fi
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$SCRIPT")" && pwd) || exit 1
 COMMAND=${1:-boot}
 case "$COMMAND" in
   enable|disable|restore|status|apply|boot) ;;
   *) printf '%s\n' 'Usage: home.sh enable [APP_DIR] [HOME_ID] | disable | restore | status' >&2; exit 1 ;;
 esac
 [ "$(id -u)" = 0 ] || { printf '%s\n' 'Run as root.' >&2; exit 1; }
-[ -x "$SCRIPT_DIR/luma-helper" ] || { printf '%s\n' 'The native Luma TV helper is missing.' >&2; exit 1; }
+# boot only schedules the copied $STATE/home.sh apply, which checks for the helper itself.
+[ "$COMMAND" = boot ] || [ -x "$SCRIPT_DIR/luma-helper" ] ||
+  { printf '%s\n' 'The native Luma TV helper is missing.' >&2; exit 1; }
 if [ "$COMMAND" = enable ] && grep -q 'release [56]\.' /etc/starfish-release 2>/dev/null; then
   printf '%s\n' \
     'Enabling Luma Home (webOS 5/6) will:' \

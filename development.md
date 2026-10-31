@@ -1044,7 +1044,9 @@ The former VM tests for interpreter code are replaced by filesystem and service 
 `tv-helper/src/tests.rs`. They do not call a TV, real LS2 service or network. Host helper executables
 reject TV operations; only ARM webOS builds can perform them. Use `cargo test -p luma-tv-helper`
 for focused checks. The workspace tests include the helper, and ARM builds/package verification
-require both native binaries with executable permissions.
+require both native binaries with executable permissions. `tests/home-wrapper.test.mjs` runs
+`home.sh` itself through absolute and relative boot-hook symlinks in a temporary root, so the copied
+helper is found beside the script's target rather than the `init.d` link.
 
 On an LG 49UN71006LB running webOS 5.6.2, a manual comparison of the same Homebrew Channel icon
 request returned identical image bytes. Measured from a TV-local parent process around each
