@@ -1,4 +1,4 @@
-/* Luma Home compositor key filter (webOS 5/6 executable method; home.cjs enable registers it in
+/* Luma Home compositor key filter (webOS 5/6 executable method; `home.sh enable` registers it in
  * com.webos.surfacemanager.keyFilters). LG's compositor loads it with Qt.include within seconds of
  * a cold boot, long before the Homebrew hooks (~50 s). While the TV boots it asks luma-early
  * (com.webos.service.lumahome, src/bin/luma-early.rs) to mount Luma over LG's Home executable
@@ -10,7 +10,7 @@ var lumaHomeTries = 0;
 var lumaHomeFront = '';
 var lumaHomeLaunches = 0;
 var lumaHomeShown = false; // Home came to the front after a launch from here
-// The selected Home target; home.cjs installScripts writes it into the installed copy.
+// The selected Home target; the native helper (tv-helper/src/home.rs) writes it into the installed copy.
 var lumaHomeTarget = 'com.webos.app.home';
 
 function lumaHomeParse(payload) {
@@ -106,7 +106,7 @@ function init() {
   }
 }
 
-// The handler named in the key filter chain (home.cjs); keys pass through.
+// The handler named in the key filter chain (tv-helper/src/home.rs); keys pass through.
 // oxlint-disable-next-line no-unused-vars
 function lumaHomeKey() {
   return KeyPolicy.NextPolicy;

@@ -89,7 +89,7 @@ backgrounds and QR-managed webhook shortcuts), not just languages. Avoid claims 
 behavior or features not yet implemented.
 
 SVG sources and fonts retain licenses in `assets/`. TV app artwork is resolved at runtime from
-inventory/installed manifests by `src/app_artwork.rs`, with an embedded Node 8-compatible elevated
+inventory/installed manifests by `src/app_artwork.rs`, with a native Rust `luma-helper` elevated
 reader for jailed installations. Reads/decoding stay on its worker; GPU uploads stay on SDL.
 Refresh invalidates cached results. No collected icon map or card-colour JSON is used or shipped.
 Desktop previews use curated vectors and generic/category fallbacks. Do not add dumped TV images

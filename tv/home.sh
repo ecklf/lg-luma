@@ -1,14 +1,26 @@
 #!/bin/sh
 # Optional native Home replacement. The webosbrew hook has no .sh suffix.
 STATE=/var/lib/luma-home
-SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd) || exit 1
+# The cold-boot hook is a symlink to the copied $STATE/home.sh: find luma-helper beside its target.
+SCRIPT=$0
+if [ -L "$SCRIPT" ]; then
+  LINK=$(readlink "$SCRIPT") || exit 1
+  case "$LINK" in /*) SCRIPT=$LINK ;; *) SCRIPT=$(dirname -- "$SCRIPT")/$LINK ;; esac
+fi
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$SCRIPT")" && pwd) || exit 1
 COMMAND=${1:-boot}
 case "$COMMAND" in
   enable|disable|restore|status|apply|boot|early) ;;
   *) printf '%s\n' 'Usage: home.sh enable [APP_DIR] [HOME_ID] | disable | restore | status' >&2; exit 1 ;;
 esac
 [ "$(id -u)" = 0 ] || { printf '%s\n' 'Run as root.' >&2; exit 1; }
-[ -x /usr/bin/node ] || { printf '%s\n' 'The TV Node.js runtime is missing.' >&2; exit 1; }
+# boot only schedules the copied $STATE/home.sh apply, which checks for the helper itself; the
+# early fast path is shell only.
+case "$COMMAND" in
+  boot|early) ;;
+  *) [ -x "$SCRIPT_DIR/luma-helper" ] ||
+    { printf '%s\n' 'The native Luma TV helper is missing.' >&2; exit 1; } ;;
+esac
 if [ "$COMMAND" = enable ] && grep -q 'release [56]\.' /etc/starfish-release 2>/dev/null; then
   printf '%s\n' \
     'Enabling Luma Home (webOS 5/6) will:' \
@@ -61,7 +73,7 @@ if [ ! -d "$STATE" ]; then mkdir -m 755 "$STATE" || exit 1; fi
 [ "$(stat -c %u "$STATE")" = 0 ] || exit 1
 MARKER=/var/run/luma-home
 if [ "$COMMAND" = early ] || [ "$COMMAND" = boot ]; then
-  # The Home target chosen at enable (home.cjs selectHome); configurations without one use home.
+  # The Home target chosen at enable (luma-helper home); configurations without one use home.
   HOME_ID=$(sed -n 's/^  "homeId": "\([^"]*\)".*/\1/p' "$STATE/state.json" 2>/dev/null)
   case "${HOME_ID:=com.webos.app.home}" in
     com.webos.app.home|com.webos.app.fullhome) ;;
@@ -91,7 +103,7 @@ if [ "$COMMAND" = early ]; then
     done
   fi
   [ "$(stat -c '%d %i' "$app/luma")" = "$(stat -c '%d %i' "$EXE")" ] || exit 1
-  # Luma registers with SAM under this identity (src/platform.rs), as after home.cjs apply.
+  # Luma registers with SAM under this identity (src/platform.rs), as after the helper's apply.
   printf '%s\n' "$HOME_ID" >"$MARKER-target"
   printf '%s\n' com.ecklf.luma >"$MARKER"
   printf '%s early: Luma is Home (uptime %s)\n' "$(date)" "$(cut -d' ' -f1 /proc/uptime)" >>"$STATE/boot.log"
@@ -108,4 +120,4 @@ if [ "$COMMAND" = boot ]; then
 fi
 exec 9>"$STATE/lock"
 flock -n 9 || { printf '%s\n' 'Luma Home integration is already being changed.' >&2; exit 1; }
-exec /usr/bin/node "$SCRIPT_DIR/home.cjs" "$COMMAND" "${2:-$SCRIPT_DIR}" "${3:-}"
+exec "$SCRIPT_DIR/luma-helper" home "$COMMAND" "${2:-$SCRIPT_DIR}" "${3:-}"
