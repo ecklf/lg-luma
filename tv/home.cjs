@@ -856,8 +856,12 @@ try {
   } else if (command === 'startup-home') {
     if (process.argv[3] !== 'on' && process.argv[3] !== 'off')
       throw new Error('Usage: home.sh startup-home on|off');
-    configureInputPolicy(json(CONFIG), process.argv[3] === 'on');
+    var policyConfig = json(CONFIG);
+    // The pinned input and Back/Exit setting name the selected Home target.
+    savedHome(policyConfig);
+    configureInputPolicy(policyConfig, process.argv[3] === 'on');
   } else if (command === 'unpin') {
+    savedHome(fs.existsSync(CONFIG) ? json(CONFIG) : null);
     restoreInputPolicy();
   } else if (command === 'status') {
     var saved = fs.existsSync(CONFIG) ? json(CONFIG) : null;

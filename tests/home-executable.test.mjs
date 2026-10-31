@@ -403,3 +403,34 @@ test('the installed key filter launches the selected Home target', () => {
   assert.ok(!installed.includes("var lumaHomeTarget = 'com.webos.app.home';"));
   assert.throws(() => context.filterSource('var other = 1;'), /no Home target line/);
 });
+
+test('startup-home pins the selected fullhome target', () => {
+  const context = load();
+  const files = new Map([
+    [
+      '/var/lib/eim/lastinput',
+      JSON.stringify({
+        appId: 'com.webos.app.hdmi1',
+        physicalLastSourceAppId: 'com.webos.app.hdmi1',
+      }),
+    ],
+  ]);
+  Object.assign(context, {
+    fs: {
+      existsSync: (f) => files.has(f),
+      writeFileSync: (f, d) => files.set(f.replace(/\.new$/, ''), d),
+      renameSync() {},
+      unlinkSync: (f) => files.delete(f),
+    },
+    read: (f) => files.get(f),
+    execFileSync() {},
+    inputSettings: () => ({ settings: { lastInputApp: 'com.webos.app.hdmi1' } }),
+    writeInputFilter() {},
+  });
+  context.savedHome({ homeId: 'com.webos.app.fullhome' });
+  context.configureInputPolicy({ enabled: true, method: 'executable' }, true);
+  assert.equal(
+    JSON.parse(files.get('/var/lib/luma-home/lastinput')).physicalLastSourceAppId,
+    'com.webos.app.fullhome',
+  );
+});
