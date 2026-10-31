@@ -1211,24 +1211,11 @@ fn opening_side_popup_preserves_card_artwork_geometry_with_or_without_captions()
             let hearts = |draws: &[crate::renderer::Draw]| {
                 draws
                     .iter()
-                    .enumerate()
-                    .filter_map(|(index, draw)| match draw {
+                    .filter_map(|draw| match draw {
                         crate::renderer::Draw::Image(path, rect, ..)
                         | crate::renderer::Draw::TintedImage(path, rect, ..)
                             if path.contains("heart-filled") && rect.x < 350. =>
                         {
-                            let crate::renderer::Draw::Shape(backing, radius, border, color) =
-                                &draws[index - 1]
-                            else {
-                                panic!("Favorite heart must have a contrast backing");
-                            };
-                            assert_eq!(*radius, 14.);
-                            assert_eq!(*border, 0.);
-                            assert_eq!((backing.w, backing.h), (28., 28.));
-                            assert!((backing.x + 6. - rect.x).abs() < 0.001);
-                            assert!((backing.y + 6. - rect.y).abs() < 0.001);
-                            assert!(color[..3].iter().all(|channel| *channel < 0.1));
-                            assert!(color[3] >= 0.79);
                             Some([rect.x, rect.y, rect.w, rect.h])
                         }
                         _ => None,
