@@ -5,6 +5,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 const script = await fs.readFile(new URL('../tv/home.cjs', import.meta.url), 'utf8');
+const fsSource = await fs.readFile(new URL('../tv/home-filter.js', import.meta.url), 'utf8');
 const exe = '/usr/bin/com.webos.app.home';
 const appDir = '/media/developer/apps/usr/palm/applications/com.ecklf.luma';
 const marker = '/var/run/luma-home';
@@ -288,4 +289,13 @@ test('saved Home target survives boot/disable; old configurations default to hom
   for (const id of ['../../etc/passwd', 'com.webos.app.livetv', '', null]) {
     assert.throws(() => context.selectHome(id), /Unsupported Home target/);
   }
+});
+
+test('the installed key filter launches the selected Home target', () => {
+  const context = load();
+  context.selectHome('com.webos.app.fullhome');
+  const installed = context.filterSource(fsSource);
+  assert.ok(installed.includes("var lumaHomeTarget = 'com.webos.app.fullhome';"));
+  assert.ok(!installed.includes("var lumaHomeTarget = 'com.webos.app.home';"));
+  assert.throws(() => context.filterSource('var other = 1;'), /no Home target line/);
 });

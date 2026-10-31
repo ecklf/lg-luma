@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const script = await fs.readFile(new URL('../tv/home-filter.js', import.meta.url), 'utf8');
 
 // LG's compositor filter context: luna calls, a timer, and subscriptions the test drives.
-function compositor() {
+function compositor(source = script) {
   const calls = [];
   const subscriptions = {};
   const prepares = [];
@@ -26,7 +26,7 @@ function compositor() {
       },
     },
   });
-  vm.runInContext(script, context);
+  vm.runInContext(source, context);
   context.init();
   const emit = (method, value) => subscriptions[method](JSON.stringify(value));
   return {
@@ -119,4 +119,18 @@ test('once Home was shown, later inputs and retries leave the owner alone', () =
 test('keys pass through unchanged', () => {
   const tv = compositor();
   assert.equal(tv.context.lumaHomeKey(1, true, false), 0);
+});
+
+test('with fullhome selected, the filter launches and recognizes fullhome', () => {
+  const line = "var lumaHomeTarget = 'com.webos.app.home';";
+  assert.ok(script.includes(line));
+  const tv = compositor(script.replace(line, "var lumaHomeTarget = 'com.webos.app.fullhome';"));
+  tv.boot(false);
+  tv.front('com.webos.app.livetv');
+  tv.early(true);
+  assert.deepEqual(tv.calls, ['/launch com.webos.app.fullhome']);
+  tv.front('com.webos.app.fullhome');
+  tv.front('com.webos.app.hdmi1');
+  tv.timers.find(([ms]) => ms === 8000)[1]();
+  assert.deepEqual(tv.calls, ['/launch com.webos.app.fullhome']);
 });

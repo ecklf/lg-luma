@@ -59,8 +59,16 @@ fi
 [ ! -L "$STATE" ] || exit 1
 if [ ! -d "$STATE" ]; then mkdir -m 755 "$STATE" || exit 1; fi
 [ "$(stat -c %u "$STATE")" = 0 ] || exit 1
-EXE=/usr/bin/com.webos.app.home
 MARKER=/var/run/luma-home
+if [ "$COMMAND" = early ] || [ "$COMMAND" = boot ]; then
+  # The Home target chosen at enable (home.cjs selectHome); configurations without one use home.
+  HOME_ID=$(sed -n 's/^  "homeId": "\([^"]*\)".*/\1/p' "$STATE/state.json" 2>/dev/null)
+  case "${HOME_ID:=com.webos.app.home}" in
+    com.webos.app.home|com.webos.app.fullhome) ;;
+    *) printf '%s\n' "Unsupported Home target: $HOME_ID" >&2; exit 1 ;;
+  esac
+  EXE=/usr/bin/$HOME_ID
+fi
 if [ "$COMMAND" = early ]; then
   # From luma-early, ~18 s into a cold boot (see src/bin/luma-early.rs): the executable method's
   # mount without Node, which would cost seconds under boot load. Opens nothing; the key filter
@@ -83,6 +91,8 @@ if [ "$COMMAND" = early ]; then
     done
   fi
   [ "$(stat -c '%d %i' "$app/luma")" = "$(stat -c '%d %i' "$EXE")" ] || exit 1
+  # Luma registers with SAM under this identity (src/platform.rs), as after home.cjs apply.
+  printf '%s\n' "$HOME_ID" >"$MARKER-target"
   printf '%s\n' com.ecklf.luma >"$MARKER"
   printf '%s early: Luma is Home (uptime %s)\n' "$(date)" "$(cut -d' ' -f1 /proc/uptime)" >>"$STATE/boot.log"
   exit 0

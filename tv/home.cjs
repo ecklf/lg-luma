@@ -506,10 +506,18 @@ function apply(config, open) {
   }
 }
 
+// The key filter launches the selected Home target (selectHome allows only known ids).
+function filterSource(source) {
+  var line = "var lumaHomeTarget = 'com.webos.app.home';";
+  if (source.split(line).length !== 2) throw new Error('home-filter.js has no Home target line');
+  return source.replace(line, "var lumaHomeTarget = '" + HOME + "';");
+}
+
 function installScripts() {
   ['home.sh', 'home.cjs', 'home-filter.js'].forEach(function (name) {
     var target = STATE + '/' + name;
     var data = fs.readFileSync(path.join(__dirname, name));
+    if (name === 'home-filter.js') data = filterSource(String(data));
     fs.writeFileSync(target + '.new', data, { mode: name === 'home.sh' ? 493 : 420 });
     fs.renameSync(target + '.new', target);
   });
