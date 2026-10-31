@@ -27,13 +27,19 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
+        Self::under(&std::env::temp_dir())
+    }
+    /// The root is canonical like the paths Home::install derives from it: macOS TMPDIR
+    /// (/var/folders/...) is a symlinked parent of /private/var/folders/....
+    fn under(parent: &Path) -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!(
+        let root = parent.join(format!(
             "luma-native-fixture-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir(&root).unwrap();
+        let root = fs::canonicalize(root).unwrap();
         let f = Self {
             root,
             calls: RefCell::new(vec![]),
@@ -318,6 +324,22 @@ fn fullhome_round_trip_and_persisted_target_keep_their_identity() {
         b"stock-com.webos.app.fullhome"
     );
     assert!(!system::exists(&f, "/var/run/luma-home-target"));
+}
+#[test]
+fn installation_under_a_symlinked_temporary_parent_stays_inside_the_root() {
+    let real = std::env::temp_dir().join(format!("luma-native-real-{}", std::process::id()));
+    let link = std::env::temp_dir().join(format!("luma-native-link-{}", std::process::id()));
+    fs::create_dir_all(&real).unwrap();
+    let _ = fs::remove_file(&link);
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    {
+        let f = Fixture::under(&link);
+        home::dispatch(&f, "enable", Some(DIR), None).unwrap();
+        assert_eq!(home::load(&f).unwrap().unwrap().app_dir, DIR);
+        home::dispatch(&f, "disable", None, None).unwrap();
+    }
+    fs::remove_file(&link).unwrap();
+    fs::remove_dir_all(&real).unwrap();
 }
 #[test]
 fn copied_recovery_binary_and_shell_survive_package_removal() {
