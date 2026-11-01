@@ -132,3 +132,72 @@ fn down_from_favorites_reaches_crypto_prices_without_inputs() {
         .unwrap();
     assert!(card.rect.y + card.rect.h <= 1080.);
 }
+
+#[test]
+fn any_binance_coin_is_found_by_search_and_listed_after_the_usual_ones() {
+    let mut state = ready();
+    state.open(2);
+    state.focus = Target::Widget(5);
+    state.activate();
+    state.focus = Target::CryptoSearch;
+    state.activate();
+    assert!(state.text_input_active());
+    assert_eq!(state.keyboard_field, crate::state::TextField::Coin);
+    assert!(
+        state.crypto.search.wanted,
+        "the first search loads Binance's coins"
+    );
+    state.crypto.search.wanted = false;
+    state.crypto.search.loading = true;
+    state
+        .crypto
+        .search
+        .accept(Ok(["APE", "BTC", "PEPE"].map(String::from).to_vec()));
+    state.text("pe");
+    assert_eq!(state.editing_text(), "PE");
+    state.overlay = None;
+    assert!(
+        controls(&state)
+            .iter()
+            .any(|c| c.target == Target::CryptoResult(1))
+    );
+    state.focus = Target::CryptoResult(0);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(
+        state.preferences.crypto_coins,
+        ["BTC", "ETH", "SOL", "PEPE"]
+    );
+    // Found coins stay listed after the usual eight, so they can be turned off there.
+    let choices = state.crypto_choices();
+    assert_eq!(choices.len(), crate::crypto::COINS.len() + 1);
+    state.focus = Target::CryptoCoin(choices.len() - 1);
+    state.activate();
+    assert_eq!(state.preferences.crypto_coins, ["BTC", "ETH", "SOL"]);
+}
+
+#[test]
+fn crypto_can_sit_beside_the_greeting_instead_of_below_the_inputs() {
+    let mut state = ready();
+    state.preferences.show_crypto = true;
+    let heading = |state: &State| {
+        scene(state).draw.iter().find_map(|draw| match draw {
+            crate::renderer::Draw::Text(label, rect, ..) if label == "Crypto" => Some(*rect),
+            _ => None,
+        })
+    };
+    assert!(heading(&state).is_some_and(|rect| rect.y > 600.));
+    state.open(2);
+    state.focus = Target::Widget(5);
+    state.activate();
+    state.focus = Target::CryptoLayout;
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.crypto_beside);
+    state.open(0);
+    let rect = heading(&state).expect("the block keeps its heading");
+    assert!(rect.x > 1300. && rect.y < 470.);
+    assert!(
+        !controls(&state)
+            .iter()
+            .any(|c| matches!(c.target, Target::Coin(_)))
+    );
+}

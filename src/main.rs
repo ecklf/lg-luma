@@ -414,6 +414,7 @@ fn script(
                     Some(state::Subpage::Greeting) => state::TextField::Name,
                     Some(state::Subpage::WeatherLocation) => state::TextField::Location,
                     Some(state::Subpage::Input(_)) => state::TextField::InputName,
+                    Some(state::Subpage::Crypto) => state::TextField::Coin,
                     _ => state::TextField::Apps,
                 }
             };
@@ -517,8 +518,19 @@ fn crypto_tick(state: &mut State, service: &crypto_service::Service, visible: bo
     if let Some(command) = command {
         service.send(command);
     }
+    if std::mem::take(&mut state.crypto.search.wanted) {
+        state.crypto.search.loading = true;
+        state.dirty = true;
+        service.catalog();
+    }
     while let Ok(response) = service.receiver.try_recv() {
-        state.dirty |= state.crypto.accept(response.id, response.result, now);
+        state.dirty |= match response {
+            crypto_service::Response::Quotes { id, result } => state.crypto.accept(id, result, now),
+            crypto_service::Response::Catalog(result) => {
+                state.crypto.search.accept(result);
+                true
+            }
+        };
     }
 }
 

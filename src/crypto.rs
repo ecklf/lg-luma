@@ -4,7 +4,7 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
-/// The coins Settings offers, as (symbol, name), in the order they are listed and shown.
+/// The coins Settings lists first, as (symbol, name); any other Binance coin is found by search.
 pub const COINS: [(&str, &str); 8] = [
     ("BTC", "Bitcoin"),
     ("ETH", "Ethereum"),
@@ -31,7 +31,34 @@ pub fn default_coins() -> Vec<String> {
     ["BTC", "ETH", "SOL"].map(String::from).to_vec()
 }
 
-/// Known symbols only, without repeats, at most `MAX_COINS`, in Settings order; anything
+/// A Binance base asset as Luma keeps it: 2–10 capital letters or digits.
+pub fn valid_symbol(symbol: &str) -> bool {
+    (2..=10).contains(&symbol.len())
+        && symbol
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+}
+
+/// The coin's name for the listed coins, else its symbol.
+pub fn name(symbol: &str) -> &str {
+    COINS
+        .iter()
+        .find(|(coin, _)| *coin == symbol)
+        .map_or(symbol, |(_, name)| name)
+}
+
+/// Puts chosen coins in display order: the listed ones in their order, then the others in the
+/// order they were added.
+pub fn order(coins: &mut [String]) {
+    coins.sort_by_key(|coin| {
+        COINS
+            .iter()
+            .position(|(symbol, _)| symbol == coin)
+            .unwrap_or(COINS.len())
+    });
+}
+
+/// Valid symbols only, without repeats, at most `MAX_COINS`, in display order; anything
 /// malformed keeps the defaults rather than failing the preferences.
 pub fn deserialize_coins<'de, D: Deserializer<'de>>(
     deserializer: D,
@@ -39,14 +66,87 @@ pub fn deserialize_coins<'de, D: Deserializer<'de>>(
     let Value::Array(values) = Value::deserialize(deserializer)? else {
         return Ok(default_coins());
     };
-    let chosen: Vec<&str> = values.iter().filter_map(Value::as_str).collect();
-    Ok(COINS
+    let mut chosen: Vec<String> = Vec::new();
+    for symbol in values.iter().filter_map(Value::as_str) {
+        if valid_symbol(symbol) && !chosen.iter().any(|coin| coin == symbol) {
+            chosen.push(symbol.to_owned());
+        }
+    }
+    order(&mut chosen);
+    chosen.truncate(MAX_COINS);
+    Ok(chosen)
+}
+
+/// The base assets Binance trades against USDT, from a `ticker/price` reply, sorted.
+pub fn parse_catalog(value: &Value) -> Result<Vec<String>, String> {
+    let tickers = value
+        .as_array()
+        .ok_or("The price service returned unreadable data.")?;
+    let mut symbols: Vec<String> = tickers
         .iter()
-        .map(|(symbol, _)| *symbol)
-        .filter(|symbol| chosen.contains(symbol))
-        .take(MAX_COINS)
+        .filter_map(|ticker| ticker["symbol"].as_str()?.strip_suffix("USDT"))
+        .filter(|symbol| valid_symbol(symbol))
         .map(String::from)
-        .collect())
+        .collect();
+    symbols.sort();
+    symbols.dedup();
+    if symbols.is_empty() {
+        return Err("The price service listed no coins.".into());
+    }
+    Ok(symbols)
+}
+
+/// Search results shown at once.
+pub const MATCHES: usize = 6;
+
+/// The coin search on Settings › Crypto: what was typed and Binance's list of coins, loaded once
+/// when the search is first opened.
+#[derive(Default)]
+pub struct Search {
+    pub query: String,
+    pub catalog: Vec<String>,
+    pub loading: bool,
+    pub failed: bool,
+    /// Set when the search opens without a list; the worker fetches it.
+    pub wanted: bool,
+}
+impl Search {
+    /// Symbols starting with the query first, then those containing it, alphabetically.
+    pub fn matches(&self) -> Vec<&str> {
+        let query = self.query.trim().to_ascii_uppercase();
+        if query.is_empty() {
+            return Vec::new();
+        }
+        let starts = self.catalog.iter().filter(|s| s.starts_with(&query));
+        let contains = self
+            .catalog
+            .iter()
+            .filter(|s| !s.starts_with(&query) && s.contains(&query));
+        starts
+            .chain(contains)
+            .take(MATCHES)
+            .map(String::as_str)
+            .collect()
+    }
+    /// Takes the typed text: letters and digits only, upper case, at most ten.
+    pub fn edit(&mut self, query: &str) {
+        self.query = query
+            .chars()
+            .filter(char::is_ascii_alphanumeric)
+            .map(|c| c.to_ascii_uppercase())
+            .take(10)
+            .collect();
+    }
+    pub fn accept(&mut self, result: Result<Vec<String>, String>) {
+        self.loading = false;
+        match result {
+            Ok(catalog) => {
+                self.catalog = catalog;
+                self.failed = false;
+            }
+            Err(_) => self.failed = true,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -88,9 +188,16 @@ pub fn parse_tickers(value: &Value, symbols: &[String]) -> Result<Vec<Quote>, St
         .collect()
 }
 
-/// US dollars with thousands separators; small prices keep more digits.
+/// US dollars with thousands separators; small prices keep four significant digits.
 pub fn format_price(price: f64) -> String {
-    let decimals = if price >= 1. { 2 } else { 4 };
+    let decimals = if price >= 1. {
+        2
+    } else if price >= 0.01 {
+        4
+    } else {
+        // 0.00001042 has four zeros after the point, then its four digits.
+        ((-price.log10()).floor() as usize + 4).min(12)
+    };
     let text = format!("{price:.decimals$}");
     let (whole, fraction) = text.split_once('.').unwrap_or((&text, ""));
     let mut grouped = String::new();
@@ -122,6 +229,8 @@ pub struct Command {
 
 #[derive(Default, Serialize)]
 pub struct Crypto {
+    #[serde(skip)]
+    pub search: Search,
     pub quotes: Vec<Quote>,
     pub updated_at: i64,
     pub loading: bool,

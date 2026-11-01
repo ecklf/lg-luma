@@ -1118,11 +1118,17 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     if state.preferences.show_greeting {
         let greeting = language.greeting(now.hour(), &state.preferences.greeting_name);
         let greeting_style = text(90.4, 500, -0.065).leading(1.05);
-        let fitted = assets.fit_text(&greeting, greeting_style, 1500.);
+        // Beside the crypto block, long greetings shrink before reaching it.
+        let width = if crypto_block_shown(state) {
+            CRYPTO_BLOCK_X - 84. - 48.
+        } else {
+            1500.
+        };
+        let fitted = assets.fit_text(&greeting, greeting_style, width);
         let height = 95. * fitted.size / greeting_style.size;
         out.text(
             &greeting,
-            Rect::new(84., top + date_height + (95. - height) / 2., 1500., height),
+            Rect::new(84., top + date_height + (95. - height) / 2., width, height),
             fitted,
             WHITE,
             false,
@@ -1334,7 +1340,9 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         }
         out.control(Target::Input(input.id.clone()), rect, true);
     }
-    if state.preferences.show_crypto && !state.preferences.crypto_coins.is_empty() {
+    if crypto_block_shown(state) {
+        crypto_block(out, state);
+    } else if state.preferences.show_crypto && !state.preferences.crypto_coins.is_empty() {
         let rows = inputs.len().div_ceil(3) as f32;
         let crypto_y = if inputs.is_empty() {
             input_y
@@ -1342,6 +1350,110 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             input_y + 58.4 + (rows - 1.) * 126.4 + 104. + 41.6
         };
         crypto_row(out, state, crypto_y);
+    }
+}
+
+/// The crypto block fills the header's right 30%, beside the greeting.
+const CRYPTO_BLOCK_X: f32 = 1311.;
+const CRYPTO_BLOCK_RIGHT: f32 = 1836.;
+
+/// Whether Home shows the prices as a block beside the greeting rather than a row.
+fn crypto_block_shown(state: &State) -> bool {
+    state.preferences.show_crypto
+        && state.preferences.crypto_beside
+        && !state.preferences.crypto_coins.is_empty()
+}
+
+/// Home's crypto prices beside the greeting, on a card: a line per coin with its price and
+/// 24-hour change. Vertically centred on the greeting, clear of the favorites heading.
+fn crypto_block(out: &mut Scene, state: &State) {
+    let language = state.preferences.language;
+    let pad = 26.;
+    let line = 56.;
+    let coins = &state.preferences.crypto_coins;
+    let title = 34.;
+    let height = pad * 2. + title + coins.len() as f32 * line;
+    let top = (300. - height / 2.).clamp(128., 470. - height) - state.scroll;
+    let rect = Rect::new(
+        CRYPTO_BLOCK_X,
+        top,
+        CRYPTO_BLOCK_RIGHT - CRYPTO_BLOCK_X,
+        height,
+    );
+    out.shadow(rect, 24., 4., 1., 0.01);
+    out.draw.push(Draw::RoundedGradient(
+        rect,
+        24.,
+        c(0x20252b, 0.60),
+        c(0x171c22, 0.55),
+    ));
+    out.border(rect, 24., 1., c(0xffffff, 0.063));
+    let x = rect.x + pad;
+    let inner = rect.w - pad * 2.;
+    out.text(
+        language.t("crypto"),
+        Rect::new(x, rect.y + pad, inner, 22.),
+        text(15.2, 600, 0.06),
+        c(0xf5f5f5, 0.6),
+        false,
+    );
+    for (index, symbol) in coins.iter().enumerate() {
+        let y = rect.y + pad + title + index as f32 * line;
+        if index > 0 {
+            out.shape(Rect::new(x, y - 1., inner, 1.), 0., c(0xffffff, 0.07));
+        }
+        let half = inner / 2.;
+        out.text(
+            symbol,
+            Rect::new(x, y + 6., half, 26.),
+            text(21.6, 600, -0.01),
+            WHITE,
+            false,
+        );
+        let name = crate::crypto::name(symbol);
+        if name != symbol {
+            out.text(
+                name,
+                Rect::new(x, y + 31., half, 18.),
+                text(14.4, 400, 0.),
+                c(0xe8e8e8, 0.5),
+                false,
+            );
+        }
+        let right = Rect::new(x + half, 0., half, 0.);
+        match state.crypto.quotes.iter().find(|q| &q.symbol == symbol) {
+            Some(quote) => {
+                out.text(
+                    crate::crypto::format_price(quote.price),
+                    Rect::new(right.x, y + 6., right.w, 26.),
+                    text(21.6, 600, -0.01).right(),
+                    WHITE,
+                    false,
+                );
+                out.text(
+                    crate::crypto::format_change(quote.change),
+                    Rect::new(right.x, y + 31., right.w, 18.),
+                    text(14.4, 550, 0.).right(),
+                    if quote.change < -0.005 {
+                        c(0xff8a80, 0.95)
+                    } else {
+                        c(0x7ee2a8, 0.95)
+                    },
+                    false,
+                );
+            }
+            None => out.text(
+                language.t(if state.crypto.failed {
+                    "cryptoUnavailable"
+                } else {
+                    "cryptoLoading"
+                }),
+                Rect::new(right.x, y + 15., right.w, 22.),
+                text(16., 400, 0.).right(),
+                c(0xe8e8e8, 0.55),
+                false,
+            ),
+        }
     }
 }
 
@@ -1389,10 +1501,10 @@ fn crypto_row(out: &mut Scene, state: &State, y: f32) {
             1.,
             c(0xffffff, if focused { 0.24 } else { 0.063 }),
         );
-        let name = crate::crypto::COINS
-            .iter()
-            .find(|(coin, name)| coin == symbol && name != coin)
-            .map_or("", |(_, name)| name);
+        let name = match crate::crypto::name(symbol) {
+            name if name == symbol => "",
+            name => name,
+        };
         let half = rect.w / 2. - 24.;
         out.text(
             symbol,
@@ -2063,56 +2175,112 @@ fn crypto_settings(out: &mut Scene, state: &State, assets: &Assets) {
             language.t("stateOff")
         })
     };
-    row(
-        out,
-        state,
-        assets,
-        Row {
-            target: Target::CryptoToggle,
-            rect: Rect::new(640., 164.8 - s, 1120., 72.),
-            title: language.t("showWidget"),
-            icon: Some("eye"),
-            value: on_off(state.preferences.show_crypto),
-            description: None,
-            selected: false,
-            chevron: false,
-        },
-    );
-    out.text(
-        language.t("cryptoCoins"),
-        Rect::new(660., 264.8 - s, 1080., 24.),
-        text(16., 400, 0.),
-        c(0xf5f5f5, 0.55),
-        false,
-    );
-    for (index, (symbol, name)) in crate::crypto::COINS.into_iter().enumerate() {
-        // BNB and XRP are their own names.
-        let title = if name == symbol {
-            symbol.to_owned()
-        } else {
-            format!("{name} · {symbol}")
-        };
+    let chosen = |symbol: &str| state.preferences.crypto_coins.iter().any(|c| c == symbol);
+    // BNB and XRP are their own names.
+    let title = |symbol: &str| match crate::crypto::name(symbol) {
+        name if name == symbol => symbol.to_owned(),
+        name => format!("{name} · {symbol}"),
+    };
+    let simple = |out: &mut Scene, target, y: f32, title: &str, icon, value| {
         row(
             out,
             state,
             assets,
             Row {
-                target: Target::CryptoCoin(index),
-                rect: Rect::new(640., 300.8 + index as f32 * 84. - s, 1120., 72.),
-                title: &title,
-                icon: None,
-                value: on_off(
-                    state
-                        .preferences
-                        .crypto_coins
-                        .iter()
-                        .any(|coin| coin == symbol),
-                ),
+                target,
+                rect: Rect::new(640., y - s, 1120., 72.),
+                title,
+                icon,
+                value,
                 description: None,
                 selected: false,
                 chevron: false,
             },
         );
+    };
+    simple(
+        out,
+        Target::CryptoToggle,
+        164.8,
+        language.t("showWidget"),
+        Some("eye"),
+        on_off(state.preferences.show_crypto),
+    );
+    simple(
+        out,
+        Target::CryptoLayout,
+        248.8,
+        language.t("cryptoLayout"),
+        Some("sparkles"),
+        Some(language.t(if state.preferences.crypto_beside {
+            "cryptoBeside"
+        } else {
+            "cryptoRow"
+        })),
+    );
+    let mut y = 348.8;
+    out.text(
+        language.t("cryptoCoins"),
+        Rect::new(660., y - s, 1080., 24.),
+        text(16., 400, 0.),
+        c(0xf5f5f5, 0.55),
+        false,
+    );
+    y += 36.;
+    let search = &state.crypto.search;
+    simple(
+        out,
+        Target::CryptoSearch,
+        y,
+        language.t("cryptoFind"),
+        Some("search"),
+        (!search.query.is_empty()).then_some(search.query.as_str()),
+    );
+    y += 84.;
+    if !search.query.is_empty() {
+        let matches = search.matches();
+        let status = if search.loading {
+            Some("cryptoSearching")
+        } else if search.failed && search.catalog.is_empty() {
+            Some("cryptoCatalogError")
+        } else if matches.is_empty() {
+            Some("cryptoNoMatch")
+        } else {
+            None
+        };
+        if let Some(key) = status {
+            out.text(
+                language.t(key),
+                Rect::new(660., y + 4. - s, 1080., 24.),
+                text(17.6, 400, 0.),
+                c(0xf5f5f5, 0.6),
+                false,
+            );
+            y += 52.;
+        }
+        for (index, symbol) in matches.into_iter().enumerate() {
+            simple(
+                out,
+                Target::CryptoResult(index),
+                y,
+                &title(symbol),
+                None,
+                on_off(chosen(symbol)),
+            );
+            y += 84.;
+        }
+        y += 20.;
+    }
+    for (index, symbol) in state.crypto_choices().iter().enumerate() {
+        simple(
+            out,
+            Target::CryptoCoin(index),
+            y,
+            &title(symbol),
+            None,
+            on_off(chosen(symbol)),
+        );
+        y += 84.;
     }
 }
 
@@ -3642,6 +3810,7 @@ fn keyboard(out: &mut Scene, state: &State, assets: &Assets) {
             TextField::Name => language.t("greetingName"),
             TextField::InputName => language.t("inputName"),
             TextField::Apps => language.t("findApp"),
+            TextField::Coin => language.t("cryptoFind"),
         },
         Rect::new(389., 324., 1000., 44.),
         text(37.6, 500, -0.055).leading(1.1),

@@ -1,5 +1,5 @@
 //! The crypto price worker: one HTTP job at a time off the SDL thread, newest request wins.
-use crate::crypto::{Command, Quote, parse_tickers};
+use crate::crypto::{Command, Quote, parse_catalog, parse_tickers};
 use std::{
     io::Read,
     net::SocketAddr,
@@ -13,6 +13,8 @@ use std::{
 };
 
 const LIMIT: usize = 64 * 1024;
+/// Every pair's price, for the coin search: about 3,000 entries.
+const CATALOG_LIMIT: usize = 1024 * 1024;
 /// Binance's global API first; the US one serves where the global API is blocked.
 const HOSTS: [&str; 2] = ["https://api.binance.com", "https://api.binance.us"];
 
@@ -64,21 +66,37 @@ impl Client {
         );
         let mut error = String::from("Prices are unavailable.");
         for host in &self.hosts {
-            match self.request(&format!("{host}/api/v3/ticker/24hr"), &pairs) {
+            let request = self
+                .agent
+                .get(format!("{host}/api/v3/ticker/24hr"))
+                .query("symbols", &pairs)
+                .query("type", "MINI");
+            match Self::request(request, LIMIT) {
                 Ok(value) => return parse_tickers(&value, symbols),
                 Err(message) => error = message,
             }
         }
         Err(error)
     }
-    fn request(&self, endpoint: &str, pairs: &str) -> Result<serde_json::Value, String> {
-        let mut response = self
-            .agent
-            .get(endpoint)
+    /// Every coin Binance trades against USDT, for the search in Settings.
+    pub fn catalog(&self) -> Result<Vec<String>, String> {
+        let mut error = String::from("Coins are unavailable.");
+        for host in &self.hosts {
+            let request = self.agent.get(format!("{host}/api/v3/ticker/price"));
+            match Self::request(request, CATALOG_LIMIT) {
+                Ok(value) => return parse_catalog(&value),
+                Err(message) => error = message,
+            }
+        }
+        Err(error)
+    }
+    fn request(
+        request: ureq::RequestBuilder<ureq::typestate::WithoutBody>,
+        limit: usize,
+    ) -> Result<serde_json::Value, String> {
+        let mut response = request
             .header("Accept", "application/json")
             .header("User-Agent", "LumaNative")
-            .query("symbols", pairs)
-            .query("type", "MINI")
             .call()
             .map_err(|_| "Prices are unavailable.")?;
         if !response.status().is_success() {
@@ -88,10 +106,10 @@ impl Client {
         response
             .body_mut()
             .as_reader()
-            .take(LIMIT as u64 + 1)
+            .take(limit as u64 + 1)
             .read_to_end(&mut bytes)
             .map_err(|_| "The price response could not be read")?;
-        if bytes.len() > LIMIT {
+        if bytes.len() > limit {
             return Err("The price response is too large".into());
         }
         serde_json::from_slice(&bytes)
@@ -99,13 +117,17 @@ impl Client {
     }
 }
 
-pub struct Response {
-    pub id: u64,
-    pub result: Result<Vec<Quote>, String>,
+pub enum Response {
+    Quotes {
+        id: u64,
+        result: Result<Vec<Quote>, String>,
+    },
+    Catalog(Result<Vec<String>, String>),
 }
 
 pub struct Service {
     sender: Option<mpsc::Sender<Command>>,
+    catalog: Option<mpsc::Sender<()>>,
     generation: Arc<AtomicU64>,
     pub receiver: mpsc::Receiver<Response>,
 }
@@ -115,6 +137,18 @@ impl Service {
         let (responses, receiver) = mpsc::channel();
         let generation = Arc::new(AtomicU64::new(0));
         let current = generation.clone();
+        // The coin list comes on its own worker, so a search never delays prices.
+        let (catalog, wanted) = mpsc::channel::<()>();
+        let catalog_client = client.clone();
+        let catalog_responses = responses.clone();
+        thread::spawn(move || {
+            for () in wanted {
+                let result = catalog_client.catalog();
+                if catalog_responses.send(Response::Catalog(result)).is_err() {
+                    break;
+                }
+            }
+        });
         thread::spawn(move || {
             while let Ok(mut job) = jobs.recv() {
                 // Only the newest waiting request is worth answering.
@@ -126,7 +160,9 @@ impl Service {
                 }
                 let result = client.quotes(&job.symbols);
                 if current.load(Ordering::SeqCst) == job.id
-                    && responses.send(Response { id: job.id, result }).is_err()
+                    && responses
+                        .send(Response::Quotes { id: job.id, result })
+                        .is_err()
                 {
                     break;
                 }
@@ -134,8 +170,14 @@ impl Service {
         });
         Self {
             sender: Some(sender),
+            catalog: Some(catalog),
             generation,
             receiver,
+        }
+    }
+    pub fn catalog(&self) {
+        if let Some(catalog) = &self.catalog {
+            let _ = catalog.send(());
         }
     }
     /// Requests older than `id` are dropped before or after they run.
@@ -153,6 +195,7 @@ impl Drop for Service {
     fn drop(&mut self) {
         self.generation.store(u64::MAX, Ordering::SeqCst);
         self.sender.take();
+        self.catalog.take();
     }
 }
 

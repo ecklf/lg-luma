@@ -39,22 +39,25 @@ fn prices_and_changes_are_formatted_for_cards() {
     assert_eq!(format_price(1234567.), "$1,234,567.00");
     assert_eq!(format_price(2.5), "$2.50");
     assert_eq!(format_price(0.12345), "$0.1235");
+    assert_eq!(format_price(0.00001042), "$0.00001042");
+    assert_eq!(format_price(0.003456), "$0.003456");
     assert_eq!(format_change(1.2349), "+1.23%");
     assert_eq!(format_change(-0.851), "−0.85%");
     assert_eq!(format_change(-0.001), "+0.00%");
 }
 
 #[test]
-fn coin_preferences_keep_known_coins_in_settings_order() {
+fn coin_preferences_keep_listed_coins_first_then_found_ones() {
     #[derive(serde::Deserialize)]
     struct Holder {
         #[serde(deserialize_with = "deserialize_coins")]
         coins: Vec<String>,
     }
     let parse = |value| serde_json::from_value::<Holder>(value).unwrap().coins;
+    // Coins found by search follow the listed ones; malformed symbols and repeats are dropped.
     assert_eq!(
-        parse(json!({"coins": ["DOGE", "BTC", "FAKE", "BTC", 7]})),
-        symbols(&["BTC", "DOGE"])
+        parse(json!({"coins": ["PEPE", "DOGE", "btc", "BTC", "A", "BTC", 7]})),
+        symbols(&["BTC", "DOGE", "PEPE"])
     );
     assert_eq!(
         parse(json!({"coins": ["TON", "DOGE", "ADA", "XRP", "BNB"]})),
@@ -127,4 +130,30 @@ fn choosing_other_coins_cancels_the_old_request_and_fetches_at_once() {
     assert!(!crypto.accept(old.id, Ok(vec![quote("BTC")]), 1002));
     assert!(crypto.accept(new.id, Ok(vec![quote("BTC"), quote("ETH")]), 1002));
     assert_eq!(crypto.quotes.len(), 2);
+}
+
+#[test]
+fn the_coin_search_lists_binance_usdt_coins_by_prefix_first() {
+    let catalog = parse_catalog(&json!([
+        {"symbol": "PEPEUSDT", "price": "0.00001"},
+        {"symbol": "BTCUSDT", "price": "78000"},
+        {"symbol": "ETHBTC", "price": "0.03"},
+        {"symbol": "APEUSDT", "price": "0.5"},
+        {"symbol": "1000SATSUSDT", "price": "0.0003"},
+        {"symbol": "weirdUSDT", "price": "1"},
+        {"symbol": "BTCUSDT", "price": "78000"},
+    ]))
+    .unwrap();
+    assert_eq!(catalog, symbols(&["1000SATS", "APE", "BTC", "PEPE"]));
+    assert!(parse_catalog(&json!([])).is_err());
+
+    let mut search = Search {
+        catalog,
+        ..Default::default()
+    };
+    search.edit("pe!");
+    assert_eq!(search.query, "PE");
+    assert_eq!(search.matches(), ["PEPE", "APE"]);
+    search.edit("");
+    assert!(search.matches().is_empty());
 }

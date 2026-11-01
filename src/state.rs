@@ -99,7 +99,13 @@ pub enum Target {
     WeatherClear,
     WeatherResult(usize),
     CryptoToggle,
-    /// Widgets › Crypto: one of `crypto::COINS`.
+    /// Widgets › Crypto: a row below the inputs or a block beside the greeting.
+    CryptoLayout,
+    /// Widgets › Crypto: the coin search's field.
+    CryptoSearch,
+    /// Widgets › Crypto: one of the search's matches.
+    CryptoResult(usize),
+    /// Widgets › Crypto: one of `State::crypto_choices`.
     CryptoCoin(usize),
     Tile(String),
     TileTest(String),
@@ -176,6 +182,7 @@ pub enum TextField {
     Location,
     Name,
     InputName,
+    Coin,
 }
 
 #[derive(Clone, Copy)]
@@ -1258,6 +1265,9 @@ impl State {
                     | Target::Tile(_)
                     | Target::InputMode(_)
                     | Target::CryptoToggle
+                    | Target::CryptoLayout
+                    | Target::CryptoSearch
+                    | Target::CryptoResult(_)
                     | Target::CryptoCoin(_)
                     | Target::WeatherToggle
                     | Target::WeatherLocation
@@ -1297,7 +1307,14 @@ impl State {
                 return vec![];
             }
             // Crypto's switches: Right does nothing and Up from the first reaches the tabs.
-            if matches!(self.focus, Target::CryptoToggle | Target::CryptoCoin(_)) {
+            if matches!(
+                self.focus,
+                Target::CryptoToggle
+                    | Target::CryptoLayout
+                    | Target::CryptoSearch
+                    | Target::CryptoResult(_)
+                    | Target::CryptoCoin(_)
+            ) {
                 match direction {
                     Direction::Right => return vec![],
                     Direction::Up if self.focus == Target::CryptoToggle => {
@@ -1690,7 +1707,10 @@ impl State {
 
     pub fn text(&mut self, text: &str) {
         if self.text_input_active() {
-            if self.keyboard_field == TextField::Location {
+            if self.keyboard_field == TextField::Coin {
+                let query = format!("{}{text}", self.crypto.search.query);
+                self.crypto.search.edit(&query);
+            } else if self.keyboard_field == TextField::Location {
                 let mut query = self.weather.query.clone();
                 query.extend(
                     text.chars()
@@ -1733,7 +1753,9 @@ impl State {
 
     pub fn delete(&mut self) {
         if self.text_input_active() {
-            if self.keyboard_field == TextField::Location {
+            if self.keyboard_field == TextField::Coin {
+                self.crypto.search.query.pop();
+            } else if self.keyboard_field == TextField::Location {
                 let mut query = self.weather.query.clone();
                 query.pop();
                 self.weather.edit(query);
@@ -1872,7 +1894,9 @@ impl State {
             end += 1;
         }
         query.replace_range(start..end, "");
-        if self.keyboard_field == TextField::Location {
+        if self.keyboard_field == TextField::Coin {
+            self.crypto.search.edit(&query);
+        } else if self.keyboard_field == TextField::Location {
             self.weather.edit(query);
         } else if self.keyboard_field == TextField::Name {
             self.greeting_name_draft = query;
@@ -1885,12 +1909,41 @@ impl State {
         self.dirty = true;
     }
 
+    /// The coins Settings › Crypto lists: `crypto::COINS`, then the chosen coins found by search.
+    pub fn crypto_choices(&self) -> Vec<String> {
+        let mut choices: Vec<String> = crate::crypto::COINS
+            .iter()
+            .map(|(symbol, _)| (*symbol).to_owned())
+            .collect();
+        for coin in &self.preferences.crypto_coins {
+            if !choices.contains(coin) {
+                choices.push(coin.clone());
+            }
+        }
+        choices
+    }
+    /// Adds or removes a coin; Home shows at most `crypto::MAX_COINS`.
+    fn toggle_coin(&mut self, symbol: String) -> Vec<Effect> {
+        let coins = &mut self.preferences.crypto_coins;
+        if let Some(position) = coins.iter().position(|coin| *coin == symbol) {
+            coins.remove(position);
+        } else if coins.len() >= crate::crypto::MAX_COINS {
+            self.notify(self.preferences.language.t("cryptoLimit"));
+            return vec![];
+        } else {
+            coins.push(symbol);
+            // Cards follow the Settings order, whatever order coins were picked in.
+            crate::crypto::order(coins);
+        }
+        vec![Effect::Save]
+    }
     pub fn editing_text(&self) -> &str {
         match self.keyboard_field {
             TextField::Location => &self.weather.query,
             TextField::Name => &self.greeting_name_draft,
             TextField::InputName => &self.input_name,
             TextField::Apps => &self.query,
+            TextField::Coin => &self.crypto.search.query,
         }
     }
     pub fn open_keyboard(&mut self, field: TextField) {
@@ -1903,6 +1956,11 @@ impl State {
             // The TV keyboard starts empty, so a new name replaces the old one.
             self.input_name.clear();
         }
+        if field == TextField::Coin {
+            self.crypto.search.query.clear();
+            let search = &mut self.crypto.search;
+            search.wanted = search.catalog.is_empty() && !search.loading;
+        }
         if cfg!(all(
             feature = "webos",
             target_os = "linux",
@@ -1914,6 +1972,7 @@ impl State {
                 TextField::Name => Target::GreetingName,
                 TextField::InputName => Target::InputRename,
                 TextField::Apps => Target::Search,
+                TextField::Coin => Target::CryptoSearch,
             };
             self.panel_started = None;
             self.dirty = true;
@@ -1942,6 +2001,7 @@ impl State {
             TextField::Name => Target::GreetingName,
             TextField::InputName => Target::InputRename,
             TextField::Apps => Target::Search,
+            TextField::Coin => Target::CryptoSearch,
         }
     }
 
@@ -2093,26 +2153,28 @@ impl State {
                 self.preferences.show_crypto = !self.preferences.show_crypto;
                 return vec![Effect::Save];
             }
-            Target::CryptoCoin(index) => {
-                let Some((symbol, _)) = crate::crypto::COINS.get(index) else {
+            Target::CryptoLayout => {
+                self.preferences.crypto_beside = !self.preferences.crypto_beside;
+                return vec![Effect::Save];
+            }
+            Target::CryptoSearch => self.open_keyboard(TextField::Coin),
+            Target::CryptoResult(index) => {
+                let Some(symbol) = self
+                    .crypto
+                    .search
+                    .matches()
+                    .get(index)
+                    .map(|symbol| symbol.to_string())
+                else {
                     return vec![];
                 };
-                let coins = &mut self.preferences.crypto_coins;
-                if let Some(position) = coins.iter().position(|coin| coin == symbol) {
-                    coins.remove(position);
-                } else if coins.len() >= crate::crypto::MAX_COINS {
-                    self.notify(self.preferences.language.t("cryptoLimit"));
+                return self.toggle_coin(symbol);
+            }
+            Target::CryptoCoin(index) => {
+                let Some(symbol) = self.crypto_choices().get(index).cloned() else {
                     return vec![];
-                } else {
-                    coins.push((*symbol).into());
-                    // Cards follow the Settings order, whatever order coins were picked in.
-                    coins.sort_by_key(|coin| {
-                        crate::crypto::COINS
-                            .iter()
-                            .position(|(symbol, _)| symbol == coin)
-                    });
-                }
-                return vec![Effect::Save];
+                };
+                return self.toggle_coin(symbol);
             }
             Target::Coin(_) => {
                 self.open(2);
@@ -2503,6 +2565,7 @@ impl State {
                     TextField::Name => self.greeting_name_draft.clear(),
                     TextField::InputName => self.input_name.clear(),
                     TextField::Apps => self.query.clear(),
+                    TextField::Coin => self.crypto.search.query.clear(),
                 },
                 "Done" => {
                     self.overlay = None;
