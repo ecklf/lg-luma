@@ -3793,5 +3793,50 @@
     "vi": "Phiên chỉnh sửa đã kết thúc",
     "nl": "Bewerksessie beëindigd",
     "sv": "Redigeringssessionen har avslutats"
+  },
+  "airplayInputDetail": {
+    "en": "Wireless sharing",
+    "de": "Drahtlose Übertragung",
+    "es": "Compartir de forma inalámbrica",
+    "zh": "无线共享",
+    "zh-tw": "無線共享",
+    "pt": "Partilha sem fios",
+    "it": "Condivisione wireless",
+    "ru": "Беспроводная передача",
+    "pl": "Udostępnianie bezprzewodowe",
+    "fr": "Partage sans fil",
+    "vi": "Chia sẻ không dây",
+    "nl": "Draadloos delen",
+    "sv": "Trådlös delning"
+  },
+  "airplayInputAuto": {
+    "en": "Show when AirPlay is enabled on the TV",
+    "de": "Anzeigen, wenn AirPlay am Fernseher aktiviert ist",
+    "es": "Mostrar cuando AirPlay esté activado en el TV",
+    "zh": "电视启用 AirPlay 时显示",
+    "zh-tw": "電視啟用 AirPlay 時顯示",
+    "pt": "Mostrar quando o AirPlay estiver ativo na TV",
+    "it": "Mostra quando AirPlay è attivo sulla TV",
+    "ru": "Показывать, когда AirPlay включён на ТВ",
+    "pl": "Pokaż, gdy AirPlay jest włączony na telewizorze",
+    "fr": "Afficher si AirPlay est activé sur le téléviseur",
+    "vi": "Hiển thị khi AirPlay được bật trên TV",
+    "nl": "Tonen wanneer AirPlay op de tv is ingeschakeld",
+    "sv": "Visa när AirPlay är aktiverat på TV:n"
+  },
+  "recentCloseAll": {
+    "en": "Close all",
+    "de": "Alle schließen",
+    "es": "Cerrar todas",
+    "zh": "全部关闭",
+    "zh-tw": "全部關閉",
+    "pt": "Fechar todos",
+    "it": "Chiudi tutte",
+    "ru": "Закрыть все",
+    "pl": "Zamknij wszystkie",
+    "fr": "Tout fermer",
+    "vi": "Đóng tất cả",
+    "nl": "Alles sluiten",
+    "sv": "Stäng alla"
   }
 }
