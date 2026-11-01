@@ -155,9 +155,8 @@ date removes its reserved space above the greeting/weather and preserves the cho
 high and low**, **Air quality and UV**, **Chance of rain** (the most likely of the next three
 hours), **Sunrise and sunset**, and **Hourly forecast**. Once any is on and a city is set, Home
 shows them in the header's right 30%, beside the greeting: the details wrap to its width above the
-next five hours. The short weather line then moves from under the greeting into the header,
-right-aligned before the settings button (icon, temperature and place), and long greetings shrink
-before reaching the block. **Card background** (on by default) puts the block on a card;
+next five hours. The short weather line under the greeting stays as it is, and long greetings
+shrink before reaching the block. **Card background** (on by default) puts the block on a card;
 off, it sits on the wallpaper. Favorites and inputs keep their positions either way. Times use the
 location's UTC offset and the chosen clock format.
 Lists render behind the fixed sidebar, navigation and background actions, without viewport clipping
