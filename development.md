@@ -888,12 +888,12 @@ reaches them when Home shows no inputs. A card shows LIVE, the start ("Tomorrow 
 "Final", the tournament with its logo as a faint watermark, both teams with their logos and maps
 won, and the map being played or the format and round. OK opens the match: the round as a chip
 (final, third place, upper or lower bracket…), the teams around the score on the current map's
-screenshot, each map's tile with its rounds and winner, both lineups with their coach, and
-"Powered by Liquipedia · CC BY-SA 3.0". **Tier 1–2 events only** and **Recent results** are on
+screenshot, each map's tile with its rounds and winner, both lineups with their coach, when
+the feed was last updated, and "Powered by Liquipedia · CC BY-SA 3.0". **Tier 1–2 events only** and **Recent results** are on
 by default. The widget is named "CS2 Score" in every language.
 
 The data is the shared feed `cs2/matches.json` of
-[eluz1ve/luma-feeds](https://github.com/eluz1ve/luma-feeds), rebuilt from LiquipediaDB every two
+[eluz1ve/luma-feeds](https://github.com/eluz1ve/luma-feeds), rebuilt from LiquipediaDB every seven
 minutes on GitHub Actions; the LiquipediaDB key stays in that repository's secrets and never
 reaches a TV. Luma reads the file every minute while Home shows the widget, from the fixed
 `eluz1ve.github.io` origin with the weather client's limits (rustls, eight-second timeout, no

@@ -2147,13 +2147,26 @@ fn cs2_dialog(out: &mut Scene, state: &State, assets: &Assets, id: &str, now: Of
         c(0xf5f5f5, 0.5),
         false,
     );
-    out.text(
-        language.t("cs2Source"),
-        Rect::new(x, panel.y + panel.h - 44., inner - 340., 20.),
-        text(14.4, 400, 0.),
-        c(0xf5f5f5, 0.45),
-        false,
-    );
+    // When the feed was last rebuilt, so a stalled feed shows.
+    let updated = state
+        .cs2
+        .feed
+        .as_ref()
+        .and_then(|feed| OffsetDateTime::from_unix_timestamp(feed.updated).ok())
+        .map(|time| {
+            let time = time.to_offset(now.offset());
+            let clock = language.clock(time, state.preferences.hour_24, false);
+            language.format("cs2Updated", &[("time", &clock)])
+        });
+    if let Some(updated) = updated {
+        out.text(
+            updated,
+            Rect::new(x, panel.y + panel.h - 44., inner - 340., 20.),
+            text(14.4, 500, 0.),
+            c(0xf5f5f5, 0.6),
+            false,
+        );
+    }
 }
 
 /// A match's start in the TV's time: "21:00" today, "Tomorrow 21:00", else its date.
