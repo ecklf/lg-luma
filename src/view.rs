@@ -1380,14 +1380,16 @@ fn crypto_block(out: &mut Scene, state: &State) {
         CRYPTO_BLOCK_RIGHT - CRYPTO_BLOCK_X,
         height,
     );
-    out.shadow(rect, 24., 4., 1., 0.01);
-    out.draw.push(Draw::RoundedGradient(
-        rect,
-        24.,
-        c(0x20252b, 0.60),
-        c(0x171c22, 0.55),
-    ));
-    out.border(rect, 24., 1., c(0xffffff, 0.063));
+    if state.preferences.crypto_card {
+        out.shadow(rect, 24., 4., 1., 0.01);
+        out.draw.push(Draw::RoundedGradient(
+            rect,
+            24.,
+            c(0x20252b, 0.60),
+            c(0x171c22, 0.55),
+        ));
+        out.border(rect, 24., 1., c(0xffffff, 0.063));
+    }
     let x = rect.x + pad;
     let inner = rect.w - pad * 2.;
     out.text(
@@ -2218,7 +2220,15 @@ fn crypto_settings(out: &mut Scene, state: &State, assets: &Assets) {
             "cryptoRow"
         })),
     );
-    let mut y = 348.8;
+    simple(
+        out,
+        Target::CryptoCard,
+        332.8,
+        language.t("cryptoCardBackground"),
+        None,
+        on_off(state.preferences.crypto_card),
+    );
+    let mut y = 432.8;
     out.text(
         language.t("cryptoCoins"),
         Rect::new(660., y - s, 1080., 24.),

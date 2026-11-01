@@ -719,6 +719,21 @@
     "nl": "Blok naast de begroeting",
     "sv": "Block bredvid hälsningen"
   },
+  "cryptoCardBackground": {
+    "zh-tw": "卡片背景",
+    "en": "Card background",
+    "de": "Kartenhintergrund",
+    "zh": "卡片背景",
+    "es": "Fondo de tarjeta",
+    "pt": "Fundo do cartão",
+    "it": "Sfondo della scheda",
+    "ru": "Фон карточки",
+    "pl": "Tło karty",
+    "fr": "Fond de carte",
+    "vi": "Nền thẻ",
+    "nl": "Kaartachtergrond",
+    "sv": "Kortbakgrund"
+  },
   "cryptoFind": {
     "zh-tw": "搜尋幣種",
     "en": "Find a coin",

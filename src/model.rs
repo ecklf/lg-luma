@@ -244,6 +244,8 @@ pub struct Preferences {
     /// Shows the prices as a block beside the greeting instead of a row below the inputs.
     #[serde(deserialize_with = "crate::crypto::deserialize_flag")]
     pub crypto_beside: bool,
+    /// The block beside the greeting sits on a card; off, straight on the wallpaper.
+    pub crypto_card: bool,
     #[serde(deserialize_with = "crate::weather::deserialize_enabled")]
     pub show_weather: bool,
     #[serde(deserialize_with = "crate::weather::deserialize_location")]
@@ -285,6 +287,7 @@ impl Default for Preferences {
             show_crypto: false,
             crypto_coins: crate::crypto::default_coins(),
             crypto_beside: false,
+            crypto_card: true,
             show_weather: true,
             weather_location: None,
             temperature_unit: Unit::Celsius,

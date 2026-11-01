@@ -845,7 +845,8 @@ every coin Binance trades against USDT (its `ticker/price` list, loaded once on 
 when the search first opens, up to 1 MiB), showing six matches, those starting with the text
 first. Coins found this way are listed after the usual eight while chosen. Choosing a fifth coin
 shows a notice instead. **Show as** puts them in cards below the inputs (the default; OK on one
-opens its settings) or in a block on the header's right 30%, beside the greeting. Coins follow
+opens its settings) or in a block on the header's right 30%, beside the greeting; **Card background** (on by
+default) puts the block on a card, off it sits on the wallpaper. Coins follow
 the Settings order; prices under a cent keep four significant digits. Prices come from Binance's `ticker/24hr` (USDT pairs, `type=MINI`), from
 `api.binance.com` and then `api.binance.us`, with the weather client's limits: rustls, an
 eight-second timeout, no redirects or proxy, and 64 KiB replies. One request is in flight,

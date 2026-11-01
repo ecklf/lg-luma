@@ -199,6 +199,14 @@ fn crypto_can_sit_beside_the_greeting_instead_of_below_the_inputs() {
     state.open(0);
     let rect = heading(&state).expect("the block keeps its heading");
     assert!(rect.x > 1300. && rect.y < 470.);
+    let card = |state: &State| {
+        scene(state).draw.iter().any(
+            |draw| matches!(draw, crate::renderer::Draw::RoundedGradient(r, ..) if r.x == 1311.),
+        )
+    };
+    assert!(card(&state));
+    state.preferences.crypto_card = false;
+    assert!(!card(&state), "off, the block sits on the wallpaper");
     assert!(
         !controls(&state)
             .iter()
