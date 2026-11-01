@@ -1364,15 +1364,35 @@ fn cs2_row(out: &mut Scene, state: &State, assets: &Assets, y: f32, now: OffsetD
         WHITE,
         false,
     );
+    let credit = language.t("cs2Credit");
+    let credit_x = 84. + assets.width(heading, style) + 20.;
+    let credit_style = text(14.4, 400, 0.);
     out.text(
-        language.t("cs2Credit"),
-        Rect::new(84. + assets.width(heading, style) + 20., y + 9.6, 600., 20.),
-        text(14.4, 400, 0.),
+        credit,
+        Rect::new(credit_x, y + 9.6, 600., 20.),
+        credit_style,
         c(0xf5f5f5, 0.5),
         false,
     );
     let preferences = &state.preferences;
     let unix = now.unix_timestamp();
+    // Scores from an old feed say how old they are.
+    if state.cs2.stale(unix)
+        && let Some(updated) = cs2_updated(state, now)
+    {
+        out.text(
+            format!("·  {updated}"),
+            Rect::new(
+                credit_x + assets.width(credit, credit_style) + 10.,
+                y + 9.6,
+                600.,
+                20.,
+            ),
+            text(14.4, 550, 0.),
+            c(0xf2c27a, 0.9),
+            false,
+        );
+    }
     let Some(feed) = state.cs2.current(unix) else {
         out.text(
             language.t(
@@ -2148,17 +2168,7 @@ fn cs2_dialog(out: &mut Scene, state: &State, assets: &Assets, id: &str, now: Of
         false,
     );
     // When the feed was last rebuilt, so a stalled feed shows.
-    let updated = state
-        .cs2
-        .feed
-        .as_ref()
-        .and_then(|feed| OffsetDateTime::from_unix_timestamp(feed.updated).ok())
-        .map(|time| {
-            let time = time.to_offset(now.offset());
-            let clock = language.clock(time, state.preferences.hour_24, false);
-            language.format("cs2Updated", &[("time", &clock)])
-        });
-    if let Some(updated) = updated {
+    if let Some(updated) = cs2_updated(state, now) {
         out.text(
             updated,
             Rect::new(x, panel.y + panel.h - 44., inner - 340., 20.),
@@ -2167,6 +2177,20 @@ fn cs2_dialog(out: &mut Scene, state: &State, assets: &Assets, id: &str, now: Of
             false,
         );
     }
+}
+
+/// "Last updated 21:05" for the feed, in the TV's time; the date too when not today.
+fn cs2_updated(state: &State, now: OffsetDateTime) -> Option<String> {
+    let language = state.preferences.language;
+    let feed = state.cs2.feed.as_ref()?;
+    let time = OffsetDateTime::from_unix_timestamp(feed.updated)
+        .ok()?
+        .to_offset(now.offset());
+    let mut clock = language.clock(time, state.preferences.hour_24, false);
+    if time.date() != now.date() {
+        clock = format!("{:02}.{:02} {clock}", time.day(), time.month() as u8);
+    }
+    Some(language.format("cs2Updated", &[("time", &clock)]))
 }
 
 /// A match's start in the TV's time: "21:00" today, "Tomorrow 21:00", else its date.

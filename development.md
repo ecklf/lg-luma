@@ -897,8 +897,8 @@ The data is the shared feed `cs2/matches.json` of
 minutes on GitHub Actions; the LiquipediaDB key stays in that repository's secrets and never
 reaches a TV. Luma reads the file every minute while Home shows the widget, from the fixed
 `eluz1ve.github.io` origin with the weather client's limits (rustls, eight-second timeout, no
-redirects or proxy, 256 KiB). A feed older than 30 minutes shows "Scores unavailable" rather than
-stale scores. Team and tournament logos and map screenshots come only from
+redirects or proxy, 256 KiB). A feed older than 30 minutes is still shown, with "Last updated"
+and its time beside the heading, so a stalled feed shows old scores rather than none. Team and tournament logos and map screenshots come only from
 `liquipedia.net/commons/images/`, one at a time on their own worker, at most 1 MiB each, decoded
 with app artwork's limits (logos at 256 px, map screenshots at 640 px for the dialog) and kept in
 memory up to 64. `--cs2-test-server` accepts only a literal loopback HTTP origin and is refused in

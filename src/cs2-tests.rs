@@ -93,8 +93,10 @@ fn scores_are_fetched_only_while_home_shows_them() {
         scores.sync(true, true, 1201).0.is_none(),
         "a failure waits for the retry"
     );
-    // A feed older than half an hour no longer passes for current scores.
-    assert!(scores.current(1000 + MAX_AGE + 1).is_none());
+    // A feed older than half an hour is still shown, marked as behind.
+    assert!(scores.current(1000 + MAX_AGE + 1).is_some());
+    assert!(!scores.stale(1000 + MAX_AGE));
+    assert!(scores.stale(1000 + MAX_AGE + 1));
     // Replies to cancelled requests are ignored.
     let (Some(old), _) = scores.sync(true, true, 1200 + RETRY_SECONDS) else {
         panic!();

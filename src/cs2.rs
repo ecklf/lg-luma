@@ -14,7 +14,7 @@ const RETRY_SECONDS: i64 = 60;
 pub const LOGO_ORIGIN: &str = "https://liquipedia.net/commons/images/";
 /// Logos kept in memory; more are forgotten and fetched again if needed.
 const LOGO_CACHE: usize = 64;
-/// A feed older than this no longer passes for current scores.
+/// A feed older than this is shown with when it was last updated, as it may be behind.
 pub const MAX_AGE: i64 = 30 * 60;
 /// Matches the row lists; three cards show at a time and Left/Right scroll through the rest.
 pub const SHOWN: usize = 12;
@@ -460,11 +460,15 @@ impl Scores {
             .insert(url, image.map_or(Logo::Missing, Logo::Ready));
         true
     }
-    /// The feed when it is recent enough to show.
-    pub fn current(&self, now: i64) -> Option<&Feed> {
+    /// The last feed received, however old: old scores beat none while the feed is down.
+    pub fn current(&self, _now: i64) -> Option<&Feed> {
+        self.feed.as_ref()
+    }
+    /// Whether the feed is old enough to say when it was last updated.
+    pub fn stale(&self, now: i64) -> bool {
         self.feed
             .as_ref()
-            .filter(|feed| now - feed.updated <= MAX_AGE)
+            .is_some_and(|feed| now - feed.updated > MAX_AGE)
     }
     /// Starts a fetch when Home shows the widget and the scores are due. Returns the request to
     /// send and whether anything changed.
