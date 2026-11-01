@@ -246,9 +246,16 @@ Press **Back** on Home, or hold **Back** for 0.6 seconds from any page, to open 
 - **Left / Right**, the pointer, or the scroll wheel browses recent apps and inputs.
 - **OK** or a pointer click opens the selected app or input.
 - **Up** closes the selected app and removes its card.
+- **Down** selects **Close all**; press **OK** to close the displayed apps one at a time.
 - **Back** dismisses the switcher and restores the previous page and focus.
 
 These shortcuts work while Luma is focused. From another app, return to Luma first.
+
+With rooted Home integration, the switcher lists running applications and closes them directly
+on its TV worker, without starting Homebrew or JavaScript for each operation. System apps and
+inputs are excluded; a process shared by multiple applications is never terminated directly.
+Automatically preloaded apps appear only after being opened by the user. Closing their card
+does not change the TV's automatic preload settings.
 
 ### Shortcut tiles
 
@@ -322,3 +329,7 @@ See [Releases](development.md#releases) for the workflow and repository setup.
 
 Luma is licensed under MIT.\
 Luma is not affiliated with LG, Apple, or any other brands shown in its UI.
+
+### AirPlay input (local extension)
+
+Built-in LG AirPlay appears under Settings → Widgets → Inputs. Choose Auto, On or Off and optionally rename it. Selecting its Home input card opens the native AirPlay page.
