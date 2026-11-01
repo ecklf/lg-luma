@@ -3364,8 +3364,16 @@ fn weather_details_and_hours_leave_favorites_and_inputs_in_place() {
     let detailed = scene(&state);
     assert_eq!(positions(&plain), positions(&detailed));
     let text = scene_text_of(&detailed);
-    // The short line under the greeting stays as it was.
-    assert!(line.iter().all(|part| text.iter().any(|t| t == part)));
+    // The short line moves up into the header: the temperature and the place, right of the
+    // navigation.
+    let header = |label: &str| {
+        detailed.draw.iter().any(|draw| {
+            matches!(draw, crate::renderer::Draw::Text(t, rect, ..)
+                if t == label && rect.y < 120. && rect.x > 1150.)
+        })
+    };
+    assert!(header("12°C") && header("Vienna"));
+    assert!(!text.iter().any(|t| t == "Partly cloudy"));
     let joined = text.join("\n");
     for expected in [
         "↑15° ↓7°",

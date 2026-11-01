@@ -767,6 +767,76 @@ fn header(
         },
     );
     out.control(Target::TvSettings, rect, false);
+    if state.page == Page::Home && weather_panel_shown(state) {
+        header_weather(out, state, assets, rect.x - 28.);
+    }
+}
+
+/// Home's short weather line in the header, right-aligned before the settings button, while the
+/// details block stands beside the greeting: the condition's icon, the temperature and the place.
+fn header_weather(out: &mut Scene, state: &State, assets: &Assets, right: f32) {
+    let Some(place) = &state.preferences.weather_location else {
+        return;
+    };
+    let language = state.preferences.language;
+    let base = text(21.6, 450, -0.02);
+    let mut parts = Vec::new();
+    let icon = match state.weather.reading(place) {
+        Some(reading) => {
+            parts.push((
+                weather::format_temperature(
+                    reading.temperature,
+                    state.preferences.temperature_unit,
+                ),
+                base.weight(600),
+                c(0xf5f5f5, 0.95),
+            ));
+            format!("weather-{}", weather::condition(reading).icon)
+        }
+        None => {
+            parts.push((
+                language
+                    .t(if state.weather.loading {
+                        "loadingWeather"
+                    } else {
+                        "weatherUnavailable"
+                    })
+                    .to_owned(),
+                base,
+                c(0xf5f5f5, 0.58),
+            ));
+            "location".to_owned()
+        }
+    };
+    parts.push((place.name.clone(), base, c(0xf5f5f5, 0.72)));
+    let gap = 10.;
+    let widths: Vec<f32> = parts
+        .iter()
+        .map(|(label, style, _)| assets.width(label, *style) + 1.)
+        .collect();
+    let icon_size = 26.;
+    let width = icon_size + gap + widths.iter().sum::<f32>() + gap * (parts.len() - 1) as f32;
+    // Clear of the navigation pill in the middle.
+    let mut x = (right - width).max(1180.);
+    let y = 64.3;
+    out.icon(
+        assets,
+        &icon,
+        Rect::new(x, y - 0.5, icon_size, icon_size),
+        c(0xdedede, 0.9),
+    );
+    x += icon_size + gap;
+    for ((label, style, color), width) in parts.into_iter().zip(widths) {
+        let room = (right - x).max(0.);
+        out.text(
+            &label,
+            Rect::new(x, y, width.min(room), 26.),
+            assets.fit_text(&label, style, room),
+            color,
+            false,
+        );
+        x += width + gap;
+    }
 }
 
 fn tile(
@@ -1095,10 +1165,9 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     let language = state.preferences.language;
     let s = state.scroll;
     let panel = weather_panel_shown(state);
-    let summary = state
-        .preferences
-        .show_weather
-        .then(|| weather_summary_layout(state, assets));
+    // With the details block, the short line moves up into the header (`header_weather`).
+    let summary =
+        (state.preferences.show_weather && !panel).then(|| weather_summary_layout(state, assets));
     let shift = summary
         .as_ref()
         .map_or(0., |summary| (summary.height + 18.4) / 2.);
