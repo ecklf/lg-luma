@@ -1710,7 +1710,10 @@ impl State {
             if self.keyboard_field == TextField::Coin {
                 let query = format!("{}{text}", self.crypto.search.query);
                 self.crypto.search.edit(&query);
-            } else if self.keyboard_field == TextField::Location {
+                self.dirty = true;
+                return;
+            }
+            if self.keyboard_field == TextField::Location {
                 let mut query = self.weather.query.clone();
                 query.extend(
                     text.chars()

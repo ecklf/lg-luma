@@ -155,6 +155,10 @@ fn any_binance_coin_is_found_by_search_and_listed_after_the_usual_ones() {
         .accept(Ok(["APE", "BTC", "PEPE"].map(String::from).to_vec()));
     state.text("pe");
     assert_eq!(state.editing_text(), "PE");
+    assert!(
+        state.query.is_empty(),
+        "the coin search leaves the app search alone"
+    );
     state.overlay = None;
     assert!(
         controls(&state)
