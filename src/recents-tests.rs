@@ -318,7 +318,7 @@ fn home_header_has_only_navigation_and_tv_settings() {
 }
 
 #[test]
-fn recents_has_only_cards_without_action_buttons_or_footer() {
+fn recents_has_cards_and_one_close_all_button_without_instruction_footer() {
     use crate::renderer::Draw;
     let mut state = ready();
     state.preferences.reduced_motion = true;
@@ -333,18 +333,117 @@ fn recents_has_only_cards_without_action_buttons_or_footer() {
     );
     assert!(scene.draw.iter().all(|draw| !matches!(draw,
         Draw::Text(value, ..) if value == "1 / 8" || value.contains("Close app") || value.contains("OK  Open"))));
-    assert!(
-        scene.draw.iter().all(|draw| !matches!(draw,
-        Draw::Text(value, ..) if value == "Netflix" || value == "YouTube" || value == "Close all"))
-    );
+    assert!(scene.draw.iter().all(|draw| !matches!(draw,
+        Draw::Text(value, ..) if value == "Netflix" || value == "YouTube")));
     assert!(
         scene
             .controls
             .iter()
-            .all(|control| matches!(control.target, Target::Recent(_)))
+            .all(|control| matches!(control.target, Target::Recent(_) | Target::RecentCloseAll))
     );
     assert!(state.direction(Direction::Down, &scene.controls).is_empty());
-    assert_eq!(state.focus, Target::Recent("netflix".into()));
+    assert_eq!(state.focus, Target::RecentCloseAll);
+}
+
+#[test]
+fn close_all_uses_a_snapshot_and_closes_each_card_before_refreshing() {
+    let mut state = ready();
+    state.open_recents();
+    accept(&mut state, recents::demo().into_iter().take(2).collect());
+    state.direction(Direction::Down, &controls(&state));
+    let effects = state.activate();
+    assert!(
+        matches!(&effects[..], [Effect::Recent { command: Command::Close(id), .. }] if id == "netflix")
+    );
+    assert_eq!(state.recents.close_queue.len(), 1);
+    state.recents.entries.push(recents::Entry {
+        app: crate::model::App::new("late.tv", "Late app"),
+    });
+    // Repeated clicks cannot enqueue another batch while the first close is pending.
+    assert!(state.activate().is_empty());
+    let effects = state.recent_response(2, Command::Close("netflix".into()), Ok(None));
+    assert!(
+        matches!(&effects[..], [Effect::Recent { command: Command::Close(id), .. }] if id == "youtube.leanback.v4")
+    );
+    let effects = state.recent_response(3, Command::Close("youtube.leanback.v4".into()), Ok(None));
+    assert!(matches!(
+        &effects[..],
+        [Effect::Recent {
+            command: Command::List,
+            ..
+        }]
+    ));
+    assert_eq!(state.recents.entries.len(), 1);
+    assert_eq!(state.recents.entries[0].app.id, "late.tv");
+    let remaining = state.recents.entries.clone();
+    accept(&mut state, remaining);
+    assert!(state.recents.error.is_none());
+    assert_eq!(state.focus, Target::Recent("late.tv".into()));
+}
+
+#[test]
+fn close_all_snapshot_excludes_inputs_and_home() {
+    for id in [
+        "com.webos.app.home",
+        "com.ecklf.luma",
+        "com.webos.app.hdmi1",
+        "com.webos.app.livetv",
+        "airplay",
+        "bad;id",
+    ] {
+        assert!(!recents::closable_in_batch(id));
+    }
+    assert!(recents::closable_in_batch("youtube.leanback.v4"));
+}
+
+#[test]
+fn close_all_failure_stops_the_batch_and_dismissal_cancels_further_closes() {
+    let mut state = ready();
+    state.open_recents();
+    accept(&mut state, recents::demo().into_iter().take(3).collect());
+    state.close_all_recents();
+    assert!(
+        state
+            .recent_response(2, Command::Close("netflix".into()), Err("refused".into()))
+            .is_empty()
+    );
+    assert!(state.recents.close_queue.is_empty());
+    assert_eq!(state.recents.entries.len(), 3);
+    state.close_all_recents();
+    let generation = state.recents.generation;
+    state.back();
+    assert!(
+        state
+            .recent_response(generation, Command::Close("netflix".into()), Ok(None))
+            .is_empty()
+    );
+    state.open_recents();
+    assert!(state.recents.close_queue.is_empty());
+}
+
+#[test]
+fn close_all_and_airplay_messages_exist_in_every_menu_language() {
+    use crate::{i18n::Language, renderer::Draw};
+    for language in Language::ALL {
+        let mut state = ready();
+        state.preferences.language = language;
+        state.open_recents();
+        accept(&mut state, recents::demo().into_iter().take(1).collect());
+        let scene = scene(&state);
+        assert!(
+            scene
+                .controls
+                .iter()
+                .any(|c| c.target == Target::RecentCloseAll)
+        );
+        assert!(scene.draw.iter().any(
+            |draw| matches!(draw, Draw::Text(value, ..) if value == language.t("recentCloseAll"))
+        ));
+        for key in ["recentCloseAll", "airplayInputDetail", "airplayInputAuto"] {
+            assert!(!language.t(key).is_empty());
+            assert_ne!(language.t(key), key);
+        }
+    }
 }
 
 #[test]
@@ -403,7 +502,7 @@ fn recents_is_modal_and_restores_the_exact_settings_parent() {
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::Recent("youtube.leanback.v4".into()));
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Recent("youtube.leanback.v4".into()));
+    assert_eq!(state.focus, Target::RecentCloseAll);
     assert!(state.back().is_empty());
     assert_eq!(state.focus, Target::ClockFormat);
     assert_eq!(state.subpage, Some(crate::state::Subpage::Clock));
@@ -520,7 +619,7 @@ fn recents_pointer_focus_never_moves_hit_regions_and_reduced_motion_snaps() {
     assert!(
         controls(&state)
             .iter()
-            .all(|c| matches!(c.target, Target::Recent(_)))
+            .all(|c| matches!(c.target, Target::Recent(_) | Target::RecentCloseAll))
     );
     state.recents.selected = 3;
     state.recents.position = 1.5;
@@ -564,7 +663,7 @@ fn recents_crossfade_reverses_without_jumping_and_restores_parent_input_immediat
         incoming
             .controls
             .iter()
-            .all(|c| matches!(c.target, Target::Recent(_)))
+            .all(|c| matches!(c.target, Target::Recent(_) | Target::RecentCloseAll))
     );
     state.back();
     assert!(!state.recents_open());

@@ -134,6 +134,24 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
         }
     }
 
+    if recent
+        .entries
+        .iter()
+        .any(|e| crate::recents::closable_in_batch(&e.app.id))
+    {
+        let label = language.t("recentCloseAll");
+        let width = assets.width(label, text(21., 550, -0.01)) + 74.;
+        button(
+            out,
+            state,
+            assets,
+            Target::RecentCloseAll,
+            Rect::new(960. - width / 2., 858., width, 60.),
+            "close",
+            label,
+        );
+    }
+
     if recent.error.is_some() {
         if !recent.entries.is_empty() {
             out.text(

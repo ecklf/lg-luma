@@ -8,7 +8,7 @@ use crate::{
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashSet, VecDeque},
     time::Instant,
 };
 
@@ -52,6 +52,14 @@ fn excluded(id: &str) -> bool {
             | "com.luma.launcher"
             | "com.luma.launcher.native"
     )
+}
+
+pub fn closable_in_batch(id: &str) -> bool {
+    valid_app_id(id)
+        && !excluded(id)
+        && !matches!(id, "airplay" | "com.webos.app.livetv")
+        && !id.starts_with("com.webos.app.hdmi")
+        && !crate::scroll_preview::is_placeholder(id)
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -131,6 +139,7 @@ pub struct Recents {
     pub loaded: bool,
     pub generation: u64,
     pub pending: Option<Command>,
+    pub close_queue: VecDeque<String>,
     pub error: Option<String>,
     pub selected: usize,
     pub position: f32,
@@ -149,6 +158,7 @@ impl Default for Recents {
             loaded: false,
             generation: 0,
             pending: None,
+            close_queue: VecDeque::new(),
             error: None,
             selected: 0,
             position: 0.,
@@ -267,6 +277,7 @@ impl State {
         }
         self.recents.updated = Instant::now();
         self.recents.pending = None;
+        self.recents.close_queue.clear();
         // An interrupted mutation is reconciled by the new history read. Return
         // its presentation card while reversing the overlay fade.
         for dismissal in &mut self.recents.dismissals {
@@ -330,6 +341,25 @@ impl State {
         }]
     }
 
+    /// Snapshot only displayed cards. Each close keeps the single-app validation
+    /// and acknowledgement; apps opened after this click are not added to the batch.
+    pub fn close_all_recents(&mut self) -> Vec<Effect> {
+        if !self.recents_open() || self.recents.pending.is_some() {
+            return vec![];
+        }
+        self.recents.close_queue = self
+            .recents
+            .entries
+            .iter()
+            .filter(|entry| closable_in_batch(&entry.app.id))
+            .map(|entry| entry.app.id.clone())
+            .collect();
+        match self.recents.close_queue.pop_front() {
+            Some(id) => self.recent_request(Command::Close(id)),
+            None => vec![],
+        }
+    }
+
     pub fn recent_response(
         &mut self,
         generation: u64,
@@ -346,6 +376,7 @@ impl State {
         self.dirty = true;
         match result {
             Err(error) => {
+                self.recents.close_queue.clear();
                 eprintln!("Luma recent apps: {error}");
                 if let Command::Close(id) = &command {
                     for dismissal in &mut self.recents.dismissals {
@@ -420,6 +451,9 @@ impl State {
                         .get(self.recents.selected)
                         .map(|e| Target::Recent(e.app.id.clone()))
                         .unwrap_or(Target::RecentEmpty);
+                    if let Some(id) = self.recents.close_queue.pop_front() {
+                        return self.recent_request(Command::Close(id));
+                    }
                     return self.recent_request(Command::List);
                 }
             },
@@ -447,11 +481,24 @@ impl State {
             self.recents.selected = next;
             let id = entries[next].app.id.clone();
             self.focus = match direction {
+                Direction::Down if entries.iter().any(|e| closable_in_batch(&e.app.id)) => {
+                    Target::RecentCloseAll
+                }
                 Direction::Down if self.recents.error.is_some() => Target::RecentRetry,
                 _ => Target::Recent(id),
             };
         } else {
             self.focus = match (&self.focus, direction) {
+                (Target::RecentCloseAll, Direction::Up) => entries
+                    .get(self.recents.selected)
+                    .map(|e| Target::Recent(e.app.id.clone()))
+                    .unwrap_or(Target::RecentEmpty),
+                (Target::RecentCloseAll, Direction::Left) if self.recents.error.is_some() => {
+                    Target::RecentRetry
+                }
+                (Target::RecentRetry, Direction::Right) if !entries.is_empty() => {
+                    Target::RecentCloseAll
+                }
                 (Target::RecentRetry, Direction::Up | Direction::Right) => entries
                     .get(self.recents.selected)
                     .map(|e| Target::Recent(e.app.id.clone()))

@@ -210,6 +210,19 @@ impl Platform {
         let (sender, requests) = mpsc::channel();
         let (responses, receiver) = mpsc::channel();
         thread::spawn(move || {
+            #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
+            if webos
+                && unsafe { libc::geteuid() } == 0
+                && let Err(error) = crate::luna::subscribe(
+                    None,
+                    "luna://com.webos.applicationManager/getAppLifeStatus",
+                    &json!({"subscribe":true}),
+                    std::time::Duration::from_secs(5),
+                    |event| luma_tv_helper::running::observe_usage(&event),
+                )
+            {
+                eprintln!("Luma running-app usage subscription: {error}");
+            }
             let mut splash_background = None;
             let mut desktop_inventory = demo_inventory();
             let mut desktop_recents = if webos {
@@ -331,11 +344,10 @@ impl Platform {
                         } else if !valid_app_id(&id) {
                             Err("Invalid application identifier".into())
                         } else {
-                            call(
-                                "luna://com.webos.applicationManager/launch",
-                                json!({"id": id}),
-                            )
-                            .map(|_| ())
+                            {
+                                let (uri, payload) = launch_request(&id);
+                                call(uri, payload).map(|_| ())
+                            }
                         }
                     } else {
                         Ok(())
@@ -719,6 +731,17 @@ fn command_reply(envelope: &Value) -> Result<Value, String> {
 }
 
 fn recent_call(command: &crate::recents::Command) -> Result<Value, String> {
+    #[cfg(all(feature = "webos", unix))]
+    if unsafe { libc::geteuid() } == 0 {
+        let system = luma_tv_helper::system::Tv;
+        match command {
+            crate::recents::Command::List => return luma_tv_helper::running::list(&system),
+            crate::recents::Command::Close(id) => {
+                return luma_tv_helper::running::close(&system, id);
+            }
+            crate::recents::Command::Launch(_) => {}
+        }
+    }
     let (uri, payload) = command.request()?;
     // The native process uses its own authenticated Homebrew connection, as
     // inventory does. Fixed operations only; no app-ID impersonation or retries
@@ -761,8 +784,46 @@ fn inventory() -> Result<(Inventory, Option<String>), String> {
 }
 
 fn input_inventory() -> Result<Vec<Input>, String> {
-    inventory_read("luna://com.webos.service.eim/getAllInputStatus", "devices")
-        .and_then(|raw| normalize_inputs(&raw))
+    let inputs = inventory_read("luna://com.webos.service.eim/getAllInputStatus", "devices")
+        .and_then(|raw| normalize_inputs(&raw))?;
+    let available = std::path::Path::new("/usr/palm/applications/airplay/appinfo.json").is_file();
+    let enabled = available
+        .then(|| {
+            call("luna://airplay.service/getStatus", json!({}))
+                .ok()
+                .and_then(|reply| reply.get("airplayEnabled").and_then(Value::as_bool))
+        })
+        .flatten();
+    Ok(with_airplay_input(inputs, available, enabled))
+}
+
+pub fn with_airplay_input(
+    mut inputs: Vec<Input>,
+    available: bool,
+    enabled: Option<bool>,
+) -> Vec<Input> {
+    inputs.retain(|input| input.id != "airplay");
+    if available {
+        inputs.push(Input {
+            id: "airplay".into(),
+            title: "AirPlay".into(),
+            port: "AirPlay".into(),
+            connected: enabled,
+            signal: None,
+        });
+    }
+    inputs
+}
+
+pub fn launch_request(id: &str) -> (&'static str, Value) {
+    if id == "airplay" {
+        ("luna://airplay.service/showAirplayPage", json!({}))
+    } else {
+        (
+            "luna://com.webos.applicationManager/launch",
+            json!({"id":id}),
+        )
+    }
 }
 
 fn title(value: Option<&str>, fallback: &str) -> String {

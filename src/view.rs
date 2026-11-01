@@ -2286,7 +2286,11 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     ),
                     (
                         language.t("stateAuto"),
-                        Some(language.t("inputWhenConnected")),
+                        Some(language.t(if id == "airplay" {
+                            "airplayInputAuto"
+                        } else {
+                            "inputWhenConnected"
+                        })),
                         current == InputMode::Auto,
                     ),
                 ]
@@ -3024,6 +3028,9 @@ fn shorten(text: &str) -> String {
 
 /// A custom name such as "PS5" can choose the icon; otherwise the TV's label.
 fn input_icon(input: &Input, custom: Option<&str>) -> &'static str {
+    if input.id == "airplay" {
+        return "airplay";
+    }
     custom
         .map(device_icon)
         .filter(|icon| *icon != "hdmi")
@@ -3061,6 +3068,9 @@ fn device_icon(name: &str) -> &'static str {
 /// Detail under an input title: the TV's own label (when connected and not just
 /// the port), the port when a custom name replaces it, then the status.
 pub fn input_status(input: &Input, renamed: bool, language: Language) -> String {
+    if input.id == "airplay" {
+        return language.t("airplayInputDetail").into();
+    }
     let mut parts = vec![];
     if input.connected == Some(true) && input.title != input.port {
         parts.push(input.title.as_str());

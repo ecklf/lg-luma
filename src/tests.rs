@@ -3269,3 +3269,114 @@ fn update_card_shows_progress_restores_retry_and_ignores_presses_while_busy() {
     state.install_response(Response::Finished(Ok(())));
     assert_eq!(state.update_status, Status::Unchecked);
 }
+
+#[test]
+fn airplay_input_is_optional_and_uses_native_receiver_launch() {
+    let original = demo_inventory().inputs;
+    for enabled in [Some(true), Some(false), None] {
+        let test_inputs = crate::platform::with_airplay_input(vec![], true, enabled);
+        assert_eq!(
+            Preferences::default().input_visible(&test_inputs[0]),
+            enabled == Some(true)
+        );
+    }
+    let unchanged = crate::platform::with_airplay_input(original.clone(), false, None);
+    assert_eq!(unchanged, original);
+    let inputs = crate::platform::with_airplay_input(original.clone(), true, Some(true));
+    assert_eq!(&inputs[..original.len()], original.as_slice());
+    assert_eq!(inputs.last().unwrap().id, "airplay");
+    assert_eq!(
+        crate::platform::launch_request("airplay"),
+        ("luna://airplay.service/showAirplayPage", json!({}))
+    );
+    assert_eq!(
+        crate::platform::launch_request("com.webos.app.hdmi2"),
+        (
+            "luna://com.webos.applicationManager/launch",
+            json!({"id":"com.webos.app.hdmi2"})
+        )
+    );
+}
+
+#[test]
+fn airplay_shares_input_visibility_settings_rename_and_home_controls() {
+    let mut state = ready();
+    state.set_inputs(crate::platform::with_airplay_input(
+        state.inventory.inputs.clone(),
+        true,
+        Some(true),
+    ));
+    assert!(
+        controls(&state)
+            .iter()
+            .any(|c| c.target == Target::Input("airplay".into()))
+    );
+    state.open(2);
+    state.focus = Target::Widget(3);
+    state.activate();
+    assert!(
+        controls(&state)
+            .iter()
+            .any(|c| c.target == Target::InputMode("airplay".into()))
+    );
+    state.focus = Target::InputMode("airplay".into());
+    state.activate();
+    assert_eq!(
+        state.subpage,
+        Some(crate::state::Subpage::Input("airplay".into()))
+    );
+    assert!(scene(&state).draw.iter().any(|d| matches!(d, crate::renderer::Draw::Text(t, ..) if t == "Show when AirPlay is enabled on the TV")));
+    for (choice, mode) in [
+        (1, InputMode::Off),
+        (0, InputMode::On),
+        (2, InputMode::Auto),
+    ] {
+        state.focus = Target::InputMode("airplay".into());
+        state.activate();
+        state.focus = Target::Choice(choice);
+        assert_eq!(state.activate(), vec![Effect::Save]);
+        assert_eq!(state.preferences.input_modes["airplay"], mode);
+    }
+    state.focus = Target::InputMode("airplay".into());
+    state.activate();
+    state.focus = Target::InputRename;
+    state.activate();
+    state.text("Apple sans fil");
+    assert_eq!(state.back(), vec![Effect::Save]);
+    assert_eq!(state.preferences.input_names["airplay"], "Apple sans fil");
+    let saved: Preferences =
+        serde_json::from_value(serde_json::to_value(&state.preferences).unwrap()).unwrap();
+    assert_eq!(saved.input_names["airplay"], "Apple sans fil");
+    state.open(0);
+    let input = state
+        .inventory
+        .inputs
+        .iter()
+        .find(|i| i.id == "airplay")
+        .unwrap();
+    assert_eq!(state.preferences.input_title(input), "Apple sans fil");
+    assert_eq!(
+        view::input_status(input, true, crate::i18n::Language::En),
+        "Wireless sharing"
+    );
+    state
+        .preferences
+        .input_modes
+        .insert("airplay".into(), InputMode::Off);
+    assert!(
+        !controls(&state)
+            .iter()
+            .any(|c| c.target == Target::Input("airplay".into()))
+    );
+    state
+        .preferences
+        .input_modes
+        .insert("airplay".into(), InputMode::On);
+    assert!(
+        controls(&state)
+            .iter()
+            .any(|c| c.target == Target::Input("airplay".into()))
+    );
+    state.focus = Target::Input("airplay".into());
+    assert_eq!(state.activate(), vec![Effect::Launch("airplay".into())]);
+}
