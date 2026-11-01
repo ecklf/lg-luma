@@ -11,6 +11,91 @@ use std::{
 };
 const DIR: &str = "/media/developer/apps/usr/palm/applications/com.ecklf.luma";
 const EXE: &str = "/usr/bin/com.webos.app.home";
+
+#[test]
+fn running_close_already_gone_is_success_and_last_list_is_empty() {
+    let f = Fixture::new();
+    assert!(running::close(&f, "youtube.leanback.v4").is_ok());
+    assert_eq!(running::list(&f).unwrap()["recentsAppList"], json!([]));
+    assert!(
+        !f.calls
+            .borrow()
+            .iter()
+            .any(|c| c.contains("closeByAppId") || c.starts_with("kill "))
+    );
+}
+
+#[test]
+fn running_list_ignores_stale_sam_rows_and_zombie_processes() {
+    let f = Fixture::new();
+    f.reply(
+        "running",
+        Ok(json!({"returnValue":true,"running":[
+            {"id":"gone.tv","defaultWindowType":"card","processid":"120"},
+            {"id":"zombie.tv","defaultWindowType":"card","processid":"121"},
+            {"id":"live.tv","defaultWindowType":"card","processid":"122"}
+        ]})),
+    );
+    f.put(
+        "/proc/121/stat",
+        format!("121 (zombie) Z {}", vec!["7"; 19].join(" ")).as_bytes(),
+    );
+    f.put(
+        "/proc/122/stat",
+        format!("122 (live) S {}", vec!["7"; 19].join(" ")).as_bytes(),
+    );
+    assert_eq!(
+        running::list(&f).unwrap()["recentsAppList"],
+        json!([{"appId":"live.tv","title":"live.tv"}])
+    );
+}
+
+#[test]
+fn running_close_rejects_protected_cards_and_shared_process_kills() {
+    for (id, shared, allowed) in [
+        ("example.tv", false, true),
+        ("example.tv", true, true),
+        ("com.webos.app.home", false, false),
+    ] {
+        let f = Fixture::new();
+        let mut rows = vec![json!({"id":id,"defaultWindowType":"card","processid":"123"})];
+        if shared {
+            rows.push(json!({"id":"other.tv","defaultWindowType":"card","processid":"123"}));
+        }
+        f.reply("running", Ok(json!({"returnValue":true,"running":rows})));
+        f.put(
+            "/proc/123/stat",
+            format!("123 (name with spaces) {}", vec!["7"; 20].join(" ")).as_bytes(),
+        );
+        assert_eq!(running::close(&f, id).is_ok(), allowed);
+        assert_eq!(
+            f.calls.borrow().iter().any(|c| c == "kill 123"),
+            allowed && !shared
+        );
+        assert_eq!(
+            f.calls.borrow().iter().any(|c| c.contains("closeByAppId")),
+            allowed
+        );
+    }
+}
+
+#[test]
+fn running_close_never_kills_after_refused_close_or_missing_process() {
+    for refused in [false, true] {
+        let f = Fixture::new();
+        f.reply("running", Ok(json!({"returnValue":true,"running":[{"id":"example.tv","defaultWindowType":"card","processid":"123"}]})));
+        if refused {
+            f.put(
+                "/proc/123/stat",
+                format!("123 (app) {}", vec!["7"; 20].join(" ")).as_bytes(),
+            );
+            f.reply("closeByAppId", Ok(json!({"returnValue":false})));
+        }
+        assert_eq!(running::close(&f, "example.tv").is_err(), refused);
+        assert!(!f.calls.borrow().iter().any(|c| c.starts_with("kill ")));
+    }
+}
+
 struct Fixture {
     root: PathBuf,
     calls: RefCell<Vec<String>>,

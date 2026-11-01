@@ -11,7 +11,7 @@ fn run() -> luma_tv_helper::Result<Value> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.first().is_some_and(|s| s == "--help") {
         println!(
-            "luma-helper: home COMMAND [APP_DIR] [HOME_ID] | read-app-icon JSON | sync-splash JSON | uninstall-app ID | tv-input COMMAND [APP_DIR]"
+            "luma-helper: home COMMAND [APP_DIR] [HOME_ID] | read-app-icon JSON | sync-splash JSON | uninstall-app ID | tv-input COMMAND [APP_DIR] | running-list | running-close ID"
         );
         return Ok(serde_json::json!({"returnValue":true}));
     }
@@ -44,6 +44,8 @@ fn run() -> luma_tv_helper::Result<Value> {
                 request["background"].as_str().ok_or("Missing background")?,
             )
         }
+        "running-list" => luma_tv_helper::running::list(&sys),
+        "running-close" => luma_tv_helper::running::close(&sys, arg(1)?),
         "uninstall-app" => Ok(uninstall::remove(arg(1)?, sys.uid())),
         "home" => home::dispatch(
             &sys,
