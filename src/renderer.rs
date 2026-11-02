@@ -69,6 +69,11 @@ pub enum Draw {
     TintedImage(String, Rect, f32, bool, Color),
     /// Installed icon and its backdrop, composited before opacity and edge fading.
     AppImage(Arc<crate::app_artwork::Artwork>, Rect, f32, Color),
+    /// Decoded artwork contained in its rect, without the app tile's backdrop; the tint's alpha
+    /// fades it (e.g. a logo as a faint watermark).
+    Picture(Arc<crate::app_artwork::Artwork>, Rect, f32, Color),
+    /// Decoded artwork filling its rect, cropped to it (e.g. a background behind text).
+    Cover(Arc<crate::app_artwork::Artwork>, Rect, f32, Color),
     Clip(Option<Rect>),
     EdgeFade(Option<[f32; 4]>),
     /// Horizontal counterpart: [left fade-in start, end, right fade-out start, end].
@@ -293,7 +298,7 @@ fn profile_skip(command: &Draw) -> bool {
             "wallpaper"
         }
         Draw::Image(..) | Draw::TintedImage(..) => "image",
-        Draw::AppImage(..) => "app",
+        Draw::AppImage(..) | Draw::Picture(..) | Draw::Cover(..) => "app",
         Draw::Shape(..) => "shape",
         Draw::RoundedGradient(..) => "gradient",
         Draw::Shadow(..) => "shadow",
@@ -1138,6 +1143,56 @@ impl Renderer {
         );
     }
 
+    fn picture(
+        &mut self,
+        image: &crate::app_artwork::Artwork,
+        rect: Rect,
+        radius: f32,
+        tint: Color,
+        cover: bool,
+    ) {
+        let entry = self.textures.entry(image.key.clone()).or_insert_with(|| {
+            Some(texture(
+                image.pixels.width(),
+                image.pixels.height(),
+                image.pixels.as_raw(),
+            ))
+        });
+        let Some(texture) = entry else {
+            return;
+        };
+        texture.frame = self.frame;
+        let (width, height) = (texture.width as f32, texture.height as f32);
+        let id = texture.id;
+        if cover {
+            // The texture's middle part with the rect's proportions.
+            let scale = (rect.w / width).max(rect.h / height);
+            let (u, v) = (rect.w / (width * scale), rect.h / (height * scale));
+            self.gradient_quad(
+                rect,
+                [0.5 - u / 2., 0.5 - v / 2., 0.5 + u / 2., 0.5 + v / 2.],
+                radius,
+                0.,
+                [tint; 2],
+                id,
+                None,
+            );
+            return;
+        }
+        let scale = (rect.w / width).min(rect.h / height);
+        let w = width * scale;
+        let h = height * scale;
+        self.gradient_quad(
+            Rect::new(rect.x + (rect.w - w) / 2., rect.y + (rect.h - h) / 2., w, h),
+            [0., 0., 1., 1.],
+            radius,
+            0.,
+            [tint; 2],
+            id,
+            None,
+        );
+    }
+
     /// A logical damage rect in drawable pixels ([x, y, width, height], origin bottom-left),
     /// grown to whole pixels.
     pub fn damage_pixels(rect: Rect, width: u32, height: u32) -> [i32; 4] {
@@ -1271,6 +1326,12 @@ impl Renderer {
                 }
                 Draw::AppImage(image, rect, radius, tint) => {
                     self.app_image(image, *rect, *radius, *tint)
+                }
+                Draw::Picture(image, rect, radius, tint) => {
+                    self.picture(image, *rect, *radius, *tint, false)
+                }
+                Draw::Cover(image, rect, radius, tint) => {
+                    self.picture(image, *rect, *radius, *tint, true)
                 }
                 Draw::Clip(clip) => self.clip = *clip,
                 Draw::EdgeFade(fade) => self.set_fade(0, *fade),

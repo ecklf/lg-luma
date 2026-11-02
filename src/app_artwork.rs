@@ -127,7 +127,7 @@ fn icon_path(directory: &Path, value: &str) -> Option<PathBuf> {
         .then_some(path)
 }
 
-fn decode(bytes: &[u8]) -> Option<Artwork> {
+pub(crate) fn decode(bytes: &[u8]) -> Option<Artwork> {
     let mut reader = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
         .ok()?;

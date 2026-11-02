@@ -232,6 +232,15 @@ pub struct Preferences {
     pub show_greeting: bool,
     pub show_date: bool,
     pub date_format: DateFormat,
+    /// Home's CS2 Score row below the inputs, and what it lists.
+    #[serde(deserialize_with = "crate::cs2::deserialize_flag")]
+    pub show_cs2: bool,
+    /// Liquipedia's tier 1 and 2 events only.
+    #[serde(deserialize_with = "crate::cs2::deserialize_enabled")]
+    pub cs2_major_only: bool,
+    /// Finished matches after the live and upcoming ones.
+    #[serde(deserialize_with = "crate::cs2::deserialize_enabled")]
+    pub cs2_results: bool,
     pub input_modes: BTreeMap<String, InputMode>,
     /// Custom names by input app ID; the TV's port and label stay visible as detail.
     pub input_names: BTreeMap<String, String>,
@@ -271,6 +280,9 @@ impl Default for Preferences {
             show_greeting: true,
             show_date: true,
             date_format: DateFormat::default(),
+            show_cs2: false,
+            cs2_major_only: true,
+            cs2_results: true,
             input_modes: BTreeMap::new(),
             input_names: BTreeMap::new(),
             show_weather: true,

@@ -94,6 +94,14 @@ pub enum Target {
     WeatherTemperature,
     WeatherQuery,
     WeatherSearch,
+    /// Widgets › CS2 Score: show it, Tier 1–2 only, recent results.
+    Cs2Toggle,
+    Cs2Major,
+    Cs2Results,
+    /// A match card in Home's CS2 Score row, by position.
+    Cs2Match(usize),
+    /// The close button of a CS2 Score match's dialog.
+    Cs2Close,
     WeatherClear,
     WeatherResult(usize),
     Tile(String),
@@ -133,15 +141,34 @@ pub struct Control {
 
 #[derive(Clone, Debug)]
 pub enum Overlay {
-    Options { id: String, restore: Target },
-    Delete { id: String, restore: Target },
-    Recents { restore: Target },
+    Options {
+        id: String,
+        restore: Target,
+    },
+    Delete {
+        id: String,
+        restore: Target,
+    },
+    Recents {
+        restore: Target,
+    },
     Keyboard,
     SystemKeyboard,
     WallpaperUpload,
     TileEditor,
-    BackgroundOptions { id: String, restore: Target },
-    BackgroundDelete { id: String, restore: Target },
+    BackgroundOptions {
+        id: String,
+        restore: Target,
+    },
+    BackgroundDelete {
+        id: String,
+        restore: Target,
+    },
+    /// A CS2 Score match in detail, by its id, so it stays open across refreshes.
+    Cs2Match {
+        id: String,
+        restore: Target,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -156,6 +183,8 @@ pub enum Subpage {
     Clock,
     ClockFormat,
     TimeFormat,
+    /// Widgets › CS2 Score.
+    Cs2,
     Input(String),
     WeatherLocation,
     Temperature,
@@ -244,6 +273,9 @@ pub struct State {
     pub update: crate::update::InstallStatus,
     pub panel_started: Option<Instant>,
     pub weather: weather::Weather,
+    pub cs2: crate::cs2::Scores,
+    /// The first of the CS2 Score cards in view; Left and Right scroll through the rest.
+    pub cs2_first: usize,
     pub keyboard_field: TextField,
     pub greeting_name_draft: String,
     pub input_name: String,
@@ -287,6 +319,8 @@ impl State {
             update: crate::update::InstallStatus::default(),
             panel_started: None,
             weather: weather::Weather::default(),
+            cs2: crate::cs2::Scores::default(),
+            cs2_first: 0,
             keyboard_field: TextField::Apps,
             greeting_name_draft: String::new(),
             input_name: String::new(),
@@ -827,6 +861,29 @@ impl State {
         self.dirty = true;
     }
 
+    /// How many matches CS2 Score lists.
+    pub fn cs2_count(&self) -> usize {
+        self.cs2.feed.as_ref().map_or(0, |feed| {
+            crate::cs2::shown(
+                feed,
+                self.preferences.cs2_major_only,
+                self.preferences.cs2_results,
+            )
+            .len()
+        })
+    }
+
+    /// Scrolls the CS2 Score row so the card at `index` is in view.
+    pub fn cs2_reveal(&mut self, index: usize) {
+        let visible = crate::cs2::VISIBLE;
+        if index < self.cs2_first {
+            self.cs2_first = index;
+        } else if index >= self.cs2_first + visible {
+            self.cs2_first = index + 1 - visible;
+        }
+        self.cs2_first = self.cs2_first.min(self.cs2_count().saturating_sub(visible));
+    }
+
     pub fn hidden_count(&self) -> usize {
         self.inventory
             .apps
@@ -997,6 +1054,7 @@ impl State {
                 Target::DateFormat
             }
             Some(Subpage::Weather) => Target::Widget(1),
+            Some(Subpage::Cs2) => Target::Widget(6),
             Some(Subpage::Shortcuts) => Target::Widget(2),
             Some(Subpage::Inputs) => Target::Widget(3),
             Some(Subpage::Clock) => Target::Setting(1),
@@ -1092,23 +1150,29 @@ impl State {
                                 .iter()
                                 .find(|control| control.target == self.focus)
                                 .map_or(960., |control| control.rect.center().0);
-                            let top = controls
-                                .iter()
-                                .filter(|control| matches!(control.target, Target::Input(_)))
-                                .map(|control| control.rect.y)
-                                .fold(f32::INFINITY, f32::min);
-                            let next = controls
-                                .iter()
-                                .filter(|control| {
-                                    matches!(control.target, Target::Input(_))
-                                        && (control.rect.y - top).abs() < 1.
-                                })
-                                .min_by(|a, b| {
-                                    (a.rect.center().0 - x)
-                                        .abs()
-                                        .total_cmp(&(b.rect.center().0 - x).abs())
-                                })
-                                .map(|control| control.target.clone());
+                            // The nearest card of the row below: Inputs, else CS2 Score.
+                            let nearest = |in_row: fn(&Target) -> bool| {
+                                let top = controls
+                                    .iter()
+                                    .filter(|control| in_row(&control.target))
+                                    .map(|control| control.rect.y)
+                                    .fold(f32::INFINITY, f32::min);
+                                controls
+                                    .iter()
+                                    .filter(|control| {
+                                        in_row(&control.target) && (control.rect.y - top).abs() < 1.
+                                    })
+                                    .min_by(|a, b| {
+                                        (a.rect.center().0 - x)
+                                            .abs()
+                                            .total_cmp(&(b.rect.center().0 - x).abs())
+                                    })
+                                    .map(|control| control.target.clone())
+                            };
+                            let next = nearest(|target| matches!(target, Target::Input(_)))
+                                .or_else(|| {
+                                    nearest(|target| matches!(target, Target::Cs2Match(_)))
+                                });
                             if let Some(next) = next {
                                 self.focus(next, controls);
                             }
@@ -1242,6 +1306,9 @@ impl State {
                 self.focus,
                 Target::TileEditor
                     | Target::Tile(_)
+                    | Target::Cs2Toggle
+                    | Target::Cs2Major
+                    | Target::Cs2Results
                     | Target::InputMode(_)
                     | Target::WeatherToggle
                     | Target::WeatherLocation
@@ -1283,6 +1350,36 @@ impl State {
             if self.focus == Target::Setting(0) && matches!(direction, Direction::Up) {
                 self.focus(Target::Nav(2), controls);
                 return vec![];
+            }
+            // CS2 Score's cards: Left and Right step through every match, scrolling the row.
+            if let Target::Cs2Match(index) = self.focus
+                && matches!(direction, Direction::Left | Direction::Right)
+            {
+                let count = self.cs2_count();
+                let next = match direction {
+                    Direction::Left => index.checked_sub(1),
+                    _ => (index + 1 < count).then_some(index + 1),
+                };
+                if let Some(next) = next {
+                    self.cs2_reveal(next);
+                    self.focus = Target::Cs2Match(next);
+                    self.dirty = true;
+                }
+                return vec![];
+            }
+            // CS2 Score's switches: Right does nothing and Up from the first reaches the tabs.
+            if matches!(
+                self.focus,
+                Target::Cs2Toggle | Target::Cs2Major | Target::Cs2Results
+            ) {
+                match direction {
+                    Direction::Right => return vec![],
+                    Direction::Up if self.focus == Target::Cs2Toggle => {
+                        self.focus(Target::Nav(2), controls);
+                        return vec![];
+                    }
+                    _ => {}
+                }
             }
             if self.focus == Target::WeatherToggle && matches!(direction, Direction::Up) {
                 self.focus(Target::Nav(2), controls);
@@ -1992,6 +2089,40 @@ impl State {
             Target::Search => {
                 self.open_keyboard(TextField::Apps);
             }
+            Target::Cs2Toggle => {
+                self.preferences.show_cs2 = !self.preferences.show_cs2;
+                return vec![Effect::Save];
+            }
+            Target::Cs2Major => {
+                self.preferences.cs2_major_only = !self.preferences.cs2_major_only;
+                return vec![Effect::Save];
+            }
+            Target::Cs2Results => {
+                self.preferences.cs2_results = !self.preferences.cs2_results;
+                return vec![Effect::Save];
+            }
+            Target::Cs2Match(index) => {
+                let id = self.cs2.feed.as_ref().and_then(|feed| {
+                    crate::cs2::shown(
+                        feed,
+                        self.preferences.cs2_major_only,
+                        self.preferences.cs2_results,
+                    )
+                    .get(index)
+                    .map(|m| m.id.clone())
+                });
+                if let Some(id) = id {
+                    self.overlay = Some(Overlay::Cs2Match {
+                        id,
+                        restore: Target::Cs2Match(index),
+                    });
+                    self.focus = Target::Cs2Close;
+                    if !self.preferences.reduced_motion {
+                        self.panel_started = Some(Instant::now());
+                    }
+                }
+            }
+            Target::Cs2Close => return self.back(),
             Target::WeatherConfigure => {
                 self.open(2);
                 self.section = WIDGETS_SECTION;
@@ -2066,6 +2197,7 @@ impl State {
                 let (subpage, focus) = match index {
                     0 => (Subpage::Greeting, Target::GreetingToggle),
                     1 => (Subpage::Weather, Target::WeatherToggle),
+                    6 => (Subpage::Cs2, Target::Cs2Toggle),
                     2 => (Subpage::Shortcuts, Target::TileEditor),
                     4 => (Subpage::Date, Target::DateToggle),
                     3 => (
@@ -2318,6 +2450,7 @@ impl State {
                     ) => {
                         return vec![];
                     }
+                    Some(Subpage::Cs2) => return vec![],
                     None => return vec![],
                 }
                 self.close_subpage();
@@ -2467,6 +2600,11 @@ impl State {
             if let Overlay::BackgroundDelete { id, restore } = overlay {
                 self.overlay = Some(Overlay::BackgroundOptions { id, restore });
                 self.focus = Target::DeleteBackground;
+                self.pressed = None;
+                return vec![];
+            }
+            if let Overlay::Cs2Match { restore, .. } = overlay {
+                self.focus = restore;
                 self.pressed = None;
                 return vec![];
             }

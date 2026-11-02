@@ -6,6 +6,9 @@ mod app_artwork;
 mod app_subscription;
 mod branding;
 mod companion;
+mod cs2;
+#[path = "cs2-service.rs"]
+mod cs2_service;
 mod damage;
 mod diagnostics;
 mod egl_damage;
@@ -78,6 +81,7 @@ struct Options {
     weather_test_server: Option<String>,
     test_extra_apps: usize,
     test_update_version: Option<String>,
+    cs2_test_server: Option<String>,
 }
 
 impl Options {
@@ -149,6 +153,7 @@ impl Options {
                 "--diagnostics" => result.diagnostics = Some(value.into()),
                 "--weather-test-server" => result.weather_test_server = Some(value),
                 "--test-update-version" => result.test_update_version = Some(value),
+                "--cs2-test-server" => result.cs2_test_server = Some(value),
                 "--test-extra-apps" => {
                     result.test_extra_apps = value
                         .parse::<usize>()
@@ -423,6 +428,7 @@ fn script(
         "await-recents" => vec![],
         "await-upload" => vec![],
         "await-tile-editor" => vec![],
+        "await-cs2" => vec![],
         _ => return Err(format!("Unknown scripted action: {action}")),
     })
 }
@@ -495,6 +501,47 @@ fn weather_tick(state: &mut State, service: &weather_service::Service, visible: 
                     service.send(command);
                 }
             }
+        }
+    }
+}
+
+fn cs2_tick(state: &mut State, service: &cs2_service::Service, visible: bool) {
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+    let (command, changed) = state.cs2.sync(
+        state.preferences.show_cs2,
+        visible && state.page == state::Page::Home,
+        now,
+    );
+    state.dirty |= changed;
+    service.generation(state.cs2.generation());
+    if let Some(command) = command {
+        service.send(command);
+    }
+    while let Ok(response) = service.receiver.try_recv() {
+        state.dirty |= match response {
+            cs2_service::Response::Feed { id, result } => state.cs2.accept(id, result, now),
+            cs2_service::Response::Logo { url, image } => state.cs2.accept_logo(url, image),
+        };
+    }
+    // Logos of the shown cards and of an open match.
+    if state.preferences.show_cs2 && visible {
+        let mut ids: Vec<String> = state.cs2.feed.as_ref().map_or_else(Vec::new, |feed| {
+            cs2::shown(
+                feed,
+                state.preferences.cs2_major_only,
+                state.preferences.cs2_results,
+            )
+            .into_iter()
+            .map(|m| m.id.clone())
+            .collect()
+        });
+        let detail = match &state.overlay {
+            Some(state::Overlay::Cs2Match { id, .. }) => Some(id.clone()),
+            _ => None,
+        };
+        ids.extend(detail.clone());
+        for (url, backdrop) in state.cs2.wanted_images(&ids, detail.as_deref()) {
+            service.image(url, backdrop);
         }
     }
 }
@@ -698,6 +745,12 @@ fn run() -> Result<(), String> {
         weather_service::Client::new(options.weather_test_server.as_deref())?,
         weather_cache,
     );
+    if webos && options.cs2_test_server.is_some() {
+        return Err("CS2 test servers are only available in desktop builds".into());
+    }
+    let cs2_service = cs2_service::Service::new(cs2_service::Client::new(
+        options.cs2_test_server.as_deref(),
+    )?);
     let updates = update::Worker::new(webos && public_update_checks);
     let platform = Platform::new(
         webos,
@@ -1198,6 +1251,7 @@ fn run() -> Result<(), String> {
             };
             state.notify(state.preferences.language.format(key, &[("tile", &title)]));
         }
+        cs2_tick(&mut state, &cs2_service, visible);
         weather_tick(&mut state, &weather_service, visible);
         if std::mem::take(&mut state.update_check_requested) {
             if let Some(version) = &options.test_update_version {
@@ -1614,6 +1668,7 @@ fn run() -> Result<(), String> {
                 (action == "await-search" && state.weather.searching)
                     || (action == "await-weather" && state.weather.fetching())
                     || (action == "await-recents" && state.recents.pending.is_some())
+                    || (action == "await-cs2" && state.cs2.fetching())
                     || (action == "await-upload"
                         && matches!(state.overlay, Some(Overlay::WallpaperUpload))
                         && state.wallpaper_upload.is_none())
@@ -1662,6 +1717,7 @@ fn run() -> Result<(), String> {
         if input_refresh.due(Instant::now(), inputs_active) {
             platform.send(Request::RefreshInputs);
         }
+        cs2_tick(&mut state, &cs2_service, visible);
         weather_tick(&mut state, &weather_service, visible);
         // SDL-webOS disables text input when its own panel is dismissed, even
         // if it did not forward a Back/Return key to the application.
@@ -1894,7 +1950,7 @@ fn run() -> Result<(), String> {
         let state = serde_json::json!({ "page": state.page, "focus": state.focus, "query": state.query,
             "filter": state.filter, "preferences": state.preferences, "apps": state.apps().iter().map(|a| &a.id).collect::<Vec<_>>(),
             "update_status": state.update_status, "available_update": state.available_update,
-            "error": state.error, "scroll": state.scroll, "home_scroll": state.home_scroll, "subpage": state.subpage, "modal": state.overlay.is_some(), "weather": state.weather,
+            "error": state.error, "scroll": state.scroll, "home_scroll": state.home_scroll, "subpage": state.subpage, "modal": state.overlay.is_some(), "weather": state.weather, "cs2": state.cs2,
             "inventory": state.inventory.apps,
             "recents": state.recents.entries, "recents_pending": state.recents.pending, "recents_error": state.recents.error, "recents_visibility": state.recents.visibility,
             "ui_text": scene.draw.iter().filter_map(|draw| match draw { renderer::Draw::Text(value, ..) => Some(value), _ => None }).collect::<Vec<_>>() });

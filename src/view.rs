@@ -256,7 +256,9 @@ impl Scene {
                 | Draw::Shadow(_, _, _, color)
                 | Draw::Text(_, _, _, color, _)
                 | Draw::TintedImage(_, _, _, _, color)
-                | Draw::AppImage(_, _, _, color) => apply(color),
+                | Draw::AppImage(_, _, _, color)
+                | Draw::Picture(_, _, _, color)
+                | Draw::Cover(_, _, _, color) => apply(color),
                 Draw::RoundedGradient(_, _, a, b) => {
                     apply(a);
                     apply(b);
@@ -601,7 +603,8 @@ pub fn scene_with_pill(
         | Overlay::BackgroundDelete { .. }
         | Overlay::Keyboard
         | Overlay::WallpaperUpload
-        | Overlay::TileEditor),
+        | Overlay::TileEditor
+        | Overlay::Cs2Match { .. }),
     ) = &state.overlay
     {
         let anchor = match overlay {
@@ -652,6 +655,7 @@ pub fn scene_with_pill(
             Overlay::Keyboard => keyboard(&mut out, state, assets),
             Overlay::WallpaperUpload => wallpaper_upload(&mut out, state, assets),
             Overlay::TileEditor => tile_editor(&mut out, state, assets),
+            Overlay::Cs2Match { id, .. } => cs2_dialog(&mut out, state, assets, id, now),
             Overlay::SystemKeyboard | Overlay::Recents { .. } => {}
         }
         if !matches!(
@@ -1334,6 +1338,889 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         }
         out.control(Target::Input(input.id.clone()), rect, true);
     }
+    if state.preferences.show_cs2 {
+        let rows = inputs.len().div_ceil(3) as f32;
+        let y = if inputs.is_empty() {
+            input_y
+        } else {
+            input_y + 58.4 + (rows - 1.) * 126.4 + 104. + 41.6
+        };
+        cs2_row(out, state, assets, y, now);
+    }
+}
+
+const CS2_CARD_HEIGHT: f32 = 150.;
+
+/// Home's CS2 Score: a heading crediting Liquipedia, then up to three match cards in the inputs'
+/// style, live ones first.
+fn cs2_row(out: &mut Scene, state: &State, assets: &Assets, y: f32, now: OffsetDateTime) {
+    let language = state.preferences.language;
+    let heading = language.t("cs2Score");
+    let style = text(23.2, 550, -0.035).leading(1.3);
+    out.text(
+        heading,
+        Rect::new(84., y + 3.3, 1000., 31.),
+        style,
+        WHITE,
+        false,
+    );
+    let credit = language.t("cs2Credit");
+    let credit_x = 84. + assets.width(heading, style) + 20.;
+    let credit_style = text(14.4, 400, 0.);
+    out.text(
+        credit,
+        Rect::new(credit_x, y + 9.6, 600., 20.),
+        credit_style,
+        c(0xf5f5f5, 0.5),
+        false,
+    );
+    let preferences = &state.preferences;
+    let unix = now.unix_timestamp();
+    // Scores from an old feed say how old they are.
+    if state.cs2.stale(unix)
+        && let Some(updated) = cs2_updated(state, now)
+    {
+        out.text(
+            format!("·  {updated}"),
+            Rect::new(
+                credit_x + assets.width(credit, credit_style) + 10.,
+                y + 9.6,
+                600.,
+                20.,
+            ),
+            text(14.4, 550, 0.),
+            c(0xf2c27a, 0.9),
+            false,
+        );
+    }
+    let Some(feed) = state.cs2.current(unix) else {
+        out.text(
+            language.t(
+                if state.cs2.loading || (state.cs2.feed.is_none() && !state.cs2.failed) {
+                    "cs2Loading"
+                } else {
+                    "cs2Unavailable"
+                },
+            ),
+            Rect::new(84., y + 58.4, 1200., 25.),
+            text(18.4, 400, 0.),
+            c(0xf5f5f5, 0.6),
+            false,
+        );
+        return;
+    };
+    let matches = crate::cs2::shown(feed, preferences.cs2_major_only, preferences.cs2_results);
+    if matches.is_empty() {
+        out.text(
+            language.t(if preferences.cs2_major_only {
+                "cs2NoMajor"
+            } else {
+                "cs2None"
+            }),
+            Rect::new(84., y + 58.4, 1200., 25.),
+            text(18.4, 400, 0.),
+            c(0xf5f5f5, 0.6),
+            false,
+        );
+        return;
+    }
+    // Three cards at a time from `cs2_first`; Left and Right scroll the rest into view.
+    let visible = crate::cs2::VISIBLE;
+    let first = state.cs2_first.min(matches.len().saturating_sub(visible));
+    if matches.len() > visible {
+        let last = (first + visible).min(matches.len());
+        out.text(
+            format!("{}–{} / {}", first + 1, last, matches.len()),
+            Rect::new(1436., y + 9.6, 400., 20.),
+            text(15.2, 500, 0.02).right(),
+            c(0xf5f5f5, 0.6),
+            false,
+        );
+    }
+    for (index, item) in matches.into_iter().enumerate().skip(first).take(visible) {
+        let rect = Rect::new(
+            84. + (index - first) as f32 * 591.45,
+            y + 58.4,
+            569.1,
+            CS2_CARD_HEIGHT,
+        );
+        cs2_card(out, state, assets, item, rect, index, now);
+    }
+}
+
+fn cs2_card(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    item: &crate::cs2::Match,
+    rect: Rect,
+    index: usize,
+    now: OffsetDateTime,
+) {
+    use crate::cs2::State as Phase;
+    let language = state.preferences.language;
+    let focused = state.focus == Target::Cs2Match(index) && !state.pointer;
+    let live = item.state == Phase::Live;
+    out.shadow(
+        rect,
+        18.4,
+        if focused { 34. } else { 4. },
+        if focused { 14. } else { 1. },
+        if focused { 0.4 } else { 0.01 },
+    );
+    // A deep card, so scores stand out against any wallpaper, with the tournament's logo as a
+    // faint watermark at its right.
+    out.draw.push(Draw::RoundedGradient(
+        rect,
+        18.4,
+        if focused {
+            c(0x262c33, 0.95)
+        } else {
+            c(0x171b20, 0.90)
+        },
+        if focused {
+            c(0x1a1f25, 0.96)
+        } else {
+            c(0x0e1115, 0.92)
+        },
+    ));
+    if let Some(icon) = item.icon.as_ref().and_then(|url| state.cs2.image(url)) {
+        out.draw.push(Draw::Picture(
+            icon,
+            Rect::new(rect.x + rect.w - 170., rect.y + 12., 150., rect.h - 24.),
+            0.,
+            [1., 1., 1., if focused { 0.16 } else { 0.11 }],
+        ));
+    }
+    out.border(
+        rect,
+        18.4,
+        1.,
+        if live {
+            c(0xff5a52, 0.38)
+        } else {
+            c(0xffffff, if focused { 0.24 } else { 0.08 })
+        },
+    );
+    // Top line: LIVE, the start or "Final", then the tournament.
+    let x = rect.x + 22.;
+    let mut caption_x = x;
+    let top = rect.y + 18.;
+    if live {
+        let label = language.t("cs2Live");
+        let style = text(13.6, 650, 0.06);
+        let width = assets.width(label, style) + 18.;
+        let badge = Rect::new(x, top, width, 24.);
+        out.shape(badge, 7., c(0xe5484d, 0.95));
+        out.text(
+            label,
+            Rect::new(x, top + 4.4, width, 17.),
+            style,
+            WHITE,
+            true,
+        );
+        caption_x += width + 12.;
+    } else {
+        let label = if item.state == Phase::Finished {
+            language.t("cs2Final").to_owned()
+        } else {
+            cs2_start(state, item.begins, now)
+        };
+        let style = text(16., 600, 0.);
+        out.text(
+            &label,
+            Rect::new(x, top + 2., 260., 21.),
+            style,
+            WHITE,
+            false,
+        );
+        caption_x += assets.width(&label, style) + 12.;
+    }
+    let caption = text(15.2, 400, 0.);
+    let room = rect.x + rect.w - 22. - caption_x;
+    out.text(
+        &item.tournament,
+        Rect::new(caption_x, top + 3., room, 20.),
+        assets.fit_text(&item.tournament, caption, room),
+        c(0xf5f5f5, 0.55),
+        false,
+    );
+    // The two sides with the maps they won.
+    let scored = item.state != Phase::Upcoming && item.score.is_some();
+    for side in 0..2 {
+        let line = rect.y + 50. + side as f32 * 32.;
+        let name = item.teams[side]
+            .as_ref()
+            .map_or("TBD", |team| team.name.as_str());
+        let lead = item
+            .score
+            .is_none_or(|score| score[side] >= score[1 - side]);
+        cs2_logo(
+            out,
+            state,
+            item.teams[side].as_ref(),
+            Rect::new(x, line, 28., 28.),
+        );
+        out.text(
+            name,
+            Rect::new(x + 40., line, rect.w - 160., 28.),
+            assets.fit_text(name, text(20.8, 550, -0.02), rect.w - 160.),
+            if item.teams[side].is_some() {
+                WHITE
+            } else {
+                c(0xf5f5f5, 0.55)
+            },
+            false,
+        );
+        if scored && let Some(score) = item.score {
+            out.text(
+                score[side].to_string(),
+                Rect::new(rect.x + rect.w - 82., line - 2., 60., 30.),
+                text(24., 650, -0.02).right(),
+                c(0xffffff, if lead { 1. } else { 0.42 }),
+                false,
+            );
+        }
+    }
+    // Bottom line: the map being played, else the format and stage.
+    let bottom = match item.current_map().filter(|_| live) {
+        Some((number, map)) => {
+            let mut parts = vec![
+                language.format("cs2Map", &[("number", &number.to_string())]),
+                map.name.clone(),
+            ];
+            if let Some([a, b]) = map.score {
+                parts.push(format!("{a}:{b}"));
+            }
+            parts.join(" · ")
+        }
+        None => [
+            item.best_of.map(|n| format!("BO{n}")).unwrap_or_default(),
+            cs2_round(language, item).unwrap_or_else(|| item.stage.clone()),
+        ]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" · "),
+    };
+    out.text(
+        bottom,
+        Rect::new(x, rect.y + rect.h - 34., rect.w - 44., 20.),
+        text(15.2, 500, 0.),
+        if live {
+            c(0xffb4ae, 0.9)
+        } else {
+            c(0xf5f5f5, 0.55)
+        },
+        false,
+    );
+    if focused {
+        out.ring(rect, 18.4);
+    }
+    out.control(Target::Cs2Match(index), rect, true);
+}
+
+/// A match's round in the TV's language: "Upper bracket · Semifinals", "Grand final"…
+fn cs2_round(language: Language, item: &crate::cs2::Match) -> Option<String> {
+    use crate::cs2::{Bracket, Round};
+    let (round, bracket) = item.round.as_ref()?;
+    let name = match round {
+        Round::GrandFinal => language.t("cs2RoundGrandFinal").to_owned(),
+        Round::Final => language.t("cs2RoundFinal").to_owned(),
+        Round::Semifinals => language.t("cs2RoundSemifinals").to_owned(),
+        Round::Quarterfinals => language.t("cs2RoundQuarterfinals").to_owned(),
+        Round::Top(number) => language.format("cs2RoundOf", &[("number", &number.to_string())]),
+        Round::ThirdPlace => language.t("cs2RoundThirdPlace").to_owned(),
+        Round::Named(name) => name.clone(),
+    };
+    Some(match bracket {
+        Some(Bracket::Upper) => format!("{} · {name}", language.t("cs2UpperBracket")),
+        Some(Bracket::Lower) => format!("{} · {name}", language.t("cs2LowerBracket")),
+        None => name,
+    })
+}
+
+/// A team's logo, or its initials on a tile while there is none.
+fn cs2_logo(out: &mut Scene, state: &State, team: Option<&crate::cs2::Team>, rect: Rect) {
+    let radius = rect.w * 0.24;
+    if let Some(image) = team.and_then(|team| state.cs2.logo(team)) {
+        out.draw.push(Draw::AppImage(image, rect, radius, [1.; 4]));
+        return;
+    }
+    out.shape(rect, radius, c(0xffffff, 0.09));
+    let initials: String = team
+        .map_or("?", |team| team.short.as_str())
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .take(2)
+        .collect::<String>()
+        .to_uppercase();
+    let size = rect.h * 0.38;
+    out.text(
+        initials,
+        Rect::new(
+            rect.x,
+            rect.y + (rect.h - size * 1.2) / 2.,
+            rect.w,
+            size * 1.2,
+        ),
+        text(size, 650, 0.02),
+        c(0xf5f5f5, 0.8),
+        true,
+    );
+}
+
+/// A CS2 Score match in detail: the series, its maps and both lineups, live while it is open.
+fn cs2_dialog(out: &mut Scene, state: &State, assets: &Assets, id: &str, now: OffsetDateTime) {
+    use crate::cs2::State as Phase;
+    let language = state.preferences.language;
+    let panel = Rect::new(296., 60., 1328., 960.);
+    out.modal = Some(panel);
+    out.shadow(panel, 28., 100., 24., 0.47);
+    out.draw.push(Draw::RoundedGradient(
+        panel,
+        28.,
+        c(0x34383b, 0.98),
+        c(0x24282d, 0.99),
+    ));
+    out.border(panel, 28., 1., c(0xffffff, 0.12));
+    let close = Rect::new(panel.x + panel.w - 92., panel.y + 36., 56., 56.);
+    let close_focused = state.focus == Target::Cs2Close && !state.pointer;
+    out.shape(
+        close,
+        28.,
+        c(0xffffff, if close_focused { 0.96 } else { 0.08 }),
+    );
+    out.icon(
+        assets,
+        "close",
+        close.inset(17.),
+        if close_focused {
+            c(0x2c2c2c, 1.)
+        } else {
+            c(0xeeeeee, 0.85)
+        },
+    );
+    out.control(Target::Cs2Close, close, true);
+    let Some(item) = state.cs2.find(id) else {
+        out.text(
+            language.t("cs2Unavailable"),
+            Rect::new(panel.x + 48., panel.y + 48., 900., 30.),
+            text(22.4, 550, 0.),
+            c(0xf5f5f5, 0.7),
+            false,
+        );
+        return;
+    };
+    let x = panel.x + 48.;
+    let inner = panel.w - 96.;
+    let live = item.state == Phase::Live;
+
+    // Header: the tournament with its logo, the stage and chips.
+    let icon = item.icon.as_ref().and_then(|url| state.cs2.image(url));
+    let title_x = if let Some(icon) = icon {
+        out.draw.push(Draw::Picture(
+            icon,
+            Rect::new(x, panel.y + 40., 60., 60.),
+            0.,
+            [1.; 4],
+        ));
+        x + 78.
+    } else {
+        x
+    };
+    out.text(
+        &item.tournament,
+        Rect::new(title_x, panel.y + 40., inner - 120. - (title_x - x), 36.),
+        assets.fit_text(
+            &item.tournament,
+            text(28., 650, -0.02),
+            inner - 120. - (title_x - x),
+        ),
+        WHITE,
+        false,
+    );
+    let round = cs2_round(language, item);
+    let subtitle = ["Counter-Strike 2", item.stage.as_str()]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" · ");
+    out.text(
+        subtitle,
+        Rect::new(title_x, panel.y + 82., inner - 120. - (title_x - x), 24.),
+        text(17.6, 400, 0.),
+        c(0xf5f5f5, 0.6),
+        false,
+    );
+    let mut chip_x = x;
+    // The tier chip is gold for the biggest events.
+    // Deciding matches stand out: the final, the grand final and the match for third place.
+    let deciding = matches!(
+        item.round,
+        Some((
+            crate::cs2::Round::Final
+                | crate::cs2::Round::GrandFinal
+                | crate::cs2::Round::ThirdPlace,
+            _
+        ))
+    );
+    for (chip, gold) in [
+        round.clone().map(|round| (round, deciding)),
+        item.best_of.map(|n| (format!("BO{n}"), false)),
+        item.tier.map(|tier| {
+            (
+                language.format("cs2Tier", &[("number", &tier.to_string())]),
+                item.major(),
+            )
+        }),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let style = text(15.2, 600, 0.02);
+        let width = assets.width(&chip, style) + 28.;
+        let rect = Rect::new(chip_x, panel.y + 118., width, 30.);
+        out.shape(
+            rect,
+            15.,
+            if gold {
+                c(0xe8c26a, 0.22)
+            } else {
+                c(0xffffff, 0.08)
+            },
+        );
+        out.text(
+            chip,
+            Rect::new(rect.x, rect.y + 6., width, 20.),
+            style,
+            WHITE,
+            true,
+        );
+        chip_x += width + 10.;
+    }
+
+    // Hero: both teams around the score.
+    let hero = Rect::new(x, panel.y + 168., inner, 226.);
+    // The map being played (or the last one) behind the teams, darkened for the text.
+    match item
+        .featured_map()
+        .and_then(|map| map.image.as_ref())
+        .and_then(|url| state.cs2.image(url))
+    {
+        Some(image) => {
+            out.draw.push(Draw::Cover(image, hero, 22., [1.; 4]));
+            out.draw.push(Draw::RoundedGradient(
+                hero,
+                22.,
+                c(0x0b0e12, 0.62),
+                c(0x0b0e12, 0.84),
+            ));
+        }
+        None => out.shape(hero, 22., c(0xffffff, 0.04)),
+    }
+    if live {
+        out.shape(hero, 22., c(0xe5484d, 0.12));
+    }
+    out.border(
+        hero,
+        22.,
+        1.,
+        if live {
+            c(0xff5a52, 0.32)
+        } else {
+            c(0xffffff, 0.06)
+        },
+    );
+    for side in 0..2 {
+        let center = if side == 0 {
+            hero.x + 230.
+        } else {
+            hero.x + hero.w - 230.
+        };
+        let team = item.teams[side].as_ref();
+        cs2_logo(
+            out,
+            state,
+            team,
+            Rect::new(center - 56., hero.y + 26., 112., 112.),
+        );
+        let name = team.map_or("TBD", |team| team.name.as_str());
+        out.text(
+            name,
+            Rect::new(center - 200., hero.y + 152., 400., 32.),
+            assets.fit_text(name, text(24., 650, -0.02), 400.),
+            WHITE,
+            true,
+        );
+    }
+    let middle = hero.x + hero.w / 2.;
+    match item.score.filter(|_| item.state != Phase::Upcoming) {
+        Some(score) => {
+            let style = text(72., 650, -0.02);
+            for side in 0..2 {
+                let lead = score[side] >= score[1 - side];
+                let offset = if side == 0 { -150. } else { 30. };
+                out.text(
+                    score[side].to_string(),
+                    Rect::new(middle + offset, hero.y + 36., 120., 86.),
+                    if side == 0 { style.right() } else { style },
+                    c(0xffffff, if lead { 1. } else { 0.42 }),
+                    false,
+                );
+            }
+            out.text(
+                ":",
+                Rect::new(middle - 30., hero.y + 32., 60., 86.),
+                text(64., 650, 0.),
+                c(0xffffff, 0.5),
+                true,
+            );
+        }
+        None => out.text(
+            "VS",
+            Rect::new(middle - 100., hero.y + 58., 200., 60.),
+            text(44., 650, 0.04),
+            c(0xffffff, 0.45),
+            true,
+        ),
+    }
+    let line = if live {
+        let label = language.t("cs2Live");
+        let style = text(13.6, 650, 0.06);
+        let width = assets.width(label, style) + 18.;
+        let badge = Rect::new(middle - width / 2., hero.y + 132., width, 24.);
+        out.shape(badge, 7., c(0xe5484d, 0.95));
+        out.text(
+            label,
+            Rect::new(badge.x, badge.y + 4.4, width, 17.),
+            style,
+            WHITE,
+            true,
+        );
+        item.current_map().map(|(number, map)| {
+            let mut parts = vec![
+                language.format("cs2Map", &[("number", &number.to_string())]),
+                map.name.clone(),
+            ];
+            if let Some([a, b]) = map.score {
+                parts.push(format!("{a}:{b}"));
+            }
+            parts.join(" · ")
+        })
+    } else if item.state == Phase::Finished {
+        Some(language.t("cs2Final").to_owned())
+    } else {
+        Some(cs2_start(state, item.begins, now))
+    };
+    if let Some(line) = line {
+        out.text(
+            line,
+            Rect::new(
+                middle - 240.,
+                hero.y + if live { 164. } else { 140. },
+                480.,
+                28.,
+            ),
+            text(if live { 21. } else { 22.4 }, 650, 0.),
+            if live { c(0xffe1de, 1.) } else { WHITE },
+            true,
+        );
+    }
+    // Liquipedia's editors add a live map's rounds as they go; until then, say so.
+    if live
+        && item
+            .current_map()
+            .is_some_and(|(_, map)| map.score.is_none())
+    {
+        out.text(
+            language.t("cs2NoRounds"),
+            Rect::new(middle - 240., hero.y + 196., 480., 20.),
+            text(14.4, 500, 0.02),
+            c(0xffffff, 0.6),
+            true,
+        );
+    }
+
+    // Maps: one tile per map of the series.
+    let maps_y = hero.y + hero.h + 30.;
+    out.text(
+        language.t("cs2Maps").to_uppercase(),
+        Rect::new(x, maps_y, 400., 20.),
+        text(14.4, 650, 0.12),
+        c(0xf5f5f5, 0.55),
+        false,
+    );
+    let slots = item
+        .best_of
+        .unwrap_or(1)
+        .max(item.maps.len() as u32)
+        .clamp(1, 7) as usize;
+    let gap = 14.;
+    let tile_w = (inner - gap * (slots - 1) as f32) / slots as f32;
+    let playing = item
+        .current_map()
+        .filter(|_| live)
+        .map(|(number, _)| number);
+    for slot in 0..slots {
+        let tile = Rect::new(x + slot as f32 * (tile_w + gap), maps_y + 30., tile_w, 112.);
+        let map = item.maps.get(slot);
+        let is_live = playing == Some(slot + 1);
+        let picture = map
+            .and_then(|map| map.image.as_ref())
+            .and_then(|url| state.cs2.image(url));
+        match picture {
+            Some(picture) => {
+                out.draw.push(Draw::Cover(picture, tile, 18., [1.; 4]));
+                out.draw.push(Draw::RoundedGradient(
+                    tile,
+                    18.,
+                    c(0x0b0e12, 0.55),
+                    c(0x0b0e12, 0.82),
+                ));
+            }
+            None => out.shape(
+                tile,
+                18.,
+                c(
+                    0xffffff,
+                    if map.is_some_and(|map| map.winner.is_some()) {
+                        0.07
+                    } else {
+                        0.03
+                    },
+                ),
+            ),
+        }
+        if is_live {
+            out.shape(tile, 18., c(0xe5484d, 0.18));
+        }
+        out.border(
+            tile,
+            18.,
+            1.,
+            if is_live {
+                c(0xff5a52, 0.5)
+            } else {
+                c(0xffffff, 0.07)
+            },
+        );
+        out.text(
+            format!("{:02}", slot + 1),
+            Rect::new(tile.x + tile.w - 70., tile.y + 12., 56., 40.),
+            text(34., 650, 0.).right(),
+            c(0xffffff, 0.07),
+            false,
+        );
+        let title = map.map_or_else(
+            || language.format("cs2Map", &[("number", &(slot + 1).to_string())]),
+            |map| map.name.clone(),
+        );
+        out.text(
+            &title,
+            Rect::new(tile.x + 18., tile.y + 16., tile.w - 90., 28.),
+            assets.fit_text(&title, text(21., 650, -0.01), tile.w - 90.),
+            c(0xffffff, if map.is_some() { 1. } else { 0.45 }),
+            false,
+        );
+        let bottom = tile.y + tile.h - 40.;
+        if let Some([a, b]) = map.and_then(|map| map.score) {
+            out.text(
+                format!("{a}:{b}"),
+                Rect::new(tile.x + tile.w - 118., bottom, 100., 26.),
+                text(21., 650, 0.).right(),
+                WHITE,
+                false,
+            );
+        }
+        if is_live {
+            out.text(
+                language.t("cs2Live"),
+                Rect::new(tile.x + 18., bottom + 3., 120., 20.),
+                text(15.2, 650, 0.06),
+                c(0xff7b72, 1.),
+                false,
+            );
+        } else if let Some(winner) = map
+            .and_then(|map| map.winner)
+            .and_then(|side| item.teams[side].as_ref())
+        {
+            cs2_logo(
+                out,
+                state,
+                Some(winner),
+                Rect::new(tile.x + 18., bottom, 26., 26.),
+            );
+            out.text(
+                &winner.short,
+                Rect::new(tile.x + 52., bottom + 2., tile.w - 180., 24.),
+                text(17.6, 600, 0.),
+                WHITE,
+                false,
+            );
+        }
+    }
+
+    // Lineups.
+    let lists_y = maps_y + 30. + 112. + 26.;
+    let column_w = (inner - 24.) / 2.;
+    for side in 0..2 {
+        let column = Rect::new(x + side as f32 * (column_w + 24.), lists_y, column_w, 290.);
+        out.shape(column, 20., c(0xffffff, 0.04));
+        let team = item.teams[side].as_ref();
+        cs2_logo(
+            out,
+            state,
+            team,
+            Rect::new(column.x + 18., column.y + 16., 26., 26.),
+        );
+        out.text(
+            language.format(
+                "cs2Lineup",
+                &[("team", team.map_or("TBD", |team| team.short.as_str()))],
+            ),
+            Rect::new(column.x + 54., column.y + 18., column.w - 72., 24.),
+            text(17.6, 600, 0.),
+            WHITE,
+            false,
+        );
+        let players = &item.lineups[side];
+        if players.is_empty() {
+            out.text(
+                language.t("cs2NoLineup"),
+                Rect::new(column.x + 18., column.y + 64., column.w - 36., 24.),
+                text(17.6, 400, 0.),
+                c(0xf5f5f5, 0.5),
+                false,
+            );
+        }
+        let coaches = team.map_or(&[][..], |team| {
+            state
+                .cs2
+                .feed
+                .as_ref()
+                .map_or(&[][..], |feed| feed.coaches(team))
+        });
+        if !coaches.is_empty() {
+            let line = column.y + column.h - 40.;
+            out.shape(
+                Rect::new(column.x + 18., line - 10., column.w - 36., 1.),
+                0.,
+                c(0xffffff, 0.1),
+            );
+            let label = language.t("cs2Coach").to_uppercase();
+            let style = text(13.6, 650, 0.1);
+            out.text(
+                &label,
+                Rect::new(column.x + 18., line + 3., 160., 20.),
+                style,
+                c(0xf5f5f5, 0.5),
+                false,
+            );
+            let names = coaches
+                .iter()
+                .map(|coach| coach.name.as_str())
+                .collect::<Vec<_>>()
+                .join(" · ");
+            out.text(
+                names,
+                Rect::new(
+                    column.x + 30. + assets.width(&label, style),
+                    line,
+                    column.w - 60.,
+                    24.,
+                ),
+                text(17.6, 600, 0.),
+                WHITE,
+                false,
+            );
+        }
+        for (row, player) in players.iter().take(6).enumerate() {
+            let y = column.y + 58. + row as f32 * 32.;
+            out.text(
+                &player.name,
+                Rect::new(column.x + 18., y, column.w * 0.6, 26.),
+                text(19.2, 600, -0.01),
+                WHITE,
+                false,
+            );
+            out.text(
+                player.flag.to_uppercase(),
+                Rect::new(
+                    column.x + column.w * 0.55,
+                    y + 3.,
+                    column.w * 0.45 - 18.,
+                    22.,
+                ),
+                text(13.6, 600, 0.08).right(),
+                c(0xf5f5f5, 0.5),
+                false,
+            );
+        }
+    }
+
+    // Footer: where the data comes from.
+    out.text(
+        format!("{} · CC BY-SA 3.0", language.t("cs2Credit")),
+        Rect::new(x, panel.y + panel.h - 44., inner, 20.),
+        text(14.4, 500, 0.).right(),
+        c(0xf5f5f5, 0.5),
+        false,
+    );
+    // When the feed was last rebuilt, so a stalled feed shows.
+    if let Some(updated) = cs2_updated(state, now) {
+        out.text(
+            updated,
+            Rect::new(x, panel.y + panel.h - 44., inner - 340., 20.),
+            text(14.4, 500, 0.),
+            c(0xf5f5f5, 0.6),
+            false,
+        );
+    }
+}
+
+/// "Last updated 21:05" for the feed, in the TV's time; the date too when not today.
+fn cs2_updated(state: &State, now: OffsetDateTime) -> Option<String> {
+    let language = state.preferences.language;
+    let feed = state.cs2.feed.as_ref()?;
+    let time = OffsetDateTime::from_unix_timestamp(feed.updated)
+        .ok()?
+        .to_offset(now.offset());
+    let mut clock = language.clock(time, state.preferences.hour_24, false);
+    if time.date() != now.date() {
+        clock = format!("{:02}.{:02} {clock}", time.day(), time.month() as u8);
+    }
+    Some(language.format("cs2Updated", &[("time", &clock)]))
+}
+
+/// A match's start in the TV's time: "21:00" today, "Tomorrow 21:00", else its date.
+fn cs2_start(state: &State, begins: i64, now: OffsetDateTime) -> String {
+    let Ok(start) = OffsetDateTime::from_unix_timestamp(begins).map(|t| t.to_offset(now.offset()))
+    else {
+        return String::new();
+    };
+    let preferences = &state.preferences;
+    let clock = preferences
+        .language
+        .clock(start, preferences.hour_24, false);
+    let days = (start.date() - now.date()).whole_days();
+    match days {
+        0 => clock,
+        1 => preferences
+            .language
+            .format("cs2Tomorrow", &[("time", &clock)]),
+        _ => {
+            let (day, month) = (start.day(), start.month() as u8);
+            let month_first = preferences.date_format == crate::model::DateFormat::MonthDayYear
+                || (preferences.date_format == crate::model::DateFormat::Localized
+                    && preferences.language == Language::En);
+            if month_first {
+                format!("{month:02}/{day:02} {clock}")
+            } else {
+                format!("{day:02}.{month:02} {clock}")
+            }
+        }
+    }
 }
 
 struct WeatherSummary {
@@ -1936,6 +2823,53 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
     );
 }
 
+fn cs2_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let s = state.scroll;
+    let preferences = &state.preferences;
+    for (index, (target, key, icon, on)) in [
+        (Target::Cs2Toggle, "showWidget", "eye", preferences.show_cs2),
+        (
+            Target::Cs2Major,
+            "cs2MajorOnly",
+            "sparkles",
+            preferences.cs2_major_only,
+        ),
+        (
+            Target::Cs2Results,
+            "cs2Results",
+            "check",
+            preferences.cs2_results,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target,
+                rect: Rect::new(640., 164.8 + index as f32 * 84. - s, 1120., 72.),
+                title: language.t(key),
+                icon: Some(icon),
+                value: Some(language.t(if on { "stateOn" } else { "stateOff" })),
+                description: None,
+                selected: false,
+                chevron: false,
+            },
+        );
+    }
+    out.text(
+        language.t("cs2Source"),
+        Rect::new(660., 164.8 + 3. * 84. + 6. - s, 1080., 24.),
+        text(16., 400, 0.),
+        c(0xf5f5f5, 0.55),
+        false,
+    );
+}
+
 fn location_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let mut y = 164.8 - state.scroll;
@@ -2148,6 +3082,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
                 Some(Subpage::Inputs) => language.t("inputs"),
                 Some(Subpage::Clock) => language.t("clock"),
+                Some(Subpage::Cs2) => language.t("cs2Score"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
                 _ => "",
@@ -2223,6 +3158,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         if matches!(
             subpage,
             Subpage::WeatherLocation
+                | Subpage::Cs2
                 | Subpage::Weather
                 | Subpage::Shortcuts
                 | Subpage::Inputs
@@ -2233,6 +3169,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         ) {
             match subpage {
                 Subpage::WeatherLocation => location_settings(out, state, assets),
+                Subpage::Cs2 => cs2_settings(out, state, assets),
                 Subpage::Weather => weather_settings(out, state, assets),
                 Subpage::Shortcuts => shortcut_settings(out, state, assets),
                 Subpage::Inputs => inputs_settings(out, state, assets),
@@ -2304,6 +3241,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 ),
             ],
             Subpage::WeatherLocation
+            | Subpage::Cs2
             | Subpage::Weather
             | Subpage::Shortcuts
             | Subpage::Inputs
@@ -2524,6 +3462,8 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 (1, "weather", "weather-sun"),
                 (2, "shortcuts", "sparkles"),
                 (3, "inputs", "input-hdmi"),
+                // Last, so the rows above keep their places.
+                (6, "cs2Score", "gaming"),
             ]
             .into_iter()
             .enumerate()

@@ -879,6 +879,31 @@ a simulated update, stored only in memory, and disables the public feed check ev
 **Settings → System** to see it. The install action is rejected locally without HTTP, Luna calls or
 package installation in these previews.
 
+## CS2 Score
+
+**Widgets → CS2 Score** (off by default) shows Counter-Strike 2 matches below the inputs: live
+ones first, then upcoming ones, then recent results, up to twelve, three cards at a time. Left
+and Right step through them and scroll the row ("4–6 / 12" in its header); Down from a favorite
+reaches them when Home shows no inputs. A card shows LIVE, the start ("Tomorrow 21:00") or
+"Final", the tournament with its logo as a faint watermark, both teams with their logos and maps
+won, and the map being played or the format and round. OK opens the match: the round as a chip
+(final, third place, upper or lower bracket…), the teams around the score on the current map's
+screenshot, each map's tile with its rounds and winner, both lineups with their coach, when
+the feed was last updated, and "Powered by Liquipedia · CC BY-SA 3.0". **Tier 1–2 events only** and **Recent results** are on
+by default. The widget is named "CS2 Score" in every language.
+
+The data is the shared feed `cs2/matches.json` of
+[eluz1ve/luma-feeds](https://github.com/eluz1ve/luma-feeds), rebuilt from LiquipediaDB every seven
+minutes on GitHub Actions; the LiquipediaDB key stays in that repository's secrets and never
+reaches a TV. Luma reads the file every minute while Home shows the widget, from the fixed
+`eluz1ve.github.io` origin with the weather client's limits (rustls, eight-second timeout, no
+redirects or proxy, 256 KiB). A feed older than 30 minutes is still shown, with "Last updated"
+and its time beside the heading, so a stalled feed shows old scores rather than none. Team and tournament logos and map screenshots come only from
+`liquipedia.net/commons/images/`, one at a time on their own worker, at most 1 MiB each, decoded
+with app artwork's limits (logos at 256 px, map screenshots at 640 px for the dialog) and kept in
+memory up to 64. `--cs2-test-server` accepts only a literal loopback HTTP origin and is refused in
+TV builds.
+
 ## Compatibility
 
 Luma's native startup, rendering and app/input discovery have been verified on rooted webOS 26.
