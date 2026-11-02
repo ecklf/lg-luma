@@ -569,14 +569,15 @@ pub fn method<'a>(release: &str, stock: &Value, id: &str) -> Result<&'a str> {
     if matches!(version, Some(10 | 11)) && id == HOME {
         return Ok("manifest");
     }
-    if matches!(version, Some(5 | 6))
+    let executable_version = matches!(version, Some(5 | 6)) || (version == Some(7) && id == HOME);
+    if executable_version
         && stock["type"] == "native"
         && stock["main"] == format!("file:///usr/bin/{id}")
         && stock["nativeLifeCycleInterfaceVersion"] == 2
     {
         return Ok("executable");
     }
-    Err("This Home integration currently targets webOS 5/6 and 25/26 (10.x/11.x)".into())
+    Err("This Home integration currently targets webOS 5/6/22 (5.x/6.x/7.x) and 25/26 (10.x/11.x) with a compatible Home manifest".into())
 }
 pub fn hook_owned(system: &impl System) -> bool {
     fs::read_link(system.path(Path::new(HOOK)))
