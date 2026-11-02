@@ -50,7 +50,7 @@ impl Fixture {
             ),
             (
                 "View/InputPickerMainView.qml",
-                "Item { Rectangle { id: listBackground\n        anchors.fill: parent\n        color: inputPickerRoot.styler.rootBgColor\n        opacity: inputPickerRoot.isMenuTransparency ? 0.85 : 1\n    } ListView.onRemove: ScriptAction { script: { removeAnimation.targetItem = delegate;\n                    removeAnimation.start(); } }\n    CustomRibbon { anchors.leftMargin: inputPickerRoot.styler.mainRibbonMargin\n id: mainRibbon } }",
+                "Item { Rectangle { id: listBackground\n        anchors.fill: parent\n        color: inputPickerRoot.styler.rootBgColor\n        opacity: inputPickerRoot.isMenuTransparency ? 0.85 : 1\n    } ListView.onRemove: ScriptAction { script: { removeAnimation.targetItem = delegate;\n                    removeAnimation.start(); } }\n    Rectangle { id: seperator\n height: 210 }\n    CustomRibbon { anchors.leftMargin: inputPickerRoot.styler.mainRibbonMargin\n id: mainRibbon } }",
             ),
             (
                 "Model/InputItemListModel.qml",
@@ -252,7 +252,7 @@ fn ownership_and_pointer_write_reject_traversal_and_preserve_fresh_inventory() {
 }
 #[test]
 fn ribbon_rebuild_does_not_retarget_a_shared_removal_animation() {
-    let source = "Rectangle { id: listBackground\n        anchors.fill: parent\n        color: inputPickerRoot.styler.rootBgColor\n        opacity: inputPickerRoot.isMenuTransparency ? 0.85 : 1\n    } ListView.onRemove: ScriptAction { script: { removeAnimation.targetItem = delegate;\n                    removeAnimation.start(); } }\n    CustomRibbon { anchors.leftMargin: inputPickerRoot.styler.mainRibbonMargin\n id: mainRibbon }";
+    let source = "Rectangle { id: listBackground\n        anchors.fill: parent\n        color: inputPickerRoot.styler.rootBgColor\n        opacity: inputPickerRoot.isMenuTransparency ? 0.85 : 1\n    } ListView.onRemove: ScriptAction { script: { removeAnimation.targetItem = delegate;\n                    removeAnimation.start(); } }\n    Rectangle { id: seperator\n height: 210 }\n    CustomRibbon { anchors.leftMargin: inputPickerRoot.styler.mainRibbonMargin\n id: mainRibbon }";
     let patched = transform("View/InputPickerMainView.qml", source).unwrap();
     assert!(patched.contains("delegate.ListView.delayRemove = false;"));
     assert!(patched.contains("radius: 27.2"));
@@ -264,6 +264,8 @@ fn ribbon_rebuild_does_not_retarget_a_shared_removal_animation() {
     assert!(patched.contains("anchors.topMargin: 12"));
     assert!(patched.contains("anchors.bottomMargin: 60"));
     assert!(patched.contains("opacity: 0"));
+    assert!(patched.contains("height: inputPickerRoot.styler.mainRibbonTileHeight"));
+    assert!(!patched.contains("height: 210"));
     assert!(!patched.contains("removeAnimation.start()"));
 }
 #[test]

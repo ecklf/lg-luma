@@ -349,6 +349,11 @@ pub fn transform(path: &str, original: &str) -> Result<String> {
                 "anchors.leftMargin: inputPickerRoot.styler.mainRibbonMargin",
                 "anchors.leftMargin: Math.max(inputPickerRoot.styler.mainRibbonMargin, (inputPickerRoot.styler.screenWidth - width) / 2)",
             )?;
+            let text = once(
+                &text,
+                "height: 210",
+                "height: inputPickerRoot.styler.mainRibbonTileHeight",
+            )?;
             once(
                 &text,
                 "    CustomRibbon {",

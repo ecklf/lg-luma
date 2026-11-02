@@ -2532,7 +2532,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 (1, "weather", "weather-sun"),
                 (2, "shortcuts", "sparkles"),
                 (3, "inputs", "input-hdmi"),
-                (5, "inputMenuTitle", "input-hdmi"),
+                (5, "inputMenuTitle", "remote"),
             ]
             .into_iter()
             .enumerate()
@@ -2669,7 +2669,7 @@ fn input_menu_settings(out: &mut Scene, state: &State, assets: &Assets) {
             target: Target::InputMenuStyle,
             rect: Rect::new(640., 164.8 - state.scroll, 1120., 102.7),
             title: language.t("inputMenuStyle"),
-            icon: Some("input-hdmi"),
+            icon: Some("remote"),
             value: Some(language.t(if menu.enabled { "stateOn" } else { "stateOff" })),
             description: Some(language.t("inputMenuHint")),
             selected: false,
