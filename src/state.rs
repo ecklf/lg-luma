@@ -53,6 +53,8 @@ pub enum Target {
     RecentRetry,
     App(String),
     Input(String),
+    /// A crypto price card on Home, by position.
+    Coin(usize),
     Browse,
     Filter(usize),
     ClearFilter,
@@ -96,6 +98,17 @@ pub enum Target {
     WeatherSearch,
     WeatherClear,
     WeatherResult(usize),
+    CryptoToggle,
+    /// Widgets › Crypto: a row below the inputs or a block beside the greeting.
+    CryptoLayout,
+    /// Widgets › Crypto: whether the block beside the greeting sits on a card.
+    CryptoCard,
+    /// Widgets › Crypto: the coin search's field.
+    CryptoSearch,
+    /// Widgets › Crypto: one of the search's matches.
+    CryptoResult(usize),
+    /// Widgets › Crypto: one of `State::crypto_choices`.
+    CryptoCoin(usize),
     Tile(String),
     TileTest(String),
     TileRemove(String),
@@ -153,6 +166,8 @@ pub enum Subpage {
     Weather,
     Shortcuts,
     Inputs,
+    /// Widgets › Crypto: show the prices and choose their coins.
+    Crypto,
     Clock,
     ClockFormat,
     TimeFormat,
@@ -169,6 +184,7 @@ pub enum TextField {
     Location,
     Name,
     InputName,
+    Coin,
 }
 
 #[derive(Clone, Copy)]
@@ -244,6 +260,7 @@ pub struct State {
     pub update: crate::update::InstallStatus,
     pub panel_started: Option<Instant>,
     pub weather: weather::Weather,
+    pub crypto: crate::crypto::Crypto,
     pub keyboard_field: TextField,
     pub greeting_name_draft: String,
     pub input_name: String,
@@ -287,6 +304,7 @@ impl State {
             update: crate::update::InstallStatus::default(),
             panel_started: None,
             weather: weather::Weather::default(),
+            crypto: crate::crypto::Crypto::default(),
             keyboard_field: TextField::Apps,
             greeting_name_draft: String::new(),
             input_name: String::new(),
@@ -999,6 +1017,7 @@ impl State {
             Some(Subpage::Weather) => Target::Widget(1),
             Some(Subpage::Shortcuts) => Target::Widget(2),
             Some(Subpage::Inputs) => Target::Widget(3),
+            Some(Subpage::Crypto) => Target::Widget(5),
             Some(Subpage::Clock) => Target::Setting(1),
             Some(Subpage::ClockFormat) => {
                 self.subpage = Some(Subpage::Clock);
@@ -1092,23 +1111,27 @@ impl State {
                                 .iter()
                                 .find(|control| control.target == self.focus)
                                 .map_or(960., |control| control.rect.center().0);
-                            let top = controls
-                                .iter()
-                                .filter(|control| matches!(control.target, Target::Input(_)))
-                                .map(|control| control.rect.y)
-                                .fold(f32::INFINITY, f32::min);
-                            let next = controls
-                                .iter()
-                                .filter(|control| {
-                                    matches!(control.target, Target::Input(_))
-                                        && (control.rect.y - top).abs() < 1.
-                                })
-                                .min_by(|a, b| {
-                                    (a.rect.center().0 - x)
-                                        .abs()
-                                        .total_cmp(&(b.rect.center().0 - x).abs())
-                                })
-                                .map(|control| control.target.clone());
+                            // The nearest card of the row below: Inputs, else crypto prices.
+                            let nearest = |in_row: fn(&Target) -> bool| {
+                                let top = controls
+                                    .iter()
+                                    .filter(|control| in_row(&control.target))
+                                    .map(|control| control.rect.y)
+                                    .fold(f32::INFINITY, f32::min);
+                                controls
+                                    .iter()
+                                    .filter(|control| {
+                                        in_row(&control.target) && (control.rect.y - top).abs() < 1.
+                                    })
+                                    .min_by(|a, b| {
+                                        (a.rect.center().0 - x)
+                                            .abs()
+                                            .total_cmp(&(b.rect.center().0 - x).abs())
+                                    })
+                                    .map(|control| control.target.clone())
+                            };
+                            let next = nearest(|target| matches!(target, Target::Input(_)))
+                                .or_else(|| nearest(|target| matches!(target, Target::Coin(_))));
                             if let Some(next) = next {
                                 self.focus(next, controls);
                             }
@@ -1243,6 +1266,12 @@ impl State {
                 Target::TileEditor
                     | Target::Tile(_)
                     | Target::InputMode(_)
+                    | Target::CryptoToggle
+                    | Target::CryptoLayout
+                    | Target::CryptoCard
+                    | Target::CryptoSearch
+                    | Target::CryptoResult(_)
+                    | Target::CryptoCoin(_)
                     | Target::WeatherToggle
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
@@ -1279,6 +1308,25 @@ impl State {
             {
                 self.focus(Target::Nav(2), controls);
                 return vec![];
+            }
+            // Crypto's switches: Right does nothing and Up from the first reaches the tabs.
+            if matches!(
+                self.focus,
+                Target::CryptoToggle
+                    | Target::CryptoLayout
+                    | Target::CryptoCard
+                    | Target::CryptoSearch
+                    | Target::CryptoResult(_)
+                    | Target::CryptoCoin(_)
+            ) {
+                match direction {
+                    Direction::Right => return vec![],
+                    Direction::Up if self.focus == Target::CryptoToggle => {
+                        self.focus(Target::Nav(2), controls);
+                        return vec![];
+                    }
+                    _ => {}
+                }
             }
             if self.focus == Target::Setting(0) && matches!(direction, Direction::Up) {
                 self.focus(Target::Nav(2), controls);
@@ -1663,6 +1711,12 @@ impl State {
 
     pub fn text(&mut self, text: &str) {
         if self.text_input_active() {
+            if self.keyboard_field == TextField::Coin {
+                let query = format!("{}{text}", self.crypto.search.query);
+                self.crypto.search.edit(&query);
+                self.dirty = true;
+                return;
+            }
             if self.keyboard_field == TextField::Location {
                 let mut query = self.weather.query.clone();
                 query.extend(
@@ -1706,7 +1760,9 @@ impl State {
 
     pub fn delete(&mut self) {
         if self.text_input_active() {
-            if self.keyboard_field == TextField::Location {
+            if self.keyboard_field == TextField::Coin {
+                self.crypto.search.query.pop();
+            } else if self.keyboard_field == TextField::Location {
                 let mut query = self.weather.query.clone();
                 query.pop();
                 self.weather.edit(query);
@@ -1845,7 +1901,9 @@ impl State {
             end += 1;
         }
         query.replace_range(start..end, "");
-        if self.keyboard_field == TextField::Location {
+        if self.keyboard_field == TextField::Coin {
+            self.crypto.search.edit(&query);
+        } else if self.keyboard_field == TextField::Location {
             self.weather.edit(query);
         } else if self.keyboard_field == TextField::Name {
             self.greeting_name_draft = query;
@@ -1858,12 +1916,41 @@ impl State {
         self.dirty = true;
     }
 
+    /// The coins Settings › Crypto lists: `crypto::COINS`, then the chosen coins found by search.
+    pub fn crypto_choices(&self) -> Vec<String> {
+        let mut choices: Vec<String> = crate::crypto::COINS
+            .iter()
+            .map(|(symbol, _)| (*symbol).to_owned())
+            .collect();
+        for coin in &self.preferences.crypto_coins {
+            if !choices.contains(coin) {
+                choices.push(coin.clone());
+            }
+        }
+        choices
+    }
+    /// Adds or removes a coin; Home shows at most `crypto::MAX_COINS`.
+    fn toggle_coin(&mut self, symbol: String) -> Vec<Effect> {
+        let coins = &mut self.preferences.crypto_coins;
+        if let Some(position) = coins.iter().position(|coin| *coin == symbol) {
+            coins.remove(position);
+        } else if coins.len() >= crate::crypto::MAX_COINS {
+            self.notify(self.preferences.language.t("cryptoLimit"));
+            return vec![];
+        } else {
+            coins.push(symbol);
+            // Cards follow the Settings order, whatever order coins were picked in.
+            crate::crypto::order(coins);
+        }
+        vec![Effect::Save]
+    }
     pub fn editing_text(&self) -> &str {
         match self.keyboard_field {
             TextField::Location => &self.weather.query,
             TextField::Name => &self.greeting_name_draft,
             TextField::InputName => &self.input_name,
             TextField::Apps => &self.query,
+            TextField::Coin => &self.crypto.search.query,
         }
     }
     pub fn open_keyboard(&mut self, field: TextField) {
@@ -1876,6 +1963,11 @@ impl State {
             // The TV keyboard starts empty, so a new name replaces the old one.
             self.input_name.clear();
         }
+        if field == TextField::Coin {
+            self.crypto.search.query.clear();
+            let search = &mut self.crypto.search;
+            search.wanted = search.catalog.is_empty() && !search.loading;
+        }
         if cfg!(all(
             feature = "webos",
             target_os = "linux",
@@ -1887,6 +1979,7 @@ impl State {
                 TextField::Name => Target::GreetingName,
                 TextField::InputName => Target::InputRename,
                 TextField::Apps => Target::Search,
+                TextField::Coin => Target::CryptoSearch,
             };
             self.panel_started = None;
             self.dirty = true;
@@ -1915,6 +2008,7 @@ impl State {
             TextField::Name => Target::GreetingName,
             TextField::InputName => Target::InputRename,
             TextField::Apps => Target::Search,
+            TextField::Coin => Target::CryptoSearch,
         }
     }
 
@@ -2062,12 +2156,51 @@ impl State {
                 }
             }
             Target::InputRename => self.open_keyboard(TextField::InputName),
+            Target::CryptoToggle => {
+                self.preferences.show_crypto = !self.preferences.show_crypto;
+                return vec![Effect::Save];
+            }
+            Target::CryptoCard => {
+                self.preferences.crypto_card = !self.preferences.crypto_card;
+                return vec![Effect::Save];
+            }
+            Target::CryptoLayout => {
+                self.preferences.crypto_beside = !self.preferences.crypto_beside;
+                return vec![Effect::Save];
+            }
+            Target::CryptoSearch => self.open_keyboard(TextField::Coin),
+            Target::CryptoResult(index) => {
+                let Some(symbol) = self
+                    .crypto
+                    .search
+                    .matches()
+                    .get(index)
+                    .map(|symbol| symbol.to_string())
+                else {
+                    return vec![];
+                };
+                return self.toggle_coin(symbol);
+            }
+            Target::CryptoCoin(index) => {
+                let Some(symbol) = self.crypto_choices().get(index).cloned() else {
+                    return vec![];
+                };
+                return self.toggle_coin(symbol);
+            }
+            Target::Coin(_) => {
+                self.open(2);
+                self.section = WIDGETS_SECTION;
+                self.subpage = Some(Subpage::Crypto);
+                self.focus = Target::CryptoToggle;
+                self.scroll = 0.;
+            }
             Target::Widget(index) => {
                 let (subpage, focus) = match index {
                     0 => (Subpage::Greeting, Target::GreetingToggle),
                     1 => (Subpage::Weather, Target::WeatherToggle),
                     2 => (Subpage::Shortcuts, Target::TileEditor),
                     4 => (Subpage::Date, Target::DateToggle),
+                    5 => (Subpage::Crypto, Target::CryptoToggle),
                     3 => (
                         Subpage::Inputs,
                         self.inventory
@@ -2314,7 +2447,8 @@ impl State {
                         | Subpage::Clock
                         | Subpage::Weather
                         | Subpage::Shortcuts
-                        | Subpage::Inputs,
+                        | Subpage::Inputs
+                        | Subpage::Crypto,
                     ) => {
                         return vec![];
                     }
@@ -2442,6 +2576,7 @@ impl State {
                     TextField::Name => self.greeting_name_draft.clear(),
                     TextField::InputName => self.input_name.clear(),
                     TextField::Apps => self.query.clear(),
+                    TextField::Coin => self.crypto.search.query.clear(),
                 },
                 "Done" => {
                     self.overlay = None;

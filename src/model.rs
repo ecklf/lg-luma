@@ -235,6 +235,17 @@ pub struct Preferences {
     pub input_modes: BTreeMap<String, InputMode>,
     /// Custom names by input app ID; the TV's port and label stay visible as detail.
     pub input_names: BTreeMap<String, String>,
+    /// Home's row of crypto prices below the inputs.
+    #[serde(deserialize_with = "crate::crypto::deserialize_flag")]
+    pub show_crypto: bool,
+    /// Up to `crypto::MAX_COINS` Binance coins: `crypto::COINS` in its order, then the others.
+    #[serde(deserialize_with = "crate::crypto::deserialize_coins")]
+    pub crypto_coins: Vec<String>,
+    /// Shows the prices as a block beside the greeting instead of a row below the inputs.
+    #[serde(deserialize_with = "crate::crypto::deserialize_flag")]
+    pub crypto_beside: bool,
+    /// The block beside the greeting sits on a card; off, straight on the wallpaper.
+    pub crypto_card: bool,
     #[serde(deserialize_with = "crate::weather::deserialize_enabled")]
     pub show_weather: bool,
     #[serde(deserialize_with = "crate::weather::deserialize_location")]
@@ -273,6 +284,10 @@ impl Default for Preferences {
             date_format: DateFormat::default(),
             input_modes: BTreeMap::new(),
             input_names: BTreeMap::new(),
+            show_crypto: false,
+            crypto_coins: crate::crypto::default_coins(),
+            crypto_beside: false,
+            crypto_card: true,
             show_weather: true,
             weather_location: None,
             temperature_unit: Unit::Celsius,
