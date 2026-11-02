@@ -139,6 +139,15 @@ Home captions default to off and Apps captions default to on, stored independent
 and `show_app_names`. The legacy `show_names` preference does not override these defaults. Hidden
 captions do not reserve layout space.
 **Settings → Widgets** groups **Date**, **Greeting**, **Weather**, **Shortcuts**, and **Inputs** as separate subpages.
+**Widgets → Input button customization** owns the existing TV input ribbon's optional styling
+and independent entry visibility. Preferences are stored under `input_menu` as
+`enabled` (default `false`) and an `entries` map. Missing dashboard, Live TV,
+HDMI 1–4, USB and media-server entries default to visible. Unknown ribbon entries
+are ignored. Old preferences therefore leave the stock
+ribbon unchanged. Toggles emit the existing asynchronous Save effect and never
+modify `input_modes`, `input_names` or Home widget preferences. Back and Left
+restore the Widgets menu row. Hardware support and activation are handled by the
+native TV integration, not by the settings renderer.
 Weather location and temperature choices return to Weather; Back from a widget returns to its row
 in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists

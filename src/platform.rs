@@ -178,6 +178,7 @@ pub enum Request {
     Launch(String),
     Uninstall(String),
     SyncSplash(String),
+    SyncInputMenu(crate::model::InputMenuPreferences),
     Recent {
         generation: u64,
         command: crate::recents::Command,
@@ -187,6 +188,7 @@ pub enum Response {
     Inventory(Result<(Inventory, Option<String>), String>),
     Inputs(Result<Vec<Input>, String>),
     Launched(Result<(), String>),
+    InputMenuSynced(Result<(), String>),
     Uninstalled {
         id: String,
         result: Result<(), String>,
@@ -224,6 +226,7 @@ impl Platform {
                 eprintln!("Luma running-app usage subscription: {error}");
             }
             let mut splash_background = None;
+            let mut input_menu = None;
             let mut desktop_inventory = demo_inventory();
             let mut desktop_recents = if webos {
                 vec![]
@@ -364,6 +367,19 @@ impl Platform {
                         }
                         continue;
                     }
+                    Request::SyncInputMenu(preferences) => {
+                        if !webos {
+                            continue;
+                        }
+                        let Some(result) = sync_input_menu_if_changed(
+                            &mut input_menu,
+                            preferences,
+                            sync_input_menu,
+                        ) else {
+                            continue;
+                        };
+                        Response::InputMenuSynced(result)
+                    }
                 };
                 if responses.send(response).is_err() {
                     break;
@@ -387,6 +403,72 @@ impl Platform {
             self.send(Request::SyncSplash(background.to_owned()));
         }
     }
+
+    pub fn sync_input_menu(&self, preferences: &crate::model::InputMenuPreferences) {
+        if self.webos {
+            self.send(Request::SyncInputMenu(preferences.clone()));
+        }
+    }
+}
+
+fn sync_input_menu_if_changed(
+    applied: &mut Option<crate::model::InputMenuPreferences>,
+    requested: crate::model::InputMenuPreferences,
+    apply: impl FnOnce(&crate::model::InputMenuPreferences) -> Result<(), String>,
+) -> Option<Result<(), String>> {
+    if applied.as_ref() == Some(&requested) {
+        return None;
+    }
+    let result = apply(&requested);
+    if result.is_ok() {
+        *applied = Some(requested);
+    }
+    Some(result)
+}
+
+fn input_menu_payload(preferences: &crate::model::InputMenuPreferences) -> Value {
+    let entries: serde_json::Map<String, Value> = crate::model::INPUT_MENU_ENTRIES
+        .iter()
+        .map(|id| ((*id).to_owned(), Value::Bool(preferences.entry_visible(id))))
+        .collect();
+    json!({"enabled": preferences.enabled, "entries": entries})
+}
+
+fn sync_input_menu(preferences: &crate::model::InputMenuPreferences) -> Result<(), String> {
+    let payload = input_menu_payload(preferences);
+    let directory = install_dir()?;
+    #[cfg(all(feature = "webos", unix))]
+    if unsafe { libc::geteuid() } == 0 {
+        return luma_tv_helper::input_menu::configure(
+            &luma_tv_helper::system::Tv,
+            &payload,
+            &directory,
+        )
+        .map(|_| ());
+    }
+    let command = helper_command(
+        "input-menu",
+        &[
+            "apply".to_owned(),
+            payload.to_string(),
+            directory.to_string_lossy().into_owned(),
+        ],
+    )?;
+    #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
+    let reply = crate::luna::call_with_timeout(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        &json!({"command": command}),
+        std::time::Duration::from_secs(30),
+    );
+    #[cfg(not(all(feature = "webos", target_os = "linux", target_arch = "arm")))]
+    let reply = raw_call(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        &json!({"command": command}),
+    );
+    reply
+        .and_then(checked_response)
+        .and_then(|envelope| command_reply(&envelope))
+        .map(|_| ())
 }
 
 /// Homebrew remains the privilege boundary for normal app jails. Each argument is shell-quoted
@@ -1008,5 +1090,64 @@ mod home_identity_tests {
     fn both_home_variants_are_hidden_from_application_inventory() {
         let raw = json!([{"id":HOME_ID,"title":"Home","visible":true}, {"id":FULL_HOME_ID,"title":"Home","visible":true}]);
         assert!(normalize_apps(&raw).unwrap().is_empty());
+    }
+
+    #[test]
+    fn input_menu_boundary_expands_defaults_and_ignores_unknown_entries() {
+        let mut preferences = crate::model::InputMenuPreferences {
+            enabled: true,
+            ..Default::default()
+        };
+        preferences.entries.insert("HDMI_3".into(), false);
+        preferences.entries.insert("airplay".into(), true);
+        preferences.entries.insert("untrusted".into(), true);
+        let payload = input_menu_payload(&preferences);
+        assert_eq!(payload["enabled"], true);
+        assert_eq!(payload["entries"]["HDMI_3"], false);
+        assert_eq!(payload["entries"]["HDMI_1"], true);
+        assert_eq!(payload["entries"]["usb"], true);
+        assert!(payload["entries"].get("airplay").is_none());
+        assert!(payload["entries"].get("brazil_tv").is_none());
+        assert!(payload["entries"].get("untrusted").is_none());
+        assert_eq!(
+            payload["entries"].as_object().unwrap().len(),
+            crate::model::INPUT_MENU_ENTRIES.len()
+        );
+    }
+
+    #[test]
+    fn failed_input_menu_changes_remain_retryable_until_applied() {
+        let mut applied = None;
+        let enabled = crate::model::InputMenuPreferences {
+            enabled: true,
+            ..Default::default()
+        };
+        assert!(
+            sync_input_menu_if_changed(&mut applied, enabled.clone(), |_| Err("temporary".into()))
+                .unwrap()
+                .is_err()
+        );
+        assert!(applied.is_none());
+        assert!(
+            sync_input_menu_if_changed(&mut applied, enabled.clone(), |_| Ok(()))
+                .unwrap()
+                .is_ok()
+        );
+        assert!(
+            sync_input_menu_if_changed(&mut applied, enabled, |_| panic!("already applied"))
+                .is_none()
+        );
+        let disabled = crate::model::InputMenuPreferences::default();
+        assert!(
+            sync_input_menu_if_changed(&mut applied, disabled.clone(), |_| Err("temporary".into()))
+                .unwrap()
+                .is_err()
+        );
+        assert!(
+            sync_input_menu_if_changed(&mut applied, disabled, |_| Ok(()))
+                .unwrap()
+                .is_ok()
+        );
+        assert!(!applied.unwrap().enabled);
     }
 }

@@ -78,6 +78,8 @@ pub enum Target {
     UseBackground,
     DeleteBackground,
     InputMode(String),
+    InputMenuStyle,
+    InputMenuEntry(String),
     InputRename,
     InputNameReset,
     Choice(usize),
@@ -154,6 +156,7 @@ pub enum Subpage {
     Weather,
     Shortcuts,
     Inputs,
+    InputMenu,
     Clock,
     ClockFormat,
     TimeFormat,
@@ -1000,6 +1003,7 @@ impl State {
             Some(Subpage::Weather) => Target::Widget(1),
             Some(Subpage::Shortcuts) => Target::Widget(2),
             Some(Subpage::Inputs) => Target::Widget(3),
+            Some(Subpage::InputMenu) => Target::Widget(5),
             Some(Subpage::Clock) => Target::Setting(1),
             Some(Subpage::ClockFormat) => {
                 self.subpage = Some(Subpage::Clock);
@@ -1119,6 +1123,12 @@ impl State {
                 }
             }
             let setting_rows: Option<&[Target]> = match self.subpage {
+                None if self.section == 0 && self.page == Page::Settings => Some(&[
+                    Target::Setting(0),
+                    Target::Setting(1),
+                    Target::Setting(4),
+                    Target::Setting(2),
+                ]),
                 Some(Subpage::Greeting) => Some(&[
                     Target::GreetingToggle,
                     Target::GreetingName,
@@ -1148,7 +1158,8 @@ impl State {
                     Direction::Right
                         if matches!(
                             self.focus,
-                            Target::GreetingName
+                            Target::Setting(0 | 1 | 4 | 8)
+                                | Target::GreetingName
                                 | Target::ClockFormat
                                 | Target::ClockTimeFormat
                                 | Target::DateFormat
@@ -1239,11 +1250,42 @@ impl State {
                 }
                 return vec![];
             }
+            if self.subpage == Some(Subpage::InputMenu)
+                && matches!(direction, Direction::Up | Direction::Down)
+            {
+                let entries = crate::model::INPUT_MENU_ENTRIES;
+                let position = match &self.focus {
+                    Target::InputMenuStyle => Some(0),
+                    Target::InputMenuEntry(id) => entries
+                        .iter()
+                        .position(|entry| *entry == id)
+                        .map(|index| index + 1),
+                    _ => None,
+                };
+                if let Some(position) = position {
+                    let target = match direction {
+                        Direction::Up if position == 0 => Target::Nav(2),
+                        Direction::Up if position == 1 => Target::InputMenuStyle,
+                        Direction::Up => Target::InputMenuEntry(entries[position - 2].into()),
+                        Direction::Down => {
+                            Target::InputMenuEntry(entries[position.min(entries.len() - 1)].into())
+                        }
+                        _ => unreachable!(),
+                    };
+                    self.focus(target, controls);
+                    if self.focus == Target::InputMenuStyle {
+                        self.scroll = 0.;
+                    }
+                    return vec![];
+                }
+            }
             if (matches!(
                 self.focus,
                 Target::TileEditor
                     | Target::Tile(_)
                     | Target::InputMode(_)
+                    | Target::InputMenuStyle
+                    | Target::InputMenuEntry(_)
                     | Target::WeatherToggle
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
@@ -1265,8 +1307,13 @@ impl State {
             {
                 return self.activate();
             }
-            if matches!(self.focus, Target::Setting(_) | Target::WeatherToggle)
-                && matches!(direction, Direction::Right)
+            if matches!(
+                self.focus,
+                Target::Setting(_)
+                    | Target::WeatherToggle
+                    | Target::InputMenuStyle
+                    | Target::InputMenuEntry(_)
+            ) && matches!(direction, Direction::Right)
             {
                 return vec![];
             }
@@ -1286,6 +1333,10 @@ impl State {
                 return vec![];
             }
             if self.focus == Target::WeatherToggle && matches!(direction, Direction::Up) {
+                self.focus(Target::Nav(2), controls);
+                return vec![];
+            }
+            if self.focus == Target::InputMenuStyle && matches!(direction, Direction::Up) {
                 self.focus(Target::Nav(2), controls);
                 return vec![];
             }
@@ -2064,6 +2115,15 @@ impl State {
                 }
             }
             Target::InputRename => self.open_keyboard(TextField::InputName),
+            Target::InputMenuStyle => {
+                self.preferences.input_menu.enabled = !self.preferences.input_menu.enabled;
+                return vec![Effect::Save];
+            }
+            Target::InputMenuEntry(id) => {
+                if self.preferences.input_menu.toggle_entry(&id) {
+                    return vec![Effect::Save];
+                }
+            }
             Target::Widget(index) => {
                 let (subpage, focus) = match index {
                     0 => (Subpage::Greeting, Target::GreetingToggle),
@@ -2078,6 +2138,7 @@ impl State {
                             .map(|input| Target::InputMode(input.id.clone()))
                             .unwrap_or(Target::Setting(3)),
                     ),
+                    5 => (Subpage::InputMenu, Target::InputMenuStyle),
                     _ => return vec![],
                 };
                 self.section = WIDGETS_SECTION;
@@ -2316,7 +2377,8 @@ impl State {
                         | Subpage::Clock
                         | Subpage::Weather
                         | Subpage::Shortcuts
-                        | Subpage::Inputs,
+                        | Subpage::Inputs
+                        | Subpage::InputMenu,
                     ) => {
                         return vec![];
                     }

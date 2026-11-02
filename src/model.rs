@@ -104,6 +104,64 @@ pub enum InputMode {
     Off,
 }
 
+pub const INPUT_MENU_ENTRIES: [&str; 8] = [
+    "home_dashboard",
+    "live_tv",
+    "HDMI_1",
+    "HDMI_2",
+    "HDMI_3",
+    "HDMI_4",
+    "usb",
+    "media_server",
+];
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct InputMenuPreferences {
+    pub enabled: bool,
+    pub entries: BTreeMap<String, bool>,
+}
+
+impl InputMenuPreferences {
+    pub fn entry_visible(&self, id: &str) -> bool {
+        INPUT_MENU_ENTRIES.contains(&id) && self.entries.get(id).copied().unwrap_or(true)
+    }
+
+    pub fn toggle_entry(&mut self, id: &str) -> bool {
+        if !INPUT_MENU_ENTRIES.contains(&id) {
+            return false;
+        }
+        self.entries.insert(id.into(), !self.entry_visible(id));
+        true
+    }
+}
+
+fn deserialize_input_menu<'de, D>(deserializer: D) -> Result<InputMenuPreferences, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    let entries = value
+        .get("entries")
+        .and_then(serde_json::Value::as_object)
+        .into_iter()
+        .flatten()
+        .filter_map(|(id, visible)| {
+            INPUT_MENU_ENTRIES
+                .contains(&id.as_str())
+                .then(|| visible.as_bool().map(|visible| (id.clone(), visible)))
+                .flatten()
+        })
+        .collect();
+    Ok(InputMenuPreferences {
+        enabled: value
+            .get("enabled")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
+        entries,
+    })
+}
+
 /// POST is the default because Home Assistant webhooks accept only POST and PUT
 /// unless GET is enabled on the trigger.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -235,6 +293,9 @@ pub struct Preferences {
     pub input_modes: BTreeMap<String, InputMode>,
     /// Custom names by input app ID; the TV's port and label stay visible as detail.
     pub input_names: BTreeMap<String, String>,
+    /// TV/Input ribbon preferences are independent of the Home input widgets.
+    #[serde(deserialize_with = "deserialize_input_menu")]
+    pub input_menu: InputMenuPreferences,
     #[serde(deserialize_with = "crate::weather::deserialize_enabled")]
     pub show_weather: bool,
     #[serde(deserialize_with = "crate::weather::deserialize_location")]
@@ -273,6 +334,7 @@ impl Default for Preferences {
             date_format: DateFormat::default(),
             input_modes: BTreeMap::new(),
             input_names: BTreeMap::new(),
+            input_menu: InputMenuPreferences::default(),
             show_weather: true,
             weather_location: None,
             temperature_unit: Unit::Celsius,

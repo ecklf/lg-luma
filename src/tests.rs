@@ -16,6 +16,9 @@ mod wallpaper_tests;
 #[path = "input-refresh-tests.rs"]
 mod input_refresh_tests;
 
+#[path = "input-menu-tests.rs"]
+mod input_menu_tests;
+
 fn ready() -> State {
     let mut state = State::new(Preferences::default());
     state.set_inventory(demo_inventory(), None);
@@ -2375,7 +2378,7 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
             _ => None,
         })
         .collect();
-    assert_eq!(widget_order, [4, 0, 1, 2, 3]);
+    assert_eq!(widget_order, [4, 0, 1, 2, 3, 5]);
     for (index, subpage) in [
         Subpage::Greeting,
         Subpage::Weather,
@@ -2392,6 +2395,11 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
         assert!(state.subpage.is_none());
         assert_eq!(state.focus, Target::Widget(index));
     }
+    state.focus = Target::Widget(5);
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.subpage, Some(Subpage::InputMenu));
+    state.back();
+    assert_eq!(state.focus, Target::Widget(5));
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(WIDGETS_SECTION));
     assert_eq!(serde_json::to_value(&state.preferences).unwrap(), saved);
@@ -2457,7 +2465,7 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
                 .iter()
                 .filter(|c| matches!(c.target, Target::Widget(_)))
                 .count(),
-            5
+            6
         );
         for key in [
             "widgets",
@@ -2465,6 +2473,7 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
             "weather",
             "shortcuts",
             "inputs",
+            "inputMenuTitle",
             "date",
         ] {
             assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t(key))), "{key}/{language:?}");

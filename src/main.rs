@@ -309,6 +309,7 @@ fn effects(
                     state.notify(state.preferences.language.t("savedError"));
                 } else {
                     platform.sync_splash(state.preferences.splash_background());
+                    platform.sync_input_menu(&state.preferences.input_menu);
                 }
             }
             effect @ (Effect::Refresh | Effect::Reload) => {
@@ -716,6 +717,7 @@ fn run() -> Result<(), String> {
         &updates,
     );
     platform.sync_splash(state.preferences.splash_background());
+    platform.sync_input_menu(&state.preferences.input_menu);
     startup_stage("preferences and workers");
 
     let sdl = sdl2::init()?;
@@ -1144,6 +1146,12 @@ fn run() -> Result<(), String> {
                             state.notice = None;
                             state.dirty = true;
                         }
+                    }
+                }
+                Response::InputMenuSynced(result) => {
+                    if let Err(error) = result {
+                        eprintln!("Luma input menu: {error}");
+                        state.notify(state.preferences.language.t("inputMenuApplyError"));
                     }
                 }
                 Response::Uninstalled { id, result } => {

@@ -2147,6 +2147,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Weather) => language.t("weather"),
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
                 Some(Subpage::Inputs) => language.t("inputs"),
+                Some(Subpage::InputMenu) => language.t("inputMenuTitle"),
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
@@ -2226,6 +2227,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::Weather
                 | Subpage::Shortcuts
                 | Subpage::Inputs
+                | Subpage::InputMenu
                 | Subpage::Greeting
                 | Subpage::Date
                 | Subpage::AppNames
@@ -2236,6 +2238,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::Weather => weather_settings(out, state, assets),
                 Subpage::Shortcuts => shortcut_settings(out, state, assets),
                 Subpage::Inputs => inputs_settings(out, state, assets),
+                Subpage::InputMenu => input_menu_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::Date => date_settings(out, state, assets),
                 Subpage::AppNames => app_name_settings(out, state, assets),
@@ -2311,6 +2314,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::Weather
             | Subpage::Shortcuts
             | Subpage::Inputs
+            | Subpage::InputMenu
             | Subpage::Greeting
             | Subpage::Date
             | Subpage::AppNames
@@ -2528,6 +2532,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 (1, "weather", "weather-sun"),
                 (2, "shortcuts", "sparkles"),
                 (3, "inputs", "input-hdmi"),
+                (5, "inputMenuTitle", "input-hdmi"),
             ]
             .into_iter()
             .enumerate()
@@ -2650,6 +2655,58 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             }
         }
         _ => {}
+    }
+}
+
+fn input_menu_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let menu = &state.preferences.input_menu;
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::InputMenuStyle,
+            rect: Rect::new(640., 164.8 - state.scroll, 1120., 102.7),
+            title: language.t("inputMenuStyle"),
+            icon: Some("input-hdmi"),
+            value: Some(language.t(if menu.enabled { "stateOn" } else { "stateOff" })),
+            description: Some(language.t("inputMenuHint")),
+            selected: false,
+            chevron: false,
+        },
+    );
+    for (index, id) in crate::model::INPUT_MENU_ENTRIES.into_iter().enumerate() {
+        let title = match id {
+            "home_dashboard" => language.t("inputMenuDashboard"),
+            "live_tv" => language.t("inputMenuLiveTv"),
+            "HDMI_1" => "HDMI 1",
+            "HDMI_2" => "HDMI 2",
+            "HDMI_3" => "HDMI 3",
+            "HDMI_4" => "HDMI 4",
+            "usb" => "USB",
+            "media_server" => language.t("inputMenuMediaServers"),
+            _ => unreachable!(),
+        };
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::InputMenuEntry(id.into()),
+                rect: Rect::new(640., 283.5 + index as f32 * 84. - state.scroll, 1120., 72.),
+                title,
+                icon: None,
+                value: Some(language.t(if menu.entry_visible(id) {
+                    "stateOn"
+                } else {
+                    "stateOff"
+                })),
+                description: None,
+                selected: false,
+                chevron: false,
+            },
+        );
     }
 }
 

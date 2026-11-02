@@ -2,7 +2,7 @@
 #[path = "../../src/webos-compat.rs"]
 mod webos_compat;
 use luma_tv_helper::{
-    files, home, input,
+    files, home, input, input_menu,
     system::{System, Tv},
     uninstall,
 };
@@ -11,7 +11,7 @@ fn run() -> luma_tv_helper::Result<Value> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.first().is_some_and(|s| s == "--help") {
         println!(
-            "luma-helper: home COMMAND [APP_DIR] [HOME_ID] | read-app-icon JSON | sync-splash JSON | uninstall-app ID | tv-input COMMAND [APP_DIR] | running-list | running-close ID"
+            "luma-helper: home COMMAND [APP_DIR] [HOME_ID] | read-app-icon JSON | sync-splash JSON | uninstall-app ID | tv-input COMMAND [APP_DIR] | input-menu apply JSON [APP_DIR] | running-list | running-close ID"
         );
         return Ok(serde_json::json!({"returnValue":true}));
     }
@@ -64,6 +64,22 @@ fn run() -> luma_tv_helper::Result<Value> {
                 })
                 .ok_or("Cannot determine installation")?;
             input::configure(&sys, arg(1)?, &directory)
+        }
+        "input-menu" => {
+            if arg(1)? != "apply" {
+                return Err("Unknown input-menu command".into());
+            }
+            let request: Value = serde_json::from_str(arg(2)?).map_err(|e| e.to_string())?;
+            let directory = args
+                .get(3)
+                .map(std::path::PathBuf::from)
+                .or_else(|| {
+                    std::env::current_exe()
+                        .ok()
+                        .and_then(|p| p.parent().map(std::path::Path::to_path_buf))
+                })
+                .ok_or("Cannot determine installation")?;
+            input_menu::configure(&sys, &request, &directory)
         }
         _ => Err("Unknown TV helper command".into()),
     }

@@ -223,6 +223,23 @@ Test on a spare button first. Disable the mapping in Input Hook to restore norma
 
 ## Features
 
+### TV / Input ribbon
+
+**Settings → Widgets → Input button customization** controls optional Luma styling for the
+TV's existing input ribbon and which entries it shows. Dashboard, Live TV, HDMI, USB and media
+servers can be hidden independently. This is separate from the input widgets on Home: changing
+one does not change the other. The integration is opt-in and requires a supported rooted TV;
+desktop settings previews do not verify firmware behavior.
+The ribbon uses a rounded, opaque card and dims the screen beneath it so Home input cards remain
+visually distinct. Tile widths adapt to the number of available entries, and the first visible
+entry retains the section heading when Dashboard is hidden.
+
+### AirPlay input
+
+On TVs with built-in AirPlay, **Settings → Widgets → Inputs** includes AirPlay with the same
+Auto, On, Off and rename controls as HDMI. Auto follows the receiver's enabled state.
+Selecting its Home input card opens the TV's native AirPlay page.
+
 ### Backgrounds
 
 Open **Settings → Background → Upload**, then scan the QR code or open the shown
@@ -329,7 +346,3 @@ See [Releases](development.md#releases) for the workflow and repository setup.
 
 Luma is licensed under MIT.\
 Luma is not affiliated with LG, Apple, or any other brands shown in its UI.
-
-### AirPlay input (local extension)
-
-Built-in LG AirPlay appears under Settings → Widgets → Inputs. Choose Auto, On or Off and optionally rename it. Selecting its Home input card opens the native AirPlay page.
