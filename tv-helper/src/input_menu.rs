@@ -341,13 +341,8 @@ pub fn transform(path: &str, original: &str) -> Result<String> {
             )?;
             let text = once(
                 &text,
-                "color: inputPickerRoot.styler.rootBgColor",
-                "color: \"#000000\"",
-            )?;
-            let text = once(
-                &text,
                 "opacity: inputPickerRoot.isMenuTransparency ? 0.85 : 1",
-                "opacity: 0.48",
+                "opacity: 0",
             )?;
             let text = once(
                 &text,

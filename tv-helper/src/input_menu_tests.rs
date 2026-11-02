@@ -263,8 +263,7 @@ fn ribbon_rebuild_does_not_retarget_a_shared_removal_animation() {
     assert!(patched.contains("anchors.rightMargin: 24"));
     assert!(patched.contains("anchors.topMargin: 12"));
     assert!(patched.contains("anchors.bottomMargin: 60"));
-    assert!(patched.contains("color: \"#000000\""));
-    assert!(patched.contains("opacity: 0.48"));
+    assert!(patched.contains("opacity: 0"));
     assert!(!patched.contains("removeAnimation.start()"));
 }
 #[test]
