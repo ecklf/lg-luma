@@ -212,6 +212,55 @@ impl DateFormat {
     }
 }
 
+/// Size of the clock in the header (#180).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ClockSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+    ExtraLarge,
+}
+
+impl ClockSize {
+    pub const ALL: [Self; 4] = [Self::Small, Self::Medium, Self::Large, Self::ExtraLarge];
+    /// Font size in 1080p units; Medium is the original 24 px clock.
+    pub fn font_size(self) -> f32 {
+        match self {
+            Self::Small => 20.,
+            Self::Medium => 24.,
+            Self::Large => 32.,
+            Self::ExtraLarge => 40.,
+        }
+    }
+    pub fn label_key(self) -> &'static str {
+        match self {
+            Self::Small => "clockSizeSmall",
+            Self::Medium => "clockSizeMedium",
+            Self::Large => "clockSizeLarge",
+            Self::ExtraLarge => "clockSizeExtraLarge",
+        }
+    }
+    pub fn index(self) -> usize {
+        Self::ALL.iter().position(|size| *size == self).unwrap_or(1)
+    }
+}
+
+/// Unknown or missing values keep the original medium clock instead of rejecting preferences.
+fn deserialize_clock_size<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<ClockSize, D::Error> {
+    Ok(
+        match serde_json::Value::deserialize(deserializer)?.as_str() {
+            Some("small") => ClockSize::Small,
+            Some("large") => ClockSize::Large,
+            Some("extra-large") => ClockSize::ExtraLarge,
+            _ => ClockSize::Medium,
+        },
+    )
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
@@ -251,6 +300,8 @@ pub struct Preferences {
     pub wallpaper_gradient: bool,
     /// Unix seconds of the last automatic or chosen wallpaper change, for the timed modes.
     pub wallpaper_changed: u64,
+    #[serde(deserialize_with = "deserialize_clock_size")]
+    pub clock_size: ClockSize,
 }
 
 impl Default for Preferences {
@@ -281,6 +332,7 @@ impl Default for Preferences {
             wallpaper_cycle: false,
             wallpaper_gradient: true,
             wallpaper_changed: 0,
+            clock_size: ClockSize::Medium,
         }
     }
 }

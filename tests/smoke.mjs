@@ -360,6 +360,25 @@ try {
   const clockFocus = await scenario('clock-format-focus', `${clockEditor},enter,down`);
   assert.equal(clockFocus.subpage, 'ClockFormat');
   assert.deepEqual(clockFocus.focus, { Choice: 1 });
+  // #180: Size offers four steps and an extra-large clock still fits beside the navigation.
+  const clockSizes = await scenario('clock-size', `${clockEditor},down,down,enter`);
+  assert.equal(clockSizes.subpage, 'ClockSize');
+  assert.deepEqual(clockSizes.focus, { Choice: 1 });
+  for (const label of ['Small', 'Medium', 'Large', 'Extra large']) {
+    assert.ok(clockSizes.ui_text.includes(label), label);
+  }
+  const clockLarge = await scenario(
+    'clock-size-saved',
+    `${clockEditor},down,down,enter,down,down,enter`,
+  );
+  assert.equal(clockLarge.preferences.clock_size, 'extra-large');
+  assert.equal(clockLarge.subpage, 'Clock');
+  await scenario('clock-size-home', 'home');
+  const clockMedium = await scenario(
+    'clock-size-reset',
+    `${clockEditor},down,down,enter,up,up,enter`,
+  );
+  assert.equal(clockMedium.preferences.clock_size, 'medium');
   const system = await scenario(
     'system-settings',
     'settings,down,down,down,down,right,down,down,down',

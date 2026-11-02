@@ -712,14 +712,22 @@ fn header(
         state.preferences.hour_24,
         state.preferences.show_seconds,
     );
+    let layout = navigation(assets, language);
+    // Centred on the navigation bar at every size, and never reaching into it.
+    let style = assets.fit_text(
+        &clock,
+        text(state.preferences.clock_size.font_size(), 500, -0.03),
+        layout.surface.x - 84. - 24.,
+    );
+    // 6/5 rather than 1.2 keeps Medium's original 28.8 px line exactly.
+    let height = style.size * 6. / 5.;
     out.text(
         clock,
-        Rect::new(84., 62.4, 300., 28.8),
-        text(24., 500, -0.03),
+        Rect::new(84., 76.8 - height / 2., layout.surface.x - 84., height),
+        style,
         WHITE,
         false,
     );
-    let layout = navigation(assets, language);
     let nav = layout.surface;
     out.shadow(nav, 48., 18., 4., 0.06);
     out.shape(nav, 48., c(0x171c20, 0.72));
@@ -2119,6 +2127,9 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::TimeFormat) => {
                     Some(vec![language.t("clock"), language.t("timeFormat")])
                 }
+                Some(Subpage::ClockSize) => {
+                    Some(vec![language.t("clock"), language.t("clockSize")])
+                }
                 Some(Subpage::WeatherLocation | Subpage::Temperature) => Some(vec![
                     language.t("weather"),
                     language.t(if state.subpage == Some(Subpage::WeatherLocation) {
@@ -2266,6 +2277,16 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 ("HH:MM", None, !state.preferences.show_seconds),
                 ("HH:MM:SS", None, state.preferences.show_seconds),
             ],
+            Subpage::ClockSize => crate::model::ClockSize::ALL
+                .iter()
+                .map(|size| {
+                    (
+                        language.t(size.label_key()),
+                        None,
+                        *size == state.preferences.clock_size,
+                    )
+                })
+                .collect(),
             Subpage::Input(id) => {
                 let current = state
                     .preferences
@@ -2840,6 +2861,11 @@ fn clock_settings(out: &mut Scene, state: &State, assets: &Assets) {
             } else {
                 "HH:MM"
             },
+        ),
+        (
+            Target::ClockSize,
+            "clockSize",
+            language.t(state.preferences.clock_size.label_key()),
         ),
     ]
     .into_iter()

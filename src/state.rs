@@ -70,6 +70,7 @@ pub enum Target {
     AppNamesApps,
     ClockFormat,
     ClockTimeFormat,
+    ClockSize,
     Background(usize),
     UploadWallpaper,
     WallpaperCycle,
@@ -156,6 +157,7 @@ pub enum Subpage {
     Clock,
     ClockFormat,
     TimeFormat,
+    ClockSize,
     Input(String),
     WeatherLocation,
     Temperature,
@@ -1008,6 +1010,10 @@ impl State {
                 self.subpage = Some(Subpage::Clock);
                 Target::ClockTimeFormat
             }
+            Some(Subpage::ClockSize) => {
+                self.subpage = Some(Subpage::Clock);
+                Target::ClockSize
+            }
             Some(Subpage::Input(id)) => {
                 self.subpage = Some(Subpage::Inputs);
                 Target::InputMode(id)
@@ -1125,7 +1131,11 @@ impl State {
                 ]),
                 Some(Subpage::AppNames) => Some(&[Target::AppNamesHome, Target::AppNamesApps]),
                 Some(Subpage::Date) => Some(&[Target::DateToggle, Target::DateFormat]),
-                Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
+                Some(Subpage::Clock) => Some(&[
+                    Target::ClockFormat,
+                    Target::ClockTimeFormat,
+                    Target::ClockSize,
+                ]),
                 _ => None,
             };
             if let Some(rows) = setting_rows
@@ -1150,6 +1160,7 @@ impl State {
                             Target::GreetingName
                                 | Target::ClockFormat
                                 | Target::ClockTimeFormat
+                                | Target::ClockSize
                                 | Target::DateFormat
                         ) =>
                     {
@@ -1168,6 +1179,7 @@ impl State {
                         | Subpage::TextRendering,
                     ) => 2,
                     Some(Subpage::Language) => Language::ALL.len(),
+                    Some(Subpage::ClockSize) => crate::model::ClockSize::ALL.len(),
                     Some(Subpage::DateFormat) => crate::model::DateFormat::ALL.len(),
                     _ => 3,
                 };
@@ -2061,6 +2073,14 @@ impl State {
                     self.panel_started = Some(Instant::now());
                 }
             }
+            Target::ClockSize => {
+                self.subpage = Some(Subpage::ClockSize);
+                self.focus = Target::Choice(self.preferences.clock_size.index());
+                self.scroll = 0.;
+                if !self.preferences.reduced_motion {
+                    self.panel_started = Some(Instant::now());
+                }
+            }
             Target::InputRename => self.open_keyboard(TextField::InputName),
             Target::Widget(index) => {
                 let (subpage, focus) = match index {
@@ -2278,6 +2298,9 @@ impl State {
                 match self.subpage.clone() {
                     Some(Subpage::ClockFormat) => self.preferences.hour_24 = index == 1,
                     Some(Subpage::TimeFormat) => self.preferences.show_seconds = index == 1,
+                    Some(Subpage::ClockSize) => {
+                        self.preferences.clock_size = crate::model::ClockSize::ALL[index.min(3)];
+                    }
                     Some(Subpage::DateFormat) => {
                         self.preferences.date_format = crate::model::DateFormat::ALL[index.min(3)];
                     }

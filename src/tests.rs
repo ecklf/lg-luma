@@ -3269,3 +3269,105 @@ fn update_card_shows_progress_restores_retry_and_ignores_presses_while_busy() {
     state.install_response(Response::Finished(Ok(())));
     assert_eq!(state.update_status, Status::Unchecked);
 }
+
+#[test]
+fn clock_size_is_chosen_in_clock_settings_and_keeps_the_clock_centred_on_the_navigation() {
+    use crate::model::ClockSize;
+    let clock = |state: &State| {
+        let label = state.preferences.language.clock(
+            time::OffsetDateTime::UNIX_EPOCH,
+            state.preferences.hour_24,
+            state.preferences.show_seconds,
+        );
+        scene(state)
+            .draw
+            .into_iter()
+            .find_map(|draw| match draw {
+                crate::renderer::Draw::Text(text, rect, style, ..) if text == label => {
+                    Some((rect, style.size))
+                }
+                _ => None,
+            })
+            .unwrap()
+    };
+    let mut state = ready();
+    assert_eq!(state.preferences.clock_size, ClockSize::Medium);
+    // Medium is the original header clock: 24 px in a 28.8 px line at y 62.4.
+    let (rect, size) = clock(&state);
+    assert_eq!((rect.x, rect.y, rect.h, size), (84., 62.4, 28.8, 24.));
+    let nav = view::navigation(
+        &view::Assets {
+            root: PathBuf::new(),
+            version: "test".into(),
+            metrics: BTreeMap::new(),
+            artwork: crate::app_artwork::Service::new(false),
+        },
+        state.preferences.language,
+    )
+    .surface;
+    assert!(rect.x + rect.w <= nav.x);
+    // Settings → General → Clock → Size → Extra large.
+    state.open(2);
+    state.focus = Target::Setting(1);
+    state.direction(Direction::Right, &controls(&state));
+    state.direction(Direction::Down, &controls(&state));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::ClockSize);
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.subpage, Some(crate::state::Subpage::ClockSize));
+    assert_eq!(state.focus, Target::Choice(1));
+    assert!(
+        controls(&state)
+            .iter()
+            .any(|c| c.target == Target::Choice(3))
+    );
+    for _ in 0..2 {
+        state.direction(Direction::Down, &controls(&state));
+    }
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.clock_size, ClockSize::ExtraLarge);
+    assert_eq!(state.subpage, Some(crate::state::Subpage::Clock));
+    assert_eq!(state.focus, Target::ClockSize);
+    for size in ClockSize::ALL {
+        state.preferences.clock_size = size;
+        let (rect, font) = clock(&state);
+        assert_eq!(font, size.font_size());
+        assert!(
+            (rect.y + rect.h / 2. - 76.8).abs() < 0.01,
+            "{size:?} centred on the nav bar"
+        );
+        assert!(
+            rect.x + rect.w <= nav.x,
+            "{size:?} stays left of the navigation"
+        );
+    }
+    // Back leaves the clock page for General, like the other clock settings.
+    state.back();
+    assert_eq!(state.focus, Target::Setting(1));
+    assert!(state.subpage.is_none());
+}
+
+#[test]
+fn clock_size_preferences_round_trip_and_tolerate_unknown_values() {
+    use crate::model::{ClockSize, Preferences};
+    let saved = serde_json::to_value(Preferences {
+        clock_size: ClockSize::ExtraLarge,
+        ..Preferences::default()
+    })
+    .unwrap();
+    assert_eq!(saved["clock_size"], "extra-large");
+    let loaded: Preferences = serde_json::from_value(saved).unwrap();
+    assert_eq!(loaded.clock_size, ClockSize::ExtraLarge);
+    for (value, size) in [
+        (serde_json::json!("small"), ClockSize::Small),
+        (serde_json::json!("huge"), ClockSize::Medium),
+        (serde_json::json!(3), ClockSize::Medium),
+    ] {
+        let loaded: Preferences =
+            serde_json::from_value(serde_json::json!({ "clock_size": value })).unwrap();
+        assert_eq!(loaded.clock_size, size);
+    }
+    let older: Preferences =
+        serde_json::from_value(serde_json::json!({ "hour_24": true })).unwrap();
+    assert_eq!(older.clock_size, ClockSize::Medium);
+}
