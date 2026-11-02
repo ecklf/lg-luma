@@ -104,6 +104,49 @@ pub enum InputMode {
     Off,
 }
 
+/// The interface scale chosen in General › Interface scale.
+#[derive(Clone, Copy, Debug, Default, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum UiSize {
+    #[default]
+    Normal,
+    Large,
+    Larger,
+}
+impl UiSize {
+    pub fn scale(self) -> f32 {
+        match self {
+            Self::Normal => 1.,
+            Self::Large => 1.25,
+            Self::Larger => 1.5,
+        }
+    }
+    pub const ALL: [Self; 3] = [Self::Normal, Self::Large, Self::Larger];
+    pub fn index(self) -> usize {
+        Self::ALL.iter().position(|size| *size == self).unwrap_or(0)
+    }
+    /// Message keys of the option's name and description.
+    pub fn keys(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Normal => ("sizeNormal", "sizeNormalHint"),
+            Self::Large => ("sizeLarge", "sizeLargeHint"),
+            Self::Larger => ("sizeLarger", "sizeLargerHint"),
+        }
+    }
+}
+/// Unknown or malformed sizes fall back to normal instead of failing the preferences.
+impl<'de> Deserialize<'de> for UiSize {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(
+            match serde_json::Value::deserialize(deserializer)?.as_str() {
+                Some("large") => Self::Large,
+                Some("larger") => Self::Larger,
+                _ => Self::Normal,
+            },
+        )
+    }
+}
+
 /// POST is the default because Home Assistant webhooks accept only POST and PUT
 /// unless GET is enabled on the trigger.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -243,6 +286,7 @@ pub struct Preferences {
     pub temperature_unit: Unit,
     #[serde(deserialize_with = "crate::i18n::deserialize_language")]
     pub language: Language,
+    pub ui_scale: UiSize,
     /// Applied at launch because MSAA is selected when SDL creates the GL window.
     #[serde(deserialize_with = "crate::text_rendering::deserialize")]
     pub text_rendering: crate::text_rendering::TextRendering,
@@ -277,6 +321,7 @@ impl Default for Preferences {
             weather_location: None,
             temperature_unit: Unit::Celsius,
             language: Language::En,
+            ui_scale: UiSize::Normal,
             text_rendering: crate::text_rendering::TextRendering::default(),
             wallpaper_cycle: false,
             wallpaper_gradient: true,
