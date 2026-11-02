@@ -221,6 +221,25 @@ You can use [LG Input Hook](https://repo.webosbrew.org/apps/org.webosbrew.inputh
 
 Test on a spare button first. Disable the mapping in Input Hook to restore normal Home behavior.
 
+### TV Input Method
+
+Turn on **Settings → System → Show as TV input** to list Luma in LG's input picker. Luma runs
+`luma-helper tv-input` through Homebrew Channel's root service; over SSH,
+`/media/developer/apps/usr/palm/applications/com.ecklf.luma/luma-helper tv-input enable` does the
+same (use `/media/cryptofs/apps/usr/palm/applications/com.ecklf.luma` for Homebrew installs). The helper
+verifies that LG actually lists Luma, and undoes registration if it does not. Use `status` to
+inspect it or `disable` to remove it. This is separate from takeover and never changes Home Auto
+Launch, HDMI selection, or the power-on preference automatically.
+
+Select Luma from LG's input picker and use the TV's last-input startup option where available.
+On an LG 49UN71006LB (webOS 5.6.2), Luma returned after standby and a full software reboot, with
+takeover and Home Auto Launch disabled. Other firmware remains untested; registration alone does
+not prove startup support. Select HDMI or Live TV before removing the entry. Luma is hidden from
+its own input row.
+Thanks to phranklins in [#79](https://github.com/ecklf/lg-luma/issues/79#issuecomment-6416333882)
+and [Hearth](https://github.com/rudra-avatar/Hearth/blob/b9f0a1c8240303b7cd52fdc820e2f840ac6d3a0e/src/lib/tvinput.ts)
+for the suggestion and API reference.
+
 ## Features
 
 ### Backgrounds
