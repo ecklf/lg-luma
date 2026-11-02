@@ -928,6 +928,15 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(7));
     state.direction(Direction::Down, &controls(&state));
+    assert_eq!(
+        state.focus,
+        Target::Setting(crate::state::HOMEBREW_UPDATES_ROW)
+    );
+    // Off by default; the row switches automatic Homebrew updates on and saves.
+    assert!(!state.preferences.homebrew_updates);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.homebrew_updates);
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(5));
     assert_eq!(state.activate(), vec![Effect::Quit]);
     state.back();

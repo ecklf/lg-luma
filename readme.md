@@ -256,6 +256,15 @@ Shortcut tiles sit on Home like apps but send a web request when selected, for e
 Assistant webhook. Open **Settings → Widgets → Shortcuts → Configure** and scan
 the QR code.
 
+### Homebrew app updates
+
+Turn on **Settings → System → Update Homebrew apps automatically** to keep apps installed through
+Homebrew Channel, such as Moonlight or YouTube AdFree, current. It is off by default. When on, Luma
+compares them with [Homebrew Channel's repository](https://repo.webosbrew.org) ten minutes after
+starting and then twice a day, and installs a newer version only while that app is closed and only
+if the package matches the repository's checksum. A short notice names each updated app. Luma and
+Homebrew Channel keep their own update paths and are never updated by this setting.
+
 ## Development
 
 ### Setup & Building

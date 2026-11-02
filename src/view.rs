@@ -5,8 +5,8 @@ use crate::{
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
         APPS_COLUMNS, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT,
-        HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State,
-        Subpage, Target, TextField, WIDGETS_SECTION,
+        HOME_TILE_PITCH, HOME_TILE_WIDTH, HOMEBREW_UPDATES_ROW, KEYS, Overlay, Page, Rect,
+        SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -2622,6 +2622,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     "type",
                     Some(language.t(state.preferences.text_rendering.label_key())),
                     true,
+                ),
+                (
+                    HOMEBREW_UPDATES_ROW,
+                    language.t("homebrewUpdates"),
+                    "refresh",
+                    Some(language.t(if state.preferences.homebrew_updates {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
+                    false,
                 ),
                 (5, language.t("quitApp"), "power", None, false),
             ]

@@ -879,6 +879,23 @@ a simulated update, stored only in memory, and disables the public feed check ev
 **Settings → System** to see it. The install action is rejected locally without HTTP, Luna calls or
 package installation in these previews.
 
+## Homebrew app updates
+
+`src/homebrew_updates.rs` runs only on interactive TV runs, and only while **Settings → System →
+Update Homebrew apps automatically** (`homebrew_updates`, default off) is on. Ten minutes after
+start and then every twelve hours it reads `https://repo.webosbrew.org/api/apps.json` once
+(HTTPS-only agent shared with the update worker, 4 MiB limit). Packages with an invalid id or
+version, a non-HTTPS or escaping URL, a malformed SHA-256 or an implausible size are skipped. It
+compares the versions in `/media/developer/apps/usr/palm/applications/*/appinfo.json` (folders
+whose manifest names another app are ignored) and never downgrades or touches `com.ecklf.luma` or
+`org.webosbrew.hbchannel`. A newer package is downloaded with the update worker's size and SHA-256
+check into a private random directory, then handed to `luma-helper app-update ID VERSION SHA256
+IPK` through Homebrew Channel's exec. The helper repeats every check as root: it copies the
+package into `/var/lib/luma-update/apps`, verifies the SHA-256 of that copy, refuses while SAM
+lists the app as running, installs through `com.webos.appInstallService/dev/install`, and
+reports success only once the installed manifest shows the new version (up to four minutes). A
+running app is retried at the next check. Successful updates show a short notice.
+
 ## Compatibility
 
 Luma's native startup, rendering and app/input discovery have been verified on rooted webOS 26.

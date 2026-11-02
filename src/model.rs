@@ -251,6 +251,8 @@ pub struct Preferences {
     pub wallpaper_gradient: bool,
     /// Unix seconds of the last automatic or chosen wallpaper change, for the timed modes.
     pub wallpaper_changed: u64,
+    /// Opt-in: install newer versions of Homebrew apps automatically (homebrew_updates.rs).
+    pub homebrew_updates: bool,
 }
 
 impl Default for Preferences {
@@ -281,6 +283,7 @@ impl Default for Preferences {
             wallpaper_cycle: false,
             wallpaper_gradient: true,
             wallpaper_changed: 0,
+            homebrew_updates: false,
         }
     }
 }

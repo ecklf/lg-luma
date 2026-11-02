@@ -24,6 +24,9 @@ struct Fixture {
     pauses: Cell<usize>,
     fail_unmount: Cell<bool>,
     stuck: Cell<bool>,
+    /// Other apps SAM reports as running, and the version LG's installer installs next.
+    running_apps: RefCell<Vec<String>>,
+    installs: RefCell<Option<String>>,
 }
 impl Fixture {
     fn new() -> Self {
@@ -53,6 +56,8 @@ impl Fixture {
             pauses: Cell::new(0),
             fail_unmount: Cell::new(false),
             stuck: Cell::new(false),
+            running_apps: RefCell::new(vec![]),
+            installs: RefCell::new(None),
         };
         for dir in [
             "/var/lib/luma-home/app",
@@ -218,7 +223,32 @@ impl System for Fixture {
                 json!({"returnValue":true})
             }
             "running" => {
-                json!({"returnValue":true,"running":if self.normal.get(){vec![json!({"id":APP})]}else{vec![]}})
+                let mut running: Vec<Value> = self
+                    .running_apps
+                    .borrow()
+                    .iter()
+                    .map(|id| json!({"id":id}))
+                    .collect();
+                if self.normal.get() {
+                    running.push(json!({"id":APP}));
+                }
+                json!({"returnValue":true,"running":running})
+            }
+            "install" => {
+                // LG's developer installer: replaces the app with the package's version.
+                let id = payload["id"].as_str().unwrap();
+                let package = payload["ipkUrl"].as_str().unwrap();
+                assert!(
+                    system::exists(self, package),
+                    "installer reads the root-owned copy"
+                );
+                if let Some(version) = self.installs.borrow_mut().take() {
+                    self.put_json(
+                        &format!("{}/{id}/appinfo.json", crate::app_update::APPS),
+                        json!({"id":id,"version":version}),
+                    );
+                }
+                json!({"returnValue":true})
             }
             "closeByAppId" => {
                 if self.close_normal.get() {
@@ -954,4 +984,110 @@ fn persistent_preferences_win_over_package_local_migration_and_active_stages_ref
         f.read("/usr/palm/applications/com.webos.app.home/splash.png"),
         b"prism"
     );
+}
+mod app_update_tests {
+    use super::*;
+    use crate::app_update;
+    const MOON: &str = "com.limelight.webos";
+    const PACKAGE: &[u8] = b"moonlight 1.6.37 package";
+    // sha256 of PACKAGE
+    fn sha() -> String {
+        ring::digest::digest(&ring::digest::SHA256, PACKAGE)
+            .as_ref()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
+    }
+    fn tv() -> Fixture {
+        let f = Fixture::new();
+        f.put_json(
+            &format!("{}/{MOON}/appinfo.json", app_update::APPS),
+            json!({"id":MOON,"version":"1.6.36"}),
+        );
+        f.put("/tmp/luma-update-x/package.ipk", PACKAGE);
+        f
+    }
+    fn update(f: &Fixture, id: &str, version: &str, sha: &str) -> Result<Value> {
+        app_update::install(
+            f,
+            id,
+            version,
+            sha,
+            Path::new("/tmp/luma-update-x/package.ipk"),
+        )
+    }
+    #[test]
+    fn a_verified_package_is_installed_from_a_root_owned_copy_and_confirmed() {
+        let f = tv();
+        *f.installs.borrow_mut() = Some("1.6.37".into());
+        let reply = update(&f, MOON, "1.6.37", &sha()).unwrap();
+        assert_eq!(reply["changed"], true);
+        assert_eq!(app_update::installed_version(&f, MOON).unwrap(), "1.6.37");
+        assert!(
+            f.calls()
+                .iter()
+                .any(|c| c.contains("appInstallService/dev/install")
+                    && c.contains("/var/lib/luma-update/apps/com.limelight.webos.ipk"))
+        );
+        // The copy is gone afterwards; an already current app is left alone.
+        assert!(!system::exists(
+            &f,
+            "/var/lib/luma-update/apps/com.limelight.webos.ipk"
+        ));
+        assert_eq!(
+            update(&f, MOON, "1.6.37", &sha()).unwrap()["changed"],
+            false
+        );
+    }
+    #[test]
+    fn a_wrong_checksum_never_reaches_the_installer() {
+        let f = tv();
+        let error = update(&f, MOON, "1.6.37", &"0".repeat(64)).unwrap_err();
+        assert!(error.contains("checksum"));
+        assert!(!f.calls().iter().any(|c| c.contains("dev/install")));
+        assert_eq!(app_update::installed_version(&f, MOON).unwrap(), "1.6.36");
+        assert!(!system::exists(
+            &f,
+            "/var/lib/luma-update/apps/com.limelight.webos.ipk"
+        ));
+    }
+    #[test]
+    fn running_excluded_or_foreign_apps_are_not_updated() {
+        let f = tv();
+        f.running_apps.borrow_mut().push(MOON.into());
+        assert!(
+            update(&f, MOON, "1.6.37", &sha())
+                .unwrap_err()
+                .contains("running")
+        );
+        for id in [APP, "org.webosbrew.hbchannel", "../etc", "netflix"] {
+            assert!(update(&f, id, "1.6.37", &sha()).is_err(), "{id}");
+        }
+        assert!(!f.calls().iter().any(|c| c.contains("dev/install")));
+    }
+    #[test]
+    fn malformed_requests_and_non_root_callers_are_refused() {
+        let f = tv();
+        for (version, sha) in [
+            ("1.6.37-beta", sha()),
+            ("", sha()),
+            ("1.6.37", "ABC".into()),
+            ("1.6.37", sha().to_uppercase()),
+        ] {
+            assert!(update(&f, MOON, version, &sha).is_err(), "{version} {sha}");
+        }
+        assert!(
+            app_update::install(&f, MOON, "1.6.37", &sha(), Path::new("relative.ipk")).is_err()
+        );
+        f.uid.set(1000);
+        assert!(update(&f, MOON, "1.6.37", &sha()).is_err());
+    }
+    #[test]
+    fn an_installer_that_never_finishes_is_reported() {
+        let f = tv();
+        // The installer accepts but never changes the installed version.
+        let error = update(&f, MOON, "1.6.37", &sha()).unwrap_err();
+        assert!(error.contains("not updated"));
+        assert_eq!(f.pauses.get(), 240);
+    }
 }

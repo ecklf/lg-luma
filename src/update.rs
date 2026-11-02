@@ -276,7 +276,7 @@ pub const CURRENT: &str = env!("CARGO_PKG_VERSION");
 /// Only IPKs from this project's own release assets are installed.
 const RELEASES: &str = "https://github.com/ecklf/lg-luma/releases/download/";
 /// A fresh directory per attempt; never truncate a predictable path in shared /tmp.
-fn download_directory() -> Result<(String, PathBuf), String> {
+pub(crate) fn download_directory() -> Result<(String, PathBuf), String> {
     use ring::rand::SecureRandom;
     use std::os::unix::fs::DirBuilderExt;
     let mut random = [0u8; 16];
@@ -326,7 +326,7 @@ fn wait_for_install(attempt: &str) -> Result<(), String> {
     }
 }
 const FEED_LIMIT: u64 = 256 * 1024;
-const MAX_IPK: u64 = 96 * 1024 * 1024;
+pub(crate) const MAX_IPK: u64 = 96 * 1024 * 1024;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Release {
@@ -401,7 +401,7 @@ pub enum Response {
     Installing(String),
 }
 
-fn agent() -> ureq::Agent {
+pub(crate) fn agent() -> ureq::Agent {
     ureq::Agent::config_builder()
         // GitHub answers release downloads with a redirect to its asset storage.
         .max_redirects(5)
@@ -436,10 +436,12 @@ fn check(agent: &ureq::Agent) -> Result<Option<Release>, String> {
     Ok(newer(CURRENT, &release.version).then_some(release))
 }
 
-fn download(
+/// Downloads `release` to `destination`, reporting progress in 5 % steps, and verifies its size and
+/// SHA-256 before anything is installed.
+pub(crate) fn download(
     agent: &ureq::Agent,
     release: &Release,
-    progress: &Sender<Response>,
+    mut progress: impl FnMut(u8),
     destination: &Path,
 ) -> Result<(), String> {
     let mut response = agent
@@ -469,7 +471,7 @@ fn download(
         let percent = (total * 100 / release.size).min(100) as u8;
         if percent >= reported + 5 {
             reported = percent;
-            let _ = progress.send(Response::Progress(percent));
+            progress(percent);
         }
     }
     file.sync_all().map_err(|e| e.to_string())?;
@@ -531,7 +533,10 @@ impl Worker {
                                 }
                                 let (attempt, directory) = download_directory()?;
                                 let ipk = directory.join("package.ipk");
-                                if let Err(error) = download(&agent, &release, &responses, &ipk) {
+                                let report = |percent| {
+                                    let _ = responses.send(Response::Progress(percent));
+                                };
+                                if let Err(error) = download(&agent, &release, report, &ipk) {
                                     let _ = fs::remove_dir_all(&directory);
                                     return Err(error);
                                 }
