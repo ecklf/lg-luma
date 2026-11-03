@@ -507,6 +507,18 @@ try {
     'Pointer focus preserves strip position',
   );
   await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
+  // #175: with the Back shortcut off, a held Back no longer opens Recent apps.
+  const backRecentsPath = 'settings,down,enter,down,down,down,down,enter';
+  const backRecentsOff = await scenario('back-recents-off', backRecentsPath);
+  assert.deepEqual(backRecentsOff.focus, { Setting: 14 });
+  assert.equal(backRecentsOff.preferences.back_recents, false);
+  assert.ok(backRecentsOff.ui_text.includes('Back button opens Recent apps'));
+  const heldWithoutRecents = await scenario('back-recents-held', 'hold-back');
+  assert.equal(heldWithoutRecents.modal, false);
+  const backRecentsOn = await scenario('back-recents-on', backRecentsPath);
+  assert.equal(backRecentsOn.preferences.back_recents, true);
+  const heldWithRecents = await scenario('back-recents-held-on', 'hold-back,await-recents');
+  assert.equal(heldWithRecents.modal, true);
   const gradientDisabled = await scenario(
     'wallpaper-gradient-disabled',
     'settings,down,down,enter,up,up,right,enter',

@@ -251,6 +251,8 @@ pub struct Preferences {
     pub wallpaper_gradient: bool,
     /// Unix seconds of the last automatic or chosen wallpaper change, for the timed modes.
     pub wallpaper_changed: u64,
+    /// Back on Home, or holding Back, opens Recent apps (#175).
+    pub back_recents: bool,
 }
 
 impl Default for Preferences {
@@ -281,6 +283,7 @@ impl Default for Preferences {
             wallpaper_cycle: false,
             wallpaper_gradient: true,
             wallpaper_changed: 0,
+            back_recents: true,
         }
     }
 }

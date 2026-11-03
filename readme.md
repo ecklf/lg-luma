@@ -250,6 +250,9 @@ Press **Back** on Home, or hold **Back** for 0.6 seconds from any page, to open 
 
 These shortcuts work while Luma is focused. From another app, return to Luma first.
 
+Turn off **Settings → General → Back button opens Recent apps** if you do not use the switcher;
+Back then only closes dialogs and returns to Home.
+
 ### Shortcut tiles
 
 Shortcut tiles sit on Home like apps but send a web request when selected, for example to a Home

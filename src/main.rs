@@ -391,7 +391,8 @@ fn script(
         "right" => state.direction(Direction::Right, controls),
         "enter" => state.activate(),
         "back" => state.back(),
-        "recents" | "hold-back" => state.open_recents(),
+        "recents" => state.open_recents(),
+        "hold-back" => state.back_recents(),
         "menu" => {
             state.options();
             vec![]
@@ -1377,7 +1378,7 @@ fn run() -> Result<(), String> {
                         _ if native_hold => {
                             if !repeat && back_button.native_hold(Instant::now()) {
                                 press = None;
-                                pending = state.open_recents();
+                                pending = state.back_recents();
                             }
                         }
                         key if is_back(key, webos) => {
@@ -1441,7 +1442,7 @@ fn run() -> Result<(), String> {
                 } if is_back(key, webos) => {
                     if let Some(long) = back_button.release(key, Instant::now()) {
                         pending = if long {
-                            state.open_recents()
+                            state.back_recents()
                         } else {
                             state.back()
                         };
@@ -1588,7 +1589,7 @@ fn run() -> Result<(), String> {
         }
         if back_button.held(Instant::now()) {
             press = None;
-            let pending = state.open_recents();
+            let pending = state.back_recents();
             running &= effects(
                 pending,
                 &mut state,

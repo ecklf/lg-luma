@@ -3793,5 +3793,20 @@
     "vi": "Phiên chỉnh sửa đã kết thúc",
     "nl": "Bewerksessie beëindigd",
     "sv": "Redigeringssessionen har avslutats"
+  },
+  "backRecents": {
+    "en": "Back button opens Recent apps",
+    "de": "Zurück-Taste öffnet zuletzt verwendete Apps",
+    "es": "El botón Atrás abre las apps recientes",
+    "zh": "返回键打开最近使用的应用",
+    "zh-tw": "返回鍵開啟最近使用的應用程式",
+    "pt": "O botão Voltar abre os apps recentes",
+    "it": "Il tasto Indietro apre le app recenti",
+    "ru": "Кнопка «Назад» открывает недавние приложения",
+    "pl": "Przycisk Wstecz otwiera ostatnie aplikacje",
+    "fr": "Le bouton Retour ouvre les apps récentes",
+    "vi": "Nút Quay lại mở ứng dụng gần đây",
+    "nl": "Terugknop opent recente apps",
+    "sv": "Bakåtknappen öppnar senaste appar"
   }
 }
