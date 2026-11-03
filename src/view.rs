@@ -738,11 +738,22 @@ fn header(
     }
     for (index, key) in ["home", "apps", "settings"].into_iter().enumerate() {
         let rect = layout.items[index];
+        // The focus ring is hidden for the pointer, so hover gets the same light
+        // pill that focused buttons use elsewhere.
+        let hovered = state.pointer && state.focus == Target::Nav(index);
+        if hovered && state.page_index() != index {
+            out.draw.push(Draw::RoundedGradient(
+                rect,
+                32.,
+                c(0xfafafa, 1.),
+                c(0xe5e5e5, 1.),
+            ));
+        }
         out.text(
             language.t(key),
             Rect::new(rect.x, 64.3, rect.w, 25.),
             text(20.8, 550, -0.02),
-            if state.page_index() == index {
+            if state.page_index() == index || hovered {
                 c(0x2c2c2c, 1.)
             } else {
                 c(0xeeeeee, 0.73)
