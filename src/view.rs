@@ -3045,7 +3045,9 @@ fn device_icon(name: &str) -> &'static str {
         "switch"
     } else if name.contains("shield") {
         "shield"
-    } else if ["xbox", "console"].iter().any(|part| name.contains(part)) {
+    } else if name.contains("xbox") {
+        "xbox"
+    } else if name.contains("console") {
         "console"
     } else if ["pc", "computer", "laptop"]
         .iter()
