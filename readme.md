@@ -98,6 +98,7 @@ https://github.com/user-attachments/assets/2156d640-b8fa-4ea4-a02c-0db4c93bcc5a
 | LG C2 | `OLED65C2PSA`         | ✅               |
 | LG C3 | `OLED65C31LA`         | ✅               |
 | LG C3 | `OLED65C36LC`         | ✅               |
+| LG C4 | `OLED77C44LA`         | ✅               |
 | LG C5 | `OLED55C57LA`         | ✅               |
 | LG C5 | `OLED55C5PSA`         | Unknown          |
 | LG C6 | `OLED65C6*`           | Unknown          |
