@@ -63,6 +63,7 @@ use time::OffsetDateTime;
 #[derive(Default)]
 struct Options {
     webos_home: bool,
+    webos_preload: bool,
     assets: Option<PathBuf>,
     preferences: Option<PathBuf>,
     screenshot: Option<PathBuf>,
@@ -107,6 +108,7 @@ impl Options {
                         .and_then(serde_json::Value::as_str)
                         .is_some_and(platform::is_home_id)
                     || platform::runs_as_lg_home();
+                result.webos_preload = result.webos_home && launch_is_preload(&metadata);
             }
             eprintln!("Luma webOS launch parameters accepted");
         }
@@ -199,6 +201,10 @@ impl Options {
         }
         Ok(result)
     }
+}
+
+fn launch_is_preload(metadata: &serde_json::Value) -> bool {
+    metadata["reason"] == "preload"
 }
 
 struct Press {
@@ -758,6 +764,9 @@ fn run() -> Result<(), String> {
     let create_window = || {
         let mut builder = video.window("Luma", requested.width, requested.height);
         builder.opengl().allow_highdpi().position_centered();
+        if options.webos_preload {
+            builder.hidden();
+        }
         if options.fullscreen || (webos && options.resolution.is_none()) {
             builder.fullscreen_desktop();
         } else if webos {
@@ -937,7 +946,7 @@ fn run() -> Result<(), String> {
         };
     // Whether a staged Home's relaunch reached the front; see platform::ForegroundCheck.
     let mut foreground = platform::ForegroundCheck::default();
-    let mut focused = true;
+    let mut focused = !options.webos_preload;
     let mut press: Option<Press> = None;
     let mut back_button = BackButton::default();
     let initial_nav = view::navigation(&assets, state.preferences.language);
@@ -946,7 +955,7 @@ fn run() -> Result<(), String> {
     let mut last_frame = Instant::now();
     let mut last_minute = None;
     let mut frame = 0u64;
-    let mut visible = true;
+    let mut visible = !options.webos_preload;
     let mut running = true;
     let mut queued_event = None;
     let mut text_active = false;

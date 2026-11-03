@@ -123,6 +123,11 @@ impl Lifecycle {
         allow(dead_code)
     )]
     pub fn from_reply(reply: &Value) -> Option<Self> {
+        // SAM may relaunch a registered Home solely to keep it preloaded. Raising
+        // its window here would interrupt the app the viewer is using.
+        if reply["reason"] == "preload" {
+            return None;
+        }
         let name = reply
             .get("event")
             .or_else(|| reply.get("message"))

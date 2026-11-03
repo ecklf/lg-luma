@@ -2008,6 +2008,10 @@ fn home_lifecycle_replies_map_for_both_registration_versions() {
         Some(Lifecycle::Relaunch)
     );
     assert_eq!(
+        Lifecycle::from_reply(&json!({"event": "relaunch", "reason": "preload"})),
+        None
+    );
+    assert_eq!(
         Lifecycle::from_reply(&json!({"event": "close"})),
         Some(Lifecycle::Close)
     );
@@ -2033,6 +2037,13 @@ fn home_lifecycle_replies_map_for_both_registration_versions() {
     ] {
         assert_eq!(Lifecycle::from_reply(&reply), None, "{reply}");
     }
+}
+
+#[test]
+fn home_preload_launch_is_identified_from_sam_metadata() {
+    assert!(crate::launch_is_preload(&json!({"reason": "preload"})));
+    assert!(!crate::launch_is_preload(&json!({"reason": "undefined"})));
+    assert!(!crate::launch_is_preload(&json!({"reason": "hotKey"})));
 }
 
 #[test]
