@@ -709,7 +709,7 @@ fn header(
     let language = state.preferences.language;
     let clock = language.clock(
         now,
-        state.preferences.hour_24,
+        state.preferences.hour_24_clock(),
         state.preferences.show_seconds,
     );
     out.text(
@@ -2259,8 +2259,16 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 })
                 .collect(),
             Subpage::ClockFormat => vec![
-                (language.t("hour12"), None, !state.preferences.hour_24),
-                (language.t("hour24"), None, state.preferences.hour_24),
+                (
+                    language.t("hour12"),
+                    None,
+                    !state.preferences.hour_24_clock(),
+                ),
+                (
+                    language.t("hour24"),
+                    None,
+                    state.preferences.hour_24_clock(),
+                ),
             ],
             Subpage::TimeFormat => vec![
                 ("HH:MM", None, !state.preferences.show_seconds),
@@ -2826,7 +2834,7 @@ fn clock_settings(out: &mut Scene, state: &State, assets: &Assets) {
         (
             Target::ClockFormat,
             "clockFormat",
-            language.t(if state.preferences.hour_24 {
+            language.t(if state.preferences.hour_24_clock() {
                 "hour24"
             } else {
                 "hour12"

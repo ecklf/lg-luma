@@ -174,6 +174,7 @@ pub fn redirect_to_home() -> Result<bool, String> {
 
 pub enum Request {
     Refresh,
+    Clock,
     RefreshInputs,
     Launch(String),
     Uninstall(String),
@@ -185,6 +186,7 @@ pub enum Request {
 }
 pub enum Response {
     Inventory(Result<(Inventory, Option<String>), String>),
+    Clock(Option<bool>),
     Inputs(Result<Vec<Input>, String>),
     Launched(Result<(), String>),
     Uninstalled {
@@ -253,6 +255,7 @@ impl Platform {
                     } else {
                         Ok((desktop_inventory.clone(), None))
                     }),
+                    Request::Clock => Response::Clock(if webos { tv_clock() } else { None }),
                     Request::RefreshInputs => Response::Inputs(if webos {
                         input_inventory()
                     } else {
@@ -716,6 +719,28 @@ fn command_reply(envelope: &Value) -> Result<Value, String> {
         return Err(failure("Homebrew inventory JSON is not a Luna response"));
     }
     checked_response(response)
+}
+
+/// The TV's clock format. webOS 4 lets public apps read `localeInfo`; where a firmware
+/// does not, Homebrew's elevated service asks instead.
+fn tv_clock() -> Option<bool> {
+    let uri = "luna://com.webos.settingsservice/getSystemSettings";
+    let payload = json!({"keys": ["localeInfo"]});
+    let reply = call(uri, payload.clone()).or_else(|_| {
+        let command = format!(
+            "if [ \"$(id -u)\" = 0 ]; then /usr/bin/luna-send -n 1 -w 4000 {uri} '{payload}'; else printf '%s\\n' '{{\"returnValue\":false,\"errorText\":\"Homebrew Channel needs root access\"}}'; fi"
+        );
+        let envelope = call(
+            "luna://org.webosbrew.hbchannel.service/exec",
+            json!({"command": command}),
+        )?;
+        command_reply(&envelope)
+    });
+    let clock = reply
+        .ok()
+        .and_then(|reply| crate::model::tv_hour_24(reply.get("settings")?.get("localeInfo")?));
+    eprintln!("Luma TV clock: {clock:?}");
+    clock
 }
 
 fn recent_call(command: &crate::recents::Command) -> Result<Value, String> {
