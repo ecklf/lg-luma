@@ -1054,6 +1054,14 @@ support from #142. Manifest takeover remains limited to webOS
 10/11. The optional `tv-input` subcommand implements the #124 registration/verification contract;
 its Settings integration is still tracked by that separate PR and requires `supportGIP`.
 
+On webOS 5/6 the helper also installs the early cold-boot start: `enable` copies `luma-early`,
+writes its four LS2 definitions, rescans, and appends `home-filter.js` (with the selected Home
+target and the input policy written into the copy) to LG's key-filter chain, all best effort.
+`startup-home on|off` and `unpin` save, pin and restore EIM's `lastinput` and `lastInputApp` for
+the selected target. The `early` and `pin` paths stay in `home.sh`, so they run before the helper
+during a cold boot. `disable` removes the early start and restores the inputs even when single
+cleanup steps fail.
+
 The former VM tests for interpreter code are replaced by filesystem and service fixtures in
 `tv-helper/src/tests.rs`. They do not call a TV, real LS2 service or network. Host helper executables
 reject TV operations; only ARM webOS builds can perform them. Use `cargo test -p luma-tv-helper`

@@ -180,6 +180,24 @@ bind-mounts Luma's executable over LG's `/usr/bin/com.webos.app.home`. LG's Home
 in place and Luma registers with SAM itself, so the Home key brings the running Luma back instead
 of restarting it. The commands and the cold-boot hook are the same.
 
+A cold boot opens Luma at about 20 s instead of after the Homebrew hook (~50 s or later). The
+Homebrew hooks start late, but LG's service hub reads `/var/luna-service2` at `core-boot-done`.
+`home.sh enable` therefore also registers a small root helper there (`com.webos.service.lumahome`,
+a copy of the package's `luma-early` in `/var/lib/luma-home`) and adds a compositor key filter
+(`home-filter.js`) to LG's chain. While the TV boots, the filter asks the helper to mount Luma and
+then opens Home. If this fails, the cold-boot hook mounts Luma as before. Keys pass through the
+filter unchanged, and `home.sh disable` removes both.
+
+At every power-on LG opens the last input from `/var/lib/eim/lastinput`, so Live TV showed before
+Luma. The integration pins that entry to Home: a read-only copy is mounted over it, and the file
+underneath names Home too, because LG reads it before any hook runs in a cold boot. The key filter
+also points Back/Exit from an app at Home instead of Live TV. Inputs you choose work as before;
+`home.sh disable` restores the recorded input.
+
+Until Luma's window opens in a cold boot, the key filter shows a loading screen in LG's compositor:
+Luma's mark on black and, after 2 s, a spinner. It ends as soon as an app is in front, on any key,
+or after 90 s.
+
 </details>
 
 <details>
@@ -322,3 +340,19 @@ See [Releases](development.md#releases) for the workflow and repository setup.
 
 Luma is licensed under MIT.\
 Luma is not affiliated with LG, Apple, or any other brands shown in its UI.
+
+### Optional power-on and Back/Exit policy (webOS 5/6)
+
+Home takeover alone preserves the TV's input policy. After enabling Home takeover, owners who
+want Luma instead of the last TV input at power-on and after leaving apps can explicitly run:
+
+```sh
+sh /var/lib/luma-home/home.sh startup-home on
+# Restore the saved power-on and Back/Exit input while keeping Home takeover:
+sh /var/lib/luma-home/home.sh startup-home off
+```
+
+Select the desired fallback TV input before opting in. This experimental policy pins EIM's
+last-input file read-only; tested on webOS 5.6.2 only. Disabling takeover also restores the saved
+input. Existing draft installations without a saved prior setting use the input recorded in
+EIM's `appId` as their migration fallback.
