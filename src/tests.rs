@@ -3269,3 +3269,27 @@ fn update_card_shows_progress_restores_retry_and_ignores_presses_while_busy() {
     state.install_response(Response::Finished(Ok(())));
     assert_eq!(state.update_status, Status::Unchecked);
 }
+
+#[test]
+fn hovering_an_inactive_nav_tab_draws_a_highlight() {
+    let mut state = ready();
+    let highlights = |state: &State| {
+        let scene = scene(state);
+        let tab = scene
+            .controls
+            .iter()
+            .find(|c| c.target == Target::Nav(1))
+            .unwrap()
+            .rect;
+        scene
+            .draw
+            .iter()
+            .filter(|draw| matches!(draw, crate::renderer::Draw::RoundedGradient(r, ..) if r.x == tab.x && r.w == tab.w))
+            .count()
+    };
+    assert_eq!(highlights(&state), 0);
+    state.pointer_focus(Target::Nav(1));
+    assert_eq!(highlights(&state), 1);
+    state.pointer_focus(Target::Nav(0));
+    assert_eq!(highlights(&state), 0);
+}
