@@ -109,14 +109,25 @@ pub fn deserialize_unit<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Un
 pub fn deserialize_enabled<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
     Ok(Value::deserialize(deserializer)? != Value::Bool(false))
 }
+/// Opt-in switches: only `true` turns them on, and anything malformed leaves them off.
+pub fn deserialize_flag<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    Ok(Value::deserialize(deserializer)? == Value::Bool(true))
+}
 pub fn format_temperature(celsius: f64, unit: Unit) -> String {
+    format!("{}{}", degrees(celsius, unit), unit.symbol())
+}
+/// A temperature with just a degree sign, for compact places such as the hourly strip.
+pub fn format_degrees(celsius: f64, unit: Unit) -> String {
+    format!("{}°", degrees(celsius, unit))
+}
+fn degrees(celsius: f64, unit: Unit) -> i32 {
     let value = if unit == Unit::Fahrenheit {
         celsius * 9. / 5. + 32.
     } else {
         celsius
     };
     // Match JavaScript Math.round, including negative half-degree ties.
-    format!("{}{}", (value + 0.5).floor() as i32, unit.symbol())
+    (value + 0.5).floor() as i32
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
@@ -151,6 +162,142 @@ pub fn parse_reading(value: &Value) -> Result<Reading, String> {
     }
     Err("The weather service returned an unreadable reading.".into())
 }
+/// One hour of the forecast strip. Times are Unix seconds; `Details::offset` gives local time.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Hour {
+    pub time: i64,
+    pub temperature: f64,
+    pub code: u8,
+    pub is_day: bool,
+    /// Chance of precipitation in percent.
+    pub rain: Option<u8>,
+}
+
+/// What Home can show beside the current reading. Every field is optional, so a partial reply
+/// still shows what it has.
+#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
+#[serde(default)]
+pub struct Details {
+    /// The location's UTC offset in seconds, for its sunrise, sunset and hours.
+    pub offset: i32,
+    pub high: Option<f64>,
+    pub low: Option<f64>,
+    pub sunrise: Option<i64>,
+    pub sunset: Option<i64>,
+    pub uv: Option<f64>,
+    pub hours: Vec<Hour>,
+    /// European air quality index, when it was asked for and answered.
+    pub air: Option<f64>,
+    /// Whether air quality was asked for, so turning it on fetches once instead of waiting.
+    pub air_requested: bool,
+}
+impl Details {
+    /// The highest chance of rain in the three hours from `now`.
+    pub fn rain_chance(&self, now: i64) -> Option<u8> {
+        self.upcoming(now)
+            .take_while(|hour| hour.time < now + 3 * 60 * 60)
+            .filter_map(|hour| hour.rain)
+            .max()
+    }
+    /// Hours from the current one on.
+    pub fn upcoming(&self, now: i64) -> impl Iterator<Item = &Hour> {
+        self.hours
+            .iter()
+            .filter(move |hour| hour.time + 60 * 60 > now)
+    }
+}
+
+const MAX_HOURS: usize = 12;
+
+fn temperature(value: &Value) -> Option<f64> {
+    value
+        .as_f64()
+        .filter(|t| t.is_finite() && (-100.0..=70.0).contains(t))
+}
+
+fn first(value: &Value, key: &str) -> Option<Value> {
+    value[key]
+        .as_array()
+        .and_then(|values| values.first())
+        .cloned()
+}
+
+/// Reads the daily, hourly and UV parts of a forecast reply. Anything missing or out of range is
+/// left out rather than failing the reading.
+pub fn parse_details(value: &Value) -> Details {
+    let daily = &value["daily"];
+    let hourly = &value["hourly"];
+    let column = |key: &str| hourly[key].as_array().cloned().unwrap_or_default();
+    let (times, temperatures, codes, days, rain) = (
+        column("time"),
+        column("temperature_2m"),
+        column("weather_code"),
+        column("is_day"),
+        column("precipitation_probability"),
+    );
+    let hours = times
+        .iter()
+        .enumerate()
+        .take(MAX_HOURS)
+        .filter_map(|(index, time)| {
+            Some(Hour {
+                time: time.as_i64()?,
+                temperature: temperature(temperatures.get(index)?)?,
+                code: codes.get(index)?.as_u64().filter(|code| *code <= 99)? as u8,
+                is_day: days.get(index)?.as_u64()? == 1,
+                rain: rain
+                    .get(index)
+                    .and_then(Value::as_u64)
+                    .filter(|chance| *chance <= 100)
+                    .map(|chance| chance as u8),
+            })
+        })
+        .collect();
+    let time = |key: &str| first(daily, key).and_then(|value| value.as_i64());
+    Details {
+        offset: value["utc_offset_seconds"]
+            .as_i64()
+            .filter(|offset| offset.abs() <= 18 * 60 * 60)
+            .unwrap_or(0) as i32,
+        high: first(daily, "temperature_2m_max").and_then(|value| temperature(&value)),
+        low: first(daily, "temperature_2m_min").and_then(|value| temperature(&value)),
+        sunrise: time("sunrise"),
+        sunset: time("sunset"),
+        uv: value["current"]["uv_index"]
+            .as_f64()
+            .filter(|uv| uv.is_finite() && (0.0..=20.0).contains(uv)),
+        hours,
+        air: None,
+        air_requested: false,
+    }
+}
+
+/// The European air quality index from an air-quality reply.
+pub fn parse_air(value: &Value) -> Option<f64> {
+    value["current"]["european_aqi"]
+        .as_f64()
+        .filter(|aqi| aqi.is_finite() && (0.0..=500.0).contains(aqi))
+}
+
+/// The message key for a European air quality index.
+pub fn air_key(aqi: f64) -> &'static str {
+    match aqi {
+        aqi if aqi < 20. => "airGood",
+        aqi if aqi < 40. => "airFair",
+        aqi if aqi < 60. => "airModerate",
+        aqi if aqi < 80. => "airPoor",
+        aqi if aqi < 100. => "airVeryPoor",
+        _ => "airExtremelyPoor",
+    }
+}
+
+/// A forecast reply: the current reading and what Home can show beside it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Forecast {
+    pub reading: Reading,
+    pub details: Details,
+}
+
 pub fn parse_locations(value: &Value) -> Result<Vec<Location>, String> {
     if !value.is_object()
         || value["error"] == true
@@ -176,6 +323,9 @@ pub struct Cache {
     pub key: String,
     pub updated_at: i64,
     pub reading: Reading,
+    /// Absent in caches written before details existed.
+    #[serde(default)]
+    pub details: Option<Details>,
 }
 impl Cache {
     pub fn age(&self, now: i64) -> Option<i64> {
@@ -215,6 +365,8 @@ pub enum Command {
     Forecast {
         id: u64,
         location: Location,
+        /// Also ask for air quality.
+        air: bool,
     },
     Persist(Cache),
     ClearCache,
@@ -309,6 +461,12 @@ impl Weather {
         self.invalidate_forecast();
         self.cache = None;
     }
+    pub fn details(&self, location: &Location) -> Option<&Details> {
+        self.cache
+            .as_ref()
+            .filter(|cache| cache.key == location.key())
+            .and_then(|cache| cache.details.as_ref())
+    }
     pub fn reading(&self, location: &Location) -> Option<Reading> {
         self.cache
             .as_ref()
@@ -350,7 +508,9 @@ impl Weather {
             }
             self.loading = false;
         } else if let Some(cache) = self.cache.as_ref().filter(|c| {
-            Some(&c.key) == key.as_ref() && c.age(now).is_some_and(|age| age < REFRESH_SECONDS)
+            Some(&c.key) == key.as_ref()
+                && c.age(now).is_some_and(|age| age < REFRESH_SECONDS)
+                && has_details(preferences, c)
         }) {
             self.loading = false;
             self.failed = false;
@@ -368,6 +528,7 @@ impl Weather {
                 .map(|location| Command::Forecast {
                     id: self.forecast_id,
                     location,
+                    air: preferences.weather_air,
                 });
         }
         if active && self.pending.is_some() {
@@ -388,7 +549,7 @@ impl Weather {
         &mut self,
         id: u64,
         key: &str,
-        result: Result<Reading, String>,
+        result: Result<Forecast, String>,
         now: i64,
     ) -> (bool, Option<Command>) {
         if self
@@ -401,11 +562,12 @@ impl Weather {
         self.pending = None;
         self.loading = false;
         match result {
-            Ok(reading) if reading.valid() => {
+            Ok(Forecast { reading, details }) if reading.valid() => {
                 let cache = Cache {
                     key: key.into(),
                     updated_at: now,
                     reading,
+                    details: Some(details),
                 };
                 self.cache = Some(cache.clone());
                 self.failed = false;
@@ -426,6 +588,21 @@ impl Weather {
             }
         }
     }
+}
+
+/// Whether a cache answers everything Home is set to show, so turning a detail on fetches once
+/// instead of waiting for the next refresh.
+fn has_details(preferences: &Preferences, cache: &Cache) -> bool {
+    let wanted = preferences.weather_high_low
+        || preferences.weather_air
+        || preferences.weather_rain
+        || preferences.weather_sun
+        || preferences.weather_hourly;
+    !wanted
+        || cache
+            .details
+            .as_ref()
+            .is_some_and(|details| !preferences.weather_air || details.air_requested)
 }
 
 #[cfg(test)]

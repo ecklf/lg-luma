@@ -67,7 +67,9 @@ const server = http.createServer((request, response) => {
   }
   if (url.pathname === '/v1/forecast') {
     assert.equal(url.searchParams.get('temperature_unit'), 'celsius');
-    assert.equal(url.searchParams.get('current'), 'temperature_2m,is_day,weather_code');
+    assert.equal(url.searchParams.get('current'), 'temperature_2m,is_day,weather_code,uv_index');
+    assert.equal(url.searchParams.get('timeformat'), 'unixtime');
+    assert.ok(url.searchParams.get('hourly').includes('precipitation_probability'));
     if (forecastMode === 'fail') return json({}, 503);
     if (forecastMode === 'malformed')
       return json({ current: { temperature_2m: 500, weather_code: 2, is_day: 1 } });

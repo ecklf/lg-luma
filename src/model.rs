@@ -241,6 +241,24 @@ pub struct Preferences {
     pub weather_location: Option<Location>,
     #[serde(deserialize_with = "crate::weather::deserialize_unit")]
     pub temperature_unit: Unit,
+    /// Home's weather line also shows today's high and low.
+    #[serde(deserialize_with = "crate::weather::deserialize_flag")]
+    pub weather_high_low: bool,
+    /// … the air quality and UV index.
+    #[serde(deserialize_with = "crate::weather::deserialize_flag")]
+    pub weather_air: bool,
+    /// … the chance of rain in the next hours.
+    #[serde(deserialize_with = "crate::weather::deserialize_flag")]
+    pub weather_rain: bool,
+    /// … sunrise and sunset.
+    #[serde(deserialize_with = "crate::weather::deserialize_flag")]
+    pub weather_sun: bool,
+    /// A strip of the next hours under the weather line.
+    #[serde(deserialize_with = "crate::weather::deserialize_flag")]
+    pub weather_hourly: bool,
+    /// The weather details beside the greeting sit on a card; off, they sit on the wallpaper.
+    #[serde(deserialize_with = "crate::weather::deserialize_enabled")]
+    pub weather_card: bool,
     #[serde(deserialize_with = "crate::i18n::deserialize_language")]
     pub language: Language,
     /// Applied at launch because MSAA is selected when SDL creates the GL window.
@@ -276,6 +294,12 @@ impl Default for Preferences {
             show_weather: true,
             weather_location: None,
             temperature_unit: Unit::Celsius,
+            weather_high_low: false,
+            weather_air: false,
+            weather_rain: false,
+            weather_sun: false,
+            weather_hourly: false,
+            weather_card: true,
             language: Language::En,
             text_rendering: crate::text_rendering::TextRendering::default(),
             wallpaper_cycle: false,
@@ -292,6 +316,19 @@ impl Preferences {
             .unwrap_or(&self.background)
     }
 
+    /// Settings › Weather's switches, in `state::WEATHER_DETAILS` order.
+    pub fn weather_detail(&self, index: usize) -> bool {
+        [
+            self.weather_high_low,
+            self.weather_air,
+            self.weather_rain,
+            self.weather_sun,
+            self.weather_hourly,
+        ]
+        .get(index)
+        .copied()
+        .unwrap_or(false)
+    }
     pub fn favorites(&self, apps: &[App]) -> Vec<String> {
         self.favorites.clone().unwrap_or_else(|| {
             let mut ids = Vec::new();
