@@ -38,19 +38,29 @@ impl Fixture {
             ),
             (
                 "Style.qml",
-                "Item { property color focusColor: isSupportBNO ? \"#68819b\" : \"#cf0652\"\nproperty int mainRibbonHeight : 330\nproperty int mainRibbonTileHeight : 210\nproperty int mainRibbonDefaultTileWidth : 280\nproperty int mainRibbonWidth : 300\nproperty color rootBgColor: \"#121212\"\nproperty color defaultTileBgColor: \"#181818\"\nproperty color tileBgColor: \"#FFFFFF\"\nproperty color inactiveTileBgColor: \"#5A5A5A\"\nproperty color tileSelectedMarkColor: \"#cf0652\"\n}",
+                "Item { property color focusColor: isSupportBNO ? \"#68819b\" : \"#cf0652\"\nproperty int mainRibbonHeight : 330\nproperty int mainRibbonTileHeight : 210\nproperty int mainRibbonTileSpacing : 10\nproperty int mainRibbonSeperatorMargin : 63\nproperty int mainRibbonDefaultTileWidth : 280\nproperty int mainRibbonWidth : 300\nproperty color rootBgColor: \"#121212\"\nproperty color defaultTileBgColor: \"#181818\"\nproperty color tileBgColor: \"#FFFFFF\"\nproperty color inactiveTileBgColor: \"#5A5A5A\"\nproperty color tileSelectedMarkColor: \"#cf0652\"\n}",
             ),
             (
                 "View/InputPickerListItem.qml",
-                "Item { id: bgBorder\n} Item { id: bg\n} Item { id: focusedMark\nborder.color:  \"#cf0652\"\n}",
+                "Item { id: bgBorder\n} Item { id: bg\n} Item { id: focusedMark\nborder.color:  \"#cf0652\"\nborder.width: mainRibbonItem.hasFocus ? 5 : 0\n}",
             ),
             (
                 "View/InputPickerListItemTile.qml",
                 "Item { color: model.activate ? \"#333333\" : \"#FFFFFF\"\ncolor: model.activate ? \"#888888\" : \"#FFFFFF\"\n    ScrollText {\n        id: deviceName\n}}",
             ),
             (
+                "View/InputPickerListItemDefaultTile.qml",
+                "Rectangle { color: \"#181818\"\n    Column {\n        width: parent.width\n        anchors.verticalCenter: parent.verticalCenter\n        Image { width: 130\n            anchors.horizontalCenter: parent.horizontalCenter\n            cache: false\n        }\n        ScrollText {\n            id: titleText\n            width: parent.width * 0.95\n            anchors.horizontalCenter: parent.horizontalCenter\n            alignCenter: true\n        }\n    }\n}",
+            ),
+            (
                 "View/InputPickerMainView.qml",
-                "Item { Rectangle { id: listBackground\n        anchors.fill: parent\n        color: inputPickerRoot.styler.rootBgColor\n        opacity: inputPickerRoot.isMenuTransparency ? 0.85 : 1\n    } ListView.onRemove: ScriptAction { script: { removeAnimation.targetItem = delegate;\n                    removeAnimation.start(); } }\n    Rectangle { id: seperator\n height: 210 }\n    CustomRibbon { anchors.leftMargin: inputPickerRoot.styler.mainRibbonMargin\n id: mainRibbon } }",
+                concat!(
+                    "Item { Rectangle { id: listBackground\n        anchors.fill: parent\n        color: inputPickerRoot.styler.rootBgColor\n        opacity: inputPickerRoot.isMenuTransparency ? 0.85 : 1\n    } ListView.onRemove: ScriptAction { script: { removeAnimation.targetItem = delegate;\n                    removeAnimation.start(); } }\n    Rectangle { id: seperator\n height: 210\n visible: model.id === \"titleItem\" ? true : false }\n",
+                    "Item { width: inputListItem.width + ( hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing : 0) + ( seperator.visible ? inputPickerRoot.styler.mainRibbonSeperatorMargin : 0)\n anchors.leftMargin: hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing + (seperator.visible ? inputPickerRoot.styler.mainRibbonSeperatorMargin : 0): 0 }\n",
+                    "Item { width: (model.id === \"titleItem\"? inputPickerRoot.styler.mainRibbonDefaultTileWidth : inputPickerRoot.styler.mainRibbonWidth) * categoryWidth + (model.id === \"titleItem\" ? inputPickerRoot.styler.mainRibbonSeperatorMargin : 0) + (hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing : 0)\n",
+                    "width : parent.width - (hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing : 0)\nanchors.leftMargin: hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing : 0\nvisible : hasCategory }\n",
+                    "    CustomRibbon { anchors.leftMargin: inputPickerRoot.styler.mainRibbonMargin\n id: mainRibbon } }"
+                ),
             ),
             (
                 "Model/InputItemListModel.qml",
@@ -252,7 +262,13 @@ fn ownership_and_pointer_write_reject_traversal_and_preserve_fresh_inventory() {
 }
 #[test]
 fn ribbon_rebuild_does_not_retarget_a_shared_removal_animation() {
-    let source = "Rectangle { id: listBackground\n        anchors.fill: parent\n        color: inputPickerRoot.styler.rootBgColor\n        opacity: inputPickerRoot.isMenuTransparency ? 0.85 : 1\n    } ListView.onRemove: ScriptAction { script: { removeAnimation.targetItem = delegate;\n                    removeAnimation.start(); } }\n    Rectangle { id: seperator\n height: 210 }\n    CustomRibbon { anchors.leftMargin: inputPickerRoot.styler.mainRibbonMargin\n id: mainRibbon }";
+    let source = concat!(
+        "Rectangle { id: listBackground\n        anchors.fill: parent\n        color: inputPickerRoot.styler.rootBgColor\n        opacity: inputPickerRoot.isMenuTransparency ? 0.85 : 1\n    } ListView.onRemove: ScriptAction { script: { removeAnimation.targetItem = delegate;\n                    removeAnimation.start(); } }\n    Rectangle { id: seperator\n height: 210\n visible: model.id === \"titleItem\" ? true : false }\n",
+        "Item { width: inputListItem.width + ( hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing : 0) + ( seperator.visible ? inputPickerRoot.styler.mainRibbonSeperatorMargin : 0)\n anchors.leftMargin: hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing + (seperator.visible ? inputPickerRoot.styler.mainRibbonSeperatorMargin : 0): 0 }\n",
+        "Item { width: (model.id === \"titleItem\"? inputPickerRoot.styler.mainRibbonDefaultTileWidth : inputPickerRoot.styler.mainRibbonWidth) * categoryWidth + (model.id === \"titleItem\" ? inputPickerRoot.styler.mainRibbonSeperatorMargin : 0) + (hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing : 0)\n",
+        "width : parent.width - (hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing : 0)\nanchors.leftMargin: hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing : 0\nvisible : hasCategory }\n",
+        "    CustomRibbon { anchors.leftMargin: inputPickerRoot.styler.mainRibbonMargin\n id: mainRibbon }"
+    );
     let patched = transform("View/InputPickerMainView.qml", source).unwrap();
     assert!(patched.contains("delegate.ListView.delayRemove = false;"));
     assert!(patched.contains("radius: 27.2"));
@@ -261,12 +277,36 @@ fn ribbon_rebuild_does_not_retarget_a_shared_removal_animation() {
     assert!(patched.contains("#18FFFFFF"));
     assert!(patched.contains("anchors.leftMargin: 24"));
     assert!(patched.contains("anchors.rightMargin: 24"));
-    assert!(patched.contains("anchors.topMargin: 12"));
+    assert!(patched.contains("anchors.topMargin: 50"));
     assert!(patched.contains("anchors.bottomMargin: 60"));
     assert!(patched.contains("opacity: 0"));
     assert!(patched.contains("height: inputPickerRoot.styler.mainRibbonTileHeight"));
+    assert!(patched.contains("visible: false"));
+    assert!(!patched.contains("text: inputPickerRoot.strings.input"));
+    assert!(!patched.contains("visible : hasCategory"));
+    assert!(patched.contains("width: inputListItem.width"));
     assert!(!patched.contains("height: 210"));
     assert!(!patched.contains("removeAnimation.start()"));
+}
+#[test]
+fn dashboard_tile_uses_the_same_card_layout_as_other_inputs() {
+    let f = Fixture::new();
+    f.seed();
+    let module = Path::new("/usr/lib/qml/InputPicker");
+    let default =
+        fs::read_to_string(f.path(&module.join("View/InputPickerListItemDefaultTile.qml")))
+            .unwrap();
+    let dashboard = transform("View/InputPickerListItemDefaultTile.qml", &default).unwrap();
+    assert!(dashboard.contains("color: \"transparent\""));
+    assert!(dashboard.contains("anchors.topMargin: inputPickerRoot.styler.tileIconTopMargin"));
+    assert!(
+        dashboard.contains("anchors.bottomMargin: inputPickerRoot.styler.tileTextBottomMargin")
+    );
+    assert!(dashboard.contains("alignCenter: false"));
+    let item = fs::read_to_string(f.path(&module.join("View/InputPickerListItem.qml"))).unwrap();
+    let card = transform("View/InputPickerListItem.qml", &item).unwrap();
+    assert!(card.contains("gradient: Gradient"));
+    assert!(card.contains("border.width: mainRibbonItem.hasFocus ? 2 : 0"));
 }
 #[test]
 fn controller_uses_the_native_service_response_instead_of_global_settings() {
@@ -292,6 +332,7 @@ fn optional_installed_module_fixture_matches_every_transformation() {
         "Style.qml",
         "View/InputPickerListItem.qml",
         "View/InputPickerListItemTile.qml",
+        "View/InputPickerListItemDefaultTile.qml",
         "View/InputPickerMainView.qml",
         "Model/InputItemListModel.qml",
     ] {

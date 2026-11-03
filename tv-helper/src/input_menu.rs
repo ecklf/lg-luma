@@ -261,6 +261,16 @@ pub fn transform(path: &str, original: &str) -> Result<String> {
             )?;
             let text = once(
                 &text,
+                "property int mainRibbonTileSpacing : 10",
+                "property int mainRibbonTileSpacing : 18",
+            )?;
+            let text = once(
+                &text,
+                "property int mainRibbonSeperatorMargin : 63",
+                "property int mainRibbonSeperatorMargin : 0",
+            )?;
+            let text = once(
+                &text,
                 "property int mainRibbonDefaultTileWidth : 280",
                 "property int mainRibbonDefaultTileWidth : mainRibbonWidth",
             )?;
@@ -308,11 +318,20 @@ pub fn transform(path: &str, original: &str) -> Result<String> {
                 "border.color: inputPickerRoot.styler.focusColor",
             )?;
             let text = once(&text, "id: bgBorder", "id: bgBorder\n        radius: 18")?;
-            let text = once(&text, "id: bg\n", "id: bg\n        radius: 18\n")?;
-            once(
+            let text = once(
+                &text,
+                "id: bg\n",
+                "id: bg\n        radius: 18\n        gradient: Gradient { GradientStop { position: 0; color: id === \"titleItem\" || activate ? \"#30363C\" : \"#252B31\" } GradientStop { position: 1; color: id === \"titleItem\" || activate ? \"#20252B\" : \"#171C22\" } }\n",
+            )?;
+            let text = once(
                 &text,
                 "id: focusedMark",
                 "id: focusedMark\n        radius: 22",
+            )?;
+            once(
+                &text,
+                "border.width: mainRibbonItem.hasFocus ? 5 : 0",
+                "border.width: mainRibbonItem.hasFocus ? 2 : 0",
             )
         }
         "View/InputPickerListItemTile.qml" => {
@@ -332,6 +351,37 @@ pub fn transform(path: &str, original: &str) -> Result<String> {
                 marker,
                 "    ColorOverlay { anchors.fill: curInputMark; source: curInputMark; color: inputPickerRoot.styler.focusColor; visible: curInputMark.visible }\n\n    ScrollText {\n        id: deviceName",
             )
+        }
+        "View/InputPickerListItemDefaultTile.qml" => {
+            let text = once(original, "color: \"#181818\"", "color: \"transparent\"")?;
+            let text = once(&text, "    Column {", "    Item {")?;
+            let text = once(
+                &text,
+                "width: parent.width\n        anchors.verticalCenter: parent.verticalCenter",
+                "width: parent.width\n        height: parent.height",
+            )?;
+            let text = once(&text, "width: 130", "width: 60")?;
+            let text = once(
+                &text,
+                "anchors.horizontalCenter: parent.horizontalCenter\n            cache: false",
+                "anchors.left: parent.left\n            anchors.leftMargin: inputPickerRoot.styler.tileIconLeftMargin\n            anchors.top: parent.top\n            anchors.topMargin: inputPickerRoot.styler.tileIconTopMargin\n            cache: false",
+            )?;
+            let text = once(
+                &text,
+                "id: titleText\n",
+                "id: titleText\n            anchors.bottom: parent.bottom\n            anchors.bottomMargin: inputPickerRoot.styler.tileTextBottomMargin\n",
+            )?;
+            let text = once(
+                &text,
+                "width: parent.width * 0.95",
+                "width: parent.width - inputPickerRoot.styler.tileTextLeftMargin * 2",
+            )?;
+            let text = once(
+                &text,
+                "anchors.horizontalCenter: parent.horizontalCenter",
+                "anchors.left: parent.left\n            anchors.leftMargin: inputPickerRoot.styler.tileTextLeftMargin",
+            )?;
+            once(&text, "alignCenter: true", "alignCenter: false")
         }
         "View/InputPickerMainView.qml" => {
             let text = once(
@@ -354,10 +404,41 @@ pub fn transform(path: &str, original: &str) -> Result<String> {
                 "height: 210",
                 "height: inputPickerRoot.styler.mainRibbonTileHeight",
             )?;
+            let text = once(
+                &text,
+                "visible: model.id === \"titleItem\" ? true : false",
+                "visible: false",
+            )?;
+            let text = once(
+                &text,
+                "width: inputListItem.width + ( hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing : 0) + ( seperator.visible ? inputPickerRoot.styler.mainRibbonSeperatorMargin : 0)",
+                "width: inputListItem.width",
+            )?;
+            let text = once(
+                &text,
+                "anchors.leftMargin: hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing + (seperator.visible ? inputPickerRoot.styler.mainRibbonSeperatorMargin : 0): 0",
+                "anchors.leftMargin: 0",
+            )?;
+            let text = once(
+                &text,
+                "width : parent.width - (hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing : 0)",
+                "width : parent.width",
+            )?;
+            let text = once(
+                &text,
+                "(hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing : 0)",
+                "0",
+            )?;
+            let text = once(
+                &text,
+                "anchors.leftMargin: hasCategory ? inputPickerRoot.styler.mainRibbonTileSpacing : 0",
+                "anchors.leftMargin: 0",
+            )?;
+            let text = once(&text, "visible : hasCategory", "visible: false")?;
             once(
                 &text,
                 "    CustomRibbon {",
-                "    Rectangle { anchors.fill: parent; anchors.leftMargin: 24; anchors.rightMargin: 24; anchors.topMargin: 12; anchors.bottomMargin: 60; radius: 27.2; border.color: \"#18FFFFFF\"; border.width: 1; gradient: Gradient { GradientStop { position: 0.0; color: \"#20252B\" } GradientStop { position: 1.0; color: \"#171C22\" } } }\n\n    CustomRibbon {",
+                "    Rectangle { anchors.fill: parent; anchors.leftMargin: 24; anchors.rightMargin: 24; anchors.topMargin: 50; anchors.bottomMargin: 60; radius: 27.2; border.color: \"#18FFFFFF\"; border.width: 1; gradient: Gradient { GradientStop { position: 0.0; color: \"#20252B\" } GradientStop { position: 1.0; color: \"#171C22\" } } }\n\n    CustomRibbon {",
             )
         }
         "Model/InputItemListModel.qml" => {
@@ -437,6 +518,7 @@ fn prepare(system: &impl System, source: &Path) -> Result<String> {
         "Style.qml",
         "View/InputPickerListItem.qml",
         "View/InputPickerListItemTile.qml",
+        "View/InputPickerListItemDefaultTile.qml",
         "View/InputPickerMainView.qml",
         "Model/InputItemListModel.qml",
     ] {

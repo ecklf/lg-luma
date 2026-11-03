@@ -230,9 +230,8 @@ TV's existing input ribbon and which entries it shows. Dashboard, Live TV, HDMI,
 servers can be hidden independently. This is separate from the input widgets on Home: changing
 one does not change the other. The integration is opt-in and requires a supported rooted TV;
 desktop settings previews do not verify firmware behavior.
-The ribbon uses a rounded, opaque card so Home input cards do not show through it. Tile widths
-adapt to the number of available entries, and the first visible
-entry retains the section heading when Dashboard is hidden.
+The ribbon uses rounded, opaque cards so Home input cards do not show through it. Tile widths
+adapt to the number of available entries; the native section heading is hidden for a compact layout.
 
 ### AirPlay input
 
