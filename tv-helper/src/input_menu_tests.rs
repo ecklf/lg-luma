@@ -171,6 +171,29 @@ fn apply_preserves_other_ui_config_and_live_updates_do_not_close_the_ribbon() {
     configure(&f, &json!({"enabled":false}), Path::new("/unused")).unwrap();
     assert_eq!(*f.manager.borrow(), original);
 }
+
+#[test]
+fn cleanup_keeps_active_and_previous_revisions_and_ignores_unowned_paths() {
+    let f = Fixture::new();
+    let revisions = f.path(Path::new(STATE).join("revisions").as_path());
+    for id in [
+        "0000000000000001",
+        "0000000000000002",
+        "0000000000000003",
+        "unrelated",
+    ] {
+        let directory = revisions.join(id);
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(directory.join("InputPicker.qml"), b"qml").unwrap();
+    }
+    let active = format!("file://{STATE}/revisions/0000000000000003/InputPicker.qml");
+    let previous = format!("file://{STATE}/revisions/0000000000000002/InputPicker.qml");
+    prune_revisions(&f, &[&active, &previous]).unwrap();
+    assert!(!revisions.join("0000000000000001").exists());
+    assert!(revisions.join("0000000000000002").exists());
+    assert!(revisions.join("0000000000000003").exists());
+    assert!(revisions.join("unrelated").exists());
+}
 #[test]
 fn reenabling_refreshes_the_supported_firmware_restore_target() {
     let f = Fixture::new();

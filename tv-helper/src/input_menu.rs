@@ -160,7 +160,43 @@ pub fn configure(system: &impl System, request: &Value, _directory: &Path) -> Re
     if previous != main {
         set_pointer(system, &previous, &main)?;
     }
+    // Keep the active QML and the immediately previous revision until the next
+    // update: the system UI may still hold objects from the old module.
+    if let Err(error) = prune_revisions(system, &[&main, &previous]) {
+        eprintln!("Input ribbon revision cleanup: {error}");
+    }
     Ok(json!({"returnValue":true,"enabled":true}))
+}
+
+fn prune_revisions(system: &impl System, keep: &[&str]) -> Result<()> {
+    let root = system.path(Path::new(STATE).join("revisions").as_path());
+    match fs::symlink_metadata(&root) {
+        Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {}
+        Ok(_) => return Err("Input ribbon revisions path is not a directory".into()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.to_string()),
+    }
+    let entries = match fs::read_dir(root) {
+        Ok(entries) => entries,
+        Err(error) => return Err(error.to_string()),
+    };
+    for entry in entries {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let name = entry.file_name();
+        let Some(id) = name.to_str() else { continue };
+        if id.len() != 16 || !id.bytes().all(|c| c.is_ascii_hexdigit()) {
+            continue;
+        }
+        let main = format!("file://{STATE}/revisions/{id}/InputPicker.qml");
+        if keep.contains(&main.as_str()) {
+            continue;
+        }
+        let metadata = fs::symlink_metadata(entry.path()).map_err(|error| error.to_string())?;
+        if metadata.is_dir() && !metadata.file_type().is_symlink() {
+            fs::remove_dir_all(entry.path()).map_err(|error| error.to_string())?;
+        }
+    }
+    Ok(())
 }
 
 fn once(source: &str, old: &str, new: &str) -> Result<String> {
