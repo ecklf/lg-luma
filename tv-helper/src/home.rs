@@ -619,10 +619,10 @@ pub fn dispatch(
             } else {
                 config.enabled = false;
                 system::write_json(system, CONFIG, &config)?;
-                home.restore(&config)?;
                 if hook_owned(system) {
                     system::remove(system, HOOK)?;
                 }
+                home.restore(&config)?;
             }
             Ok(json!({"returnValue":true}))
         }

@@ -597,6 +597,19 @@ fn run() -> Result<(), String> {
         log_home_output();
     }
     let webos = cfg!(feature = "webos");
+    // SAM can restart Home while a disable operation is still removing the
+    // executable mount. Do not show another Luma Home from that stale mount.
+    #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
+    if options.webos_home
+        && luma_tv_helper::home::load(&luma_tv_helper::system::Tv)
+            .ok()
+            .flatten()
+            .is_some_and(|config| !config.enabled)
+        && !luma_tv_helper::home::hook_owned(&luma_tv_helper::system::Tv)
+    {
+        eprintln!("Luma Home takeover is disabled; waiting for LG Home");
+        return Ok(());
+    }
     let startup_stage = |stage: &str| {
         if webos {
             eprintln!(

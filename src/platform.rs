@@ -496,10 +496,16 @@ fn sync_input_menu(preferences: &crate::model::InputMenuPreferences) -> Result<(
 /// independently; there is no interpreter source and no untrusted command name.
 fn helper_command(operation: &str, arguments: &[String]) -> Result<String, String> {
     let executable = install_dir()?.join("luma-helper");
-    let quote = |text: &str| format!("'{}'", text.replace('\'', "'\\''"));
-    let mut parts = vec![quote(&executable.to_string_lossy()), quote(operation)];
-    parts.extend(arguments.iter().map(|argument| quote(argument)));
+    let mut parts = vec![
+        shell_quote(&executable.to_string_lossy()),
+        shell_quote(operation),
+    ];
+    parts.extend(arguments.iter().map(|argument| shell_quote(argument)));
     Ok(parts.join(" "))
+}
+
+fn shell_quote(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "'\\''"))
 }
 
 fn home_helper(command: &str, app: Option<&std::path::Path>) -> Result<Value, String> {
@@ -545,20 +551,22 @@ fn home_integration_status() -> Result<bool, String> {
 }
 
 fn set_home_integration(enabled: bool) -> Result<bool, String> {
-    let app = enabled.then(install_dir).transpose()?;
-    let mut arguments = vec![if enabled { "enable" } else { "disable" }.to_owned()];
-    if let Some(app) = &app {
-        arguments.push(app.to_string_lossy().into_owned());
+    let directory = install_dir()?;
+    let mut arguments = vec![shell_quote(if enabled { "enable-ui" } else { "disable" })];
+    if enabled {
+        arguments.push(shell_quote(&directory.to_string_lossy()));
     }
-    // The caller is the Home process being stopped. Homebrew's exec children
-    // can end with that call; a transient unit must own the whole transition.
+    // The wrapper owns the same non-blocking lock as boot and SSH changes.
+    // A Home restart during disable cannot launch a competing enable before
+    // the original transition has removed the mount and boot hook.
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|error| error.to_string())?
         .as_nanos();
     let command = format!(
-        "systemd-run --unit=luma-home-switch-{nonce:x} --collect {}",
-        helper_command("home", &arguments)?
+        "systemd-run --unit=luma-home-switch-{nonce:x} --collect /bin/sh {} {}",
+        shell_quote(&directory.join("home.sh").to_string_lossy()),
+        arguments.join(" ")
     );
     #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
     let started = crate::luna::call_with_timeout(

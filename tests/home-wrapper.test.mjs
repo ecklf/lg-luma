@@ -89,3 +89,15 @@ test('a missing helper is reported before any change', async () => {
     await fs.rm(tv.root, { recursive: true, force: true });
   }
 });
+
+test('the UI enable command uses the locked wrapper without a terminal prompt', async () => {
+  const tv = await fixture();
+  try {
+    const result = tv.run('enable-ui', '/installed/luma');
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /Apply these changes\?/);
+    assert.deepEqual(await tv.recorded(), ['[home][enable][/installed/luma][]']);
+  } finally {
+    await fs.rm(tv.root, { recursive: true, force: true });
+  }
+});

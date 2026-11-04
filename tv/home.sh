@@ -9,7 +9,9 @@ if [ -L "$SCRIPT" ]; then
 fi
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$SCRIPT")" && pwd) || exit 1
 COMMAND=${1:-boot}
+INTERACTIVE_ENABLE=true
 case "$COMMAND" in
+  enable-ui) COMMAND=enable; INTERACTIVE_ENABLE=false ;;
   enable|disable|restore|status|apply|boot) ;;
   *) printf '%s\n' 'Usage: home.sh enable [APP_DIR] [HOME_ID] | disable | restore | status' >&2; exit 1 ;;
 esac
@@ -46,7 +48,7 @@ elif [ "$COMMAND" = enable ]; then
     "Restore LG Home with: sh $STATE/home.sh disable" \
     ''
 fi
-if [ "$COMMAND" = enable ]; then
+if [ "$COMMAND" = enable ] && [ "$INTERACTIVE_ENABLE" = true ]; then
   printf '%s\n' "Selected Home target: ${3:-saved target, otherwise com.webos.app.home}"
 
   while :; do
