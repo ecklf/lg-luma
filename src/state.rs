@@ -48,6 +48,7 @@ pub enum Target {
     TvSettings,
     InstallUpdate,
     CheckUpdates,
+    HomeIntegration,
     Recent(String),
     RecentEmpty,
     RecentRetry,
@@ -202,6 +203,8 @@ pub enum Effect {
     Quit,
     Weather(weather::Command),
     UpdateDownload(String),
+    HomeIntegration(bool),
+    HomeStatus,
 }
 
 pub const KEYS: [&str; 40] = [
@@ -233,6 +236,9 @@ pub struct State {
     pub available_update: Option<String>,
     pub update_status: crate::update::Status,
     pub update_check_requested: bool,
+    /// Actual TV Home integration, read from the root-owned configuration.
+    pub home_integration: Option<bool>,
+    pub home_integration_busy: bool,
     /// Inventory loads that failed in a row while no apps were shown yet.
     pub inventory_failures: u32,
     pub dirty: bool,
@@ -278,6 +284,8 @@ impl State {
             available_update: None,
             update_status: crate::update::Status::Unchecked,
             update_check_requested: false,
+            home_integration: None,
+            home_integration_busy: false,
             inventory_failures: 0,
             dirty: true,
             pointer: false,
@@ -2164,6 +2172,15 @@ impl State {
                     self.update_status = crate::update::Status::Checking;
                     self.update_check_requested = true;
                     self.dirty = true;
+                }
+            }
+            Target::HomeIntegration => {
+                if !self.home_integration_busy {
+                    self.home_integration_busy = true;
+                    return vec![match self.home_integration {
+                        Some(enabled) => Effect::HomeIntegration(!enabled),
+                        None => Effect::HomeStatus,
+                    }];
                 }
             }
             Target::Tile(_) => self.options(),

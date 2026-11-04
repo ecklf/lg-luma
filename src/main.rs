@@ -354,6 +354,10 @@ fn effects(
             }
             Effect::FireWebhook(tile) => webhook.send(tile),
             Effect::UpdateDownload(release) => updates.request(update::Request::Download(release)),
+            Effect::HomeIntegration(enabled) => {
+                platform.send(Request::SetHomeIntegration(enabled));
+            }
+            Effect::HomeStatus => platform.send(Request::HomeStatus),
             Effect::Quit => return false,
             Effect::Uninstall(id) => platform.send(Request::Uninstall(id)),
             Effect::DeleteWallpaper(id) => {
@@ -724,6 +728,9 @@ fn run() -> Result<(), String> {
     );
     platform.sync_splash(state.preferences.splash_background());
     platform.sync_input_menu(&state.preferences.input_menu);
+    if webos {
+        platform.send(Request::HomeStatus);
+    }
     startup_stage("preferences and workers");
 
     let sdl = sdl2::init()?;
@@ -1162,6 +1169,17 @@ fn run() -> Result<(), String> {
                         eprintln!("Luma input menu: {error}");
                         state.notify(state.preferences.language.t("inputMenuApplyError"));
                     }
+                }
+                Response::HomeIntegration(result) => {
+                    state.home_integration_busy = false;
+                    match result {
+                        Ok(enabled) => state.home_integration = Some(enabled),
+                        Err(error) => {
+                            eprintln!("Luma Home integration: {error}");
+                            state.notify(state.preferences.language.t("homeIntegrationError"));
+                        }
+                    }
+                    state.dirty = true;
                 }
                 Response::Uninstalled { id, result } => {
                     let pending = state.uninstall_response(id, result);

@@ -926,6 +926,8 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::CheckUpdates);
     state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::HomeIntegration);
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(3));
     assert_eq!(state.activate(), vec![Effect::Reload]);
     state.direction(Direction::Down, &controls(&state));
@@ -938,6 +940,28 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(0));
     assert_eq!(state.section, 0);
+}
+
+#[test]
+fn home_integration_uses_actual_status_and_blocks_duplicate_toggles() {
+    use crate::i18n::Language;
+    for language in Language::ALL {
+        assert_ne!(language.t("homeIntegration"), "homeIntegration");
+        assert_ne!(language.t("homeIntegrationError"), "homeIntegrationError");
+    }
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::SYSTEM_SECTION;
+    state.focus = Target::HomeIntegration;
+    assert_eq!(state.activate(), vec![Effect::HomeStatus]);
+    assert!(state.activate().is_empty());
+    state.home_integration_busy = false;
+    state.home_integration = Some(true);
+    assert_eq!(state.activate(), vec![Effect::HomeIntegration(false)]);
+    assert!(state.activate().is_empty());
+    state.home_integration_busy = false;
+    state.home_integration = Some(false);
+    assert_eq!(state.activate(), vec![Effect::HomeIntegration(true)]);
 }
 
 #[test]
@@ -3037,6 +3061,8 @@ fn update_card_shows_both_versions_and_explicitly_starts_installation() {
             state.hit_test(&rendered.controls, x, y),
             Some(Target::InstallUpdate)
         );
+        state.direction(Direction::Down, &rendered.controls);
+        assert_eq!(state.focus, Target::HomeIntegration);
         state.direction(Direction::Down, &rendered.controls);
         assert_eq!(state.focus, Target::Setting(3));
         state.focus = Target::InstallUpdate;

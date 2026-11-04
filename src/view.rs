@@ -2613,6 +2613,27 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     chevron: false,
                 },
             );
+            row(
+                out,
+                state,
+                assets,
+                Row {
+                    target: Target::HomeIntegration,
+                    rect: Rect::new(640., 408.8 - s, 1120., 72.),
+                    title: language.t("homeIntegration"),
+                    icon: Some("luma-mark"),
+                    value: if state.home_integration_busy {
+                        Some(language.t("homeIntegrationWorking"))
+                    } else {
+                        state
+                            .home_integration
+                            .map(|enabled| language.t(if enabled { "stateOn" } else { "stateOff" }))
+                    },
+                    description: None,
+                    selected: false,
+                    chevron: false,
+                },
+            );
             for (position, (index, title, icon, value, chevron)) in [
                 (
                     3,
@@ -2643,7 +2664,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     assets,
                     Row {
                         target: Target::Setting(index),
-                        rect: Rect::new(640., 408.8 + position as f32 * 84. - s, 1120., 72.),
+                        rect: Rect::new(640., 492.8 + position as f32 * 84. - s, 1120., 72.),
                         title,
                         icon: Some(icon),
                         value,

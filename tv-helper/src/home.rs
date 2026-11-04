@@ -606,7 +606,7 @@ pub fn dispatch(
     let home = Home::new(system, id)?;
     match command {
         "status" => Ok(
-            json!({"enabled":saved.as_ref().is_some_and(|c|c.enabled),"method":saved.as_ref().map(|c|c.method.as_str()),"homeId":id,"homeKeyVerified":null,"availableTargets":([HOME,FULL_HOME].into_iter().filter(|id|home.exists(format!("/usr/palm/applications/{id}/appinfo.json"))).collect::<Vec<_>>()),"mounted":saved.as_ref().is_some_and(|c|if c.method=="executable"{home.exe_mounted(&c.app_dir)}else{home.mounted()}),"bootHook":hook_owned(system),"appDir":saved.as_ref().map(|c|c.app_dir.as_str())}),
+            json!({"returnValue":true,"enabled":saved.as_ref().is_some_and(|c|c.enabled),"method":saved.as_ref().map(|c|c.method.as_str()),"homeId":id,"homeKeyVerified":null,"availableTargets":([HOME,FULL_HOME].into_iter().filter(|id|home.exists(format!("/usr/palm/applications/{id}/appinfo.json"))).collect::<Vec<_>>()),"mounted":saved.as_ref().is_some_and(|c|if c.method=="executable"{home.exe_mounted(&c.app_dir)}else{home.mounted()}),"bootHook":hook_owned(system),"appDir":saved.as_ref().map(|c|c.app_dir.as_str())}),
         ),
         "enable" => {
             home.install(Path::new(app.ok_or("Missing installation directory")?))?;

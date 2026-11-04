@@ -401,6 +401,7 @@ fn fullhome_round_trip_and_persisted_target_keep_their_identity() {
         format!("{}\n", home::FULL_HOME).as_bytes()
     );
     let status = home::dispatch(&f, "status", None, None).unwrap();
+    assert_eq!(status["returnValue"], true);
     assert_eq!(status["homeId"], home::FULL_HOME);
     assert_eq!(status["mounted"], true);
     home::dispatch(&f, "disable", None, None).unwrap();

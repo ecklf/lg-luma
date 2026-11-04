@@ -184,6 +184,8 @@ pub enum Request {
     Uninstall(String),
     SyncSplash(String),
     SyncInputMenu(crate::model::InputMenuPreferences),
+    HomeStatus,
+    SetHomeIntegration(bool),
     Recent {
         generation: u64,
         command: crate::recents::Command,
@@ -194,6 +196,7 @@ pub enum Response {
     Inputs(Result<Vec<Input>, String>),
     Launched(Result<(), String>),
     InputMenuSynced(Result<(), String>),
+    HomeIntegration(Result<bool, String>),
     Uninstalled {
         id: String,
         result: Result<(), String>,
@@ -385,6 +388,19 @@ impl Platform {
                         };
                         Response::InputMenuSynced(result)
                     }
+                    Request::HomeStatus => Response::HomeIntegration(if webos {
+                        home_integration_status()
+                    } else {
+                        Ok(false)
+                    }),
+                    Request::SetHomeIntegration(enabled) => {
+                        let result = if webos {
+                            set_home_integration(enabled)
+                        } else {
+                            Ok(enabled)
+                        };
+                        Response::HomeIntegration(result)
+                    }
                 };
                 if responses.send(response).is_err() {
                     break;
@@ -484,6 +500,58 @@ fn helper_command(operation: &str, arguments: &[String]) -> Result<String, Strin
     let mut parts = vec![quote(&executable.to_string_lossy()), quote(operation)];
     parts.extend(arguments.iter().map(|argument| quote(argument)));
     Ok(parts.join(" "))
+}
+
+fn home_helper(command: &str, app: Option<&std::path::Path>) -> Result<Value, String> {
+    // Mutations must run outside Luma: disabling Home stops the current Home
+    // process, and enabling it closes a standalone Luma instance.
+    let mut arguments = vec![command.to_owned()];
+    if let Some(app) = app {
+        arguments.push(app.to_string_lossy().into_owned());
+    }
+    let command = helper_command("home", &arguments)?;
+    #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
+    let reply = crate::luna::call_with_timeout(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        &json!({"command":command}),
+        std::time::Duration::from_secs(60),
+    );
+    #[cfg(not(all(feature = "webos", target_os = "linux", target_arch = "arm")))]
+    let reply = raw_call(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        &json!({"command":command}),
+    );
+    reply
+        .and_then(checked_response)
+        .and_then(|value| command_reply(&value))
+}
+
+fn home_integration_status() -> Result<bool, String> {
+    #[cfg(all(feature = "webos", unix))]
+    let reply = if unsafe { libc::geteuid() } == 0 {
+        luma_tv_helper::home::dispatch(&luma_tv_helper::system::Tv, "status", None, None)?
+    } else {
+        home_helper("status", None)?
+    };
+    #[cfg(not(all(feature = "webos", unix)))]
+    let reply = home_helper("status", None)?;
+    reply["enabled"]
+        .as_bool()
+        .ok_or_else(|| "Home integration status is missing".into())
+}
+
+fn set_home_integration(enabled: bool) -> Result<bool, String> {
+    let app = enabled.then(install_dir).transpose()?;
+    let result = home_helper(if enabled { "enable" } else { "disable" }, app.as_deref());
+    // The service can lose its completion reply when the current Luma instance
+    // exits. Read back the root-owned state before reporting a failure.
+    let actual = home_integration_status()?;
+    if actual == enabled {
+        Ok(actual)
+    } else {
+        result?;
+        Err("Home integration did not reach the requested state".into())
+    }
 }
 
 /// Quote for the exec service's shell and systemd's ExecStart environment expansion. Shell

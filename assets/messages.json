@@ -3943,5 +3943,50 @@
     "vi": "Không thể áp dụng menu TV / Đầu vào",
     "nl": "Het menu TV / Ingangen kon niet worden toegepast",
     "sv": "Det gick inte att använda TV-/ingångsmenyn"
+  },
+  "homeIntegration": {
+    "en": "Use Luma as TV Home",
+    "de": "Luma als TV-Startbildschirm verwenden",
+    "es": "Usar Luma como inicio del televisor",
+    "zh": "将 Luma 设为电视主页",
+    "zh-tw": "將 Luma 設為電視首頁",
+    "pt": "Usar o Luma como tela inicial da TV",
+    "it": "Usa Luma come schermata Home della TV",
+    "ru": "Использовать Luma как главный экран ТВ",
+    "pl": "Używaj Luma jako ekranu głównego TV",
+    "fr": "Utiliser Luma comme accueil principal",
+    "vi": "Dùng Luma làm màn hình chính của TV",
+    "nl": "Luma als startscherm van de tv gebruiken",
+    "sv": "Använd Luma som TV:ns hemskärm"
+  },
+  "homeIntegrationWorking": {
+    "en": "Applying…",
+    "de": "Wird angewendet…",
+    "es": "Aplicando…",
+    "zh": "正在应用…",
+    "zh-tw": "正在套用…",
+    "pt": "Aplicando…",
+    "it": "Applicazione…",
+    "ru": "Применение…",
+    "pl": "Stosowanie…",
+    "fr": "Application…",
+    "vi": "Đang áp dụng…",
+    "nl": "Toepassen…",
+    "sv": "Tillämpar…"
+  },
+  "homeIntegrationError": {
+    "en": "Unable to change the TV Home setting",
+    "de": "Die TV-Startbildschirm-Einstellung konnte nicht geändert werden",
+    "es": "No se pudo cambiar el ajuste de inicio del televisor",
+    "zh": "无法更改电视主页设置",
+    "zh-tw": "無法變更電視首頁設定",
+    "pt": "Não foi possível alterar a configuração da tela inicial da TV",
+    "it": "Impossibile modificare l'impostazione Home della TV",
+    "ru": "Не удалось изменить настройку главного экрана ТВ",
+    "pl": "Nie można zmienić ustawienia ekranu głównego TV",
+    "fr": "Impossible de modifier le réglage de l’accueil principal",
+    "vi": "Không thể thay đổi cài đặt màn hình chính của TV",
+    "nl": "Kan de instelling voor het startscherm niet wijzigen",
+    "sv": "Det gick inte att ändra inställningen för TV:ns hemskärm"
   }
 }
