@@ -169,6 +169,11 @@ sh /var/lib/luma-home/home.sh disable
 
 `restore` is an alias for `disable`.
 
+Once Luma is installed, **Settings → System → Use Luma as TV Home** provides the same switch on
+supported rooted TVs. Turning it off restores LG Home and removes the cold-boot hook. To turn it
+back on, open Luma from LG's application list and use the same setting. The SSH commands above
+remain available if Luma cannot be opened.
+
 Boot log: `/var/lib/luma-home/boot.log`. See the
 [development guide](development.md#optional-native-home-integration) for implementation details.
 
