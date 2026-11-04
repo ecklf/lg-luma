@@ -551,6 +551,16 @@ fn home_integration_status() -> Result<bool, String> {
 }
 
 fn set_home_integration(enabled: bool) -> Result<bool, String> {
+    if enabled {
+        let status = home_integration_details()?;
+        // A Home process can still deliver a queued key event after disable
+        // has saved false. Only a separately launched Luma may enable again.
+        if status["enabled"] == false
+            && (status["mounted"] == true || status["bootHook"] == true || runs_as_lg_home())
+        {
+            return Err("Finish restoring LG Home before enabling Luma Home again".into());
+        }
+    }
     let directory = install_dir()?;
     let mut arguments = vec![shell_quote(if enabled { "enable-ui" } else { "disable" })];
     if enabled {
