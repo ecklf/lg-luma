@@ -526,7 +526,7 @@ fn home_helper(command: &str, app: Option<&std::path::Path>) -> Result<Value, St
         .and_then(|value| command_reply(&value))
 }
 
-fn home_integration_status() -> Result<bool, String> {
+fn home_integration_details() -> Result<Value, String> {
     #[cfg(all(feature = "webos", unix))]
     let reply = if unsafe { libc::geteuid() } == 0 {
         luma_tv_helper::home::dispatch(&luma_tv_helper::system::Tv, "status", None, None)?
@@ -535,23 +535,66 @@ fn home_integration_status() -> Result<bool, String> {
     };
     #[cfg(not(all(feature = "webos", unix)))]
     let reply = home_helper("status", None)?;
-    reply["enabled"]
+    Ok(reply)
+}
+
+fn home_integration_status() -> Result<bool, String> {
+    home_integration_details()?["enabled"]
         .as_bool()
         .ok_or_else(|| "Home integration status is missing".into())
 }
 
 fn set_home_integration(enabled: bool) -> Result<bool, String> {
     let app = enabled.then(install_dir).transpose()?;
-    let result = home_helper(if enabled { "enable" } else { "disable" }, app.as_deref());
-    // The service can lose its completion reply when the current Luma instance
-    // exits. Read back the root-owned state before reporting a failure.
-    let actual = home_integration_status()?;
-    if actual == enabled {
-        Ok(actual)
-    } else {
-        result?;
-        Err("Home integration did not reach the requested state".into())
+    let mut arguments = vec![if enabled { "enable" } else { "disable" }.to_owned()];
+    if let Some(app) = &app {
+        arguments.push(app.to_string_lossy().into_owned());
     }
+    // The caller is the Home process being stopped. Homebrew's exec children
+    // can end with that call; a transient unit must own the whole transition.
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_nanos();
+    let command = format!(
+        "systemd-run --unit=luma-home-switch-{nonce:x} --collect {}",
+        helper_command("home", &arguments)?
+    );
+    #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
+    let started = crate::luna::call_with_timeout(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        &json!({"command":command}),
+        std::time::Duration::from_secs(10),
+    );
+    #[cfg(not(all(feature = "webos", target_os = "linux", target_arch = "arm")))]
+    let started = raw_call(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        &json!({"command":command}),
+    );
+    let started = started.and_then(checked_response).and_then(|reply| {
+        if ["returnCode", "exitCode"]
+            .iter()
+            .any(|key| reply.get(*key).is_some_and(|code| code != 0 && code != "0"))
+        {
+            Err("Could not start the Home switch service".into())
+        } else {
+            Ok(())
+        }
+    });
+    // The request may lose its reply when Luma exits. Require the saved state,
+    // mount and boot hook to agree; never retry a possibly completed mutation.
+    for _ in 0..40 {
+        if let Ok(status) = home_integration_details()
+            && status["enabled"] == enabled
+            && status["mounted"] == enabled
+            && status["bootHook"] == enabled
+        {
+            return Ok(enabled);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    started?;
+    Err("Home integration did not reach the requested state".into())
 }
 
 /// Quote for the exec service's shell and systemd's ExecStart environment expansion. Shell
