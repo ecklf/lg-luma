@@ -3106,6 +3106,39 @@ fn input_name_rows(out: &mut Scene, state: &State, assets: &Assets, id: &str, y:
             },
         );
     }
+    if state.preferences.inputs_menu {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::InputInMenu,
+                rect: Rect::new(
+                    640.,
+                    y + 102.7 + if custom.is_some() { 84. } else { 0. },
+                    1120.,
+                    72.,
+                ),
+                title: language.t("showInInputsMenu"),
+                icon: Some("input-hdmi"),
+                value: Some(
+                    if state
+                        .preferences
+                        .inputs_menu_hidden
+                        .iter()
+                        .any(|item| item == id)
+                    {
+                        language.t("stateOff")
+                    } else {
+                        language.t("stateOn")
+                    },
+                ),
+                description: None,
+                selected: false,
+                chevron: false,
+            },
+        );
+    }
 }
 
 fn settings_surface(out: &mut Scene, rect: Rect, radius: f32) {

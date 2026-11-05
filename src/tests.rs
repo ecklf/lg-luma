@@ -3295,11 +3295,33 @@ fn inputs_menu_stays_off_until_chosen_then_switches_from_the_top_bar() {
     state.direction(Direction::Left, &controls(&state));
     assert!(state.subpage.is_none());
 
-    // Live TV first, then plugged-in inputs, then the rest; inputs switched Off are left out.
-    state
-        .preferences
-        .input_modes
-        .insert("com.webos.app.hdmi2".into(), InputMode::Off);
+    // Home's cards and the menu are separate: every card switched Off still leaves the menu
+    // listing Live TV, then plugged-in inputs, then the rest.
+    for input in [
+        "com.webos.app.hdmi1",
+        "com.webos.app.hdmi2",
+        "com.webos.app.hdmi3",
+    ] {
+        state
+            .preferences
+            .input_modes
+            .insert(input.into(), InputMode::Off);
+    }
+    assert_eq!(
+        state.input_choices(),
+        vec![
+            "com.webos.app.livetv",
+            "com.webos.app.hdmi1",
+            "com.webos.app.hdmi2",
+            "com.webos.app.hdmi3"
+        ]
+    );
+    // Each input's page has its own menu switch, below Rename, while the menu is on.
+    state.subpage = Some(crate::state::Subpage::Input("com.webos.app.hdmi2".into()));
+    state.focus = Target::InputRename;
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::InputInMenu);
+    assert_eq!(state.activate(), vec![Effect::Save]);
     assert_eq!(
         state.input_choices(),
         vec![
@@ -3308,6 +3330,17 @@ fn inputs_menu_stays_off_until_chosen_then_switches_from_the_top_bar() {
             "com.webos.app.hdmi3"
         ]
     );
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.subpage, Some(crate::state::Subpage::Inputs));
+    state.preferences.inputs_menu = false;
+    state.subpage = Some(crate::state::Subpage::Input("com.webos.app.hdmi2".into()));
+    assert!(
+        !controls(&state)
+            .iter()
+            .any(|control| control.target == Target::InputInMenu),
+        "the switch only shows while the menu is on"
+    );
+    state.preferences.inputs_menu = true;
 
     state.open(0);
     assert!(has_button(&state));

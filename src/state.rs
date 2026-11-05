@@ -50,6 +50,7 @@ pub enum Target {
     InputsButton,
     InputPick(String),
     InputsMenu,
+    InputInMenu,
     InstallUpdate,
     CheckUpdates,
     Recent(String),
@@ -490,8 +491,8 @@ impl State {
         self.dirty = true;
     }
 
-    /// What the top bar's Inputs menu lists, by app ID: Live TV, then the inputs not switched
-    /// Off, plugged-in ones first (port order kept within each).
+    /// What the top bar's Inputs menu lists, by app ID: Live TV, then the inputs not hidden from
+    /// it (whatever their Home card mode), plugged-in ones first (port order kept within each).
     pub fn input_choices(&self) -> Vec<String> {
         let live = self
             .inventory
@@ -503,12 +504,7 @@ impl State {
             .inventory
             .inputs
             .iter()
-            .filter(|input| {
-                self.preferences
-                    .input_modes
-                    .get(&input.id)
-                    .is_none_or(|mode| *mode != InputMode::Off)
-            })
+            .filter(|input| !self.preferences.inputs_menu_hidden.contains(&input.id))
             .partition(|input| input.connected == Some(true));
         live.chain(
             plugged
@@ -1269,6 +1265,21 @@ impl State {
                 }
                 return vec![];
             }
+            if self.focus == Target::InputInMenu {
+                match direction {
+                    Direction::Left => self.close_subpage(),
+                    Direction::Up => self.focus(
+                        if controls.iter().any(|c| c.target == Target::InputNameReset) {
+                            Target::InputNameReset
+                        } else {
+                            Target::InputRename
+                        },
+                        controls,
+                    ),
+                    _ => {}
+                }
+                return vec![];
+            }
             if matches!(self.focus, Target::InputRename | Target::InputNameReset) {
                 match direction {
                     Direction::Left => self.close_subpage(),
@@ -1285,6 +1296,9 @@ impl State {
                             && controls.iter().any(|c| c.target == Target::InputNameReset) =>
                     {
                         self.focus(Target::InputNameReset, controls)
+                    }
+                    Direction::Down if controls.iter().any(|c| c.target == Target::InputInMenu) => {
+                        self.focus(Target::InputInMenu, controls)
                     }
                     _ => {}
                 }
@@ -2224,6 +2238,17 @@ impl State {
                     self.scroll = 0.;
                     self.sync_custom_tiles();
                     self.focus = Target::TileEditor;
+                    return vec![Effect::Save];
+                }
+            }
+            Target::InputInMenu => {
+                if let Some(Subpage::Input(id)) = &self.subpage {
+                    let hidden = &mut self.preferences.inputs_menu_hidden;
+                    if let Some(index) = hidden.iter().position(|item| item == id) {
+                        hidden.remove(index);
+                    } else {
+                        hidden.push(id.clone());
+                    }
                     return vec![Effect::Save];
                 }
             }

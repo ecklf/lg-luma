@@ -3808,5 +3808,20 @@
     "vi": "Nút nguồn vào ở trên cùng",
     "nl": "Ingangenknop bovenaan",
     "sv": "Ingångsknapp överst"
+  },
+  "showInInputsMenu": {
+    "zh-tw": "在輸入來源選單中顯示",
+    "en": "Show in Inputs menu",
+    "de": "Im Eingänge-Menü zeigen",
+    "es": "Mostrar en el menú de entradas",
+    "zh": "在输入源中显示",
+    "pt": "Mostrar no menu de entradas",
+    "it": "Mostra nel menu ingressi",
+    "ru": "Показывать в меню входов",
+    "pl": "Pokaż w menu wejść",
+    "fr": "Afficher dans le menu Entrées",
+    "vi": "Hiện trong menu nguồn vào",
+    "nl": "Tonen in ingangenmenu",
+    "sv": "Visa i ingångsmenyn"
   }
 }
