@@ -23,10 +23,36 @@ pub const HOME_STRIP_LEFT: f32 = 84.;
 pub const HOME_STRIP_RIGHT: f32 = 1748.;
 pub const HOME_TILE_WIDTH: f32 = 256.;
 pub const HOME_TILE_PITCH: f32 = 281.6;
+/// Most full rows of favourites Settings can draw above the Home strip.
+pub const MAX_ROWS_ABOVE: usize = 2;
 pub const HOME_FADE_LEFT: f32 = 8.;
 pub const HOME_FADE_RIGHT: f32 = 1910.;
 pub const BACKGROUND_FADE: f32 = 0.4;
 pub const CYCLE_FADE: f32 = 1.6;
+
+/// The favourites (by index in Home order) in drawn row `row`, with `above` rows over the strip.
+/// Row 0 is the strip: the first six, then those after the rows above, scrolling sideways as
+/// before. Rows 1 to `above` run top to bottom and hold the next six each, without scrolling.
+pub fn home_row(row: usize, count: usize, above: usize) -> Vec<usize> {
+    if row == 0 {
+        let lifted = (APPS_COLUMNS * (above + 1)).min(count);
+        (0..count.min(APPS_COLUMNS)).chain(lifted..count).collect()
+    } else {
+        let start = (APPS_COLUMNS * row).min(count);
+        (start..(start + APPS_COLUMNS).min(count)).collect()
+    }
+}
+
+/// The drawn row of favourite `index` and its position in that row (see `home_row`).
+pub fn home_slot(index: usize, above: usize) -> (usize, usize) {
+    if index < APPS_COLUMNS {
+        (0, index)
+    } else if index < APPS_COLUMNS * (above + 1) {
+        (index / APPS_COLUMNS, index % APPS_COLUMNS)
+    } else {
+        (0, index - APPS_COLUMNS * above)
+    }
+}
 
 pub fn unix_now() -> u64 {
     std::time::SystemTime::now()
@@ -470,6 +496,77 @@ impl State {
         self.dirty = true;
     }
 
+    /// How many rows of favourites are drawn above the Home strip for `count` favourites: what
+    /// Settings asks for, as far as there are favourites beyond the strip's first six.
+    pub fn rows_above(&self, count: usize) -> usize {
+        self.preferences
+            .rows_above_favorites
+            .min(MAX_ROWS_ABOVE)
+            .min(count.saturating_sub(APPS_COLUMNS).div_ceil(APPS_COLUMNS))
+    }
+
+    /// The Home favourite one remote step from `index` as drawn: Left/Right stay in the row,
+    /// Up/Down take the nearest tile across in the row above or below (in the strip, a shown
+    /// one). None at an edge.
+    fn home_step(
+        &self,
+        apps: &[&App],
+        index: usize,
+        direction: Direction,
+        controls: &[Control],
+    ) -> Option<usize> {
+        let count = apps.len();
+        let above = self.rows_above(count);
+        let (row, position) = home_slot(index, above);
+        let next_row = match direction {
+            Direction::Left | Direction::Right => {
+                let next = if matches!(direction, Direction::Left) {
+                    position.checked_sub(1)?
+                } else {
+                    position + 1
+                };
+                return home_row(row, count, above).get(next).copied();
+            }
+            Direction::Up => match row {
+                0 if above > 0 => above,
+                0 | 1 => return None,
+                row => row - 1,
+            },
+            Direction::Down => match row {
+                0 => return None,
+                row if row == above => 0,
+                row => row + 1,
+            },
+        };
+        let rect = |index: usize| {
+            controls
+                .iter()
+                .find(|control| control.target == Target::App(apps[index].id.clone()))
+                .map(|control| control.rect)
+        };
+        let cells = home_row(next_row, count, above);
+        let Some(x) = rect(index).map(|rect| rect.center().0) else {
+            return cells.get(position.min(cells.len() - 1)).copied();
+        };
+        let shown: Vec<_> = cells
+            .iter()
+            .copied()
+            .filter(|cell| {
+                rect(*cell).is_some_and(|rect| {
+                    rect.x >= HOME_STRIP_LEFT - 0.1 && rect.x + rect.w <= HOME_STRIP_RIGHT + 0.1
+                })
+            })
+            .collect();
+        if shown.is_empty() { &cells } else { &shown }
+            .iter()
+            .copied()
+            .min_by(|a, b| {
+                let distance =
+                    |cell: usize| rect(cell).map_or(f32::MAX, |r| (r.center().0 - x).abs());
+                distance(*a).total_cmp(&distance(*b))
+            })
+    }
+
     pub fn apps(&self) -> Vec<&App> {
         let ids = self.preferences.favorites(&self.inventory.apps);
         if self.page == Page::Home {
@@ -615,6 +712,7 @@ impl State {
                     && self.inventory.apps.iter().any(|app| &app.id == *id)
             })
             .count();
+        let count = home_row(0, count, self.rows_above(count)).len();
         let content = if count == 0 {
             0.
         } else {
@@ -723,15 +821,26 @@ impl State {
 
     pub fn first_content(&self) -> Target {
         match self.page {
-            Page::Home => self
-                .apps()
-                .get(((self.home_scroll - 0.01).max(0.) / HOME_TILE_PITCH).ceil() as usize)
-                .map(|app| Target::App(app.id.clone()))
-                .unwrap_or(if self.error.is_some() {
-                    Target::Retry
+            Page::Home => {
+                let apps = self.apps();
+                let above = self.rows_above(apps.len());
+                // The top row first; without rows above, the strip's first shown tile.
+                let index = if above > 0 {
+                    Some(APPS_COLUMNS)
                 } else {
-                    Target::Browse
-                }),
+                    home_row(0, apps.len(), 0)
+                        .get(((self.home_scroll - 0.01).max(0.) / HOME_TILE_PITCH).ceil() as usize)
+                        .copied()
+                };
+                index
+                    .and_then(|index| apps.get(index))
+                    .map(|app| Target::App(app.id.clone()))
+                    .unwrap_or(if self.error.is_some() {
+                        Target::Retry
+                    } else {
+                        Target::Browse
+                    })
+            }
             Page::Apps => self
                 .apps()
                 .first()
@@ -1056,10 +1165,17 @@ impl State {
                 })
                 .collect();
             if let Some(index) = slots.iter().position(|slot| ids[*slot] == id) {
-                let next = match direction {
-                    Direction::Left => index.saturating_sub(1),
-                    Direction::Right => (index + 1).min(slots.len() - 1),
-                    _ => index,
+                let next = if self.page == Page::Home {
+                    // Home's favourites are the slots in order; moves follow the rows as drawn.
+                    let apps = self.apps();
+                    self.home_step(&apps, index, direction, controls)
+                        .unwrap_or(index)
+                } else {
+                    match direction {
+                        Direction::Left => index.saturating_sub(1),
+                        Direction::Right => (index + 1).min(slots.len() - 1),
+                        _ => index,
+                    }
                 };
                 if next != index {
                     ids.swap(slots[index], slots[next]);
@@ -1076,18 +1192,14 @@ impl State {
             {
                 let apps = self.apps();
                 if let Some(index) = apps.iter().position(|app| &app.id == id) {
-                    match direction {
-                        Direction::Left | Direction::Right => {
-                            let next = if matches!(direction, Direction::Left) {
-                                index.saturating_sub(1)
-                            } else {
-                                (index + 1).min(apps.len() - 1)
-                            };
-                            let id = apps[next].id.clone();
-                            self.focus(Target::App(id), controls);
-                        }
-                        Direction::Up => self.focus(Target::Nav(0), controls),
-                        Direction::Down => {
+                    let next = self
+                        .home_step(&apps, index, direction, controls)
+                        .map(|next| apps[next].id.clone());
+                    match (direction, next) {
+                        (_, Some(id)) => self.focus(Target::App(id), controls),
+                        (Direction::Left | Direction::Right, None) => {}
+                        (Direction::Up, None) => self.focus(Target::Nav(0), controls),
+                        (Direction::Down, None) => {
                             let x = controls
                                 .iter()
                                 .find(|control| control.target == self.focus)
@@ -2195,6 +2307,11 @@ impl State {
                         return vec![];
                     }
                     5 => return vec![Effect::Quit],
+                    8 => {
+                        self.preferences.rows_above_favorites =
+                            (self.preferences.rows_above_favorites + 1) % (MAX_ROWS_ABOVE + 1);
+                        self.home_scroll = 0.;
+                    }
                     7 => {
                         self.subpage = Some(Subpage::TextRendering);
                         self.focus = Target::Choice(self.preferences.text_rendering.index());

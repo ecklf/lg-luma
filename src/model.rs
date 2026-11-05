@@ -223,6 +223,9 @@ pub struct Preferences {
     pub splash_background: Option<String>,
     pub deleted_backgrounds: Vec<String>,
     pub show_home_names: bool,
+    /// Full rows of favourites drawn above the Home strip (0 keeps the single strip).
+    #[serde(deserialize_with = "deserialize_rows_above")]
+    pub rows_above_favorites: usize,
     pub show_app_names: bool,
     pub hour_24: bool,
     pub reduced_motion: bool,
@@ -263,6 +266,7 @@ impl Default for Preferences {
             splash_background: None,
             deleted_backgrounds: vec![],
             show_home_names: false,
+            rows_above_favorites: 0,
             show_app_names: true,
             hour_24: false,
             reduced_motion: false,
@@ -283,6 +287,17 @@ impl Default for Preferences {
             wallpaper_changed: 0,
         }
     }
+}
+
+/// Older or hand-edited files keep loading: anything but 0, 1 or 2 is the single strip.
+fn deserialize_rows_above<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<usize, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(value
+        .as_u64()
+        .filter(|rows| *rows <= crate::state::MAX_ROWS_ABOVE as u64)
+        .unwrap_or(0) as usize)
 }
 
 impl Preferences {

@@ -3269,3 +3269,112 @@ fn update_card_shows_progress_restores_retry_and_ignores_presses_while_busy() {
     state.install_response(Response::Finished(Ok(())));
     assert_eq!(state.update_status, Status::Unchecked);
 }
+
+#[test]
+fn rows_above_favorites_stay_off_until_chosen_and_follow_the_drawn_rows() {
+    use crate::state::{home_row, home_slot};
+    // Strip first six, the next six per row above (top first), then the strip again.
+    assert_eq!(home_row(0, 20, 2), vec![0, 1, 2, 3, 4, 5, 18, 19]);
+    assert_eq!(home_row(1, 20, 2), (6..12).collect::<Vec<_>>());
+    assert_eq!(home_row(2, 20, 2), (12..18).collect::<Vec<_>>());
+    assert_eq!(home_row(1, 8, 1), vec![6, 7]);
+    assert_eq!(home_row(0, 9, 0), (0..9).collect::<Vec<_>>());
+    for (index, slot) in [(5, (0, 5)), (6, (1, 0)), (13, (2, 1)), (18, (0, 6))] {
+        assert_eq!(home_slot(index, 2), slot);
+    }
+
+    let mut state = ready();
+    let favorites: Vec<_> = state
+        .inventory
+        .apps
+        .iter()
+        .take(20)
+        .map(|app| app.id.clone())
+        .collect();
+    assert_eq!(favorites.len(), 20, "the demo inventory has enough apps");
+    state.preferences.favorites = Some(favorites.clone());
+    // Off by default: one strip, Up from it goes to the tabs as before.
+    assert_eq!(state.preferences.rows_above_favorites, 0);
+    assert_eq!(state.rows_above(20), 0);
+    state.focus = Target::App(favorites[2].clone());
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::Nav(0));
+
+    // Settings → General cycles Off → 1 row → 2 rows → Off.
+    state.open(2);
+    state.focus = Target::Setting(8);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.rows_above_favorites, 1);
+    state.activate();
+    assert_eq!(state.preferences.rows_above_favorites, 2);
+    state.activate();
+    assert_eq!(state.preferences.rows_above_favorites, 0);
+
+    // Rows above only appear as far as there are favourites to fill them.
+    state.preferences.rows_above_favorites = 2;
+    assert_eq!(state.rows_above(6), 0);
+    assert_eq!(state.rows_above(8), 1);
+    assert_eq!(state.rows_above(20), 2);
+
+    state.open(0);
+    let rect = |state: &State, id: &str| {
+        controls(state)
+            .into_iter()
+            .find(|control| control.target == Target::App(id.into()))
+            .unwrap()
+            .rect
+    };
+    // The top row sits where the strip was; the strip moves down below both rows.
+    let (top, middle, strip) = (
+        rect(&state, &favorites[6]),
+        rect(&state, &favorites[12]),
+        rect(&state, &favorites[0]),
+    );
+    assert!(top.y < middle.y && middle.y < strip.y);
+    assert_eq!(top.x, strip.x);
+    assert_eq!(rect(&state, &favorites[18]).y, strip.y);
+
+    // Down from the tabs lands on the top row; Down walks the rows to the strip, Up back.
+    state.focus = Target::Nav(0);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::App(favorites[6].clone()));
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::App(favorites[7].clone()));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::App(favorites[13].clone()));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::App(favorites[1].clone()));
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::App(favorites[13].clone()));
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::App(favorites[7].clone()));
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::Nav(0));
+    // Rows above end after six; the strip continues past its sixth with the rest.
+    state.focus = Target::App(favorites[11].clone());
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::App(favorites[11].clone()));
+    state.focus = Target::App(favorites[5].clone());
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::App(favorites[18].clone()));
+
+    // Moving an app follows the rows too: Up swaps it with the tile drawn above.
+    state.focus = Target::App(favorites[0].clone());
+    state.home_scroll = 0.;
+    state.hold();
+    state.direction(Direction::Up, &controls(&state));
+    let order = state.preferences.favorites.clone().unwrap();
+    assert_eq!(order[12], favorites[0]);
+    assert_eq!(order[0], favorites[12]);
+}
+
+#[test]
+fn rows_above_favorites_preference_reads_leniently() {
+    for (value, rows) in [(json!(1), 1), (json!(2), 2), (json!(3), 0), (json!("2"), 0)] {
+        let preferences: Preferences =
+            serde_json::from_value(json!({ "rows_above_favorites": value })).unwrap();
+        assert_eq!(preferences.rows_above_favorites, rows);
+    }
+    let preferences: Preferences = serde_json::from_value(json!({})).unwrap();
+    assert_eq!(preferences.rows_above_favorites, 0);
+}

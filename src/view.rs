@@ -6,7 +6,7 @@ use crate::{
     state::{
         APPS_COLUMNS, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT,
         HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State,
-        Subpage, Target, TextField, WIDGETS_SECTION,
+        Subpage, Target, TextField, WIDGETS_SECTION, home_row,
     },
     weather::{self, Unit},
 };
@@ -1209,6 +1209,29 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
                 0.
             };
     }
+    // Rows above the strip (Settings → General) hold the favourites after its first six, in fixed
+    // columns; the strip below them keeps scrolling with the rest.
+    let above = state.rows_above(apps.len());
+    let row_pitch = grid_height + 38.4;
+    for row in 1..=above {
+        for (position, index) in home_row(row, apps.len(), above).into_iter().enumerate() {
+            tile(
+                out,
+                state,
+                assets,
+                apps[index],
+                Rect::new(
+                    84. + position as f32 * HOME_TILE_PITCH,
+                    544.8 + (row - 1) as f32 * row_pitch - s,
+                    HOME_TILE_WIDTH,
+                    FACE_HEIGHT,
+                ),
+                names,
+                false,
+            );
+        }
+    }
+    let strip_y = 544.8 + above as f32 * row_pitch;
     // Like Apple TV's rows, the favourites run to the screen edge: the next tile shows cut off
     // at the right (and a scrolled-away one at the left), so it is clear the row continues.
     out.draw.push(Draw::Clip(Some(state.favorites_viewport())));
@@ -1225,15 +1248,15 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         HOME_STRIP_RIGHT,
         HOME_FADE_RIGHT,
     ])));
-    for (index, app) in apps.iter().enumerate() {
+    for (position, index) in home_row(0, apps.len(), above).into_iter().enumerate() {
         tile(
             out,
             state,
             assets,
-            app,
+            apps[index],
             Rect::new(
-                84. + index as f32 * HOME_TILE_PITCH - state.home_scroll,
-                544.8 - s,
+                84. + position as f32 * HOME_TILE_PITCH - state.home_scroll,
+                strip_y - s,
                 HOME_TILE_WIDTH,
                 FACE_HEIGHT,
             ),
@@ -1243,7 +1266,7 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     }
     out.draw.push(Draw::EdgeFadeX(None));
     out.draw.push(Draw::Clip(Some(state.content_viewport())));
-    let input_y = 544.8 + grid_height + 41.6 - s;
+    let input_y = strip_y + grid_height + 41.6 - s;
     let inputs: Vec<_> = state
         .inventory
         .inputs
@@ -2360,6 +2383,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 (0, "appNames", "type", None, true),
                 (1, "clock", "clock", None, true),
                 (4, "language", "language", Some(language.name()), true),
+                (
+                    8,
+                    "favoriteRows",
+                    "grid",
+                    Some(match state.preferences.rows_above_favorites {
+                        0 => language.t("stateOff"),
+                        1 => language.t("oneRow"),
+                        _ => language.t("twoRows"),
+                    }),
+                    false,
+                ),
                 (
                     2,
                     "reducedMotion",
