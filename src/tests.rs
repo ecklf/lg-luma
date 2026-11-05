@@ -3269,3 +3269,85 @@ fn update_card_shows_progress_restores_retry_and_ignores_presses_while_busy() {
     state.install_response(Response::Finished(Ok(())));
     assert_eq!(state.update_status, Status::Unchecked);
 }
+
+#[test]
+fn inputs_menu_stays_off_until_chosen_then_switches_from_the_top_bar() {
+    let mut state = ready();
+    let has_button = |state: &State| {
+        controls(state)
+            .iter()
+            .any(|control| control.target == Target::InputsButton)
+    };
+    // Off by default: no button, and Up from a favorite on the right still goes to the tabs.
+    assert!(!state.preferences.inputs_menu);
+    assert!(!has_button(&state));
+    let right = state.apps()[5].id.clone();
+    state.focus = Target::App(right.clone());
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::Nav(0));
+
+    // Settings → Widgets → Inputs switches it on; Left leaves the page as from its other rows.
+    state.open(2);
+    state.subpage = Some(crate::state::Subpage::Inputs);
+    state.focus = Target::InputsMenu;
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.inputs_menu);
+    state.direction(Direction::Left, &controls(&state));
+    assert!(state.subpage.is_none());
+
+    // Live TV first, then plugged-in inputs, then the rest; inputs switched Off are left out.
+    state
+        .preferences
+        .input_modes
+        .insert("com.webos.app.hdmi2".into(), InputMode::Off);
+    assert_eq!(
+        state.input_choices(),
+        vec![
+            "com.webos.app.livetv",
+            "com.webos.app.hdmi1",
+            "com.webos.app.hdmi3"
+        ]
+    );
+
+    state.open(0);
+    assert!(has_button(&state));
+    // Up from the right half of Home reaches the button; Left goes to the tabs, Right to TV
+    // settings.
+    state.focus = Target::App(right);
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::InputsButton);
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::TvSettings);
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::InputsButton);
+
+    // OK opens the menu on its first row; Down moves through it; Back returns to the button.
+    assert!(state.activate().is_empty());
+    assert!(matches!(state.overlay, Some(Overlay::Inputs)));
+    assert_eq!(
+        state.focus,
+        Target::InputPick("com.webos.app.livetv".into())
+    );
+    let menu = controls(&state);
+    assert!(
+        menu.iter()
+            .all(|control| matches!(control.target, Target::InputPick(_))),
+        "only the menu takes input while it is open"
+    );
+    state.direction(Direction::Down, &menu);
+    assert_eq!(state.focus, Target::InputPick("com.webos.app.hdmi1".into()));
+    assert!(state.back().is_empty());
+    assert!(state.overlay.is_none());
+    assert_eq!(state.focus, Target::InputsButton);
+
+    // OK on a row switches to it and closes the menu.
+    state.activate();
+    state.direction(Direction::Down, &controls(&state));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(
+        state.activate(),
+        vec![Effect::Launch("com.webos.app.hdmi3".into())]
+    );
+    assert!(state.overlay.is_none());
+    assert_eq!(state.focus, Target::InputsButton);
+}

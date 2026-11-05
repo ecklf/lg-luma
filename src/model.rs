@@ -223,6 +223,8 @@ pub struct Preferences {
     pub splash_background: Option<String>,
     pub deleted_backgrounds: Vec<String>,
     pub show_home_names: bool,
+    /// An Inputs button in the top bar that opens a menu of Live TV and the inputs.
+    pub inputs_menu: bool,
     pub show_app_names: bool,
     pub hour_24: bool,
     pub reduced_motion: bool,
@@ -263,6 +265,7 @@ impl Default for Preferences {
             splash_background: None,
             deleted_backgrounds: vec![],
             show_home_names: false,
+            inputs_menu: false,
             show_app_names: true,
             hour_24: false,
             reduced_motion: false,

@@ -600,6 +600,7 @@ pub fn scene_with_pill(
         | Overlay::BackgroundOptions { .. }
         | Overlay::BackgroundDelete { .. }
         | Overlay::Keyboard
+        | Overlay::Inputs
         | Overlay::WallpaperUpload
         | Overlay::TileEditor),
     ) = &state.overlay
@@ -628,6 +629,11 @@ pub fn scene_with_pill(
                     }
                     rect
                 }),
+            Overlay::Inputs => out
+                .controls
+                .iter()
+                .find(|control| control.target == Target::InputsButton)
+                .map(|control| control.rect),
             _ => None,
         };
         out.controls.clear();
@@ -650,6 +656,7 @@ pub fn scene_with_pill(
                 delete_confirmation(&mut out, state, assets, id)
             }
             Overlay::Keyboard => keyboard(&mut out, state, assets),
+            Overlay::Inputs => inputs_menu(&mut out, state, assets, anchor),
             Overlay::WallpaperUpload => wallpaper_upload(&mut out, state, assets),
             Overlay::TileEditor => tile_editor(&mut out, state, assets),
             Overlay::SystemKeyboard | Overlay::Recents { .. } => {}
@@ -776,6 +783,145 @@ fn header(
         },
     );
     out.control(Target::TvSettings, rect, false);
+    if state.inputs_button() {
+        let button = inputs_button_rect(assets, language, rect);
+        let lit = state.focus == Target::InputsButton;
+        inputs_button(out, assets, language, button, lit);
+        out.control(Target::InputsButton, button, false);
+    }
+}
+
+/// The top bar's Inputs button, left of the TV settings button: an icon and its label.
+fn inputs_button_rect(assets: &Assets, language: Language, settings: Rect) -> Rect {
+    let width = 20. + 24. + 10. + assets.width(language.t("inputs"), text(20.8, 550, -0.02)) + 24.;
+    Rect::new(
+        settings.x - 16. - width,
+        settings.y,
+        width.ceil(),
+        settings.h,
+    )
+}
+
+fn inputs_button(out: &mut Scene, assets: &Assets, language: Language, rect: Rect, lit: bool) {
+    out.pill(rect, lit, false);
+    let ink = if lit {
+        c(0x2c2c2c, 1.)
+    } else {
+        c(0xeeeeee, 0.73)
+    };
+    out.icon(
+        assets,
+        "input-hdmi",
+        Rect::new(rect.x + 20., rect.y + (rect.h - 24.) / 2., 24., 24.),
+        ink,
+    );
+    out.text(
+        language.t("inputs"),
+        Rect::new(
+            rect.x + 54.,
+            rect.y + (rect.h - 25.) / 2.,
+            rect.w - 54.,
+            25.,
+        ),
+        text(20.8, 550, -0.02),
+        ink,
+        false,
+    );
+}
+
+/// The Inputs menu under its button: Live TV, then each input with whether a device is plugged
+/// in. OK switches to it; Back returns to the button.
+fn inputs_menu(out: &mut Scene, state: &State, assets: &Assets, button: Option<Rect>) {
+    let language = state.preferences.language;
+    let choices = state.input_choices();
+    let button = button.unwrap_or(Rect::new(1600., 47.2, 160., 60.));
+    // The button stays lit above the dimmed screen while its menu is open.
+    inputs_button(out, assets, language, button, true);
+    let (width, row_h, pad) = (520., 84., 16.);
+    let panel = Rect::new(
+        (button.x + button.w - width).max(84.),
+        button.y + button.h + 16.,
+        width,
+        pad * 2. + row_h * choices.len() as f32 - 8.,
+    );
+    out.modal = Some(panel);
+    out.shadow(panel, 27.2, 120., 25., 0.47);
+    out.draw.push(Draw::RoundedGradient(
+        panel,
+        27.2,
+        c(0x34383b, 0.96),
+        c(0x24282d, 0.988),
+    ));
+    out.border(panel, 27.2, 1., c(0xffffff, 0.12));
+    for (index, id) in choices.iter().enumerate() {
+        let rect = Rect::new(
+            panel.x + pad,
+            panel.y + pad + index as f32 * row_h,
+            panel.w - pad * 2.,
+            row_h - 8.,
+        );
+        let target = Target::InputPick(id.clone());
+        let focused = state.focus == target;
+        out.shape(rect, 12., c(0xffffff, if focused { 0.96 } else { 0.10 }));
+        let ink = if focused { c(0x242424, 1.) } else { WHITE };
+        let input = state.inventory.inputs.iter().find(|input| &input.id == id);
+        let (icon, title, detail) = match input {
+            Some(input) => (
+                format!(
+                    "input-{}",
+                    input_icon(input, state.preferences.input_name(input))
+                ),
+                state.preferences.input_title(input).to_owned(),
+                Some(input_status(
+                    input,
+                    state.preferences.input_name(input).is_some(),
+                    language,
+                )),
+            ),
+            None => (
+                "tv".into(),
+                state
+                    .inventory
+                    .apps
+                    .iter()
+                    .find(|app| &app.id == id)
+                    .map_or_else(|| id.clone(), |app| app.title.clone()),
+                None,
+            ),
+        };
+        out.icon(
+            assets,
+            &icon,
+            Rect::new(rect.x + 20., rect.y + (rect.h - 28.) / 2., 28., 28.),
+            ink,
+        );
+        let title_y = if detail.is_some() {
+            rect.y + 12.
+        } else {
+            rect.y + (rect.h - 26.) / 2.
+        };
+        out.text(
+            &title,
+            Rect::new(rect.x + 64., title_y, rect.w - 84., 26.),
+            text(20.8, 600, -0.02),
+            ink,
+            false,
+        );
+        if let Some(detail) = detail {
+            out.text(
+                &detail,
+                Rect::new(rect.x + 64., rect.y + 42., rect.w - 84., 22.),
+                text(15.2, 400, 0.),
+                if focused {
+                    c(0x242424, 0.62)
+                } else {
+                    c(0xe8e8e8, 0.56)
+                },
+                false,
+            );
+        }
+        out.control(target, rect, false);
+    }
 }
 
 fn tile(
@@ -2711,6 +2857,25 @@ fn inputs_settings(out: &mut Scene, state: &State, assets: &Assets) {
             },
             icon: Some("refresh"),
             value: None,
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::InputsMenu,
+            rect: Rect::new(640., y + 84., 1120., 72.),
+            title: language.t("inputsMenu"),
+            icon: Some("input-hdmi"),
+            value: Some(if state.preferences.inputs_menu {
+                language.t("stateOn")
+            } else {
+                language.t("stateOff")
+            }),
             description: None,
             selected: false,
             chevron: false,

@@ -3793,5 +3793,20 @@
     "vi": "Phiên chỉnh sửa đã kết thúc",
     "nl": "Bewerksessie beëindigd",
     "sv": "Redigeringssessionen har avslutats"
+  },
+  "inputsMenu": {
+    "zh-tw": "上方輸入來源選單",
+    "en": "Inputs button in top bar",
+    "de": "Eingänge-Taste oben",
+    "es": "Botón de entradas arriba",
+    "zh": "在上方显示输入源",
+    "pt": "Botão de entradas no topo",
+    "it": "Pulsante ingressi in alto",
+    "ru": "Кнопка входов вверху",
+    "pl": "Przycisk wejść u góry",
+    "fr": "Bouton Entrées en haut",
+    "vi": "Nút nguồn vào ở trên cùng",
+    "nl": "Ingangenknop bovenaan",
+    "sv": "Ingångsknapp överst"
   }
 }
