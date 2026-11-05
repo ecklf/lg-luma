@@ -259,7 +259,11 @@ fn stock(id: &str) -> Value {
 
 #[test]
 fn home_methods_reject_unknown_firmware_or_lifecycle() {
-    for release in ["Rockhopper release 5.6.2", "Rockhopper release 6.5.0"] {
+    for release in [
+        "Rockhopper release 5.6.2",
+        "Rockhopper release 6.5.0",
+        "Rockhopper release 9.2.4-48 (ombre-okapi)",
+    ] {
         assert_eq!(
             home::method(release, &stock(home::HOME), home::HOME).unwrap(),
             "executable"
@@ -271,9 +275,13 @@ fn home_methods_reject_unknown_firmware_or_lifecycle() {
             "manifest"
         );
     }
-    for release in ["Rockhopper release 4.10.2", "Rockhopper release 9.2.0"] {
+    for release in ["Rockhopper release 4.10.2", "Rockhopper release 7.3.0"] {
         assert!(home::method(release, &stock(home::HOME), home::HOME).is_err());
     }
+    // webOS 24 has the executable method only, so it still needs a native Home.
+    let mut bad24 = stock(home::HOME);
+    bad24["nativeLifeCycleInterfaceVersion"] = json!(1);
+    assert!(home::method("release 9.2.4-48", &bad24, home::HOME).is_err());
     let mut bad = stock(home::HOME);
     bad["nativeLifeCycleInterfaceVersion"] = json!(1);
     assert!(home::method("release 5.6.2", &bad, home::HOME).is_err());
