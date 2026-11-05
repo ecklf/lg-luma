@@ -3794,49 +3794,19 @@
     "nl": "Bewerksessie beëindigd",
     "sv": "Redigeringssessionen har avslutats"
   },
-  "favoriteRows": {
-    "zh-tw": "上方收藏列",
-    "en": "Rows above favorites",
-    "de": "Reihen über Favoriten",
-    "es": "Filas sobre favoritos",
-    "zh": "上方收藏行",
-    "pt": "Linhas acima dos favoritos",
-    "it": "Righe sopra i preferiti",
-    "ru": "Ряды над избранным",
-    "pl": "Rzędy nad ulubionymi",
-    "fr": "Rangées au-dessus des favoris",
-    "vi": "Hàng phía trên mục yêu thích",
-    "nl": "Rijen boven favorieten",
-    "sv": "Rader ovanför favoriter"
-  },
-  "oneRow": {
-    "zh-tw": "1 列",
-    "en": "1 row",
-    "de": "1 Reihe",
-    "es": "1 fila",
-    "zh": "1 行",
-    "pt": "1 linha",
-    "it": "1 riga",
-    "ru": "1 ряд",
-    "pl": "1 rząd",
-    "fr": "1 rangée",
-    "vi": "1 hàng",
-    "nl": "1 rij",
-    "sv": "1 rad"
-  },
-  "twoRows": {
-    "zh-tw": "2 列",
-    "en": "2 rows",
-    "de": "2 Reihen",
-    "es": "2 filas",
-    "zh": "2 行",
-    "pt": "2 linhas",
-    "it": "2 righe",
-    "ru": "2 ряда",
-    "pl": "2 rzędy",
-    "fr": "2 rangées",
-    "vi": "2 hàng",
-    "nl": "2 rijen",
-    "sv": "2 rader"
+  "favoritesShown": {
+    "zh-tw": "顯示的收藏",
+    "en": "Favorites shown",
+    "de": "Angezeigte Favoriten",
+    "es": "Favoritos visibles",
+    "zh": "显示的收藏",
+    "pt": "Favoritos exibidos",
+    "it": "Preferiti visibili",
+    "ru": "Показ избранного",
+    "pl": "Widoczne ulubione",
+    "fr": "Favoris affichés",
+    "vi": "Số mục yêu thích hiển thị",
+    "nl": "Getoonde favorieten",
+    "sv": "Visade favoriter"
   }
 }

@@ -3300,7 +3300,7 @@ fn rows_above_favorites_stay_off_until_chosen_and_follow_the_drawn_rows() {
     state.direction(Direction::Up, &controls(&state));
     assert_eq!(state.focus, Target::Nav(0));
 
-    // Settings → General cycles Off → 1 row → 2 rows → Off.
+    // Settings → General → Favorites shown cycles 6 → 12 → 18 → 6.
     state.open(2);
     state.focus = Target::Setting(8);
     assert_eq!(state.activate(), vec![Effect::Save]);

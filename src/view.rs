@@ -2385,12 +2385,13 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 (4, "language", "language", Some(language.name()), true),
                 (
                     8,
-                    "favoriteRows",
+                    "favoritesShown",
                     "grid",
+                    // Favorites in full on Home: the strip's six and six per row above it.
                     Some(match state.preferences.rows_above_favorites {
-                        0 => language.t("stateOff"),
-                        1 => language.t("oneRow"),
-                        _ => language.t("twoRows"),
+                        0 => "6",
+                        1 => "12",
+                        _ => "18",
                     }),
                     false,
                 ),
