@@ -753,6 +753,22 @@ mounted Home manifest. The author verified takeover, same-process Home-key relau
 reapplication on one LG OLED65G46LA (2024 G4), running `9.2.4-48`. No other 9.x models have been
 tested; treat this path as experimental rather than a claim of support for every webOS 24 TV.
 
+### Home background preloading
+
+For both executable and manifest Home integration, a nonempty SAM `preload` launch parameter
+creates a hidden, unfocused window without presenting frames. Background lifecycle `relaunch`
+requests carrying a nonempty `preload` at the top level or in `parameters` are ignored: they do
+not show/raise the window, reset the UI, refresh inventory or arm the foreground watchdog.
+Ordinary Home activation still restores/shows/raises Luma; normal Luma tile startup is unchanged.
+This incorporates the hidden-startup approach from #157 and additionally handles warm preload
+relaunches. Startup hiding does not depend on lifecycle registration succeeding.
+
+Manual TV acceptance is still required for these combined fixes: preload a new and an existing
+Home while an app or HDMI input is foreground, activate Home afterward, repeat background/Home
+cycles, and leave streaming paused for an extended period. Also verify registration-refused or
+`/var/lib/luma-home/no-lifecycle` restart fallback. Host tests do not establish compositor behavior,
+long-session foreground stability, standby or cold-boot behavior.
+
 ### Home lifecycle on webOS 10/11
 
 With the staged manifest (see [Optional native Home integration](#optional-native-home-integration)), SAM starts Luma's own executable for `com.webos.app.home`, but

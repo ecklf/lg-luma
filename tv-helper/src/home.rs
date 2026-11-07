@@ -574,7 +574,8 @@ pub fn method<'a>(release: &str, stock: &Value, id: &str) -> Result<&'a str> {
     // takeover has to replace the Home executable instead. Verified on a 2024 G4
     // running 9.2.4-48, where the manifest method fails on that missing method.
     // Internal 7.x is verified only for the standard Home identity.
-    let executable_version = matches!(version, Some(5 | 6 | 9)) || (version == Some(7) && id == HOME);
+    let executable_version =
+        matches!(version, Some(5 | 6 | 9)) || (version == Some(7) && id == HOME);
     if executable_version
         && stock["type"] == "native"
         && stock["main"] == format!("file:///usr/bin/{id}")
