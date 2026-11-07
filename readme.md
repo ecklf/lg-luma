@@ -2,7 +2,7 @@
 
 A native launcher for rooted LG webOS TVs, inspired by Apple TV.
 
-https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
+https://github.com/user-attachments/assets/2156d640-b8fa-4ea4-a02c-0db4c93bcc5a
 
 <details>
 <summary>Screenshots</summary>
@@ -60,6 +60,7 @@ https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
 | TV        | Model identifier | Takeover Support |
 | --------- | ---------------- | ---------------- |
 | LG C1     | `OLED48C1KNB`    | ✅               |
+| LG G1     | `OLED65G1RLA`    | ✅               |
 | LG UP8000 | `86UP80009LA`    | Unknown          |
 
 </details>
@@ -81,6 +82,7 @@ The native executable path and lifecycle-v2 manifest are checked before enabling
 
 | TV    | Model identifier | Takeover Support |
 | ----- | ---------------- | ---------------- |
+| LG G4 | `OLED65G46LA`    | ✅               |
 | LG B2 | `OLED65B29LA`    | ✅               |
 
 </details>
@@ -110,6 +112,7 @@ The native executable path and lifecycle-v2 manifest are checked before enabling
 | LG C2 | `OLED65C2PSA`         | ✅               |
 | LG C3 | `OLED65C31LA`         | ✅               |
 | LG C3 | `OLED65C36LC`         | ✅               |
+| LG C4 | `OLED77C44LA`         | ✅               |
 | LG C5 | `OLED55C57LA`         | ✅               |
 | LG C5 | `OLED55C5PSA`         | Unknown          |
 | LG C6 | `OLED65C6*`           | Unknown          |
@@ -148,7 +151,8 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 ### Takeover Method
 
 > [!NOTE]
-> Takeover is supported on **webOS 5, 6, 22, 25 and 26**.\
+> Takeover is supported on **webOS 5, 6, 22, 24, 25 and 26**.\
+> On 5, 6, 22 and 24 it replaces the Home executable; on 25 and 26 it mounts Luma's Home app.\
 > webOS 22 requires the native LG Home executable with lifecycle interface v2; other layouts are rejected.
 > The takeover does not delete LG Home: it remains underneath a temporary mount, which is cleared by
 > a reboot. If Luma is uninstalled first, LG Home returns on reboot, but the separate takeover boot
@@ -186,12 +190,17 @@ Boot log: `/var/lib/luma-home/boot.log`. See the
 [development guide](development.md#optional-native-home-integration) for implementation details.
 
 <details>
-<summary>Method for webOS 5 / 6 / 22</summary>
+<summary>Method for webOS 5 / 6 / 22 / 24</summary>
 
-On **webOS 5, 6 and 22**, `home.sh enable` uses the executable method instead of replacing the manifest. It
+On **webOS 5, 6, 22 and 24**, `home.sh enable` uses the executable method instead of replacing the manifest. It
 bind-mounts Luma's executable over LG's `/usr/bin/com.webos.app.home`. LG's Home manifest stays
 in place and Luma registers with SAM itself, so the Home key brings the running Luma back instead
 of restarting it. The commands and the cold-boot hook are the same.
+
+webOS 24 belongs here rather than with 25/26 because its SAM has no `releaseBlockSystemApp`, so a
+mounted Home manifest is never reread and the manifest method fails on that missing method.
+Verified on an `OLED65G46LA` (2024 G4, `9.2.4-48`); other 9.x models should behave the same, but
+have not been tested yet.
 
 </details>
 

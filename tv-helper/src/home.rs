@@ -569,7 +569,12 @@ pub fn method<'a>(release: &str, stock: &Value, id: &str) -> Result<&'a str> {
     if matches!(version, Some(10 | 11)) && id == HOME {
         return Ok("manifest");
     }
-    let executable_version = matches!(version, Some(5 | 6)) || (version == Some(7) && id == HOME);
+    // webOS 24 (9.x) behaves like 5/6 here, not like 10/11: its SAM has no
+    // releaseBlockSystemApp, so a mounted Home manifest is never reread and the
+    // takeover has to replace the Home executable instead. Verified on a 2024 G4
+    // running 9.2.4-48, where the manifest method fails on that missing method.
+    // Internal 7.x is verified only for the standard Home identity.
+    let executable_version = matches!(version, Some(5 | 6 | 9)) || (version == Some(7) && id == HOME);
     if executable_version
         && stock["type"] == "native"
         && stock["main"] == format!("file:///usr/bin/{id}")
@@ -577,7 +582,7 @@ pub fn method<'a>(release: &str, stock: &Value, id: &str) -> Result<&'a str> {
     {
         return Ok("executable");
     }
-    Err("This Home integration currently targets webOS 5/6/22 (5.x/6.x/7.x) and 25/26 (10.x/11.x) with a compatible Home manifest".into())
+    Err("This Home integration currently targets webOS 5/6/22/24 (5.x/6.x/7.x/9.x) and 25/26 (10.x/11.x) with a compatible Home manifest".into())
 }
 pub fn hook_owned(system: &impl System) -> bool {
     fs::read_link(system.path(Path::new(HOOK)))
