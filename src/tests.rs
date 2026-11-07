@@ -23,6 +23,53 @@ fn ready() -> State {
 }
 
 #[test]
+fn home_focus_animation_preserves_hitboxes_and_stops_off_home() {
+    let mut state = ready();
+    state.focus = Target::App("netflix".into());
+    let before = controls(&state);
+    state.animate_home_focus(0.08);
+    assert!(state.home_focus.amount("netflix") > 0.);
+    assert!(state.animating());
+    let during = controls(&state);
+    for (a, b) in before.iter().zip(during.iter()) {
+        assert_eq!(a.target, b.target);
+        assert_eq!(
+            (a.rect.x, a.rect.y, a.rect.w, a.rect.h),
+            (b.rect.x, b.rect.y, b.rect.w, b.rect.h)
+        );
+    }
+    state.page = Page::Apps;
+    state.animate_home_focus(2.);
+    assert_eq!(state.home_focus.amount("netflix"), 0.);
+    assert!(!state.home_focus.animating());
+}
+
+#[test]
+fn reduced_home_focus_uses_glow_and_grid_keeps_its_ring() {
+    use crate::renderer::Draw;
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state.focus = Target::App("netflix".into());
+    state.animate_home_focus(0.);
+    assert_eq!(state.home_focus.amount("netflix"), 1.);
+    let has_glow = |scene: view::Scene| {
+        scene.draw.iter().any(
+            |draw| matches!(draw, Draw::Shadow(_, _, _, color) if color[0] > 0. && color[3] > 0.),
+        )
+    };
+    assert!(has_glow(scene(&state)));
+    state.page = Page::Apps;
+    state.animate_home_focus(0.);
+    assert!(!has_glow(scene(&state)));
+    assert!(
+        scene(&state)
+            .draw
+            .iter()
+            .any(|draw| { matches!(draw, Draw::Shape(_, _, width, _) if *width == 3.2) })
+    );
+}
+
+#[test]
 fn home_relaunch_returns_from_apps_and_settings() {
     for page in [1, 2] {
         let mut state = ready();
