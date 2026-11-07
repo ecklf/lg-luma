@@ -3039,10 +3039,15 @@ fn device_icon(name: &str) -> &'static str {
         "apple-tv"
     } else if name.contains("usb") {
         "usb"
-    } else if ["xbox", "switch", "console"]
-        .iter()
-        .any(|part| name.contains(part))
-    {
+    } else if name.contains("switch2") {
+        "switch2"
+    } else if name.contains("switch") {
+        "switch"
+    } else if name.contains("shield") {
+        "shield"
+    } else if name.contains("xbox") {
+        "xbox"
+    } else if name.contains("console") {
         "console"
     } else if ["pc", "computer", "laptop"]
         .iter()
