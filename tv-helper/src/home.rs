@@ -13,6 +13,81 @@ const HOOK: &str = "/var/lib/webosbrew/init.d/64-luma-home";
 const MARKER: &str = "/var/run/luma-home";
 pub const HOME: &str = "com.webos.app.home";
 pub const FULL_HOME: &str = "com.webos.app.fullhome";
+// Early cold-boot start for the executable method (src/bin/luma-early.rs, home-filter.js). ls-hubd
+// reads these volatile LS2 directories at core-boot-done and starts dynamic services as root, so
+// the compositor key filter can have Luma mounted ~30 s before the Homebrew hook runs.
+pub const EARLY: &str = "com.webos.service.lumahome";
+// A copy beside home.sh: ls-hubd treats programs under /media/developer as developer-mode
+// services and does not deliver the system key filter's calls to them.
+const EARLY_EXE: &str = "/var/lib/luma-home/luma-early";
+const LS2: &str = "/var/luna-service2";
+pub const FILTER: &str = "/var/lib/luma-home/home-filter.js";
+const KEY_FILTERS: &str = "com.webos.surfacemanager.keyFilters";
+const FILTER_HANDLER: &str = "lumaHomeKey";
+const FILTER_TARGET: &str = "var lumaHomeTarget = 'com.webos.app.home';";
+
+/// The LS2 definitions of luma-early: dynamic service, role bound to its executable, the one
+/// method in API group "all" (the only group LG grants com.webos.starfish.keyfilters), callable
+/// by the key filter alone.
+pub fn early_files() -> BTreeMap<String, String> {
+    let service = format!("{LS2}/services.d/{EARLY}.service");
+    let role = format!("{LS2}/roles.d/{EARLY}.json");
+    let api = format!("{LS2}/api-permissions.d/{EARLY}.json");
+    let manifest = format!("{LS2}/manifests.d/{EARLY}.json");
+    let line = |value: Value| format!("{value}\n");
+    BTreeMap::from([
+        (
+            service.clone(),
+            format!("[D-BUS Service]\nName={EARLY}\nExec={EARLY_EXE}\nType=dynamic\n"),
+        ),
+        (
+            role.clone(),
+            line(json!({
+                "exeName": EARLY_EXE,
+                "type": "regular",
+                "allowedNames": [EARLY],
+                "permissions": [{"service": EARLY, "inbound": ["com.webos.starfish.keyfilters"], "outbound": []}],
+            })),
+        ),
+        (
+            api.clone(),
+            line(json!({"all": [format!("{EARLY}/prepare")]})),
+        ),
+        (
+            manifest,
+            line(json!({
+                "id": EARLY,
+                // ls-hubd silently drops a manifest whose version is not x.y.z.
+                "version": "1.0.0",
+                "serviceFiles": [service],
+                "roleFiles": [role],
+                "apiPermissionFiles": [api],
+            })),
+        ),
+    ])
+}
+
+/// LG's filter chain with ours removed, and appended again when `on`. Keys pass through it.
+pub fn key_filters(list: &[Value], on: bool) -> Vec<Value> {
+    let mut rest: Vec<Value> = list
+        .iter()
+        .filter(|entry| entry["file"] != FILTER)
+        .cloned()
+        .collect();
+    if on {
+        rest.push(json!({"file": FILTER, "handler": FILTER_HANDLER}));
+    }
+    rest
+}
+
+/// The installed key filter launches the selected Home target.
+pub fn filter_source(source: &str, id: &str) -> Result<String> {
+    target(id)?;
+    if source.matches(FILTER_TARGET).count() != 1 {
+        return Err("home-filter.js has no Home target line".into());
+    }
+    Ok(source.replace(FILTER_TARGET, &format!("var lumaHomeTarget = '{id}';")))
+}
 fn default_home() -> String {
     HOME.into()
 }
@@ -293,6 +368,92 @@ impl<'a, S: System> Home<'a, S> {
         }
         Err("Close Luma before enabling Home integration".into())
     }
+    fn set_key_filters(&self, on: bool) -> Result<()> {
+        let reply = accepted(system::luna(
+            self.system,
+            "com.webos.service.config",
+            "getConfigs",
+            &json!({"configNames": [KEY_FILTERS]}),
+        )?)
+        .map_err(|e| format!("Read key filters: {e}"))?;
+        let list = reply["configs"][KEY_FILTERS]
+            .as_array()
+            .ok_or_else(|| format!("Missing {KEY_FILTERS}"))?;
+        let next = key_filters(list, on);
+        if &next == list {
+            return Ok(());
+        }
+        accepted(system::luna(
+            self.system,
+            "com.webos.service.config",
+            "setConfigs",
+            &json!({"configs": {KEY_FILTERS: next}}),
+        )?)
+        .map_err(|e| format!("Write key filters: {e}"))?;
+        Ok(())
+    }
+    /// Best effort: without it a cold boot still reaches Luma through the Homebrew hook.
+    fn install_early(&self, app: &Path) {
+        let early = app.join("luma-early");
+        if !self.exists(&early) {
+            return;
+        }
+        let result = (|| {
+            let bytes = system::read(self.system, &early, 16 * 1024 * 1024)?;
+            system::write(self.system, EARLY_EXE, &bytes, 0o755)?;
+            system::mkdir(self.system, LS2)?;
+            for (file, contents) in early_files() {
+                if let Some(parent) = Path::new(&file).parent() {
+                    system::mkdir(self.system, parent)?;
+                }
+                system::write(self.system, &file, contents.as_bytes(), 0o644)?;
+            }
+            system::command(self.system, "/usr/sbin/ls-control", &["scan-volatile-dirs"])?;
+            self.set_key_filters(false)?;
+            self.set_key_filters(true)
+        })();
+        if let Err(error) = result {
+            eprintln!("Luma Home: early start not installed: {error}");
+        }
+    }
+    /// Best effort as well: a failed step is reported and must not keep disable from restoring
+    /// LG Home.
+    fn remove_early(&self) {
+        let attempt = |result: Result<()>| {
+            if let Err(error) = result {
+                eprintln!("Luma Home: early start cleanup: {error}");
+            }
+        };
+        attempt(self.set_key_filters(false));
+        let mut changed = false;
+        for file in early_files().into_keys() {
+            if self.exists(&file) {
+                attempt(system::remove(self.system, &file));
+                changed = true;
+            }
+        }
+        attempt(system::remove(self.system, EARLY_EXE));
+        if changed {
+            attempt(system::command(
+                self.system,
+                "/usr/sbin/ls-control",
+                &["scan-volatile-dirs"],
+            ));
+        }
+    }
+    /// Disable keeps going after cleanup failures so LG Home is restored and the hook removed.
+    pub fn disable(&self, config: &mut Config) -> Result<()> {
+        config.enabled = false;
+        system::write_json(self.system, CONFIG, &*config)?;
+        if config.method == "executable" {
+            self.remove_early();
+        }
+        let restored = self.restore(config);
+        if hook_owned(self.system) {
+            system::remove(self.system, HOOK)?;
+        }
+        restored
+    }
     pub fn restore(&self, config: &Config) -> Result<()> {
         let was_home = match self.foreground() {
             Ok(id) => id == self.id,
@@ -405,6 +566,15 @@ impl<'a, S: System> Home<'a, S> {
             let bytes = system::read(self.system, app.join(name), 16 * 1024 * 1024)?;
             system::write(self.system, format!("{STATE}/{name}"), &bytes, mode)?;
         }
+        // The compositor key filter that opens Home early in a cold boot.
+        let source = String::from_utf8(system::read(
+            self.system,
+            app.join("home-filter.js"),
+            1024 * 1024,
+        )?)
+        .map_err(|e| e.to_string())?;
+        let filter = filter_source(&source, &self.id)?;
+        system::write(self.system, FILTER, filter.as_bytes(), 0o644)?;
         // Retire the former interpreter script only after both replacement files are available.
         system::remove(self.system, format!("{STATE}/home.cjs"))?;
         Ok(())
@@ -523,7 +693,11 @@ impl<'a, S: System> Home<'a, S> {
         }
         self.apply(&config, true)?;
         config.enabled = true;
-        system::write_json(self.system, CONFIG, &config)
+        system::write_json(self.system, CONFIG, &config)?;
+        if config.method == "executable" {
+            self.install_early(&app);
+        }
+        Ok(())
     }
 }
 fn unescape(s: &str) -> String {
@@ -606,7 +780,7 @@ pub fn dispatch(
     let home = Home::new(system, id)?;
     match command {
         "status" => Ok(
-            json!({"enabled":saved.as_ref().is_some_and(|c|c.enabled),"method":saved.as_ref().map(|c|c.method.as_str()),"homeId":id,"homeKeyVerified":null,"availableTargets":([HOME,FULL_HOME].into_iter().filter(|id|home.exists(format!("/usr/palm/applications/{id}/appinfo.json"))).collect::<Vec<_>>()),"mounted":saved.as_ref().is_some_and(|c|if c.method=="executable"{home.exe_mounted(&c.app_dir)}else{home.mounted()}),"bootHook":hook_owned(system),"appDir":saved.as_ref().map(|c|c.app_dir.as_str())}),
+            json!({"enabled":saved.as_ref().is_some_and(|c|c.enabled),"method":saved.as_ref().map(|c|c.method.as_str()),"homeId":id,"homeKeyVerified":null,"availableTargets":([HOME,FULL_HOME].into_iter().filter(|id|home.exists(format!("/usr/palm/applications/{id}/appinfo.json"))).collect::<Vec<_>>()),"mounted":saved.as_ref().is_some_and(|c|if c.method=="executable"{home.exe_mounted(&c.app_dir)}else{home.mounted()}),"bootHook":hook_owned(system),"earlyStart":saved.as_ref().is_some_and(|c|c.method=="executable")&&home.exists(format!("{LS2}/services.d/{EARLY}.service")),"appDir":saved.as_ref().map(|c|c.app_dir.as_str())}),
         ),
         "enable" => {
             home.install(Path::new(app.ok_or("Missing installation directory")?))?;
@@ -617,12 +791,7 @@ pub fn dispatch(
             if command == "apply" && config.enabled {
                 home.apply(&config, false)?;
             } else {
-                config.enabled = false;
-                system::write_json(system, CONFIG, &config)?;
-                home.restore(&config)?;
-                if hook_owned(system) {
-                    system::remove(system, HOOK)?;
-                }
+                home.disable(&mut config)?;
             }
             Ok(json!({"returnValue":true}))
         }
