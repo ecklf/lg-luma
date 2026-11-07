@@ -50,7 +50,11 @@ https://github.com/user-attachments/assets/2156d640-b8fa-4ea4-a02c-0db4c93bcc5a
 
 | TV        | Model identifier | Takeover Support |
 | --------- | ---------------- | ---------------- |
+| LG GX     | `OLED65GXPUA`    | ✅               |
 | LG UN7100 | `49UN71006LB`    | ✅               |
+
+The [GX report (#205)](https://github.com/ecklf/lg-luma/issues/205) confirms Home takeover,
+app launching and operation after restart on webOS 5.6.2-21. It does not establish CX support.
 
 </details>
 
@@ -60,7 +64,13 @@ https://github.com/user-attachments/assets/2156d640-b8fa-4ea4-a02c-0db4c93bcc5a
 | TV        | Model identifier | Takeover Support |
 | --------- | ---------------- | ---------------- |
 | LG C1     | `OLED48C1KNB`    | ✅               |
+| LG G1     | `OLED65G1RLA`    | ✅               |
 | LG UP8000 | `86UP80009LA`    | Unknown          |
+
+The [G1 report (#209)](https://github.com/ecklf/lg-luma/issues/209) confirms Home takeover,
+app launching and operation after a full reboot on webOS 6.5.3-47, firmware 03.53.45.
+A separate [C1 report (#208)](https://github.com/ecklf/lg-luma/issues/208) describes an unwanted
+Home opening after cold boot. See [cold-boot troubleshooting](#cold-boot-troubleshooting).
 
 </details>
 
@@ -194,6 +204,24 @@ LG Home's original files remain underneath, using the same approach as
 [Glasshouse Home](https://github.com/rorygallagher2024/glasshouse/blob/main/server/lib/home-takeover.js).
 
 </details>
+
+### Cold-boot troubleshooting
+
+On an LG C1 (`OLED65C15LA`, webOS 6.5.3, firmware 03.53.45), Luma 2.16.2 was
+[reported to interrupt Live TV about 60 seconds after a cold boot (#208)](https://github.com/ecklf/lg-luma/issues/208),
+but not after normal standby. This occurred with **Recent Input** selected and the separate
+`65-luma` autostart hook disabled. Disabling that hook does not disable the `64-luma-home` hook,
+which reapplies Home takeover.
+
+Home preload is a possible cause, not yet confirmed on this C1. The open
+[preload fix in PR #157](https://github.com/ecklf/lg-luma/pull/157) is a candidate for manual
+testing, not a verified fix for #208. There is no confirmed workaround that preserves native
+takeover for this report. Disabling takeover restores LG Home, but also removes Luma as the
+default Home launcher.
+
+For investigation, save `/var/lib/luma-home/boot.log`, `/tmp/luma-home.log`, and the output of
+`sh /var/lib/luma-home/home.sh status` after reproducing the interruption. See the
+[development guide](development.md#cold-boot-interruption-investigation-208) for verification steps.
 
 ### Autostart Method
 
