@@ -734,50 +734,6 @@ shares `/var/run`, which is volatile like the mount itself. LG's file stays unde
 without the hook gives LG's Home back. Verified on an LG 49UN7100
 (webOS 5): Home key to Luma in about 0.4 s instead of a restart of about 2 s.
 
-### Community Home takeover confirmations
-
-- [#205](https://github.com/ecklf/lg-luma/issues/205): LG GX (`OLED65GXPUA`), webOS 5.6.2-21.
-  The reporter confirms Home-button behavior, auto-hide, launching stock and Homebrew apps
-  (including Plex Native), and operation after restart. This is not confirmation for the CX.
-- [#209](https://github.com/ecklf/lg-luma/issues/209): LG G1 (`OLED65G1RLA`), webOS 6.5.3-47
-  (`kisscurl-koli`), firmware 03.53.45, rooted with SlopBro and installed through Homebrew Channel.
-  The reporter confirms the Home button, app launching and operation after a full reboot.
-
-These are community hardware reports for the listed configurations, not automated-test results
-or guarantees for other models and firmware.
-
-### Cold-boot interruption investigation (#208)
-
-[#208](https://github.com/ecklf/lg-luma/issues/208) reports Luma 2.16.2 appearing over Live TV
-about 60 seconds after a full cold boot on an LG C1 (`OLED65C15LA`), webOS 6.5.3, firmware
-03.53.45, rooted with SlopBro and using Homebrew Channel 0.7.3. Normal standby wake is unaffected.
-The executable takeover remains enabled with `64-luma-home`, while `65-luma` is absent.
-LG's startup screen remains Recent Input, with Quick Start+ disabled. Disabling standalone
-autostart therefore did not resolve this report.
-
-Home preload is a hypothesis. [PR #157](https://github.com/ecklf/lg-luma/pull/157) proposes keeping
-Home preload launches hidden until activation, but has not established the cause or resolved
-behavior on this C1. Keep #208 open pending manual verification rather than treating compatibility
-reports from other TVs as evidence that it is fixed.
-
-For a manual comparison on the affected TV:
-
-1. Record the installed Luma version and `sh /var/lib/luma-home/home.sh status`, and confirm
-   `65-luma` is absent without removing `64-luma-home` or changing LG's startup settings.
-2. Cold boot into Live TV without remote input, wait beyond the reported interruption time,
-   then save `/var/lib/luma-home/boot.log` and `/tmp/luma-home.log` before another reboot.
-   Check launch metadata and lifecycle messages for preload evidence. A foreground app ID of
-   `com.webos.app.home` alone does not identify why Home opened.
-3. If testing a PR #157 build, record its exact commit and repeat the same cold boot. Verify
-   Live TV stays visible, then press Home and confirm Luma opens. Also check Home from another
-   app, repeated background/Home cycles and normal standby wake.
-4. Report the logs and results in #208, including any missing launch metadata. If the candidate
-   does not help, continue investigating rather than assuming every cold-boot launch is preload.
-
-There is no verified workaround preserving native takeover for this report. `home.sh disable`
-restores LG Home and can stop using takeover while investigating, but no longer makes Luma the
-default Home launcher. Desktop checks cannot establish this cold-boot behavior.
-
 ### Home lifecycle on webOS 10/11
 
 With the staged manifest (see [Optional native Home integration](#optional-native-home-integration)), SAM starts Luma's own executable for `com.webos.app.home`, but
