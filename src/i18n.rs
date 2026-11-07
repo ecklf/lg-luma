@@ -30,9 +30,10 @@ pub enum Language {
     Vi,
     Nl,
     Sv,
+    Cs,
 }
 impl Language {
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::De,
         Self::En,
         Self::Es,
@@ -43,6 +44,7 @@ impl Language {
         Self::Pt,
         Self::Sv,
         Self::Vi,
+        Self::Cs,
         Self::Ru,
         Self::Zh,
         Self::ZhTw,
@@ -62,6 +64,7 @@ impl Language {
             Self::Vi => "vi",
             Self::Nl => "nl",
             Self::Sv => "sv",
+            Self::Cs => "cs",
         }
     }
     pub fn name(self) -> &'static str {
@@ -79,6 +82,7 @@ impl Language {
             Self::Vi => "Tiếng Việt",
             Self::Nl => "Nederlands",
             Self::Sv => "Svenska",
+            Self::Cs => "Čeština",
         }
     }
     pub fn index(self) -> usize {
@@ -441,6 +445,34 @@ impl Language {
                 ][month]
             )
             .to_uppercase(),
+            Self::Cs => format!(
+                "{} {}. {}",
+                [
+                    "pondělí",
+                    "úterý",
+                    "středa",
+                    "čtvrtek",
+                    "pátek",
+                    "sobota",
+                    "neděle"
+                ][weekday],
+                now.day(),
+                [
+                    "ledna",
+                    "února",
+                    "března",
+                    "dubna",
+                    "května",
+                    "června",
+                    "července",
+                    "srpna",
+                    "září",
+                    "října",
+                    "listopadu",
+                    "prosince"
+                ][month]
+            )
+            .to_uppercase(),
         }
     }
     pub fn clock(self, now: OffsetDateTime, hour24: bool, seconds: bool) -> String {
@@ -498,6 +530,7 @@ pub fn deserialize_language<'de, D: Deserializer<'de>>(
             Some("vi") => Language::Vi,
             Some("nl") => Language::Nl,
             Some("sv") => Language::Sv,
+            Some("cs") => Language::Cs,
             _ => Language::En,
         },
     )
@@ -573,6 +606,7 @@ mod tests {
                 super::Language::Vi => "Vietnamese",
                 super::Language::Nl => "Dutch",
                 super::Language::Sv => "Swedish",
+                super::Language::Cs => "Czech",
             };
             assert!(
                 description.contains(name),
@@ -668,6 +702,12 @@ mod tests {
         );
         assert_eq!(Language::Sv.greeting(2, "Ana"), "Fortfarande uppe, Ana?");
         assert_eq!(Language::Sv.category("Gaming"), "Spel");
+        assert_eq!(
+            Language::Cs.format("favoriteAdded", &[("app", "Netflix")]),
+            "Přidáno do oblíbených: Netflix."
+        );
+        assert_eq!(Language::Cs.greeting(2, "Ana"), "Ještě vzhůru, Ana?");
+        assert_eq!(Language::Cs.category("Gaming"), "Hry");
         assert_eq!(Language::De.category("Gaming"), "Spiele");
         assert_eq!(Language::En.greeting(15, ""), "Good afternoon.");
         assert_eq!(Language::En.greeting(15, "  Ana "), "Good afternoon, Ana.");
@@ -697,6 +737,8 @@ mod tests {
         assert_eq!(Language::Nl.clock(now, true, false), "20:41");
         assert_eq!(Language::Sv.date(now), "ONSDAG 21 OKTOBER");
         assert_eq!(Language::Sv.clock(now, true, false), "20:41");
+        assert_eq!(Language::Cs.date(now), "STŘEDA 21. ŘÍJNA");
+        assert_eq!(Language::Cs.clock(now, true, false), "20:41");
         assert_eq!(Language::Zh.clock(now, false, false), "下午8:41");
         assert_eq!(Language::Zh.clock(now, false, true), "下午8:41:00");
         assert_eq!(Language::En.clock(now, true, false), "20:41");
@@ -751,6 +793,20 @@ mod tests {
             let now = OffsetDateTime::parse(date, &time::format_description::well_known::Rfc3339)
                 .unwrap();
             assert_eq!(Language::Nl.date(now), expected);
+        }
+    }
+
+    #[test]
+    fn czech_dates_use_genitive_months_and_accented_names() {
+        for (date, expected) in [
+            ("2024-02-29T00:05:00+01:00", "ČTVRTEK 29. ÚNORA"),
+            ("2026-05-01T12:00:00+02:00", "PÁTEK 1. KVĚTNA"),
+            ("2026-09-29T09:00:00+02:00", "ÚTERÝ 29. ZÁŘÍ"),
+            ("2026-12-27T20:41:00+01:00", "NEDĚLE 27. PROSINCE"),
+        ] {
+            let now = OffsetDateTime::parse(date, &time::format_description::well_known::Rfc3339)
+                .unwrap();
+            assert_eq!(Language::Cs.date(now), expected);
         }
     }
 }
