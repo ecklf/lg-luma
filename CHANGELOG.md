@@ -1,5 +1,18 @@
 # lg-luma
 
+## 2.17.0
+
+### Minor Changes
+
+- 7a1e3ec: Add dedicated Nintendo Switch, Switch 2, NVIDIA Shield, and Xbox input icons, selected from detected or custom input names.
+- bb1871f: Support Home takeover on webOS 24 (9.x). Its SAM has no `releaseBlockSystemApp`,
+  so a mounted Home manifest is never reread; webOS 24 therefore takes the same
+  executable method as webOS 5/6 instead of the manifest method used on 10.x/11.x.
+
+### Patch Changes
+
+- e22d48e: Add Czech (`cs`) translation: full `messages.json` catalog and locale registration, including localized date formatting with genitive month names. The bundled Inter subset already covers all Czech letters (á, č, ď, é, ě, í, ň, ó, ř, š, ť, ú, ů, ý, ž and their capitals).
+
 ## 2.16.2
 
 ### Patch Changes
