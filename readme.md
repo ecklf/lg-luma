@@ -66,6 +66,18 @@ https://github.com/user-attachments/assets/2156d640-b8fa-4ea4-a02c-0db4c93bcc5a
 </details>
 
 <details>
+<summary>webOS 22</summary>
+
+| TV        | Model identifier | Takeover Support                                           |
+| --------- | ---------------- | ---------------------------------------------------------- |
+| LG UQ801C | `55UQ801C0SB`    | ✅ Executable method; firmware 04.60.90, internal 7.6.0-19 |
+
+This is one owner-tested configuration, not a claim that every webOS 22 model has the same Home.
+The native executable path and lifecycle-v2 manifest are checked before enabling takeover.
+
+</details>
+
+<details>
 <summary>webOS 24</summary>
 
 | TV    | Model identifier | Takeover Support |
@@ -139,8 +151,9 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 ### Takeover Method
 
 > [!NOTE]
-> Takeover is supported on **webOS 5, 6, 24, 25 and 26**.\
-> On 5, 6 and 24 it replaces the Home executable; on 25 and 26 it mounts Luma's Home app.\
+> Takeover is supported on **webOS 5, 6, 22, 24, 25 and 26**.\
+> On 5, 6, 22 and 24 it replaces the Home executable; on 25 and 26 it mounts Luma's Home app.\
+> webOS 22 requires the native LG Home executable with lifecycle interface v2; other layouts are rejected.
 > The takeover does not delete LG Home: it remains underneath a temporary mount, which is cleared by
 > a reboot. If Luma is uninstalled first, LG Home returns on reboot, but the separate takeover boot
 > hook remains and logs an error because it can no longer find Luma. No TV reset is needed. For
@@ -177,9 +190,9 @@ Boot log: `/var/lib/luma-home/boot.log`. See the
 [development guide](development.md#optional-native-home-integration) for implementation details.
 
 <details>
-<summary>Method for webOS 5 / 6 / 24</summary>
+<summary>Method for webOS 5 / 6 / 22 / 24</summary>
 
-On **webOS 5, 6 and 24**, SAM cannot reread a mounted Home manifest, so `home.sh enable` instead
+On **webOS 5, 6, 22 and 24**, `home.sh enable` uses the executable method instead of replacing the manifest. It
 bind-mounts Luma's executable over LG's `/usr/bin/com.webos.app.home`. LG's Home manifest stays
 in place and Luma registers with SAM itself, so the Home key brings the running Luma back instead
 of restarting it. The commands and the cold-boot hook are the same.
