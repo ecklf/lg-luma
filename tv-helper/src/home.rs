@@ -569,14 +569,18 @@ pub fn method<'a>(release: &str, stock: &Value, id: &str) -> Result<&'a str> {
     if matches!(version, Some(10 | 11)) && id == HOME {
         return Ok("manifest");
     }
-    if matches!(version, Some(5 | 6))
+    // webOS 24 (9.x) behaves like 5/6 here, not like 10/11: its SAM has no
+    // releaseBlockSystemApp, so a mounted Home manifest is never reread and the
+    // takeover has to replace the Home executable instead. Verified on a 2024 G4
+    // running 9.2.4-48, where the manifest method fails on that missing method.
+    if matches!(version, Some(5 | 6 | 9))
         && stock["type"] == "native"
         && stock["main"] == format!("file:///usr/bin/{id}")
         && stock["nativeLifeCycleInterfaceVersion"] == 2
     {
         return Ok("executable");
     }
-    Err("This Home integration currently targets webOS 5/6 and 25/26 (10.x/11.x)".into())
+    Err("This Home integration currently targets webOS 5/6, 24 (9.x) and 25/26 (10.x/11.x)".into())
 }
 pub fn hook_owned(system: &impl System) -> bool {
     fs::read_link(system.path(Path::new(HOOK)))

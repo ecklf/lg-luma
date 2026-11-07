@@ -17,9 +17,9 @@ esac
 # boot only schedules the copied $STATE/home.sh apply, which checks for the helper itself.
 [ "$COMMAND" = boot ] || [ -x "$SCRIPT_DIR/luma-helper" ] ||
   { printf '%s\n' 'The native Luma TV helper is missing.' >&2; exit 1; }
-if [ "$COMMAND" = enable ] && grep -q 'release [56]\.' /etc/starfish-release 2>/dev/null; then
+if [ "$COMMAND" = enable ] && grep -q 'release [569]\.' /etc/starfish-release 2>/dev/null; then
   printf '%s\n' \
-    'Enabling Luma Home (webOS 5/6) will:' \
+    'Enabling Luma Home (webOS 5/6/24) will:' \
     '  1. Close any running normal Luma instance.' \
     "  2. Create $STATE with integration scripts and saved state." \
     "  3. Bind-mount Luma's executable over the selected LG Home executable." \
