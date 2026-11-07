@@ -60,6 +60,7 @@ https://github.com/user-attachments/assets/2156d640-b8fa-4ea4-a02c-0db4c93bcc5a
 | TV        | Model identifier | Takeover Support |
 | --------- | ---------------- | ---------------- |
 | LG C1     | `OLED48C1KNB`    | ✅               |
+| LG G1     | `OLED65G1RLA`    | ✅               |
 | LG UP8000 | `86UP80009LA`    | Unknown          |
 
 </details>
