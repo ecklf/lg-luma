@@ -4046,5 +4046,53 @@
     "nl": "Bewerksessie beëindigd",
     "sv": "Redigeringssessionen har avslutats",
     "cs": "Relace úprav skončila"
+  },
+  "powerButton": {
+    "en": "Power button",
+    "de": "Power button",
+    "es": "Power button",
+    "zh": "Power button",
+    "zh-tw": "Power button",
+    "pt": "Power button",
+    "it": "Power button",
+    "ru": "Power button",
+    "pl": "Power button",
+    "fr": "Bouton alimentation",
+    "vi": "Power button",
+    "nl": "Power button",
+    "sv": "Power button",
+    "cs": "Tlačítko napájení"
+  },
+  "powerActionFailed": {
+    "en": "Power off failed",
+    "de": "Ausschalten fehlgeschlagen",
+    "es": "Error al apagar",
+    "zh": "关机失败",
+    "zh-tw": "關機失敗",
+    "pt": "Falha ao desligar",
+    "it": "Spegnimento non riuscito",
+    "ru": "Не удалось выключить",
+    "pl": "Nie udało się wyłączyć",
+    "fr": "Échec de l'extinction",
+    "vi": "Tắt máy không thành công",
+    "nl": "Uitschakelen mislukt",
+    "sv": "Avstängning misslyckades",
+    "cs": "Vypnutí se nezdařilo"
+  },
+  "poweringOff": {
+    "en": "Powering off…",
+    "de": "Wird ausgeschaltet…",
+    "es": "Apagando…",
+    "zh": "正在关机…",
+    "zh-tw": "正在關機…",
+    "pt": "A desligar…",
+    "it": "Spegnimento…",
+    "ru": "Выключаем…",
+    "pl": "Wyłączanie…",
+    "fr": "Extinction…",
+    "vi": "Đang tắt…",
+    "nl": "Uitschakelen…",
+    "sv": "Stänger av…",
+    "cs": "Vypínání…"
   }
 }

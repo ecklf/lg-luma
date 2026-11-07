@@ -212,6 +212,28 @@ impl DateFormat {
     }
 }
 
+/// Action of the optional home power button. Off hides the button.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PowerAction {
+    #[default]
+    Off,
+    PowerOff,
+}
+
+impl PowerAction {
+    pub const ALL: [PowerAction; 2] = [PowerAction::Off, PowerAction::PowerOff];
+    pub fn label_key(&self) -> &'static str {
+        match self {
+            PowerAction::Off => "stateOff",
+            PowerAction::PowerOff => "stateOn",
+        }
+    }
+    pub fn index(&self) -> usize {
+        Self::ALL.iter().position(|a| a == self).unwrap_or(0)
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
@@ -251,6 +273,8 @@ pub struct Preferences {
     pub wallpaper_gradient: bool,
     /// Unix seconds of the last automatic or chosen wallpaper change, for the timed modes.
     pub wallpaper_changed: u64,
+    /// Action of the optional home power button; Off hides the button.
+    pub home_power_button: PowerAction,
 }
 
 impl Default for Preferences {
@@ -281,6 +305,7 @@ impl Default for Preferences {
             wallpaper_cycle: false,
             wallpaper_gradient: true,
             wallpaper_changed: 0,
+            home_power_button: PowerAction::Off,
         }
     }
 }

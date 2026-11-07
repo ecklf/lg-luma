@@ -2375,7 +2375,7 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
             _ => None,
         })
         .collect();
-    assert_eq!(widget_order, [4, 0, 1, 2, 3]);
+    assert_eq!(widget_order, [4, 0, 1, 2, 3, 5]);
     for (index, subpage) in [
         Subpage::Greeting,
         Subpage::Weather,
@@ -2403,6 +2403,29 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
     assert_eq!(state.activate(), vec![Effect::Reload]);
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::Widget(3));
+}
+
+#[test]
+fn power_button_widget_configures_home_power_action() {
+    use crate::state::Subpage;
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state.open(2);
+    state.focus = Target::Widget(5);
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::PowerButton));
+    assert_eq!(state.focus, Target::Choice(0));
+    state.focus = Target::Choice(1);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(
+        state.preferences.home_power_button,
+        crate::model::PowerAction::PowerOff
+    );
+    assert!(state.subpage.is_none());
+    state.focus = Target::HomePower;
+    assert_eq!(state.activate(), vec![Effect::PowerOff]);
+    state.preferences.home_power_button = crate::model::PowerAction::Off;
+    assert_eq!(state.activate(), Vec::<Effect>::new());
 }
 
 #[test]
@@ -2457,7 +2480,7 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
                 .iter()
                 .filter(|c| matches!(c.target, Target::Widget(_)))
                 .count(),
-            5
+            6
         );
         for key in [
             "widgets",
@@ -2466,6 +2489,7 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
             "shortcuts",
             "inputs",
             "date",
+            "powerButton",
         ] {
             assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t(key))), "{key}/{language:?}");
         }

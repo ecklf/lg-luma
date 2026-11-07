@@ -348,6 +348,10 @@ fn effects(
             Effect::FireWebhook(tile) => webhook.send(tile),
             Effect::UpdateDownload(release) => updates.request(update::Request::Download(release)),
             Effect::Quit => return false,
+            Effect::PowerOff => {
+                state.notify(state.preferences.language.t("poweringOff"));
+                platform.send(Request::Power(crate::model::PowerAction::PowerOff));
+            }
             Effect::Uninstall(id) => platform.send(Request::Uninstall(id)),
             Effect::DeleteWallpaper(id) => {
                 wallpapers.delete(id, state.preferences.background.clone())
@@ -1158,6 +1162,12 @@ fn run() -> Result<(), String> {
                         &webhook_service,
                         &updates,
                     );
+                }
+                Response::Powered(result) => {
+                    if let Err(error) = result {
+                        eprintln!("power action failed: {error}");
+                        state.notify(state.preferences.language.t("powerActionFailed"));
+                    }
                 }
                 Response::Recent {
                     generation,
