@@ -947,6 +947,10 @@ fn run() -> Result<(), String> {
     let mut visible = true;
     let mut running = true;
     let mut queued_event = None;
+    // SDL starts text input during video init. Keep it off until Luma's keyboard opens: on
+    // webOS 4 some remote keys otherwise arrive as TEXTINPUT with invalid UTF-8, and sdl2
+    // panics converting them ("Invalid TextInput string") before Luma sees the event.
+    video.text_input().stop();
     let mut text_active = false;
     let mut initial_focus = options.script.is_empty();
     let mut startup_cycle_pending = state.preferences.wallpaper_cycle;
