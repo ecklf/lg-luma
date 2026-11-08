@@ -668,6 +668,9 @@ fn run() -> Result<(), String> {
         !options.script.is_empty(),
         options.test_update_version.is_some(),
     );
+    if webos && let Some(directory) = preferences_path.parent() {
+        app_artwork::set_disk_cache(directory.join("icon-cache"));
+    }
     let mut state = State::new(initial_preferences);
     if let Some(version) = &options.test_update_version {
         eprintln!(

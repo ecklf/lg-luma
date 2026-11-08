@@ -10,9 +10,56 @@ use std::{
     fs::File,
     io::{Cursor, Read},
     path::{Component, Path, PathBuf},
-    sync::{Arc, Condvar, Mutex, mpsc},
+    sync::{Arc, Condvar, Mutex, OnceLock, mpsc},
     thread,
 };
+
+/// Folder for icons that only the elevated service can read. Starting that service takes
+/// seconds after a quiet period, so without this every cold start showed those icons late.
+static DISK_CACHE: OnceLock<PathBuf> = OnceLock::new();
+
+/// Keep icon bytes read through the elevated service in `directory`, one file per app.
+pub fn set_disk_cache(directory: PathBuf) {
+    let _ = DISK_CACHE.set(directory);
+}
+
+// One file per app id: the first line is the source key (id, version, icon paths), the
+// rest is the icon file as read. An updated app has a new key, so its file is replaced.
+fn disk_cache_path(source: &Source) -> Option<PathBuf> {
+    DISK_CACHE
+        .get()
+        .map(|dir| dir.join(format!("{}.icon", source.id)))
+}
+
+fn disk_cache_key(source: &Source) -> String {
+    format!("{source:?}").replace('\n', " ")
+}
+
+fn disk_cache_read(source: &Source) -> Option<Artwork> {
+    let bytes = read_bounded(&disk_cache_path(source)?, MAX_FILE + 8192)?;
+    let split = bytes.iter().position(|b| *b == b'\n')?;
+    (bytes[..split] == *disk_cache_key(source).as_bytes())
+        .then(|| decode(&bytes[split + 1..]))
+        .flatten()
+}
+
+fn disk_cache_write(source: &Source, icon: &[u8]) {
+    let Some(path) = disk_cache_path(source) else {
+        return;
+    };
+    let mut data = disk_cache_key(source).into_bytes();
+    data.push(b'\n');
+    data.extend_from_slice(icon);
+    let temporary = path.with_extension("tmp");
+    let written = path
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::write(&temporary, &data))
+        .and_then(|()| std::fs::rename(&temporary, &path));
+    if let Err(error) = written {
+        eprintln!("Luma icon cache {}: {error}", source.id);
+    }
+}
 
 const ROOTS: [&str; 5] = [
     "/media/developer/apps/usr/palm/applications",
@@ -372,8 +419,15 @@ fn load(source: &Source) -> Option<Artwork> {
     }
     // Some jailed installations cannot read other applications' files. Use the
     // same native-authenticated elevated service as inventory, on this worker.
+    if let Some(image) = disk_cache_read(source) {
+        return Some(image);
+    }
     match crate::platform::read_app_icons(source) {
-        Ok(icons) => icons.iter().find_map(|bytes| decode(bytes)),
+        Ok(icons) => icons.iter().find_map(|bytes| {
+            let image = decode(bytes)?;
+            disk_cache_write(source, bytes);
+            Some(image)
+        }),
         Err(error) => {
             eprintln!("Luma installed icon {}: {error}", source.id);
             None
