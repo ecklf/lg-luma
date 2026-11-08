@@ -113,6 +113,22 @@ impl Assets {
         style
     }
 
+    /// One line in `width`: shrink down to `min` px, then cut with an ellipsis.
+    fn fit_line(&self, value: &str, style: TextStyle, width: f32, min: f32) -> (String, TextStyle) {
+        let mut style = self.fit_text(value, style, width);
+        if style.size >= min {
+            return (value.into(), style);
+        }
+        style.size = min;
+        let mut chars: Vec<char> = value.chars().collect();
+        let mut line = value.to_owned();
+        while !chars.is_empty() && self.width(&line, style) > width - 1. {
+            chars.pop();
+            line = format!("{}…", chars.iter().collect::<String>().trim_end());
+        }
+        (line, style)
+    }
+
     fn lines(&self, value: &str, style: TextStyle, width: f32) -> usize {
         let key = format!(
             "{}{}",
@@ -1259,11 +1275,16 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             false,
         );
     }
+    // LG TVs have at most four HDMI ports, so one row fits every model and
+    // cards keep their size when Auto shows or hides an input.
+    const COLUMNS: usize = 4;
+    const GAP: f32 = 22.35;
+    let width = (1752. - GAP * (COLUMNS - 1) as f32) / COLUMNS as f32;
     for (index, input) in inputs.iter().enumerate() {
         let rect = Rect::new(
-            84. + (index % 3) as f32 * 591.45,
-            input_y + 58.4 + (index / 3) as f32 * 126.4,
-            569.1,
+            84. + (index % COLUMNS) as f32 * (width + GAP),
+            input_y + 58.4 + (index / COLUMNS) as f32 * 126.4,
+            width,
             104.,
         );
         let focused = state.focus == Target::Input(input.id.clone());
@@ -1315,20 +1336,39 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             ),
             c(0xdedede, 1.),
         );
-        out.text(
-            state.preferences.input_title(input),
-            Rect::new(rect.x + 93., rect.y + 24.3, 450., 28.8),
-            text(24., 500, -0.03),
-            WHITE,
-            false,
-        );
-        out.text(
-            input_status(input, name.is_some(), language),
-            Rect::new(rect.x + 93., rect.y + 57.4, 450., 25.2),
-            text(16.8, 400, 0.).leading(1.5),
-            c(0xe8e8e8, 0.48),
-            false,
-        );
+        // Text starts after the 56px artwork and keeps its 21px inset on the right.
+        // Each row has room for one line: shrink to a readable floor, then
+        // ellipsize. Shrunk text stays centred on its row.
+        let text_width = rect.w - 93. - 21.;
+        let rows = [
+            (
+                state.preferences.input_title(input).to_owned(),
+                text(24., 500, -0.03),
+                18.,
+                24.3,
+                28.8,
+                WHITE,
+            ),
+            (
+                input_status(input, name.is_some(), language),
+                text(16.8, 400, 0.).leading(1.5),
+                14.,
+                57.4,
+                25.2,
+                c(0xe8e8e8, 0.48),
+            ),
+        ];
+        for (value, base, min, y, height, color) in rows {
+            let (line, style) = assets.fit_line(&value, base, text_width, min);
+            let shift = (base.size - style.size) * base.line_height / 2.;
+            out.text(
+                line,
+                Rect::new(rect.x + 93., rect.y + y + shift, text_width, height),
+                style,
+                color,
+                false,
+            );
+        }
         if focused {
             out.ring(rect, 18.4);
         }
@@ -3560,7 +3600,80 @@ fn full_screen_fill(draw: &Draw) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Preferences, demo_inventory};
+    use crate::model::{Input, InputMode, Preferences, demo_inventory};
+
+    #[test]
+    fn four_inputs_share_one_row_and_their_text_fits_every_language() {
+        let assets = assets();
+        let mut state = State::new(Preferences::default());
+        let mut inventory = demo_inventory();
+        // The longest status per card: renamed, no signal, no device, unknown cable.
+        inventory.inputs[0].signal = Some(false);
+        inventory.inputs.push(Input {
+            id: "com.webos.app.hdmi4".into(),
+            title: "HDMI 4".into(),
+            port: "HDMI 4".into(),
+            connected: None,
+            signal: None,
+        });
+        state.set_inventory(inventory, None);
+        state
+            .preferences
+            .set_input_name("com.webos.app.hdmi1", "PS5");
+        // The widest custom name allowed (W is the widest test glyph) must ellipsize.
+        let widest = "W".repeat(crate::model::INPUT_NAME_LIMIT);
+        state
+            .preferences
+            .set_input_name("com.webos.app.hdmi2", &widest);
+        for id in ["com.webos.app.hdmi3", "com.webos.app.hdmi4"] {
+            state
+                .preferences
+                .input_modes
+                .insert(id.into(), InputMode::On);
+        }
+        for language in Language::ALL {
+            state.preferences.language = language;
+            let mut scene = Scene::new();
+            home(&mut scene, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+            let cards: Vec<_> = scene
+                .controls
+                .iter()
+                .filter(|control| matches!(control.target, Target::Input(_)))
+                .map(|control| control.rect)
+                .collect();
+            assert_eq!(cards.len(), 4);
+            assert!(cards.iter().all(|card| card.y == cards[0].y));
+            assert!((cards[3].x + cards[3].w - 1836.).abs() < 0.01);
+            assert!(scene.draw.iter().any(|draw| matches!(
+                draw,
+                Draw::Text(value, _, style, ..) if value.starts_with('W') && value.ends_with('…')
+                    && style.size == 18.
+            )));
+            for draw in &scene.draw {
+                let Draw::Text(value, rect, style, ..) = draw else {
+                    continue;
+                };
+                if !cards.iter().any(|card| {
+                    rect.x >= card.x
+                        && rect.x + rect.w <= card.x + card.w
+                        && rect.y > card.y
+                        && rect.y < card.y + card.h
+                }) {
+                    continue;
+                }
+                // One line, still readable from the couch.
+                assert!(
+                    assets.width(value, *style) <= rect.w,
+                    "{language:?}: {value}"
+                );
+                assert!(
+                    style.size >= 14.,
+                    "{language:?}: {value} at {}px",
+                    style.size
+                );
+            }
+        }
+    }
 
     fn assets() -> Assets {
         Assets {
