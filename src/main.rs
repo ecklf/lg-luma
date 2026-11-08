@@ -753,6 +753,11 @@ fn run() -> Result<(), String> {
     } else {
         Size::new(1280, 720)
     });
+    if webos && state.preferences.background == crate::model::LIVE_TV_BACKGROUND {
+        // Read by SDL-webOS when the window is created: webOS keeps live TV playing behind
+        // an overlay window, as it does for LG Home.
+        sdl2::hint::set("SDL_WEBOS_WINDOW_TYPE", "_WEBOS_WINDOW_TYPE_OVERLAY");
+    }
     let create_window = || {
         let mut builder = video.window("Luma", requested.width, requested.height);
         builder.opengl().allow_highdpi().position_centered();
@@ -1741,6 +1746,8 @@ fn run() -> Result<(), String> {
                     }
                     damage
                 });
+                renderer.transparent =
+                    webos && state.preferences.background == crate::model::LIVE_TV_BACKGROUND;
                 renderer.render(&scene.draw, width, height, damage);
                 redrawn_total += renderer.stats().redrawn_fraction;
                 if verify_damage {

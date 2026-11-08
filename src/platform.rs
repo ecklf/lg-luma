@@ -371,7 +371,11 @@ impl Platform {
     }
 
     pub fn sync_splash(&self, background: &str) {
-        if self.webos && self.splash_enabled && !crate::wallpapers::valid_id(background) {
+        if self.webos
+            && self.splash_enabled
+            && !crate::wallpapers::valid_id(background)
+            && background != crate::model::LIVE_TV_BACKGROUND
+        {
             self.send(Request::SyncSplash(background.to_owned()));
         }
     }

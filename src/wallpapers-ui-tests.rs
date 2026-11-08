@@ -1,5 +1,9 @@
 use super::*;
-use crate::{model::BACKGROUNDS, renderer::Draw, wallpapers::Wallpaper};
+use crate::{
+    model::{BACKGROUNDS, LIVE_TV_BACKGROUND},
+    renderer::Draw,
+    wallpapers::Wallpaper,
+};
 
 fn custom(index: u32) -> Wallpaper {
     Wallpaper {
@@ -536,7 +540,8 @@ fn custom_gallery_navigation_reveals_whole_cards_in_incomplete_rows() {
     let mut state = ready();
     state.open(2);
     state.section = 1;
-    state.set_wallpapers(vec![custom(1), custom(2)]);
+    // One upload: with the Live TV card after it, the last row stays incomplete.
+    state.set_wallpapers(vec![custom(1)]);
     state.focus = Target::Background(8);
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::Background(9));
@@ -719,13 +724,44 @@ fn every_unselected_bundled_background_can_be_removed_and_stays_removed_after_re
         assert!(!(0..state.background_count()).any(|i| state.background_id(i) == Some(id)));
         assert!(controls(&state).iter().any(|c| c.target == state.focus));
     }
-    assert_eq!(state.background_count(), 1);
+    // The selected background and the Live TV card, which cannot be removed.
+    assert_eq!(state.background_count(), 2);
     let mut preferences: crate::model::Preferences =
         serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
     preferences.sanitize();
     let restored = State::new(preferences);
-    assert_eq!(restored.background_count(), 1);
+    assert_eq!(restored.background_count(), 2);
     assert_eq!(restored.background_id(0), Some("dunes"));
+    assert_eq!(restored.background_id(1), Some(LIVE_TV_BACKGROUND));
+}
+
+#[test]
+fn live_tv_background_is_listed_last_survives_reload_and_back_on_home_quits() {
+    let mut state = ready();
+    state.open(2);
+    state.section = 1;
+    state.set_wallpapers(vec![custom(1)]);
+    let last = state.background_count() - 1;
+    assert_eq!(state.background_id(last), Some(LIVE_TV_BACKGROUND));
+    assert!(!state.can_delete_background(LIVE_TV_BACKGROUND));
+    state.focus = Target::Background(last);
+    state.activate();
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.background, LIVE_TV_BACKGROUND);
+
+    let mut preferences: crate::model::Preferences =
+        serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
+    preferences.sanitize();
+    assert_eq!(preferences.background, LIVE_TV_BACKGROUND);
+
+    let mut restored = State::new(preferences);
+    restored.set_inventory(demo_inventory(), None);
+    restored.set_wallpapers(vec![custom(1)]);
+    assert!(restored.cycle_wallpaper(100));
+    assert_ne!(restored.preferences.background, LIVE_TV_BACKGROUND);
+    restored.preferences.background = LIVE_TV_BACKGROUND.into();
+    restored.open(0);
+    assert_eq!(restored.back(), vec![Effect::Quit]);
 }
 
 #[test]
