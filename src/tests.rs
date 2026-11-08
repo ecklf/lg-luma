@@ -3271,25 +3271,50 @@ fn update_card_shows_progress_restores_retry_and_ignores_presses_while_busy() {
 }
 
 #[test]
-fn hovering_an_inactive_nav_tab_draws_a_highlight() {
+fn hovering_an_inactive_nav_tab_draws_a_distinct_highlight_only_while_hovered() {
+    use crate::renderer::Draw;
     let mut state = ready();
-    let highlights = |state: &State| {
+    let tab = |state: &State, index| {
         let scene = scene(state);
-        let tab = scene
+        let rect = scene
             .controls
             .iter()
-            .find(|c| c.target == Target::Nav(1))
+            .find(|c| c.target == Target::Nav(index))
             .unwrap()
             .rect;
-        scene
-            .draw
-            .iter()
-            .filter(|draw| matches!(draw, crate::renderer::Draw::RoundedGradient(r, ..) if r.x == tab.x && r.w == tab.w))
-            .count()
+        let pill = scene.draw.iter().find_map(|draw| match draw {
+            Draw::Shape(r, _, 0., color)
+                if (r.x, r.y, r.w, r.h) == (rect.x, rect.y, rect.w, rect.h) =>
+            {
+                Some(*color)
+            }
+            _ => None,
+        });
+        let label = scene.draw.iter().find_map(|draw| match draw {
+            Draw::Text(_, r, .., color, true) if r.x == rect.x && r.w == rect.w => Some(*color),
+            _ => None,
+        });
+        (pill, label.unwrap())
     };
-    assert_eq!(highlights(&state), 0);
+    let (_, idle) = tab(&state, 1);
+    let (_, active) = tab(&state, 0);
+    assert_eq!(tab(&state, 1).0, None);
+
     state.pointer_focus(Target::Nav(1));
-    assert_eq!(highlights(&state), 1);
-    state.pointer_focus(Target::Nav(0));
-    assert_eq!(highlights(&state), 0);
+    state.hover = Some(Target::Nav(1));
+    let (pill, label) = tab(&state, 1);
+    assert!(pill.is_some());
+    assert!(
+        label != idle && label != active,
+        "hover must not look active"
+    );
+
+    // Leaving the tab clears the highlight even though focus stays on it.
+    state.hover = None;
+    assert_eq!(state.focus, Target::Nav(1));
+    assert_eq!(tab(&state, 1), (None, idle));
+
+    // The active tab never gets a hover pill on top of its own.
+    state.hover = Some(Target::Nav(0));
+    assert_eq!(tab(&state, 0), (None, active));
 }

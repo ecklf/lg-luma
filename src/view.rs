@@ -738,23 +738,21 @@ fn header(
     }
     for (index, key) in ["home", "apps", "settings"].into_iter().enumerate() {
         let rect = layout.items[index];
-        // The focus ring is hidden for the pointer, so hover gets the same light
-        // pill that focused buttons use elsewhere.
-        let hovered = state.pointer && state.focus == Target::Nav(index);
-        if hovered && state.page_index() != index {
-            out.draw.push(Draw::RoundedGradient(
-                rect,
-                32.,
-                c(0xfafafa, 1.),
-                c(0xe5e5e5, 1.),
-            ));
+        let active = state.page_index() == index;
+        // The focus ring is hidden for the pointer, so a hovered inactive tab gets a
+        // faint pill: clearly hovered, never mistaken for the active page.
+        let hovered = !active && state.pointer && state.hover == Some(Target::Nav(index));
+        if hovered {
+            out.shape(rect, 32., c(0xffffff, 0.14));
         }
         out.text(
             language.t(key),
             Rect::new(rect.x, 64.3, rect.w, 25.),
             text(20.8, 550, -0.02),
-            if state.page_index() == index || hovered {
+            if active {
                 c(0x2c2c2c, 1.)
+            } else if hovered {
+                WHITE
             } else {
                 c(0xeeeeee, 0.73)
             },

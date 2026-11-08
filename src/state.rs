@@ -233,6 +233,8 @@ pub struct State {
     pub inventory_failures: u32,
     pub dirty: bool,
     pub pointer: bool,
+    /// The control under the pointer right now; unlike focus, cleared when it leaves.
+    pub hover: Option<Target>,
     pub pressed: Option<Target>,
     pub previous_background: Option<(String, Instant)>,
     pub background_fade: f32,
@@ -277,6 +279,7 @@ impl State {
             inventory_failures: 0,
             dirty: true,
             pointer: false,
+            hover: None,
             pressed: None,
             previous_background: None,
             background_fade: BACKGROUND_FADE,
