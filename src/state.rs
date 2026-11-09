@@ -222,6 +222,8 @@ pub struct State {
     pub loading: bool,
     /// Set by Refresh apps: the next inventory also reloads every app icon.
     pub reload_artwork: bool,
+    /// System action consumed by the SDL loop, with disk work delegated to artwork's worker.
+    pub reset_icon_cache: bool,
     pub launching: bool,
     pub uninstalling: Option<String>,
     pub notice: Option<(String, Instant)>,
@@ -269,6 +271,7 @@ impl State {
             moving: None,
             loading: false,
             reload_artwork: false,
+            reset_icon_cache: false,
             launching: false,
             uninstalling: None,
             notice: None,
@@ -2198,6 +2201,10 @@ impl State {
                         return vec![];
                     }
                     5 => return vec![Effect::Quit],
+                    9 => {
+                        self.reset_icon_cache = true;
+                        return vec![];
+                    }
                     7 => {
                         self.subpage = Some(Subpage::TextRendering);
                         self.focus = Target::Choice(self.preferences.text_rendering.index());

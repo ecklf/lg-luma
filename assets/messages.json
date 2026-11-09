@@ -1231,6 +1231,22 @@
     "sv": "Uppdatera appar och ingångar",
     "cs": "Obnovit aplikace a vstupy"
   },
+  "resetIconCache": {
+    "en": "Reset icon cache",
+    "de": "Symbolcache zurücksetzen",
+    "es": "Restablecer caché de iconos",
+    "fr": "Réinitialiser le cache des icônes",
+    "it": "Reimposta cache delle icone",
+    "nl": "Pictogramcache resetten",
+    "pl": "Zresetuj pamięć podręczną ikon",
+    "pt": "Redefinir cache de ícones",
+    "sv": "Återställ ikoncache",
+    "vi": "Đặt lại bộ nhớ đệm biểu tượng",
+    "cs": "Obnovit mezipaměť ikon",
+    "ru": "Сбросить кэш значков",
+    "zh": "重置图标缓存",
+    "zh-tw": "重設圖示快取"
+  },
   "installUpdate": {
     "zh-tw": "安裝 {version}",
     "nl": "{version} installeren",

@@ -668,6 +668,9 @@ fn run() -> Result<(), String> {
         !options.script.is_empty(),
         options.test_update_version.is_some(),
     );
+    if webos && let Some(directory) = preferences_path.parent() {
+        app_artwork::set_disk_cache(directory.join("icon-cache"));
+    }
     let mut state = State::new(initial_preferences);
     if let Some(version) = &options.test_update_version {
         eprintln!(
@@ -1082,6 +1085,17 @@ fn run() -> Result<(), String> {
         }
         while let Ok(response) = updates.receiver.try_recv() {
             state.install_response(response);
+        }
+        if std::mem::take(&mut state.reset_icon_cache) {
+            assets.artwork.reset_icon_cache();
+            assets.artwork.prefetch(
+                state
+                    .inventory
+                    .apps
+                    .iter()
+                    .filter(|app| crate::branding::for_key(&app.brand).is_none())
+                    .filter_map(|app| app.icon.clone()),
+            );
         }
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
