@@ -362,13 +362,20 @@ try {
   assert.deepEqual(clockFocus.focus, { Choice: 1 });
   const system = await scenario(
     'system-settings',
-    'settings,down,down,down,down,right,down,down,down',
+    'settings,down,down,down,down,right,down,down,down,down',
   );
   assert.deepEqual(system.focus, { Setting: 5 });
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
   assert.ok(!system.ui_text.includes('Luma update'));
   assert.ok(system.ui_text.includes('Quit app'));
   assert.ok(system.ui_text.includes('Text rendering'));
+  assert.ok(system.ui_text.includes('Reset icon cache'));
+  const resetIcons = await scenario(
+    'reset-icon-cache',
+    'settings,down,down,down,down,right,down,down,down,enter',
+  );
+  assert.deepEqual(resetIcons.focus, { Setting: 9 });
+  assert.deepEqual(resetIcons.preferences, system.preferences);
   const updatePreview = await scenario('update-preview', 'settings,down,down,down,down,right', [
     '--test-update-version',
     '99.0.0',

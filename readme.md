@@ -28,6 +28,9 @@ https://github.com/user-attachments/assets/2156d640-b8fa-4ea4-a02c-0db4c93bcc5a
 
 </details>
 
+If installed app icons look stale, use **Settings → System → Reset icon cache** to
+clear cached artwork and reload it without changing your preferences.
+
 ## Compatibility
 
 > [!NOTE]

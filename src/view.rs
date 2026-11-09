@@ -2623,6 +2623,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     Some(language.t(state.preferences.text_rendering.label_key())),
                     true,
                 ),
+                (9, language.t("resetIconCache"), "refresh", None, false),
                 (5, language.t("quitApp"), "power", None, false),
             ]
             .into_iter()

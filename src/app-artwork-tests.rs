@@ -39,6 +39,94 @@ fn poll_until(service: &Service, mut done: impl FnMut() -> bool) {
 }
 
 #[test]
+fn reset_icon_cache_removes_only_owned_cache_files() {
+    let directory = std::env::temp_dir().join(format!(
+        "luma-icon-reset-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    assert!(clear_disk_cache_at(&directory).is_ok());
+    std::fs::create_dir(&directory).unwrap();
+    for name in [
+        "sample.app.icon",
+        "sample.app.tmp",
+        "preferences.json",
+        "invalid id.icon",
+    ] {
+        std::fs::write(directory.join(name), b"cached").unwrap();
+    }
+    std::fs::create_dir(directory.join("nested.icon")).unwrap();
+    clear_disk_cache_at(&directory).unwrap();
+    assert!(!directory.join("sample.app.icon").exists());
+    assert!(!directory.join("sample.app.tmp").exists());
+    assert!(directory.join("preferences.json").exists());
+    assert!(directory.join("invalid id.icon").exists());
+    assert!(directory.join("nested.icon").is_dir());
+    #[cfg(unix)]
+    {
+        let link = directory.join("alias");
+        std::os::unix::fs::symlink(&directory, &link).unwrap();
+        assert!(clear_disk_cache_at(&link).is_err());
+        std::fs::remove_file(link).unwrap();
+    }
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn reset_icon_cache_runs_after_in_flight_load_and_before_new_loads() {
+    let (started, started_rx) = mpsc::channel();
+    let (release, release_rx) = mpsc::channel();
+    let release_rx = Mutex::new(release_rx);
+    let calls = Arc::new(AtomicUsize::new(0));
+    let cleared = Arc::new(AtomicUsize::new(0));
+    let worker_calls = calls.clone();
+    let worker_cleared = cleared.clone();
+    let reset_cleared = cleared.clone();
+    let service = Service::with_worker(
+        true,
+        move |_| {
+            let call = worker_calls.fetch_add(1, Ordering::SeqCst);
+            if call == 0 {
+                started.send(()).unwrap();
+                release_rx
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(3))
+                    .unwrap();
+                assert_eq!(worker_cleared.load(Ordering::SeqCst), 0);
+            } else {
+                assert_eq!(worker_cleared.load(Ordering::SeqCst), 1);
+            }
+            Some(Artwork {
+                key: String::new(),
+                pixels: RgbaImage::from_pixel(1, 1, Rgba([call as u8, 0, 0, 255])),
+                backdrop: [[0; 3]; 2],
+            })
+        },
+        move || {
+            reset_cleared.fetch_add(1, Ordering::SeqCst);
+        },
+    );
+    let source = Source::new("sample.app", &json!({}));
+    service.get(&source);
+    started_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+    let queued = Source::new("queued.app", &json!({}));
+    service.get(&queued);
+    service.reset_icon_cache();
+    assert!(service.cache.borrow().entries.is_empty());
+    assert_eq!(cleared.load(Ordering::SeqCst), 0);
+    service.prefetch([source.clone()]);
+    release.send(()).unwrap();
+    poll_until(&service, || service.get(&source).is_some());
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_eq!(service.get(&source).unwrap().pixels.get_pixel(0, 0)[0], 1);
+    assert!(!service.cache.borrow().entries.contains_key(&queued));
+}
+
+#[test]
 fn inventory_metadata_resolves_absolute_relative_and_manifest_fallback_paths() {
     let metadata = json!({"id":"sample", "title":"Regional App", "icon":"regional.png",
         "largeIcon":"large.png", "folderPath":format!("{}/sample", ROOTS[1]), "version":"3.1.0"});

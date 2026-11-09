@@ -61,6 +61,49 @@ fn disk_cache_write(source: &Source, icon: &[u8]) {
     }
 }
 
+fn clear_disk_cache() {
+    if let Some(directory) = DISK_CACHE.get()
+        && let Err(error) = clear_disk_cache_at(directory)
+    {
+        eprintln!("Luma reset icon cache: {error}");
+    }
+}
+
+fn clear_disk_cache_at(directory: &Path) -> std::io::Result<()> {
+    match std::fs::symlink_metadata(directory) {
+        Ok(metadata) if !metadata.file_type().is_dir() => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Icon cache must be a real directory",
+            ));
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+        _ => {}
+    }
+    let entries = match std::fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        if matches!(
+            path.extension().and_then(|s| s.to_str()),
+            Some("icon" | "tmp")
+        ) && path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .is_some_and(valid_app_id)
+            && entry.file_type()?.is_file()
+        {
+            std::fs::remove_file(path)?;
+        }
+    }
+    Ok(())
+}
+
 const ROOTS: [&str; 5] = [
     "/media/developer/apps/usr/palm/applications",
     "/media/cryptofs/apps/usr/palm/applications",
@@ -479,6 +522,7 @@ struct Request {
 struct Requests {
     visible: VecDeque<Request>,
     background: VecDeque<Request>,
+    reset_disk: bool,
     closed: bool,
 }
 
@@ -557,6 +601,14 @@ impl Service {
         enabled: bool,
         loader: impl Fn(&Source) -> Option<Artwork> + Send + 'static,
     ) -> Self {
+        Self::with_worker(enabled, loader, clear_disk_cache)
+    }
+
+    fn with_worker(
+        enabled: bool,
+        loader: impl Fn(&Source) -> Option<Artwork> + Send + 'static,
+        clear_disk: impl Fn() + Send + 'static,
+    ) -> Self {
         let queue = Arc::new((Mutex::new(Requests::default()), Condvar::new()));
         // Room for a full request queue: an idle UI only polls on its next
         // wake, and a one-slot reply channel held the worker to one icon each.
@@ -572,16 +624,25 @@ impl Service {
                             if queue.closed {
                                 return;
                             }
+                            if std::mem::take(&mut queue.reset_disk) {
+                                break None;
+                            }
                             // Visible requests, including promoted prefetches, always go next.
                             if let Some(request) = queue
                                 .visible
                                 .pop_front()
                                 .or_else(|| queue.background.pop_front())
                             {
-                                break request;
+                                break Some(request);
                             }
                             queue = ready.wait(queue).unwrap();
                         }
+                    };
+                    let Some(request) = request else {
+                        // Serialized after any active read/write and before fresh requests.
+                        // Do filesystem work without holding the queue lock used by the UI.
+                        clear_disk();
+                        continue;
                     };
                     let image = loader(&request.source).map(|mut image| {
                         image.key = format!("installed-icon:{}", request.token);
@@ -685,6 +746,16 @@ impl Service {
         self.prefetch.borrow_mut().clear();
         if let Some(sender) = &self.sender {
             sender.clear();
+        }
+    }
+
+    /// Drop memory entries now, then clear disk on the worker before reloading icons.
+    pub fn reset_icon_cache(&self) {
+        self.reset();
+        if let Some(sender) = &self.sender {
+            let (mutex, ready) = &*sender.queue;
+            mutex.lock().unwrap().reset_disk = true;
+            ready.notify_one();
         }
     }
 

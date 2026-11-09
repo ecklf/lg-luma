@@ -100,6 +100,9 @@ the keyboard first; Weather Location then returns to its parent Location row, HD
 that HDMI row, and the Background gallery to Background in the sidebar. Back from the sidebar
 focuses the Settings tab, then returns Home. **System** in the sidebar groups **Refresh apps & inputs**
 and the vector power-icon **Quit app** action separately from General preferences.
+**Reset icon cache** clears persisted and decoded app icons, then reloads artwork on its
+worker without changing preferences. An active icon read finishes before disk entries are
+removed, so it cannot restore stale artwork after the reset.
 On Apps, OK or a normal pointer click on an app opens its side popup, with **Open** first and focused by
 default, followed by favorite, hide/show and **Delete app** actions. A second OK launches the app.
 Home favorites, Inputs and Recent apps launch directly. Hold OK on Home still reorders favorites.
@@ -429,7 +432,8 @@ sampled card colour. Missing, corrupt or unsupported artwork uses the existing g
 Discovery, bounded file reads, decoding and colour sampling run on a dedicated worker. If the
 jailed app cannot read an asset directly, the native process calls Homebrew Channel's elevated
 `exec` service with the packaged native `luma-helper read-app-icon` command. It returns bounded
-image bytes without writing collected files or changing filesystem permissions. PNG, JPEG and WebP
+image bytes without changing filesystem permissions. Elevated icon reads are cached in
+`icon-cache` beside preferences, keyed by app ID, version and icon paths. PNG, JPEG and WebP
 are supported; runtime SVG parsing is not required. Source files are limited to 512 KiB and
 2048×2048 pixels; decoded icons are at most 256×256 with a 16 MiB/256-entry CPU cache. GPU uploads
 stay on the SDL thread and share the existing 48 MiB texture cache. Pending/unavailable icons do
@@ -438,7 +442,9 @@ not block input, and failures are cached until inventory is refreshed.
 Inventory also refreshes at startup and whenever the window becomes visible. Decoded icons are
 keyed by app ID, version and icon paths, so those refreshes keep them and retry only previous
 failures; an updated app has a new version and is read again. **Refresh apps** (or desktop F5)
-invalidates all artwork, including previous failures; request tokens discard stale replies. Check newly installed/updated apps and both normal tile and Home-takeover
+invalidates decoded artwork, including previous failures, while reusing matching disk entries.
+Use **Settings → System → Reset icon cache** to discard disk entries too. Request tokens discard
+stale replies. Check newly installed/updated apps and both normal tile and Home-takeover
 launches on a real TV to verify sandbox access. These paths are covered with mocked filesystem
 and worker tests, not live-TV calls in automated checks.
 

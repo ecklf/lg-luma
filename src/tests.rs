@@ -909,7 +909,7 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     assert!(
         !controls(&state)
             .iter()
-            .any(|c| matches!(c.target, Target::Setting(3 | 5)))
+            .any(|c| matches!(c.target, Target::Setting(3 | 5 | 9)))
     );
     assert!(
         controls(&state)
@@ -927,6 +927,15 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     assert_eq!(state.activate(), vec![Effect::Reload]);
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(7));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Setting(9));
+    let preferences = serde_json::to_value(&state.preferences).unwrap();
+    assert!(state.activate().is_empty());
+    assert!(state.reset_icon_cache);
+    assert_eq!(
+        serde_json::to_value(&state.preferences).unwrap(),
+        preferences
+    );
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(5));
     assert_eq!(state.activate(), vec![Effect::Quit]);
