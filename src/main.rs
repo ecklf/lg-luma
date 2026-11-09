@@ -1312,6 +1312,10 @@ fn run() -> Result<(), String> {
                         }
                         profile.pause();
                     }
+                    WindowEvent::Leave => {
+                        state.hover = None;
+                        state.dirty = true;
+                    }
                     WindowEvent::FocusLost => {
                         if webos {
                             if matches!(
@@ -1466,6 +1470,10 @@ fn run() -> Result<(), String> {
                     let hovered = hit(&scene.controls, &window, x, y, &state);
                     if let Some(target) = hovered.clone() {
                         state.pointer_focus(target);
+                    }
+                    if state.hover != hovered {
+                        state.hover = hovered.clone();
+                        state.dirty = true;
                     }
                     if press
                         .as_ref()
