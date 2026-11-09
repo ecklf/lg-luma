@@ -3080,8 +3080,17 @@ fn input_icon(input: &Input, custom: Option<&str>) -> &'static str {
 }
 
 fn device_icon(name: &str) -> &'static str {
+    // TV labels can append a device category, e.g. "PS5 Game Console".
+    // Match short aliases as words so unrelated names do not acquire branding.
+    let playstation_alias = name.split(|ch: char| !ch.is_alphanumeric()).any(|word| {
+        ["ps1", "ps2", "ps3", "ps4", "ps5"]
+            .iter()
+            .any(|alias| word.eq_ignore_ascii_case(alias))
+    });
     let name = name.to_lowercase().replace(' ', "");
-    if name.contains("playstation") || ["ps1", "ps2", "ps3", "ps4", "ps5"].contains(&name.as_str())
+    if playstation_alias
+        || name.contains("playstation")
+        || ["ps1", "ps2", "ps3", "ps4", "ps5"].contains(&name.as_str())
     {
         "playstation"
     } else if name.contains("appletv") {
@@ -3687,6 +3696,33 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn playstation_input_aliases_allow_device_categories() {
+        for label in [
+            "PS5 Game Console",
+            "ps4 game console",
+            "Sony PS5 (Game Console)",
+            "PS3 - Console",
+            "PS2",
+            "PS1",
+            "PS 5",
+            "PlayStation 5 Game Console",
+        ] {
+            assert_eq!(device_icon(label), "playstation", "{label}");
+        }
+        assert_eq!(device_icon("Game Console"), "console");
+        assert_eq!(device_icon("PS50 Game Console"), "console");
+        assert_eq!(device_icon("UPS5"), "hdmi");
+
+        let mut input = demo_inventory().inputs.remove(0);
+        input.title = "PS5 Game Console".into();
+        assert_eq!(input_icon(&input, None), "playstation");
+        assert_eq!(input_icon(&input, Some("Living room")), "playstation");
+        input.title = "Game Console".into();
+        assert_eq!(input_icon(&input, Some("PS5 Game Console")), "playstation");
+        assert_eq!(input_icon(&input, Some("Xbox")), "xbox");
     }
 
     fn assets() -> Assets {
