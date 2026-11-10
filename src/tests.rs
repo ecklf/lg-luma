@@ -4,7 +4,7 @@ use crate::{
     state::{Direction, Effect, Overlay, Page, State, Target},
     storage, view,
 };
-use serde_json::json;
+use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::PathBuf};
 
 #[path = "recents-tests.rs"]
@@ -2003,6 +2003,111 @@ fn keyboard_done_saves_a_typed_input_name() {
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert_eq!(state.preferences.input_names["com.webos.app.hdmi1"], "PS5");
     assert!(state.overlay.is_none());
+}
+
+#[test]
+fn home_preload_launches_start_hidden() {
+    for key in ["nid", "appId"] {
+        for id in [crate::platform::HOME_ID, crate::platform::FULL_HOME_ID] {
+            for mode in [
+                "full",
+                "semi-full",
+                "partial",
+                "minimal",
+                "criu",
+                "future-mode",
+            ] {
+                let mut options = crate::Options::default();
+                options.apply_launch_metadata(&json!({
+                    "@system_native_app": true,
+                    (key): id,
+                    "preload": mode,
+                }));
+                assert!(options.webos_home);
+                assert_eq!(options.preload.as_deref(), Some(mode));
+                assert!(options.start_hidden(), "{key}={id}, preload={mode}");
+            }
+        }
+    }
+}
+
+#[test]
+fn ordinary_home_launches_do_not_start_hidden() {
+    for key in ["nid", "appId"] {
+        for id in [crate::platform::HOME_ID, crate::platform::FULL_HOME_ID] {
+            for preload in [Value::Null, json!(""), json!(true), json!(1)] {
+                let mut options = crate::Options::default();
+                options.apply_launch_metadata(&json!({(key): id, "preload": preload}));
+                assert!(options.webos_home);
+                assert_eq!(options.preload, None);
+                assert!(!options.start_hidden());
+            }
+            let mut options = crate::Options::default();
+            options.apply_launch_metadata(&json!({(key): id}));
+            assert!(!options.start_hidden());
+        }
+    }
+}
+
+#[test]
+fn normal_app_preload_does_not_change_startup_visibility() {
+    for metadata in [
+        json!({"nid": crate::platform::APP_ID, "preload": "full"}),
+        json!({"appId": crate::platform::APP_ID, "preload": "full"}),
+        json!({"preload": "full"}),
+        json!({}),
+    ] {
+        let mut options = crate::Options::default();
+        options.apply_launch_metadata(&metadata);
+        assert!(!options.webos_home);
+        assert_eq!(options.preload, None);
+        assert!(!options.start_hidden(), "{metadata}");
+    }
+}
+
+#[test]
+fn home_preload_relaunches_do_not_activate_or_close_the_window() {
+    use crate::platform::Lifecycle;
+    for key in ["event", "message"] {
+        for mode in [
+            "full",
+            "semi-full",
+            "partial",
+            "minimal",
+            "criu",
+            "future-mode",
+        ] {
+            for parameters in [false, true] {
+                let mut reply = json!({(key): "relaunch", "returnValue": true});
+                if parameters {
+                    reply["parameters"] = json!({"preload": mode});
+                } else {
+                    reply["preload"] = json!(mode);
+                }
+                assert_eq!(Lifecycle::from_reply(&reply), None, "{reply}");
+                // Close still terminates a preloaded Home rather than leaving it registered.
+                reply[key] = json!("close");
+                assert_eq!(Lifecycle::from_reply(&reply), Some(Lifecycle::Close));
+            }
+        }
+        for preload in [Value::Null, json!(""), json!(true), json!(1)] {
+            let reply = json!({(key): "relaunch", "preload": preload,
+                "parameters": {"preload": preload, "launchType": "homeKey"}});
+            assert_eq!(Lifecycle::from_reply(&reply), Some(Lifecycle::Relaunch));
+        }
+        // A later ordinary Home activation must still reveal the hidden instance.
+        for parameters in [Value::Null, json!({}), json!({"launchType": "homeKey"})] {
+            assert_eq!(
+                Lifecycle::from_reply(&json!({(key): "relaunch", "parameters": parameters})),
+                Some(Lifecycle::Relaunch)
+            );
+        }
+        assert_eq!(
+            Lifecycle::from_reply(&json!({(key): "relaunch", "preload": "",
+                "parameters": {"preload": "full"}})),
+            None
+        );
+    }
 }
 
 #[test]

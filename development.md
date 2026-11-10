@@ -657,7 +657,7 @@ failures preserve the last valid inputs. No failed inventory read substitutes de
 ### Optional native Home integration
 
 `tv/home.sh` and the native Rust `luma-helper` executable are packaged beside `luma`. They are a root-only, explicit integration
-for webOS 10/25 and 11/26 (and webOS 5/6 and 9/24, see below). `enable` stages a native manifest with ID `com.webos.app.home` and
+for webOS 10/25 and 11/26 (and webOS 5/6, 7/22 and 9/24, see below). `enable` stages a native manifest with ID `com.webos.app.home` and
 symlinks to the installed executable, libraries and assets under `/var/lib/luma-home/app`, then
 bind-mounts it over `/usr/palm/applications/com.webos.app.home`. SAM rereads that one app through
 `blockSystemApp` followed by `releaseBlockSystemApp`, including `forceBlockSystemApp: false` when
@@ -725,7 +725,7 @@ is bound to that executable path. Luma detects this (`platform::runs_as_lg_home`
 - skips the per-icon elevated-service fallback for installed artwork: as root every file is
   readable, so that fallback would only spend seconds per icon to fail the same way.
 
-`tv/home.sh` chooses this method (`"method": "executable"` in `state.json`) on webOS 5/6 and 24 (9.x) when LG
+`tv/home.sh` chooses this method (`"method": "executable"` in `state.json`) on webOS 5/6, 22 (7.x) and 24 (9.x) when LG
 Home's manifest is native, starts `file:///usr/bin/com.webos.app.home` and declares
 `nativeLifeCycleInterfaceVersion: 2`. `enable` and the boot hook bind-mount the installed
 executable over that path, stop the previous Home process and open Home if it was in front (or
@@ -740,10 +740,40 @@ shares `/var/run`, which is volatile like the mount itself. LG's file stays unde
 without the hook gives LG's Home back. Verified on an LG 49UN7100
 (webOS 5): Home key to Luma in about 0.4 s instead of a restart of about 2 s.
 
+On an LG 55UQ801C0SB running firmware 04.60.90, internal webOS 7.6.0-19 (marketed as
+webOS 22), the same executable method was tested on the actual TV. The native Home manifest
+declares `file:///usr/bin/com.webos.app.home` and lifecycle interface 2. The owner confirmed
+the physical Home key returns to Luma from YouTube and another app. A live disable restored
+the stock executable's SHA-256 and opened LG Home, then the modified ARM helper successfully
+enabled takeover through the normal command. `com.webos.app.fullhome` is not enabled for 7.x.
+This does not extend manifest takeover to webOS 7 or claim support for internal 8.x.
+
+The existing `64-luma-home` hook reapplied the executable mount after a software reboot on
+that TV. LG's power-on input policy still selected HDMI 2; a separate owner-local, one-shot
+hook opening the mounted Home was then tested successfully after another software reboot.
+That additional launch policy is outside this change (see the separate power-on work in #89).
+These observations do not claim an unplug/replug cold-start test or an early-boot takeover.
+
 webOS 24 (9.x) also uses this method because its SAM has no `releaseBlockSystemApp` to reread a
 mounted Home manifest. The author verified takeover, same-process Home-key relaunch and cold-boot
 reapplication on one LG OLED65G46LA (2024 G4), running `9.2.4-48`. No other 9.x models have been
 tested; treat this path as experimental rather than a claim of support for every webOS 24 TV.
+
+### Home background preloading
+
+For both executable and manifest Home integration, a nonempty SAM `preload` launch parameter
+creates a hidden, unfocused window without presenting frames. Background lifecycle `relaunch`
+requests carrying a nonempty `preload` at the top level or in `parameters` are ignored: they do
+not show/raise the window, reset the UI, refresh inventory or arm the foreground watchdog.
+Ordinary Home activation still restores/shows/raises Luma; normal Luma tile startup is unchanged.
+This incorporates the hidden-startup approach from #157 and additionally handles warm preload
+relaunches. Startup hiding does not depend on lifecycle registration succeeding.
+
+Manual TV acceptance is still required for these combined fixes: preload a new and an existing
+Home while an app or HDMI input is foreground, activate Home afterward, repeat background/Home
+cycles, and leave streaming paused for an extended period. Also verify registration-refused or
+`/var/lib/luma-home/no-lifecycle` restart fallback. Host tests do not establish compositor behavior,
+long-session foreground stability, standby or cold-boot behavior.
 
 ### Home lifecycle on webOS 10/11
 
