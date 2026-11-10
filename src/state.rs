@@ -100,6 +100,7 @@ pub enum Target {
     TileTest(String),
     TileRemove(String),
     TileEditor,
+    HomePower,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -161,6 +162,7 @@ pub enum Subpage {
     Temperature,
     Language,
     TextRendering,
+    PowerButton,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -198,6 +200,7 @@ pub enum Effect {
     Quit,
     Weather(weather::Command),
     UpdateDownload(String),
+    PowerOff,
 }
 
 pub const KEYS: [&str; 40] = [
@@ -1028,6 +1031,7 @@ impl State {
             }
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
+            Some(Subpage::PowerButton) => Target::Widget(5),
             None => Target::Sidebar(self.section),
         };
         self.scroll = 0.;
@@ -2082,6 +2086,10 @@ impl State {
                             .map(|input| Target::InputMode(input.id.clone()))
                             .unwrap_or(Target::Setting(3)),
                     ),
+                    5 => (
+                        Subpage::PowerButton,
+                        Target::Choice(self.preferences.home_power_button.index()),
+                    ),
                     _ => return vec![],
                 };
                 self.section = WIDGETS_SECTION;
@@ -2170,6 +2178,12 @@ impl State {
                 self.scroll = 0.;
                 self.subpage = None;
                 self.focus = self.section_entry();
+            }
+            Target::HomePower => {
+                return match self.preferences.home_power_button {
+                    crate::model::PowerAction::PowerOff => vec![Effect::PowerOff],
+                    crate::model::PowerAction::Off => vec![],
+                };
             }
             Target::Setting(index) => {
                 match index {
@@ -2315,6 +2329,10 @@ impl State {
                             self.preferences.text_rendering = mode;
                             self.notify(self.preferences.language.t("textRenderingRestart"));
                         }
+                    }
+                    Some(Subpage::PowerButton) => {
+                        self.preferences.home_power_button =
+                            crate::model::PowerAction::ALL[index.min(1)];
                     }
                     Some(
                         Subpage::WeatherLocation

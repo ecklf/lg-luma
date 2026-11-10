@@ -178,6 +178,7 @@ pub enum Request {
     Launch(String),
     Uninstall(String),
     SyncSplash(String),
+    Power(crate::model::PowerAction),
     Recent {
         generation: u64,
         command: crate::recents::Command,
@@ -196,6 +197,7 @@ pub enum Response {
         command: crate::recents::Command,
         result: Result<Option<Vec<crate::recents::Entry>>, String>,
     },
+    Powered(Result<(), String>),
 }
 
 pub struct Platform {
@@ -258,6 +260,43 @@ impl Platform {
                     } else {
                         Ok(desktop_inventory.inputs.clone())
                     }),
+                    Request::Power(action) => {
+                        // The root helper runs /sbin/poweroff; the app itself has
+                        // no ACG for power management.
+                        let arg = match action {
+                            crate::model::PowerAction::PowerOff => "shutdown",
+                            crate::model::PowerAction::Off => "",
+                        };
+                        let result = if webos && !arg.is_empty() {
+                            helper_command("power", &[arg.to_string()]).and_then(|command| {
+                                #[cfg(all(
+                                    feature = "webos",
+                                    target_os = "linux",
+                                    target_arch = "arm"
+                                ))]
+                                let call = crate::luna::call_with_timeout(
+                                    "luna://org.webosbrew.hbchannel.service/exec",
+                                    &json!({"command": command}),
+                                    std::time::Duration::from_secs(60),
+                                );
+                                #[cfg(not(all(
+                                    feature = "webos",
+                                    target_os = "linux",
+                                    target_arch = "arm"
+                                )))]
+                                let call = raw_call(
+                                    "luna://org.webosbrew.hbchannel.service/exec",
+                                    &json!({"command": command}),
+                                );
+                                call.and_then(checked_response)
+                                    .and_then(|envelope| command_reply(&envelope))
+                                    .map(|_| ())
+                            })
+                        } else {
+                            Err("Power actions require the TV build".into())
+                        };
+                        Response::Powered(result)
+                    }
                     Request::Uninstall(id) => {
                         // Validate again at the worker boundary, not just in the UI.
                         let result = uninstall_request(&id).and_then(|(_, _)| {

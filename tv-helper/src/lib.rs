@@ -3,6 +3,7 @@
 pub mod files;
 pub mod home;
 pub mod input;
+pub mod power;
 pub mod system;
 pub mod uninstall;
 

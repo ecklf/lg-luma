@@ -777,8 +777,17 @@ fn header(
         out.control(Target::Nav(index), rect, false);
     }
     let button_size = 60.;
+    // The optional power button takes the corner spot; the TV-settings
+    // gear shifts left only while the power button is shown.
+    let power_shown = state.preferences.home_power_button != crate::model::PowerAction::Off;
+    let corner_x = 1836. - button_size;
+    let gear_x = if power_shown {
+        corner_x - 72.
+    } else {
+        corner_x
+    };
     let rect = Rect::new(
-        1836. - button_size,
+        gear_x,
         nav.y + (nav.h - button_size) / 2.,
         button_size,
         button_size,
@@ -801,6 +810,28 @@ fn header(
         },
     );
     out.control(Target::TvSettings, rect, false);
+    // Optional power button in the corner, shown on every page. Hidden when Off.
+    if power_shown {
+        let power_rect = Rect::new(corner_x, rect.y, button_size, button_size);
+        let power_focused = state.focus == Target::HomePower;
+        out.pill(power_rect, power_focused, false);
+        out.icon(
+            assets,
+            "power",
+            Rect::new(
+                power_rect.x + (power_rect.w - 23.2) / 2.,
+                power_rect.y + (power_rect.h - 23.2) / 2.,
+                23.2,
+                23.2,
+            ),
+            if power_focused {
+                c(0x2c2c2c, 1.)
+            } else {
+                c(0xeeeeee, 0.73)
+            },
+        );
+        out.control(Target::HomePower, power_rect, false);
+    }
 }
 
 fn tile(
@@ -2199,6 +2230,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
+                Some(Subpage::PowerButton) => language.t("powerButton"),
                 _ => "",
             };
             let mut path = vec![label];
@@ -2373,6 +2405,16 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                         language.t(mode.label_key()),
                         Some(language.t("textRenderingRestart")),
                         mode == state.preferences.text_rendering,
+                    )
+                })
+                .collect(),
+            Subpage::PowerButton => crate::model::PowerAction::ALL
+                .into_iter()
+                .map(|action| {
+                    (
+                        language.t(action.label_key()),
+                        None,
+                        action == state.preferences.home_power_button,
                     )
                 })
                 .collect(),
@@ -2573,6 +2615,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 (1, "weather", "weather-sun"),
                 (2, "shortcuts", "sparkles"),
                 (3, "inputs", "input-hdmi"),
+                (5, "powerButton", "power"),
             ]
             .into_iter()
             .enumerate()
@@ -2586,7 +2629,11 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                         rect: Rect::new(640., 164.8 + index as f32 * 84. - s, 1120., 72.),
                         title: language.t(key),
                         icon: Some(icon),
-                        value: None,
+                        value: if widget == 5 {
+                            Some(language.t(state.preferences.home_power_button.label_key()))
+                        } else {
+                            None
+                        },
                         description: None,
                         selected: false,
                         chevron: true,
