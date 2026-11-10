@@ -111,6 +111,68 @@ test('the real release command combines changesets and synchronizes every file',
   assert.deepEqual(await fs.readdir(path.join(directory, '.changeset')), ['config.json']);
 });
 
+test('release feed and standalone manifest share the same verified package metadata', async (t) => {
+  const directory = await fixture(t, '1.2.3');
+  const app = JSON.parse(await fs.readFile(path.join(directory, 'appinfo.json'), 'utf8'));
+  await fs.mkdir(path.join(directory, 'tools'));
+  await fs.copyFile(
+    path.join(root, 'tools/repository.mjs'),
+    path.join(directory, 'tools/repository.mjs'),
+  );
+  await fs.mkdir(path.join(directory, 'dist'));
+  await fs.mkdir(path.join(directory, '.build/package'), { recursive: true });
+  await fs.mkdir(path.join(directory, 'assets'));
+  const ipk = Buffer.from('test IPK bytes, not an installable package');
+  const icon = Buffer.from('test icon bytes');
+  const description = '<p>Test release description</p>\n';
+  const filename = `${app.id}_${app.version}_arm.ipk`;
+  await fs.writeFile(path.join(directory, 'dist', filename), ipk);
+  await fs.writeFile(path.join(directory, '.build/package', app.largeIcon), icon);
+  await fs.writeFile(path.join(directory, 'assets/homebrew-description.html'), description);
+  const githubOutput = path.join(directory, 'github-output');
+  const result = spawnSync(process.execPath, ['tools/repository.mjs'], {
+    cwd: directory,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      GITHUB_REPOSITORY: 'example/luma',
+      RELEASE_TAG: `v${app.version}`,
+      GITHUB_OUTPUT: githubOutput,
+    },
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const readJson = async (name) =>
+    JSON.parse(await fs.readFile(path.join(directory, 'dist', name), 'utf8'));
+  const feed = await readJson('repo.json');
+  const standalone = await readJson(`${app.id}.manifest.json`);
+  assert.deepEqual(standalone, feed.packages[0].manifest);
+  assert.equal(standalone.id, app.id);
+  assert.equal(standalone.version, app.version);
+  assert.equal(standalone.type, 'native');
+  assert.equal(standalone.rootRequired, true);
+  assert.equal(standalone.sourceUrl, 'https://github.com/example/luma');
+  const releaseUrl = `https://github.com/example/luma/releases/download/v${app.version}`;
+  assert.equal(standalone.ipkUrl, `${releaseUrl}/${filename}`);
+  assert.equal(standalone.iconUri, `${releaseUrl}/${app.largeIcon}`);
+  assert.equal(standalone.ipkSize, ipk.length);
+  const { createHash } = await import('node:crypto');
+  assert.deepEqual(standalone.ipkHash, {
+    sha256: createHash('sha256').update(ipk).digest('hex'),
+  });
+  assert.equal(feed.packages[0].fullDescriptionUrl, `${releaseUrl}/description.html`);
+  assert.equal(feed.packages[0].shortDescription, app.appDescription);
+  assert.deepEqual(await fs.readFile(path.join(directory, 'dist', app.largeIcon)), icon);
+  assert.equal(
+    await fs.readFile(path.join(directory, 'dist/description.html'), 'utf8'),
+    description,
+  );
+  assert.equal(await fs.readFile(githubOutput, 'utf8'), `tag=v${app.version}\n`);
+
+  const workflow = await fs.readFile(path.join(root, '.github/workflows/ci.yml'), 'utf8');
+  assert.match(workflow, /dist\/com\.ecklf\.luma\.manifest\.json/);
+  assert.match(workflow, /files=\([^\n]*release\/com\.ecklf\.luma\.manifest\.json/);
+});
+
 function gateFixture({ pull = {}, previous = '2.0.3', current = '2.0.4', event = {} } = {}) {
   const context = {
     eventName: 'push',

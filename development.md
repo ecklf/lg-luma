@@ -1017,6 +1017,10 @@ not `manifest.appDescription`. The feed generator writes the root app metadata d
 to `dist/description.html` and sets the package's `fullDescriptionUrl` to that version's release
 asset. Homebrew Channel prefers this HTML description when the URL is present. CI uploads the
 HTML alongside the feed and IPK, so the feed and its description must be published together.
+The generator also writes `dist/com.ecklf.luma.manifest.json`, containing exactly the app manifest
+embedded in `repo.json`. CI publishes it with every release for the central webOS Homebrew repository's
+`manifestUrl`, using `https://github.com/ecklf/lg-luma/releases/latest/download/com.ecklf.luma.manifest.json`.
+This standalone manifest is not a replacement for the custom repository's `repo.json` feed.
 
 Key modules: `state.rs` focus/preferences, `view.rs` geometry, `renderer.rs` GPU caches/draws,
 `font.rs` lazy metrics/outlines, `vector.rs` GPU mesh upload, `platform.rs` worker/inventory,
