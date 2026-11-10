@@ -117,6 +117,8 @@ clear cached artwork and reload it without changing your preferences.
 
 ### Homebrew Channel
 
+Add this custom repository URL to Homebrew Channel:
+
 ```text
 https://github.com/ecklf/lg-luma/releases/latest/download/repo.json
 ```
