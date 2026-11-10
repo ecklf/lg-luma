@@ -1,5 +1,11 @@
 # lg-luma
 
+## 2.18.1
+
+### Patch Changes
+
+- 6dbc626: Publish a standalone application manifest with release assets for central webOS Homebrew repository submissions, while preserving the existing custom repository feed.
+
 ## 2.18.0
 
 ### Minor Changes
