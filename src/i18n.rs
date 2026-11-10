@@ -31,9 +31,11 @@ pub enum Language {
     Nl,
     Sv,
     Cs,
+    Ca,
 }
 impl Language {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
+        Self::Ca,
         Self::De,
         Self::En,
         Self::Es,
@@ -65,6 +67,7 @@ impl Language {
             Self::Nl => "nl",
             Self::Sv => "sv",
             Self::Cs => "cs",
+            Self::Ca => "ca",
         }
     }
     pub fn name(self) -> &'static str {
@@ -83,6 +86,7 @@ impl Language {
             Self::Nl => "Nederlands",
             Self::Sv => "Svenska",
             Self::Cs => "Čeština",
+            Self::Ca => "Català",
         }
     }
     pub fn index(self) -> usize {
@@ -473,6 +477,34 @@ impl Language {
                 ][month]
             )
             .to_uppercase(),
+            Self::Ca => format!(
+                "{}, {} {}",
+                [
+                    "dilluns",
+                    "dimarts",
+                    "dimecres",
+                    "dijous",
+                    "divendres",
+                    "dissabte",
+                    "diumenge"
+                ][weekday],
+                now.day(),
+                [
+                    "de gener",
+                    "de febrer",
+                    "de març",
+                    "d’abril",
+                    "de maig",
+                    "de juny",
+                    "de juliol",
+                    "d’agost",
+                    "de setembre",
+                    "d’octubre",
+                    "de novembre",
+                    "de desembre"
+                ][month]
+            )
+            .to_uppercase(),
         }
     }
     pub fn clock(self, now: OffsetDateTime, hour24: bool, seconds: bool) -> String {
@@ -505,11 +537,13 @@ impl Language {
                 now.minute()
             )
         } else {
-            format!(
-                "{hour}:{:02} {}",
-                now.minute(),
-                if now.hour() >= 12 { "PM" } else { "AM" }
-            )
+            let period = match (self, now.hour() >= 12) {
+                (Self::Ca, false) => "a. m.",
+                (Self::Ca, true) => "p. m.",
+                (_, false) => "AM",
+                (_, true) => "PM",
+            };
+            format!("{hour}:{:02} {period}", now.minute())
         }
     }
 }
@@ -531,6 +565,7 @@ pub fn deserialize_language<'de, D: Deserializer<'de>>(
             Some("nl") => Language::Nl,
             Some("sv") => Language::Sv,
             Some("cs") => Language::Cs,
+            Some("ca") => Language::Ca,
             _ => Language::En,
         },
     )
@@ -607,6 +642,7 @@ mod tests {
                 super::Language::Nl => "Dutch",
                 super::Language::Sv => "Swedish",
                 super::Language::Cs => "Czech",
+                super::Language::Ca => "Catalan",
             };
             assert!(
                 description.contains(name),
@@ -808,5 +844,26 @@ mod tests {
                 .unwrap();
             assert_eq!(Language::Cs.date(now), expected);
         }
+    }
+
+    #[test]
+    fn catalan_dates_and_clock_use_local_conventions() {
+        for (date, expected) in [
+            ("2026-03-03T09:05:04+01:00", "DIMARTS, 3 DE MARÇ"),
+            ("2026-04-01T09:05:04+02:00", "DIMECRES, 1 D’ABRIL"),
+            ("2026-08-01T09:05:04+02:00", "DISSABTE, 1 D’AGOST"),
+            ("2026-10-21T20:41:00+02:00", "DIMECRES, 21 D’OCTUBRE"),
+        ] {
+            let now = OffsetDateTime::parse(date, &time::format_description::well_known::Rfc3339)
+                .unwrap();
+            assert_eq!(Language::Ca.date(now), expected);
+        }
+        let now = OffsetDateTime::parse(
+            "2026-10-21T20:41:00+02:00",
+            &time::format_description::well_known::Rfc3339,
+        )
+        .unwrap();
+        assert_eq!(Language::Ca.clock(now, true, false), "20:41");
+        assert_eq!(Language::Ca.clock(now, false, true), "8:41:00 p. m.");
     }
 }

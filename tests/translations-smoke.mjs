@@ -13,6 +13,7 @@ const preferences = path.join(temporary, 'preferences.json');
 const binary = path.resolve(root, process.env.CARGO_TARGET_DIR ?? 'target', 'debug/luma');
 const requests = [];
 const places = {
+  ca: { name: 'Viena', region: 'Viena', country: 'Àustria' },
   en: { name: 'Vienna', region: 'Vienna', country: 'Austria' },
   de: { name: 'Wien', region: 'Wien', country: 'Österreich' },
   zh: { name: '维也纳', region: '维也纳', country: '奥地利' },
@@ -113,7 +114,7 @@ try {
   );
   const languages = await scenario('picker-en', picker);
   assert.equal(languages.subpage, 'Language');
-  for (const name of ['English', 'Deutsch', '简体中文', 'Español', 'Português (Brasil)'])
+  for (const name of ['Català', 'English', 'Deutsch', '简体中文', 'Español', 'Português (Brasil)'])
     assert.ok(languages.ui_text.includes(name));
 
   const german = await scenario('de-home', `${picker},up,enter,home,down`);
@@ -278,13 +279,16 @@ try {
     preferences,
     JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
   );
-  const vietnamesePicker = `${picker},${Array(8).fill('down').join(',')}`;
+  const swedishPicker = `${picker},${Array(7).fill('down').join(',')}`;
+  const swedishFocused = await scenario('sv-picker', swedishPicker);
+  assert.deepEqual(swedishFocused.focus, { Choice: 9 });
+  assert.equal(swedishFocused.scroll, 0, 'The first ten language rows fit without scrolling');
+  const vietnamesePicker = `${swedishPicker},down`;
   const vietnameseFocused = await scenario('vi-picker', vietnamesePicker);
-  assert.deepEqual(vietnameseFocused.focus, { Choice: 9 });
-  assert.equal(vietnameseFocused.scroll, 0, 'The first ten language rows fit without scrolling');
+  assert.deepEqual(vietnameseFocused.focus, { Choice: 10 });
   assert.ok(vietnameseFocused.ui_text.includes('Tiếng Việt'));
   const chineseFocused = await scenario('zh-picker-last', `${vietnamesePicker},down,down,down`);
-  assert.deepEqual(chineseFocused.focus, { Choice: 12 });
+  assert.deepEqual(chineseFocused.focus, { Choice: 13 });
   assert.ok(chineseFocused.scroll > 0, 'Simplified Chinese must scroll fully into view');
   assert.ok(chineseFocused.ui_text.includes('简体中文'));
   const vietnamese = await scenario('vi-home', `${vietnamesePicker},enter,home,down`);
@@ -343,7 +347,7 @@ try {
   );
   const traditionalPicker = `${picker},${Array(12).fill('down').join(',')}`;
   const traditionalFocused = await scenario('zh-tw-picker', traditionalPicker);
-  assert.deepEqual(traditionalFocused.focus, { Choice: 13 });
+  assert.deepEqual(traditionalFocused.focus, { Choice: 14 });
   assert.ok(traditionalFocused.scroll > 0);
   assert.ok(traditionalFocused.ui_text.includes('繁體中文'));
   const traditional = await scenario('zh-tw-home', `${traditionalPicker},enter,home,down`);
@@ -373,8 +377,40 @@ try {
     'zh',
   );
   await scenario('zh-tw-4k', 'home,down', ['--capture-scale', '2']);
+
+  await fs.writeFile(
+    preferences,
+    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
+  );
+  const catalan = await scenario('ca-home', `${picker},up,up,enter,home,down`);
+  assert.equal(catalan.preferences.language, 'ca');
+  for (const key of ['home', 'settings', 'favorites', 'evening', 'setWeatherLocation'])
+    contains(catalan, key, 'ca');
+  assert.ok(catalan.ui_text.includes('DIMECRES, 21 D’OCTUBRE'));
+  assert.ok(catalan.ui_text.includes('Netflix'));
+
+  const catalanSettings = await scenario('ca-settings', 'settings,down');
+  assert.equal(catalanSettings.preferences.language, 'ca', 'Catalan survives a restart');
+  assert.ok(catalanSettings.ui_text.includes('Català'));
+  contains(catalanSettings, 'language', 'ca');
+  const catalanDelete = await scenario('ca-delete-confirm', deleteConfirmation);
+  contains(catalanDelete, 'cancel', 'ca');
+  assert.ok(
+    catalanDelete.ui_text.includes(messages.deleteAppWarning.ca.replace('{app}', 'Netflix')),
+  );
+  const catalanWeather = await scenario(
+    'ca-weather',
+    `${location},type:Viena,back,enter,await-search,down,enter,home,await-weather`,
+  );
+  assert.equal(catalanWeather.preferences.weather_location.country, 'Àustria');
+  contains(catalanWeather, 'partlyCloudy', 'ca');
+  assert.equal(
+    requests.filter((request) => request.path === '/v1/search').at(-1).query.language,
+    'ca',
+  );
+
   console.log(
-    'Native translation checks passed: saved language selection, shared labels, Portuguese and Vietnamese locale formatting and accented glyphs, Vietnamese deletion/cancel UI, localized geocoding/weather, unchanged app names, Chinese glyphs and 4K rendering.',
+    'Native translation checks passed: saved language selection, shared labels, locale formatting and accented glyphs, deletion dialogs, localized geocoding/weather, unchanged app names, Chinese glyphs and 4K rendering.',
   );
 } finally {
   server.closeAllConnections();
