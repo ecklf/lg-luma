@@ -37,7 +37,7 @@ fn home_relaunch_returns_from_apps_and_settings() {
 
         assert!(state.return_home().is_empty());
         assert_eq!(state.page, Page::Home);
-        assert_eq!(state.focus, Target::Nav(0));
+        assert_eq!(state.focus, Target::App("netflix".into()));
         assert!(state.query.is_empty());
         assert_eq!(state.filter, 0);
         assert_eq!(state.scroll, 0.);
@@ -113,7 +113,7 @@ fn home_relaunch_commits_keyboard_edits_before_clearing_the_subpage() {
             Some("Console")
         );
         assert_eq!(state.page, Page::Home);
-        assert_eq!(state.focus, Target::Nav(0));
+        assert_eq!(state.focus, Target::App("netflix".into()));
         assert!(!state.text_input_active());
         assert!(state.subpage.is_none());
     }
@@ -141,8 +141,93 @@ fn home_relaunch_dismisses_recents_and_ignores_its_pending_reply() {
             .recent_response(generation, command, Ok(Some(vec![])))
             .is_empty()
     );
-    assert_eq!(state.focus, Target::Nav(0));
+    assert_eq!(state.focus, Target::App("netflix".into()));
     assert!(state.overlay.is_none());
+}
+
+#[test]
+fn home_relaunch_focuses_first_visible_favorite_in_saved_order() {
+    let mut state = ready();
+    state.preferences.favorites = Some(vec![
+        "missing.app".into(),
+        "netflix".into(),
+        "youtube.leanback.v4".into(),
+    ]);
+    state.preferences.hidden.push("netflix".into());
+    state.home_scroll = crate::state::HOME_TILE_PITCH;
+    state.focus = Target::Input("HDMI_1".into());
+
+    state.return_home();
+    assert_eq!(state.focus, Target::App("youtube.leanback.v4".into()));
+    assert_eq!(state.home_scroll, 0.);
+    assert_eq!(
+        state.activate(),
+        vec![Effect::Launch("youtube.leanback.v4".into())]
+    );
+}
+
+#[test]
+fn home_relaunch_resets_scrolled_favorites_and_keeps_remote_routes() {
+    let mut state = ready();
+    state.preferences.favorites = Some(
+        state
+            .inventory
+            .apps
+            .iter()
+            .take(9)
+            .map(|app| app.id.clone())
+            .collect(),
+    );
+    let favorites = state.preferences.favorites.clone().unwrap();
+    state.home_scroll = crate::state::HOME_TILE_PITCH * 2.;
+
+    state.return_home();
+    assert_eq!(state.home_scroll, 0.);
+    assert_eq!(state.focus, Target::App(favorites[0].clone()));
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::App(favorites[1].clone()));
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::App(favorites[0].clone()));
+    state.direction(Direction::Down, &controls(&state));
+    assert!(matches!(state.focus, Target::Input(_)));
+
+    state.return_home();
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::Nav(0));
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.page, Page::Apps);
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.page, Page::Home);
+    assert_eq!(
+        state.focus,
+        Target::Nav(0),
+        "Tab browsing stays in the header"
+    );
+}
+
+#[test]
+fn home_relaunch_without_favorites_uses_existing_empty_and_error_actions() {
+    let mut state = ready();
+    state.preferences.favorites = Some(vec![]);
+    state.return_home();
+    assert_eq!(state.focus, Target::Browse);
+
+    state.error = Some("Inventory unavailable".into());
+    state.return_home();
+    assert_eq!(state.focus, Target::Retry);
+}
+
+#[test]
+fn back_to_home_focuses_first_favorite() {
+    for page in [1, 2] {
+        let mut state = ready();
+        state.open(page);
+        state.home_scroll = crate::state::HOME_TILE_PITCH;
+        assert!(state.back().is_empty());
+        assert_eq!(state.page, Page::Home);
+        assert_eq!(state.focus, Target::App("netflix".into()));
+        assert_eq!(state.home_scroll, 0.);
+    }
 }
 
 fn scene(state: &State) -> view::Scene {
