@@ -965,7 +965,8 @@
     "vi": "Biểu tượng",
     "nl": "Pictogram",
     "sv": "Ikon",
-    "cs": "Ikona"
+    "cs": "Ikona",
+    "ca": "Icona"
   },
   "inputIconAutomatic": {
     "zh-tw": "自動",
@@ -981,7 +982,8 @@
     "vi": "Tự động",
     "nl": "Automatisch",
     "sv": "Automatiskt",
-    "cs": "Automaticky"
+    "cs": "Automaticky",
+    "ca": "Automàtic"
   },
   "inputIconHdmi": {
     "zh-tw": "HDMI",
@@ -997,7 +999,8 @@
     "vi": "HDMI",
     "nl": "HDMI",
     "sv": "HDMI",
-    "cs": "HDMI"
+    "cs": "HDMI",
+    "ca": "HDMI"
   },
   "inputIconUsb": {
     "zh-tw": "USB",
@@ -1013,7 +1016,8 @@
     "vi": "USB",
     "nl": "USB",
     "sv": "USB",
-    "cs": "USB"
+    "cs": "USB",
+    "ca": "USB"
   },
   "inputIconAppleTv": {
     "zh-tw": "Apple TV",
@@ -1029,7 +1033,8 @@
     "vi": "Apple TV",
     "nl": "Apple TV",
     "sv": "Apple TV",
-    "cs": "Apple TV"
+    "cs": "Apple TV",
+    "ca": "Apple TV"
   },
   "inputIconComputer": {
     "zh-tw": "電腦",
@@ -1045,7 +1050,8 @@
     "vi": "Máy tính",
     "nl": "Computer",
     "sv": "Dator",
-    "cs": "Počítač"
+    "cs": "Počítač",
+    "ca": "Ordinador"
   },
   "inputIconConsole": {
     "zh-tw": "遊戲主機",
@@ -1061,7 +1067,8 @@
     "vi": "Máy chơi game",
     "nl": "Spelcomputer",
     "sv": "Spelkonsol",
-    "cs": "Herní konzole"
+    "cs": "Herní konzole",
+    "ca": "Consola de videojocs"
   },
   "inputIconPlaystation": {
     "zh-tw": "PlayStation",
@@ -1077,7 +1084,8 @@
     "vi": "PlayStation",
     "nl": "PlayStation",
     "sv": "PlayStation",
-    "cs": "PlayStation"
+    "cs": "PlayStation",
+    "ca": "PlayStation"
   },
   "inputIconShield": {
     "zh-tw": "NVIDIA Shield",
@@ -1093,7 +1101,8 @@
     "vi": "NVIDIA Shield",
     "nl": "NVIDIA Shield",
     "sv": "NVIDIA Shield",
-    "cs": "NVIDIA Shield"
+    "cs": "NVIDIA Shield",
+    "ca": "NVIDIA Shield"
   },
   "inputIconStreamer": {
     "zh-tw": "串流裝置",
@@ -1109,7 +1118,8 @@
     "vi": "Thiết bị phát trực tuyến",
     "nl": "Streamingapparaat",
     "sv": "Strömningsenhet",
-    "cs": "Streamovací zařízení"
+    "cs": "Streamovací zařízení",
+    "ca": "Dispositiu de reproducció en continu"
   },
   "inputIconSwitch": {
     "zh-tw": "Nintendo Switch",
@@ -1125,7 +1135,8 @@
     "vi": "Nintendo Switch",
     "nl": "Nintendo Switch",
     "sv": "Nintendo Switch",
-    "cs": "Nintendo Switch"
+    "cs": "Nintendo Switch",
+    "ca": "Nintendo Switch"
   },
   "inputIconSwitch2": {
     "zh-tw": "Nintendo Switch 2",
@@ -1141,7 +1152,8 @@
     "vi": "Nintendo Switch 2",
     "nl": "Nintendo Switch 2",
     "sv": "Nintendo Switch 2",
-    "cs": "Nintendo Switch 2"
+    "cs": "Nintendo Switch 2",
+    "ca": "Nintendo Switch 2"
   },
   "inputIconXbox": {
     "zh-tw": "Xbox",
@@ -1157,7 +1169,8 @@
     "vi": "Xbox",
     "nl": "Xbox",
     "sv": "Xbox",
-    "cs": "Xbox"
+    "cs": "Xbox",
+    "ca": "Xbox"
   },
   "clearName": {
     "zh-tw": "清除名稱",
