@@ -1,6 +1,6 @@
 [package]
 name = "luma"
-version = "2.19.0"
+version = "2.20.0"
 edition = "2024"
 rust-version = "1.88"
 publish = false
