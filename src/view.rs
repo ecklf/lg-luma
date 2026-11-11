@@ -1332,7 +1332,10 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             c(0xa0a0a0, 0.10),
         ));
         let name = state.preferences.input_name(input);
-        let icon = input_icon(input, name);
+        let icon = state
+            .preferences
+            .input_icon(&input.id)
+            .unwrap_or_else(|| input_icon(input, name));
         let size = if icon == "apple-tv" { 41.6 } else { 35.2 };
         out.icon(
             assets,
@@ -2176,6 +2179,9 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                         "temperature"
                     }),
                 ]),
+                Some(Subpage::InputIcons(_)) => {
+                    Some(vec![language.t("inputs"), language.t("inputIcon")])
+                }
                 Some(Subpage::Input(id)) => Some(vec![
                     language.t("inputs"),
                     state
@@ -2315,6 +2321,16 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 ("HH:MM", None, !state.preferences.show_seconds),
                 ("HH:MM:SS", None, state.preferences.show_seconds),
             ],
+            Subpage::InputIcons(id) => {
+                let current = state.preferences.input_icon(id);
+                std::iter::once((language.t("inputIconAutomatic"), None, current.is_none()))
+                    .chain(
+                        crate::model::INPUT_ICONS
+                            .iter()
+                            .map(|(icon, key)| (language.t(key), None, current == Some(*icon))),
+                    )
+                    .collect()
+            }
             Subpage::Input(id) => {
                 let current = state
                     .preferences
@@ -2379,6 +2395,11 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         };
         for (index, (title, description, selected)) in options.into_iter().enumerate() {
             let h = if description.is_some() { 90.7 } else { 72. };
+            let icon = if matches!(subpage, Subpage::InputIcons(_)) && index > 0 {
+                Some(format!("input-{}", crate::model::INPUT_ICONS[index - 1].0))
+            } else {
+                None
+            };
             row(
                 out,
                 state,
@@ -2387,7 +2408,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     target: Target::Choice(index),
                     rect: Rect::new(640., 164.8 + index as f32 * (h + 12.) - s, 1120., h),
                     title,
-                    icon: None,
+                    icon: icon.as_deref(),
                     value: None,
                     description,
                     selected,
@@ -2655,6 +2676,13 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             );
             for (position, (index, title, icon, value, chevron)) in [
                 (
+                    7,
+                    language.t("textRendering"),
+                    "type",
+                    Some(language.t(state.preferences.text_rendering.label_key())),
+                    true,
+                ),
+                (
                     3,
                     language.t(if state.loading {
                         "refreshNotice"
@@ -2664,13 +2692,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     "refresh",
                     None,
                     false,
-                ),
-                (
-                    7,
-                    language.t("textRendering"),
-                    "type",
-                    Some(language.t(state.preferences.text_rendering.label_key())),
-                    true,
                 ),
                 (9, language.t("resetIconCache"), "refresh", None, false),
                 (5, language.t("quitApp"), "power", None, false),
@@ -2684,7 +2705,16 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     assets,
                     Row {
                         target: Target::Setting(index),
-                        rect: Rect::new(640., 408.8 + position as f32 * 84. - s, 1120., 72.),
+                        rect: Rect::new(
+                            640.,
+                            408.8
+                                + position as f32 * 84.
+                                + if position > 0 { 16. } else { 0. }
+                                + if position > 2 { 16. } else { 0. }
+                                - s,
+                            1120.,
+                            72.,
+                        ),
                         title,
                         icon: Some(icon),
                         value,
@@ -2719,7 +2749,10 @@ fn inputs_settings(out: &mut Scene, state: &State, assets: &Assets) {
                 title: state.preferences.input_title(input),
                 icon: Some(&format!(
                     "input-{}",
-                    input_icon(input, state.preferences.input_name(input))
+                    state
+                        .preferences
+                        .input_icon(&input.id)
+                        .unwrap_or_else(|| input_icon(input, state.preferences.input_name(input)))
                 )),
                 value: Some(language.t(match mode {
                     InputMode::On => "stateOn",
@@ -2991,6 +3024,44 @@ fn input_name_rows(out: &mut Scene, state: &State, assets: &Assets, id: &str, y:
             },
         );
     }
+    let icon = state.preferences.input_icon(id);
+    let label = icon
+        .and_then(|icon| {
+            crate::model::INPUT_ICONS
+                .iter()
+                .find(|(known, _)| *known == icon)
+        })
+        .map_or("inputIconAutomatic", |(_, key)| *key);
+    let preview = icon
+        .or_else(|| {
+            state
+                .inventory
+                .inputs
+                .iter()
+                .find(|input| input.id == id)
+                .map(|input| input_icon(input, state.preferences.input_name(input)))
+        })
+        .unwrap_or("hdmi");
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::InputIcon,
+            rect: Rect::new(
+                640.,
+                y + if custom.is_some() { 186.7 } else { 102.7 },
+                1120.,
+                72.,
+            ),
+            title: language.t("inputIcon"),
+            icon: Some(&format!("input-{preview}")),
+            value: Some(language.t(label)),
+            description: None,
+            selected: false,
+            chevron: true,
+        },
+    );
 }
 
 fn settings_surface(out: &mut Scene, rect: Rect, radius: f32) {

@@ -16,6 +16,9 @@ mod wallpaper_tests;
 #[path = "input-refresh-tests.rs"]
 mod input_refresh_tests;
 
+#[path = "input-icon-tests.rs"]
+mod input_icon_tests;
+
 fn ready() -> State {
     let mut state = State::new(Preferences::default());
     state.set_inventory(demo_inventory(), None);
@@ -923,10 +926,10 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::CheckUpdates);
     state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Setting(7));
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(3));
     assert_eq!(state.activate(), vec![Effect::Reload]);
-    state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Setting(7));
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(9));
     let preferences = serde_json::to_value(&state.preferences).unwrap();
@@ -944,6 +947,43 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(0));
     assert_eq!(state.section, 0);
+}
+
+#[test]
+fn system_maintenance_actions_share_an_icon_and_group_below_text_rendering() {
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::SYSTEM_SECTION;
+    state.panel_started = None;
+    let system = scene(&state);
+    let rect = |index| {
+        system
+            .controls
+            .iter()
+            .find(|control| control.target == Target::Setting(index))
+            .unwrap()
+            .rect
+    };
+    let text = rect(7);
+    let refresh = rect(3);
+    let reset = rect(9);
+    let quit = rect(5);
+    let gap = |above: crate::state::Rect, below: crate::state::Rect| below.y - above.y - above.h;
+    assert!(gap(text, refresh) > gap(refresh, reset));
+    assert!(gap(reset, quit) > gap(refresh, reset));
+    assert!((gap(refresh, reset) - 12.).abs() < 0.01);
+    for action in [refresh, reset] {
+        assert!(system.draw.iter().any(|draw| matches!(draw,
+            crate::renderer::Draw::TintedImage(path, icon, ..)
+                if path.ends_with("ui-icons/refresh.lvec")
+                    && icon.y >= action.y && icon.y + icon.h <= action.y + action.h
+        )));
+    }
+    state.focus = Target::Setting(9);
+    state.direction(Direction::Up, &system.controls);
+    assert_eq!(state.focus, Target::Setting(3));
+    state.direction(Direction::Up, &system.controls);
+    assert_eq!(state.focus, Target::Setting(7));
 }
 
 #[test]
