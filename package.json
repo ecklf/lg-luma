@@ -17,7 +17,7 @@
     "deploy": "pnpm run package && node tools/deploy.mjs",
     "test": "pnpm test:release && pnpm test:home && pnpm test:icons && pnpm test:wallpapers && pnpm test:tiles && cargo test --locked --workspace --all-features",
     "test:release": "node --test tests/release.test.mjs",
-    "test:home": "node --test tests/self-update.test.mjs tests/home-wrapper.test.mjs && cargo test --locked -p luma-tv-helper",
+    "test:home": "node --test tests/self-update.test.mjs tests/home-wrapper.test.mjs tests/home-filter.test.mjs && cargo test --locked -p luma-tv-helper",
     "test:icons": "node --test tests/brand-assets.test.mjs",
     "test:wallpapers": "node --test tests/wallpaper-upload.test.mjs",
     "test:tiles": "node --test tests/tile-editor.test.mjs",

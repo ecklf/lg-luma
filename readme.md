@@ -194,6 +194,15 @@ mounted Home manifest is never reread and the manifest method fails on that miss
 Verified on an `OLED65G46LA` (2024 G4, `9.2.4-48`); other 9.x models should behave the same, but
 have not been tested yet.
 
+On webOS 5/6, a cold boot opens Luma at about 20 s instead of after the Homebrew hook (~50 s or
+later). The Homebrew hooks start late, but LG's service hub reads `/var/luna-service2` at
+`core-boot-done`. `home.sh enable` therefore also registers a small root helper there
+(`com.webos.service.lumahome`, a copy of the package's `luma-early` in `/var/lib/luma-home`) and adds
+a compositor key filter (`home-filter.js`) to LG's chain. While the TV boots, the filter asks the
+helper to mount Luma and then opens Home. If this fails, the cold-boot hook mounts Luma as before.
+Keys pass through the filter unchanged, and `home.sh disable` removes both. The early-boot timing
+has not been verified on webOS 24.
+
 </details>
 
 <details>
