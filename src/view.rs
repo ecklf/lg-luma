@@ -866,7 +866,6 @@ fn tile(
 
     out.shadow(
         visual_rect,
-        rect,
         19.2,
         22. + (12. * progress),
         9. + (5. * progress),
@@ -874,7 +873,7 @@ fn tile(
     );
     let favorite_color = app_face(out, assets, app, visual_rect, state.preferences.language, 19.2);
     if pinned {
-        favorite_badge(out, assets, rect, favorite_color);
+        favorite_badge(out, assets, visual_rect, favorite_color);
     }
     if state.moving.as_ref() == Some(&app.id) {
         let indicator = Rect::new(
