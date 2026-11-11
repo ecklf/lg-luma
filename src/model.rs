@@ -235,6 +235,8 @@ pub struct Preferences {
     pub input_modes: BTreeMap<String, InputMode>,
     /// Custom names by input app ID; the TV's port and label stay visible as detail.
     pub input_names: BTreeMap<String, String>,
+    /// Bundled input icon overrides by input app ID; absent means automatic detection.
+    pub input_icons: BTreeMap<String, String>,
     #[serde(deserialize_with = "crate::weather::deserialize_enabled")]
     pub show_weather: bool,
     #[serde(deserialize_with = "crate::weather::deserialize_location")]
@@ -273,6 +275,7 @@ impl Default for Preferences {
             date_format: DateFormat::default(),
             input_modes: BTreeMap::new(),
             input_names: BTreeMap::new(),
+            input_icons: BTreeMap::new(),
             show_weather: true,
             weather_location: None,
             temperature_unit: Unit::Celsius,
@@ -375,6 +378,29 @@ impl Preferences {
         }
     }
 
+    pub fn input_icon(&self, id: &str) -> Option<&'static str> {
+        self.input_icons.get(id).and_then(|saved| {
+            INPUT_ICONS
+                .iter()
+                .find(|(icon, _)| *icon == saved)
+                .map(|(icon, _)| *icon)
+        })
+    }
+
+    /// An empty icon restores automatic detection. Unknown assets are never saved.
+    pub fn set_input_icon(&mut self, id: &str, icon: &str) -> bool {
+        if !valid_app_id(id) {
+            return false;
+        }
+        if icon.is_empty() {
+            return self.input_icons.remove(id).is_some();
+        }
+        if !INPUT_ICONS.iter().any(|(known, _)| *known == icon) {
+            return false;
+        }
+        self.input_icons.insert(id.into(), icon.into()) != Some(icon.into())
+    }
+
     pub fn sanitize(&mut self) {
         if self.splash_background.as_ref().is_some_and(|id| {
             !BACKGROUNDS.iter().any(|(known, _)| *known == id) && !crate::wallpapers::valid_id(id)
@@ -419,6 +445,9 @@ impl Preferences {
             });
             self.custom_tiles.truncate(TILE_LIMIT);
         }
+        self.input_icons.retain(|id, icon| {
+            valid_app_id(id) && INPUT_ICONS.iter().any(|(known, _)| *known == icon)
+        });
         self.input_modes.retain(|id, _| valid_app_id(id));
         self.input_names = std::mem::take(&mut self.input_names)
             .into_iter()
@@ -429,6 +458,21 @@ impl Preferences {
             .collect();
     }
 }
+
+/// Every bundled device SVG offered by the native input icon picker.
+pub const INPUT_ICONS: [(&str, &str); 11] = [
+    ("hdmi", "inputIconHdmi"),
+    ("usb", "inputIconUsb"),
+    ("apple-tv", "inputIconAppleTv"),
+    ("computer", "inputIconComputer"),
+    ("console", "inputIconConsole"),
+    ("playstation", "inputIconPlaystation"),
+    ("shield", "inputIconShield"),
+    ("streamer", "inputIconStreamer"),
+    ("switch", "inputIconSwitch"),
+    ("switch2", "inputIconSwitch2"),
+    ("xbox", "inputIconXbox"),
+];
 
 pub const INPUT_NAME_LIMIT: usize = 40;
 

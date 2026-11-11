@@ -166,6 +166,14 @@ Back from Greeting restores its Widgets row; App names returns to General. Input
 also uses **Clear name**.
 Choice checkmarks identify saved values, while the bright row fill identifies only the current focus.
 
+Input icon picker: **Settings → Widgets → Inputs → select input → Icon** opens a
+native picker for bundled input SVG icons. Its choices are **Automatic** (default label detection),
+**HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**, **NVIDIA Shield**,
+**Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, and **Xbox**. An explicit choice
+is persisted per input across restarts; choosing **Automatic** clears only that input's
+icon override and restores label-based detection. Existing inputs without an override continue
+using Automatic. This is a backward-compatible feature and does not change input names or visibility.
+
 Home favorites form one horizontal strip, never a second row. Left/Right follows saved order,
 including reorder mode, and reveals complete cards. Up returns to Home navigation; Down enters
 the nearest input in the first row. The strip position survives page changes. Wheel movement over

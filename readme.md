@@ -253,6 +253,16 @@ Toggle **Gradient** beside **Rotation** to turn background shading on or off. It
 and remembers your choice. Older uploads without an unshaded copy keep their full-resolution
 shaded image. This does not change LG's launch splash.
 
+### Input icons
+
+Open **Settings → Widgets → Inputs**, select an input, then choose
+**Icon** to open a native picker for bundled SVG icons. Choices are **Automatic** (the default,
+using label detection), **HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**,
+**NVIDIA Shield**, **Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, and **Xbox**.
+
+An explicit icon choice is saved separately for each input and persists across restarts.
+Choose **Automatic** to clear that input's override and restore label-based icon detection.
+
 ### Recent app switching
 
 Press **Back** on Home, or hold **Back** for 0.6 seconds from any page, to open Recent apps.
