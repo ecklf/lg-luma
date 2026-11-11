@@ -59,5 +59,10 @@ await fs.copyFile(
   path.join(output, descriptionFilename),
 );
 await fs.writeFile(path.join(output, 'repo.json'), JSON.stringify(feed, null, 2) + '\n');
+const manifestFilename = `${manifest.id}.manifest.json`;
+await fs.writeFile(
+  path.join(output, manifestFilename),
+  JSON.stringify(feed.packages[0].manifest, null, 2) + '\n',
+);
 if (process.env.GITHUB_OUTPUT) await fs.appendFile(process.env.GITHUB_OUTPUT, `tag=${tag}\n`);
 console.log(`Homebrew feed: dist/repo.json (${tag}, ${bytes.length} byte IPK)`);

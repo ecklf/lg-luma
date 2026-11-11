@@ -100,6 +100,9 @@ the keyboard first; Weather Location then returns to its parent Location row, HD
 that HDMI row, and the Background gallery to Background in the sidebar. Back from the sidebar
 focuses the Settings tab, then returns Home. **System** in the sidebar groups **Refresh apps & inputs**
 and the vector power-icon **Quit app** action separately from General preferences.
+**Reset icon cache** clears persisted and decoded app icons, then reloads artwork on its
+worker without changing preferences. An active icon read finishes before disk entries are
+removed, so it cannot restore stale artwork after the reset.
 On Apps, OK or a normal pointer click on an app opens its side popup, with **Open** first and focused by
 default, followed by favorite, hide/show and **Delete app** actions. A second OK launches the app.
 Home favorites, Inputs and Recent apps launch directly. Hold OK on Home still reorders favorites.
@@ -162,6 +165,14 @@ it. Preferences are saved when the keyboard closes, including automatic system-k
 Back from Greeting restores its Widgets row; App names returns to General. Input name removal
 also uses **Clear name**.
 Choice checkmarks identify saved values, while the bright row fill identifies only the current focus.
+
+Input icon picker: **Settings → Widgets → Inputs → select input → Icon** opens a
+native picker for bundled input SVG icons. Its choices are **Automatic** (default label detection),
+**HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**, **NVIDIA Shield**,
+**Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, and **Xbox**. An explicit choice
+is persisted per input across restarts; choosing **Automatic** clears only that input's
+icon override and restores label-based detection. Existing inputs without an override continue
+using Automatic. This is a backward-compatible feature and does not change input names or visibility.
 
 Home favorites form one horizontal strip, never a second row. Left/Right follows saved order,
 including reorder mode, and reveals complete cards. Up returns to Home navigation; Down enters
@@ -429,7 +440,8 @@ sampled card colour. Missing, corrupt or unsupported artwork uses the existing g
 Discovery, bounded file reads, decoding and colour sampling run on a dedicated worker. If the
 jailed app cannot read an asset directly, the native process calls Homebrew Channel's elevated
 `exec` service with the packaged native `luma-helper read-app-icon` command. It returns bounded
-image bytes without writing collected files or changing filesystem permissions. PNG, JPEG and WebP
+image bytes without changing filesystem permissions. Elevated icon reads are cached in
+`icon-cache` beside preferences, keyed by app ID, version and icon paths. PNG, JPEG and WebP
 are supported; runtime SVG parsing is not required. Source files are limited to 512 KiB and
 2048×2048 pixels; decoded icons are at most 256×256 with a 16 MiB/256-entry CPU cache. GPU uploads
 stay on the SDL thread and share the existing 48 MiB texture cache. Pending/unavailable icons do
@@ -438,7 +450,9 @@ not block input, and failures are cached until inventory is refreshed.
 Inventory also refreshes at startup and whenever the window becomes visible. Decoded icons are
 keyed by app ID, version and icon paths, so those refreshes keep them and retry only previous
 failures; an updated app has a new version and is read again. **Refresh apps** (or desktop F5)
-invalidates all artwork, including previous failures; request tokens discard stale replies. Check newly installed/updated apps and both normal tile and Home-takeover
+invalidates decoded artwork, including previous failures, while reusing matching disk entries.
+Use **Settings → System → Reset icon cache** to discard disk entries too. Request tokens discard
+stale replies. Check newly installed/updated apps and both normal tile and Home-takeover
 launches on a real TV to verify sandbox access. These paths are covered with mocked filesystem
 and worker tests, not live-TV calls in automated checks.
 
@@ -651,7 +665,7 @@ failures preserve the last valid inputs. No failed inventory read substitutes de
 ### Optional native Home integration
 
 `tv/home.sh` and the native Rust `luma-helper` executable are packaged beside `luma`. They are a root-only, explicit integration
-for webOS 10/25 and 11/26 (and webOS 5/6, see below). `enable` stages a native manifest with ID `com.webos.app.home` and
+for webOS 10/25 and 11/26 (and webOS 5/6 and 9/24, see below). `enable` stages a native manifest with ID `com.webos.app.home` and
 symlinks to the installed executable, libraries and assets under `/var/lib/luma-home/app`, then
 bind-mounts it over `/usr/palm/applications/com.webos.app.home`. SAM rereads that one app through
 `blockSystemApp` followed by `releaseBlockSystemApp`, including `forceBlockSystemApp: false` when
@@ -690,7 +704,7 @@ out of the last app, standby wake with the TV's chosen Quick Start+ setting, a f
 saved preferences and restoring LG Home. The broader webOS 6+ app compatibility statement does
 not establish Home-replacement support on older firmware.
 
-### Running in place of LG's Home executable (webOS 5)
+### Running in place of LG's Home executable (webOS 5/6/24)
 
 On webOS 5 the manifest takeover above does not apply: SAM restarts a v1 native Home on every
 Home launch. A root integration can instead bind-mount the installed `luma` executable over LG's
@@ -719,7 +733,7 @@ is bound to that executable path. Luma detects this (`platform::runs_as_lg_home`
 - skips the per-icon elevated-service fallback for installed artwork: as root every file is
   readable, so that fallback would only spend seconds per icon to fail the same way.
 
-`tv/home.sh` chooses this method (`"method": "executable"` in `state.json`) on webOS 5/6 when LG
+`tv/home.sh` chooses this method (`"method": "executable"` in `state.json`) on webOS 5/6 and 24 (9.x) when LG
 Home's manifest is native, starts `file:///usr/bin/com.webos.app.home` and declares
 `nativeLifeCycleInterfaceVersion: 2`. `enable` and the boot hook bind-mount the installed
 executable over that path, stop the previous Home process and open Home if it was in front (or
@@ -733,6 +747,11 @@ tile launch redirects to the Home instance: the tile's jail sees `/usr/bin` with
 shares `/var/run`, which is volatile like the mount itself. LG's file stays underneath, and a cold boot
 without the hook gives LG's Home back. Verified on an LG 49UN7100
 (webOS 5): Home key to Luma in about 0.4 s instead of a restart of about 2 s.
+
+webOS 24 (9.x) also uses this method because its SAM has no `releaseBlockSystemApp` to reread a
+mounted Home manifest. The author verified takeover, same-process Home-key relaunch and cold-boot
+reapplication on one LG OLED65G46LA (2024 G4), running `9.2.4-48`. No other 9.x models have been
+tested; treat this path as experimental rather than a claim of support for every webOS 24 TV.
 
 ### Home lifecycle on webOS 10/11
 
@@ -833,9 +852,10 @@ failure retries after five minutes. Unit changes convert unrounded cached Celsiu
 Removing a city clears its cache. The `.weather.json` sidecar uses Unix-seconds timestamps.
 Mock servers accept only literal loopback HTTP origins and are refused in TV builds.
 
-`assets/messages.json` supplies Dutch, English, French, German, Italian, Polish, Portuguese (Brazil),
-Russian, Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese, including locale formatting
-and weather labels. App/device names and saved city names remain real data. No geolocation,
+`assets/messages.json` supplies Catalan, Czech, Dutch, English, French, German, Italian, Polish,
+Portuguese (Brazil), Russian, Simplified Chinese, Spanish, Swedish, Traditional Chinese and
+Vietnamese, including locale formatting and weather labels. App/device names and saved city
+names remain real data. No geolocation,
 runtime font/translation services or telemetry are used. Weather attribution: Open-Meteo,
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
@@ -1006,6 +1026,10 @@ not `manifest.appDescription`. The feed generator writes the root app metadata d
 to `dist/description.html` and sets the package's `fullDescriptionUrl` to that version's release
 asset. Homebrew Channel prefers this HTML description when the URL is present. CI uploads the
 HTML alongside the feed and IPK, so the feed and its description must be published together.
+The generator also writes `dist/com.ecklf.luma.manifest.json`, containing exactly the app manifest
+embedded in `repo.json`. CI publishes it with every release for the central webOS Homebrew repository's
+`manifestUrl`, using `https://github.com/ecklf/lg-luma/releases/latest/download/com.ecklf.luma.manifest.json`.
+This standalone manifest is not a replacement for the custom repository's `repo.json` feed.
 
 Key modules: `state.rs` focus/preferences, `view.rs` geometry, `renderer.rs` GPU caches/draws,
 `font.rs` lazy metrics/outlines, `vector.rs` GPU mesh upload, `platform.rs` worker/inventory,

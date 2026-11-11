@@ -39,6 +39,94 @@ fn poll_until(service: &Service, mut done: impl FnMut() -> bool) {
 }
 
 #[test]
+fn reset_icon_cache_removes_only_owned_cache_files() {
+    let directory = std::env::temp_dir().join(format!(
+        "luma-icon-reset-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    assert!(clear_disk_cache_at(&directory).is_ok());
+    std::fs::create_dir(&directory).unwrap();
+    for name in [
+        "sample.app.icon",
+        "sample.app.tmp",
+        "preferences.json",
+        "invalid id.icon",
+    ] {
+        std::fs::write(directory.join(name), b"cached").unwrap();
+    }
+    std::fs::create_dir(directory.join("nested.icon")).unwrap();
+    clear_disk_cache_at(&directory).unwrap();
+    assert!(!directory.join("sample.app.icon").exists());
+    assert!(!directory.join("sample.app.tmp").exists());
+    assert!(directory.join("preferences.json").exists());
+    assert!(directory.join("invalid id.icon").exists());
+    assert!(directory.join("nested.icon").is_dir());
+    #[cfg(unix)]
+    {
+        let link = directory.join("alias");
+        std::os::unix::fs::symlink(&directory, &link).unwrap();
+        assert!(clear_disk_cache_at(&link).is_err());
+        std::fs::remove_file(link).unwrap();
+    }
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn reset_icon_cache_runs_after_in_flight_load_and_before_new_loads() {
+    let (started, started_rx) = mpsc::channel();
+    let (release, release_rx) = mpsc::channel();
+    let release_rx = Mutex::new(release_rx);
+    let calls = Arc::new(AtomicUsize::new(0));
+    let cleared = Arc::new(AtomicUsize::new(0));
+    let worker_calls = calls.clone();
+    let worker_cleared = cleared.clone();
+    let reset_cleared = cleared.clone();
+    let service = Service::with_worker(
+        true,
+        move |_| {
+            let call = worker_calls.fetch_add(1, Ordering::SeqCst);
+            if call == 0 {
+                started.send(()).unwrap();
+                release_rx
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(3))
+                    .unwrap();
+                assert_eq!(worker_cleared.load(Ordering::SeqCst), 0);
+            } else {
+                assert_eq!(worker_cleared.load(Ordering::SeqCst), 1);
+            }
+            Some(Artwork {
+                key: String::new(),
+                pixels: RgbaImage::from_pixel(1, 1, Rgba([call as u8, 0, 0, 255])),
+                backdrop: [[0; 3]; 2],
+            })
+        },
+        move || {
+            reset_cleared.fetch_add(1, Ordering::SeqCst);
+        },
+    );
+    let source = Source::new("sample.app", &json!({}));
+    service.get(&source);
+    started_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+    let queued = Source::new("queued.app", &json!({}));
+    service.get(&queued);
+    service.reset_icon_cache();
+    assert!(service.cache.borrow().entries.is_empty());
+    assert_eq!(cleared.load(Ordering::SeqCst), 0);
+    service.prefetch([source.clone()]);
+    release.send(()).unwrap();
+    poll_until(&service, || service.get(&source).is_some());
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_eq!(service.get(&source).unwrap().pixels.get_pixel(0, 0)[0], 1);
+    assert!(!service.cache.borrow().entries.contains_key(&queued));
+}
+
+#[test]
 fn inventory_metadata_resolves_absolute_relative_and_manifest_fallback_paths() {
     let metadata = json!({"id":"sample", "title":"Regional App", "icon":"regional.png",
         "largeIcon":"large.png", "folderPath":format!("{}/sample", ROOTS[1]), "version":"3.1.0"});
@@ -449,7 +537,98 @@ fn decoded_cache_evicts_old_icons_when_scrolling_through_many_apps() {
 }
 
 #[test]
-fn visible_cards_switch_from_fallback_to_installed_artwork_without_an_icon_map() {
+fn favorite_badge_uses_the_local_gradient_and_maximum_black_white_contrast() {
+    let mut artwork = decode(&encoded(ImageFormat::Png, 32, 32, [255; 4])).unwrap();
+    assert!(artwork.dark_badge(0.));
+    artwork.backdrop = [[0; 3]; 2];
+    assert!(!artwork.dark_badge(0.));
+    artwork.backdrop = [[255; 3], [0; 3]];
+    assert!(artwork.dark_badge(19.2 / 154.4));
+    assert!(!artwork.dark_badge(1.));
+    // Choose by linear luminance, not an arbitrary sRGB brightness threshold.
+    for value in 0..=255 {
+        artwork.backdrop = [[value; 3]; 2];
+        let background = luminance([value; 3]);
+        let foreground = if artwork.dark_badge(0.125) { 0. } else { 1. };
+        assert!(
+            super::contrast(foreground, background) >= super::contrast(1. - foreground, background)
+        );
+        assert!(super::contrast(foreground, background) >= 4.5);
+    }
+}
+
+#[test]
+fn grid_and_options_use_matching_adaptive_hearts_without_a_backing_circle() {
+    use crate::{renderer::Draw, state::Target};
+    for (pixel, expected) in [([255; 4], [0., 0., 0., 1.]), ([0, 0, 0, 255], [1.; 4])] {
+        let assets = crate::view::Assets {
+            root: PathBuf::new(),
+            version: "test".into(),
+            metrics: Default::default(),
+            artwork: Service::with_loader(true, move |_| {
+                decode(&encoded(ImageFormat::Png, 32, 32, pixel))
+            }),
+        };
+        let apps = crate::platform::normalize_apps(&json!([
+            {"id":"regional.app", "title":"Regional App"}
+        ]))
+        .unwrap();
+        let mut state = crate::state::State::new(crate::model::Preferences {
+            favorites: Some(vec!["regional.app".into()]),
+            reduced_motion: true,
+            ..Default::default()
+        });
+        state.set_inventory(
+            crate::model::Inventory {
+                apps,
+                inputs: vec![],
+            },
+            None,
+        );
+        state.open(1);
+        state.focus = Target::App("regional.app".into());
+        let render = |state: &crate::state::State| {
+            crate::view::scene_with_pill(
+                state,
+                &assets,
+                800.,
+                100.,
+                time::OffsetDateTime::UNIX_EPOCH,
+            )
+        };
+        poll_until(&assets.artwork, || {
+            render(&state)
+                .draw
+                .iter()
+                .any(|draw| matches!(draw, Draw::AppImage(..)))
+        });
+        for popup in [false, true] {
+            if popup {
+                state.options();
+            }
+            let scene = render(&state);
+            let colors: Vec<_> = scene
+                .draw
+                .iter()
+                .filter_map(|draw| match draw {
+                    Draw::TintedImage(path, rect, _, _, color)
+                        if path.ends_with("heart-filled.lvec") && rect.w == 16. =>
+                    {
+                        Some(*color)
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(colors, vec![expected; if popup { 2 } else { 1 }]);
+            assert!(!scene.draw.iter().any(|draw| matches!(draw,
+                Draw::Shape(rect, radius, _, _) if rect.w == 28. && rect.h == 28. && *radius == 14.
+            )));
+        }
+    }
+}
+
+#[test]
+fn visible_cards_switch_from_fallback_to_a_single_composited_installed_surface() {
     let assets = crate::view::Assets {
         root: PathBuf::new(),
         version: "test".into(),
@@ -490,15 +669,30 @@ fn visible_cards_switch_from_fallback_to_installed_artwork_without_an_icon_map()
             .iter()
             .any(|draw| matches!(draw, crate::renderer::Draw::AppImage(..)))
     });
-    let image = scene()
+    let loaded = scene();
+    let (image, face, radius) = loaded
         .draw
-        .into_iter()
+        .iter()
         .find_map(|draw| match draw {
-            crate::renderer::Draw::AppImage(image, _, _) => Some(image),
+            crate::renderer::Draw::AppImage(image, rect, radius, _) => Some((image, rect, radius)),
             _ => None,
         })
         .unwrap();
     assert_eq!(image.backdrop, [[24, 40, 56]; 2]);
+    assert!(*radius > 0.);
+    // The image command covers the entire rounded face, not just the inset icon.
+    // A separate backdrop would be faded twice under the icon and expose its box.
+    let same_face =
+        |r: &crate::state::Rect| r.x == face.x && r.y == face.y && r.w == face.w && r.h == face.h;
+    assert!(loaded.draw.iter().any(|draw| matches!(draw,
+        crate::renderer::Draw::Shape(rect, r, border, _) if same_face(rect) && r == radius && *border == 1.
+    )));
+    assert!(!loaded.draw.iter().any(|draw| match draw {
+        crate::renderer::Draw::Shape(rect, _, border, _) => same_face(rect) && *border == 0.,
+        crate::renderer::Draw::RoundedGradient(rect, ..)
+        | crate::renderer::Draw::Image(_, rect, ..) => same_face(rect),
+        _ => false,
+    }));
 }
 
 #[test]

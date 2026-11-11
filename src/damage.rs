@@ -84,7 +84,7 @@ pub fn bounds(command: &Draw) -> Option<Rect> {
         | Draw::RoundedGradient(rect, ..)
         | Draw::Image(_, rect, ..)
         | Draw::TintedImage(_, rect, ..)
-        | Draw::AppImage(_, rect, _) => Some(rect.inset(-1.)),
+        | Draw::AppImage(_, rect, ..) => Some(rect.inset(-1.)),
         Draw::Shadow(rect, _, blur, _) => Some(rect.inset(-blur - 1.)),
         // Glyphs may extend past their layout box: redraw the full width of the line.
         Draw::Text(_, rect, style, ..) => Some(Rect::new(
@@ -126,8 +126,8 @@ fn same(a: &Draw, b: &Draw) -> bool {
         (Draw::TintedImage(p1, r1, a1, c1, t1), Draw::TintedImage(p2, r2, a2, c2, t2)) => {
             p1 == p2 && rect(r1, r2) && a1 == a2 && c1 == c2 && t1 == t2
         }
-        (Draw::AppImage(i1, r1, t1), Draw::AppImage(i2, r2, t2)) => {
-            Arc::ptr_eq(i1, i2) && rect(r1, r2) && t1 == t2
+        (Draw::AppImage(i1, r1, a1, t1), Draw::AppImage(i2, r2, a2, t2)) => {
+            Arc::ptr_eq(i1, i2) && rect(r1, r2) && a1 == a2 && t1 == t2
         }
         (Draw::Clip(c1), Draw::Clip(c2)) => match (c1, c2) {
             (Some(r1), Some(r2)) => rect(r1, r2),

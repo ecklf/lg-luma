@@ -2,7 +2,7 @@
 
 A native launcher for rooted LG webOS TVs, inspired by Apple TV.
 
-https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
+https://github.com/user-attachments/assets/2156d640-b8fa-4ea4-a02c-0db4c93bcc5a
 
 <details>
 <summary>Screenshots</summary>
@@ -27,6 +27,9 @@ https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
 </table>
 
 </details>
+
+If installed app icons look stale, use **Settings → System → Reset icon cache** to
+clear cached artwork and reload it without changing your preferences.
 
 ## Compatibility
 
@@ -60,6 +63,7 @@ https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
 | TV        | Model identifier | Takeover Support |
 | --------- | ---------------- | ---------------- |
 | LG C1     | `OLED48C1KNB`    | ✅               |
+| LG G1     | `OLED65G1RLA`    | ✅               |
 | LG UP8000 | `86UP80009LA`    | Unknown          |
 
 </details>
@@ -69,6 +73,7 @@ https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
 
 | TV    | Model identifier | Takeover Support |
 | ----- | ---------------- | ---------------- |
+| LG G4 | `OLED65G46LA`    | ✅               |
 | LG B2 | `OLED65B29LA`    | ✅               |
 
 </details>
@@ -98,6 +103,7 @@ https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
 | LG C2 | `OLED65C2PSA`         | ✅               |
 | LG C3 | `OLED65C31LA`         | ✅               |
 | LG C3 | `OLED65C36LC`         | ✅               |
+| LG C4 | `OLED77C44LA`         | ✅               |
 | LG C5 | `OLED55C57LA`         | ✅               |
 | LG C5 | `OLED55C5PSA`         | Unknown          |
 | LG C6 | `OLED65C6*`           | Unknown          |
@@ -111,6 +117,8 @@ https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
 
 ### Homebrew Channel
 
+Add this custom repository URL to Homebrew Channel:
+
 ```text
 https://github.com/ecklf/lg-luma/releases/latest/download/repo.json
 ```
@@ -120,7 +128,7 @@ https://github.com/ecklf/lg-luma/releases/latest/download/repo.json
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_2.16.0_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_2.19.0_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -136,7 +144,8 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 ### Takeover Method
 
 > [!NOTE]
-> Takeover is supported on **webOS 5, 6, 25 and 26**.\
+> Takeover is supported on **webOS 5, 6, 24, 25 and 26**.\
+> On 5, 6 and 24 it replaces the Home executable; on 25 and 26 it mounts Luma's Home app.\
 > The takeover does not delete LG Home: it remains underneath a temporary mount, which is cleared by
 > a reboot. If Luma is uninstalled first, LG Home returns on reboot, but the separate takeover boot
 > hook remains and logs an error because it can no longer find Luma. No TV reset is needed. For
@@ -173,20 +182,26 @@ Boot log: `/var/lib/luma-home/boot.log`. See the
 [development guide](development.md#optional-native-home-integration) for implementation details.
 
 <details>
-<summary>Method for webOS 5 / 6</summary>
+<summary>Method for webOS 5 / 6 / 24</summary>
 
-On **webOS 5 and 6**, SAM cannot reread a mounted Home manifest, so `home.sh enable` instead
+On **webOS 5, 6 and 24**, SAM cannot reread a mounted Home manifest, so `home.sh enable` instead
 bind-mounts Luma's executable over LG's `/usr/bin/com.webos.app.home`. LG's Home manifest stays
 in place and Luma registers with SAM itself, so the Home key brings the running Luma back instead
 of restarting it. The commands and the cold-boot hook are the same.
 
-A cold boot opens Luma at about 20 s instead of after the Homebrew hook (~50 s or later). The
-Homebrew hooks start late, but LG's service hub reads `/var/luna-service2` at `core-boot-done`.
-`home.sh enable` therefore also registers a small root helper there (`com.webos.service.lumahome`,
-a copy of the package's `luma-early` in `/var/lib/luma-home`) and adds a compositor key filter
-(`home-filter.js`) to LG's chain. While the TV boots, the filter asks the helper to mount Luma and
-then opens Home. If this fails, the cold-boot hook mounts Luma as before. Keys pass through the
-filter unchanged, and `home.sh disable` removes both.
+webOS 24 belongs here rather than with 25/26 because its SAM has no `releaseBlockSystemApp`, so a
+mounted Home manifest is never reread and the manifest method fails on that missing method.
+Verified on an `OLED65G46LA` (2024 G4, `9.2.4-48`); other 9.x models should behave the same, but
+have not been tested yet.
+
+On webOS 5/6, a cold boot opens Luma at about 20 s instead of after the Homebrew hook (~50 s or
+later). The Homebrew hooks start late, but LG's service hub reads `/var/luna-service2` at
+`core-boot-done`. `home.sh enable` therefore also registers a small root helper there
+(`com.webos.service.lumahome`, a copy of the package's `luma-early` in `/var/lib/luma-home`) and adds
+a compositor key filter (`home-filter.js`) to LG's chain. While the TV boots, the filter asks the
+helper to mount Luma and then opens Home. If this fails, the cold-boot hook mounts Luma as before.
+Keys pass through the filter unchanged, and `home.sh disable` removes both. The early-boot timing
+has not been verified on webOS 24.
 
 </details>
 
@@ -231,6 +246,10 @@ Test on a spare button first. Disable the mapping in Input Hook to restore norma
 
 ## Features
 
+Choose the interface language in **Settings → General → Language**. Luma supports Catalan,
+Czech, Dutch, English, French, German, Italian, Polish, Portuguese (Brazil), Russian,
+Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese.
+
 ### Backgrounds
 
 Open **Settings → Background → Upload**, then scan the QR code or open the shown
@@ -246,6 +265,16 @@ LG splash unchanged.
 Toggle **Gradient** beside **Rotation** to turn background shading on or off. It defaults to On
 and remembers your choice. Older uploads without an unshaded copy keep their full-resolution
 shaded image. This does not change LG's launch splash.
+
+### Input icons
+
+Open **Settings → Widgets → Inputs**, select an input, then choose
+**Icon** to open a native picker for bundled SVG icons. Choices are **Automatic** (the default,
+using label detection), **HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**,
+**NVIDIA Shield**, **Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, and **Xbox**.
+
+An explicit icon choice is saved separately for each input and persists across restarts.
+Choose **Automatic** to clear that input's override and restore label-based icon detection.
 
 ### Recent app switching
 
@@ -284,7 +313,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_2.16.0_arm.ipk
+dist/com.ecklf.luma_2.19.0_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png

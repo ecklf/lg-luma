@@ -668,6 +668,9 @@ fn run() -> Result<(), String> {
         !options.script.is_empty(),
         options.test_update_version.is_some(),
     );
+    if webos && let Some(directory) = preferences_path.parent() {
+        app_artwork::set_disk_cache(directory.join("icon-cache"));
+    }
     let mut state = State::new(initial_preferences);
     if let Some(version) = &options.test_update_version {
         eprintln!(
@@ -947,6 +950,10 @@ fn run() -> Result<(), String> {
     let mut visible = true;
     let mut running = true;
     let mut queued_event = None;
+    // SDL starts text input during video init. Keep it off until Luma's keyboard opens: on
+    // webOS 4 some remote keys otherwise arrive as TEXTINPUT with invalid UTF-8, and sdl2
+    // panics converting them ("Invalid TextInput string") before Luma sees the event.
+    video.text_input().stop();
     let mut text_active = false;
     let mut initial_focus = options.script.is_empty();
     let mut startup_cycle_pending = state.preferences.wallpaper_cycle;
@@ -1078,6 +1085,17 @@ fn run() -> Result<(), String> {
         }
         while let Ok(response) = updates.receiver.try_recv() {
             state.install_response(response);
+        }
+        if std::mem::take(&mut state.reset_icon_cache) {
+            assets.artwork.reset_icon_cache();
+            assets.artwork.prefetch(
+                state
+                    .inventory
+                    .apps
+                    .iter()
+                    .filter(|app| crate::branding::for_key(&app.brand).is_none())
+                    .filter_map(|app| app.icon.clone()),
+            );
         }
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
@@ -1312,6 +1330,10 @@ fn run() -> Result<(), String> {
                         }
                         profile.pause();
                     }
+                    WindowEvent::Leave => {
+                        state.hover = None;
+                        state.dirty = true;
+                    }
                     WindowEvent::FocusLost => {
                         if webos {
                             if matches!(
@@ -1466,6 +1488,10 @@ fn run() -> Result<(), String> {
                     let hovered = hit(&scene.controls, &window, x, y, &state);
                     if let Some(target) = hovered.clone() {
                         state.pointer_focus(target);
+                    }
+                    if state.hover != hovered {
+                        state.hover = hovered.clone();
+                        state.dirty = true;
                     }
                     if press
                         .as_ref()
