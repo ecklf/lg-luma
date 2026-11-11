@@ -237,6 +237,10 @@ Test on a spare button first. Disable the mapping in Input Hook to restore norma
 
 ## Features
 
+Choose the interface language in **Settings → General → Language**. Luma supports Catalan,
+Czech, Dutch, English, French, German, Italian, Polish, Portuguese (Brazil), Russian,
+Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese.
+
 ### Backgrounds
 
 Open **Settings → Background → Upload**, then scan the QR code or open the shown
