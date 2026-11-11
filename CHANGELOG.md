@@ -1,5 +1,19 @@
 # lg-luma
 
+## 2.19.0
+
+### Minor Changes
+
+- ea1b6d5: Add a native bundled SVG icon picker under Settings → Widgets → Inputs → select input → Icon.
+  Choose Automatic (default label detection), HDMI, USB, Apple TV, Computer, Console, PlayStation,
+  NVIDIA Shield, Streaming device, Nintendo Switch, Nintendo Switch 2, or Xbox. Explicit icon
+  choices persist per input across restarts; choosing Automatic clears that input's override and
+  restores label-based detection. Existing inputs keep Automatic unless an override is selected.
+
+### Patch Changes
+
+- ea1b6d5: Group Refresh apps & inputs and Reset icon cache below Text rendering in System settings, keeping their existing refresh icon and adding spacing around the group.
+
 ## 2.18.1
 
 ### Patch Changes
