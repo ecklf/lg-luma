@@ -2676,6 +2676,13 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             );
             for (position, (index, title, icon, value, chevron)) in [
                 (
+                    7,
+                    language.t("textRendering"),
+                    "type",
+                    Some(language.t(state.preferences.text_rendering.label_key())),
+                    true,
+                ),
+                (
                     3,
                     language.t(if state.loading {
                         "refreshNotice"
@@ -2685,13 +2692,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     "refresh",
                     None,
                     false,
-                ),
-                (
-                    7,
-                    language.t("textRendering"),
-                    "type",
-                    Some(language.t(state.preferences.text_rendering.label_key())),
-                    true,
                 ),
                 (9, language.t("resetIconCache"), "refresh", None, false),
                 (5, language.t("quitApp"), "power", None, false),
@@ -2705,7 +2705,16 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     assets,
                     Row {
                         target: Target::Setting(index),
-                        rect: Rect::new(640., 408.8 + position as f32 * 84. - s, 1120., 72.),
+                        rect: Rect::new(
+                            640.,
+                            408.8
+                                + position as f32 * 84.
+                                + if position > 0 { 16. } else { 0. }
+                                + if position > 2 { 16. } else { 0. }
+                                - s,
+                            1120.,
+                            72.,
+                        ),
                         title,
                         icon: Some(icon),
                         value,
