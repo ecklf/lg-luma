@@ -842,16 +842,38 @@ fn tile(
     }
     let start = out.draw.len();
     let focused = state.focus == Target::App(app.id.clone());
+
+     let mut progress = if focused { 1.0 } else { 0.0 };
+    if focused && !state.preferences.reduced_motion {
+        if let Some(time) = state.focus_started {
+        
+        let t = (time.elapsed().as_secs_f32() / 0.25).clamp(0.0, 1.0); 
+        progress = 1.0 - (1.0 - t) * (1.0 - t);
+      }
+    }
+
+    let mut visual_rect = rect;
+    if progress > 0.0 {
+
+    let expand = 18.0 * progress;
+        visual_rect = Rect::new(
+            rect.x - expand / 2.0,
+            rect.y - expand / 2.0,
+            rect.w + expand,
+            rect.h + expand,
+          );
+    }     
+
     out.shadow(
-        rect,
+        visual_rect,
         19.2,
-        if focused { 34. } else { 22. },
-        if focused { 14. } else { 9. },
-        if focused { 0.4 } else { 0.165 },
+        22. + (12. * progress),
+        9. + (5. * progress),
+        0.165 + (0.235 * progress),
     );
-    let favorite_color = app_face(out, assets, app, rect, state.preferences.language, 19.2);
+    let favorite_color = app_face(out, assets, app, visual_rect, state.preferences.language, 19.2);
     if pinned {
-        favorite_badge(out, assets, rect, favorite_color);
+        favorite_badge(out, assets, visual_rect, favorite_color);
     }
     if state.moving.as_ref() == Some(&app.id) {
         let indicator = Rect::new(
@@ -875,7 +897,7 @@ fn tile(
         );
     }
     if focused {
-        out.ring(rect, 19.2);
+        out.ring(visual_rect, 19.2);
     }
     if state.page == Page::Apps && state.filter == 5 {
         out.fade(start, 0.45, 1.);

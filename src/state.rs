@@ -209,6 +209,7 @@ pub const KEYS: [&str; 40] = [
 pub struct State {
     pub page: Page,
     pub focus: Target,
+    pub focus_started: Option<Instant>,
     pub inventory: Inventory,
     pub preferences: Preferences,
     pub query: String,
@@ -259,6 +260,7 @@ impl State {
         Self {
             page: Page::Home,
             focus: Target::Nav(0),
+            focus_started: None,
             inventory: Inventory::default(),
             preferences,
             query: String::new(),
@@ -378,6 +380,13 @@ impl State {
 
     pub fn tick(&mut self) {
         let recents_open = self.recents_open();
+        if let Some(start) = self.focus_started {
+            if !self.preferences.reduced_motion && start.elapsed() < Duration::from_millis(300) {
+                self.dirty = true;
+            } else {
+                self.focus_started = None;
+            }
+        }
         if recents_open || self.recents.visibility > 0. {
             self.dirty |= self.recents.animate(
                 recents_open,
@@ -429,6 +438,7 @@ impl State {
     }
 
     pub fn animating(&self) -> bool {
+        self.focus_started.is_some() ||
         ((self.recents_open() || self.recents.visibility > 0.)
             && (self.recents.visibility != if self.recents_open() { 1. } else { 0. }
                 || self.recents.cards_animating(self.pointer)))
@@ -748,6 +758,9 @@ impl State {
     }
 
     pub fn focus(&mut self, target: Target, controls: &[Control]) {
+        if self.focus != target {
+            self.focus_started = Some(Instant::now());
+        }
         self.pointer = false;
         self.focus = target;
         self.reveal_focus(controls);
@@ -819,6 +832,7 @@ impl State {
         if self.focus == target {
             return;
         }
+        self.focus_started = Some(Instant::now());
         if let Target::Sidebar(section) = target {
             if self.subpage == Some(Subpage::WeatherLocation) {
                 self.weather.cancel_search();
