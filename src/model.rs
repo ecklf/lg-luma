@@ -215,6 +215,8 @@ impl DateFormat {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
+    #[serde(deserialize_with = "crate::home_layout::deserialize")]
+    pub home_layout: Option<crate::home_layout::Layout>,
     pub favorites: Option<Vec<String>>,
     pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
@@ -259,6 +261,7 @@ impl Default for Preferences {
     fn default() -> Self {
         Self {
             favorites: None,
+            home_layout: None,
             custom_tiles: vec![],
             hidden: vec![],
             background: "dunes".into(),

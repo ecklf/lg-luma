@@ -219,7 +219,7 @@ try {
   assert.equal(clock.focus, 'ClockFormat');
   assert.ok(clock.ui_text.includes('Clock format'));
   assert.ok(clock.ui_text.includes('Time format'));
-  const inputsPage = 'settings,down,down,down,enter,down,down,down,down,enter';
+  const inputsPage = 'settings,down,down,down,enter,down,down,down,down,down,enter';
   const inputs = await scenario('inputs-page', inputsPage);
   assert.equal(inputs.subpage, 'Inputs');
   assert.deepEqual(inputs.focus, { InputMode: 'com.webos.app.hdmi1' });
@@ -279,7 +279,7 @@ try {
   assert.equal(profiled.render.profile.presented, 24);
   assert.ok(profiled.render.profile.pacing.samples > 0);
   assert.ok(profiled.render.profile.cpu_submission.mean_ms >= 0);
-  const widgetsPage = 'settings,down,down,down,enter';
+  const widgetsPage = 'settings,down,down,down,enter,down';
   const widgets = await scenario('widgets-settings', widgetsPage);
   assert.deepEqual(widgets.focus, { Widget: 4 });
   assert.ok(widgets.ui_text.includes('Widgets'));

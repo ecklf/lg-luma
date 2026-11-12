@@ -338,13 +338,18 @@ impl Weather {
             self.invalidate_forecast();
             self.active_key = key.clone();
         }
-        let active = preferences.show_weather && home_visible && key.is_some();
+        let enabled = preferences.show_weather
+            && preferences
+                .home_layout
+                .as_ref()
+                .is_none_or(|layout| layout.widget(crate::home_layout::Kind::Weather).is_some());
+        let active = enabled && home_visible && key.is_some();
         if active && !self.active_home {
             self.next_fetch = 0;
         }
         self.active_home = active;
         let mut command = None;
-        if !preferences.show_weather || !home_visible || key.is_none() {
+        if !enabled || !home_visible || key.is_none() {
             if self.pending.take().is_some() {
                 self.forecast_id += 1;
             }

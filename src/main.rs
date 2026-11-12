@@ -10,6 +10,9 @@ mod damage;
 mod diagnostics;
 mod egl_damage;
 mod font;
+mod home_layout;
+#[path = "home-layout-state.rs"]
+mod home_layout_state;
 mod i18n;
 #[path = "input-refresh.rs"]
 mod input_refresh;
@@ -253,7 +256,7 @@ impl BackButton {
         if !self.down(key, now) {
             return vec![];
         }
-        if state.overlay.is_some() || state.moving.is_some() {
+        if state.overlay.is_some() || state.moving.is_some() || state.layout_editor.is_some() {
             // Dismiss once and consume the whole physical press, including any
             // subsequent native Exit notification and the final Back release.
             self.consume();
@@ -460,10 +463,16 @@ fn input_refresh_active(state: &State, webos: bool, focused: bool, visible: bool
         && visible
         && !state.loading
         && state.overlay.is_none()
+        && state.layout_editor.is_none()
         && state.moving.is_none()
         && state.pressed.is_none()
         && state.recents.visibility == 0.
-        && (state.page == state::Page::Home
+        && ((state.page == state::Page::Home
+            && state
+                .preferences
+                .home_layout
+                .as_ref()
+                .is_none_or(|layout| layout.widget(home_layout::Kind::Inputs).is_some()))
             || (state.page == state::Page::Settings
                 && matches!(
                     state.subpage,
@@ -475,7 +484,7 @@ fn weather_tick(state: &mut State, service: &weather_service::Service, visible: 
     let now = OffsetDateTime::now_utc().unix_timestamp();
     let (command, changed) = state.weather.sync(
         &state.preferences,
-        visible && state.page == state::Page::Home,
+        visible && state.page == state::Page::Home && state.layout_editor.is_none(),
         now,
     );
     state.dirty |= changed;
@@ -1065,6 +1074,7 @@ fn run() -> Result<(), String> {
         if focused
             && visible
             && state.overlay.is_none()
+            && state.layout_editor.is_none()
             && state.moving.is_none()
             && state.deleting_wallpaper.is_none()
             && !state.animating()
@@ -1920,7 +1930,7 @@ fn run() -> Result<(), String> {
         let state = serde_json::json!({ "page": state.page, "focus": state.focus, "query": state.query,
             "filter": state.filter, "preferences": state.preferences, "apps": state.apps().iter().map(|a| &a.id).collect::<Vec<_>>(),
             "update_status": state.update_status, "available_update": state.available_update,
-            "error": state.error, "scroll": state.scroll, "home_scroll": state.home_scroll, "subpage": state.subpage, "modal": state.overlay.is_some(), "weather": state.weather,
+            "error": state.error, "scroll": state.scroll, "home_scroll": state.home_scroll, "input_scroll": state.input_scroll, "subpage": state.subpage, "modal": state.overlay.is_some() || state.layout_editor.is_some(), "weather": state.weather,
             "inventory": state.inventory.apps,
             "recents": state.recents.entries, "recents_pending": state.recents.pending, "recents_error": state.recents.error, "recents_visibility": state.recents.visibility,
             "ui_text": scene.draw.iter().filter_map(|draw| match draw { renderer::Draw::Text(value, ..) => Some(value), _ => None }).collect::<Vec<_>>() });

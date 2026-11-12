@@ -72,6 +72,31 @@ backend. Avoid copying the whole SDK library directory or the TV's graphics driv
 
 ## Controls and navigation
 
+### Home layout editor
+
+Settings → Widgets → Edit home layout opens a draft, never writing preferences until Save.
+Select a widget with the remote or pointer, then choose Move, Resize, Configure, or Remove.
+Move uses arrow-key grid steps; Resize uses Left/Right for width and Up/Down for height.
+OK confirms an operation; Back restores its original geometry. Back from the canvas offers
+Save, Discard, or Continue. The fixed footer also offers Add, Presets, Reset, Save, and Discard.
+Pointer selection uses the same controls; moving and resizing use the remote/keyboard arrows,
+not freeform dragging. Favorite-app reordering remains separate from widget placement.
+
+`src/home_layout.rs` owns version-1 placement, safe bounds, minimum sizes, collision checks,
+stable instance IDs, and presets. The logical canvas has 12 columns and 22 vertical steps;
+no widget overlap or offscreen placement is accepted. One instance of each kind is allowed,
+except Clock, which supports two independently styled instances. Invalid or future-version
+layouts fall back to the unchanged legacy Home without dropping other preferences.
+`src/home-layout-state.rs` owns the draft and interaction state, and
+`src/home-layout-view.rs` renders the canvas and editor. Rendering, hit testing, wheel input,
+strip scrolling, and directional focus derive their bounds from the same widget rectangles.
+Decorative widgets are not focus stops outside the editor. Removing Navigation leaves a
+Settings recovery control above the canvas. Weather does not fetch while editing or when its
+widget is absent. Existing format, name, location, unit, and input configuration is retained.
+
+Desktop smoke coverage includes persisted layouts, editor cancellation, narrow-strip scrolling,
+and framebuffer captures. These checks do not establish TV hardware behavior.
+
 ### Documentation screenshots
 
 `pnpm screenshots` generates `docs/home.png`, `docs/apps.png`, `docs/settings.png` and

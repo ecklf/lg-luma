@@ -31,6 +31,12 @@ https://github.com/user-attachments/assets/2156d640-b8fa-4ea4-a02c-0db4c93bcc5a
 If installed app icons look stale, use **Settings → System → Reset icon cache** to
 clear cached artwork and reload it without changing your preferences.
 
+Customize Home in **Settings → Widgets → Edit home layout**. Move and resize independent
+Favorites, Inputs, Date, Greeting, Weather, Clock, Navigation, and TV Settings widgets on a
+snap-to-grid canvas. Start from Classic, Split, or Minimal, adjust content sizes and headings,
+and explicitly save or discard your changes. Narrow app and input strips scroll horizontally.
+Existing installations keep their current Home until a layout is saved.
+
 ## Compatibility
 
 > [!NOTE]

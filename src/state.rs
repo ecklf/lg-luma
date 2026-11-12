@@ -44,6 +44,10 @@ pub enum Page {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum Target {
+    LayoutEdit,
+    LayoutWidget(u32),
+    LayoutToolbar(usize),
+    LayoutAction(usize),
     Nav(usize),
     TvSettings,
     InstallUpdate,
@@ -209,6 +213,8 @@ pub const KEYS: [&str; 40] = [
 ];
 
 pub struct State {
+    pub layout_editor: Option<crate::home_layout::Editor>,
+    pub input_scroll: f32,
     pub page: Page,
     pub focus: Target,
     pub inventory: Inventory,
@@ -258,9 +264,20 @@ pub struct State {
 
 impl State {
     pub fn new(preferences: Preferences) -> Self {
+        let focus = if preferences.home_layout.as_ref().is_some_and(|layout| {
+            layout
+                .widget(crate::home_layout::Kind::Navigation)
+                .is_none_or(|w| w.compact_navigation)
+        }) {
+            Target::Nav(2)
+        } else {
+            Target::Nav(0)
+        };
         Self {
+            layout_editor: None,
+            input_scroll: 0.,
             page: Page::Home,
-            focus: Target::Nav(0),
+            focus,
             inventory: Inventory::default(),
             preferences,
             query: String::new(),
@@ -458,6 +475,7 @@ impl State {
     }
 
     pub fn open(&mut self, index: usize) {
+        self.layout_editor = None;
         self.weather.cancel_search();
         self.page = match index {
             1 => Page::Apps,
@@ -465,6 +483,15 @@ impl State {
             _ => Page::Home,
         };
         self.focus = Target::Nav(self.page_index());
+        if self.page == Page::Home
+            && self.preferences.home_layout.as_ref().is_some_and(|layout| {
+                layout
+                    .widget(crate::home_layout::Kind::Navigation)
+                    .is_none_or(|w| w.compact_navigation)
+            })
+        {
+            self.focus = Target::Nav(2);
+        }
         self.scroll = 0.;
         if self.page == Page::Home {
             self.scroll_favorites(0.);
@@ -534,6 +561,9 @@ impl State {
     }
 
     pub fn favorites_viewport(&self) -> Rect {
+        if let Some(widget) = self.home_widget(crate::home_layout::Kind::Favorites) {
+            return widget.rect().inset(-8.);
+        }
         let content = self.content_viewport();
         let left = if self.home_scroll > 0. {
             HOME_FADE_LEFT
@@ -561,6 +591,11 @@ impl State {
                 let viewport =
                     if self.page == Page::Home && matches!(control.target, Target::App(_)) {
                         self.favorites_viewport()
+                    } else if self.page == Page::Home
+                        && matches!(control.target, Target::Input(_))
+                        && let Some(widget) = self.home_widget(crate::home_layout::Kind::Inputs)
+                    {
+                        widget.rect().inset(-8.)
                     } else if matches!(control.target, Target::Background(_)) {
                         self.backgrounds_viewport()
                     } else if self.page == Page::Apps {
@@ -581,6 +616,9 @@ impl State {
         x: i32,
         y: i32,
     ) -> bool {
+        if self.page == Page::Home && self.home_layout().is_some() {
+            return self.widget_wheel(position, x, y);
+        }
         let backgrounds =
             self.page == Page::Settings && self.section == 1 && self.subpage.is_none();
         if backgrounds && position.is_some_and(|(x, y)| !self.backgrounds_viewport().contains(x, y))
@@ -628,7 +666,18 @@ impl State {
         } else {
             (count - 1) as f32 * HOME_TILE_PITCH + HOME_TILE_WIDTH
         };
-        let max = (content - (HOME_STRIP_RIGHT - HOME_STRIP_LEFT)).max(0.);
+        let (left, right) = self.favorite_bounds();
+        let content = if let Some(widget) = self.home_widget(crate::home_layout::Kind::Favorites) {
+            let width = widget.card_width().min(widget.rect().w);
+            if count == 0 {
+                0.
+            } else {
+                (count - 1) as f32 * (width + 25.6) + width
+            }
+        } else {
+            content
+        };
+        let max = (content - (right - left)).max(0.);
         let next = (self.home_scroll + delta).clamp(0., max);
         if next != self.home_scroll {
             self.home_scroll = next;
@@ -712,6 +761,7 @@ impl State {
     pub fn reconcile_focus(&mut self) {
         if self.page == Page::Home {
             self.scroll_favorites(0.);
+            self.scroll_inputs(0.);
         }
         if let Target::App(id) = &self.focus
             && !self.apps().iter().any(|app| &app.id == id)
@@ -730,6 +780,9 @@ impl State {
     }
 
     pub fn first_content(&self) -> Target {
+        if self.page == Page::Home && self.preferences.home_layout.is_some() {
+            return self.widget_first_content();
+        }
         match self.page {
             Page::Home => self
                 .apps()
@@ -768,13 +821,27 @@ impl State {
     pub fn reveal_focus(&mut self, controls: &[Control]) -> bool {
         let previous = self.scroll;
         let previous_home = self.home_scroll;
+        let previous_input = self.input_scroll;
         if let Some(control) = controls.iter().find(|c| c.target == self.focus) {
             if self.page == Page::Home && matches!(self.focus, Target::App(_)) {
-                if control.rect.x < HOME_STRIP_LEFT {
-                    self.home_scroll += control.rect.x - HOME_STRIP_LEFT;
-                } else if control.rect.x + control.rect.w > HOME_STRIP_RIGHT {
-                    self.home_scroll += control.rect.x + control.rect.w - HOME_STRIP_RIGHT;
+                let (left, right) = self.favorite_bounds();
+                if control.rect.x < left {
+                    self.home_scroll += control.rect.x - left;
+                } else if control.rect.x + control.rect.w > right {
+                    self.home_scroll += control.rect.x + control.rect.w - right;
                 }
+            }
+            if self.page == Page::Home
+                && matches!(self.focus, Target::Input(_))
+                && let Some(widget) = self.home_widget(crate::home_layout::Kind::Inputs)
+            {
+                let rect = widget.rect();
+                if control.rect.x < rect.x {
+                    self.input_scroll += control.rect.x - rect.x;
+                } else if control.rect.x + control.rect.w > rect.x + rect.w {
+                    self.input_scroll += control.rect.x + control.rect.w - rect.x - rect.w;
+                }
+                self.input_scroll = self.input_scroll.max(0.);
             }
             if matches!(
                 self.focus,
@@ -806,10 +873,15 @@ impl State {
         if self.page == Page::Home {
             self.scroll_favorites(0.);
         }
-        if self.scroll != previous || self.home_scroll != previous_home {
+        if self.scroll != previous
+            || self.home_scroll != previous_home
+            || self.input_scroll != previous_input
+        {
             self.dirty = true;
         }
-        self.scroll != previous || self.home_scroll != previous_home
+        self.scroll != previous
+            || self.home_scroll != previous_home
+            || self.input_scroll != previous_input
     }
 
     /// Hover and pointer-down must not move the control before pointer-up.
@@ -983,7 +1055,7 @@ impl State {
                     })
                     .unwrap_or(0),
             ),
-            WIDGETS_SECTION => Target::Widget(4),
+            WIDGETS_SECTION => Target::LayoutEdit,
             SYSTEM_SECTION if self.available_update.is_some() => Target::InstallUpdate,
             SYSTEM_SECTION => Target::CheckUpdates,
             _ => Target::Setting(0),
@@ -1043,6 +1115,18 @@ impl State {
     pub fn direction(&mut self, direction: Direction, controls: &[Control]) -> Vec<Effect> {
         self.pointer = false;
         self.dirty = true;
+        if self.layout_editor.is_some() {
+            self.layout_direction(direction, controls);
+            return vec![];
+        }
+        if self.page == Page::Home
+            && self.preferences.home_layout.is_some()
+            && self.overlay.is_none()
+            && self.moving.is_none()
+        {
+            self.widget_direction(direction, controls);
+            return vec![];
+        }
         if self.recents_open() {
             return self.recent_direction(direction);
         }
@@ -1581,6 +1665,9 @@ impl State {
     }
 
     pub fn options(&mut self) {
+        if self.layout_editor.is_some() {
+            return;
+        }
         if self.overlay.is_some() || self.moving.is_some() {
             return;
         }
@@ -1673,6 +1760,9 @@ impl State {
     }
 
     pub fn hold(&mut self) {
+        if self.layout_editor.is_some() {
+            return;
+        }
         if self.page == Page::Home && self.overlay.is_none() {
             if let Target::App(id) = &self.focus {
                 self.moving = Some(id.clone());
@@ -1942,6 +2032,9 @@ impl State {
     }
 
     pub fn activate(&mut self) -> Vec<Effect> {
+        if self.layout_editor.is_some() {
+            return self.layout_activate();
+        }
         if self.recents_open() {
             use crate::recents::Command;
             return match self.focus.clone() {
@@ -1964,6 +2057,7 @@ impl State {
             return self.send_tile(tile);
         }
         match self.focus.clone() {
+            Target::LayoutEdit => self.edit_layout(),
             Target::Nav(index) => self.open(index),
             Target::Browse => self.open(1),
             Target::Retry => return vec![Effect::Reload],
@@ -2022,6 +2116,12 @@ impl State {
                 self.open_keyboard(TextField::Location);
             }
             Target::WeatherToggle => {
+                if !self.toggle_layout_widget(
+                    crate::home_layout::Kind::Weather,
+                    !self.preferences.show_weather,
+                ) {
+                    return vec![];
+                }
                 self.preferences.show_weather = !self.preferences.show_weather;
                 self.weather.invalidate_forecast();
                 return vec![Effect::Save];
@@ -2038,10 +2138,22 @@ impl State {
             }
             Target::WeatherQuery => self.open_keyboard(TextField::Location),
             Target::GreetingToggle => {
+                if !self.toggle_layout_widget(
+                    crate::home_layout::Kind::Greeting,
+                    !self.preferences.show_greeting,
+                ) {
+                    return vec![];
+                }
                 self.preferences.show_greeting = !self.preferences.show_greeting;
                 return vec![Effect::Save];
             }
             Target::DateToggle => {
+                if !self.toggle_layout_widget(
+                    crate::home_layout::Kind::Date,
+                    !self.preferences.show_date,
+                ) {
+                    return vec![];
+                }
                 self.preferences.show_date = !self.preferences.show_date;
                 return vec![Effect::Save];
             }
@@ -2061,6 +2173,13 @@ impl State {
             }
             Target::AppNamesHome => {
                 self.preferences.show_home_names = !self.preferences.show_home_names;
+                if let Some(layout) = &mut self.preferences.home_layout {
+                    for widget in &mut layout.widgets {
+                        if widget.kind == crate::home_layout::Kind::Favorites {
+                            widget.labels = self.preferences.show_home_names;
+                        }
+                    }
+                }
                 return vec![Effect::Save];
             }
             Target::AppNamesApps => {
@@ -2517,6 +2636,10 @@ impl State {
     pub fn back(&mut self) -> Vec<Effect> {
         self.pointer = false;
         self.dirty = true;
+        if self.layout_editor.is_some() {
+            self.layout_back();
+            return vec![];
+        }
         if self.moving.take().is_some() {
             return vec![];
         }

@@ -16,6 +16,8 @@ mod wallpaper_tests;
 #[path = "input-refresh-tests.rs"]
 mod input_refresh_tests;
 
+#[path = "home-layout-tests.rs"]
+mod home_layout_tests;
 #[path = "input-icon-tests.rs"]
 mod input_icon_tests;
 
@@ -1563,6 +1565,8 @@ fn weather_location_keyboard_back_and_sidebar_routes_restore_focus() {
     state.focus = Target::Sidebar(crate::state::WIDGETS_SECTION);
     state.section = crate::state::WIDGETS_SECTION;
     state.activate();
+    assert_eq!(state.focus, Target::LayoutEdit);
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Widget(4));
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Widget(0));
@@ -2416,7 +2420,7 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(WIDGETS_SECTION));
     state.direction(Direction::Right, &controls(&state));
-    assert_eq!(state.focus, Target::Widget(4));
+    assert_eq!(state.focus, Target::LayoutEdit);
     let widget_order: Vec<_> = controls(&state)
         .into_iter()
         .filter_map(|control| match control.target {

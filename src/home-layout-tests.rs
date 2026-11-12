@@ -1,0 +1,479 @@
+use super::*;
+use crate::home_layout::{Alignment, Kind, Layout, Mode};
+
+fn custom(preset: usize) -> State {
+    let mut state = ready();
+    state.preferences.home_layout = Some(Layout::preset(preset, &state.preferences));
+    state
+}
+
+fn action(state: &mut State, index: usize) -> Vec<Effect> {
+    state.focus = Target::LayoutAction(index);
+    state.activate()
+}
+
+#[test]
+fn home_layout_editor_is_remote_accessible_and_does_not_save_on_entry() {
+    let mut state = ready();
+    state.open(2);
+    for _ in 0..3 {
+        state.direction(Direction::Down, &controls(&state));
+    }
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::LayoutEdit);
+    let before = serde_json::to_value(&state.preferences).unwrap();
+    assert!(state.activate().is_empty());
+    assert!(state.layout_editor.is_some());
+    assert_eq!(state.page, Page::Home);
+    assert_eq!(before, serde_json::to_value(&state.preferences).unwrap());
+    assert!(
+        controls(&state)
+            .iter()
+            .all(|c| matches!(c.target, Target::LayoutWidget(_) | Target::LayoutToolbar(_)))
+    );
+    assert!(state.open_recents().is_empty());
+    state.hold();
+    state.options();
+    assert!(state.overlay.is_none());
+    assert!(state.moving.is_none());
+}
+
+#[test]
+fn home_layout_move_and_resize_confirm_cancel_and_collision_are_transactional() {
+    let mut state = ready();
+    state.edit_layout();
+    let before = state.layout_editor.as_ref().unwrap().draft.clone();
+    let id = before.widgets[0].id;
+    state.activate();
+    action(&mut state, 0);
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(
+        state.layout_editor.as_ref().unwrap().draft.widgets[0].column,
+        1
+    );
+    assert!(state.preferences.home_layout.is_none());
+    state.back();
+    assert_eq!(state.layout_editor.as_ref().unwrap().draft, before);
+    action(&mut state, 0);
+    for _ in 0..12 {
+        state.direction(Direction::Right, &controls(&state));
+    }
+    assert!(state.layout_editor.as_ref().unwrap().draft.valid());
+    assert_eq!(
+        state.layout_editor.as_ref().unwrap().draft.widgets[0].column,
+        5
+    );
+    assert!(state.activate().is_empty());
+    assert!(
+        matches!(state.layout_editor.as_ref().unwrap().mode, Mode::Menu(current) if current == id)
+    );
+    action(&mut state, 1);
+    state.direction(Direction::Down, &controls(&state));
+    state.back();
+    assert_eq!(
+        state.layout_editor.as_ref().unwrap().draft.widgets[0].height,
+        2
+    );
+    state.back();
+    state.focus = Target::LayoutToolbar(4);
+    assert!(state.activate().is_empty());
+    assert!(state.preferences.home_layout.is_none());
+}
+
+#[test]
+fn home_layout_save_round_trips_and_exit_requires_an_explicit_decision() {
+    let mut state = ready();
+    state.edit_layout();
+    state.focus = Target::LayoutToolbar(1);
+    state.activate();
+    action(&mut state, 1);
+    let draft = state.layout_editor.as_ref().unwrap().draft.clone();
+    state.back();
+    assert!(matches!(
+        state.layout_editor.as_ref().unwrap().mode,
+        Mode::Exit
+    ));
+    assert_eq!(state.focus, Target::LayoutAction(2));
+    assert_eq!(action(&mut state, 0), vec![Effect::Save]);
+    assert_eq!(state.preferences.home_layout, Some(draft.clone()));
+    assert_eq!(state.focus, Target::LayoutEdit);
+    let restored: Preferences =
+        serde_json::from_value(serde_json::to_value(&state.preferences).unwrap()).unwrap();
+    assert_eq!(restored.home_layout, Some(draft));
+    state.edit_layout();
+    state.layout_editor.as_mut().unwrap().draft.widgets.clear();
+    state.focus = Target::LayoutToolbar(4);
+    state.activate();
+    assert!(
+        !state
+            .preferences
+            .home_layout
+            .as_ref()
+            .unwrap()
+            .widgets
+            .is_empty()
+    );
+}
+
+#[test]
+fn home_layout_configure_remove_add_and_clock_variants_are_independent() {
+    let mut state = ready();
+    state.edit_layout();
+    state.activate();
+    action(&mut state, 2);
+    assert_eq!(state.focus, Target::LayoutAction(0));
+    action(&mut state, 0);
+    action(&mut state, 1);
+    action(&mut state, 4);
+    let clock = state
+        .layout_editor
+        .as_ref()
+        .unwrap()
+        .draft
+        .widget(Kind::Clock)
+        .unwrap();
+    assert_eq!(clock.size, 2);
+    assert_eq!(clock.alignment, Alignment::Center);
+    assert!(clock.large_clock);
+    state.back();
+    action(&mut state, 3);
+    assert!(
+        state
+            .layout_editor
+            .as_ref()
+            .unwrap()
+            .draft
+            .widget(Kind::Clock)
+            .is_none()
+    );
+    state.focus = Target::LayoutToolbar(0);
+    state.activate();
+    action(&mut state, 0);
+    assert!(matches!(state.focus, Target::LayoutWidget(_)));
+    state.focus = Target::LayoutToolbar(0);
+    state.activate();
+    action(&mut state, 0);
+    assert_eq!(
+        state
+            .layout_editor
+            .as_ref()
+            .unwrap()
+            .draft
+            .widgets
+            .iter()
+            .filter(|w| w.kind == Kind::Clock)
+            .count(),
+        2
+    );
+    state.focus = Target::LayoutToolbar(0);
+    state.activate();
+    action(&mut state, 0);
+    assert_eq!(
+        state
+            .layout_editor
+            .as_ref()
+            .unwrap()
+            .draft
+            .widgets
+            .iter()
+            .filter(|w| w.kind == Kind::Clock)
+            .count(),
+        2
+    );
+    state.back();
+    state.focus = Target::LayoutToolbar(3);
+    state.activate();
+    assert_eq!(
+        state
+            .preferences
+            .home_layout
+            .as_ref()
+            .unwrap()
+            .widgets
+            .iter()
+            .filter(|w| w.kind == Kind::Clock)
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn home_layout_favorites_resizing_changes_viewport_not_card_size_and_reveals_whole_cards() {
+    let mut state = custom(1);
+    let width = state.home_widget(Kind::Favorites).unwrap().card_width();
+    let apps: Vec<_> = state.apps().iter().map(|app| app.id.clone()).collect();
+    state.focus = Target::App(apps[0].clone());
+    for _ in 1..apps.len() {
+        state.direction(Direction::Right, &controls(&state));
+        let scene = scene(&state);
+        let card = scene
+            .controls
+            .iter()
+            .find(|c| c.target == state.focus)
+            .unwrap();
+        let (left, right) = state.favorite_bounds();
+        assert!(card.rect.x >= left - 0.1 && card.rect.x + card.rect.w <= right + 0.1);
+        assert_eq!(card.rect.w, width);
+    }
+    assert!(state.home_scroll > 0.);
+    let before = state.home_scroll;
+    let card = controls(&state)
+        .into_iter()
+        .find(|c| c.target == Target::App(apps[0].clone()))
+        .unwrap();
+    assert_ne!(
+        state.hit_test(&controls(&state), card.rect.x + 10., card.rect.y + 10.),
+        Some(card.target)
+    );
+    state.pointer_focus(state.focus.clone());
+    assert_eq!(before, state.home_scroll);
+}
+
+#[test]
+fn home_layout_narrow_inputs_scroll_reveal_clip_and_reconcile_after_disconnect() {
+    let mut state = custom(1);
+    for input in &state.inventory.inputs {
+        state
+            .preferences
+            .input_modes
+            .insert(input.id.clone(), InputMode::On);
+    }
+    let ids: Vec<_> = state
+        .inventory
+        .inputs
+        .iter()
+        .map(|input| input.id.clone())
+        .collect();
+    state.focus = Target::Input(ids[0].clone());
+    for id in ids.iter().skip(1) {
+        state.direction(Direction::Right, &controls(&state));
+        assert_eq!(state.focus, Target::Input(id.clone()));
+        let widget = state.home_widget(Kind::Inputs).unwrap().rect();
+        let card = controls(&state)
+            .into_iter()
+            .find(|c| c.target == state.focus)
+            .unwrap();
+        assert!(
+            card.rect.x >= widget.x - 0.1 && card.rect.x + card.rect.w <= widget.x + widget.w + 0.1
+        );
+    }
+    assert!(state.input_scroll > 0.);
+    let first = controls(&state)
+        .into_iter()
+        .find(|c| c.target == Target::Input(ids[0].clone()))
+        .unwrap();
+    assert_ne!(
+        state.hit_test(&controls(&state), first.rect.x + 10., first.rect.y + 10.),
+        Some(first.target)
+    );
+    state.set_inputs(vec![state.inventory.inputs[0].clone()]);
+    assert_eq!(state.input_scroll, 0.);
+    assert_ne!(state.focus, Target::Input(ids.last().unwrap().clone()));
+}
+
+#[test]
+fn home_layout_wheel_only_scrolls_the_widget_under_the_pointer() {
+    let mut state = custom(1);
+    let inputs = state.home_widget(Kind::Inputs).unwrap().rect();
+    let favorites = state.home_widget(Kind::Favorites).unwrap().rect();
+    state.wheel_scroll(&controls(&state), Some(favorites.center()), 0, -1);
+    assert!(state.home_scroll > 0.);
+    assert_eq!(state.input_scroll, 0.);
+    let scroll = state.home_scroll;
+    state.wheel_scroll(&controls(&state), Some(inputs.center()), 0, -1);
+    assert_eq!(state.home_scroll, scroll);
+    assert!(state.input_scroll > 0.);
+    state.wheel_scroll(&controls(&state), Some((1900., 940.)), 0, -10);
+    assert_eq!(state.home_scroll, scroll);
+    assert_eq!(state.scroll, 0.);
+}
+
+#[test]
+fn home_layout_remote_crosses_side_by_side_widgets_using_geometry() {
+    let mut state = custom(1);
+    let last = state.apps().last().unwrap().id.clone();
+    state.focus(Target::App(last), &controls(&state));
+    state.direction(Direction::Right, &controls(&state));
+    assert!(matches!(state.focus, Target::Input(_)));
+    state.direction(Direction::Left, &controls(&state));
+    assert!(matches!(state.focus, Target::App(_)));
+}
+
+#[test]
+fn home_layout_removed_navigation_keeps_settings_and_empty_layout_recoverable() {
+    let mut state = custom(0);
+    state
+        .preferences
+        .home_layout
+        .as_mut()
+        .unwrap()
+        .widgets
+        .clear();
+    state.open(0);
+    assert_eq!(state.focus, Target::Nav(2));
+    let scene = scene(&state);
+    assert_eq!(scene.controls.len(), 1);
+    assert_eq!(scene.controls[0].target, Target::Nav(2));
+    state.activate();
+    assert_eq!(state.page, Page::Settings);
+    assert_eq!(state.first_content(), Target::Sidebar(0));
+}
+
+#[test]
+fn home_layout_presets_and_all_editor_panels_have_valid_focus_in_every_language() {
+    for language in crate::i18n::Language::ALL {
+        for preset in 0..3 {
+            let mut state = custom(preset);
+            state.preferences.language = language;
+            assert!(
+                scene(&state)
+                    .controls
+                    .iter()
+                    .all(|c| c.rect.w > 0. && c.rect.h > 0.)
+            );
+            state.edit_layout();
+            let widgets = state.layout_editor.as_ref().unwrap().draft.widgets.clone();
+            for widget in widgets {
+                state.layout_editor.as_mut().unwrap().mode = Mode::Select;
+                state.focus = Target::LayoutWidget(widget.id);
+                state.activate();
+                action(&mut state, 2);
+                let controls = controls(&state);
+                assert!(
+                    controls.iter().any(|c| c.target == state.focus),
+                    "{} {:?}",
+                    language.code(),
+                    widget.kind
+                );
+                assert!(
+                    controls
+                        .iter()
+                        .all(|c| matches!(c.target, Target::LayoutAction(_)))
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn home_layout_legacy_visibility_controls_stay_in_sync_without_losing_formats_or_names() {
+    let mut state = custom(0);
+    state.preferences.greeting_name = "Ana".into();
+    for (kind, target) in [
+        (Kind::Greeting, Target::GreetingToggle),
+        (Kind::Date, Target::DateToggle),
+        (Kind::Weather, Target::WeatherToggle),
+    ] {
+        state.focus = target.clone();
+        assert_eq!(state.activate(), vec![Effect::Save]);
+        assert!(
+            state
+                .preferences
+                .home_layout
+                .as_ref()
+                .unwrap()
+                .widget(kind)
+                .is_none()
+        );
+        state.focus = target;
+        assert_eq!(state.activate(), vec![Effect::Save]);
+        assert!(
+            state
+                .preferences
+                .home_layout
+                .as_ref()
+                .unwrap()
+                .widget(kind)
+                .is_some()
+        );
+    }
+    assert_eq!(state.preferences.greeting_name, "Ana");
+    assert!(state.preferences.home_layout.as_ref().unwrap().valid());
+}
+
+#[test]
+fn home_layout_widget_absence_disables_weather_without_a_network_request() {
+    let mut state = custom(2);
+    state.preferences.weather_location = Some(crate::weather::Location {
+        name: "Berlin".into(),
+        latitude: 52.52,
+        longitude: 13.405,
+        country: String::new(),
+        region: String::new(),
+    });
+    state.preferences.show_weather = true;
+    assert!(
+        state
+            .weather
+            .sync(&state.preferences, true, 1000)
+            .0
+            .is_none()
+    );
+}
+
+#[test]
+fn home_layout_native_back_cancels_once_and_consumes_the_physical_press() {
+    use sdl2::keyboard::Keycode;
+    use std::time::{Duration, Instant};
+    let mut state = ready();
+    state.edit_layout();
+    state.activate();
+    action(&mut state, 0);
+    state.direction(Direction::Right, &controls(&state));
+    let mut button = crate::BackButton::default();
+    let now = Instant::now();
+    assert!(button.key_down(&mut state, Keycode::AcBack, now).is_empty());
+    assert!(matches!(
+        state.layout_editor.as_ref().unwrap().mode,
+        Mode::Menu(_)
+    ));
+    assert_eq!(
+        state.layout_editor.as_ref().unwrap().draft.widgets[0].column,
+        0
+    );
+    assert!(!button.native_hold(now + Duration::from_millis(1000)));
+    assert_eq!(
+        button.release(Keycode::AcBack, now + Duration::from_millis(1100)),
+        None
+    );
+    assert!(matches!(
+        state.layout_editor.as_ref().unwrap().mode,
+        Mode::Menu(_)
+    ));
+    assert!(state.overlay.is_none());
+}
+
+#[test]
+fn home_layout_explicit_presets_and_reset_restore_widgets_hidden_by_minimal() {
+    let mut state = custom(2);
+    state.preferences.show_weather = false;
+    state.preferences.show_date = false;
+    state.edit_layout();
+    state.focus = Target::LayoutToolbar(1);
+    state.activate();
+    action(&mut state, 0);
+    assert!(
+        state
+            .layout_editor
+            .as_ref()
+            .unwrap()
+            .draft
+            .widget(Kind::Weather)
+            .is_some()
+    );
+    assert!(
+        state
+            .layout_editor
+            .as_ref()
+            .unwrap()
+            .draft
+            .widget(Kind::Date)
+            .is_some()
+    );
+    state.layout_editor.as_mut().unwrap().draft.widgets.clear();
+    state.focus = Target::LayoutToolbar(2);
+    state.activate();
+    assert_eq!(state.layout_editor.as_ref().unwrap().draft.widgets.len(), 8);
+    assert!(!state.preferences.show_weather);
+    assert!(!state.preferences.show_date);
+}

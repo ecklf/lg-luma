@@ -250,7 +250,7 @@ impl State {
     }
 
     pub fn open_recents(&mut self) -> Vec<Effect> {
-        if self.overlay.is_some() || self.moving.is_some() {
+        if self.overlay.is_some() || self.moving.is_some() || self.layout_editor.is_some() {
             return vec![];
         }
         self.overlay = Some(Overlay::Recents {

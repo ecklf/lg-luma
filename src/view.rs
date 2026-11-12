@@ -21,6 +21,8 @@ const FACE_HEIGHT: f32 = 154.4;
 const GRID_PITCH: f32 = 296.4;
 const RECENTS_BACKDROP_OPACITY: f32 = 0.86;
 
+#[path = "home-layout-view.rs"]
+mod home_layout_view;
 #[path = "recents-view.rs"]
 mod recents_view;
 
@@ -567,6 +569,9 @@ pub fn scene_with_pill(
         out.draw.push(Draw::Clip(Some(viewport)));
     }
     match state.page {
+        Page::Home if state.home_layout().is_some() => {
+            home_layout_view::home(&mut out, state, assets, now)
+        }
         Page::Home => home(&mut out, state, assets, now),
         Page::Apps => library(&mut out, state, assets),
         Page::Settings => settings(&mut out, state, assets),
@@ -609,7 +614,12 @@ pub fn scene_with_pill(
     }
     out.draw.push(Draw::EdgeFade(None));
     out.draw.push(Draw::Clip(None));
-    header(&mut out, state, assets, now, pill_x, pill_width);
+    if state.page != Page::Home || state.home_layout().is_none() {
+        header(&mut out, state, assets, now, pill_x, pill_width);
+    }
+    if state.layout_editor.is_some() {
+        home_layout_view::editor(&mut out, state, assets);
+    }
     if let Some(
         overlay @ (Overlay::Options { .. }
         | Overlay::Delete { .. }
@@ -633,7 +643,7 @@ pub fn scene_with_pill(
                     // full hit region here stretches the lifted card vertically.
                     let mut rect = control.rect;
                     let names = if state.page == Page::Home {
-                        state.preferences.show_home_names
+                        state.home_widget(crate::home_layout::Kind::Favorites).map_or(state.preferences.show_home_names, |w| w.labels)
                     } else {
                         state.preferences.show_app_names
                     };
@@ -981,6 +991,9 @@ fn app_face(
 }
 
 fn caption_height(state: &State, assets: &Assets, app: &App, width: f32) -> f32 {
+    if state.page == Page::Home && state.home_layout().is_some() {
+        return 58.24;
+    }
     let title = format!(
         "{}{}",
         app.title,
@@ -1296,96 +1309,101 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             width,
             104.,
         );
-        let focused = state.focus == Target::Input(input.id.clone());
-        out.shadow(
-            rect,
-            18.4,
-            if focused { 34. } else { 4. },
-            if focused { 14. } else { 1. },
-            if focused { 0.4 } else { 0.01 },
-        );
-        out.draw.push(Draw::RoundedGradient(
-            rect,
-            18.4,
-            if focused {
-                c(0x30363c, 0.70)
-            } else {
-                c(0x20252b, 0.60)
-            },
-            if focused {
-                c(0x242a30, 0.65)
-            } else {
-                c(0x171c22, 0.55)
-            },
-        ));
-        out.border(
-            rect,
-            18.4,
-            1.,
-            c(0xffffff, if focused { 0.24 } else { 0.063 }),
-        );
-        let art = Rect::new(rect.x + 21., rect.y + 24., 56., 56.);
-        out.draw.push(Draw::RoundedGradient(
-            art,
-            12.8,
-            c(0xd6d6d6, 0.24),
-            c(0xa0a0a0, 0.10),
-        ));
-        let name = state.preferences.input_name(input);
-        let icon = state
-            .preferences
-            .input_icon(&input.id)
-            .unwrap_or_else(|| input_icon(input, name));
-        let size = if icon == "apple-tv" { 41.6 } else { 35.2 };
-        out.icon(
-            assets,
-            &format!("input-{icon}"),
-            Rect::new(
-                art.x + (56. - size) / 2.,
-                art.y + (56. - size) / 2.,
-                size,
-                size,
-            ),
-            c(0xdedede, 1.),
-        );
-        // Text starts after the 56px artwork and keeps its 21px inset on the right.
-        // Each row has room for one line: shrink to a readable floor, then
-        // ellipsize. Shrunk text stays centred on its row.
-        let text_width = rect.w - 93. - 21.;
-        let rows = [
-            (
-                state.preferences.input_title(input).to_owned(),
-                text(24., 500, -0.03),
-                18.,
-                24.3,
-                28.8,
-                WHITE,
-            ),
-            (
-                input_status(input, name.is_some(), language),
-                text(16.8, 400, 0.).leading(1.5),
-                14.,
-                57.4,
-                25.2,
-                c(0xe8e8e8, 0.48),
-            ),
-        ];
-        for (value, base, min, y, height, color) in rows {
-            let (line, style) = assets.fit_line(&value, base, text_width, min);
-            let shift = (base.size - style.size) * base.line_height / 2.;
-            out.text(
-                line,
-                Rect::new(rect.x + 93., rect.y + y + shift, text_width, height),
-                style,
-                color,
-                false,
-            );
-        }
-        if focused {
-            out.ring(rect, 18.4);
-        }
-        out.control(Target::Input(input.id.clone()), rect, true);
+        input_card(out, state, assets, input, rect);
     }
+}
+
+fn input_card(out: &mut Scene, state: &State, assets: &Assets, input: &Input, rect: Rect) {
+    let language = state.preferences.language;
+    let focused = state.focus == Target::Input(input.id.clone());
+    out.shadow(
+        rect,
+        18.4,
+        if focused { 34. } else { 4. },
+        if focused { 14. } else { 1. },
+        if focused { 0.4 } else { 0.01 },
+    );
+    out.draw.push(Draw::RoundedGradient(
+        rect,
+        18.4,
+        if focused {
+            c(0x30363c, 0.70)
+        } else {
+            c(0x20252b, 0.60)
+        },
+        if focused {
+            c(0x242a30, 0.65)
+        } else {
+            c(0x171c22, 0.55)
+        },
+    ));
+    out.border(
+        rect,
+        18.4,
+        1.,
+        c(0xffffff, if focused { 0.24 } else { 0.063 }),
+    );
+    let art = Rect::new(rect.x + 21., rect.y + 24., 56., 56.);
+    out.draw.push(Draw::RoundedGradient(
+        art,
+        12.8,
+        c(0xd6d6d6, 0.24),
+        c(0xa0a0a0, 0.10),
+    ));
+    let name = state.preferences.input_name(input);
+    let icon = state
+        .preferences
+        .input_icon(&input.id)
+        .unwrap_or_else(|| input_icon(input, name));
+    let size = if icon == "apple-tv" { 41.6 } else { 35.2 };
+    out.icon(
+        assets,
+        &format!("input-{icon}"),
+        Rect::new(
+            art.x + (56. - size) / 2.,
+            art.y + (56. - size) / 2.,
+            size,
+            size,
+        ),
+        c(0xdedede, 1.),
+    );
+    // Text starts after the 56px artwork and keeps its 21px inset on the right.
+    // Each row has room for one line: shrink to a readable floor, then
+    // ellipsize. Shrunk text stays centred on its row.
+    let text_width = rect.w - 93. - 21.;
+    let rows = [
+        (
+            state.preferences.input_title(input).to_owned(),
+            text(24., 500, -0.03),
+            18.,
+            24.3,
+            28.8,
+            WHITE,
+        ),
+        (
+            input_status(input, name.is_some(), language),
+            text(16.8, 400, 0.).leading(1.5),
+            14.,
+            57.4,
+            25.2,
+            c(0xe8e8e8, 0.48),
+        ),
+    ];
+    for (value, base, min, y, height, color) in rows {
+        let (line, style) = assets.fit_line(&value, base, text_width, min);
+        let shift = (base.size - style.size) * base.line_height / 2.;
+        out.text(
+            line,
+            Rect::new(rect.x + 93., rect.y + y + shift, text_width, height),
+            style,
+            color,
+            false,
+        );
+    }
+    if focused {
+        out.ring(rect, 18.4);
+    }
+    out.control(Target::Input(input.id.clone()), rect, true);
 }
 
 struct WeatherSummary {
@@ -2588,6 +2606,21 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             out.draw.extend(actions);
         }
         WIDGETS_SECTION => {
+            row(
+                out,
+                state,
+                assets,
+                Row {
+                    target: Target::LayoutEdit,
+                    rect: Rect::new(640., 164.8 - s, 1120., 72.),
+                    title: language.t("layoutEdit"),
+                    icon: Some("grid"),
+                    value: None,
+                    description: None,
+                    selected: false,
+                    chevron: true,
+                },
+            );
             for (index, (widget, key, icon)) in [
                 (4, "date", "clock"),
                 (0, "greeting", "type"),
@@ -2604,7 +2637,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     assets,
                     Row {
                         target: Target::Widget(widget),
-                        rect: Rect::new(640., 164.8 + index as f32 * 84. - s, 1120., 72.),
+                        rect: Rect::new(640., 248.8 + index as f32 * 84. - s, 1120., 72.),
                         title: language.t(key),
                         icon: Some(icon),
                         value: None,
@@ -3658,7 +3691,12 @@ fn toast(out: &mut Scene, state: &State, assets: &Assets, notice: &str) {
     let text_height =
         assets.lines(notice, style, width - 40.) as f32 * style.size * style.line_height;
     let height = 20. + text_height;
-    let rect = Rect::new(960. - width / 2., 1080. - 51.2 - height, width, height);
+    let bottom = if state.layout_editor.is_some() {
+        936.
+    } else {
+        1080. - 51.2
+    };
+    let rect = Rect::new(960. - width / 2., bottom - height, width, height);
     out.shadow(rect, 16., 18., 4., 0.06);
     out.shape(rect, 16., c(0x171c20, 0.72));
     out.border(rect, 16., 1., c(0xffffff, 0.07));
@@ -3672,7 +3710,7 @@ fn toast(out: &mut Scene, state: &State, assets: &Assets, notice: &str) {
     if state.focus == Target::DismissNotice {
         out.border(rect, 16., 2., WHITE);
     }
-    if state.overlay.is_none() {
+    if state.overlay.is_none() && state.layout_editor.is_none() {
         out.control(Target::DismissNotice, rect, false);
     }
     if !state.preferences.reduced_motion
