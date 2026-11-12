@@ -750,8 +750,13 @@ without the hook gives LG's Home back. Verified on an LG 49UN7100
 
 webOS 24 (9.x) also uses this method because its SAM has no `releaseBlockSystemApp` to reread a
 mounted Home manifest. The author verified takeover, same-process Home-key relaunch and cold-boot
-reapplication on one LG OLED65G46LA (2024 G4), running `9.2.4-48`. No other 9.x models have been
-tested; treat this path as experimental rather than a claim of support for every webOS 24 TV.
+reapplication on one LG OLED65G46LA (2024 G4), running `9.2.4-48`. A
+[community report](https://github.com/ecklf/lg-luma/issues/225) also confirms executable takeover,
+cold-boot reapplication and repeated Home-key activation on an LG 50QNED816RE running `9.2.2-61`
+with Luma 2.18.0. The reporter initially saw LG Home on the first startup after enabling Quick
+Start+, with subsequent startups and wakes behaving as expected. This does not verify
+same-process relaunch or early-boot timing on that model; treat this path as experimental rather
+than a claim of support for every webOS 24 TV.
 
 ### Home lifecycle on webOS 10/11
 

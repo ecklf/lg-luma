@@ -71,10 +71,11 @@ clear cached artwork and reload it without changing your preferences.
 <details>
 <summary>webOS 24</summary>
 
-| TV    | Model identifier | Takeover Support |
-| ----- | ---------------- | ---------------- |
-| LG G4 | `OLED65G46LA`    | ✅               |
-| LG B2 | `OLED65B29LA`    | ✅               |
+| TV        | Model identifier | Takeover Support |
+| --------- | ---------------- | ---------------- |
+| LG G4     | `OLED65G46LA`    | ✅               |
+| LG B2     | `OLED65B29LA`    | ✅               |
+| LG QNED81 | `50QNED816RE`    | ✅               |
 
 </details>
 
@@ -122,6 +123,9 @@ Add this custom repository URL to Homebrew Channel:
 ```text
 https://github.com/ecklf/lg-luma/releases/latest/download/repo.json
 ```
+
+Upvote [the official Homebrew Channel repository PR](https://github.com/webosbrew/apps-repo/pull/343)
+to help make Luma available by default.
 
 ### SSH
 
@@ -191,8 +195,6 @@ of restarting it. The commands and the cold-boot hook are the same.
 
 webOS 24 belongs here rather than with 25/26 because its SAM has no `releaseBlockSystemApp`, so a
 mounted Home manifest is never reread and the manifest method fails on that missing method.
-Verified on an `OLED65G46LA` (2024 G4, `9.2.4-48`); other 9.x models should behave the same, but
-have not been tested yet.
 
 On webOS 5/6, a cold boot opens Luma at about 20 s instead of after the Homebrew hook (~50 s or
 later). The Homebrew hooks start late, but LG's service hub reads `/var/luna-service2` at
@@ -323,10 +325,8 @@ Open [webOS Dev Manager](https://github.com/webosbrew/dev-manager-desktop), conn
 IP on port **22** as **root**, and install the IPK. Open **Luma** from the TV menu. Homebrew
 Channel must be elevated; on webOS 26 use **0.8.0-rc1 or newer** for its `lunabus.query` mapping.
 
-The native package uses **`com.ecklf.luma`** and installs separately from the old
-`com.luma.launcher` web app and the former `com.luma.launcher.native` / `com.luma.native` prototypes. Native preferences
-are local JSON files and are separate for each installation; browser preferences are not migrated.
-Homebrew Channel treats this ID as a separate app rather than an update to the old launcher.
+The native package uses **`com.ecklf.luma`**. Preferences are stored in local JSON files
+separately for each installation.
 
 Wait for installation success; Ctrl+C closes an ongoing subscription. Fully close and reopen
 Luma after updating. The [development guide](development.md#tv-startup-diagnostics) has a jailed
