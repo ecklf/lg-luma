@@ -77,11 +77,6 @@ clear cached artwork and reload it without changing your preferences.
 | LG B2     | `OLED65B29LA`    | ✅               |
 | LG QNED81 | `50QNED816RE`    | ✅               |
 
-The [LG 50QNED816RE community report](https://github.com/ecklf/lg-luma/issues/225) confirms
-executable Home takeover with Luma 2.18.0 on firmware `9.2.2-61`, including cold-boot
-reapplication and repeated Home-key activation. After enabling Quick Start+, the first startup
-initially showed LG Home; subsequent startups and wakes behaved as expected.
-
 </details>
 
 <details>
