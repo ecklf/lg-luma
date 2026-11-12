@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 
 pub const CATEGORIES: [&str; 4] = ["Streaming", "Music", "Gaming", "Utilities"];
+/// Background that draws no image, so live TV or the current input shows through.
+/// Luma then opens as a webOS overlay window, which the TV keeps playing behind.
+pub const LIVE_TV_BACKGROUND: &str = "live-tv";
 pub const BACKGROUNDS: [(&str, &str); 9] = [
     ("slate", "Slate"),
     ("midnight", "Midnight"),
@@ -407,7 +410,8 @@ impl Preferences {
         }) {
             self.splash_background = None;
         }
-        if !BACKGROUNDS.iter().any(|(id, _)| *id == self.background)
+        if self.background != LIVE_TV_BACKGROUND
+            && !BACKGROUNDS.iter().any(|(id, _)| *id == self.background)
             && !crate::wallpapers::valid_id(&self.background)
         {
             self.background = "dunes".into();

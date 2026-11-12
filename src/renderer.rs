@@ -329,6 +329,8 @@ pub struct Renderer {
     vector_program: GLuint,
     text_program: GLuint,
     text_embolden: f32,
+    /// Clear to transparent instead of the opaque base colour (live TV background).
+    pub transparent: bool,
     buffer: GLuint,
     vao: GLuint,
     white: Texture,
@@ -450,6 +452,7 @@ impl Renderer {
             vector_program,
             text_program,
             text_embolden,
+            transparent: false,
             buffer,
             vao,
             white,
@@ -1308,7 +1311,11 @@ impl Renderer {
         unsafe {
             gl::Viewport(0, 0, width as i32, height as i32);
             scissor(damage);
-            gl::ClearColor(0.04, 0.04, 0.05, 1.);
+            if self.transparent {
+                gl::ClearColor(0., 0., 0., 0.);
+            } else {
+                gl::ClearColor(0.04, 0.04, 0.05, 1.);
+            }
             gl::Clear(gl::COLOR_BUFFER_BIT);
             gl::Viewport(vx, vy, vw, vh);
             if self.vao != 0 {
