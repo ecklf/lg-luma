@@ -704,7 +704,7 @@ out of the last app, standby wake with the TV's chosen Quick Start+ setting, a f
 saved preferences and restoring LG Home. The broader webOS 6+ app compatibility statement does
 not establish Home-replacement support on older firmware.
 
-### Running in place of LG's Home executable (webOS 5/6/24)
+### Running in place of LG's Home executable (webOS 5/6/7/24)
 
 On webOS 5 the manifest takeover above does not apply: SAM restarts a v1 native Home on every
 Home launch. A root integration can instead bind-mount the installed `luma` executable over LG's
@@ -733,7 +733,7 @@ is bound to that executable path. Luma detects this (`platform::runs_as_lg_home`
 - skips the per-icon elevated-service fallback for installed artwork: as root every file is
   readable, so that fallback would only spend seconds per icon to fail the same way.
 
-`tv/home.sh` chooses this method (`"method": "executable"` in `state.json`) on webOS 5/6 and 24 (9.x) when LG
+`tv/home.sh` chooses this method (`"method": "executable"` in `state.json`) on webOS 5/6/7 and 24 (9.x) when LG
 Home's manifest is native, starts `file:///usr/bin/com.webos.app.home` and declares
 `nativeLifeCycleInterfaceVersion: 2`. `enable` and the boot hook bind-mount the installed
 executable over that path, stop the previous Home process and open Home if it was in front (or
@@ -747,6 +747,11 @@ tile launch redirects to the Home instance: the tile's jail sees `/usr/bin` with
 shares `/var/run`, which is volatile like the mount itself. LG's file stays underneath, and a cold boot
 without the hook gives LG's Home back. Verified on an LG 49UN7100
 (webOS 5): Home key to Luma in about 0.4 s instead of a restart of about 2 s.
+
+webOS 7 (webOS 22) is allowed through the same native Home and lifecycle-v2 checks. Filesystem
+fixtures cover method selection, incompatible manifest rejection, enable and disable for both
+Home targets. This is experimental, not hardware verification: remote Home-key relaunch,
+standby, cold-boot reapplication and LG Home restoration still need testing on a webOS 7 TV.
 
 webOS 24 (9.x) also uses this method because its SAM has no `releaseBlockSystemApp` to reread a
 mounted Home manifest. The author verified takeover, same-process Home-key relaunch and cold-boot

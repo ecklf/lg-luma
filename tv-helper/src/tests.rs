@@ -301,6 +301,7 @@ fn home_methods_reject_unknown_firmware_or_lifecycle() {
     for release in [
         "Rockhopper release 5.6.2",
         "Rockhopper release 6.5.0",
+        "Rockhopper release 7.3.0",
         "Rockhopper release 9.2.4-48 (ombre-okapi)",
     ] {
         assert_eq!(
@@ -314,7 +315,7 @@ fn home_methods_reject_unknown_firmware_or_lifecycle() {
             "manifest"
         );
     }
-    for release in ["Rockhopper release 4.10.2", "Rockhopper release 7.3.0"] {
+    for release in ["Rockhopper release 4.10.2", "Rockhopper release 8.3.0"] {
         assert!(home::method(release, &stock(home::HOME), home::HOME).is_err());
     }
     // webOS 24 has the executable method only, so it still needs a native Home.
@@ -326,6 +327,53 @@ fn home_methods_reject_unknown_firmware_or_lifecycle() {
     assert!(home::method("release 5.6.2", &bad, home::HOME).is_err());
     assert!(home::method("release 10.1.0", &stock(home::FULL_HOME), home::FULL_HOME).is_err());
     assert!(home::Home::new(&Fixture::new(), "../other").is_err());
+}
+#[test]
+fn webos7_executable_takeover_requires_a_matching_native_home() {
+    for id in [home::HOME, home::FULL_HOME] {
+        let manifest = stock(id);
+        assert_eq!(
+            home::method("Rockhopper release 7.3.0", &manifest, id).unwrap(),
+            "executable"
+        );
+        for (field, value) in [
+            ("type", json!("web")),
+            ("main", json!("file:///usr/bin/other-home")),
+            ("nativeLifeCycleInterfaceVersion", json!(1)),
+            ("nativeLifeCycleInterfaceVersion", Value::Null),
+        ] {
+            let mut invalid = manifest.clone();
+            invalid[field] = value;
+            assert!(home::method("Rockhopper release 7.3.0", &invalid, id).is_err());
+        }
+    }
+}
+#[test]
+fn webos7_enable_and_disable_preserve_the_stock_home() {
+    for id in [home::HOME, home::FULL_HOME] {
+        let f = Fixture::new();
+        f.put("/etc/starfish-release", b"Rockhopper release 7.3.0");
+        home::dispatch(&f, "enable", Some(DIR), Some(id)).unwrap();
+        let config = home::load(&f).unwrap().unwrap();
+        assert_eq!(config.method, "executable");
+        assert_eq!(config.home_id, id);
+        assert!(config.enabled);
+        assert!(system::same_file(
+            &f,
+            format!("/usr/bin/{id}"),
+            format!("{DIR}/luma")
+        ));
+        assert_eq!(
+            system::json(&f, format!("/usr/palm/applications/{id}/appinfo.json")).unwrap(),
+            stock(id)
+        );
+        home::dispatch(&f, "disable", None, None).unwrap();
+        assert_eq!(
+            f.read(&format!("/usr/bin/{id}")),
+            format!("stock-{id}").as_bytes()
+        );
+        assert!(!home::load(&f).unwrap().unwrap().enabled);
+    }
 }
 #[test]
 fn only_luma_mounts_are_owned_even_after_package_replacement() {
