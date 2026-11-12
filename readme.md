@@ -325,10 +325,8 @@ Open [webOS Dev Manager](https://github.com/webosbrew/dev-manager-desktop), conn
 IP on port **22** as **root**, and install the IPK. Open **Luma** from the TV menu. Homebrew
 Channel must be elevated; on webOS 26 use **0.8.0-rc1 or newer** for its `lunabus.query` mapping.
 
-The native package uses **`com.ecklf.luma`** and installs separately from the old
-`com.luma.launcher` web app and the former `com.luma.launcher.native` / `com.luma.native` prototypes. Native preferences
-are local JSON files and are separate for each installation; browser preferences are not migrated.
-Homebrew Channel treats this ID as a separate app rather than an update to the old launcher.
+The native package uses **`com.ecklf.luma`**. Preferences are stored in local JSON files
+separately for each installation.
 
 Wait for installation success; Ctrl+C closes an ongoing subscription. Fully close and reopen
 Luma after updating. The [development guide](development.md#tv-startup-diagnostics) has a jailed
