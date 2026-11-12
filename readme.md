@@ -125,7 +125,7 @@ https://github.com/ecklf/lg-luma/releases/latest/download/repo.json
 ```
 
 Upvote [the official Homebrew Channel repository PR](https://github.com/webosbrew/apps-repo/pull/343)
-to bring it to the maintainers' attention.
+to help make Luma available by default in Homebrew Channel.
 
 ### SSH
 
