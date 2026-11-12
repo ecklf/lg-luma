@@ -125,7 +125,7 @@ https://github.com/ecklf/lg-luma/releases/latest/download/repo.json
 ```
 
 Upvote [the official Homebrew Channel repository PR](https://github.com/webosbrew/apps-repo/pull/343)
-to help it get maintainer visibility.
+to bring it to the maintainers' attention.
 
 ### SSH
 
