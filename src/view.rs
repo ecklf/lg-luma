@@ -842,14 +842,52 @@ fn tile(
     }
     let start = out.draw.len();
     let focused = state.focus == Target::App(app.id.clone());
+    let home = state.page == Page::Home;
+    let amount = if home {
+        state.home_focus.amount(&app.id)
+    } else if focused {
+        1.
+    } else {
+        0.
+    };
+    let base_rect = rect;
+    // Keep hitboxes and navigation geometry fixed, including when using the Magic Remote.
+    let rect = if home {
+        let scale = 1. + 0.07 * amount;
+        Rect::new(
+            rect.x - rect.w * (scale - 1.) / 2.,
+            rect.y - rect.h * (scale - 1.) / 2. - 5. * amount,
+            rect.w * scale,
+            rect.h * scale,
+        )
+    } else {
+        rect
+    };
     out.shadow(
         rect,
         19.2,
-        if focused { 34. } else { 22. },
-        if focused { 14. } else { 9. },
-        if focused { 0.4 } else { 0.165 },
+        22. + 12. * amount,
+        9. + 5. * amount,
+        0.165 + 0.235 * amount,
     );
+
+    if home && amount > 0. {
+        // Two inexpensive GPU distance-field glows, with no texture blur or CPU readback.
+        out.draw.push(Draw::Shadow(
+            rect.inset(-3.),
+            22.2,
+            32.,
+            c(0xdceaff, 0.32 * amount),
+        ));
+        out.draw.push(Draw::Shadow(
+            rect,
+            19.2,
+            10.,
+            c(0xffffff, 0.45 * amount),
+        ));
+    }
     let favorite_color = app_face(out, assets, app, rect, state.preferences.language, 19.2);
+
     if pinned {
         favorite_badge(out, assets, rect, favorite_color);
     }
@@ -874,7 +912,9 @@ fn tile(
             c(0xededed, 1.),
         );
     }
-    if focused {
+    if home {
+        out.border(rect, 19.2, 1.4, c(0xffffff, 0.65 * amount));
+    } else if focused {
         out.ring(rect, 19.2);
     }
     if state.page == Page::Apps && state.filter == 5 {
@@ -883,6 +923,8 @@ fn tile(
     if state.pressed.as_ref() == Some(&Target::App(app.id.clone())) {
         out.fade(start, 1., 0.85);
     }
+    // Labels remain anchored so toggling focus does not shift text or neighbouring controls.
+    let rect = base_rect;
     if names {
         out.text(
             format!(

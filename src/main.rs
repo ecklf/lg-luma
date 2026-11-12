@@ -10,6 +10,7 @@ mod damage;
 mod diagnostics;
 mod egl_damage;
 mod font;
+mod home_focus;
 mod i18n;
 #[path = "input-refresh.rs"]
 mod input_refresh;
@@ -1719,6 +1720,8 @@ fn run() -> Result<(), String> {
         }
         let dt = last_frame.elapsed().as_secs_f32().min(0.1);
         last_frame = Instant::now();
+        // Update after input so a focus change starts in this frame, without an idle wait.
+        state.animate_home_focus(dt);
         let navigation = view::navigation(&assets, state.preferences.language);
         let target = navigation.items[state.page_index()].x;
         let target_width = navigation.items[state.page_index()].w;
