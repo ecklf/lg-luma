@@ -195,9 +195,6 @@ of restarting it. The commands and the cold-boot hook are the same.
 
 webOS 24 belongs here rather than with 25/26 because its SAM has no `releaseBlockSystemApp`, so a
 mounted Home manifest is never reread and the manifest method fails on that missing method.
-Verified on an `OLED65G46LA` (2024 G4, `9.2.4-48`), with community confirmation on a
-`50QNED816RE` (`9.2.2-61`, Luma 2.18.0; [#225](https://github.com/ecklf/lg-luma/issues/225)).
-These reports do not establish compatibility with every 9.x model or firmware.
 
 On webOS 5/6, a cold boot opens Luma at about 20 s instead of after the Homebrew hook (~50 s or
 later). The Homebrew hooks start late, but LG's service hub reads `/var/luna-service2` at
