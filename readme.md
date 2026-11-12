@@ -124,6 +124,9 @@ Add this custom repository URL to Homebrew Channel:
 https://github.com/ecklf/lg-luma/releases/latest/download/repo.json
 ```
 
+Upvote [the official Homebrew Channel repository PR](https://github.com/webosbrew/apps-repo/pull/343)
+to help it get maintainer visibility.
+
 ### SSH
 
 On your computer, replace `TV_IP`:
