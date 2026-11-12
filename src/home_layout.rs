@@ -10,7 +10,6 @@ pub const GAP: f32 = 24.;
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
     Clock,
-    Navigation,
     Settings,
     Date,
     Greeting,
@@ -20,9 +19,8 @@ pub enum Kind {
 }
 
 impl Kind {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 7] = [
         Self::Clock,
-        Self::Navigation,
         Self::Settings,
         Self::Date,
         Self::Greeting,
@@ -34,7 +32,6 @@ impl Kind {
     pub fn key(self) -> &'static str {
         match self {
             Self::Clock => "clock",
-            Self::Navigation => "layoutNavigation",
             Self::Settings => "tvSettings",
             Self::Date => "date",
             Self::Greeting => "greeting",
@@ -49,9 +46,8 @@ impl Kind {
             Self::Favorites => (3, 7),
             Self::Inputs => (3, 4),
             Self::Greeting => (3, 3),
-            Self::Navigation => (3, 2),
             Self::Weather => (3, 2),
-            Self::Clock => (2, 2),
+            Self::Clock => (1, 2),
             Self::Date => (2, 1),
             Self::Settings => (1, 2),
         }
@@ -79,10 +75,8 @@ pub struct Widget {
     /// 0 = small, 1 = normal, 2 = large. Independent of the viewport width.
     pub size: u8,
     pub alignment: Alignment,
-    pub heading: bool,
     pub labels: bool,
     pub large_clock: bool,
-    pub compact_navigation: bool,
 }
 
 impl Default for Widget {
@@ -92,14 +86,12 @@ impl Default for Widget {
             kind: Kind::Clock,
             column: 0,
             row: 0,
-            width: 3,
+            width: 1,
             height: 2,
             size: 1,
             alignment: Alignment::Left,
-            heading: true,
             labels: false,
             large_clock: false,
-            compact_navigation: false,
         }
     }
 }
@@ -121,9 +113,7 @@ impl Widget {
         };
         let width = width.min(self.rect().w);
         if self.kind == Kind::Favorites {
-            let available = self.rect().h
-                - if self.heading { 42. } else { 8. }
-                - if self.labels { 76.64 } else { 0. };
+            let available = self.rect().h - 8. - if self.labels { 76.64 } else { 0. };
             width.min(available * 256. / 154.4)
         } else {
             width
@@ -136,6 +126,20 @@ impl Widget {
             && u16::from(self.row) < u16::from(other.row) + u16::from(other.height)
             && u16::from(other.row) < u16::from(self.row) + u16::from(self.height)
     }
+
+    /// The centered page navigation is permanent, not part of the editable canvas.
+    pub fn overlaps_navigation(&self) -> bool {
+        self.row < 2 && self.column < 9 && u16::from(self.column) + u16::from(self.width) > 3
+    }
+}
+
+pub fn cell_rect(column: u8, row: u8) -> Rect {
+    Rect::new(
+        84. + f32::from(column) * 148.,
+        48. + f32::from(row) * 40.,
+        124.,
+        32.,
+    )
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -162,8 +166,13 @@ impl Layout {
                 ..Widget::default()
             });
         };
-        add(Kind::Clock, 0, 0, 3, 2);
-        add(Kind::Navigation, 8, 0, 3, 2);
+        add(
+            Kind::Clock,
+            0,
+            0,
+            if preferences.show_seconds { 2 } else { 1 },
+            2,
+        );
         add(Kind::Settings, 11, 0, 1, 2);
         match index {
             1 => {
@@ -205,10 +214,11 @@ impl Layout {
 
     pub fn valid(&self) -> bool {
         self.version == 1
-            && self.widgets.len() <= 9
+            && self.widgets.len() <= 8
             && self.widgets.iter().enumerate().all(|(i, w)| {
                 let (min_w, min_h) = w.kind.minimum();
                 w.id != 0
+                    && !w.overlaps_navigation()
                     && w.size <= 2
                     && w.width >= min_w
                     && w.height >= min_h
@@ -276,7 +286,32 @@ impl Layout {
 
 /// Bad, unknown-version, or overlapping layouts cannot make Home inaccessible.
 pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Layout>, D::Error> {
-    let value = serde_json::Value::deserialize(deserializer)?;
+    let mut value = serde_json::Value::deserialize(deserializer)?;
+    // Earlier previews stored navigation as a movable widget. Drop that instance
+    // without discarding the owner's other widgets, IDs, or appearance settings.
+    if let Some(widgets) = value
+        .get_mut("widgets")
+        .and_then(serde_json::Value::as_array_mut)
+    {
+        let legacy_navigation = widgets.iter().any(|widget| {
+            widget.get("kind").and_then(serde_json::Value::as_str) == Some("navigation")
+        });
+        widgets.retain(|widget| {
+            widget.get("kind").and_then(serde_json::Value::as_str) != Some("navigation")
+        });
+        for widget in widgets {
+            if legacy_navigation
+                && widget.get("kind").and_then(serde_json::Value::as_str) == Some("clock")
+                && widget
+                    .get("large_clock")
+                    .and_then(serde_json::Value::as_bool)
+                    != Some(true)
+                && widget.get("width").and_then(serde_json::Value::as_u64) == Some(3)
+            {
+                widget["width"] = 1.into();
+            }
+        }
+    }
     Ok(serde_json::from_value::<Layout>(value)
         .ok()
         .filter(Layout::valid))
@@ -298,6 +333,7 @@ pub enum Mode {
 pub struct Editor {
     pub draft: Layout,
     pub mode: Mode,
+    pub show_grid: bool,
 }
 
 #[cfg(test)]
@@ -344,7 +380,7 @@ mod tests {
         let mut layout = Layout::preset(0, &Preferences::default());
         let original = layout.clone();
         let mut candidate = layout.widgets[0].clone();
-        candidate.column = 9;
+        candidate.column = 11;
         assert!(!layout.replace(candidate));
         assert_eq!(layout, original);
         assert!(layout.add(Kind::Favorites).is_none());

@@ -59,7 +59,6 @@ pub(super) fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetD
             Kind::Weather => weather_widget(out, state, assets, widget),
             Kind::Favorites => favorites(out, state, assets, widget),
             Kind::Inputs => inputs(out, state, assets, widget),
-            Kind::Navigation => navigation_widget(out, state, assets, widget),
             Kind::Settings => {
                 let button = Rect::new(
                     rect.x + (rect.w - 60.) / 2.,
@@ -79,19 +78,6 @@ pub(super) fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetD
             }
         }
         out.draw.push(Draw::Clip(None));
-    }
-    // A removed navigation widget must never strand the owner outside Settings.
-    if layout.widget(Kind::Navigation).is_none() {
-        let rect = Rect::new(1776., 8., 60., 32.);
-        let focused = state.focus == Target::Nav(2);
-        out.pill(rect, focused, false);
-        out.icon(
-            assets,
-            "settings",
-            Rect::new(rect.x + 20., rect.y + 6., 20., 20.),
-            if focused { c(0x20252b, 1.) } else { WHITE },
-        );
-        out.control(Target::Nav(2), rect, false);
     }
 }
 
@@ -125,74 +111,9 @@ fn label(
     );
 }
 
-fn navigation_widget(out: &mut Scene, state: &State, assets: &Assets, widget: &Widget) {
-    let rect = widget.rect();
-    let count = if widget.compact_navigation { 2 } else { 3 };
-    let width = (rect.w - 12. * (count - 1) as f32) / count as f32;
-    for index in 0..count {
-        let tab = if widget.compact_navigation {
-            index + 1
-        } else {
-            index
-        };
-        let button = Rect::new(
-            rect.x + index as f32 * (width + 12.),
-            rect.y + (rect.h - 56.) / 2.,
-            width,
-            56.,
-        );
-        out.pill(button, state.focus == Target::Nav(tab), tab == 0);
-        if widget.compact_navigation {
-            out.icon(
-                assets,
-                if tab == 1 { "grid" } else { "settings" },
-                Rect::new(button.x + (width - 24.) / 2., button.y + 16., 24., 24.),
-                if state.focus == Target::Nav(tab) {
-                    c(0x20252b, 1.)
-                } else {
-                    WHITE
-                },
-            );
-        } else {
-            label(
-                out,
-                assets,
-                state
-                    .preferences
-                    .language
-                    .t(["home", "apps", "settings"][tab]),
-                button.inset(12.),
-                20.8,
-                Alignment::Center,
-                if state.focus == Target::Nav(tab) {
-                    c(0x2c2c2c, 1.)
-                } else {
-                    WHITE
-                },
-            );
-        }
-        out.control(Target::Nav(tab), button, false);
-    }
-}
-
-fn heading(out: &mut Scene, state: &State, widget: &Widget) -> f32 {
-    if !widget.heading {
-        return 8.;
-    }
-    let rect = widget.rect();
-    out.text(
-        state.preferences.language.t(widget.kind.key()),
-        Rect::new(rect.x, rect.y, rect.w, 32.),
-        text(23.2, 550, -0.035),
-        WHITE,
-        false,
-    );
-    42.
-}
-
 fn favorites(out: &mut Scene, state: &State, assets: &Assets, widget: &Widget) {
     let rect = widget.rect();
-    let top = heading(out, state, widget);
+    let top = 8.;
     let width = widget.card_width().min(rect.w);
     let apps = state.apps();
     if apps.is_empty() {
@@ -262,7 +183,7 @@ fn favorites(out: &mut Scene, state: &State, assets: &Assets, widget: &Widget) {
 
 fn inputs(out: &mut Scene, state: &State, assets: &Assets, widget: &Widget) {
     let rect = widget.rect();
-    let top = heading(out, state, widget);
+    let top = 8.;
     let width = widget.card_width().min(rect.w);
     let inputs: Vec<_> = state
         .inventory
@@ -371,6 +292,30 @@ pub(super) fn editor(out: &mut Scene, state: &State, assets: &Assets) {
     out.controls.clear();
     out.draw.push(Draw::Clip(None));
     out.shape(Rect::new(0., 0., 1920., 1080.), 0., c(0x080b12, 0.22));
+    if editor.show_grid {
+        for row in 0..crate::home_layout::ROWS {
+            for column in 0..crate::home_layout::COLUMNS {
+                let cell = Widget {
+                    column,
+                    row,
+                    width: 1,
+                    height: 1,
+                    ..Widget::default()
+                };
+                if !cell.overlaps_navigation()
+                    && !editor
+                        .draft
+                        .widgets
+                        .iter()
+                        .any(|widget| cell.overlaps(widget))
+                {
+                    let rect = crate::home_layout::cell_rect(column, row);
+                    out.shape(rect, 4., c(0xffffff, 0.035));
+                    out.border(rect, 4., 1., c(0xffffff, 0.10));
+                }
+            }
+        }
+    }
     for widget in &editor.draft.widgets {
         let rect = widget.rect();
         let selected = state.focus == Target::LayoutWidget(widget.id);
@@ -399,10 +344,26 @@ pub(super) fn editor(out: &mut Scene, state: &State, assets: &Assets) {
     };
     out.text(
         language.t(instruction),
-        Rect::new(84., 952., 1752., 28.),
+        Rect::new(84., 952., 1430., 28.),
         text(18., 450, 0.),
         WHITE,
         false,
+    );
+    editor_button(
+        out,
+        state,
+        assets,
+        Target::LayoutToolbar(5),
+        &format!(
+            "{} · {}",
+            language.t("layoutGrid"),
+            language.t(if editor.show_grid {
+                "stateOn"
+            } else {
+                "stateOff"
+            })
+        ),
+        Rect::new(1556., 948., 280., 36.),
     );
     for (index, key) in [
         "layoutAdd",
@@ -475,9 +436,8 @@ pub(super) fn editor(out: &mut Scene, state: &State, assets: &Assets) {
         ),
         Mode::Configure(id) => {
             let widget = editor.draft.widgets.iter().find(|w| w.id == *id).unwrap();
-            let mut items = vec![];
-            if widget.kind != Kind::Navigation {
-                items.push((
+            let mut items =
+                vec![(
                     0,
                     "layoutSize",
                     Some(
@@ -486,8 +446,7 @@ pub(super) fn editor(out: &mut Scene, state: &State, assets: &Assets) {
                                 [usize::from(widget.size)])
                             .to_owned(),
                     ),
-                ));
-            }
+                )];
             if matches!(widget.kind, Kind::Clock | Kind::Date | Kind::Greeting) {
                 items.push((
                     1,
@@ -510,21 +469,11 @@ pub(super) fn editor(out: &mut Scene, state: &State, assets: &Assets) {
                         .to_owned(),
                 )
             };
-            if matches!(widget.kind, Kind::Favorites | Kind::Inputs) {
-                items.push((2, "layoutHeading", on_off(widget.heading)));
-            }
             if widget.kind == Kind::Favorites {
                 items.push((3, "appNames", on_off(widget.labels)));
             }
             if widget.kind == Kind::Clock {
                 items.push((4, "layoutLargeClock", on_off(widget.large_clock)));
-            }
-            if widget.kind == Kind::Navigation {
-                items.push((
-                    5,
-                    "layoutCompactNavigation",
-                    on_off(widget.compact_navigation),
-                ));
             }
             panel(out, state, assets, "layoutConfigure", items);
         }

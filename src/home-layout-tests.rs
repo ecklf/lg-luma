@@ -61,7 +61,7 @@ fn home_layout_move_and_resize_confirm_cancel_and_collision_are_transactional() 
     assert!(state.layout_editor.as_ref().unwrap().draft.valid());
     assert_eq!(
         state.layout_editor.as_ref().unwrap().draft.widgets[0].column,
-        5
+        2
     );
     assert!(state.activate().is_empty());
     assert!(
@@ -300,7 +300,7 @@ fn home_layout_remote_crosses_side_by_side_widgets_using_geometry() {
 }
 
 #[test]
-fn home_layout_removed_navigation_keeps_settings_and_empty_layout_recoverable() {
+fn home_layout_empty_layout_keeps_permanent_navigation_recoverable() {
     let mut state = custom(0);
     state
         .preferences
@@ -310,10 +310,11 @@ fn home_layout_removed_navigation_keeps_settings_and_empty_layout_recoverable() 
         .widgets
         .clear();
     state.open(0);
-    assert_eq!(state.focus, Target::Nav(2));
+    assert_eq!(state.focus, Target::Nav(0));
     let scene = scene(&state);
-    assert_eq!(scene.controls.len(), 1);
-    assert_eq!(scene.controls[0].target, Target::Nav(2));
+    assert_eq!(scene.controls.len(), 3);
+    assert_eq!(scene.controls[0].target, Target::Nav(0));
+    state.focus = Target::Nav(2);
     state.activate();
     assert_eq!(state.page, Page::Settings);
     assert_eq!(state.first_content(), Target::Sidebar(0));
@@ -473,7 +474,161 @@ fn home_layout_explicit_presets_and_reset_restore_widgets_hidden_by_minimal() {
     state.layout_editor.as_mut().unwrap().draft.widgets.clear();
     state.focus = Target::LayoutToolbar(2);
     state.activate();
-    assert_eq!(state.layout_editor.as_ref().unwrap().draft.widgets.len(), 8);
+    assert_eq!(state.layout_editor.as_ref().unwrap().draft.widgets.len(), 7);
     assert!(!state.preferences.show_weather);
     assert!(!state.preferences.show_date);
+}
+
+#[test]
+fn home_layout_navigation_is_fixed_centered_and_never_in_the_widget_palette() {
+    use crate::renderer::Draw;
+    for language in crate::i18n::Language::ALL {
+        for preset in 0..3 {
+            let mut state = custom(preset);
+            state.preferences.language = language;
+            let rendered = scene(&state);
+            let tabs: Vec<_> = rendered
+                .controls
+                .iter()
+                .filter(|c| matches!(c.target, Target::Nav(_)))
+                .collect();
+            assert_eq!(tabs.len(), 3);
+            let left = tabs[0].rect.x;
+            let right = tabs[2].rect.x + tabs[2].rect.w;
+            assert!(((left + right) / 2. - 960.).abs() < 0.1);
+            assert!(left >= 528. && right <= 1392.);
+            assert!(!rendered.draw.iter().any(|d| matches!(d, Draw::Text(value, ..) if value == language.t("favorites") || value == language.t("inputs"))));
+            state.edit_layout();
+            state.focus = Target::LayoutToolbar(0);
+            state.activate();
+            assert!(
+                !scene_text(&scene(&state)).contains(&language.t("layoutNavigation").to_owned())
+            );
+        }
+    }
+}
+
+fn scene_text(scene: &view::Scene) -> Vec<String> {
+    scene
+        .draw
+        .iter()
+        .filter_map(|draw| match draw {
+            crate::renderer::Draw::Text(value, ..) => Some(value.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn home_layout_grid_toggle_only_changes_guides_and_keeps_pointer_targets_still() {
+    use crate::renderer::Draw;
+    let mut state = custom(0);
+    state.edit_layout();
+    let draft = state.layout_editor.as_ref().unwrap().draft.clone();
+    let before = scene(&state);
+    let guide_count = |scene: &view::Scene| {
+        scene.draw.iter().filter(|draw| matches!(draw, Draw::Shape(_, radius, width, color) if *radius == 4. && *width == 0. && (color[3] - 0.035).abs() < 0.0001)).count()
+    };
+    assert!(guide_count(&before) > 0);
+    state.pointer_focus(Target::LayoutToolbar(5));
+    assert!(state.activate().is_empty());
+    assert!(!state.layout_editor.as_ref().unwrap().show_grid);
+    let after = scene(&state);
+    assert_eq!(guide_count(&after), 0);
+    assert_eq!(draft, state.layout_editor.as_ref().unwrap().draft);
+    for control in before.controls {
+        let current = after
+            .controls
+            .iter()
+            .find(|c| c.target == control.target)
+            .unwrap();
+        assert_eq!(
+            (
+                control.rect.x,
+                control.rect.y,
+                control.rect.w,
+                control.rect.h
+            ),
+            (
+                current.rect.x,
+                current.rect.y,
+                current.rect.w,
+                current.rect.h
+            )
+        );
+    }
+    state.activate();
+    assert!(guide_count(&scene(&state)) > 0);
+}
+
+#[test]
+fn home_layout_reserves_navigation_cells_and_keeps_compact_clock_tight() {
+    let mut state = custom(0);
+    let clock = state.home_widget(Kind::Clock).unwrap();
+    assert_eq!(clock.width, 1);
+    assert_eq!(clock.rect().w, 124.);
+    let mut candidate = clock.clone();
+    candidate.column = 3;
+    assert!(
+        !state
+            .preferences
+            .home_layout
+            .as_mut()
+            .unwrap()
+            .replace(candidate)
+    );
+    state.preferences.show_seconds = true;
+    assert_eq!(
+        Layout::preset(0, &state.preferences)
+            .widget(Kind::Clock)
+            .unwrap()
+            .width,
+        2
+    );
+    for column in 0..12 {
+        let cell = crate::home_layout::cell_rect(column, 3);
+        assert_eq!(cell.w, 124.);
+        assert_eq!(cell.h, 32.);
+        if column < 11 {
+            assert_eq!(
+                crate::home_layout::cell_rect(column + 1, 3).x - cell.x - cell.w,
+                24.
+            );
+        }
+    }
+}
+
+#[test]
+fn home_layout_old_navigation_and_heading_fields_migrate_without_losing_other_widgets() {
+    let mut layout = serde_json::to_value(Layout::preset(0, &Preferences::default())).unwrap();
+    let widgets = layout["widgets"].as_array_mut().unwrap();
+    widgets[0]["width"] = 3.into();
+    widgets.push(json!({"id": 99, "kind": "navigation", "column": 8, "row": 0, "width": 3, "height": 2, "compact_navigation": true}));
+    for widget in widgets.iter_mut() {
+        widget["heading"] = true.into();
+    }
+    let restored: Preferences =
+        serde_json::from_value(json!({"home_layout": layout, "greeting_name": "Ana"})).unwrap();
+    let restored_layout = restored.home_layout.as_ref().unwrap();
+    assert_eq!(restored_layout.widgets.len(), 7);
+    assert_eq!(restored_layout.widget(Kind::Clock).unwrap().width, 1);
+    assert_eq!(restored.greeting_name, "Ana");
+    let output = serde_json::to_string(&restored).unwrap();
+    assert!(!output.contains("\"navigation\""));
+    assert!(!output.contains("heading"));
+    assert!(!output.contains("compact_navigation"));
+    // A newly resized compact clock must not be mistaken for the old default on reload.
+    let mut custom_layout = restored_layout.clone();
+    custom_layout.widgets[0].width = 3;
+    assert!(custom_layout.valid());
+    let saved: Preferences = serde_json::from_value(json!({"home_layout": custom_layout})).unwrap();
+    assert_eq!(
+        saved
+            .home_layout
+            .unwrap()
+            .widget(Kind::Clock)
+            .unwrap()
+            .width,
+        3
+    );
 }

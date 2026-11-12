@@ -53,11 +53,28 @@ try {
   assert.deepEqual(editor.focus, { LayoutWidget: 1 });
   assert.ok(editor.ui_text.includes('Save layout'));
   assert.equal(editor.preferences.home_layout, null);
+  const gridHidden = await scenario('layout-editor-grid-hidden', `${edit},click:1680:965`);
+  assert.ok(gridHidden.ui_text.includes('Show grid · Off'));
+  assert.equal(gridHidden.preferences.home_layout, null);
+  const gridShown = await scenario(
+    'layout-editor-grid-shown',
+    `${edit},click:1680:965,click:1680:965`,
+  );
+  assert.ok(gridShown.ui_text.includes('Show grid · On'));
   const classic = await scenario(
     'layout-classic-remote-save',
     `${edit},down,down,down,down,down,down,right,right,right,enter,home`,
   );
-  assert.equal(classic.preferences.home_layout.widgets.length, 8);
+  assert.equal(classic.preferences.home_layout.widgets.length, 7);
+  assert.ok(
+    !classic.preferences.home_layout.widgets.some((widget) => widget.kind === 'navigation'),
+  );
+  assert.equal(
+    classic.preferences.home_layout.widgets.find((widget) => widget.kind === 'clock').width,
+    1,
+  );
+  assert.ok(!classic.ui_text.includes('Favorites'));
+  assert.ok(!classic.ui_text.includes('Inputs'));
   assert.equal(classic.page, 'Home');
   const split = await scenario(
     'layout-split',
@@ -106,7 +123,7 @@ try {
     preferences,
     JSON.stringify({ ...saved, home_layout: { version: 1, widgets: [] } }),
   );
-  const empty = await scenario('layout-recovery', 'home,enter');
+  const empty = await scenario('layout-recovery', 'home,right,right,enter');
   assert.equal(empty.page, 'Settings');
   await fs.writeFile(
     preferences,

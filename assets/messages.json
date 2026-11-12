@@ -1,4 +1,21 @@
 {
+  "layoutGrid": {
+    "en": "Show grid",
+    "de": "Raster anzeigen",
+    "es": "Mostrar cuadrícula",
+    "fr": "Afficher la grille",
+    "it": "Mostra griglia",
+    "pt": "Mostrar grade",
+    "nl": "Raster tonen",
+    "sv": "Visa rutnät",
+    "ca": "Mostra la graella",
+    "cs": "Zobrazit mřížku",
+    "pl": "Pokaż siatkę",
+    "ru": "Показать сетку",
+    "vi": "Hiện lưới",
+    "zh": "显示网格",
+    "zh-tw": "顯示網格"
+  },
   "layoutEdit": {
     "en": "Edit home layout",
     "de": "Startseite bearbeiten",

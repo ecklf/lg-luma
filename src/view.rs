@@ -614,9 +614,7 @@ pub fn scene_with_pill(
     }
     out.draw.push(Draw::EdgeFade(None));
     out.draw.push(Draw::Clip(None));
-    if state.page != Page::Home || state.home_layout().is_none() {
-        header(&mut out, state, assets, now, pill_x, pill_width);
-    }
+    header(&mut out, state, assets, now, pill_x, pill_width);
     if state.layout_editor.is_some() {
         home_layout_view::editor(&mut out, state, assets);
     }
@@ -733,18 +731,20 @@ fn header(
     pill_width: f32,
 ) {
     let language = state.preferences.language;
-    let clock = language.clock(
-        now,
-        state.preferences.hour_24,
-        state.preferences.show_seconds,
-    );
-    out.text(
-        clock,
-        Rect::new(84., 62.4, 300., 28.8),
-        text(24., 500, -0.03),
-        WHITE,
-        false,
-    );
+    if state.page != Page::Home || state.home_layout().is_none() {
+        let clock = language.clock(
+            now,
+            state.preferences.hour_24,
+            state.preferences.show_seconds,
+        );
+        out.text(
+            clock,
+            Rect::new(84., 62.4, 300., 28.8),
+            text(24., 500, -0.03),
+            WHITE,
+            false,
+        );
+    }
     let layout = navigation(assets, language);
     let nav = layout.surface;
     out.shadow(nav, 48., 18., 4., 0.06);
@@ -785,6 +785,9 @@ fn header(
             true,
         );
         out.control(Target::Nav(index), rect, false);
+    }
+    if state.page == Page::Home && state.home_layout().is_some() {
+        return;
     }
     let button_size = 60.;
     let rect = Rect::new(
@@ -1180,13 +1183,6 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             top + date_height + greeting_height,
         );
     }
-    out.text(
-        language.t("favorites"),
-        Rect::new(84., 478.5 - s, 1000., 31.),
-        text(23.2, 550, -0.035).leading(1.3),
-        WHITE,
-        false,
-    );
     if state.moving.is_some() {
         out.text(
             language.t("moveApps"),
@@ -1288,15 +1284,6 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         .iter()
         .filter(|input| state.preferences.input_visible(input))
         .collect();
-    if !inputs.is_empty() {
-        out.text(
-            language.t("inputsHeading"),
-            Rect::new(84., input_y + 3.3, 1000., 31.),
-            text(23.2, 550, -0.035).leading(1.3),
-            WHITE,
-            false,
-        );
-    }
     // LG TVs have at most four HDMI ports, so one row fits every model and
     // cards keep their size when Auto shows or hides an input.
     const COLUMNS: usize = 4;

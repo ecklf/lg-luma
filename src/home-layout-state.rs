@@ -77,6 +77,7 @@ impl State {
         self.layout_editor = Some(Editor {
             draft,
             mode: Mode::Select,
+            show_grid: true,
         });
         self.home_scroll = 0.;
         self.input_scroll = 0.;
@@ -110,6 +111,11 @@ impl State {
                 }
                 3 => return self.finish_layout(true),
                 4 => return self.finish_layout(false),
+                5 => {
+                    let editor = self.layout_editor.as_mut().unwrap();
+                    editor.show_grid = !editor.show_grid;
+                    return vec![];
+                }
                 _ => return vec![],
             }
             self.focus = Target::LayoutAction(0);
@@ -135,11 +141,7 @@ impl State {
                     }
                     2 => {
                         editor.mode = Mode::Configure(id);
-                        self.focus = Target::LayoutAction(if widget.kind == Kind::Navigation {
-                            5
-                        } else {
-                            0
-                        });
+                        self.focus = Target::LayoutAction(0);
                     }
                     3 => {
                         editor.draft.widgets.retain(|w| w.id != id);
@@ -178,10 +180,8 @@ impl State {
                                 Alignment::Right => Alignment::Left,
                             }
                         }
-                        2 => widget.heading = !widget.heading,
                         3 => widget.labels = !widget.labels,
                         4 => widget.large_clock = !widget.large_clock,
-                        5 => widget.compact_navigation = !widget.compact_navigation,
                         _ => {}
                     }
                 }
@@ -312,6 +312,17 @@ impl State {
 
     /// Each strip owns horizontal navigation; crossing its end uses actual screen geometry.
     pub fn widget_direction(&mut self, direction: Direction, controls: &[Control]) {
+        if let Target::Nav(index) = self.focus {
+            let next = match direction {
+                Direction::Left => index.checked_sub(1),
+                Direction::Right if index < 2 => Some(index + 1),
+                _ => None,
+            };
+            if let Some(next) = next {
+                self.open(next);
+                return;
+            }
+        }
         if matches!(direction, Direction::Left | Direction::Right) {
             let targets: Vec<_> = match &self.focus {
                 Target::App(_) => self

@@ -264,20 +264,11 @@ pub struct State {
 
 impl State {
     pub fn new(preferences: Preferences) -> Self {
-        let focus = if preferences.home_layout.as_ref().is_some_and(|layout| {
-            layout
-                .widget(crate::home_layout::Kind::Navigation)
-                .is_none_or(|w| w.compact_navigation)
-        }) {
-            Target::Nav(2)
-        } else {
-            Target::Nav(0)
-        };
         Self {
             layout_editor: None,
             input_scroll: 0.,
             page: Page::Home,
-            focus,
+            focus: Target::Nav(0),
             inventory: Inventory::default(),
             preferences,
             query: String::new(),
@@ -483,15 +474,6 @@ impl State {
             _ => Page::Home,
         };
         self.focus = Target::Nav(self.page_index());
-        if self.page == Page::Home
-            && self.preferences.home_layout.as_ref().is_some_and(|layout| {
-                layout
-                    .widget(crate::home_layout::Kind::Navigation)
-                    .is_none_or(|w| w.compact_navigation)
-            })
-        {
-            self.focus = Target::Nav(2);
-        }
         self.scroll = 0.;
         if self.page == Page::Home {
             self.scroll_favorites(0.);

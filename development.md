@@ -79,19 +79,24 @@ Select a widget with the remote or pointer, then choose Move, Resize, Configure,
 Move uses arrow-key grid steps; Resize uses Left/Right for width and Up/Down for height.
 OK confirms an operation; Back restores its original geometry. Back from the canvas offers
 Save, Discard, or Continue. The fixed footer also offers Add, Presets, Reset, Save, and Discard.
+Show grid toggles translucent, gapped boxes for available cells without changing the saved layout.
 Pointer selection uses the same controls; moving and resizing use the remote/keyboard arrows,
 not freeform dragging. Favorite-app reordering remains separate from widget placement.
 
 `src/home_layout.rs` owns version-1 placement, safe bounds, minimum sizes, collision checks,
 stable instance IDs, and presets. The logical canvas has 12 columns and 22 vertical steps;
-no widget overlap or offscreen placement is accepted. One instance of each kind is allowed,
+no widget overlap or offscreen placement is accepted. The top-center navigation area is reserved
+and excluded from placement and grid guides. One instance of each kind is allowed,
 except Clock, which supports two independently styled instances. Invalid or future-version
 layouts fall back to the unchanged legacy Home without dropping other preferences.
 `src/home-layout-state.rs` owns the draft and interaction state, and
 `src/home-layout-view.rs` renders the canvas and editor. Rendering, hit testing, wheel input,
 strip scrolling, and directional focus derive their bounds from the same widget rectangles.
-Decorative widgets are not focus stops outside the editor. Removing Navigation leaves a
-Settings recovery control above the canvas. Weather does not fetch while editing or when its
+Decorative widgets are not focus stops outside the editor. Page navigation is permanent and
+centered, using the same shared header on every page. Earlier preview layouts drop their Navigation
+instance and tighten the default compact clock without losing other widgets. Favorites and Inputs
+have no section headings or heading toggle. App-name preferences and input identification remain
+independent. Compact clocks start at one column, or two with seconds. Weather does not fetch while editing or when its
 widget is absent. Existing format, name, location, unit, and input configuration is retained.
 
 Desktop smoke coverage includes persisted layouts, editor cancellation, narrow-strip scrolling,

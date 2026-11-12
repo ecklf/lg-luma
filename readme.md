@@ -32,9 +32,10 @@ If installed app icons look stale, use **Settings → System → Reset icon cach
 clear cached artwork and reload it without changing your preferences.
 
 Customize Home in **Settings → Widgets → Edit home layout**. Move and resize independent
-Favorites, Inputs, Date, Greeting, Weather, Clock, Navigation, and TV Settings widgets on a
-snap-to-grid canvas. Start from Classic, Split, or Minimal, adjust content sizes and headings,
+Favorites, Inputs, Date, Greeting, Weather, Clock, and TV Settings widgets on a
+snap-to-grid canvas. Page navigation stays fixed and centered. Start from Classic, Split, or Minimal, adjust content sizes,
 and explicitly save or discard your changes. Narrow app and input strips scroll horizontally.
+Favorites and Inputs have no section headings. Toggle the editor’s translucent grid cells with **Show grid**.
 Existing installations keep their current Home until a layout is saved.
 
 ## Compatibility
