@@ -74,7 +74,7 @@ jobs:
           sudo apt-get "${apt_options[@]}" update
           # FontTools recommends large optional scientific Python packages. xauth is needed by xvfb-run.
           sudo apt-get "${apt_options[@]}" install -y --no-install-recommends \
-            libsdl2-dev pkg-config woff2 python3-fonttools libgl1-mesa-dri xvfb xauth
+            libsdl2-dev pkg-config woff2 python3-fonttools libgl1-mesa-dri libegl1 libgles2 xvfb xauth
       - name: Check formatting
         run: pnpm format:check
       - name: Lint Rust and packaging tools
@@ -126,7 +126,9 @@ jobs:
         run: |
           apt_options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
           sudo apt-get "${apt_options[@]}" update
-          sudo apt-get "${apt_options[@]}" install -y --no-install-recommends libsdl2-2.0-0 libgl1-mesa-dri xvfb xauth
+          # SDL loads EGL/GLES dynamically for the GLES rendering scenario.
+          sudo apt-get "${apt_options[@]}" install -y --no-install-recommends \
+            libsdl2-2.0-0 libgl1-mesa-dri libegl1 libgles2 xvfb xauth
       - uses: actions/download-artifact@v8
         with:
           name: smoke-inputs
