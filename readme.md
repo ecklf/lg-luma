@@ -42,7 +42,8 @@ date have been removed.
   **Luma Settings → Apps**. Hidden apps remain listed there.
 - The **Inputs** dropdown at the top left shows names, icons, and connection dots, respecting
   each input's Auto / On / Off visibility setting.
-- The **clock** at the top right opens **Luma Settings** or LG's native **TV settings**.
+- The **clock** opens floating Control Center-style actions for **Luma Settings** or LG's native
+  **TV settings**. LG's native settings UI is unchanged.
 
 Screenshots are native desktop previews, not hardware performance claims.
 

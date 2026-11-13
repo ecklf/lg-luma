@@ -108,6 +108,53 @@ try {
   assert.equal(clockMenu.modal, true);
   assert.ok(clockMenu.ui_text.includes('Luma Settings'));
   assert.ok(clockMenu.ui_text.includes('TV settings'));
+  for (const [name, environment] of [
+    ['control-center-gles', { LUMA_GLES: '1' }],
+    ['control-center-fallback', { LUMA_GLASS: '0' }],
+  ]) {
+    const center = await scenario(name, 'home,up,right,enter,down', [], 90, environment);
+    assert.equal(center.modal, true);
+    assert.equal(center.focus, 'TvSettings');
+    assert.equal(center.render.capture.glass_backdrop_sampling, name.endsWith('gles'));
+    assert.ok(center.ui_text.includes('Luma Settings'));
+    assert.ok(center.ui_text.includes('TV settings'));
+  }
+  const originalPreferences = await fs.readFile(preferences, 'utf8');
+  for (const [index, name, fill] of [
+    [2, 'light', '#ffffff'],
+    [3, 'dark', '#080808'],
+    [4, 'busy', 'url(#grid)'],
+  ]) {
+    const id = `custom-${String(index).repeat(32)}`;
+    const directory = path.join(temporary, 'wallpapers', id);
+    await fs.mkdir(directory, { recursive: true });
+    const svg = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="40" height="40" fill="#d8b58c"/><path d="M0 0h20v20H0zM20 20h20v20H20z" fill="#173e4c"/></pattern></defs><rect width="1920" height="1080" fill="${fill}"/></svg>`,
+    );
+    await sharp(svg).jpeg().toFile(path.join(directory, 'wallpaper.jpg'));
+    await sharp(svg).resize(480, 270).jpeg().toFile(path.join(directory, 'thumbnail.jpg'));
+    await fs.writeFile(path.join(directory, 'metadata.json'), JSON.stringify({ id }));
+    await fs.writeFile(
+      preferences,
+      JSON.stringify({ ...JSON.parse(originalPreferences), background: id }),
+    );
+    const center = await scenario(`glass-${name}`, 'home,up,right,enter');
+    assert.equal(center.preferences.background, id);
+    assert.equal(center.render.capture.glass_backdrop_sampling, true);
+    if (name === 'light') {
+      // Sample an empty interior area of the unselected TV control. On white,
+      // adaptive absorption must still leave room for readable white labels.
+      const { data } = await sharp(path.join(out, 'glass-light.png'))
+        .resize(1920, 1080)
+        .extract({ left: 1780, top: 425, width: 8, height: 8 })
+        .removeAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      assert.ok(Math.max(...data) < 150, 'Bright glass must adapt for white foregrounds');
+    }
+    await fs.rm(directory, { recursive: true });
+  }
+  await fs.writeFile(preferences, originalPreferences);
   const recents = await scenario('recents', 'recents,await-recents');
   assert.equal(recents.modal, true);
   assert.deepEqual(recents.focus, { Recent: 'netflix' });

@@ -26,6 +26,15 @@ float edge_coverage() {
         edge *= 1.0 - smoothstep(u_edge_fade_x.z, u_edge_fade_x.w, v_logical_x);
     return edge;
 }
+vec3 glass_sample(vec2 uv, float scattering) {
+    // Clamp each atlas half independently: no seam leakage or off-screen wrapping.
+    uv = clamp(uv, vec2(0.5 / 960.0, 0.5 / 540.0), vec2(959.5 / 960.0, 539.5 / 540.0));
+    vec2 sharp_uv = vec2(uv.x, uv.y * 0.5);
+    vec2 soft_uv = sharp_uv + vec2(0.0, 0.5);
+    vec3 sharp = mix(texture2D(u_glass_a, sharp_uv).rgb, texture2D(u_glass_b, sharp_uv).rgb, u_glass_mix);
+    vec3 soft = mix(texture2D(u_glass_a, soft_uv).rgb, texture2D(u_glass_b, soft_uv).rgb, u_glass_mix);
+    return mix(sharp, soft, scattering);
+}
 void main() {
     if (v_params.x < 0.0) {
         vec4 color = texture2D(u_texture, v_uv) * v_color;
@@ -47,15 +56,28 @@ void main() {
     if (glass) {
         vec3 color = v_color.rgb;
         if (u_glass_enabled) {
-            // Rounded SDF normal bends the wallpaper most strongly at the curved rim.
-            vec2 normal = sign(v_shape.xy) * normalize(max(q, vec2(0.001)));
-            float rim = 1.0 - smoothstep(0.0, 22.0, -d);
-            vec2 uv = (vec2(v_logical_x, v_logical_y) - normal * rim * 12.0) / vec2(1920.0, 1080.0);
-            vec3 backdrop = mix(texture2D(u_glass_a, uv).rgb, texture2D(u_glass_b, uv).rgb, u_glass_mix);
-            float tint = mix(0.66, 0.92, step(0.5, v_color.r));
-            color = mix(backdrop, v_color.rgb, tint);
-            float light = max(dot(normal, normalize(vec2(-0.5, -1.0))), 0.0);
-            color += vec3(0.035 + rim * (0.035 + light * 0.16));
+            // Exact rounded-box gradient, including axis-aligned flat edges.
+            vec2 outside = max(q, vec2(0.0));
+            vec2 axis = q.x > q.y ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+            vec2 normal = sign(v_shape.xy) * (max(q.x, q.y) > 0.0
+                ? outside / max(length(outside), 0.0001) : axis);
+            float depth = max(-d, 0.0);
+            float bevel = clamp(radius * 0.22, 4.0, 10.0);
+            float rim = 1.0 - smoothstep(0.0, bevel, depth);
+            // Bounded curved-lens profile, not a wide painted bevel.
+            float slope = rim * rim;
+            vec2 uv = (vec2(v_logical_x, v_logical_y) - normal * slope * 9.0) / vec2(1920.0, 1080.0);
+            float scattering = mix(0.25, 0.88, smoothstep(0.0, bevel * 2.0, depth));
+            vec3 backdrop = glass_sample(uv, scattering);
+            float luminance = dot(backdrop, vec3(0.2126, 0.7152, 0.0722));
+            float focused = step(0.5, v_color.r);
+            // Neutral adaptive absorption keeps white labels legible on bright imagery.
+            color = mix(backdrop, vec3(0.075), 0.14 + 0.44 * luminance);
+            color = mix(color, v_color.rgb, focused * 0.88);
+            float light = dot(normal, normalize(vec2(-0.55, -1.0)));
+            float specular = pow(abs(light), 5.0);
+            float hairline = 1.0 - smoothstep(0.0, 1.25, depth);
+            color += vec3(hairline * (0.07 + specular * 0.24) + slope * specular * 0.045);
         }
         gl_FragColor = vec4(color, alpha * v_color.a * edge_coverage());
         return;

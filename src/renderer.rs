@@ -1196,9 +1196,15 @@ impl Renderer {
         let key = format!("glass:{path}");
         let entry = self.textures.entry(key).or_insert_with(|| {
             image::open(path).ok().map(|image| {
-                let small = image.resize_exact(480, 270, image::imageops::FilterType::Triangle);
-                let blurred = small.blur(3.).to_rgba8();
-                texture(480, 270, blurred.as_raw())
+                // Two filter levels in one atlas keep the GLES2 sampler count unchanged.
+                // The rim retains detail while larger interiors scatter more light.
+                let small = image.resize_exact(960, 540, image::imageops::FilterType::Triangle);
+                let sharp = small.to_rgba8();
+                let blurred = small.blur(8.).to_rgba8();
+                let mut atlas = image::RgbaImage::new(960, 1080);
+                image::imageops::replace(&mut atlas, &sharp, 0, 0);
+                image::imageops::replace(&mut atlas, &blurred, 0, 540);
+                texture(960, 1080, atlas.as_raw())
             })
         });
         if let Some(texture) = entry {

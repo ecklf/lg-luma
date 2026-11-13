@@ -5,6 +5,32 @@ use crate::{
 };
 
 #[test]
+fn control_center_uses_separate_floating_actions_and_preserves_navigation() {
+    let mut state = ready();
+    state.focus = Target::SettingsMenu;
+    state.activate();
+    let rendered = scene(&state);
+    assert_eq!(rendered.controls.len(), 2);
+    for control in &rendered.controls {
+        assert_eq!(control.rect.x + control.rect.w, 1836.);
+        assert!(rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::Glass(rect, radius, _) if (rect.x, rect.y, rect.w, rect.h) ==
+                (control.rect.x, control.rect.y, control.rect.w, control.rect.h) && *radius == 44.
+        )));
+    }
+    let panel = rendered.modal.unwrap();
+    assert!(!rendered.draw.iter().any(|draw| matches!(draw,
+        Draw::Glass(rect, ..) if (rect.x, rect.y, rect.w, rect.h) == (panel.x, panel.y, panel.w, panel.h)
+    )));
+    assert_eq!(state.focus, Target::LumaSettings);
+    state.direction(Direction::Down, &rendered.controls);
+    assert_eq!(state.focus, Target::TvSettings);
+    state.back();
+    assert!(state.overlay.is_none());
+    assert_eq!(state.focus, Target::SettingsMenu);
+}
+
+#[test]
 fn down_opens_drawer_and_back_resets_to_first_favorite() {
     let mut state = ready();
     state.preferences.reduced_motion = true;

@@ -173,17 +173,21 @@ Back closes the drawer and resets focus and horizontal scroll to the first favor
 over either favorites dock scrolls horizontally. Pointer hover/down never initiates reveal scrolling.
 Grid Up/Down follows six-column indices, including offscreen rows, with the first row leading to
 the category/search toolbar. The top-left Inputs dropdown shows icons, names and connection dots,
-not descriptions. The clock dropdown offers Luma Settings and native LG TV settings.
+not descriptions. The clock opens two right-aligned, floating Control Center-style controls for
+Luma Settings and native LG TV settings. It does not replace LG's native settings UI.
 
 ### Liquid Glass renderer
 
 `Draw::Glass` is a GLES2 rounded-distance-field material inspired by
 [OverShifted/LiquidGlass](https://github.com/OverShifted/LiquidGlass). The implementation is original,
-not a vendored copy of that shader. It uses a cached 480×270 wallpaper backdrop with a small blur,
-edge refraction and directional highlights. Surfaces share the backdrop rather than each creating
+not a vendored copy of that shader. It caches sharp and blurred 960×540 wallpaper levels in one
+960×1080 atlas, with rounded-box normals, narrow edge lensing, adaptive neutral absorption and
+directional hairline highlights. The rim retains more detail than the interior. Surfaces share the backdrop rather than each creating
 an FBO or sampling the framebuffer. Text and app artwork are separate, sharp draws. Wallpaper
 crossfades blend both glass backdrops. Wallpaper changes already invalidate the full scene, while
 ordinary glass changes participate in damage tracking.
+
+See [the research notes](docs/liquid-glass-research.md) for sources, visual decisions and limitations.
 
 For bounded GLES2 cost, refraction samples the wallpaper, not other UI controls behind a menu.
 Cached backdrop textures use the existing texture budget and eviction. `LUMA_GLASS=0` disables

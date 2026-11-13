@@ -183,8 +183,7 @@ pub struct Scene {
 }
 impl Scene {
     fn glass(&mut self, rect: Rect, radius: f32) {
-        self.draw.push(Draw::Glass(rect, radius, c(0x18212b, 0.96)));
-        self.border(rect, radius, 1., c(0xffffff, 0.22));
+        self.draw.push(Draw::Glass(rect, radius, c(0x202020, 0.96)));
     }
     fn new() -> Self {
         Self {
@@ -751,49 +750,71 @@ fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
 
 fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
-    let inputs = matches!(state.overlay, Some(Overlay::Inputs));
-    let entries: Vec<_> = if inputs {
-        state
-            .inventory
-            .inputs
-            .iter()
-            .filter(|input| state.preferences.input_visible(input))
-            .map(|input| {
-                (
-                    Target::Input(input.id.clone()),
-                    state.preferences.input_title(input).to_owned(),
-                    format!(
-                        "input-{}",
-                        state
-                            .preferences
-                            .input_icon(&input.id)
-                            .unwrap_or_else(|| input_icon(
-                                input,
-                                state.preferences.input_name(input)
-                            ))
-                    ),
-                    input.connected,
-                )
-            })
-            .collect()
-    } else {
-        vec![
+    if matches!(state.overlay, Some(Overlay::Settings)) {
+        // Independent floating controls, not nested glass inside a glass panel.
+        let panel = Rect::new(1396., 148., 440., 340.);
+        out.controls.clear();
+        out.modal = Some(panel);
+        for (index, (target, label, icon)) in [
             (
                 Target::LumaSettings,
                 format!("Luma {}", language.t("settings")),
-                "settings".into(),
-                None,
+                "settings",
             ),
-            (
-                Target::TvSettings,
-                language.t("tvSettings").into(),
-                "tv".into(),
-                None,
-            ),
+            (Target::TvSettings, language.t("tvSettings").into(), "tv"),
         ]
-    };
+        .into_iter()
+        .enumerate()
+        {
+            let rect = Rect::new(panel.x, panel.y + index as f32 * 176., panel.w, 156.);
+            out.shadow(rect, 44., 28., 10., 0.24);
+            let focused = state.focus == target;
+            out.draw.push(Draw::Glass(
+                rect,
+                44.,
+                c(if focused { 0xe5ebf0 } else { 0x202020 }, 0.96),
+            ));
+            let foreground = if focused { c(0x242424, 1.) } else { WHITE };
+            out.icon(
+                assets,
+                icon,
+                Rect::new(rect.x + 28., rect.y + 47., 62., 62.),
+                foreground,
+            );
+            let (label, style) = assets.fit_line(&label, text(28., 550, -0.02), rect.w - 134., 19.);
+            out.text(
+                label,
+                Rect::new(rect.x + 114., rect.y + 59., rect.w - 134., 40.),
+                style,
+                foreground,
+                false,
+            );
+            out.control(target, rect, false);
+        }
+        return;
+    }
+    let entries: Vec<_> = state
+        .inventory
+        .inputs
+        .iter()
+        .filter(|input| state.preferences.input_visible(input))
+        .map(|input| {
+            (
+                Target::Input(input.id.clone()),
+                state.preferences.input_title(input).to_owned(),
+                format!(
+                    "input-{}",
+                    state
+                        .preferences
+                        .input_icon(&input.id)
+                        .unwrap_or_else(|| input_icon(input, state.preferences.input_name(input)))
+                ),
+                input.connected,
+            )
+        })
+        .collect();
     let panel = Rect::new(
-        if inputs { 84. } else { 1356. },
+        84.,
         128.,
         480.,
         (entries.len().max(1) as f32 * 76. + 24.).min(900.),
@@ -837,20 +858,18 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
             WHITE,
             false,
         );
-        if inputs {
-            out.shape(
-                Rect::new(rect.x + rect.w - 28., rect.y + 29., 10., 10.),
-                5.,
-                c(
-                    if connected == Some(true) {
-                        0x60e6a0
-                    } else {
-                        0x8c949c
-                    },
-                    1.,
-                ),
-            );
-        }
+        out.shape(
+            Rect::new(rect.x + rect.w - 28., rect.y + 29., 10., 10.),
+            5.,
+            c(
+                if connected == Some(true) {
+                    0x60e6a0
+                } else {
+                    0x8c949c
+                },
+                1.,
+            ),
+        );
         out.control(target, rect, false);
     }
     out.draw.push(Draw::Clip(None));
