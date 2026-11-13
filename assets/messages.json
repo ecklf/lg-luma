@@ -1,4 +1,21 @@
 {
+  "layoutStripResizeHint": {
+    "en": "Resize: Left/Right adjusts width. Height fits the content. OK confirms. Back cancels.",
+    "de": "Größe: Links/Rechts ändert die Breite. Die Höhe folgt dem Inhalt. OK bestätigt. Zurück verwirft.",
+    "es": "Tamaño: izquierda/derecha cambia el ancho. La altura se ajusta al contenido. OK confirma. Atrás cancela.",
+    "fr": "Taille : gauche/droite règle la largeur. La hauteur suit le contenu. OK confirme. Retour annule.",
+    "it": "Dimensioni: sinistra/destra cambia la larghezza. L’altezza segue il contenuto. OK conferma. Indietro annulla.",
+    "pt": "Tamanho: esquerda/direita ajusta a largura. A altura segue o conteúdo. OK confirma. Voltar cancela.",
+    "nl": "Formaat: links/rechts wijzigt de breedte. De hoogte volgt de inhoud. OK bevestigt. Terug annuleert.",
+    "sv": "Storlek: vänster/höger ändrar bredden. Höjden följer innehållet. OK bekräftar. Tillbaka ångrar.",
+    "ca": "Mida: esquerra/dreta ajusta l’amplada. L’alçada segueix el contingut. OK confirma. Enrere cancel·la.",
+    "cs": "Velikost: vlevo/vpravo mění šířku. Výška se přizpůsobí obsahu. OK potvrdí. Zpět zruší.",
+    "pl": "Rozmiar: lewo/prawo zmienia szerokość. Wysokość pasuje do zawartości. OK potwierdza. Wstecz anuluje.",
+    "ru": "Размер: влево/вправо меняет ширину. Высота зависит от содержимого. OK подтверждает. Назад отменяет.",
+    "vi": "Kích thước: trái/phải đổi chiều rộng. Chiều cao vừa nội dung. OK xác nhận. Quay lại hủy.",
+    "zh": "大小：左右调整宽度。高度随内容调整。OK 确认。返回取消。",
+    "zh-tw": "大小：左右調整寬度。高度依內容調整。OK 確認。返回取消。"
+  },
   "layoutGrid": {
     "en": "Show grid",
     "de": "Raster anzeigen",

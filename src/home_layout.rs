@@ -5,6 +5,10 @@ use serde::{Deserialize, Deserializer, Serialize};
 pub const COLUMNS: u8 = 12;
 pub const ROWS: u8 = 22;
 pub const GAP: f32 = 24.;
+pub const STRIP_TOP: f32 = 8.;
+pub const FAVORITE_ASPECT: f32 = 154.4 / 256.;
+pub const FAVORITE_LABEL_HEIGHT: f32 = 76.64;
+pub const INPUT_HEIGHT: f32 = 104.;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -43,8 +47,8 @@ impl Kind {
 
     pub fn minimum(self) -> (u8, u8) {
         match self {
-            Self::Favorites => (3, 7),
-            Self::Inputs => (3, 4),
+            Self::Favorites => (3, 4),
+            Self::Inputs => (3, 3),
             Self::Greeting => (3, 3),
             Self::Weather => (3, 2),
             Self::Clock => (1, 2),
@@ -102,7 +106,8 @@ impl Widget {
             84. + f32::from(self.column) * 148.,
             48. + f32::from(self.row) * 40.,
             f32::from(self.width) * 148. - GAP,
-            f32::from(self.height) * 40. - 8.,
+            self.content_height()
+                .unwrap_or(f32::from(self.height) * 40. - 8.),
         )
     }
 
@@ -111,12 +116,34 @@ impl Widget {
             Kind::Inputs => [320., 420., 480.][usize::from(self.size.min(2))],
             _ => [192., 256., 300.][usize::from(self.size.min(2))],
         };
-        let width = width.min(self.rect().w);
-        if self.kind == Kind::Favorites {
-            let available = self.rect().h - 8. - if self.labels { 76.64 } else { 0. };
-            width.min(available * 256. / 154.4)
-        } else {
-            width
+        width.min(f32::from(self.width) * 148. - GAP)
+    }
+
+    pub fn is_strip(&self) -> bool {
+        matches!(self.kind, Kind::Favorites | Kind::Inputs)
+    }
+
+    /// Strip bounds end at the last content pixel. Grid rounding belongs outside
+    /// the widget, not in an invisible bottom-padding region.
+    pub fn content_height(&self) -> Option<f32> {
+        match self.kind {
+            Kind::Favorites => Some(
+                STRIP_TOP
+                    + self.card_width() * FAVORITE_ASPECT
+                    + if self.labels {
+                        FAVORITE_LABEL_HEIGHT
+                    } else {
+                        0.
+                    },
+            ),
+            Kind::Inputs => Some(STRIP_TOP + INPUT_HEIGHT),
+            _ => None,
+        }
+    }
+
+    pub fn fit_content(&mut self) {
+        if let Some(height) = self.content_height() {
+            self.height = ((height + 8.) / 40.).ceil() as u8;
         }
     }
 
@@ -185,15 +212,15 @@ impl Layout {
                 if preferences.show_weather {
                     add(Kind::Weather, 8, 4, 4, 4);
                 }
-                add(Kind::Favorites, 0, 11, 7, 7);
-                add(Kind::Inputs, 8, 11, 4, 4);
+                add(Kind::Favorites, 0, 11, 7, 5);
+                add(Kind::Inputs, 8, 11, 4, 3);
             }
             2 => {
                 if preferences.show_greeting {
                     add(Kind::Greeting, 0, 5, 9, 3);
                 }
-                add(Kind::Favorites, 0, 11, 12, 7);
-                add(Kind::Inputs, 0, 18, 12, 4);
+                add(Kind::Favorites, 0, 11, 12, 5);
+                add(Kind::Inputs, 0, 18, 12, 3);
             }
             _ => {
                 if preferences.show_date {
@@ -205,9 +232,12 @@ impl Layout {
                 if preferences.show_weather {
                     add(Kind::Weather, 0, 8, 12, 2);
                 }
-                add(Kind::Favorites, 0, 11, 12, 7);
-                add(Kind::Inputs, 0, 18, 12, 4);
+                add(Kind::Favorites, 0, 11, 12, 5);
+                add(Kind::Inputs, 0, 18, 12, 3);
             }
+        }
+        for widget in &mut layout.widgets {
+            widget.fit_content();
         }
         layout
     }
@@ -222,6 +252,8 @@ impl Layout {
                     && w.size <= 2
                     && w.width >= min_w
                     && w.height >= min_h
+                    && w.content_height()
+                        .is_none_or(|height| w.height == ((height + 8.) / 40.).ceil() as u8)
                     && u16::from(w.column) + u16::from(w.width) <= u16::from(COLUMNS)
                     && u16::from(w.row) + u16::from(w.height) <= u16::from(ROWS)
                     && self.widgets[..i]
@@ -240,7 +272,8 @@ impl Layout {
         self.widgets.iter().find(|w| w.kind == kind)
     }
 
-    pub fn replace(&mut self, candidate: Widget) -> bool {
+    pub fn replace(&mut self, mut candidate: Widget) -> bool {
+        candidate.fit_content();
         let Some(index) = self.widgets.iter().position(|w| w.id == candidate.id) else {
             return false;
         };
@@ -264,7 +297,7 @@ impl Layout {
             .checked_add(1)?;
         for row in 0..=ROWS - height {
             for column in 0..=COLUMNS - width {
-                let widget = Widget {
+                let mut widget = Widget {
                     id,
                     kind,
                     column,
@@ -273,6 +306,7 @@ impl Layout {
                     height,
                     ..Widget::default()
                 };
+                widget.fit_content();
                 self.widgets.push(widget);
                 if self.valid() {
                     return Some(id);
@@ -314,6 +348,14 @@ pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<
     }
     Ok(serde_json::from_value::<Layout>(value)
         .ok()
+        .map(|mut layout| {
+            for widget in &mut layout.widgets {
+                if widget.height >= widget.kind.minimum().1 {
+                    widget.fit_content();
+                }
+            }
+            layout
+        })
         .filter(Layout::valid))
 }
 

@@ -77,6 +77,11 @@ backend. Avoid copying the whole SDK library directory or the TV's graphics driv
 Settings → Widgets → Edit home layout opens a draft, never writing preferences until Save.
 Select a widget with the remote or pointer, then choose Move, Resize, Configure, or Remove.
 Move uses arrow-key grid steps; Resize uses Left/Right for width and Up/Down for height.
+Favorites and Inputs are content-height strips: only width is resized directly. Their outlines
+end at the cards or app captions, and only the required grid rows are reserved. Card size and
+app-name changes recompute this footprint and reject overlaps. Spacing belongs between grid
+placements, not inside a padded strip. Earlier layouts shrink their reserved strip heights on
+load without changing card coordinates, widths, or saved row positions.
 OK confirms an operation; Back restores its original geometry. Back from the canvas offers
 Save, Discard, or Continue. The fixed footer also offers Add, Presets, Reset, Save, and Discard.
 Show grid toggles translucent, gapped boxes for available cells without changing the saved layout.

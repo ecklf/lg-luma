@@ -170,7 +170,8 @@ impl State {
             }
             Mode::Configure(id) => {
                 let editor = self.layout_editor.as_mut().unwrap();
-                if let Some(widget) = editor.draft.widgets.iter_mut().find(|w| w.id == id) {
+                if let Some(mut widget) = editor.draft.widgets.iter().find(|w| w.id == id).cloned()
+                {
                     match index {
                         0 => widget.size = (widget.size + 1) % 3,
                         1 => {
@@ -183,6 +184,9 @@ impl State {
                         3 => widget.labels = !widget.labels,
                         4 => widget.large_clock = !widget.large_clock,
                         _ => {}
+                    }
+                    if !editor.draft.replace(widget) {
+                        self.notify(self.preferences.language.t("layoutBlocked"));
                     }
                 }
                 self.home_scroll = 0.;
@@ -254,6 +258,12 @@ impl State {
         match &editor.mode {
             Mode::Move(before) | Mode::Resize(before) => {
                 let resize = matches!(editor.mode, Mode::Resize(_));
+                if resize
+                    && before.is_strip()
+                    && matches!(direction, Direction::Up | Direction::Down)
+                {
+                    return;
+                }
                 let mut candidate = editor
                     .draft
                     .widgets

@@ -113,7 +113,7 @@ fn label(
 
 fn favorites(out: &mut Scene, state: &State, assets: &Assets, widget: &Widget) {
     let rect = widget.rect();
-    let top = 8.;
+    let top = crate::home_layout::STRIP_TOP;
     let width = widget.card_width().min(rect.w);
     let apps = state.apps();
     if apps.is_empty() {
@@ -133,7 +133,7 @@ fn favorites(out: &mut Scene, state: &State, assets: &Assets, widget: &Widget) {
             Alignment::Left,
             WHITE,
         );
-        let button = Rect::new(rect.x, rect.y + top + 72., rect.w.min(280.), 48.);
+        let button = Rect::new(rect.x, rect.y + top + 64., rect.w.min(280.), 48.);
         let target = if state.error.is_some() {
             Target::Retry
         } else {
@@ -158,12 +158,7 @@ fn favorites(out: &mut Scene, state: &State, assets: &Assets, widget: &Widget) {
         }
     }
     for (index, app) in apps.iter().enumerate() {
-        let labels = if widget.labels {
-            18.4 + caption_height(state, assets, app, width)
-        } else {
-            0.
-        };
-        let height = (width * FACE_HEIGHT / HOME_TILE_WIDTH).min((rect.h - top - labels).max(40.));
+        let height = width * crate::home_layout::FAVORITE_ASPECT;
         tile(
             out,
             state,
@@ -183,7 +178,7 @@ fn favorites(out: &mut Scene, state: &State, assets: &Assets, widget: &Widget) {
 
 fn inputs(out: &mut Scene, state: &State, assets: &Assets, widget: &Widget) {
     let rect = widget.rect();
-    let top = 8.;
+    let top = crate::home_layout::STRIP_TOP;
     let width = widget.card_width().min(rect.w);
     let inputs: Vec<_> = state
         .inventory
@@ -212,7 +207,7 @@ fn inputs(out: &mut Scene, state: &State, assets: &Assets, widget: &Widget) {
                 rect.x + index as f32 * (width + 22.35) - state.input_scroll,
                 rect.y + top,
                 width,
-                104.,
+                crate::home_layout::INPUT_HEIGHT,
             ),
         );
     }
@@ -339,6 +334,7 @@ pub(super) fn editor(out: &mut Scene, state: &State, assets: &Assets) {
     out.shape(Rect::new(0., 944., 1920., 136.), 0., c(0x101720, 0.96));
     let instruction = match editor.mode {
         Mode::Move(_) => "layoutMoveHint",
+        Mode::Resize(ref widget) if widget.is_strip() => "layoutStripResizeHint",
         Mode::Resize(_) => "layoutResizeHint",
         _ => "layoutSelectHint",
     };

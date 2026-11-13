@@ -2154,14 +2154,18 @@ impl State {
                 return vec![Effect::Save];
             }
             Target::AppNamesHome => {
-                self.preferences.show_home_names = !self.preferences.show_home_names;
-                if let Some(layout) = &mut self.preferences.home_layout {
-                    for widget in &mut layout.widgets {
-                        if widget.kind == crate::home_layout::Kind::Favorites {
-                            widget.labels = self.preferences.show_home_names;
-                        }
+                let labels = !self.preferences.show_home_names;
+                if let Some(layout) = &mut self.preferences.home_layout
+                    && let Some(mut widget) =
+                        layout.widget(crate::home_layout::Kind::Favorites).cloned()
+                {
+                    widget.labels = labels;
+                    if !layout.replace(widget) {
+                        self.notify(self.preferences.language.t("layoutBlocked"));
+                        return vec![];
                     }
                 }
+                self.preferences.show_home_names = labels;
                 return vec![Effect::Save];
             }
             Target::AppNamesApps => {

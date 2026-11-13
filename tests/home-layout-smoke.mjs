@@ -84,9 +84,18 @@ try {
   assert.equal(saved.home_layout.version, 1);
   const favorites = saved.home_layout.widgets.find((widget) => widget.kind === 'favorites');
   assert.equal(favorites.width, 7);
+  assert.equal(favorites.height, 5);
+  assert.equal(saved.home_layout.widgets.find((widget) => widget.kind === 'inputs').height, 3);
   assert.equal(split.page, 'Home');
   const restored = await scenario('layout-restored', 'home');
   assert.deepEqual(restored.preferences.home_layout, saved.home_layout);
+  const padded = structuredClone(saved);
+  padded.home_layout.widgets.find((widget) => widget.kind === 'favorites').height = 7;
+  padded.home_layout.widgets.find((widget) => widget.kind === 'inputs').height = 4;
+  await fs.writeFile(preferences, JSON.stringify(padded));
+  const tightened = await scenario('layout-tight-strip-migration', 'home');
+  assert.deepEqual(tightened.preferences.home_layout, saved.home_layout);
+  await fs.writeFile(preferences, JSON.stringify(saved));
   const scrolled = await scenario(
     'layout-narrow-favorites',
     'home,click:220:600,right,right,right,right,right',

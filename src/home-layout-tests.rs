@@ -632,3 +632,136 @@ fn home_layout_old_navigation_and_heading_fields_migrate_without_losing_other_wi
         3
     );
 }
+
+#[test]
+fn home_layout_strip_bounds_end_at_the_content_without_changing_card_positions() {
+    for size in 0..3 {
+        for labels in [false, true] {
+            let mut state = custom(0);
+            let layout = state.preferences.home_layout.as_mut().unwrap();
+            let mut favorite = layout.widget(Kind::Favorites).unwrap().clone();
+            favorite.size = size;
+            favorite.labels = labels;
+            assert!(layout.replace(favorite));
+            let rendered = scene(&state);
+            for (kind, is_target) in [(Kind::Favorites, true), (Kind::Inputs, false)] {
+                let widget = state.home_widget(kind).unwrap();
+                let rect = widget.rect();
+                let card = rendered
+                    .controls
+                    .iter()
+                    .find(|control| {
+                        if is_target {
+                            matches!(control.target, Target::App(_))
+                        } else {
+                            matches!(control.target, Target::Input(_))
+                        }
+                    })
+                    .unwrap();
+                assert!((card.rect.y - (48. + f32::from(widget.row) * 40. + 8.)).abs() < 0.001);
+                assert!(
+                    (card.rect.y + card.rect.h - rect.y - rect.h).abs() < 0.001,
+                    "{kind:?} size {size}, labels {labels}"
+                );
+                assert_eq!(widget.height, ((rect.h + 8.) / 40.).ceil() as u8);
+                if kind == Kind::Favorites {
+                    assert!(
+                        (card.rect.h
+                            - if labels { 76.64 } else { 0. }
+                            - widget.card_width() * 154.4 / 256.)
+                            .abs()
+                            < 0.001
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn home_layout_old_padded_strips_migrate_in_place_and_release_grid_rows() {
+    let mut old = Layout::preset(0, &Preferences::default());
+    for widget in &mut old.widgets {
+        if widget.kind == Kind::Favorites {
+            widget.height = 7;
+        }
+        if widget.kind == Kind::Inputs {
+            widget.height = 4;
+        }
+    }
+    let preferences: Preferences = serde_json::from_value(json!({"home_layout": old})).unwrap();
+    let mut layout = preferences.home_layout.unwrap();
+    for kind in [Kind::Favorites, Kind::Inputs] {
+        let before = old.widget(kind).unwrap();
+        let after = layout.widget(kind).unwrap();
+        assert_eq!(
+            (
+                before.id,
+                before.column,
+                before.row,
+                before.width,
+                before.size
+            ),
+            (after.id, after.column, after.row, after.width, after.size)
+        );
+        assert_eq!(after.height, if kind == Kind::Favorites { 5 } else { 3 });
+    }
+    let mut input = layout.widget(Kind::Inputs).unwrap().clone();
+    input.row = 16;
+    assert!(
+        layout.replace(input),
+        "The two grid rows beneath Favorites are available again"
+    );
+}
+
+#[test]
+fn home_layout_strip_configuration_rejects_growing_into_a_neighbor() {
+    let mut state = custom(0);
+    let layout = state.preferences.home_layout.as_mut().unwrap();
+    let mut input = layout.widget(Kind::Inputs).unwrap().clone();
+    input.row = 16;
+    assert!(layout.replace(input));
+    let before = state.preferences.home_layout.clone();
+    state.focus = Target::AppNamesHome;
+    assert!(state.activate().is_empty());
+    assert!(!state.preferences.show_home_names);
+    assert_eq!(state.preferences.home_layout, before);
+    state.edit_layout();
+    let id = state.home_widget(Kind::Favorites).unwrap().id;
+    state.layout_editor.as_mut().unwrap().mode = Mode::Configure(id);
+    action(&mut state, 3);
+    assert!(!state.home_widget(Kind::Favorites).unwrap().labels);
+    assert!(state.layout_editor.as_ref().unwrap().draft.valid());
+    state
+        .layout_editor
+        .as_mut()
+        .unwrap()
+        .draft
+        .widgets
+        .iter_mut()
+        .find(|widget| widget.kind == Kind::Inputs)
+        .unwrap()
+        .row = 18;
+    action(&mut state, 3);
+    assert!(state.home_widget(Kind::Favorites).unwrap().labels);
+    assert_eq!(state.home_widget(Kind::Favorites).unwrap().height, 7);
+    assert!(state.layout_editor.as_ref().unwrap().draft.valid());
+}
+
+#[test]
+fn home_layout_strip_resize_changes_width_not_empty_vertical_space() {
+    let mut state = custom(1);
+    state.edit_layout();
+    let widget = state.home_widget(Kind::Favorites).unwrap().clone();
+    state.layout_editor.as_mut().unwrap().mode = Mode::Resize(widget.clone());
+    state.focus = Target::LayoutWidget(widget.id);
+    for direction in [Direction::Up, Direction::Down, Direction::Down] {
+        state.direction(direction, &controls(&state));
+    }
+    assert_eq!(state.home_widget(Kind::Favorites), Some(&widget));
+    state.direction(Direction::Left, &controls(&state));
+    let after = state.home_widget(Kind::Favorites).unwrap();
+    assert_eq!(after.width, widget.width - 1);
+    assert_eq!(after.rect().h, widget.rect().h);
+    assert_eq!(after.card_width(), widget.card_width());
+}
