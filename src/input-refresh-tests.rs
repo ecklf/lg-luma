@@ -227,15 +227,15 @@ fn polling_only_runs_on_visible_focused_tv_input_screens_outside_interactions() 
     assert!(!active(&state));
     state.pressed = None;
     state.open(1);
-    assert!(!active(&state));
+    assert!(active(&state));
     state.open(2);
-    assert!(!active(&state));
+    assert!(active(&state));
     state.subpage = Some(Subpage::Inputs);
     assert!(active(&state));
     state.subpage = Some(Subpage::Input(state.inventory.inputs[0].id.clone()));
     assert!(active(&state));
     state.subpage = Some(Subpage::Clock);
-    assert!(!active(&state));
+    assert!(active(&state));
 }
 
 #[test]

@@ -12,6 +12,8 @@ pub const WIDGETS_SECTION: usize = 2;
 pub const SYSTEM_SECTION: usize = 3;
 pub const APPS_SECTION: usize = 4;
 pub const SECTION_COUNT: usize = 5;
+pub const SETTINGS_ORDER: [usize; SECTION_COUNT] =
+    [0, APPS_SECTION, 1, WIDGETS_SECTION, SYSTEM_SECTION];
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
 pub const APPS_COLUMNS: usize = 6;
@@ -58,7 +60,6 @@ pub enum Target {
     App(String),
     DockApp(String),
     Input(String),
-    Browse,
     Filter(usize),
     Search,
     Sidebar(usize),
@@ -628,7 +629,7 @@ impl State {
     }
 
     pub fn drawer_grid_top(&self) -> f32 {
-        350. + if self.preferences.show_home_names {
+        408. + if self.preferences.show_home_names {
             100.
         } else {
             0.
@@ -840,15 +841,7 @@ impl State {
                 .iter()
                 .any(|input| &input.id == id && self.preferences.input_visible(input))
         {
-            self.focus = if matches!(self.overlay, Some(Overlay::Inputs)) {
-                self.inventory
-                    .inputs
-                    .iter()
-                    .find(|input| self.preferences.input_visible(input))
-                    .map_or(Target::InputsMenu, |input| Target::Input(input.id.clone()))
-            } else {
-                self.first_content()
-            };
+            self.focus = self.first_input_target();
         }
         if matches!(self.overlay, Some(Overlay::Inputs))
             && self.focus == Target::InputsMenu
@@ -870,8 +863,12 @@ impl State {
                 .map(|app| Target::App(app.id.clone()))
                 .unwrap_or(if self.error.is_some() {
                     Target::Retry
+                } else if self.preferences.show_weather
+                    && self.preferences.weather_location.is_none()
+                {
+                    Target::WeatherConfigure
                 } else {
-                    Target::Browse
+                    Target::SettingsMenu
                 }),
             Page::Apps => self
                 .apps()
@@ -885,6 +882,16 @@ impl State {
                 .unwrap_or(Target::SettingsMenu),
             Page::Settings => Target::Sidebar(0),
         }
+    }
+
+    pub fn first_input_target(&self) -> Target {
+        self.inventory
+            .inputs
+            .iter()
+            .find(|input| self.preferences.input_visible(input))
+            .map_or(Target::SettingsMenu, |input| {
+                Target::Input(input.id.clone())
+            })
     }
 
     pub fn focus(&mut self, target: Target, controls: &[Control]) {
@@ -920,6 +927,7 @@ impl State {
                 self.focus,
                 Target::Nav(_)
                     | Target::InputsMenu
+                    | Target::Input(_)
                     | Target::SettingsMenu
                     | Target::LumaSettings
                     | Target::Filter(_)
@@ -1264,7 +1272,7 @@ impl State {
                     let target = match direction {
                         Direction::Up => {
                             if index < 3 {
-                                Target::InputsMenu
+                                self.first_input_target()
                             } else {
                                 Target::SettingsMenu
                             }
@@ -1284,10 +1292,36 @@ impl State {
                     return vec![];
                 }
             }
-            if matches!(self.focus, Target::InputsMenu | Target::SettingsMenu) {
+            if matches!(
+                self.focus,
+                Target::Input(_) | Target::InputsMenu | Target::SettingsMenu
+            ) {
+                let mut targets: Vec<_> = self
+                    .inventory
+                    .inputs
+                    .iter()
+                    .filter(|input| self.preferences.input_visible(input))
+                    .map(|input| Target::Input(input.id.clone()))
+                    .collect();
+                targets.push(Target::SettingsMenu);
+                let index = targets
+                    .iter()
+                    .position(|target| *target == self.focus)
+                    .unwrap_or(0);
                 match direction {
-                    Direction::Left => self.focus(Target::InputsMenu, controls),
-                    Direction::Right => self.focus(Target::SettingsMenu, controls),
+                    Direction::Left => {
+                        self.focus(targets[index.saturating_sub(1)].clone(), controls)
+                    }
+                    Direction::Right => self.focus(
+                        targets[(index + 1).min(targets.len() - 1)].clone(),
+                        controls,
+                    ),
+                    Direction::Down
+                        if self.page == Page::Home && self.favorite_apps().is_empty() =>
+                    {
+                        self.open(1);
+                        self.focus = self.first_content();
+                    }
                     Direction::Down => self.focus(
                         if self.page == Page::Home
                             && self.preferences.show_weather
@@ -1325,18 +1359,19 @@ impl State {
                     return vec![];
                 }
             }
-            if self.page == Page::Home
-                && matches!(self.focus, Target::Browse | Target::WeatherConfigure)
-            {
+            if self.page == Page::Home && self.focus == Target::WeatherConfigure {
                 match direction {
-                    Direction::Down if self.focus == Target::WeatherConfigure => {
+                    Direction::Down
+                        if self.focus == Target::WeatherConfigure
+                            && !self.favorite_apps().is_empty() =>
+                    {
                         self.focus(self.first_content(), controls)
                     }
                     Direction::Down => {
                         self.open(1);
                         self.focus = self.first_content();
                     }
-                    Direction::Up => self.focus(Target::InputsMenu, controls),
+                    Direction::Up => self.focus(self.first_input_target(), controls),
                     _ => {}
                 }
                 return vec![];
@@ -1358,7 +1393,7 @@ impl State {
                         }
                         Direction::Up => self.focus(
                             if index < 3 {
-                                Target::InputsMenu
+                                self.first_input_target()
                             } else {
                                 Target::SettingsMenu
                             },
@@ -1480,6 +1515,10 @@ impl State {
                 return vec![];
             }
             if let Target::Sidebar(index) = self.focus {
+                let position = SETTINGS_ORDER
+                    .iter()
+                    .position(|section| *section == index)
+                    .unwrap_or(0);
                 match direction {
                     Direction::Right => {
                         let entry = if self.section == 1 {
@@ -1490,16 +1529,17 @@ impl State {
                         self.focus(entry, controls);
                     }
                     Direction::Up => self.focus(
-                        if index == 0 {
+                        if position == 0 {
                             Target::SettingsMenu
                         } else {
-                            Target::Sidebar(index - 1)
+                            Target::Sidebar(SETTINGS_ORDER[position - 1])
                         },
                         controls,
                     ),
-                    Direction::Down => {
-                        self.focus(Target::Sidebar((index + 1) % SECTION_COUNT), controls)
-                    }
+                    Direction::Down => self.focus(
+                        Target::Sidebar(SETTINGS_ORDER[(position + 1) % SECTION_COUNT]),
+                        controls,
+                    ),
                     Direction::Left => {}
                 }
                 return vec![];
@@ -1664,7 +1704,7 @@ impl State {
                                 .get(index.min(self.favorite_apps().len().saturating_sub(1)))
                                 .map_or(
                                     if index < 3 {
-                                        Target::InputsMenu
+                                        self.first_input_target()
                                     } else {
                                         Target::SettingsMenu
                                     },
@@ -2229,10 +2269,6 @@ impl State {
         }
         match self.focus.clone() {
             Target::Nav(index) => self.open(if index == 2 { 0 } else { index }),
-            Target::Browse => {
-                self.open(1);
-                self.focus = self.first_content();
-            }
             Target::InputsMenu => {
                 self.overlay = Some(Overlay::Inputs);
                 self.focus = self

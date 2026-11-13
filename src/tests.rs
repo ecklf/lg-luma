@@ -241,7 +241,7 @@ fn remote_routes_from_header_and_back_through_settings() {
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::App("netflix".into()));
     state.direction(Direction::Up, &controls(&state));
-    assert_eq!(state.focus, Target::InputsMenu);
+    assert_eq!(state.focus, state.first_input_target());
     state.open(2);
     assert_eq!(state.focus, Target::Sidebar(0));
     state.activate();
@@ -330,7 +330,7 @@ fn partial_refresh_preserves_valid_inputs_and_never_invents_tv_apps() {
     );
     assert!(state.inventory.apps.is_empty());
     assert_eq!(state.inventory.inputs.len(), 3);
-    assert_eq!(state.first_content(), Target::Browse);
+    assert_eq!(state.first_content(), Target::WeatherConfigure);
 }
 
 #[test]
@@ -545,13 +545,21 @@ fn reordering_skips_hidden_and_unavailable_favorite_slots() {
 fn settings_header_moves_between_controls_without_switching_pages() {
     let mut state = ready();
     state.open(2);
-    state.focus = Target::InputsMenu;
+    let last = state
+        .inventory
+        .inputs
+        .iter()
+        .rfind(|input| state.preferences.input_visible(input))
+        .unwrap()
+        .id
+        .clone();
+    state.focus = Target::Input(last.clone());
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.page, Page::Settings);
     assert_eq!(state.focus, Target::SettingsMenu);
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.page, Page::Settings);
-    assert_eq!(state.focus, Target::InputsMenu);
+    assert_eq!(state.focus, Target::Input(last));
 }
 
 #[test]
@@ -944,8 +952,6 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     assert_eq!(state.activate(), vec![Effect::Quit]);
     state.back();
     assert_eq!(state.focus, Target::Sidebar(crate::state::SYSTEM_SECTION));
-    state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Sidebar(crate::state::APPS_SECTION));
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(0));
     assert_eq!(state.section, 0);
@@ -2394,6 +2400,7 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
     );
     state.direction(Direction::Down, &controls(&state));
     state.direction(Direction::Down, &controls(&state));
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(WIDGETS_SECTION));
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::Widget(1));
@@ -2609,7 +2616,7 @@ fn language_list_scrolls_under_fixed_ui_without_clipping_or_fades() {
             )
         })
         .unwrap();
-    for key in ["interface", "inputs"] {
+    for key in ["interface", "apps"] {
         let label = state.preferences.language.t(key);
         let fixed = rendered
             .draw

@@ -57,7 +57,7 @@ try {
       '--preferences',
       preferences,
       '--script',
-      'settings,down,down,down,down,enter',
+      'settings,down,enter',
       '--frames',
       '18',
       '--screenshot',

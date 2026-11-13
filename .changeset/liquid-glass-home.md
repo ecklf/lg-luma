@@ -16,3 +16,7 @@ Keep the drawer artwork-only, without categories/search or extra Apps/Move apps 
 any Settings sidebar item now returns Home directly. Apps management uses a three-column card
 gallery with the existing action popup. Bundle colored Breezy Weather icons with day/night variants
 and their license/source notices.
+
+Enlarge and reorganize the weather widget and its empty state, show direct compact input pills,
+reduce settings action sizes, and place Apps immediately after General. Keep the dock decorative
+with unclipped glass edges and more space before the drawer grid.

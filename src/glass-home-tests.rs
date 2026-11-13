@@ -5,6 +5,84 @@ use crate::{
 };
 
 #[test]
+fn dock_is_not_a_control_and_its_glass_is_not_clipped_to_the_content_area() {
+    let rendered = scene(&ready());
+    assert!(
+        !rendered
+            .controls
+            .iter()
+            .any(|control| control.rect.x == 60. && control.rect.w == 1800.)
+    );
+    let mut clip = None;
+    let mut dock = false;
+    for draw in &rendered.draw {
+        match draw {
+            Draw::Clip(value) => clip = *value,
+            Draw::Glass(rect, _, _) if rect.x == 60. => {
+                assert!(clip.is_none());
+                dock = true;
+            }
+            _ => {}
+        }
+    }
+    assert!(dock);
+}
+
+#[test]
+fn drawer_has_a_clear_gap_below_the_dock_with_or_without_captions() {
+    for names in [false, true] {
+        let mut state = ready();
+        state.preferences.reduced_motion = true;
+        state.preferences.show_home_names = names;
+        state.open(1);
+        let rendered = scene(&state);
+        let bottom = rendered
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Glass(rect, ..) if rect.x == 60. => Some(rect.y + rect.h),
+                _ => None,
+            })
+            .unwrap();
+        assert!(state.drawer_grid_top() - bottom >= 48.);
+        assert!(state.apps_viewport().y > bottom + 30.);
+    }
+}
+
+#[test]
+fn weather_empty_state_uses_a_large_icon_and_setup_action() {
+    let state = ready();
+    let rendered = scene(&state);
+    assert!(rendered.draw.iter().any(|draw| matches!(draw,
+        Draw::Image(path, rect, ..) | Draw::TintedImage(path, rect, ..) if path.ends_with("weather/partly-cloudy.png") && rect.w == 144. && rect.h == 144.)));
+    assert!(rendered.draw.iter().any(|draw| matches!(draw,
+        Draw::Text(label, _, style, ..) if label == state.preferences.language.t("setWeatherLocation") && style.size >= 36.)));
+    let setup = rendered
+        .controls
+        .iter()
+        .find(|control| control.target == Target::WeatherConfigure)
+        .unwrap();
+    assert!(setup.rect.h >= 240.);
+}
+
+#[test]
+fn settings_sidebar_places_apps_immediately_after_general() {
+    let mut state = ready();
+    state.open(2);
+    let rendered = scene(&state);
+    state.direction(Direction::Down, &rendered.controls);
+    assert_eq!(state.focus, Target::Sidebar(APPS_SECTION));
+    let mut sidebar: Vec<_> = rendered
+        .controls
+        .iter()
+        .filter(|control| matches!(control.target, Target::Sidebar(_)))
+        .collect();
+    sidebar.sort_by(|a, b| a.rect.y.total_cmp(&b.rect.y));
+    assert_eq!(sidebar[0].target, Target::Sidebar(0));
+    assert_eq!(sidebar[1].target, Target::Sidebar(APPS_SECTION));
+}
+
+#[test]
 fn home_keeps_pinned_order_without_extra_labels_even_while_reordering() {
     let mut state = ready();
     state.preferences.favorites = Some(vec![
@@ -130,7 +208,7 @@ fn control_center_uses_separate_floating_actions_and_preserves_navigation() {
         assert_eq!(control.rect.x + control.rect.w, 1836.);
         assert!(rendered.draw.iter().any(|draw| matches!(draw,
             Draw::Glass(rect, radius, _) if (rect.x, rect.y, rect.w, rect.h) ==
-                (control.rect.x, control.rect.y, control.rect.w, control.rect.h) && *radius == 44.
+                (control.rect.x, control.rect.y, control.rect.w, control.rect.h) && *radius == 28.
         )));
     }
     let panel = rendered.modal.unwrap();
@@ -183,12 +261,13 @@ fn corners_and_weather_setup_are_remote_accessible() {
     let mut state = ready();
     state.focus = Target::App("netflix".into());
     state.direction(Direction::Up, &controls(&state));
-    assert_eq!(state.focus, Target::InputsMenu);
+    assert_eq!(state.focus, state.first_input_target());
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::WeatherConfigure);
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::App("netflix".into()));
     state.direction(Direction::Up, &controls(&state));
+    state.direction(Direction::Right, &controls(&state));
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::SettingsMenu);
     state.activate();
@@ -205,12 +284,10 @@ fn corners_and_weather_setup_are_remote_accessible() {
 }
 
 #[test]
-fn inputs_menu_respects_visibility_and_uses_dots_not_status_text() {
+fn input_pills_respect_visibility_and_launch_without_a_dropdown() {
     let mut state = ready();
     let id = state.inventory.inputs[0].id.clone();
     state.inventory.inputs[0].connected = Some(false);
-    state.focus = Target::InputsMenu;
-    state.activate();
     assert!(
         !controls(&state)
             .iter()
@@ -229,12 +306,17 @@ fn inputs_menu_respects_visibility_and_uses_dots_not_status_text() {
             .any(|control| control.target == Target::Input(id.clone()))
     );
     assert!(rendered.draw.iter().any(
-        |draw| matches!(draw, Draw::Shape(rect, radius, _, _) if rect.w == 10. && *radius == 5.)
+        |draw| matches!(draw, Draw::Shape(rect, radius, _, _) if rect.w == 8. && *radius == 4.)
     ));
     assert!(!rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, ..) if label.contains("Connected") || label.contains("Disconnected") || label.contains("No signal"))));
-    state.preferences.input_modes.insert(id, InputMode::Off);
-    state.back();
-    assert_eq!(state.focus, Target::InputsMenu);
+    state.focus = Target::Input(id.clone());
+    assert_eq!(state.activate(), vec![Effect::Launch(id.clone())]);
+    state
+        .preferences
+        .input_modes
+        .insert(id.clone(), InputMode::Off);
+    state.reconcile_focus();
+    assert_ne!(state.focus, Target::Input(id));
     assert!(state.overlay.is_none());
 }
 
@@ -260,17 +342,17 @@ fn empty_favorites_and_empty_inventory_still_offer_drawer_and_settings() {
     let mut state = ready();
     state.preferences.favorites = Some(vec![]);
     state.open(0);
-    assert_eq!(state.focus, Target::Browse);
-    state.activate();
+    assert_eq!(state.focus, Target::WeatherConfigure);
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.page, Page::Apps);
     assert!(matches!(state.focus, Target::App(_)));
     state.inventory.apps.clear();
     state.reconcile_focus();
     assert_eq!(state.focus, Target::SettingsMenu);
     state.back();
-    assert_eq!(state.focus, Target::Browse);
+    assert_eq!(state.focus, Target::WeatherConfigure);
     state.direction(Direction::Up, &controls(&state));
-    assert_eq!(state.focus, Target::InputsMenu);
+    assert_eq!(state.focus, state.first_input_target());
 }
 
 #[test]

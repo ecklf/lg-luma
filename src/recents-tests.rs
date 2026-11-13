@@ -309,11 +309,20 @@ fn home_header_has_only_inputs_and_clock_settings() {
         .into_iter()
         .filter(|control| control.rect.y < 120.)
         .collect();
-    assert_eq!(header.len(), 2);
+    assert_eq!(
+        header.len(),
+        state
+            .inventory
+            .inputs
+            .iter()
+            .filter(|input| state.preferences.input_visible(input))
+            .count()
+            + 1
+    );
     assert!(
         header
             .iter()
-            .all(|control| matches!(control.target, Target::InputsMenu | Target::SettingsMenu))
+            .all(|control| matches!(control.target, Target::Input(_) | Target::SettingsMenu))
     );
 }
 

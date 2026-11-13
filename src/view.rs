@@ -695,48 +695,94 @@ fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
         state.preferences.hour_24,
         state.preferences.show_seconds,
     );
-    let inputs_width = (assets.width(language.t("inputs"), text(22., 550, 0.)) + 96.).max(180.);
     let clock_width = (assets.width(&clock, text(24., 550, -0.02)) + 96.).max(220.);
-    for (target, rect, icon, label) in [
-        (
-            Target::InputsMenu,
-            Rect::new(84., 48., inputs_width, 64.),
-            "input-hdmi",
-            language.t("inputs").to_owned(),
-        ),
-        (
-            Target::SettingsMenu,
-            Rect::new(1836. - clock_width, 48., clock_width, 64.),
-            "settings",
-            clock,
-        ),
-    ] {
-        out.glass(rect, 32.);
-        if state.focus == target {
-            out.border(rect.inset(-4.), 36., 2., WHITE);
-        }
+    let inputs: Vec<_> = state
+        .inventory
+        .inputs
+        .iter()
+        .filter(|input| state.preferences.input_visible(input))
+        .collect();
+    let available = 1836. - clock_width - 32. - 84.;
+    let max_width = ((available - inputs.len().saturating_sub(1) as f32 * 10.)
+        / inputs.len().max(1) as f32)
+        .min(240.);
+    let mut x = 84.;
+    for input in inputs {
+        let target = Target::Input(input.id.clone());
+        let title = state.preferences.input_title(input);
+        let width = (assets.width(title, text(20.8, 550, -0.02)) + 86.)
+            .max(148.)
+            .min(max_width);
+        let rect = Rect::new(x, 56., width, 48.);
+        let focused = state.focus == target;
+        out.pill(rect, focused, false);
+        let foreground = if focused { c(0x242424, 1.) } else { WHITE };
         out.icon(
             assets,
-            icon,
-            Rect::new(rect.x + 22., rect.y + 20., 24., 24.),
-            WHITE,
+            &format!(
+                "input-{}",
+                state
+                    .preferences
+                    .input_icon(&input.id)
+                    .unwrap_or_else(|| input_icon(input, state.preferences.input_name(input)))
+            ),
+            Rect::new(x + 16., 68., 24., 24.),
+            foreground,
         );
+        let (label, style) = assets.fit_line(title, text(20.8, 550, -0.02), width - 84., 14.);
         out.text(
             label,
-            Rect::new(rect.x + 60., rect.y + 18., rect.w - 80., 30.),
-            text(24., 550, -0.02),
-            WHITE,
-            true,
+            Rect::new(x + 52., 66., width - 84., 29.12),
+            style,
+            foreground,
+            false,
+        );
+        out.shape(
+            Rect::new(x + width - 23., 76., 8., 8.),
+            4.,
+            c(
+                if input.connected == Some(true) {
+                    0x60e6a0
+                } else {
+                    0x8c949c
+                },
+                1.,
+            ),
         );
         out.control(target, rect, false);
+        x += width + 10.;
     }
+    let (target, rect, icon, label) = (
+        Target::SettingsMenu,
+        Rect::new(1836. - clock_width, 48., clock_width, 64.),
+        "settings",
+        clock,
+    );
+    out.glass(rect, 32.);
+    if state.focus == target {
+        out.border(rect.inset(-4.), 36., 2., WHITE);
+    }
+    out.icon(
+        assets,
+        icon,
+        Rect::new(rect.x + 22., rect.y + 20., 24., 24.),
+        WHITE,
+    );
+    out.text(
+        label,
+        Rect::new(rect.x + 60., rect.y + 18., rect.w - 80., 30.),
+        text(24., 550, -0.02),
+        WHITE,
+        true,
+    );
+    out.control(target, rect, false);
 }
 
 fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     if matches!(state.overlay, Some(Overlay::Settings)) {
         // Independent floating controls, not nested glass inside a glass panel.
-        let panel = Rect::new(1396., 148., 440., 340.);
+        let panel = Rect::new(1496., 132., 340., 156.);
         out.controls.clear();
         out.modal = Some(panel);
         for (index, (target, label, icon)) in [
@@ -750,25 +796,25 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
         .into_iter()
         .enumerate()
         {
-            let rect = Rect::new(panel.x, panel.y + index as f32 * 176., panel.w, 156.);
-            out.shadow(rect, 44., 28., 10., 0.24);
+            let rect = Rect::new(panel.x, panel.y + index as f32 * 84., panel.w, 72.);
+            out.shadow(rect, 28., 24., 8., 0.24);
             let focused = state.focus == target;
             out.draw.push(Draw::Glass(
                 rect,
-                44.,
+                28.,
                 c(if focused { 0xe5ebf0 } else { 0x202020 }, 0.96),
             ));
             let foreground = if focused { c(0x242424, 1.) } else { WHITE };
             out.icon(
                 assets,
                 icon,
-                Rect::new(rect.x + 28., rect.y + 47., 62., 62.),
+                Rect::new(rect.x + 20., rect.y + 22., 28., 28.),
                 foreground,
             );
-            let (label, style) = assets.fit_line(&label, text(28., 550, -0.02), rect.w - 134., 19.);
+            let (label, style) = assets.fit_line(&label, text(22., 550, -0.02), rect.w - 88., 18.);
             out.text(
                 label,
-                Rect::new(rect.x + 114., rect.y + 59., rect.w - 134., 40.),
+                Rect::new(rect.x + 68., rect.y + 22., rect.w - 88., 32.),
                 style,
                 foreground,
                 false,
@@ -1206,15 +1252,10 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
     let names = state.preferences.show_home_names;
     let dock_height = FACE_HEIGHT + if names { 100. } else { 0. };
     let dock = Rect::new(60., dock_y - 24., 1800., dock_height + 48.);
+    // The card extends beyond the content viewport; clip only its scrolling contents.
+    out.draw.push(Draw::Clip(None));
     out.shadow(dock, 40., 38., 12., 0.22);
     out.glass(dock, 40.);
-    if state.page == Page::Home {
-        // Keep the empty dock and gaps pointer-accessible without an extra Apps button.
-        out.control(Target::Browse, dock, false);
-        if state.focus == Target::Browse {
-            out.ring(dock, 40.);
-        }
-    }
     let apps = state.favorite_apps();
     if state.loading && state.inventory.apps.is_empty() {
         for index in 0..6 {
@@ -1288,74 +1329,107 @@ struct WeatherSummary {
     height: f32,
     width: f32,
     icon: String,
+    icon_rect: Rect,
     parts: Vec<(String, TextStyle, Color, Rect)>,
 }
 fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
     let language = state.preferences.language;
-    let base = text(23.2, 400, -0.025).leading(1.5);
     let mut parts = Vec::new();
-    let mut icon = "location".to_owned();
+    let mut add = |label: String, style: TextStyle, x: f32, y: f32, width: f32, opacity: f32| {
+        let (label, style) = assets.fit_line(&label, style, width, 24.);
+        let rect = Rect::new(
+            x,
+            y,
+            assets.width(&label, style) + 2.,
+            style.size * style.line_height,
+        );
+        parts.push((label, style, c(0xf5f5f5, opacity), rect));
+    };
+    let mut icon = "weather/partly-cloudy.png".to_owned();
     if let Some(place) = &state.preferences.weather_location {
+        add(
+            place.name.clone(),
+            text(30., 550, -0.02),
+            84.,
+            0.,
+            860.,
+            0.85,
+        );
         if let Some(reading) = state.weather.reading(place) {
             let condition = weather::condition(reading);
             icon = format!("weather/{}.png", condition.icon);
-            parts.push((
+            add(
                 weather::format_temperature(
                     reading.temperature,
                     state.preferences.temperature_unit,
                 ),
-                text(80., 500, -0.05),
-                c(0xf5f5f5, 0.91),
-            ));
-            parts.push((language.t(condition.key).into(), base, c(0xf5f5f5, 0.58)));
+                text(112., 500, -0.055),
+                252.,
+                46.,
+                680.,
+                0.96,
+            );
+            add(
+                language.t(condition.key).into(),
+                text(28., 450, -0.02),
+                252.,
+                180.,
+                760.,
+                0.78,
+            );
             if state.weather.failed {
-                parts.push((
+                add(
                     language.t("lastReading").into(),
-                    text(15.08, 400, 0.).leading(1.5),
-                    c(0xf2d5a5, 0.65),
-                ));
+                    text(24., 400, 0.),
+                    252.,
+                    226.,
+                    760.,
+                    0.65,
+                );
             }
         } else {
-            parts.push((
+            add(
                 if state.weather.loading {
                     language.t("loadingWeather")
                 } else {
                     language.t("weatherUnavailable")
                 }
                 .into(),
-                base,
-                c(0xf5f5f5, 0.58),
-            ));
+                text(40., 500, -0.025),
+                252.,
+                86.,
+                760.,
+                0.85,
+            );
         }
-        parts.push((place.name.clone(), base.weight(450), c(0xf5f5f5, 0.72)));
     } else {
-        parts.push((
+        add(
+            language.t("weather").into(),
+            text(30., 550, -0.02),
+            84.,
+            0.,
+            860.,
+            0.85,
+        );
+        add(
             language.t("setWeatherLocation").into(),
-            base,
-            c(0xf5f5f5, 0.72),
-        ));
+            text(40., 500, -0.025),
+            252.,
+            86.,
+            760.,
+            0.92,
+        );
     }
-    let mut positioned = Vec::new();
-    let mut top = 1.6;
-    let mut right: f32 = 0.;
-    let x = if state.preferences.weather_location.is_some() {
-        224.
-    } else {
-        121.6
-    };
-    for (label, style, color) in parts {
-        let (label, style) = assets.fit_line(&label, style, 760., 18.);
-        let width = assets.width(&label, style) + 2.;
-        let height = style.size * style.line_height;
-        positioned.push((label, style, color, Rect::new(x, top, width, height)));
-        right = right.max(x + width);
-        top += height + 8.;
-    }
+    let right = parts
+        .iter()
+        .map(|(_, _, _, rect)| rect.x + rect.w)
+        .fold(228., f32::max);
     WeatherSummary {
-        height: top,
+        height: 268.,
         width: right - 84.,
         icon,
-        parts: positioned,
+        icon_rect: Rect::new(84., 64., 144., 144.),
+        parts,
     }
 }
 fn weather_summary(
@@ -1365,7 +1439,7 @@ fn weather_summary(
     summary: WeatherSummary,
     y: f32,
 ) {
-    let label_focus = summary.parts.first().map(|(_, style, _, rect)| {
+    let label_focus = summary.parts.last().map(|(_, style, _, rect)| {
         // The label's layout line box includes leading above and below the
         // text. Keep the focus ring snug to the label rather than the whole
         // weather row, which also contains the location icon.
@@ -1377,11 +1451,12 @@ fn weather_summary(
             (rect.h - leading).max(style.size),
         )
     });
-    let icon_rect = if state.preferences.weather_location.is_some() {
-        Rect::new(84., y + 8., 112., 112.)
-    } else {
-        Rect::new(84., y + 5.8, 26.4, 26.4)
-    };
+    let icon_rect = Rect::new(
+        summary.icon_rect.x,
+        y + summary.icon_rect.y,
+        summary.icon_rect.w,
+        summary.icon_rect.h,
+    );
     if summary.icon.ends_with(".png") {
         out.image(assets.path(&summary.icon), icon_rect, 0., true);
     } else {
@@ -1890,12 +1965,10 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
 
 fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
-    for (index, key) in ["interface", "background", "widgets", "system", "apps"]
-        .into_iter()
-        .enumerate()
-    {
+    for (position, index) in crate::state::SETTINGS_ORDER.into_iter().enumerate() {
+        let key = ["interface", "background", "widgets", "system", "apps"][index];
         let label = language.t(key);
-        let rect = Rect::new(160., 164.8 + index as f32 * 84., 403.2, 72.);
+        let rect = Rect::new(160., 164.8 + position as f32 * 84., 403.2, 72.);
         let focused = state.focus == Target::Sidebar(index);
         out.pill(rect, focused, state.section == index);
         let color = if focused {
@@ -3594,7 +3667,7 @@ mod tests {
                     .iter()
                     .filter_map(|draw| match draw {
                         Draw::Text(label, rect, style, color, _)
-                            if (rect.y - 356.3).abs() < 0.001 =>
+                            if (rect.y - 440.3).abs() < 0.001 =>
                         {
                             Some((label, rect, style, color))
                         }
@@ -3612,7 +3685,7 @@ mod tests {
                     .iter()
                     .filter_map(|draw| match draw {
                         Draw::TintedImage(_, rect, _, _, color)
-                            if (rect.y - 359.8).abs() < 0.001 =>
+                            if (rect.y - 443.8).abs() < 0.001 =>
                         {
                             assert_eq!(color, parts[0].3);
                             Some(rect)

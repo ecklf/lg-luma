@@ -21,7 +21,7 @@ https://github.com/user-attachments/assets/2156d640-b8fa-4ea4-a02c-0db4c93bcc5a
       <img src="docs/settings.png" alt="Luma native General settings, desktop preview">
     </td>
     <td width="50%" align="center">
-      <img src="docs/inputs.png" alt="Luma native input dropdown, desktop preview">
+      <img src="docs/inputs.png" alt="Luma native input pills, desktop preview">
     </td>
   </tr>
 </table>
@@ -40,7 +40,7 @@ date have been removed.
 - **Back** closes the drawer and focuses the first favorite.
 - **OK / click** launches apps directly. Manage favorites, hidden apps, and uninstall actions in
   **Luma Settings → Apps**. Hidden apps remain listed there.
-- The **Inputs** dropdown at the top left shows names, icons, and connection dots, respecting
+- Direct **input pills** at the top left show names, icons, and connection dots, respecting
   each input's Auto / On / Off visibility setting.
 - The **clock** opens floating Control Center-style actions for **Luma Settings** or LG's native
   **TV settings**. LG's native settings UI is unchanged.

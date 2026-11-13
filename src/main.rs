@@ -457,13 +457,6 @@ fn input_refresh_active(state: &State, webos: bool, focused: bool, visible: bool
         && state.moving.is_none()
         && state.pressed.is_none()
         && state.recents.visibility == 0.
-        && (state.page == state::Page::Home
-            || matches!(state.overlay, Some(Overlay::Inputs))
-            || (state.page == state::Page::Settings
-                && matches!(
-                    state.subpage,
-                    Some(state::Subpage::Inputs | state::Subpage::Input(_))
-                )))
 }
 
 fn weather_tick(state: &mut State, service: &weather_service::Service, visible: bool) {

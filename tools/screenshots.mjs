@@ -40,15 +40,21 @@ const configuration = {
 try {
   for (const [name, script] of [
     ['home', 'home'],
+    ['weather-setup', 'home,up,down'],
     ['apps', 'apps,down'],
     ['settings', 'settings'],
-    ['inputs', 'home,up,enter'],
-    ['clock-menu', 'home,up,right,enter'],
-    ['manage-apps', 'settings,down,down,down,down,enter'],
-    ['app-actions', 'settings,down,down,down,down,enter,enter'],
+    ['inputs', 'home,up'],
+    ['clock-menu', 'home,up,right,right,enter'],
+    ['manage-apps', 'settings,down,enter'],
+    ['app-actions', 'settings,down,enter,enter'],
   ]) {
     // Independent state makes screenshots stable regardless of capture order.
-    await fs.writeFile(preferences, JSON.stringify(configuration));
+    await fs.writeFile(
+      preferences,
+      JSON.stringify(
+        name === 'weather-setup' ? { ...configuration, weather_location: null } : configuration,
+      ),
+    );
     await fs.writeFile(
       path.join(temporary, 'preferences.weather.json'),
       JSON.stringify({

@@ -75,7 +75,7 @@ backend. Avoid copying the whole SDK library directory or the TV's graphics driv
 ### Documentation screenshots
 
 `pnpm screenshots` generates `docs/home.png`, `docs/apps.png`, `docs/settings.png` and
-`docs/inputs.png`, plus `docs/clock-menu.png`, `docs/manage-apps.png` and `docs/app-actions.png`,
+`docs/inputs.png`, plus `docs/clock-menu.png`, `docs/manage-apps.png`, `docs/app-actions.png` and `docs/weather-setup.png`,
 linked by the README or PR.
 It builds the desktop executable without the TV feature, uses isolated temporary preferences,
 sample inventory, cached sample weather and a fixed date/time, and captures actual 1920×1080
@@ -155,7 +155,7 @@ greeting area with a large condition icon, temperature, condition and location. 
 icons are original Breezy Weather PNGs, including clear/partly-cloudy night variants, bundled locally
 with their LGPL-3.0 license, attribution and source hashes in `assets/weather/`. No icons are fetched at runtime.
 Disabled weather
-is hidden. Enabled weather without a location offers a compact setup action.
+is hidden. Enabled weather without a location uses the same large 144px artwork and a prominent setup action.
 Settings lists render behind fixed controls. The drawer grid is clipped below its fixed dock so
 offscreen cards cannot capture pointer events there. Input name removal uses **Clear name**.
 Choice checkmarks identify saved values, while the bright row fill identifies only the current focus.
@@ -173,12 +173,15 @@ including reorder mode, and reveals complete cards. Up reaches Inputs or the clo
 Down lifts the dock to the top and reveals a six-column app grid beneath it. Favorites stay in the
 dock instead of appearing twice in the grid. The drawer has no search or category toolbar.
 The Home dock follows saved pinned order, with no Apps button or Move apps label above it.
-Clicking an empty dock or the gaps between cards also opens the drawer.
+The dock itself is decorative, not a focus/click target. Down opens the drawer; Back closes it.
+Its glass is drawn without the narrower content clip, while scrolling app cards retain their own clipping.
+The drawer leaves at least 60 logical pixels between the dock and its first card row.
 Back closes the drawer and resets focus and horizontal scroll to the first favorite. Wheel movement
 over either favorites dock scrolls horizontally. Pointer hover/down never initiates reveal scrolling.
 Grid Up/Down follows six-column indices, including offscreen rows, with the first row leading to
-the pinned dock (or corner controls if it is empty). The top-left Inputs dropdown shows icons, names and connection dots,
-not descriptions. The clock opens two right-aligned, floating Control Center-style controls for
+the pinned dock (or corner controls if it is empty). Top-left inputs are direct 48px-high pills with
+icons, names and connection dots, respecting Auto/On/Off visibility; no input button/dropdown is needed.
+The clock opens two compact 72px-high, right-aligned, floating Control Center-style controls for
 Luma Settings and native LG TV settings. It does not replace LG's native settings UI.
 
 ### Liquid Glass renderer
@@ -205,7 +208,7 @@ the glass surface count and whether backdrop sampling was active.
 
 TV editing uses the system keyboard through SDL-webOS. Desktop editing uses the custom panel.
 
-HDMI status refreshes every two seconds while the TV's Home, input dropdown or input settings are visible and
+HDMI status refreshes every two seconds while the TV's header input pills are visible and
 focused. Only inputs are read on the existing platform worker; installed apps, artwork and saved
 preferences are not reloaded. At most one input read is queued, errors retain the last valid data
 and retry after ten seconds, and an unchanged snapshot does not redraw. Holds, reordering, other overlays,
