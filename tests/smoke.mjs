@@ -299,7 +299,7 @@ try {
     'settings,down,down,enter,up,enter,enter',
   );
   assert.equal(bundledRestored.preferences.background, 'forest');
-  const clock = await scenario('clock', 'settings,click:900:284');
+  const clock = await scenario('clock', 'settings,click:900:200');
   assert.equal(clock.subpage, 'Clock');
   assert.equal(clock.focus, 'ClockFormat');
   assert.ok(clock.ui_text.includes('Clock format'));
