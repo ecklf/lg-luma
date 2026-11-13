@@ -75,25 +75,27 @@ backend. Avoid copying the whole SDK library directory or the TV's graphics driv
 ### Documentation screenshots
 
 `pnpm screenshots` generates `docs/home.png`, `docs/apps.png`, `docs/settings.png` and
-`docs/inputs.png`, linked by the README. It builds the desktop executable without the TV feature,
-uses isolated temporary preferences, sample inventory and a fixed date/time, and captures actual
-1920×1080 OpenGL framebuffers. Weather is unconfigured, so no real weather APIs are contacted.
+`docs/inputs.png`, plus `docs/clock-menu.png`, `docs/manage-apps.png` and `docs/app-actions.png`,
+linked by the README or PR.
+It builds the desktop executable without the TV feature, uses isolated temporary preferences,
+sample inventory, cached sample weather and a fixed date/time, and captures actual 1920×1080
+OpenGL framebuffers. The weather origin is loopback-only, so no real weather APIs are contacted.
 It does not execute the test suites. A desktop display is required; on headless Linux use
 `xvfb-run -a pnpm screenshots`. These images document the native design, not TV hardware behavior.
 
 ### Input
 
-| Input                         | Action                                                        |
-| ----------------------------- | ------------------------------------------------------------- |
-| Arrows                        | Move focus, revealing remote-focused content                  |
-| OK / Enter                    | Activate on release                                           |
-| Hold OK for 600 ms            | Reorder Home favorite or open app options                     |
-| OK or Back in move mode       | Finish reordering without launching                           |
-| Escape / Back / Backspace     | Parent navigation, overlay dismissal or Recent apps from Home |
-| Hold Back / Escape for 600 ms | Open Recent apps while Luma is focused                        |
-| Menu / M / right-click        | App or background options side popup                          |
-| Pointer / wheel               | Hover, click, hold and scrolling                              |
-| F5                            | Refresh inventory                                             |
+| Input                         | Action                                                                       |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| Arrows                        | Move focus. Down from favorites opens the drawer, Up reaches corner controls |
+| OK / Enter                    | Activate on release                                                          |
+| Hold OK for 600 ms            | Reorder Home favorite or open app options                                    |
+| OK or Back in move mode       | Finish reordering without launching                                          |
+| Escape / Back / Backspace     | Parent navigation, overlay dismissal or Recent apps from Home                |
+| Hold Back / Escape for 600 ms | Open Recent apps while Luma is focused                                       |
+| Menu / M / right-click        | App or background options side popup                                         |
+| Pointer / wheel               | Hover, click, hold and scrolling                                             |
+| F5                            | Refresh inventory                                                            |
 
 Backspace deletes while editing. Native Back uses SDL's webOS-specific keycode. Back dismisses
 the keyboard first; Weather Location then returns to its parent Location row, HDMI choices to
@@ -103,9 +105,9 @@ and the vector power-icon **Quit app** action separately from General preference
 **Reset icon cache** clears persisted and decoded app icons, then reloads artwork on its
 worker without changing preferences. An active icon read finishes before disk entries are
 removed, so it cannot restore stale artwork after the reset.
-On Apps, OK or a normal pointer click on an app opens its side popup, with **Open** first and focused by
-default, followed by favorite, hide/show and **Delete app** actions. A second OK launches the app.
-Home favorites, Inputs and Recent apps launch directly. Hold OK on Home still reorders favorites.
+Home, the app drawer, Inputs and Recent apps launch directly on OK/click. **Settings → Apps** lists
+all apps, including hidden ones, and opens the action popup with **Open**, favorite, hide/show and
+**Delete app** actions. Hold OK on Home still reorders favorites.
 Background cards open the same side popup with **Use background** first and **Delete background**
 only for inactive backgrounds. Deletion requires confirmation with **Cancel** focused by default.
 Uploaded images are deleted on the wallpaper worker; bundled assets remain in the package, with
@@ -141,29 +143,18 @@ General has an **App names** subpage with independent **Show on Home** and **Sho
 Home captions default to off and Apps captions default to on, stored independently in `show_home_names`
 and `show_app_names`. The legacy `show_names` preference does not override these defaults. Hidden
 captions do not reserve layout space.
-**Settings → Widgets** groups **Date**, **Greeting**, **Weather**, **Shortcuts**, and **Inputs** as separate subpages.
+**Settings → Widgets** groups **Weather**, **Shortcuts**, and **Inputs** as separate subpages.
 Weather location and temperature choices return to Weather; Back from a widget returns to its row
 in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
 with a tighter 48-pixel spacing for Languages and Backgrounds.
-**Widgets → Greeting → Show widget** is the first row and hides only the greeting text, preserving the saved name,
-date and weather. Weather moves directly below the date when the greeting is hidden, without
-moving favorites or inputs. It defaults to enabled for existing and new installations.
-**Widgets → Date** contains **Show widget** (enabled by default) and **Date format**. Choose the
-existing localized weekday/month/day display (default), `DD.MM.YYYY`, `MM/DD/YYYY`, or `YYYY-MM-DD`.
-Choosing a format returns to its Date row; Back from Date restores its Widgets row. Hiding the
-date removes its reserved space above the greeting/weather and preserves the chosen format.
-Lists render behind the fixed sidebar, navigation and background actions, without viewport clipping
-or edge fades. Pointer interaction and remote focus retain their safe content viewports.
-The **Greeting** subpage contains **Name** and **Clear name**. Selecting Name opens the text keyboard
-(the system keyboard on the TV) and the name is appended to the Home greeting ("Good evening, Ana.").
-Long greetings scale down to fit their existing single-line area, centred vertically without
-moving the weather summary or favorite cards. Short greetings retain their original size.
-The keyboard starts empty; closing it without a name preserves the saved value. Clear name removes
-it. Preferences are saved when the keyboard closes, including automatic system-keyboard dismissal.
-Back from Greeting restores its Widgets row; App names returns to General. Input name removal
-also uses **Clear name**.
+The Home greeting and standalone date, along with their widget entries, are removed. Their legacy
+preferences remain readable and are not erased during other edits. Weather occupies the former
+greeting area with a large condition icon, temperature, condition and location. Disabled weather
+is hidden. Enabled weather without a location offers a compact setup action.
+Settings lists render behind fixed controls. The drawer grid is clipped below its fixed dock and
+toolbar so offscreen cards cannot capture pointer events there. Input name removal uses **Clear name**.
 Choice checkmarks identify saved values, while the bright row fill identifies only the current focus.
 
 Input icon picker: **Settings → Widgets → Inputs → select input → Icon** opens a
@@ -174,21 +165,41 @@ is persisted per input across restarts; choosing **Automatic** clears only that 
 icon override and restores label-based detection. Existing inputs without an override continue
 using Automatic. This is a backward-compatible feature and does not change input names or visibility.
 
-Home favorites form one horizontal strip, never a second row. Left/Right follows saved order,
-including reorder mode, and reveals complete cards. Up returns to Home navigation; Down enters
-the nearest input in the first row. The strip position survives page changes. Wheel movement over
-favorites scrolls horizontally; elsewhere it scrolls vertically. Pointer hover/down never moves
-the clicked control. Apps Up/Down follows the six-column grid order, including offscreen rows,
-and only the first row's Up route reaches the category toolbar. Scrolling Apps content fades into
-the existing wallpaper at the header/footer, with one alpha mask for surfaces, shadows, rings,
-vector icons/logos and text. The wallpaper/header are unmasked; no blur texture is needed.
+Home favorites form one horizontal glass dock, never a second row. Left/Right follows saved order,
+including reorder mode, and reveals complete cards. Up reaches Inputs or the clock/settings control.
+Down lifts the dock to the top and reveals a six-column app grid beneath it. Favorites stay in the
+dock instead of appearing twice in the unfiltered grid. Searches/categories can include favorites.
+Back closes the drawer and resets focus and horizontal scroll to the first favorite. Wheel movement
+over either favorites dock scrolls horizontally. Pointer hover/down never initiates reveal scrolling.
+Grid Up/Down follows six-column indices, including offscreen rows, with the first row leading to
+the category/search toolbar. The top-left Inputs dropdown shows icons, names and connection dots,
+not descriptions. The clock dropdown offers Luma Settings and native LG TV settings.
+
+### Liquid Glass renderer
+
+`Draw::Glass` is a GLES2 rounded-distance-field material inspired by
+[OverShifted/LiquidGlass](https://github.com/OverShifted/LiquidGlass). The implementation is original,
+not a vendored copy of that shader. It uses a cached 480×270 wallpaper backdrop with a small blur,
+edge refraction and directional highlights. Surfaces share the backdrop rather than each creating
+an FBO or sampling the framebuffer. Text and app artwork are separate, sharp draws. Wallpaper
+crossfades blend both glass backdrops. Wallpaper changes already invalidate the full scene, while
+ordinary glass changes participate in damage tracking.
+
+For bounded GLES2 cost, refraction samples the wallpaper, not other UI controls behind a menu.
+Cached backdrop textures use the existing texture budget and eviction. `LUMA_GLASS=0` disables
+backdrop sampling for a tinted-surface fallback, also selected on fragment-mediump-only hardware.
+Desktop captures verify rendering, not older TV GPU speed. Manually verify performance, remote
+behavior, input switching and native LG settings before release.
+`LUMA_GLES=1` requests a desktop GLES context and the GLSL ES 1.00 shader path without enabling TV
+services. Smoke coverage renders both this path and the `LUMA_GLASS=0` fallback. Diagnostics report
+the glass surface count and whether backdrop sampling was active.
 
 TV editing uses the system keyboard through SDL-webOS. Desktop editing uses the custom panel.
 
-HDMI status refreshes every two seconds while the TV's Home or input settings are visible and
+HDMI status refreshes every two seconds while the TV's Home, input dropdown or input settings are visible and
 focused. Only inputs are read on the existing platform worker; installed apps, artwork and saved
 preferences are not reloaded. At most one input read is queued, errors retain the last valid data
-and retry after ten seconds, and an unchanged snapshot does not redraw. Holds, reordering, overlays,
+and retry after ten seconds, and an unchanged snapshot does not redraw. Holds, reordering, other overlays,
 loading and hidden/unfocused pages pause polling and defer pending snapshots, keeping pointer
 targets stationary through release. A later complete inventory supersedes deferred input data.
 Auto visibility remains cable-based: boolean `hdmiPlugIn` takes priority over `connected`, with

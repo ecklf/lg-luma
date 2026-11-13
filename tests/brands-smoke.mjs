@@ -64,7 +64,7 @@ try {
     assert.equal(report.capture.glyph_failures, 0, `Invalid caption for ${logo}`);
     assert.ok(report.capture.vector_meshes > 0);
     const input = await sharp(screenshot)
-      .extract({ left: 78, top: 264, width: 282, height: 238 })
+      .extract({ left: 78, top: 426, width: 282, height: 238 })
       .png()
       .toBuffer();
     cards.push({ input, left: (index % 6) * 282, top: Math.floor(index / 6) * 238 });

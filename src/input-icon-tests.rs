@@ -103,6 +103,7 @@ fn remote_input_icon_picker_saves_resets_and_restores_its_parent() {
 #[test]
 fn input_icon_overrides_render_on_home_and_settings_and_automatic_restores_detection() {
     let mut state = ready();
+    state.overlay = Some(crate::state::Overlay::Inputs);
     let id = state.inventory.inputs[0].id.clone();
     let has_icon = |state: &crate::state::State, icon: &str| {
         scene(state).draw.iter().any(|d| matches!(d, Draw::TintedImage(path, ..) if path.ends_with(&format!("ui-icons/input-{icon}.lvec"))))

@@ -21,12 +21,30 @@ https://github.com/user-attachments/assets/2156d640-b8fa-4ea4-a02c-0db4c93bcc5a
       <img src="docs/settings.png" alt="Luma native General settings, desktop preview">
     </td>
     <td width="50%" align="center">
-      <img src="docs/inputs.png" alt="Luma native input settings, desktop preview">
+      <img src="docs/inputs.png" alt="Luma native input dropdown, desktop preview">
     </td>
   </tr>
 </table>
 
 </details>
+
+## Home and app drawer
+
+Home uses Liquid Glass controls over your wallpaper, a floating favorites dock, and a weather
+block with a condition icon, temperature, condition, and location. The greeting and standalone
+date have been removed.
+
+- **Left / Right** browses favorites. Hold **OK** to reorder them.
+- **Down** from favorites opens the animated six-column app drawer.
+- **Up** from favorites reaches the corner controls.
+- **Back** closes the drawer and focuses the first favorite.
+- **OK / click** launches apps directly. Manage favorites, hidden apps, and uninstall actions in
+  **Luma Settings → Apps**. Hidden apps remain listed there.
+- The **Inputs** dropdown at the top left shows names, icons, and connection dots, respecting
+  each input's Auto / On / Off visibility setting.
+- The **clock** at the top right opens **Luma Settings** or LG's native **TV settings**.
+
+Screenshots are native desktop previews, not hardware performance claims.
 
 If installed app icons look stale, use **Settings → System → Reset icon cache** to
 clear cached artwork and reload it without changing your preferences.

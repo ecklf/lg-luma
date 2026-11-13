@@ -201,6 +201,7 @@ impl DateFormat {
         }
     }
 
+    #[cfg(test)]
     pub fn format(self, language: Language, now: time::OffsetDateTime) -> String {
         let (year, month, day) = (now.year(), now.month() as u8, now.day());
         match self {
