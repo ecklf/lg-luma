@@ -25,3 +25,6 @@ Size input pills to their labels and center their contents vertically. Keep the 
 use the Luma logo and settings gear for the corner menu actions, and close the drawer when Up
 leaves the pinned row for the header. Preserve the original System update status card and inner
 action button, including versions, progress and retry behavior.
+
+Let drawer apps scroll behind the floating dock, clipping at the pinned cards' top edge rather
+than below the glass. Keep remote-focused grid cards fully visible below the dock.

@@ -45,7 +45,7 @@ fn drawer_has_a_clear_gap_below_the_dock_with_or_without_captions() {
             })
             .unwrap();
         assert!(state.drawer_grid_top() - bottom >= 48.);
-        assert!(state.apps_viewport().y > bottom + 30.);
+        assert_eq!(state.apps_viewport().y, 164.8);
     }
 }
 
@@ -63,6 +63,59 @@ fn weather_empty_state_uses_a_large_icon_and_setup_action() {
         .find(|control| control.target == Target::WeatherConfigure)
         .unwrap();
     assert!(setup.rect.h >= 240.);
+}
+
+#[test]
+fn scrolling_drawer_continues_behind_dock_without_obscuring_remote_focus() {
+    for names in [false, true] {
+        let mut state = ready();
+        state.preferences.reduced_motion = true;
+        state.preferences.show_home_names = names;
+        state.open(1);
+        state.scroll = 220.;
+        let rendered = scene(&state);
+        let viewport = state.apps_viewport();
+        assert_eq!(viewport.y, 164.8);
+        let grid_clip = rendered.draw.iter().position(|draw| matches!(draw,
+            Draw::Clip(Some(rect)) if rect.y == viewport.y && rect.x == viewport.x && rect.w == viewport.w)).unwrap();
+        let dock_glass = rendered
+            .draw
+            .iter()
+            .position(|draw| {
+                matches!(draw,
+            Draw::Glass(rect, ..) if rect.x == 60.)
+            })
+            .unwrap();
+        assert!(
+            grid_clip < dock_glass,
+            "the dock must composite above the scrolling grid"
+        );
+        let pinned = rendered
+            .controls
+            .iter()
+            .find(|control| matches!(control.target, Target::DockApp(_)))
+            .unwrap();
+        let (x, y) = pinned.rect.center();
+        assert_eq!(
+            state.hit_test(&rendered.controls, x, y),
+            Some(pinned.target.clone())
+        );
+        let grid = rendered
+            .controls
+            .iter()
+            .find(|control| matches!(control.target, Target::App(_)))
+            .unwrap();
+        assert!(grid.rect.y < state.drawer_grid_top() - 8.);
+        state.focus = grid.target.clone();
+        assert!(state.reveal_focus(&rendered.controls));
+        let revealed = scene(&state);
+        let selected = revealed
+            .controls
+            .iter()
+            .find(|control| control.target == state.focus)
+            .unwrap();
+        assert!(selected.rect.y >= state.drawer_grid_top() - 8.);
+    }
 }
 
 #[test]

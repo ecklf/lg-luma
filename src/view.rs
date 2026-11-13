@@ -1242,7 +1242,6 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, _now: OffsetDateTime) {
         );
         out.fade(start, 1. - state.drawer_progress(), 1.);
     }
-    favorites_dock(out, state, assets);
     if state.drawer_visibility > 0. {
         let controls = out.controls.len();
         let start = out.draw.len();
@@ -1250,6 +1249,7 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, _now: OffsetDateTime) {
         out.fade(start, state.drawer_progress(), 1.);
         out.controls.truncate(controls);
     }
+    favorites_dock(out, state, assets);
 }
 
 fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
@@ -1503,10 +1503,11 @@ fn library(out: &mut Scene, state: &State, assets: &Assets) {
         out.fade(start, 1. - state.drawer_progress(), 1.);
         out.controls.truncate(controls);
     }
-    favorites_dock(out, state, assets);
     let start = out.draw.len();
     library_grid(out, state, assets);
     out.fade(start, state.drawer_progress(), 1.);
+    // The scrolling grid continues underneath the floating glass and pinned cards.
+    favorites_dock(out, state, assets);
 }
 
 fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {

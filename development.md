@@ -178,6 +178,8 @@ The Home dock follows saved pinned order, with no Apps button or Move apps label
 The dock itself is decorative, not a focus/click target. Down opens the drawer; Back closes it.
 Its glass is drawn without the narrower content clip, while scrolling app cards retain their own clipping.
 The drawer leaves at least 60 logical pixels between the dock and its first card row.
+When scrolled, grid cards continue behind the floating dock and clip at the pinned cards' top edge.
+Remote focus still reveals grid cards below the dock, keeping the selected card unobscured.
 Back closes the drawer and resets focus and horizontal scroll to the first favorite. Wheel movement
 over either favorites dock scrolls horizontally. Pointer hover/down never initiates reveal scrolling.
 Grid Up/Down follows six-column indices, including offscreen rows, with the first row leading to

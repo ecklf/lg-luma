@@ -619,13 +619,9 @@ impl State {
 
     pub fn apps_viewport(&self) -> Rect {
         let content = self.content_viewport();
-        let top = self.drawer_grid_top();
-        Rect::new(
-            content.x,
-            top - 16.,
-            content.w,
-            content.y + content.h - top + 16.,
-        )
+        // Let scrolling cards continue behind the floating dock, up to its card edge.
+        let top = 164.8;
+        Rect::new(content.x, top, content.w, content.y + content.h - top)
     }
 
     pub fn drawer_grid_top(&self) -> f32 {
@@ -944,7 +940,8 @@ impl State {
                 } else if matches!(self.focus, Target::Background(_)) {
                     self.backgrounds_viewport().y + 8.
                 } else if self.page == Page::Apps {
-                    self.apps_viewport().y + 8.
+                    // Remote focus stays below the dock even though cards can draw behind it.
+                    self.drawer_grid_top() - 8.
                 } else {
                     120.8
                 };
