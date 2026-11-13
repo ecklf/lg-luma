@@ -100,13 +100,13 @@ It does not execute the test suites. A desktop display is required; on headless 
 Backspace deletes while editing. Native Back uses SDL's webOS-specific keycode. Back dismisses
 the keyboard first; Weather Location then returns to its parent Location row, HDMI choices to
 that HDMI row, and the Background gallery to Background in the sidebar. Back from the sidebar
-focuses the Settings tab, then returns Home. **System** in the sidebar groups **Refresh apps & inputs**
+returns directly Home; there is no Home header button. **System** in the sidebar groups **Refresh apps & inputs**
 and the vector power-icon **Quit app** action separately from General preferences.
 **Reset icon cache** clears persisted and decoded app icons, then reloads artwork on its
 worker without changing preferences. An active icon read finishes before disk entries are
 removed, so it cannot restore stale artwork after the reset.
-Home, the app drawer, Inputs and Recent apps launch directly on OK/click. **Settings → Apps** lists
-all apps, including hidden ones, and opens the action popup with **Open**, favorite, hide/show and
+Home, the app drawer, Inputs and Recent apps launch directly on OK/click. **Settings → Apps** uses
+a three-column artwork gallery like Backgrounds, including hidden apps, and opens the action popup with **Open**, favorite, hide/show and
 **Delete app** actions. Hold OK on Home still reorders favorites.
 Background cards open the same side popup with **Use background** first and **Delete background**
 only for inactive backgrounds. Deletion requires confirmation with **Cancel** focused by default.
@@ -151,10 +151,13 @@ reserve 64 logical pixels below their last item for both remote focus and wheel 
 with a tighter 48-pixel spacing for Languages and Backgrounds.
 The Home greeting and standalone date, along with their widget entries, are removed. Their legacy
 preferences remain readable and are not erased during other edits. Weather occupies the former
-greeting area with a large condition icon, temperature, condition and location. Disabled weather
+greeting area with a large condition icon, temperature, condition and location. The colored, static
+icons are original Breezy Weather PNGs, including clear/partly-cloudy night variants, bundled locally
+with their LGPL-3.0 license, attribution and source hashes in `assets/weather/`. No icons are fetched at runtime.
+Disabled weather
 is hidden. Enabled weather without a location offers a compact setup action.
-Settings lists render behind fixed controls. The drawer grid is clipped below its fixed dock and
-toolbar so offscreen cards cannot capture pointer events there. Input name removal uses **Clear name**.
+Settings lists render behind fixed controls. The drawer grid is clipped below its fixed dock so
+offscreen cards cannot capture pointer events there. Input name removal uses **Clear name**.
 Choice checkmarks identify saved values, while the bright row fill identifies only the current focus.
 
 Input icon picker: **Settings → Widgets → Inputs → select input → Icon** opens a
@@ -168,11 +171,13 @@ using Automatic. This is a backward-compatible feature and does not change input
 Home favorites form one horizontal glass dock, never a second row. Left/Right follows saved order,
 including reorder mode, and reveals complete cards. Up reaches Inputs or the clock/settings control.
 Down lifts the dock to the top and reveals a six-column app grid beneath it. Favorites stay in the
-dock instead of appearing twice in the unfiltered grid. Searches/categories can include favorites.
+dock instead of appearing twice in the grid. The drawer has no search or category toolbar.
+The Home dock follows saved pinned order, with no Apps button or Move apps label above it.
+Clicking an empty dock or the gaps between cards also opens the drawer.
 Back closes the drawer and resets focus and horizontal scroll to the first favorite. Wheel movement
 over either favorites dock scrolls horizontally. Pointer hover/down never initiates reveal scrolling.
 Grid Up/Down follows six-column indices, including offscreen rows, with the first row leading to
-the category/search toolbar. The top-left Inputs dropdown shows icons, names and connection dots,
+the pinned dock (or corner controls if it is empty). The top-left Inputs dropdown shows icons, names and connection dots,
 not descriptions. The clock opens two right-aligned, floating Control Center-style controls for
 Luma Settings and native LG TV settings. It does not replace LG's native settings UI.
 

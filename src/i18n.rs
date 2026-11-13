@@ -117,15 +117,6 @@ impl Language {
         }
         value
     }
-    pub fn category(self, value: &str) -> &str {
-        match value {
-            "Streaming" => self.t("categoryStreaming"),
-            "Music" => self.t("categoryMusic"),
-            "Gaming" => self.t("categoryGaming"),
-            "Utilities" => self.t("categoryUtilities"),
-            _ => self.t("categoryUtilities"),
-        }
-    }
     #[cfg(test)]
     pub fn greeting(self, hour: u8, name: &str) -> String {
         let key = match hour {
@@ -733,20 +724,20 @@ mod tests {
             "Netflix toegevoegd aan favorieten."
         );
         assert_eq!(Language::Nl.greeting(2, "Ana"), "Nog wakker, Ana?");
-        assert_eq!(Language::Nl.category("Gaming"), "Games");
+        assert_eq!(Language::Nl.t("categoryGaming"), "Games");
         assert_eq!(
             Language::Sv.format("favoriteAdded", &[("app", "Netflix")]),
             "Netflix har lagts till bland favoriterna."
         );
         assert_eq!(Language::Sv.greeting(2, "Ana"), "Fortfarande uppe, Ana?");
-        assert_eq!(Language::Sv.category("Gaming"), "Spel");
+        assert_eq!(Language::Sv.t("categoryGaming"), "Spel");
         assert_eq!(
             Language::Cs.format("favoriteAdded", &[("app", "Netflix")]),
             "Přidáno do oblíbených: Netflix."
         );
         assert_eq!(Language::Cs.greeting(2, "Ana"), "Ještě vzhůru, Ana?");
-        assert_eq!(Language::Cs.category("Gaming"), "Hry");
-        assert_eq!(Language::De.category("Gaming"), "Spiele");
+        assert_eq!(Language::Cs.t("categoryGaming"), "Hry");
+        assert_eq!(Language::De.t("categoryGaming"), "Spiele");
         assert_eq!(Language::En.greeting(15, ""), "Good afternoon.");
         assert_eq!(Language::En.greeting(15, "  Ana "), "Good afternoon, Ana.");
         assert_eq!(Language::Es.greeting(2, "Ana"), "¿Aún despiertos, Ana?");

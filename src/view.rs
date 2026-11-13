@@ -1,7 +1,7 @@
 //! Remote-first Liquid Glass surfaces in a logical 1920×1080 layout.
 use crate::{
     i18n::Language,
-    model::{App, BACKGROUNDS, CATEGORIES, Input, InputMode},
+    model::{App, BACKGROUNDS, Input, InputMode},
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
         APPS_COLUMNS, APPS_SECTION, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT,
@@ -598,7 +598,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             Overlay::Options { id, .. } => out
                 .controls
                 .iter()
-                .find(|control| state.page != Page::Settings && (control.target == Target::App(id.clone()) || control.target == Target::DockApp(id.clone())))
+                .find(|control| control.target == Target::App(id.clone()) || control.target == Target::DockApp(id.clone()))
                 .map(|control| {
                     // Hit regions include captions, artwork does not. Reusing the
                     // full hit region here stretches the lifted card vertically.
@@ -729,22 +729,6 @@ fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
             true,
         );
         out.control(target, rect, false);
-    }
-    if state.page == Page::Settings {
-        let back = Rect::new(820., 48., 280., 64.);
-        out.pill(back, state.focus == Target::Nav(2), false);
-        out.text(
-            language.t("home"),
-            Rect::new(back.x, back.y + 18., back.w, 30.),
-            text(24., 550, 0.),
-            if state.focus == Target::Nav(2) {
-                c(0x2c2c2c, 1.)
-            } else {
-                WHITE
-            },
-            true,
-        );
-        out.control(Target::Nav(2), back, false);
     }
 }
 
@@ -959,9 +943,6 @@ fn tile(
     if focused {
         out.ring(rect, 19.2);
     }
-    if state.page == Page::Apps && state.filter == 5 {
-        out.fade(start, 0.45, 1.);
-    }
     if state.pressed.as_ref() == Some(&target) {
         out.fade(start, 1., 0.85);
     }
@@ -970,7 +951,7 @@ fn tile(
             format!(
                 "{}{}",
                 app.title,
-                if state.filter == 5 {
+                if state.managing_apps() && state.preferences.hidden.contains(&app.id) {
                     format!(" · {}", state.preferences.language.t("hiddenLabel"))
                 } else {
                     String::new()
@@ -1066,7 +1047,7 @@ fn caption_height(state: &State, assets: &Assets, app: &App, width: f32) -> f32 
     let title = format!(
         "{}{}",
         app.title,
-        if state.filter == 5 {
+        if state.managing_apps() && state.preferences.hidden.contains(&app.id) {
             format!(" · {}", state.preferences.language.t("hiddenLabel"))
         } else {
             String::new()
@@ -1214,7 +1195,6 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, _now: OffsetDateTime) {
         let controls = out.controls.len();
         let start = out.draw.len();
         library_grid(out, state, assets);
-        library_toolbar(out, state, assets);
         out.fade(start, state.drawer_progress(), 1.);
         out.controls.truncate(controls);
     }
@@ -1228,14 +1208,12 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
     let dock = Rect::new(60., dock_y - 24., 1800., dock_height + 48.);
     out.shadow(dock, 40., 38., 12., 0.22);
     out.glass(dock, 40.);
-    if state.moving.is_some() {
-        out.text(
-            language.t("moveApps"),
-            Rect::new(1600., dock_y - 68., 236., 28.),
-            text(14.4, 400, 0.),
-            c(0xdedede, 1.),
-            true,
-        );
+    if state.page == Page::Home {
+        // Keep the empty dock and gaps pointer-accessible without an extra Apps button.
+        out.control(Target::Browse, dock, false);
+        if state.focus == Target::Browse {
+            out.ring(dock, 40.);
+        }
     }
     let apps = state.favorite_apps();
     if state.loading && state.inventory.apps.is_empty() {
@@ -1304,30 +1282,6 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
     }
     out.draw.push(Draw::EdgeFadeX(None));
     out.draw.push(Draw::Clip(Some(state.content_viewport())));
-    if state.page == Page::Apps {
-        return;
-    }
-    let button = Rect::new(862., dock_y - 88., 196., 48.);
-    out.pill(button, state.focus == Target::Browse, false);
-    let color = if state.focus == Target::Browse {
-        c(0x2c2c2c, 1.)
-    } else {
-        WHITE
-    };
-    out.icon(
-        assets,
-        "grid",
-        Rect::new(button.x + 20., button.y + 14., 20., 20.),
-        color,
-    );
-    out.text(
-        language.t("apps"),
-        Rect::new(button.x + 50., button.y + 11., 126., 28.),
-        text(21., 550, 0.),
-        color,
-        true,
-    );
-    out.control(Target::Browse, button, false);
 }
 
 struct WeatherSummary {
@@ -1344,7 +1298,7 @@ fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
     if let Some(place) = &state.preferences.weather_location {
         if let Some(reading) = state.weather.reading(place) {
             let condition = weather::condition(reading);
-            icon = format!("weather-{}", condition.icon);
+            icon = format!("weather/{}.png", condition.icon);
             parts.push((
                 weather::format_temperature(
                     reading.temperature,
@@ -1423,16 +1377,16 @@ fn weather_summary(
             (rect.h - leading).max(style.size),
         )
     });
-    out.icon(
-        assets,
-        &summary.icon,
-        if state.preferences.weather_location.is_some() {
-            Rect::new(84., y + 8., 112., 112.)
-        } else {
-            Rect::new(84., y + 5.8, 26.4, 26.4)
-        },
-        c(0xdedede, 0.83),
-    );
+    let icon_rect = if state.preferences.weather_location.is_some() {
+        Rect::new(84., y + 8., 112., 112.)
+    } else {
+        Rect::new(84., y + 5.8, 26.4, 26.4)
+    };
+    if summary.icon.ends_with(".png") {
+        out.image(assets.path(&summary.icon), icon_rect, 0., true);
+    } else {
+        out.icon(assets, &summary.icon, icon_rect, c(0xdedede, 0.83));
+    }
     for (label, style, color, rect) in summary.parts {
         out.text(
             label,
@@ -1471,115 +1425,20 @@ fn library(out: &mut Scene, state: &State, assets: &Assets) {
     favorites_dock(out, state, assets);
     let start = out.draw.len();
     library_grid(out, state, assets);
-    library_toolbar(out, state, assets);
     out.fade(start, state.drawer_progress(), 1.);
-}
-
-fn library_toolbar(out: &mut Scene, state: &State, assets: &Assets) {
-    let language = state.preferences.language;
-    let toolbar_y = state.drawer_toolbar_y();
-    let mut x = 84.;
-    for (index, label) in CATEGORIES.into_iter().enumerate() {
-        let label = language.category(label);
-        let width = assets.width(label, text(20.8, 550, -0.02)) + 40.;
-        let rect = Rect::new(x, toolbar_y, width, 56.);
-        filter(
-            out,
-            state,
-            Target::Filter(index + 1),
-            rect,
-            label,
-            state.filter == index + 1,
-        );
-        x += width + 7.2;
-    }
-    if state.filter != 0 {
-        let rect = Rect::new(x, toolbar_y, 56., 56.);
-        let focused = state.focus == Target::ClearFilter;
-        out.pill(rect, focused, false);
-        out.icon(
-            assets,
-            "close",
-            rect.inset(16.),
-            if focused {
-                c(0x2c2c2c, 1.)
-            } else {
-                c(0xeeeeee, 0.73)
-            },
-        );
-        out.control(Target::ClearFilter, rect, false);
-    }
-    let search = Rect::new(1532., toolbar_y, 304., 56.);
-    let focused = matches!(state.focus, Target::Search | Target::ClearSearch);
-    out.glass(search, 48.);
-    out.border(
-        search,
-        48.,
-        1.,
-        c(0xffffff, if focused { 0.70 } else { 0.07 }),
-    );
-    if focused {
-        out.border(search.inset(-3.), 51., 3., c(0xffffff, 0.063));
-    }
-    out.icon(
-        assets,
-        "search",
-        Rect::new(search.x + 19.4, search.y + 18.4, 19.2, 19.2),
-        c(0xeeeeee, 0.73),
-    );
-    out.text(
-        if state.query.is_empty() {
-            language.t("findApp")
-        } else {
-            &state.query
-        },
-        Rect::new(
-            search.x + 49.8,
-            search.y + (search.h - 29.12) / 2.,
-            if state.query.is_empty() { 234. } else { 202. },
-            29.12,
-        ),
-        text(20.8, 550, -0.02).leading(1.4),
-        c(0xeeeeee, if state.query.is_empty() { 0.73 } else { 1. }),
-        false,
-    );
-    out.control(Target::Search, search, false);
-    if !state.query.is_empty() {
-        let clear = Rect::new(search.x + search.w - 45.8, search.y + 14.8, 26.4, 26.4);
-        out.shape(clear, 13.2, c(0xffffff, 0.055));
-        out.icon(assets, "close", clear.inset(5.2), WHITE);
-        if state.focus == Target::ClearSearch {
-            out.border(clear.inset(-2.), 15.2, 2., WHITE);
-        }
-        out.control(Target::ClearSearch, clear, false);
-    }
 }
 
 fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let s = state.scroll;
     let apps = state.drawer_apps();
-    if apps.is_empty()
-        && (state.favorite_apps().is_empty() || !state.query.is_empty() || state.filter != 0)
-    {
+    if apps.is_empty() && state.favorite_apps().is_empty() {
         let title = if state.loading {
             language.t("findingApps")
-        } else if !state.query.is_empty() {
-            language.t("noMatches")
-        } else if state.filter == 5 {
-            language.t("noHidden")
         } else {
             language.t("roomForNew")
         };
-        let hint = state.error.clone().unwrap_or_else(|| {
-            if !state.query.is_empty() {
-                language.format("noMatchesHint", &[("query", &state.query)])
-            } else if state.filter == 5 {
-                language.t("hiddenHint").into()
-            } else {
-                language.t("noCategoryApps").into()
-            }
-        });
+        let hint = state.error.clone().unwrap_or_default();
         empty(
             out,
             state,
@@ -1630,26 +1489,6 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
         y += row_height + 38.4;
     }
     out.draw.push(Draw::Clip(None));
-}
-
-fn filter(out: &mut Scene, state: &State, target: Target, rect: Rect, label: &str, selected: bool) {
-    let focused = state.focus == target;
-    out.pill(rect, focused, selected);
-    if selected && !focused {
-        out.border(rect, rect.h / 2., 1.5, c(0xffffff, 0.35));
-    }
-    out.text(
-        label,
-        Rect::new(rect.x, rect.y + (rect.h - 29.12) / 2., rect.w, 29.12),
-        text(20.8, 550, -0.02).leading(1.4),
-        if focused {
-            c(0x2c2c2c, 1.)
-        } else {
-            c(0xeeeeee, if selected { 1. } else { 0.73 })
-        },
-        true,
-    );
-    out.control(target, rect, false);
 }
 
 /// The existing System status card owns the only update action.
@@ -2332,39 +2171,32 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
     }
     match state.section {
         APPS_SECTION => {
-            for (index, app) in state.apps().iter().enumerate() {
-                let (title, _) = assets.fit_line(&app.title, text(20.8, 550, -0.02), 820., 20.8);
-                let favorite = state
-                    .preferences
-                    .favorites(&state.inventory.apps)
-                    .contains(&app.id);
-                let hidden = state.preferences.hidden.contains(&app.id);
-                row(
-                    out,
-                    state,
-                    assets,
-                    Row {
-                        target: Target::App(app.id.clone()),
-                        rect: Rect::new(640., 164.8 + index as f32 * 84. - s, 1120., 72.),
-                        title: &title,
-                        icon: Some(if hidden {
-                            "eye-off"
-                        } else if favorite {
-                            "heart-filled"
-                        } else {
-                            "grid"
-                        }),
-                        value: if hidden {
-                            Some(language.t("hiddenLabel"))
-                        } else {
-                            None
-                        },
-                        description: None,
-                        selected: false,
-                        chevron: true,
-                    },
-                );
+            out.draw
+                .push(Draw::Clip(Some(state.app_settings_viewport())));
+            let apps = state.apps();
+            let names = state.preferences.show_app_names;
+            let mut y = 164.8;
+            for row in apps.chunks(3) {
+                let caption = if names {
+                    18.4 + row
+                        .iter()
+                        .map(|app| caption_height(state, assets, app, 360.))
+                        .fold(58.24, f32::max)
+                } else {
+                    0.
+                };
+                for (column, app) in row.iter().enumerate() {
+                    let rect = Rect::new(640. + column as f32 * 380., y - s, 360., 202.5);
+                    tile(out, state, assets, app, rect, names, false);
+                    if state.preferences.hidden.contains(&app.id) {
+                        let badge = Rect::new(rect.x + 12., rect.y + 12., 30., 30.);
+                        out.shape(badge, 15., c(0x202020, 0.85));
+                        out.icon(assets, "eye-off", badge.inset(6.), WHITE);
+                    }
+                }
+                y += 226.5 + caption;
             }
+            out.draw.push(Draw::Clip(None));
         }
         0 => {
             for (position, (index, key, icon, value, chevron)) in [

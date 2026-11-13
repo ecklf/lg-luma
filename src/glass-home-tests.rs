@@ -5,6 +5,121 @@ use crate::{
 };
 
 #[test]
+fn home_keeps_pinned_order_without_extra_labels_even_while_reordering() {
+    let mut state = ready();
+    state.preferences.favorites = Some(vec![
+        "amazon".into(),
+        "netflix".into(),
+        "youtube.leanback.v4".into(),
+    ]);
+    state.open(0);
+    assert_eq!(
+        state
+            .favorite_apps()
+            .iter()
+            .map(|app| app.id.as_str())
+            .collect::<Vec<_>>(),
+        ["amazon", "netflix", "youtube.leanback.v4"]
+    );
+    assert_eq!(state.focus, Target::App("amazon".into()));
+    state.hold();
+    let rendered = scene(&state);
+    for label in ["apps", "moveApps"] {
+        assert!(!rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::Text(value, ..) if value == state.preferences.language.t(label))));
+    }
+    assert!(state.moving.is_some());
+}
+
+#[test]
+fn back_from_every_settings_sidebar_returns_home_without_a_home_button() {
+    for section in 0..crate::state::SECTION_COUNT {
+        let mut state = ready();
+        state.open(2);
+        state.focus(Target::Sidebar(section), &controls(&state));
+        let rendered = scene(&state);
+        assert!(
+            !rendered
+                .controls
+                .iter()
+                .any(|control| matches!(control.target, Target::Nav(_)))
+        );
+        assert!(!rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::Text(value, ..) if value == state.preferences.language.t("home"))));
+        state.back();
+        assert_eq!(state.page, Page::Home);
+        assert_eq!(state.focus, Target::App("netflix".into()));
+    }
+}
+
+#[test]
+fn app_settings_gallery_navigates_three_columns_and_opens_existing_popup() {
+    let mut state = ready();
+    state.open(2);
+    state.focus(Target::Sidebar(APPS_SECTION), &controls(&state));
+    state.activate();
+    let ids: Vec<_> = state.apps().iter().map(|app| app.id.clone()).collect();
+    let rendered = scene(&state);
+    let cards: Vec<_> = rendered
+        .controls
+        .iter()
+        .filter(|control| matches!(control.target, Target::App(_)))
+        .collect();
+    assert_eq!(cards.len(), state.inventory.apps.len());
+    assert_eq!(cards[0].rect.w, 360.);
+    assert_eq!(cards[0].rect.y, cards[2].rect.y);
+    assert!(cards[3].rect.y > cards[0].rect.y);
+    state.direction(Direction::Right, &rendered.controls);
+    assert_eq!(state.focus, Target::App(ids[1].clone()));
+    assert!(state.overlay.is_none());
+    state.direction(Direction::Down, &rendered.controls);
+    assert_eq!(state.focus, Target::App(ids[4].clone()));
+    state.activate();
+    assert_eq!(state.focus, Target::OpenApp);
+    assert!(matches!(state.overlay, Some(Overlay::Options { .. })));
+    state.back();
+    assert_eq!(state.focus, Target::App(ids[4].clone()));
+    state.focus = Target::App(ids[3].clone());
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::Sidebar(APPS_SECTION));
+}
+
+#[test]
+fn app_gallery_clips_pointer_hits_and_reveals_remote_focus_without_scrolling_sidebar() {
+    let mut state = ready();
+    state.preferences.show_app_names = false;
+    state.preferences.hidden.push("netflix".into());
+    state.open(2);
+    state.section = APPS_SECTION;
+    let rendered = scene(&state);
+    let first = rendered
+        .controls
+        .iter()
+        .find(|control| control.target == Target::App("netflix".into()))
+        .unwrap();
+    assert_eq!(first.rect.h, 202.5);
+    assert!(rendered.draw.iter().any(|draw| matches!(draw,
+        Draw::TintedImage(path, rect, ..) if path.ends_with("eye-off.lvec") && first.rect.contains(rect.x, rect.y))));
+    state.wheel_scroll(&rendered.controls, Some((300., 500.)), 0, -3);
+    assert_eq!(state.scroll, 0.);
+    state.wheel_scroll(&rendered.controls, Some((800., 500.)), 0, -3);
+    assert!(state.scroll > 0.);
+    let scrolled = scene(&state);
+    assert_ne!(
+        state.hit_test(&scrolled.controls, 800., 170.),
+        Some(first.target.clone())
+    );
+    let last = Target::App(state.apps().last().unwrap().id.clone());
+    state.focus(last.clone(), &scrolled.controls);
+    let revealed = controls(&state)
+        .into_iter()
+        .find(|control| control.target == last)
+        .unwrap();
+    assert!(revealed.rect.y >= state.app_settings_viewport().y);
+    assert!(revealed.rect.y + revealed.rect.h <= 1032.1);
+}
+
+#[test]
 fn control_center_uses_separate_floating_actions_and_preserves_navigation() {
     let mut state = ready();
     state.focus = Target::SettingsMenu;
@@ -151,7 +266,7 @@ fn empty_favorites_and_empty_inventory_still_offer_drawer_and_settings() {
     assert!(matches!(state.focus, Target::App(_)));
     state.inventory.apps.clear();
     state.reconcile_focus();
-    assert_eq!(state.focus, Target::Search);
+    assert_eq!(state.focus, Target::SettingsMenu);
     state.back();
     assert_eq!(state.focus, Target::Browse);
     state.direction(Direction::Up, &controls(&state));

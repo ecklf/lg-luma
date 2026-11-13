@@ -41,11 +41,11 @@ try {
   for (const [name, script] of [
     ['home', 'home'],
     ['apps', 'apps,down'],
-    ['settings', 'settings,down'],
+    ['settings', 'settings'],
     ['inputs', 'home,up,enter'],
     ['clock-menu', 'home,up,right,enter'],
-    ['manage-apps', 'settings,down,down,down,down,down,enter'],
-    ['app-actions', 'settings,down,down,down,down,down,enter,enter'],
+    ['manage-apps', 'settings,down,down,down,down,enter'],
+    ['app-actions', 'settings,down,down,down,down,enter,enter'],
   ]) {
     // Independent state makes screenshots stable regardless of capture order.
     await fs.writeFile(preferences, JSON.stringify(configuration));

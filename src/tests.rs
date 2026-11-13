@@ -243,14 +243,11 @@ fn remote_routes_from_header_and_back_through_settings() {
     state.direction(Direction::Up, &controls(&state));
     assert_eq!(state.focus, Target::InputsMenu);
     state.open(2);
-    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(0));
     state.activate();
     assert_eq!(state.focus, Target::Setting(0));
     assert!(state.back().is_empty());
     assert_eq!(state.focus, Target::Sidebar(0));
-    state.back();
-    assert_eq!(state.focus, Target::Nav(2));
     state.back();
     assert_eq!(state.page, Page::Home);
     assert_eq!(
@@ -264,7 +261,7 @@ fn remote_routes_from_header_and_back_through_settings() {
 }
 
 #[test]
-fn hiding_restores_nearest_app_and_hidden_filter_can_restore_it() {
+fn hiding_keeps_the_management_card_available_for_restoring() {
     let mut state = ready();
     manage_apps(&mut state);
     state.focus = Target::App("netflix".into());
@@ -302,10 +299,11 @@ fn reorder_persists_order_and_keeps_selected_identity() {
 }
 
 #[test]
-fn keyboard_is_modal_and_back_closes_the_drawer_after_editing() {
+fn keyboard_is_modal_and_back_restores_its_setting_after_editing() {
     let mut state = ready();
-    state.open(1);
-    state.focus = Target::Search;
+    state.open(2);
+    state.subpage = Some(crate::state::Subpage::Greeting);
+    state.focus = Target::GreetingName;
     state.activate();
     assert!(
         controls(&state)
@@ -316,13 +314,11 @@ fn keyboard_is_modal_and_back_closes_the_drawer_after_editing() {
     state.delete();
     state.text("x");
     state.back();
-    assert_eq!(state.query, "netflix");
-    assert_eq!(state.focus, Target::Search);
-    assert_eq!(state.apps().len(), 1);
+    assert_eq!(state.preferences.greeting_name, "netflix");
+    assert_eq!(state.focus, Target::GreetingName);
     state.back();
-    assert!(state.query.is_empty());
-    assert_eq!(state.focus, Target::App("netflix".into()));
-    assert_eq!(state.page, Page::Home);
+    assert_eq!(state.focus, Target::Widget(0));
+    assert_eq!(state.page, Page::Settings);
 }
 
 #[test]
@@ -549,6 +545,7 @@ fn reordering_skips_hidden_and_unavailable_favorite_slots() {
 fn settings_header_moves_between_controls_without_switching_pages() {
     let mut state = ready();
     state.open(2);
+    state.focus = Target::InputsMenu;
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.page, Page::Settings);
     assert_eq!(state.focus, Target::SettingsMenu);
@@ -1100,35 +1097,14 @@ fn background_sidebar_right_focuses_upload_and_ok_restores_the_applied_backgroun
 }
 
 #[test]
-fn categories_and_search_have_clear_actions_and_conditional_hidden_control() {
+fn hidden_apps_stay_out_of_the_drawer_but_remain_manageable() {
     let mut state = ready();
     state.open(1);
-    assert!(
-        !controls(&state)
-            .iter()
-            .any(|c| c.target == Target::Filter(5))
-    );
-    state.focus = Target::Search;
-    state.direction(Direction::Left, &controls(&state));
-    assert_eq!(state.focus, Target::Filter(4));
-    state.preferences.hidden.push("netflix".into());
-    state.focus = Target::Search;
-    state.direction(Direction::Left, &controls(&state));
-    assert_eq!(state.focus, Target::Filter(4));
-    assert!(
-        !controls(&state)
-            .iter()
-            .any(|c| c.target == Target::Filter(5))
-    );
-    state.focus = Target::ClearFilter;
-    state.activate();
-    assert_eq!(state.filter, 0);
-    assert_eq!(state.focus, Target::Filter(1));
-    state.query = "YouTube".into();
-    state.focus = Target::ClearSearch;
-    state.activate();
-    assert!(state.query.is_empty());
-    assert_eq!(state.focus, Target::Search);
+    let id = state.apps()[0].id.clone();
+    state.preferences.hidden.push(id.clone());
+    assert!(!state.apps().iter().any(|app| app.id == id));
+    manage_apps(&mut state);
+    assert!(state.apps().iter().any(|app| app.id == id));
 }
 
 #[test]
@@ -1193,8 +1169,8 @@ fn delete_confirmation_defaults_to_cancel_and_back_restores_side_popup() {
             .all(|rect| rect.x > popup.x + popup.w - 80.)
     );
     assert!(
-        popup.w < card.w,
-        "management opens a compact action popup, not a stretched list row"
+        popup.w <= 600. && card.w == 360.,
+        "management keeps the gallery artwork and a compact action popup"
     );
     state.focus = Target::Option(2);
     let focused_scene = scene(&state);
@@ -1437,7 +1413,7 @@ fn deletion_completion_does_not_steal_focus_after_dismissal() {
     state.open(2);
     state.uninstall_response("netflix".into(), Ok(()));
     assert_eq!(state.page, Page::Settings);
-    assert_eq!(state.focus, Target::Nav(2));
+    assert_eq!(state.focus, Target::Sidebar(0));
     assert!(state.overlay.is_none());
 }
 
@@ -1499,13 +1475,13 @@ fn failed_deletion_refreshes_inventory_and_closes_stale_confirmation() {
 }
 
 #[test]
-fn remote_toolbar_focus_normalizes_scroll_but_hover_does_not() {
+fn remote_header_focus_normalizes_scroll_but_hover_does_not() {
     let mut state = ready();
     state.open(1);
     state.scroll = 100.;
-    state.pointer_focus(Target::Filter(1));
+    state.pointer_focus(Target::InputsMenu);
     assert_eq!(state.scroll, 100.);
-    state.focus(Target::Filter(2), &controls(&state));
+    state.focus(Target::SettingsMenu, &controls(&state));
     assert_eq!(state.scroll, 0.);
 }
 
@@ -2418,7 +2394,6 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
     );
     state.direction(Direction::Down, &controls(&state));
     state.direction(Direction::Down, &controls(&state));
-    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(WIDGETS_SECTION));
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::Widget(1));
@@ -2634,7 +2609,7 @@ fn language_list_scrolls_under_fixed_ui_without_clipping_or_fades() {
             )
         })
         .unwrap();
-    for key in ["interface", "home"] {
+    for key in ["interface", "inputs"] {
         let label = state.preferences.language.t(key);
         let fixed = rendered
             .draw
@@ -2650,17 +2625,17 @@ fn language_list_scrolls_under_fixed_ui_without_clipping_or_fades() {
     let nav = rendered
         .controls
         .iter()
-        .find(|control| control.target == Target::Nav(2))
+        .find(|control| control.target == Target::SettingsMenu)
         .unwrap();
     let (x, y) = nav.rect.center();
     assert_eq!(
         state.hit_test(&rendered.controls, x, y),
-        Some(Target::Nav(2))
+        Some(Target::SettingsMenu)
     );
 }
 
 #[test]
-fn drawer_grid_is_clipped_below_the_fixed_dock_and_toolbar() {
+fn drawer_grid_is_clipped_below_the_fixed_dock() {
     use crate::renderer::Draw;
     let mut state = ready();
     state.open(1);
@@ -2685,23 +2660,19 @@ fn drawer_grid_is_clipped_below_the_fixed_dock_and_toolbar() {
 }
 
 #[test]
-fn apps_toolbar_stays_fixed_above_scrolling_cards_and_keeps_pointer_priority() {
-    for with_clear_controls in [false, true] {
+fn pinned_dock_stays_fixed_above_scrolling_cards_and_keeps_pointer_priority() {
+    for names in [false, true] {
         let mut state = ready();
         state.open(1);
-        if with_clear_controls {
-            state.filter = 1;
-            state.query = "n".into();
-        }
+        state.drawer_visibility = 1.;
+        state.preferences.show_home_names = names;
         let before = controls(&state);
         state.scroll = 200.;
         let rendered = scene(&state);
-        for control in before.iter().filter(|control| {
-            matches!(
-                control.target,
-                Target::Filter(_) | Target::ClearFilter | Target::Search | Target::ClearSearch
-            )
-        }) {
+        for control in before
+            .iter()
+            .filter(|control| matches!(control.target, Target::InputsMenu | Target::SettingsMenu))
+        {
             let fixed = rendered
                 .controls
                 .iter()
@@ -2715,7 +2686,16 @@ fn apps_toolbar_stays_fixed_above_scrolling_cards_and_keeps_pointer_priority() {
                 Some(fixed.target.clone())
             );
         }
-        assert_eq!(state.hit_test(&rendered.controls, 1400., 230.), None);
+        let pinned = rendered
+            .controls
+            .iter()
+            .find(|control| matches!(control.target, Target::DockApp(_)))
+            .unwrap();
+        let (x, y) = pinned.rect.center();
+        assert_eq!(
+            state.hit_test(&rendered.controls, x, y),
+            Some(pinned.target.clone())
+        );
         let first = before
             .iter()
             .find(|control| matches!(control.target, Target::App(_)))
@@ -2737,63 +2717,41 @@ fn apps_toolbar_stays_fixed_above_scrolling_cards_and_keeps_pointer_priority() {
 }
 
 #[test]
-fn app_categories_and_search_use_matching_pills_and_larger_heavier_labels() {
-    use crate::renderer::Draw;
+fn app_drawer_has_no_categories_or_search() {
     let mut state = ready();
     state.open(1);
     state.drawer_visibility = 1.;
     let rendered = scene(&state);
-    for control in rendered
-        .controls
-        .iter()
-        .filter(|control| matches!(control.target, Target::Filter(_) | Target::Search))
-    {
-        assert_eq!(control.rect.h, 56.);
-        assert_eq!(control.rect.y, 350.);
-        assert!(rendered.draw.iter().any(|draw| matches!(draw,
-            Draw::Glass(rect, radius, color) if rect.x == control.rect.x && rect.y == control.rect.y
-                && rect.w == control.rect.w && (*radius == 48. || *radius == 28.) && color[3] >= 0.72
-        )));
-        assert!(rendered.draw.iter().any(|draw| matches!(draw,
-            Draw::Text(_, rect, style, ..) if rect.x >= control.rect.x && rect.x < control.rect.x + control.rect.w
-                && rect.y > control.rect.y && rect.y < control.rect.y + control.rect.h
-                && style.size == 20.8 && style.weight == 550
-        )));
-    }
+    assert!(
+        !rendered
+            .controls
+            .iter()
+            .any(|control| matches!(control.target, Target::Filter(_) | Target::Search))
+    );
+    assert!(
+        rendered
+            .controls
+            .iter()
+            .any(|control| matches!(control.target, Target::App(_)))
+    );
 }
 
 #[test]
-fn category_focus_active_and_clear_button_share_the_pill_style() {
-    use crate::renderer::Draw;
+fn drawer_ignores_stale_search_and_category_state() {
     let mut state = ready();
     state.open(1);
     state.drawer_visibility = 1.;
+    let original: Vec<_> = state.apps().iter().map(|app| app.id.clone()).collect();
     state.filter = 1;
-    state.focus = Target::ClearFilter;
-    let rendered = scene(&state);
-    let clear = rendered
-        .controls
-        .iter()
-        .find(|control| control.target == Target::ClearFilter)
-        .unwrap();
-    assert_eq!((clear.rect.w, clear.rect.h), (56., 56.));
-    assert!(rendered.draw.iter().any(|draw| matches!(draw,
-        Draw::Glass(rect, radius, ..) if rect.x == clear.rect.x && rect.y == clear.rect.y && *radius == 28.
-    )));
-    let category = rendered
-        .controls
-        .iter()
-        .find(|control| control.target == Target::Filter(1))
-        .unwrap();
-    assert!(rendered.draw.iter().any(|draw| matches!(draw,
-        Draw::Shape(rect, radius, stroke, color) if rect.x == category.rect.x && rect.y == category.rect.y
-            && *radius == 28. && *stroke == 1.5 && color[3] == 0.35
-    )));
-    state.focus = Target::Filter(1);
-    let focused = scene(&state);
-    assert!(focused.draw.iter().any(|draw| matches!(draw,
-        Draw::Glass(rect, radius, ..) if rect.x == category.rect.x && rect.y == category.rect.y && *radius == 28.
-    )));
+    state.query = "nonexistent app".into();
+    assert_eq!(
+        state
+            .apps()
+            .iter()
+            .map(|app| app.id.clone())
+            .collect::<Vec<_>>(),
+        original
+    );
 }
 
 #[test]

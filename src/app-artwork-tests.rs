@@ -585,8 +585,8 @@ fn grid_and_options_use_matching_adaptive_hearts_without_a_backing_circle() {
             },
             None,
         );
-        state.open(1);
-        state.query = "Regional".into();
+        state.open(2);
+        state.section = crate::state::APPS_SECTION;
         state.focus = Target::App("regional.app".into());
         let render = |state: &crate::state::State| {
             crate::view::scene(state, &assets, time::OffsetDateTime::UNIX_EPOCH)

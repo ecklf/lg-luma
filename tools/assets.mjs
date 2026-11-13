@@ -8,6 +8,8 @@ const root = path.resolve(import.meta.dirname, '..');
 const source = path.join(root, 'assets');
 const out = path.join(root, '.build/assets');
 const highResolution = process.argv.includes('--4k');
+// Original raster artwork stays separate and replaceable, with its licenses/source notice.
+await fs.cp(path.join(source, 'weather'), path.join(out, 'weather'), { recursive: true });
 // Retire generated dumps from older asset caches as well as the source assets.
 for (const legacy of ['app-icons', 'icons.json', 'colors.json']) {
   await fs.rm(path.join(out, legacy), { recursive: true, force: true });
