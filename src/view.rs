@@ -599,22 +599,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
                 .controls
                 .iter()
                 .find(|control| control.target == Target::App(id.clone()) || control.target == Target::DockApp(id.clone()))
-                .map(|control| {
-                    // Hit regions include captions, artwork does not. Reusing the
-                    // full hit region here stretches the lifted card vertically.
-                    let mut rect = control.rect;
-                    let names = if state.page == Page::Home || matches!(control.target, Target::DockApp(_)) {
-                        state.preferences.show_home_names
-                    } else {
-                        state.preferences.show_app_names
-                    };
-                    if names
-                        && let Some(app) = state.inventory.apps.iter().find(|app| &app.id == id)
-                    {
-                        rect.h -= 18.4 + caption_height(state, assets, app, rect.w);
-                    }
-                    rect
-                }),
+                .map(|control| control.rect),
             _ => None,
         };
         out.controls.clear();
@@ -911,31 +896,13 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
     out.draw.push(Draw::Clip(None));
 }
 
-fn tile(
-    out: &mut Scene,
-    state: &State,
-    assets: &Assets,
-    app: &App,
-    rect: Rect,
-    names: bool,
-    dock: bool,
-) {
+fn tile(out: &mut Scene, state: &State, assets: &Assets, app: &App, rect: Rect, dock: bool) {
     let target = if dock && state.page == Page::Apps {
         Target::DockApp(app.id.clone())
     } else {
         Target::App(app.id.clone())
     };
-    let caption_height = if names {
-        caption_height(state, assets, app, rect.w)
-    } else {
-        0.
-    };
-    let label_height = if names { 18.4 + caption_height } else { 0. };
-    out.control(
-        target.clone(),
-        Rect::new(rect.x, rect.y, rect.w, rect.h + label_height),
-        true,
-    );
+    out.control(target.clone(), rect, true);
     let viewport = if dock {
         state.favorites_viewport()
     } else {
@@ -946,7 +913,7 @@ fn tile(
     } else {
         MAIN_TOP
     };
-    if rect.y + rect.h + label_height < top
+    if rect.y + rect.h < top
         || rect.y > 1054.
         || rect.x + rect.w + 40. < viewport.x
         || rect.x - 40. > viewport.x + viewport.w
@@ -997,32 +964,6 @@ fn tile(
     }
     if state.pressed.as_ref() == Some(&target) {
         out.fade(start, 1., 0.85);
-    }
-    if names {
-        out.text(
-            format!(
-                "{}{}",
-                app.title,
-                if state.managing_apps() && state.preferences.hidden.contains(&app.id) {
-                    format!(" · {}", state.preferences.language.t("hiddenLabel"))
-                } else {
-                    String::new()
-                }
-            ),
-            Rect::new(
-                rect.x + 4.,
-                rect.y + rect.h + 18.4,
-                rect.w - 8.,
-                caption_height,
-            ),
-            text(20.8, if focused { 600 } else { 550 }, -0.02).leading(1.4),
-            if focused {
-                c(0xffffff, 1.)
-            } else {
-                c(0xececec, 0.66)
-            },
-            true,
-        );
     }
     if state.moving.is_some() && state.moving.as_ref() != Some(&app.id) {
         out.fade(start, 0.48, 1.);
@@ -1093,29 +1034,6 @@ fn app_face(
         brand_mark(out, assets, app, rect, language);
     }
     favorite_color
-}
-
-fn caption_height(state: &State, assets: &Assets, app: &App, width: f32) -> f32 {
-    let title = format!(
-        "{}{}",
-        app.title,
-        if state.managing_apps() && state.preferences.hidden.contains(&app.id) {
-            format!(" · {}", state.preferences.language.t("hiddenLabel"))
-        } else {
-            String::new()
-        }
-    );
-    let style = text(
-        20.8,
-        if state.focus == Target::App(app.id.clone()) {
-            600
-        } else {
-            550
-        },
-        -0.02,
-    )
-    .leading(1.4);
-    (assets.lines(&title, style, width - 8.) as f32 * style.size * style.line_height).max(58.24)
 }
 
 fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language: Language) {
@@ -1255,8 +1173,7 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, _now: OffsetDateTime) {
 fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let dock_y = state.dock_y();
-    let names = state.preferences.show_home_names;
-    let dock_height = FACE_HEIGHT + if names { 100. } else { 0. };
+    let dock_height = FACE_HEIGHT;
     let dock = Rect::new(60., dock_y - 24., 1800., dock_height + 48.);
     // The card extends beyond the content viewport; clip only its scrolling contents.
     out.draw.push(Draw::Clip(None));
@@ -1323,7 +1240,6 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
                 HOME_TILE_WIDTH,
                 FACE_HEIGHT,
             ),
-            names,
             true,
         );
     }
@@ -1537,17 +1453,8 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
     out.draw.push(Draw::Clip(Some(state.apps_viewport())));
     let offset = state.dock_y() - 164.8;
     let mut y = state.drawer_grid_top();
-    let names = state.preferences.show_app_names;
     for row in apps.chunks(APPS_COLUMNS) {
-        let row_height = FACE_HEIGHT
-            + if names {
-                18.4 + row
-                    .iter()
-                    .map(|app| caption_height(state, assets, app, 270.))
-                    .fold(58.24, f32::max)
-            } else {
-                0.
-            };
+        let row_height = FACE_HEIGHT;
         for (column, app) in row.iter().enumerate() {
             tile(
                 out,
@@ -1560,7 +1467,6 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
                     270.,
                     FACE_HEIGHT,
                 ),
-                names,
                 false,
             );
             // Reveal/scroll against the final layout, not the moving presentation.
@@ -2021,7 +1927,6 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 _ => None,
             };
             let sub = match &state.subpage {
-                Some(Subpage::AppNames) => language.t("appNames"),
                 Some(Subpage::Greeting) => language.t("greeting"),
                 Some(Subpage::Date) => language.t("date"),
                 Some(Subpage::Weather) => language.t("weather"),
@@ -2108,7 +2013,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::Inputs
                 | Subpage::Greeting
                 | Subpage::Date
-                | Subpage::AppNames
                 | Subpage::Clock
         ) {
             match subpage {
@@ -2118,7 +2022,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::Inputs => inputs_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::Date => date_settings(out, state, assets),
-                Subpage::AppNames => app_name_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
                 _ => unreachable!(),
             }
@@ -2199,7 +2102,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::Inputs
             | Subpage::Greeting
             | Subpage::Date
-            | Subpage::AppNames
             | Subpage::Clock => {
                 unreachable!()
             }
@@ -2254,33 +2156,23 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             out.draw
                 .push(Draw::Clip(Some(state.app_settings_viewport())));
             let apps = state.apps();
-            let names = state.preferences.show_app_names;
             let mut y = 164.8;
             for row in apps.chunks(3) {
-                let caption = if names {
-                    18.4 + row
-                        .iter()
-                        .map(|app| caption_height(state, assets, app, 360.))
-                        .fold(58.24, f32::max)
-                } else {
-                    0.
-                };
                 for (column, app) in row.iter().enumerate() {
                     let rect = Rect::new(640. + column as f32 * 380., y - s, 360., 202.5);
-                    tile(out, state, assets, app, rect, names, false);
+                    tile(out, state, assets, app, rect, false);
                     if state.preferences.hidden.contains(&app.id) {
                         let badge = Rect::new(rect.x + 12., rect.y + 12., 30., 30.);
                         out.shape(badge, 15., c(0x202020, 0.85));
                         out.icon(assets, "eye-off", badge.inset(6.), WHITE);
                     }
                 }
-                y += 226.5 + caption;
+                y += 226.5;
             }
             out.draw.push(Draw::Clip(None));
         }
         0 => {
             for (position, (index, key, icon, value, chevron)) in [
-                (0, "appNames", "type", None, true),
                 (1, "clock", "clock", None, true),
                 (4, "language", "language", Some(language.name()), true),
                 (
@@ -2792,41 +2684,6 @@ fn clock_settings(out: &mut Scene, state: &State, assets: &Assets) {
                 description: None,
                 selected: false,
                 chevron: true,
-            },
-        );
-    }
-}
-
-fn app_name_settings(out: &mut Scene, state: &State, assets: &Assets) {
-    let language = state.preferences.language;
-    for (index, (target, title, enabled)) in [
-        (
-            Target::AppNamesHome,
-            "showOnHome",
-            state.preferences.show_home_names,
-        ),
-        (
-            Target::AppNamesApps,
-            "showOnApps",
-            state.preferences.show_app_names,
-        ),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        row(
-            out,
-            state,
-            assets,
-            Row {
-                target,
-                rect: Rect::new(640., 164.8 + index as f32 * 84. - state.scroll, 1120., 72.),
-                title: language.t(title),
-                icon: None,
-                value: Some(language.t(if enabled { "stateOn" } else { "stateOff" })),
-                description: None,
-                selected: false,
-                chevron: false,
             },
         );
     }
@@ -3665,7 +3522,7 @@ mod tests {
                 state.focus = if focused {
                     Target::Sidebar(2)
                 } else {
-                    Target::Setting(0)
+                    Target::Setting(1)
                 };
                 let mut scene = Scene::new();
                 settings_sidebar(&mut scene, &state, &assets);

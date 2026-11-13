@@ -231,7 +231,7 @@ fn widening_favorites_does_not_widen_apps_or_unclip_offscreen_rows() {
     assert!(!state.wheel_scroll(&controls, Some((1860., 600.)), 0, -1));
     assert_eq!(state.home_scroll, 0.);
     let viewport = state.content_viewport();
-    let scroll_limit = controls[0].rect.y + controls[0].rect.h - (viewport.y + viewport.h - 12.);
+    let scroll_limit = controls[0].rect.y + controls[0].rect.h - (viewport.y + viewport.h - 24.);
     assert_eq!(state.scroll, 90_f32.min(scroll_limit));
 }
 
@@ -245,7 +245,7 @@ fn remote_routes_from_header_and_back_through_settings() {
     state.open(2);
     assert_eq!(state.focus, Target::Sidebar(0));
     state.activate();
-    assert_eq!(state.focus, Target::Setting(0));
+    assert_eq!(state.focus, Target::Setting(1));
     assert!(state.back().is_empty());
     assert_eq!(state.focus, Target::Sidebar(0));
     state.back();
@@ -661,59 +661,51 @@ fn remote_can_clear_a_saved_greeting_name_without_moving_the_controls() {
 }
 
 #[test]
-fn app_name_settings_use_independent_defaults_including_with_legacy_preferences() {
-    let old: Preferences = serde_json::from_value(json!({"show_names": true})).unwrap();
-    assert!(!old.show_home_names);
-    assert!(old.show_app_names);
+fn app_name_settings_are_removed_and_legacy_preferences_are_ignored() {
+    let old: Preferences = serde_json::from_value(
+        json!({"show_names": true, "show_home_names": true, "show_app_names": true}),
+    )
+    .unwrap();
+    let saved = serde_json::to_value(old).unwrap();
+    assert!(saved.get("show_home_names").is_none());
+    assert!(saved.get("show_app_names").is_none());
     let mut state = ready();
-    assert!(!state.preferences.show_home_names);
-    assert!(state.preferences.show_app_names);
     state.open(2);
-    state.focus = Target::Setting(0);
     assert!(
-        state
-            .direction(Direction::Right, &controls(&state))
-            .is_empty()
+        !controls(&state)
+            .iter()
+            .any(|control| control.target == Target::Setting(0))
     );
-    assert_eq!(state.subpage, Some(crate::state::Subpage::AppNames));
-    assert_eq!(state.focus, Target::AppNamesHome);
-    assert_eq!(state.activate(), vec![Effect::Save]);
-    assert!(state.preferences.show_home_names);
-    assert!(state.preferences.show_app_names);
-    state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::AppNamesApps);
-    assert_eq!(state.activate(), vec![Effect::Save]);
-    assert!(state.preferences.show_home_names);
-    assert!(!state.preferences.show_app_names);
-    assert_eq!(state.subpage, Some(crate::state::Subpage::AppNames));
-    let restored: Preferences =
-        serde_json::from_value(serde_json::to_value(&state.preferences).unwrap()).unwrap();
-    assert!(restored.show_home_names);
-    assert!(!restored.show_app_names);
-    state.direction(Direction::Left, &controls(&state));
-    assert_eq!(state.focus, Target::Setting(0));
-    assert!(state.subpage.is_none());
+    assert!(!scene(&state).draw.iter().any(
+        |draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == "App names")
+    ));
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::Setting(1));
 }
 
 #[test]
-fn home_and_apps_render_only_their_own_caption_preference() {
+fn all_app_galleries_are_artwork_only_even_with_legacy_caption_preferences() {
     let mut state = ready();
     for (home, apps) in [(false, true), (true, false), (true, true), (false, false)] {
-        state.preferences.show_home_names = home;
-        state.preferences.show_app_names = apps;
-        for (page, expected) in [(0, home), (1, home)] {
+        state.preferences =
+            serde_json::from_value(json!({"show_home_names": home, "show_app_names": apps}))
+                .unwrap();
+        for page in [0, 1, 2] {
             state.open(page);
+            if page == 2 {
+                state.section = crate::state::APPS_SECTION;
+            }
             let scene = scene(&state);
             let caption = scene.draw.iter().any(
                 |draw| matches!(draw, crate::renderer::Draw::Text(value, ..) if value == "Netflix"),
             );
-            assert_eq!(caption, expected, "Home={home}, Apps={apps}, page={page}");
+            assert!(!caption, "Home={home}, Apps={apps}, page={page}");
             let card = scene
                 .controls
                 .iter()
                 .find(|c| {
                     c.target
-                        == if page == 0 {
+                        == if page != 1 {
                             Target::App("netflix".into())
                         } else {
                             Target::DockApp("netflix".into())
@@ -721,8 +713,8 @@ fn home_and_apps_render_only_their_own_caption_preference() {
                 })
                 .unwrap();
             assert_eq!(
-                card.rect.h > 154.4,
-                expected,
+                card.rect.h,
+                if page == 2 { 202.5 } else { 154.4 },
                 "Hidden captions must not reserve space"
             );
         }
@@ -1218,8 +1210,9 @@ fn opening_side_popup_preserves_card_artwork_geometry_with_or_without_captions()
     for page in [0] {
         for names in [false, true] {
             let mut state = ready();
-            state.preferences.show_app_names = names;
-            state.preferences.show_home_names = names;
+            state.preferences =
+                serde_json::from_value(json!({"show_app_names": names, "show_home_names": names}))
+                    .unwrap();
             state.open(page);
             state.focus = Target::App("netflix".into());
             let before = scene(&state);
@@ -1492,7 +1485,7 @@ fn remote_header_focus_normalizes_scroll_but_hover_does_not() {
 }
 
 #[test]
-fn long_captions_expand_rows_without_overlapping_the_next_row() {
+fn long_app_titles_do_not_reserve_caption_space() {
     let mut state = ready();
     state.preferences.favorites = Some(vec![]);
     state.open(1);
@@ -1507,7 +1500,7 @@ fn long_captions_expand_rows_without_overlapping_the_next_row() {
         .iter()
         .find(|c| c.target == Target::App(next_id.clone()))
         .unwrap();
-    assert!(title.rect.h > 240.);
+    assert_eq!(title.rect.h, 154.4);
     assert!(next.rect.y > title.rect.y + title.rect.h);
 }
 
@@ -1771,7 +1764,12 @@ fn unsupported_language_preferences_recover_without_losing_other_choices() {
     )
     .unwrap();
     assert_eq!(preferences.language, crate::i18n::Language::En);
-    assert!(preferences.show_home_names);
+    assert!(
+        serde_json::to_value(&preferences)
+            .unwrap()
+            .get("show_home_names")
+            .is_none()
+    );
     assert_eq!(preferences.favorites, Some(vec!["netflix".into()]));
 }
 
@@ -2672,7 +2670,7 @@ fn pinned_dock_stays_fixed_above_scrolling_cards_and_keeps_pointer_priority() {
         let mut state = ready();
         state.open(1);
         state.drawer_visibility = 1.;
-        state.preferences.show_home_names = names;
+        state.preferences = serde_json::from_value(json!({"show_home_names": names})).unwrap();
         let before = controls(&state);
         state.scroll = 200.;
         let rendered = scene(&state);

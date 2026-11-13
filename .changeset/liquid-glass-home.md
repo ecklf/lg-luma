@@ -28,3 +28,6 @@ action button, including versions, progress and retry behavior.
 
 Let drawer apps scroll behind the floating dock, clipping at the pinned cards' top edge rather
 than below the glass. Keep remote-focused grid cards fully visible below the dock.
+
+Remove App names settings and captions across Home, the drawer, and Settings → Apps. Ignore legacy
+caption preferences. Tighten the drawer's dock-to-list gap to 24px and match its bottom padding.

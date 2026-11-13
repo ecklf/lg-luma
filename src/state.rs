@@ -17,6 +17,7 @@ pub const SETTINGS_ORDER: [usize; SECTION_COUNT] =
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
 pub const APPS_COLUMNS: usize = 6;
+pub const DRAWER_PADDING: f32 = 24.;
 /// Automatic inventory retries before the error shows: with the 6.5 s Luna timeout about 50 s.
 pub const INVENTORY_RETRIES: u32 = 5;
 pub const INVENTORY_RETRY_DELAY: Duration = Duration::from_secs(2);
@@ -70,8 +71,6 @@ pub enum Target {
     GreetingToggle,
     DateToggle,
     DateFormat,
-    AppNamesHome,
-    AppNamesApps,
     ClockFormat,
     ClockTimeFormat,
     Background(usize),
@@ -153,7 +152,6 @@ pub enum Overlay {
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Subpage {
-    AppNames,
     Greeting,
     Date,
     DateFormat,
@@ -529,11 +527,7 @@ impl State {
     }
 
     pub fn dock_y(&self) -> f32 {
-        let home_y = if self.preferences.show_home_names {
-            720.
-        } else {
-            820.
-        };
+        let home_y = 820.;
         home_y - (home_y - 164.8) * self.drawer_progress()
     }
 
@@ -602,6 +596,8 @@ impl State {
                 } else {
                     SETTINGS_BOTTOM_PADDING
                 }
+            } else if self.page == Page::Apps {
+                DRAWER_PADDING
             } else {
                 12.
             }
@@ -625,11 +621,8 @@ impl State {
     }
 
     pub fn drawer_grid_top(&self) -> f32 {
-        408. + if self.preferences.show_home_names {
-            100.
-        } else {
-            0.
-        }
+        // Pinned artwork height, glass inset, then the matching outer list padding.
+        164.8 + 154.4 + 24. + DRAWER_PADDING
     }
 
     pub fn app_settings_viewport(&self) -> Rect {
@@ -1143,7 +1136,7 @@ impl State {
                 }),
             SYSTEM_SECTION if self.available_update.is_some() => Target::InstallUpdate,
             SYSTEM_SECTION => Target::CheckUpdates,
-            _ => Target::Setting(0),
+            _ => Target::Setting(1),
         }
     }
 
@@ -1154,7 +1147,6 @@ impl State {
         self.panel_started = None;
         self.pointer = false;
         self.focus = match self.subpage.take() {
-            Some(Subpage::AppNames) => Target::Setting(0),
             Some(Subpage::Greeting) => Target::Widget(0),
             Some(Subpage::Date) => Target::Widget(4),
             Some(Subpage::DateFormat) => {
@@ -1413,7 +1405,6 @@ impl State {
                     Target::GreetingName,
                     Target::GreetingNameClear,
                 ]),
-                Some(Subpage::AppNames) => Some(&[Target::AppNamesHome, Target::AppNamesApps]),
                 Some(Subpage::Date) => Some(&[Target::DateToggle, Target::DateFormat]),
                 Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
                 _ => None,
@@ -1586,7 +1577,7 @@ impl State {
                 self.focus(Target::SettingsMenu, controls);
                 return vec![];
             }
-            if self.focus == Target::Setting(0) && matches!(direction, Direction::Up) {
+            if self.focus == Target::Setting(1) && matches!(direction, Direction::Up) {
                 self.focus(Target::SettingsMenu, controls);
                 return vec![];
             }
@@ -2378,14 +2369,6 @@ impl State {
                 self.focus = Target::GreetingName;
                 return vec![Effect::Save];
             }
-            Target::AppNamesHome => {
-                self.preferences.show_home_names = !self.preferences.show_home_names;
-                return vec![Effect::Save];
-            }
-            Target::AppNamesApps => {
-                self.preferences.show_app_names = !self.preferences.show_app_names;
-                return vec![Effect::Save];
-            }
             Target::ClockFormat | Target::ClockTimeFormat => {
                 let format = self.focus == Target::ClockFormat;
                 self.subpage = Some(if format {
@@ -2528,15 +2511,6 @@ impl State {
             }
             Target::Setting(index) => {
                 match index {
-                    0 => {
-                        self.subpage = Some(Subpage::AppNames);
-                        self.focus = Target::AppNamesHome;
-                        self.scroll = 0.;
-                        if !self.preferences.reduced_motion {
-                            self.panel_started = Some(Instant::now());
-                        }
-                        return vec![];
-                    }
                     1 => {
                         self.subpage = Some(Subpage::Clock);
                         self.scroll = 0.;
@@ -2687,7 +2661,6 @@ impl State {
                         Subpage::WeatherLocation
                         | Subpage::Greeting
                         | Subpage::Date
-                        | Subpage::AppNames
                         | Subpage::Clock
                         | Subpage::Weather
                         | Subpage::Shortcuts

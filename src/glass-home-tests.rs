@@ -29,11 +29,13 @@ fn dock_is_not_a_control_and_its_glass_is_not_clipped_to_the_content_area() {
 }
 
 #[test]
-fn drawer_has_a_clear_gap_below_the_dock_with_or_without_captions() {
+fn drawer_has_a_compact_gap_even_with_legacy_caption_preferences() {
     for names in [false, true] {
         let mut state = ready();
         state.preferences.reduced_motion = true;
-        state.preferences.show_home_names = names;
+        state.preferences =
+            serde_json::from_value(json!({"show_home_names": names, "reduced_motion": true}))
+                .unwrap();
         state.open(1);
         let rendered = scene(&state);
         let bottom = rendered
@@ -44,8 +46,17 @@ fn drawer_has_a_clear_gap_below_the_dock_with_or_without_captions() {
                 _ => None,
             })
             .unwrap();
-        assert!(state.drawer_grid_top() - bottom >= 48.);
+        assert!((state.drawer_grid_top() - bottom - 24.).abs() < 0.001);
         assert_eq!(state.apps_viewport().y, 164.8);
+        state.wheel_scroll(&rendered.controls, Some((900., 900.)), 0, -1000);
+        let scrolled = scene(&state);
+        let last_bottom = scrolled
+            .controls
+            .iter()
+            .filter(|control| matches!(control.target, Target::App(_)))
+            .map(|control| control.rect.y + control.rect.h)
+            .fold(0., f32::max);
+        assert!((1080. - last_bottom - 24.).abs() < 0.001);
     }
 }
 
@@ -70,7 +81,9 @@ fn scrolling_drawer_continues_behind_dock_without_obscuring_remote_focus() {
     for names in [false, true] {
         let mut state = ready();
         state.preferences.reduced_motion = true;
-        state.preferences.show_home_names = names;
+        state.preferences =
+            serde_json::from_value(json!({"show_home_names": names, "reduced_motion": true}))
+                .unwrap();
         state.open(1);
         state.scroll = 220.;
         let rendered = scene(&state);
@@ -218,7 +231,6 @@ fn app_settings_gallery_navigates_three_columns_and_opens_existing_popup() {
 #[test]
 fn app_gallery_clips_pointer_hits_and_reveals_remote_focus_without_scrolling_sidebar() {
     let mut state = ready();
-    state.preferences.show_app_names = false;
     state.preferences.hidden.push("netflix".into());
     state.open(2);
     state.section = APPS_SECTION;

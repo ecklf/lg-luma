@@ -373,24 +373,18 @@ try {
   assert.ok(!widgets.ui_text.includes('Greeting'));
   assert.ok(!widgets.ui_text.includes('Date'));
 
-  const appNamesEditor = 'settings,enter,enter';
-  const appNames = await scenario('app-name-settings', appNamesEditor);
-  assert.equal(appNames.subpage, 'AppNames');
-  assert.ok(appNames.ui_text.includes('Show on Home'));
-  assert.ok(appNames.ui_text.includes('Show on Apps'));
-  assert.equal(appNames.preferences.show_home_names, false);
-  assert.equal(appNames.preferences.show_app_names, true);
-  const customNames = await scenario(
-    'home-names-enabled',
-    `${appNamesEditor},enter,down,enter,back,home`,
-  );
-  assert.equal(customNames.preferences.show_home_names, true);
-  assert.equal(customNames.preferences.show_app_names, false);
-  assert.ok(customNames.ui_text.includes('Netflix'));
-  const hiddenNames = await scenario('app-names-disabled', 'apps');
-  assert.equal(hiddenNames.preferences.show_app_names, false);
-  assert.ok(!hiddenNames.ui_text.includes('Amazon Music'));
-  assert.ok(hiddenNames.ui_text.includes('Netflix'), 'Dock captions retain the Home preference');
+  const general = await scenario('general-without-app-names', 'settings,enter');
+  assert.deepEqual(general.focus, { Setting: 1 });
+  assert.ok(!general.ui_text.includes('App names'));
+  for (const [name, script] of [
+    ['home-artwork-only', 'home'],
+    ['drawer-artwork-only', 'apps'],
+    ['app-settings-artwork-only', 'settings,down,enter'],
+  ]) {
+    const artwork = await scenario(name, script);
+    assert.ok(!artwork.ui_text.includes('Netflix'));
+    assert.ok(!artwork.ui_text.includes('Amazon Music'));
+  }
 
   const renamedInput = await scenario(
     'input-rename-focus',
@@ -399,7 +393,7 @@ try {
   assert.equal(renamedInput.focus, 'InputRename');
   assert.equal(renamedInput.preferences.input_names['com.webos.app.hdmi2'], 'Console');
   assert.ok(renamedInput.ui_text.includes('Clear name'));
-  const clockEditor = 'settings,enter,down,enter';
+  const clockEditor = 'settings,enter,enter';
   const timeFormat = await scenario('clock-time-format', `${clockEditor},down,enter`);
   assert.equal(timeFormat.subpage, 'TimeFormat');
   assert.deepEqual(timeFormat.focus, { Choice: 0 });

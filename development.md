@@ -141,10 +141,9 @@ The **Clock** subpage contains **Clock format** (12-hour or 24-hour) and **Time 
 or `HH:MM:SS`, defaulting to `HH:MM`). Choosing a format returns to its row in Clock, and Back
 from Clock restores its General row. With seconds shown, the header clock redraws once per second
 instead of once per minute. Existing saved hour and seconds preferences are retained.
-General has an **App names** subpage with independent **Show on Home** and **Show on Apps** toggles.
-Home captions default to off and Apps captions default to on, stored independently in `show_home_names`
-and `show_app_names`. The legacy `show_names` preference does not override these defaults. Hidden
-captions do not reserve layout space.
+App cards on Home, in the drawer, and in Settings → Apps are artwork-only, with no name captions
+or App names setting. Legacy `show_names`, `show_home_names`, and `show_app_names` preferences
+are ignored and are not written back. App titles remain available in the management popup.
 **Settings → Widgets** groups **Weather**, **Shortcuts**, and **Inputs** as separate subpages.
 Weather location and temperature choices return to Weather; Back from a widget returns to its row
 in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row.
@@ -177,7 +176,8 @@ dock instead of appearing twice in the grid. The drawer has no search or categor
 The Home dock follows saved pinned order, with no Apps button or Move apps label above it.
 The dock itself is decorative, not a focus/click target. Down opens the drawer; Back closes it.
 Its glass is drawn without the narrower content clip, while scrolling app cards retain their own clipping.
-The drawer leaves at least 60 logical pixels between the dock and its first card row.
+The drawer leaves 24 logical pixels between the glass dock and its first card row, matching
+the 24px bottom padding when the list is scrolled to its end.
 When scrolled, grid cards continue behind the floating dock and clip at the pinned cards' top edge.
 Remote focus still reveals grid cards below the dock, keeping the selected card unobscured.
 Back closes the drawer and resets focus and horizontal scroll to the first favorite. Wheel movement
@@ -514,8 +514,7 @@ The gallery also runs as part of `pnpm test:smoke`. Asset source/licence details
 
 Live TV (`com.webos.app.livetv`) and Web Browser (`com.webos.app.browser`) also have dedicated
 SVG-backed demo cards: a blue/cyan TV display with a live indicator, and a matching globe with a
-navigation pointer. Both are original Luma vector artwork. The existing card caption remains available when
-names are visible. `Brand::artwork_size()` sets optical sizing per brand, keeping heavy wordmarks
+navigation pointer. Both are original Luma vector artwork. `Brand::artwork_size()` sets optical sizing per brand, keeping heavy wordmarks
 such as Hulu, Joyn and Plex closer to the visual weight of Apple TV, YouTube, Das Erste and ARTE.
 
 Text reads the bundled TTF's advances, kerning and line metrics lazily. Only needed glyph outlines

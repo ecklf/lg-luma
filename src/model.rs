@@ -222,8 +222,6 @@ pub struct Preferences {
     /// Last manually chosen splash, independent of automatic rotation.
     pub splash_background: Option<String>,
     pub deleted_backgrounds: Vec<String>,
-    pub show_home_names: bool,
-    pub show_app_names: bool,
     pub hour_24: bool,
     pub reduced_motion: bool,
     pub show_seconds: bool,
@@ -264,8 +262,6 @@ impl Default for Preferences {
             background: "dunes".into(),
             splash_background: None,
             deleted_backgrounds: vec![],
-            show_home_names: false,
-            show_app_names: true,
             hour_24: false,
             reduced_motion: false,
             show_seconds: false,
