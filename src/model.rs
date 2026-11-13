@@ -3,7 +3,6 @@ use crate::weather::{Location, Unit};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 
-pub const CATEGORIES: [&str; 4] = ["Streaming", "Music", "Gaming", "Utilities"];
 pub const BACKGROUNDS: [(&str, &str); 9] = [
     ("slate", "Slate"),
     ("midnight", "Midnight"),
@@ -201,6 +200,7 @@ impl DateFormat {
         }
     }
 
+    #[cfg(test)]
     pub fn format(self, language: Language, now: time::OffsetDateTime) -> String {
         let (year, month, day) = (now.year(), now.month() as u8, now.day());
         match self {
@@ -222,8 +222,6 @@ pub struct Preferences {
     /// Last manually chosen splash, independent of automatic rotation.
     pub splash_background: Option<String>,
     pub deleted_backgrounds: Vec<String>,
-    pub show_home_names: bool,
-    pub show_app_names: bool,
     pub hour_24: bool,
     pub reduced_motion: bool,
     pub show_seconds: bool,
@@ -264,8 +262,6 @@ impl Default for Preferences {
             background: "dunes".into(),
             splash_background: None,
             deleted_backgrounds: vec![],
-            show_home_names: false,
-            show_app_names: true,
             hour_24: false,
             reduced_motion: false,
             show_seconds: false,
@@ -460,7 +456,7 @@ impl Preferences {
 }
 
 /// Every bundled device SVG offered by the native input icon picker.
-pub const INPUT_ICONS: [(&str, &str); 11] = [
+pub const INPUT_ICONS: [(&str, &str); 15] = [
     ("hdmi", "inputIconHdmi"),
     ("usb", "inputIconUsb"),
     ("apple-tv", "inputIconAppleTv"),
@@ -471,6 +467,10 @@ pub const INPUT_ICONS: [(&str, &str); 11] = [
     ("streamer", "inputIconStreamer"),
     ("switch", "inputIconSwitch"),
     ("switch2", "inputIconSwitch2"),
+    ("sony", "inputIconSony"),
+    ("dvd", "inputIconDvd"),
+    ("blu-ray", "inputIconBluRay"),
+    ("disk", "inputIconDisk"),
     ("xbox", "inputIconXbox"),
 ];
 

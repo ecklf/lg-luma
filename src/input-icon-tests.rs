@@ -103,6 +103,7 @@ fn remote_input_icon_picker_saves_resets_and_restores_its_parent() {
 #[test]
 fn input_icon_overrides_render_on_home_and_settings_and_automatic_restores_detection() {
     let mut state = ready();
+    state.overlay = Some(crate::state::Overlay::Inputs);
     let id = state.inventory.inputs[0].id.clone();
     let has_icon = |state: &crate::state::State, icon: &str| {
         scene(state).draw.iter().any(|d| matches!(d, Draw::TintedImage(path, ..) if path.ends_with(&format!("ui-icons/input-{icon}.lvec"))))
@@ -180,4 +181,82 @@ fn input_icon_picker_covers_bundled_assets_and_every_language() {
     state.set_inputs(vec![]);
     assert_eq!(state.subpage, Some(Subpage::Inputs));
     assert_eq!(state.focus, Target::Sidebar(crate::state::WIDGETS_SECTION));
+}
+
+#[test]
+fn media_input_icons_detect_names_and_allow_manual_overrides() {
+    let mut state = ready();
+    let id = state.inventory.inputs[0].id.clone();
+    for (name, expected) in [
+        ("Sony", "sony"),
+        ("Sony PS5", "playstation"),
+        ("DVD player", "dvd"),
+        ("Sony Blu-ray", "blu-ray"),
+        ("Blu ray player", "blu-ray"),
+        ("Disk", "disk"),
+        ("Disc player", "disk"),
+        ("CD player", "disk"),
+    ] {
+        state.preferences.set_input_name(&id, name);
+        assert!(scene(&state).draw.iter().any(|draw| matches!(draw,
+            Draw::TintedImage(path, ..) if path.ends_with(&format!("ui-icons/input-{expected}.lvec")))), "{name}");
+    }
+    for icon in ["sony", "dvd", "blu-ray", "disk"] {
+        state.preferences.set_input_icon(&id, icon);
+        assert!(
+            scene(&state).draw.iter().any(|draw| matches!(draw,
+            Draw::TintedImage(path, ..) if path.ends_with(&format!("ui-icons/input-{icon}.lvec"))))
+        );
+    }
+}
+
+#[test]
+fn input_icon_optical_sizes_preserve_centering_label_gap_and_pill_padding() {
+    let mut state = ready();
+    let id = state.inventory.inputs[0].id.clone();
+    state.preferences.set_input_name(&id, "Device");
+    for (icon, _) in INPUT_ICONS {
+        state.preferences.set_input_icon(&id, icon);
+        let rendered = scene(&state);
+        let pill = rendered
+            .controls
+            .iter()
+            .find(|control| control.target == Target::Input(id.clone()))
+            .unwrap()
+            .rect;
+        let artwork = rendered
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::TintedImage(path, rect, ..)
+                    if path.ends_with(&format!("ui-icons/input-{icon}.lvec"))
+                        && pill.contains(rect.x, rect.y) =>
+                {
+                    Some(rect)
+                }
+                _ => None,
+            })
+            .unwrap();
+        let label = rendered
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text(text, rect, ..) if text == "Device" && rect.y < 100. => Some(rect),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(artwork.h, 24.);
+        assert!((artwork.center().1 - pill.center().1).abs() < 0.001);
+        assert!((artwork.x - pill.x - 14.).abs() < 0.001);
+        assert!((label.x - artwork.x - artwork.w - 10.).abs() < 0.001);
+        assert_eq!(
+            artwork.w,
+            match icon {
+                "sony" => 40.,
+                "apple-tv" | "dvd" | "blu-ray" | "disk" => 32.,
+                "playstation" => 28.,
+                _ => 24.,
+            }
+        );
+    }
 }

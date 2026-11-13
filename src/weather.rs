@@ -192,7 +192,9 @@ pub fn condition(reading: Reading) -> Condition {
     let (key, icon) = match reading.code {
         0 if reading.is_day => ("clearSkies", "sun"),
         0 => ("clearNight", "moon"),
+        1 if !reading.is_day => ("mostlyClear", "partly-cloudy-night"),
         1 => ("mostlyClear", "partly-cloudy"),
+        2 if !reading.is_day => ("partlyCloudy", "partly-cloudy-night"),
         2 => ("partlyCloudy", "partly-cloudy"),
         3 => ("overcast", "cloud"),
         45 | 48 => ("fog", "fog"),

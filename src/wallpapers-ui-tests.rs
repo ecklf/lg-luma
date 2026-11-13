@@ -496,7 +496,7 @@ fn scrolled_backgrounds_cannot_capture_upload_or_sidebar_pointer_hits() {
     );
     assert_eq!(state.hit_test(&gallery, 1000., 200.), None);
     assert_eq!(
-        state.hit_test(&gallery, 300., 280.),
+        state.hit_test(&gallery, 300., 364.),
         Some(Target::Sidebar(1))
     );
     assert_eq!(
