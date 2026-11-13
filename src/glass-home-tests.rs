@@ -425,7 +425,7 @@ fn input_pills_hug_short_labels_and_center_fitted_text() {
             .unwrap();
         assert!((label_rect.center().1 - pill.center().1).abs() < 0.001);
         assert!((label_rect.h - style.size * style.line_height).abs() < 0.001);
-        assert!((pill.x + pill.w - label_rect.x - label_rect.w - 32.).abs() < 0.001);
+        assert!((pill.x + pill.w - label_rect.x - label_rect.w - 14.).abs() < 0.001);
     }
     assert!(
         widths[0] < 148.,
@@ -533,6 +533,64 @@ fn clock_is_time_only_and_corner_actions_use_luma_and_settings_icons() {
             .unwrap();
         assert!(menu.draw.iter().any(|draw| matches!(draw,
             Draw::TintedImage(path, rect, ..) if path.ends_with(icon) && action.rect.contains(rect.x, rect.y))));
+    }
+}
+
+#[test]
+fn input_status_slot_animates_width_in_and_out_without_refitting_the_label() {
+    for reduced_motion in [false, true] {
+        let mut state = ready();
+        state.preferences.reduced_motion = reduced_motion;
+        let id = state.inventory.inputs[0].id.clone();
+        let target = Target::Input(id.clone());
+        let geometry = |state: &State| {
+            let rendered = scene(state);
+            let pill = rendered
+                .controls
+                .iter()
+                .find(|control| control.target == target)
+                .unwrap()
+                .rect;
+            let label = rendered
+                .draw
+                .iter()
+                .find_map(|draw| match draw {
+                    Draw::Text(label, rect, style, ..)
+                        if rect.x > pill.x && rect.x < pill.x + pill.w && rect.y < 100. =>
+                    {
+                        Some((label.clone(), rect.x, rect.w, style.size))
+                    }
+                    _ => None,
+                })
+                .unwrap();
+            (pill, label)
+        };
+        state.animate_input_status(0.);
+        let (collapsed, label) = geometry(&state);
+        state.pointer = false;
+        state.focus = target.clone();
+        state.animate_input_status(0.04);
+        let (growing, fitted) = geometry(&state);
+        assert_eq!(label, fitted);
+        assert!(growing.w > collapsed.w);
+        if !reduced_motion {
+            assert!(growing.w < collapsed.w + 18.);
+        }
+        state.animate_input_status(0.16);
+        let (expanded, fitted) = geometry(&state);
+        assert_eq!(label, fitted);
+        assert!((expanded.w - collapsed.w - 18.).abs() < 0.001);
+        state.focus = Target::SettingsMenu;
+        state.animate_input_status(0.08);
+        let (shrinking, _) = geometry(&state);
+        if !reduced_motion {
+            assert!(shrinking.w > collapsed.w && shrinking.w < expanded.w);
+        }
+        state.animate_input_status(0.16);
+        let (restored, fitted) = geometry(&state);
+        assert_eq!(restored.w, collapsed.w);
+        assert_eq!(label, fitted);
+        assert_eq!(state.input_status_progress(&id), 0.);
     }
 }
 

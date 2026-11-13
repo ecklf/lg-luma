@@ -194,8 +194,9 @@ Grid Up/Down follows six-column indices, including offscreen rows, with the firs
 the pinned dock (or corner controls if it is empty). Up from the pinned row closes the drawer and
 focuses the inputs or clock. Top-left inputs are direct 48px-high, content-sized pills with vertically
 centered icons, names and connection dots, respecting Auto/On/Off visibility; no input button/dropdown is needed.
-Connection dots appear only while hovering, pressing, or remotely focusing an input; their space
-stays reserved so pointer targets do not shift.
+Connection dots appear only while hovering, pressing, or remotely focusing an input. Idle pills
+have 14px right padding; the 18px status slot expands/collapses over 160ms with a smooth fade.
+Labels keep their fitted size throughout, and reduced motion switches immediately.
 Input meshes trim transparent source bounds; per-mark optical widths give wide wordmarks more
 room without stretching their aspect ratio. Header pills preserve a 10px icon-to-label gap.
 The time-only clock opens two compact 72px-high, right-aligned, floating Control Center-style controls for

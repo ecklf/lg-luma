@@ -40,6 +40,7 @@ Add Sony, DVD, Blu-ray, and Disk input icons with manual selection and automatic
 Use sourced Sony, DVD, Blu-ray Disc, and Compact Disc trademark vectors, with pinned source
 hashes and trademark notices, rather than hand-drawn approximations.
 
-Show input connection dots only on hover, press, or remote selection, without shifting pill geometry.
+Show input connection dots only on hover, press, or remote selection. Animate the extra status
+slot width in and out, leaving compact 14px right padding when idle and honoring reduced motion.
 Normalize input artwork by trimming source whitespace and applying optical widths to wide
 wordmarks while preserving their proportions and consistent label spacing.

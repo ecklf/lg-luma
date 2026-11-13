@@ -716,8 +716,12 @@ fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
                 .unwrap_or_else(|| input_icon(input, state.preferences.input_name(input)))
         );
         let icon_width = input_icon_width(&icon, 24.);
-        let inset = icon_width + 56.;
-        let width = (assets.width(title, text(20.8, 550, -0.02)) + inset).min(max_width);
+        let progress = state.input_status_progress(&input.id);
+        // Keep label fitting independent of the animated status slot.
+        let label_width = assets
+            .width(title, text(20.8, 550, -0.02))
+            .min(max_width - icon_width - 56.);
+        let width = label_width + icon_width + 38. + 18. * progress;
         let rect = Rect::new(x, 56., width, 48.);
         let focused = state.focus == target;
         out.pill(rect, focused, false);
@@ -728,26 +732,23 @@ fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
             Rect::new(x + 14. + (icon_width - 24.) / 2., 68., 24., 24.),
             foreground,
         );
-        let (label, style) = assets.fit_line(title, text(20.8, 550, -0.02), width - inset, 14.);
+        let (label, style) = assets.fit_line(title, text(20.8, 550, -0.02), label_width, 14.);
         let label_height = style.size * style.line_height;
         out.text(
             label,
             Rect::new(
                 x + 24. + icon_width,
                 rect.y + (rect.h - label_height) / 2.,
-                width - inset,
+                label_width,
                 label_height,
             ),
             style,
             foreground,
             false,
         );
-        if (!state.pointer && focused)
-            || state.hover.as_ref() == Some(&target)
-            || state.pressed.as_ref() == Some(&target)
-        {
+        if progress > 0.55 {
             out.shape(
-                Rect::new(x + width - 22., 76., 8., 8.),
+                Rect::new(x + 34. + icon_width + label_width, 76., 8., 8.),
                 4.,
                 c(
                     if input.connected == Some(true) {
@@ -755,7 +756,7 @@ fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
                     } else {
                         0x8c949c
                     },
-                    1.,
+                    (progress - 0.55) / 0.45,
                 ),
             );
         }

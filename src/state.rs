@@ -226,6 +226,7 @@ pub struct State {
     pub home_scroll: f32,
     pub drawer_visibility: f32,
     drawer_updated: Instant,
+    input_status_visibility: std::collections::BTreeMap<String, f32>,
     pub overlay: Option<Overlay>,
     pub moving: Option<String>,
     pub loading: bool,
@@ -278,6 +279,7 @@ impl State {
             home_scroll: 0.,
             drawer_visibility: 0.,
             drawer_updated: Instant::now(),
+            input_status_visibility: std::collections::BTreeMap::new(),
             overlay: None,
             moving: None,
             loading: false,
@@ -395,6 +397,7 @@ impl State {
             .as_secs_f32()
             .min(0.05);
         self.drawer_updated = now;
+        self.animate_input_status(dt);
         if self.drawer_visibility != goal {
             self.drawer_visibility = if self.preferences.reduced_motion {
                 goal
@@ -451,6 +454,52 @@ impl State {
         }
     }
 
+    pub fn input_status_active(&self, id: &str) -> bool {
+        let target = Target::Input(id.into());
+        (!self.pointer && self.focus == target)
+            || self.hover.as_ref() == Some(&target)
+            || self.pressed.as_ref() == Some(&target)
+    }
+
+    pub fn input_status_progress(&self, id: &str) -> f32 {
+        let goal = if self.input_status_active(id) { 1. } else { 0. };
+        let t = if self.preferences.reduced_motion {
+            goal
+        } else {
+            self.input_status_visibility
+                .get(id)
+                .copied()
+                .unwrap_or(goal)
+        };
+        t * t * (3. - 2. * t)
+    }
+
+    pub(crate) fn animate_input_status(&mut self, dt: f32) {
+        self.input_status_visibility
+            .retain(|id, _| self.inventory.inputs.iter().any(|input| &input.id == id));
+        for input in &self.inventory.inputs {
+            let goal = if self.input_status_active(&input.id) {
+                1.
+            } else {
+                0.
+            };
+            let value = self
+                .input_status_visibility
+                .entry(input.id.clone())
+                .or_insert(goal);
+            if *value != goal {
+                *value = if self.preferences.reduced_motion {
+                    goal
+                } else if goal > *value {
+                    (*value + dt / 0.16).min(goal)
+                } else {
+                    (*value - dt / 0.16).max(goal)
+                };
+                self.dirty = true;
+            }
+        }
+    }
+
     pub fn page_index(&self) -> usize {
         match self.page {
             Page::Home => 0,
@@ -461,6 +510,10 @@ impl State {
 
     pub fn animating(&self) -> bool {
         (self.drawer_visibility != if self.page == Page::Apps { 1. } else { 0. })
+            || (!self.preferences.reduced_motion
+                && self.input_status_visibility.iter().any(|(id, value)| {
+                    *value != if self.input_status_active(id) { 1. } else { 0. }
+                }))
             || ((self.recents_open() || self.recents.visibility > 0.)
                 && (self.recents.visibility != if self.recents_open() { 1. } else { 0. }
                     || self.recents.cards_animating(self.pointer)))
