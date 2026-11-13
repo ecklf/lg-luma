@@ -37,3 +37,5 @@ in the drawer. Add Move to visible favorites' Settings → Apps menus to start d
 only saved favorites can be reordered.
 
 Add Sony, DVD, Blu-ray, and Disk input icons with manual selection and automatic name matching.
+Use sourced Sony, DVD, Blu-ray Disc, and Compact Disc trademark vectors, with pinned source
+hashes and trademark notices, rather than hand-drawn approximations.

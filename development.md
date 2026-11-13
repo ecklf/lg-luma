@@ -165,7 +165,9 @@ Input icon picker: **Settings → Widgets → Inputs → select input → Icon**
 native picker for bundled input SVG icons. Its choices are **Automatic** (default label detection),
 **HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**, **NVIDIA Shield**,
 **Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, **Sony**, **DVD**, **Blu-ray**,
-**Disk**, and **Xbox**. Sony and media-player names are detected automatically; more specific
+**Disk**, and **Xbox**. Sony, DVD, Blu-ray, and Disk use sourced trademark artwork (Disk uses
+the Compact Disc wordmark), with provenance in `assets/licenses/input-trademarks.md`.
+Sony and media-player names are detected automatically; more specific
 PlayStation or DVD/Blu-ray names take precedence over Sony. An explicit choice
 is persisted per input across restarts; choosing **Automatic** clears only that input's
 icon override and restores label-based detection. Existing inputs without an override continue
