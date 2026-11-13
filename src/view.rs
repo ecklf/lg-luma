@@ -2473,12 +2473,30 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     crate::update::Status::Failed => "updateCheckFailed",
                 }
             };
-            settings_surface(out, rect, 20.);
+            let target = if state.available_update.is_some() {
+                Target::InstallUpdate
+            } else {
+                Target::CheckUpdates
+            };
+            let focused = state.focus == target;
+            let foreground = if focused { c(0x2c2c2c, 1.) } else { WHITE };
+            let secondary = if focused {
+                c(0x2c2c2c, 0.72)
+            } else {
+                c(0xeeeeee, 0.73)
+            };
+            // One surface and one hit target: the action is content, not nested glass.
+            if focused {
+                out.draw.push(Draw::Glass(rect, 28., c(0xe5ebf0, 1.)));
+                out.border(rect, 28., 1.5, c(0xffffff, 0.7));
+            } else {
+                settings_surface(out, rect, 28.);
+            }
             out.text(
                 language.t(title),
                 Rect::new(rect.x + 24.2, rect.y + 24., rect.w - 48.4, 34.),
                 text(24., 550, -0.02).leading(1.4),
-                WHITE,
+                foreground,
                 false,
             );
             out.text(
@@ -2492,32 +2510,39 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 },
                 Rect::new(rect.x + 24.2, rect.y + 74., rect.w - 48.4, 32.),
                 text(20.8, 450, -0.02).leading(1.4),
-                c(0xeeeeee, 0.73),
+                secondary,
                 false,
             );
-            row(
-                out,
-                state,
+            out.icon(
                 assets,
-                Row {
-                    target: if state.available_update.is_some() {
-                        Target::InstallUpdate
-                    } else {
-                        Target::CheckUpdates
-                    },
-                    rect: Rect::new(rect.x + 24., rect.y + 132., rect.w - 48., 64.),
-                    title: &update_value(state),
-                    icon: Some(if state.available_update.is_some() {
-                        "arrow"
-                    } else {
-                        "refresh"
-                    }),
-                    value: None,
-                    description: None,
-                    selected: false,
-                    chevron: false,
+                if state.available_update.is_some() {
+                    "arrow"
+                } else {
+                    "refresh"
                 },
+                Rect::new(rect.x + 24., rect.y + 148., 24., 24.),
+                foreground,
             );
+            let (action, style) = assets.fit_line(
+                &update_value(state),
+                text(20.8, 600, -0.02),
+                rect.w - 136.,
+                18.,
+            );
+            out.text(
+                action,
+                Rect::new(rect.x + 64., rect.y + 146., rect.w - 136., 32.),
+                style,
+                foreground,
+                false,
+            );
+            out.icon(
+                assets,
+                "right",
+                Rect::new(rect.x + rect.w - 48., rect.y + 148., 24., 24.),
+                secondary,
+            );
+            out.control(target, rect, true);
             for (position, (index, title, icon, value, chevron)) in [
                 (
                     7,

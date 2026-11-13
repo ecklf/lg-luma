@@ -907,7 +907,10 @@ fn system_version_is_inside_the_update_status_card_without_a_separate_row() {
         crate::renderer::Draw::Text(label, _, style, color, _)
             if label == "Current version: test" && style.size == 20.8 && style.weight == 450 && color[3] == 0.73
     )));
-    assert_eq!(state.hit_test(&system.controls, 900., 200.), None);
+    assert_eq!(
+        state.hit_test(&system.controls, 900., 200.),
+        Some(Target::CheckUpdates)
+    );
     state.focus = Target::Sidebar(crate::state::SYSTEM_SECTION);
     state.direction(Direction::Right, &system.controls);
     assert_eq!(state.focus, Target::CheckUpdates);
@@ -3009,6 +3012,67 @@ fn update_card_shows_both_versions_and_explicitly_starts_installation() {
         state.focus = Target::InstallUpdate;
         state.direction(Direction::Left, &rendered.controls);
         assert_eq!(state.focus, Target::Sidebar(crate::state::SYSTEM_SECTION));
+    }
+}
+
+#[test]
+fn update_card_is_one_glass_surface_and_one_full_card_action() {
+    use crate::renderer::Draw;
+    for available in [false, true] {
+        for focused in [false, true] {
+            let mut state = ready();
+            state.open(2);
+            state.section = crate::state::SYSTEM_SECTION;
+            state.available_update = available.then(|| "9.0.0".into());
+            let target = if available {
+                Target::InstallUpdate
+            } else {
+                Target::CheckUpdates
+            };
+            state.focus = if focused {
+                target.clone()
+            } else {
+                Target::Sidebar(crate::state::SYSTEM_SECTION)
+            };
+            let rendered = scene(&state);
+            let control = rendered
+                .controls
+                .iter()
+                .find(|control| control.target == target)
+                .unwrap();
+            assert_eq!(
+                (
+                    control.rect.x,
+                    control.rect.y,
+                    control.rect.w,
+                    control.rect.h
+                ),
+                (640., 164.8, 1120., 220.)
+            );
+            let glass: Vec<_> = rendered
+                .draw
+                .iter()
+                .filter_map(|draw| match draw {
+                    Draw::Glass(rect, _, color) if control.rect.contains(rect.x, rect.y) => {
+                        Some((rect, color))
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(
+                glass.len(),
+                1,
+                "the action must not add a nested glass button"
+            );
+            assert_eq!(glass[0].0.h, control.rect.h);
+            assert_eq!(glass[0].1[3], if focused { 1. } else { 0.96 });
+            for (x, y) in [(650., 175.), (1200., 275.), (1750., 375.)] {
+                assert_eq!(
+                    state.hit_test(&rendered.controls, x, y),
+                    Some(target.clone())
+                );
+            }
+        }
     }
 }
 

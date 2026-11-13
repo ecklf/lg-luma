@@ -75,11 +75,13 @@ backend. Avoid copying the whole SDK library directory or the TV's graphics driv
 ### Documentation screenshots
 
 `pnpm screenshots` generates `docs/home.png`, `docs/apps.png`, `docs/settings.png` and
-`docs/inputs.png`, plus `docs/clock-menu.png`, `docs/manage-apps.png`, `docs/app-actions.png` and `docs/weather-setup.png`,
+`docs/inputs.png`, plus `docs/clock-menu.png`, `docs/manage-apps.png`, `docs/app-actions.png`,
+`docs/weather-setup.png` and `docs/update-card.png`,
 linked by the README or PR.
 It builds the desktop executable without the TV feature, uses isolated temporary preferences,
 sample inventory, cached sample weather and a fixed date/time, and captures actual 1920×1080
 OpenGL framebuffers. The weather origin is loopback-only, so no real weather APIs are contacted.
+The update-card preview uses simulated version `99.0.0`, without a network request or installation.
 It does not execute the test suites. A desktop display is required; on headless Linux use
 `xvfb-run -a pnpm screenshots`. These images document the native design, not TV hardware behavior.
 
@@ -900,7 +902,9 @@ Scripted captures and simulated update previews do not contact GitHub. Interacti
 use the same endpoint and worker as TV. The card shows the current version and only reports
 **No newer version found** after a successful check, never while unchecked or offline.
 A newer version shows an **Update available** notice and a **Settings → System** card with both
-versions. Its **Install {version}** button explicitly starts installation on interactive TV runs.
+versions. The whole card is one focusable/clickable action on a single glass surface; the status,
+versions and **Install {version}** label are content rather than a nested button. Selecting the card
+explicitly starts installation on interactive TV runs.
 The read-only checker never downloads an IPK. A separate installer worker rechecks release metadata,
 requires the exact offered version, and accepts only this project's ARM release assets with a bounded
 size and SHA-256. It downloads into a private random directory and verifies both before handing off
