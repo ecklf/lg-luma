@@ -35,3 +35,5 @@ caption preferences. Tighten the drawer's dock-to-list gap to 24px and match its
 Backfill unused dock slots with visible apps without saving them as favorites or duplicating them
 in the drawer. Add Move to visible favorites' Settings → Apps menus to start dock reordering;
 only saved favorites can be reordered.
+
+Add Sony, DVD, Blu-ray, and Disk input icons with manual selection and automatic name matching.

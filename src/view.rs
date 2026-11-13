@@ -2880,6 +2880,14 @@ fn device_icon(name: &str) -> &'static str {
         "shield"
     } else if name.contains("xbox") {
         "xbox"
+    } else if name.contains("blu-ray") || name.contains("bluray") {
+        "blu-ray"
+    } else if name.contains("dvd") {
+        "dvd"
+    } else if name.contains("disk") || name.contains("disc") || name.contains("cdplayer") {
+        "disk"
+    } else if name.contains("sony") {
+        "sony"
     } else if name.contains("console") {
         "console"
     } else if ["pc", "computer", "laptop"]
@@ -3086,7 +3094,7 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
         .take(if deletable { 4 } else { 3 })
         .collect();
         if movable {
-            actions.push((Target::MoveApp, language.t("move")));
+            actions.insert(2, (Target::MoveApp, language.t("move")));
         }
         actions
     };

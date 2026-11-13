@@ -648,6 +648,12 @@ fn settings_move_action_reorders_only_saved_favorites() {
     manage_apps(&mut state);
     state.focus = Target::App("netflix".into());
     state.options();
+    let actions = controls(&state);
+    assert_eq!(actions[1].target, Target::Option(0));
+    assert_eq!(actions[2].target, Target::MoveApp);
+    state.focus = Target::Option(0);
+    state.direction(Direction::Down, &actions);
+    assert_eq!(state.focus, Target::MoveApp);
     assert!(
         controls(&state)
             .iter()

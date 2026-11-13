@@ -164,7 +164,9 @@ Choice checkmarks identify saved values, while the bright row fill identifies on
 Input icon picker: **Settings → Widgets → Inputs → select input → Icon** opens a
 native picker for bundled input SVG icons. Its choices are **Automatic** (default label detection),
 **HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**, **NVIDIA Shield**,
-**Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, and **Xbox**. An explicit choice
+**Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, **Sony**, **DVD**, **Blu-ray**,
+**Disk**, and **Xbox**. Sony and media-player names are detected automatically; more specific
+PlayStation or DVD/Blu-ray names take precedence over Sony. An explicit choice
 is persisted per input across restarts; choosing **Automatic** clears only that input's
 icon override and restores label-based detection. Existing inputs without an override continue
 using Automatic. This is a backward-compatible feature and does not change input names or visibility.

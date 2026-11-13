@@ -275,7 +275,7 @@ try {
   const vietnameseOptions = await scenario('vi-app-options', manageApps);
   for (const key of ['open', 'removeFavorite', 'hideApp', 'deleteApp'])
     contains(vietnameseOptions, key, 'vi');
-  const deleteConfirmation = `${manageApps},down,down,down,enter`;
+  const deleteConfirmation = `${manageApps},down,down,down,down,enter`;
   const vietnameseDelete = await scenario('vi-delete-confirm', deleteConfirmation);
   assert.equal(vietnameseDelete.focus, 'CancelDelete');
   contains(vietnameseDelete, 'cancel', 'vi');

@@ -219,21 +219,21 @@ try {
   const appOptions = await scenario('app-options', `${manageApps},enter`);
   assert.deepEqual(appOptions.focus, 'OpenApp');
   assert.ok(appOptions.ui_text.includes('Delete app'));
-  const deleteFocused = await scenario('delete-focused', `${manageApps},enter,down,down,down`);
+  const deleteFocused = await scenario('delete-focused', `${manageApps},enter,down,down,down,down`);
   assert.deepEqual(deleteFocused.focus, { Option: 2 });
   const deleteConfirm = await scenario(
     'delete-confirm',
-    `${manageApps},enter,down,down,down,enter`,
+    `${manageApps},enter,down,down,down,down,enter`,
   );
   assert.deepEqual(deleteConfirm.focus, 'CancelDelete');
   assert.ok(deleteConfirm.ui_text.some((value) => value.includes('uninstall “Netflix”')));
   const deleteCancel = await scenario(
     'delete-cancel',
-    `${manageApps},enter,down,down,down,enter,enter`,
+    `${manageApps},enter,down,down,down,down,enter,enter`,
   );
   assert.deepEqual(deleteCancel.focus, { Option: 2 });
   assert.ok(deleteCancel.apps.includes('netflix'));
-  const hidden = await scenario('apps', `${manageApps},enter,down,down,enter`);
+  const hidden = await scenario('apps', `${manageApps},enter,down,down,down,enter`);
   assert.ok(hidden.preferences.hidden.includes('netflix'));
   assert.deepEqual(hidden.focus, { App: 'netflix' });
   // Hidden apps stay discoverable in Settings → Apps.

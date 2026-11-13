@@ -182,3 +182,30 @@ fn input_icon_picker_covers_bundled_assets_and_every_language() {
     assert_eq!(state.subpage, Some(Subpage::Inputs));
     assert_eq!(state.focus, Target::Sidebar(crate::state::WIDGETS_SECTION));
 }
+
+#[test]
+fn media_input_icons_detect_names_and_allow_manual_overrides() {
+    let mut state = ready();
+    let id = state.inventory.inputs[0].id.clone();
+    for (name, expected) in [
+        ("Sony", "sony"),
+        ("Sony PS5", "playstation"),
+        ("DVD player", "dvd"),
+        ("Sony Blu-ray", "blu-ray"),
+        ("Blu ray player", "blu-ray"),
+        ("Disk", "disk"),
+        ("Disc player", "disk"),
+        ("CD player", "disk"),
+    ] {
+        state.preferences.set_input_name(&id, name);
+        assert!(scene(&state).draw.iter().any(|draw| matches!(draw,
+            Draw::TintedImage(path, ..) if path.ends_with(&format!("ui-icons/input-{expected}.lvec")))), "{name}");
+    }
+    for icon in ["sony", "dvd", "blu-ray", "disk"] {
+        state.preferences.set_input_icon(&id, icon);
+        assert!(
+            scene(&state).draw.iter().any(|draw| matches!(draw,
+            Draw::TintedImage(path, ..) if path.ends_with(&format!("ui-icons/input-{icon}.lvec"))))
+        );
+    }
+}
