@@ -101,6 +101,12 @@ try {
   const drawerClosed = await scenario('drawer-closed', 'home,right,down,back');
   assert.equal(drawerClosed.page, 'Home');
   assert.deepEqual(drawerClosed.focus, { App: 'netflix' });
+  const drawerToInputs = await scenario('drawer-to-inputs', 'home,down,up,up');
+  assert.equal(drawerToInputs.page, 'Home');
+  assert.deepEqual(drawerToInputs.focus, { Input: 'com.webos.app.hdmi1' });
+  const drawerToClock = await scenario('drawer-to-clock', 'home,down,up,right,right,right,up');
+  assert.equal(drawerToClock.page, 'Home');
+  assert.equal(drawerToClock.focus, 'SettingsMenu');
   const inputMenu = await scenario('input-pills', 'home,up');
   assert.equal(inputMenu.modal, false);
   assert.ok(inputMenu.ui_text.includes('HDMI 1'));

@@ -321,6 +321,134 @@ fn input_pills_respect_visibility_and_launch_without_a_dropdown() {
 }
 
 #[test]
+fn input_pills_hug_short_labels_and_center_fitted_text() {
+    let mut state = ready();
+    let id = state.inventory.inputs[0].id.clone();
+    state
+        .preferences
+        .input_modes
+        .insert(id.clone(), InputMode::On);
+    let mut widths = Vec::new();
+    for title in [
+        "PS5",
+        "PlayStation 5",
+        "An unusually long input label for fitting",
+    ] {
+        state
+            .preferences
+            .input_names
+            .insert(id.clone(), title.into());
+        let rendered = scene(&state);
+        let pill = rendered
+            .controls
+            .iter()
+            .find(|control| control.target == Target::Input(id.clone()))
+            .unwrap()
+            .rect;
+        widths.push(pill.w);
+        let (label_rect, style) = rendered
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text(_, rect, style, ..) if rect.x == pill.x + 48. && rect.y < 100. => {
+                    Some((rect, style))
+                }
+                _ => None,
+            })
+            .unwrap();
+        assert!((label_rect.center().1 - pill.center().1).abs() < 0.001);
+        assert!((label_rect.h - style.size * style.line_height).abs() < 0.001);
+        assert_eq!(label_rect.w, pill.w - 80.);
+    }
+    assert!(
+        widths[0] < 148.,
+        "short labels must not inherit a minimum width"
+    );
+    assert!(widths[0] < widths[1]);
+    assert!(widths[2] <= 240.);
+}
+
+#[test]
+fn clock_is_time_only_and_corner_actions_use_luma_and_settings_icons() {
+    let mut state = ready();
+    let rendered = scene(&state);
+    let clock = rendered
+        .controls
+        .iter()
+        .find(|control| control.target == Target::SettingsMenu)
+        .unwrap()
+        .rect;
+    assert!(!rendered.draw.iter().any(|draw| matches!(draw,
+        Draw::TintedImage(_, rect, ..) if clock.contains(rect.x, rect.y))));
+    let time = rendered
+        .draw
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Text(_, rect, ..) if clock.contains(rect.x, rect.y) => Some(rect),
+            _ => None,
+        })
+        .unwrap();
+    assert!((time.center().0 - clock.center().0).abs() < 0.001);
+    assert!((time.center().1 - clock.center().1).abs() < 0.001);
+    state.focus = Target::SettingsMenu;
+    state.activate();
+    let menu = scene(&state);
+    for (target, icon) in [
+        (Target::LumaSettings, "luma-mark.lvec"),
+        (Target::TvSettings, "settings.lvec"),
+    ] {
+        let action = menu
+            .controls
+            .iter()
+            .find(|control| control.target == target)
+            .unwrap();
+        assert!(menu.draw.iter().any(|draw| matches!(draw,
+            Draw::TintedImage(path, rect, ..) if path.ends_with(icon) && action.rect.contains(rect.x, rect.y))));
+    }
+}
+
+#[test]
+fn up_from_pinned_drawer_row_closes_drawer_and_preserves_header_focus() {
+    for reduced_motion in [false, true] {
+        for inputs_visible in [false, true] {
+            for index in [0, 3] {
+                let mut state = ready();
+                state.preferences.reduced_motion = reduced_motion;
+                if !inputs_visible {
+                    for input in &state.inventory.inputs {
+                        state
+                            .preferences
+                            .input_modes
+                            .insert(input.id.clone(), InputMode::Off);
+                    }
+                }
+                state.open(1);
+                state.drawer_visibility = 1.;
+                state.focus = Target::DockApp(state.favorite_apps()[index].id.clone());
+                let expected = if index < 3 {
+                    state.first_input_target()
+                } else {
+                    Target::SettingsMenu
+                };
+                state.direction(Direction::Up, &controls(&state));
+                assert_eq!(state.page, Page::Home);
+                assert_eq!(state.focus, expected);
+                assert_eq!(state.scroll, 0.);
+                assert!(state.overlay.is_none());
+                if reduced_motion {
+                    assert_eq!(state.drawer_visibility, 0.);
+                }
+                assert!(
+                    controls(&state)
+                        .iter()
+                        .any(|control| control.target == expected)
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn all_apps_remain_manageable_when_hidden_and_favoriting_restores_them() {
     let mut state = ready();
     let id = "netflix".to_string();

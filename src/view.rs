@@ -695,7 +695,7 @@ fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
         state.preferences.hour_24,
         state.preferences.show_seconds,
     );
-    let clock_width = (assets.width(&clock, text(24., 550, -0.02)) + 96.).max(220.);
+    let clock_width = assets.width(&clock, text(24., 550, -0.02)) + 48.;
     let inputs: Vec<_> = state
         .inventory
         .inputs
@@ -710,9 +710,7 @@ fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
     for input in inputs {
         let target = Target::Input(input.id.clone());
         let title = state.preferences.input_title(input);
-        let width = (assets.width(title, text(20.8, 550, -0.02)) + 86.)
-            .max(148.)
-            .min(max_width);
+        let width = (assets.width(title, text(20.8, 550, -0.02)) + 80.).min(max_width);
         let rect = Rect::new(x, 56., width, 48.);
         let focused = state.focus == target;
         out.pill(rect, focused, false);
@@ -726,19 +724,25 @@ fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
                     .input_icon(&input.id)
                     .unwrap_or_else(|| input_icon(input, state.preferences.input_name(input)))
             ),
-            Rect::new(x + 16., 68., 24., 24.),
+            Rect::new(x + 14., 68., 24., 24.),
             foreground,
         );
-        let (label, style) = assets.fit_line(title, text(20.8, 550, -0.02), width - 84., 14.);
+        let (label, style) = assets.fit_line(title, text(20.8, 550, -0.02), width - 80., 14.);
+        let label_height = style.size * style.line_height;
         out.text(
             label,
-            Rect::new(x + 52., 66., width - 84., 29.12),
+            Rect::new(
+                x + 48.,
+                rect.y + (rect.h - label_height) / 2.,
+                width - 80.,
+                label_height,
+            ),
             style,
             foreground,
             false,
         );
         out.shape(
-            Rect::new(x + width - 23., 76., 8., 8.),
+            Rect::new(x + width - 22., 76., 8., 8.),
             4.,
             c(
                 if input.connected == Some(true) {
@@ -752,25 +756,23 @@ fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
         out.control(target, rect, false);
         x += width + 10.;
     }
-    let (target, rect, icon, label) = (
+    let (target, rect, label) = (
         Target::SettingsMenu,
         Rect::new(1836. - clock_width, 48., clock_width, 64.),
-        "settings",
         clock,
     );
     out.glass(rect, 32.);
     if state.focus == target {
         out.border(rect.inset(-4.), 36., 2., WHITE);
     }
-    out.icon(
-        assets,
-        icon,
-        Rect::new(rect.x + 22., rect.y + 20., 24., 24.),
-        WHITE,
-    );
     out.text(
         label,
-        Rect::new(rect.x + 60., rect.y + 18., rect.w - 80., 30.),
+        Rect::new(
+            rect.x + 24.,
+            rect.y + (rect.h - 28.8) / 2.,
+            rect.w - 48.,
+            28.8,
+        ),
         text(24., 550, -0.02),
         WHITE,
         true,
@@ -789,9 +791,13 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
             (
                 Target::LumaSettings,
                 format!("Luma {}", language.t("settings")),
+                "luma-mark",
+            ),
+            (
+                Target::TvSettings,
+                language.t("tvSettings").into(),
                 "settings",
             ),
-            (Target::TvSettings, language.t("tvSettings").into(), "tv"),
         ]
         .into_iter()
         .enumerate()
@@ -2473,30 +2479,12 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     crate::update::Status::Failed => "updateCheckFailed",
                 }
             };
-            let target = if state.available_update.is_some() {
-                Target::InstallUpdate
-            } else {
-                Target::CheckUpdates
-            };
-            let focused = state.focus == target;
-            let foreground = if focused { c(0x2c2c2c, 1.) } else { WHITE };
-            let secondary = if focused {
-                c(0x2c2c2c, 0.72)
-            } else {
-                c(0xeeeeee, 0.73)
-            };
-            // One surface and one hit target: the action is content, not nested glass.
-            if focused {
-                out.draw.push(Draw::Glass(rect, 28., c(0xe5ebf0, 1.)));
-                out.border(rect, 28., 1.5, c(0xffffff, 0.7));
-            } else {
-                settings_surface(out, rect, 28.);
-            }
+            settings_surface(out, rect, 20.);
             out.text(
                 language.t(title),
                 Rect::new(rect.x + 24.2, rect.y + 24., rect.w - 48.4, 34.),
                 text(24., 550, -0.02).leading(1.4),
-                foreground,
+                WHITE,
                 false,
             );
             out.text(
@@ -2510,39 +2498,32 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 },
                 Rect::new(rect.x + 24.2, rect.y + 74., rect.w - 48.4, 32.),
                 text(20.8, 450, -0.02).leading(1.4),
-                secondary,
+                c(0xeeeeee, 0.73),
                 false,
             );
-            out.icon(
+            row(
+                out,
+                state,
                 assets,
-                if state.available_update.is_some() {
-                    "arrow"
-                } else {
-                    "refresh"
+                Row {
+                    target: if state.available_update.is_some() {
+                        Target::InstallUpdate
+                    } else {
+                        Target::CheckUpdates
+                    },
+                    rect: Rect::new(rect.x + 24., rect.y + 132., rect.w - 48., 64.),
+                    title: &update_value(state),
+                    icon: Some(if state.available_update.is_some() {
+                        "arrow"
+                    } else {
+                        "refresh"
+                    }),
+                    value: None,
+                    description: None,
+                    selected: false,
+                    chevron: false,
                 },
-                Rect::new(rect.x + 24., rect.y + 148., 24., 24.),
-                foreground,
             );
-            let (action, style) = assets.fit_line(
-                &update_value(state),
-                text(20.8, 600, -0.02),
-                rect.w - 136.,
-                18.,
-            );
-            out.text(
-                action,
-                Rect::new(rect.x + 64., rect.y + 146., rect.w - 136., 32.),
-                style,
-                foreground,
-                false,
-            );
-            out.icon(
-                assets,
-                "right",
-                Rect::new(rect.x + rect.w - 48., rect.y + 148., 24., 24.),
-                secondary,
-            );
-            out.control(target, rect, true);
             for (position, (index, title, icon, value, chevron)) in [
                 (
                     7,

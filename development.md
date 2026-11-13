@@ -181,10 +181,11 @@ The drawer leaves at least 60 logical pixels between the dock and its first card
 Back closes the drawer and resets focus and horizontal scroll to the first favorite. Wheel movement
 over either favorites dock scrolls horizontally. Pointer hover/down never initiates reveal scrolling.
 Grid Up/Down follows six-column indices, including offscreen rows, with the first row leading to
-the pinned dock (or corner controls if it is empty). Top-left inputs are direct 48px-high pills with
-icons, names and connection dots, respecting Auto/On/Off visibility; no input button/dropdown is needed.
-The clock opens two compact 72px-high, right-aligned, floating Control Center-style controls for
-Luma Settings and native LG TV settings. It does not replace LG's native settings UI.
+the pinned dock (or corner controls if it is empty). Up from the pinned row closes the drawer and
+focuses the inputs or clock. Top-left inputs are direct 48px-high, content-sized pills with vertically
+centered icons, names and connection dots, respecting Auto/On/Off visibility; no input button/dropdown is needed.
+The time-only clock opens two compact 72px-high, right-aligned, floating Control Center-style controls for
+Luma Settings (Luma logo) and native LG TV settings (settings icon). It does not replace LG's native settings UI.
 
 ### Liquid Glass renderer
 
@@ -902,9 +903,8 @@ Scripted captures and simulated update previews do not contact GitHub. Interacti
 use the same endpoint and worker as TV. The card shows the current version and only reports
 **No newer version found** after a successful check, never while unchecked or offline.
 A newer version shows an **Update available** notice and a **Settings → System** card with both
-versions. The whole card is one focusable/clickable action on a single glass surface; the status,
-versions and **Install {version}** label are content rather than a nested button. Selecting the card
-explicitly starts installation on interactive TV runs.
+versions. Its **Install {version}** button explicitly starts installation on interactive TV runs.
+Only the inner action button is focusable/clickable; the surrounding card displays status.
 The read-only checker never downloads an IPK. A separate installer worker rechecks release metadata,
 requires the exact offered version, and accepts only this project's ARM release assets with a bounded
 size and SHA-256. It downloads into a private random directory and verifies both before handing off

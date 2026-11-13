@@ -907,10 +907,7 @@ fn system_version_is_inside_the_update_status_card_without_a_separate_row() {
         crate::renderer::Draw::Text(label, _, style, color, _)
             if label == "Current version: test" && style.size == 20.8 && style.weight == 450 && color[3] == 0.73
     )));
-    assert_eq!(
-        state.hit_test(&system.controls, 900., 200.),
-        Some(Target::CheckUpdates)
-    );
+    assert_eq!(state.hit_test(&system.controls, 900., 200.), None);
     state.focus = Target::Sidebar(crate::state::SYSTEM_SECTION);
     state.direction(Direction::Right, &system.controls);
     assert_eq!(state.focus, Target::CheckUpdates);
@@ -2802,7 +2799,7 @@ fn clock_menu_is_aligned_top_right() {
         .unwrap();
     assert_eq!(button.rect.y, 48.);
     assert_eq!(button.rect.h, 64.);
-    assert!(button.rect.w >= 220.);
+    assert!(button.rect.w > 48. && button.rect.w < 220.);
     assert_eq!(button.rect.x + button.rect.w, 1836.);
     let (x, y) = button.rect.center();
     assert_eq!(
@@ -3016,7 +3013,7 @@ fn update_card_shows_both_versions_and_explicitly_starts_installation() {
 }
 
 #[test]
-fn update_card_is_one_glass_surface_and_one_full_card_action() {
+fn update_card_keeps_status_surface_and_button_only_action() {
     use crate::renderer::Draw;
     for available in [false, true] {
         for focused in [false, true] {
@@ -3047,13 +3044,16 @@ fn update_card_is_one_glass_surface_and_one_full_card_action() {
                     control.rect.w,
                     control.rect.h
                 ),
-                (640., 164.8, 1120., 220.)
+                (664., 296.8, 1072., 64.)
             );
             let glass: Vec<_> = rendered
                 .draw
                 .iter()
                 .filter_map(|draw| match draw {
-                    Draw::Glass(rect, _, color) if control.rect.contains(rect.x, rect.y) => {
+                    Draw::Glass(rect, _, color)
+                        if crate::state::Rect::new(640., 164.8, 1120., 220.)
+                            .contains(rect.x, rect.y) =>
+                    {
                         Some((rect, color))
                     }
                     _ => None,
@@ -3061,17 +3061,20 @@ fn update_card_is_one_glass_surface_and_one_full_card_action() {
                 .collect();
             assert_eq!(
                 glass.len(),
-                1,
-                "the action must not add a nested glass button"
+                2,
+                "the status card and its action retain separate surfaces"
             );
-            assert_eq!(glass[0].0.h, control.rect.h);
-            assert_eq!(glass[0].1[3], if focused { 1. } else { 0.96 });
+            assert_eq!(glass[0].0.h, 220.);
+            assert_eq!(glass[0].1[3], 0.96);
+            assert_eq!(glass[1].0.h, control.rect.h);
+            assert_eq!(glass[1].1[3], if focused { 1. } else { 0.96 });
             for (x, y) in [(650., 175.), (1200., 275.), (1750., 375.)] {
-                assert_eq!(
-                    state.hit_test(&rendered.controls, x, y),
-                    Some(target.clone())
-                );
+                assert_eq!(state.hit_test(&rendered.controls, x, y), None);
             }
+            assert_eq!(
+                state.hit_test(&rendered.controls, 1000., 328.),
+                Some(target)
+            );
         }
     }
 }

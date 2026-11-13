@@ -21,5 +21,7 @@ Enlarge and reorganize the weather widget and its empty state, show direct compa
 reduce settings action sizes, and place Apps immediately after General. Keep the dock decorative
 with unclipped glass edges and more space before the drawer grid.
 
-Make the System update card one full-card action with a single glass surface, removing its nested
-glass button while preserving update status, versions, progress and retry behavior.
+Size input pills to their labels and center their contents vertically. Keep the clock time-only,
+use the Luma logo and settings gear for the corner menu actions, and close the drawer when Up
+leaves the pinned row for the header. Preserve the original System update status card and inner
+action button, including versions, progress and retry behavior.

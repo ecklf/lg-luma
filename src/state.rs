@@ -1288,6 +1288,9 @@ impl State {
                             Target::DockApp(apps[(index + 1).min(apps.len() - 1)].id.clone())
                         }
                     };
+                    if matches!(direction, Direction::Up) {
+                        self.open(0);
+                    }
                     self.focus(target, controls);
                     return vec![];
                 }
