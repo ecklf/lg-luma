@@ -31,3 +31,7 @@ than below the glass. Keep remote-focused grid cards fully visible below the doc
 
 Remove App names settings and captions across Home, the drawer, and Settings → Apps. Ignore legacy
 caption preferences. Tighten the drawer's dock-to-list gap to 24px and match its bottom padding.
+
+Backfill unused dock slots with visible apps without saving them as favorites or duplicating them
+in the drawer. Add Move to visible favorites' Settings → Apps menus to start dock reordering;
+only saved favorites can be reordered.

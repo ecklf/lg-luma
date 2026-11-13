@@ -113,8 +113,8 @@ try {
   assert.ok(!inputMenu.ui_text.some((value) => value.includes('Connected')));
   const clockMenu = await scenario('clock-menu', 'home,up,right,right,enter');
   assert.equal(clockMenu.modal, true);
-  assert.ok(clockMenu.ui_text.includes('Luma Settings'));
-  assert.ok(clockMenu.ui_text.includes('TV settings'));
+  assert.ok(clockMenu.ui_text.includes('Launcher settings'));
+  assert.ok(clockMenu.ui_text.includes('Device settings'));
   for (const [name, environment] of [
     ['control-center-gles', { LUMA_GLES: '1' }],
     ['control-center-fallback', { LUMA_GLASS: '0' }],
@@ -123,8 +123,8 @@ try {
     assert.equal(center.modal, true);
     assert.equal(center.focus, 'TvSettings');
     assert.equal(center.render.capture.glass_backdrop_sampling, name.endsWith('gles'));
-    assert.ok(center.ui_text.includes('Luma Settings'));
-    assert.ok(center.ui_text.includes('TV settings'));
+    assert.ok(center.ui_text.includes('Launcher settings'));
+    assert.ok(center.ui_text.includes('Device settings'));
   }
   const originalPreferences = await fs.readFile(preferences, 'utf8');
   for (const [index, name, fill] of [

@@ -775,14 +775,10 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
         for (index, (target, label, icon)) in [
             (
                 Target::LumaSettings,
-                format!("Luma {}", language.t("settings")),
+                language.t("launcherSettings"),
                 "luma-mark",
             ),
-            (
-                Target::TvSettings,
-                language.t("tvSettings").into(),
-                "settings",
-            ),
+            (Target::TvSettings, language.t("deviceSettings"), "settings"),
         ]
         .into_iter()
         .enumerate()
@@ -802,7 +798,7 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
                 Rect::new(rect.x + 20., rect.y + 22., 28., 28.),
                 foreground,
             );
-            let (label, style) = assets.fit_line(&label, text(22., 550, -0.02), rect.w - 88., 18.);
+            let (label, style) = assets.fit_line(label, text(22., 550, -0.02), rect.w - 88., 18.);
             out.text(
                 label,
                 Rect::new(rect.x + 68., rect.y + 22., rect.w - 88., 32.),
@@ -1179,7 +1175,7 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
     out.draw.push(Draw::Clip(None));
     out.shadow(dock, 40., 38., 12., 0.22);
     out.glass(dock, 40.);
-    let apps = state.favorite_apps();
+    let apps = state.dock_apps();
     if state.loading && state.inventory.apps.is_empty() {
         for index in 0..6 {
             out.shape(
@@ -1430,7 +1426,7 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let s = state.scroll;
     let apps = state.drawer_apps();
-    if apps.is_empty() && state.favorite_apps().is_empty() {
+    if apps.is_empty() && state.dock_apps().is_empty() {
         let title = if state.loading {
             language.t("findingApps")
         } else {
@@ -3013,6 +3009,11 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
     } else {
         crate::platform::can_uninstall(id)
     };
+    let movable = !shortcut
+        && !background
+        && state.managing_apps()
+        && favorite
+        && !state.preferences.hidden.iter().any(|item| item == id);
     let height = if shortcut {
         176.
     } else if background {
@@ -3021,7 +3022,7 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
         329.6
     } else {
         252.8
-    };
+    } + if movable { 76.8 } else { 0. };
     let card = anchor.unwrap_or(Rect::new(460., 380., 256., 153.6));
     let x = if card.x + card.w + 32. + 520. <= 1836. {
         card.x + card.w + 32.
@@ -3065,7 +3066,7 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
         }
         actions
     } else {
-        vec![
+        let mut actions: Vec<_> = vec![
             (Target::OpenApp, language.t("open")),
             (
                 Target::Option(0),
@@ -3083,7 +3084,11 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
         ]
         .into_iter()
         .take(if deletable { 4 } else { 3 })
-        .collect()
+        .collect();
+        if movable {
+            actions.push((Target::MoveApp, language.t("move")));
+        }
+        actions
     };
     for (row, (target, label)) in actions.into_iter().enumerate() {
         let rect = Rect::new(
@@ -3130,6 +3135,7 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
             match &target {
                 Target::OpenApp | Target::TileTest(_) => "arrow",
                 Target::UseBackground => "check",
+                Target::MoveApp => "left",
                 Target::Option(0) => {
                     if favorite {
                         "heart-filled"

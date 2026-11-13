@@ -1112,11 +1112,10 @@ fn a_notice_does_not_escape_modal_focus_and_closing_restores_the_app() {
     state.notify("Saved");
     state.focus = Target::App("netflix".into());
     state.options();
-    assert!(
-        controls(&state)
-            .iter()
-            .all(|c| matches!(c.target, Target::OpenApp | Target::Option(_)))
-    );
+    assert!(controls(&state).iter().all(|c| matches!(
+        c.target,
+        Target::OpenApp | Target::MoveApp | Target::Option(_)
+    )));
     state.focus = Target::Option(1);
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Option(2));
@@ -1139,12 +1138,10 @@ fn delete_confirmation_defaults_to_cancel_and_back_restores_side_popup() {
     state.options();
     let popup_scene = scene(&state);
     let popup = popup_scene.modal.unwrap();
-    assert!(
-        popup_scene
-            .controls
-            .iter()
-            .all(|control| matches!(control.target, Target::OpenApp | Target::Option(_)))
-    );
+    assert!(popup_scene.controls.iter().all(|control| matches!(
+        control.target,
+        Target::OpenApp | Target::MoveApp | Target::Option(_)
+    )));
     assert!(!popup_scene.draw[parent_draw_count..].iter().any(|draw| matches!(draw,
         crate::renderer::Draw::Text(value, rect, ..) if popup.contains(rect.x, rect.y)
             && ["Netflix", "Streaming", "Select", "Close", "OK", "Back"].contains(&value.as_str()))));
@@ -1160,7 +1157,7 @@ fn delete_confirmation_defaults_to_cancel_and_back_restores_side_popup() {
             _ => None,
         })
         .collect();
-    assert_eq!(action_icons.len(), 4);
+    assert_eq!(action_icons.len(), 5);
     assert!(
         action_icons
             .iter()
@@ -1487,13 +1484,13 @@ fn remote_header_focus_normalizes_scroll_but_hover_does_not() {
 #[test]
 fn long_app_titles_do_not_reserve_caption_space() {
     let mut state = ready();
-    state.preferences.favorites = Some(vec![]);
     state.open(1);
-    state.inventory.apps.iter_mut().find(|app| app.id == "netflix").unwrap().title = "A very long installed application title that needs more than two lines to remain fully readable".into();
+    let id = state.drawer_apps()[0].id.clone();
+    state.inventory.apps.iter_mut().find(|app| app.id == id).unwrap().title = "A very long installed application title that needs more than two lines to remain fully readable".into();
     let targets = controls(&state);
     let title = targets
         .iter()
-        .find(|c| c.target == Target::App("netflix".into()))
+        .find(|c| c.target == Target::App(id.clone()))
         .unwrap();
     let next_id = state.apps()[6].id.clone();
     let next = targets

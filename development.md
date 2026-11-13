@@ -174,6 +174,10 @@ including reorder mode, and reveals complete cards. Up reaches Inputs or the clo
 Down lifts the dock to the top and reveals a six-column app grid beneath it. Favorites stay in the
 dock instead of appearing twice in the grid. The drawer has no search or category toolbar.
 The Home dock follows saved pinned order, with no Apps button or Move apps label above it.
+Unused slots (up to six cards) backfill with visible apps in alphabetical order without changing
+favorites. These backfilled apps are excluded from the drawer to avoid duplicates and cannot be
+reordered. In Settings → Apps, a visible favorite's action popup includes **Move**, which opens
+the Home dock in reorder mode; Left/Right changes saved favorite order and OK/Back finishes.
 The dock itself is decorative, not a focus/click target. Down opens the drawer; Back closes it.
 Its glass is drawn without the narrower content clip, while scrolling app cards retain their own clipping.
 The drawer leaves 24 logical pixels between the glass dock and its first card row, matching
@@ -187,7 +191,7 @@ the pinned dock (or corner controls if it is empty). Up from the pinned row clos
 focuses the inputs or clock. Top-left inputs are direct 48px-high, content-sized pills with vertically
 centered icons, names and connection dots, respecting Auto/On/Off visibility; no input button/dropdown is needed.
 The time-only clock opens two compact 72px-high, right-aligned, floating Control Center-style controls for
-Luma Settings (Luma logo) and native LG TV settings (settings icon). It does not replace LG's native settings UI.
+Launcher settings (Luma logo) and Device settings (settings icon). Device settings opens LG's native settings UI.
 
 ### Liquid Glass renderer
 

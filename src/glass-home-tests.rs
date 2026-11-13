@@ -535,7 +535,7 @@ fn empty_favorites_and_empty_inventory_still_offer_drawer_and_settings() {
     let mut state = ready();
     state.preferences.favorites = Some(vec![]);
     state.open(0);
-    assert_eq!(state.focus, Target::WeatherConfigure);
+    assert_eq!(state.focus, Target::App(state.dock_apps()[0].id.clone()));
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.page, Page::Apps);
     assert!(matches!(state.focus, Target::App(_)));
@@ -586,6 +586,112 @@ fn drawer_animation_does_not_change_grid_layout_or_scroll_on_open() {
             );
         }
     }
+}
+
+#[test]
+fn dock_backfills_without_promoting_hidden_or_duplicate_apps() {
+    for count in [0, 1, 3, 6, 8] {
+        let mut state = ready();
+        let ids: Vec<_> = state
+            .inventory
+            .apps
+            .iter()
+            .take(count)
+            .map(|app| app.id.clone())
+            .collect();
+        state.preferences.favorites = Some(ids.clone());
+        state
+            .preferences
+            .hidden
+            .push(state.inventory.apps.last().unwrap().id.clone());
+        let saved = state.preferences.favorites.clone();
+        let dock = state.dock_apps();
+        assert_eq!(dock.len(), count.max(6));
+        assert_eq!(
+            dock.iter()
+                .take(count)
+                .map(|app| app.id.clone())
+                .collect::<Vec<_>>(),
+            ids
+        );
+        let dock_ids: std::collections::BTreeSet<_> =
+            dock.iter().map(|app| app.id.clone()).collect();
+        assert_eq!(dock_ids.len(), dock.len());
+        assert!(
+            !dock
+                .iter()
+                .any(|app| state.preferences.hidden.contains(&app.id))
+        );
+        assert!(
+            !state
+                .drawer_apps()
+                .iter()
+                .any(|app| dock_ids.contains(&app.id))
+        );
+        assert_eq!(
+            dock.len() + state.drawer_apps().len(),
+            state.inventory.apps.len() - 1
+        );
+        assert_eq!(state.preferences.favorites, saved);
+    }
+    let mut state = ready();
+    state.inventory.apps.truncate(3);
+    state.preferences.favorites = Some(vec![]);
+    assert_eq!(state.dock_apps().len(), 3);
+    assert!(state.drawer_apps().is_empty());
+}
+
+#[test]
+fn settings_move_action_reorders_only_saved_favorites() {
+    let mut state = ready();
+    state.preferences.favorites = Some(vec!["netflix".into(), "amazon".into()]);
+    manage_apps(&mut state);
+    state.focus = Target::App("netflix".into());
+    state.options();
+    assert!(
+        controls(&state)
+            .iter()
+            .any(|control| control.target == Target::MoveApp)
+    );
+    state.focus = Target::MoveApp;
+    assert!(state.activate().is_empty());
+    assert_eq!(state.page, Page::Home);
+    assert_eq!(state.focus, Target::App("netflix".into()));
+    assert_eq!(state.moving.as_deref(), Some("netflix"));
+    assert!(state.overlay.is_none());
+    assert_eq!(
+        state.direction(Direction::Right, &controls(&state)),
+        vec![Effect::Save]
+    );
+    assert_eq!(
+        state.preferences.favorites.as_ref().unwrap(),
+        &["amazon", "netflix"]
+    );
+    state.back();
+    assert!(state.moving.is_none());
+    let filler = state.dock_apps()[2].id.clone();
+    state.focus = Target::App(filler.clone());
+    state.hold();
+    assert!(
+        state.moving.is_none(),
+        "backfilled cards cannot enter reorder mode"
+    );
+    manage_apps(&mut state);
+    state.focus = Target::App(filler);
+    state.options();
+    assert!(
+        !controls(&state)
+            .iter()
+            .any(|control| control.target == Target::MoveApp)
+    );
+    state.focus = Target::MoveApp;
+    state.activate();
+    assert!(state.moving.is_none());
+    assert_eq!(state.page, Page::Settings);
+    assert_eq!(
+        state.preferences.favorites.as_ref().unwrap(),
+        &["amazon", "netflix"]
+    );
 }
 
 #[test]

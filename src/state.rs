@@ -89,6 +89,7 @@ pub enum Target {
     DismissNotice,
     Option(usize),
     OpenApp,
+    MoveApp,
     ConfirmDelete,
     CancelDelete,
     Key(usize),
@@ -532,13 +533,8 @@ impl State {
     }
 
     pub fn apps(&self) -> Vec<&App> {
-        let ids = self.preferences.favorites(&self.inventory.apps);
         if self.page == Page::Home {
-            return ids
-                .iter()
-                .filter(|id| !self.preferences.hidden.contains(id))
-                .filter_map(|id| self.inventory.apps.iter().find(|app| &app.id == id))
-                .collect();
+            return self.dock_apps();
         }
         self.app_list(self.page == Page::Apps)
     }
@@ -549,13 +545,14 @@ impl State {
 
     fn app_list(&self, drawer: bool) -> Vec<&App> {
         let ids = self.preferences.favorites(&self.inventory.apps);
+        let dock = if drawer { self.dock_apps() } else { vec![] };
         let mut apps: Vec<_> = self
             .inventory
             .apps
             .iter()
             .filter(|app| {
                 (self.managing_apps() || !self.preferences.hidden.contains(&app.id))
-                    && (!drawer || !ids.contains(&app.id))
+                    && (!drawer || !dock.iter().any(|pinned| pinned.id == app.id))
             })
             .collect();
         apps.sort_by(|a, b| {
@@ -578,6 +575,30 @@ impl State {
             .filter(|id| !self.preferences.hidden.contains(id))
             .filter_map(|id| self.inventory.apps.iter().find(|app| &app.id == id))
             .collect()
+    }
+
+    /// Backfill the six visible dock slots without changing saved favorites.
+    pub fn dock_apps(&self) -> Vec<&App> {
+        let mut apps = self.favorite_apps();
+        if apps.len() < 6 {
+            let mut remaining: Vec<_> = self
+                .inventory
+                .apps
+                .iter()
+                .filter(|app| {
+                    !self.preferences.hidden.contains(&app.id)
+                        && !apps.iter().any(|pinned| pinned.id == app.id)
+                })
+                .collect();
+            remaining.sort_by(|a, b| {
+                a.title
+                    .to_lowercase()
+                    .cmp(&b.title.to_lowercase())
+                    .then_with(|| a.id.cmp(&b.id))
+            });
+            apps.extend(remaining.into_iter().take(6 - apps.len()));
+        }
+        apps
     }
 
     pub fn content_viewport(&self) -> Rect {
@@ -714,15 +735,7 @@ impl State {
     }
 
     pub fn scroll_favorites(&mut self, delta: f32) {
-        let count = self
-            .preferences
-            .favorites(&self.inventory.apps)
-            .iter()
-            .filter(|id| {
-                !self.preferences.hidden.contains(id)
-                    && self.inventory.apps.iter().any(|app| &app.id == *id)
-            })
-            .count();
+        let count = self.dock_apps().len();
         let content = if count == 0 {
             0.
         } else {
@@ -819,7 +832,7 @@ impl State {
             self.focus = self.first_content();
         }
         if let Target::DockApp(id) = &self.focus
-            && !self.favorite_apps().iter().any(|app| &app.id == id)
+            && !self.dock_apps().iter().any(|app| &app.id == id)
         {
             self.focus = self.first_content();
         }
@@ -864,7 +877,7 @@ impl State {
                 .first()
                 .map(|app| Target::App(app.id.clone()))
                 .or_else(|| {
-                    self.favorite_apps()
+                    self.dock_apps()
                         .first()
                         .map(|app| Target::DockApp(app.id.clone()))
                 })
@@ -1256,7 +1269,7 @@ impl State {
             if self.page == Page::Apps
                 && let Target::DockApp(id) = &self.focus
             {
-                let apps = self.favorite_apps();
+                let apps = self.dock_apps();
                 if let Some(index) = apps.iter().position(|app| &app.id == id) {
                     let target = match direction {
                         Direction::Up => {
@@ -1308,9 +1321,7 @@ impl State {
                         targets[(index + 1).min(targets.len() - 1)].clone(),
                         controls,
                     ),
-                    Direction::Down
-                        if self.page == Page::Home && self.favorite_apps().is_empty() =>
-                    {
+                    Direction::Down if self.page == Page::Home && self.dock_apps().is_empty() => {
                         self.open(1);
                         self.focus = self.first_content();
                     }
@@ -1355,7 +1366,7 @@ impl State {
                 match direction {
                     Direction::Down
                         if self.focus == Target::WeatherConfigure
-                            && !self.favorite_apps().is_empty() =>
+                            && !self.dock_apps().is_empty() =>
                     {
                         self.focus(self.first_content(), controls)
                     }
@@ -1651,7 +1662,7 @@ impl State {
                     }
                     Direction::Up => {
                         let target = self
-                            .favorite_apps()
+                            .dock_apps()
                             .last()
                             .map_or(Target::SettingsMenu, |app| Target::DockApp(app.id.clone()));
                         self.focus(target, controls);
@@ -1668,7 +1679,7 @@ impl State {
                     Direction::Right => Target::Search,
                     Direction::Down => self.first_content(),
                     Direction::Up => self
-                        .favorite_apps()
+                        .dock_apps()
                         .first()
                         .map_or(Target::InputsMenu, |app| Target::DockApp(app.id.clone())),
                 };
@@ -1691,8 +1702,8 @@ impl State {
                             apps[(index + 1).min(apps.len() - 1)].id.clone(),
                         )),
                         Direction::Up if index < APPS_COLUMNS => Some(
-                            self.favorite_apps()
-                                .get(index.min(self.favorite_apps().len().saturating_sub(1)))
+                            self.dock_apps()
+                                .get(index.min(self.dock_apps().len().saturating_sub(1)))
                                 .map_or(
                                     if index < 3 {
                                         self.first_input_target()
@@ -1969,7 +1980,12 @@ impl State {
 
     pub fn hold(&mut self) {
         if self.page == Page::Home && self.overlay.is_none() {
-            if let Target::App(id) = &self.focus {
+            if let Target::App(id) = &self.focus
+                && self
+                    .preferences
+                    .favorites(&self.inventory.apps)
+                    .contains(id)
+            {
                 self.moving = Some(id.clone());
                 self.notice = None;
                 self.dirty = true;
@@ -2672,6 +2688,24 @@ impl State {
                 }
                 self.close_subpage();
                 return vec![Effect::Save];
+            }
+            Target::MoveApp => {
+                if let Some(Overlay::Options { id, .. }) = &self.overlay
+                    && self.managing_apps()
+                    && self.favorite_apps().iter().any(|app| &app.id == id)
+                {
+                    let id = id.clone();
+                    self.open(0);
+                    self.focus = Target::App(id.clone());
+                    if let Some(index) = self.dock_apps().iter().position(|app| app.id == id) {
+                        self.scroll_favorites(index as f32 * HOME_TILE_PITCH);
+                    }
+                    self.moving = Some(id);
+                    self.notice = None;
+                    self.pointer = false;
+                    self.pressed = None;
+                }
+                return vec![];
             }
             Target::Option(index) => {
                 if index == 2 {
