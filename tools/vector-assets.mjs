@@ -66,6 +66,7 @@ export async function generateVectorAssets() {
       source: path.join(root, 'assets/ui-icons', file),
       output: path.join(out, 'ui-icons', `${name}.lvec`),
       monochrome: ['input-sony', 'input-dvd', 'input-blu-ray', 'input-disk'].includes(name),
+      trim: name.startsWith('input-'),
       reference_size: 256,
     });
   }

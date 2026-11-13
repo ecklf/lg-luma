@@ -21,6 +21,15 @@ const FACE_HEIGHT: f32 = 154.4;
 const GRID_PITCH: f32 = 296.4;
 const RECENTS_BACKDROP_OPACITY: f32 = 0.86;
 
+fn input_icon_width(name: &str, size: f32) -> f32 {
+    size * match name {
+        "input-sony" => 5. / 3.,
+        "input-apple-tv" | "input-dvd" | "input-blu-ray" | "input-disk" => 4. / 3.,
+        "input-playstation" => 7. / 6.,
+        _ => 1.,
+    }
+}
+
 #[path = "recents-view.rs"]
 mod recents_view;
 
@@ -213,6 +222,10 @@ impl Scene {
         self.draw.push(Draw::Image(path, rect, radius, contain));
     }
     fn icon(&mut self, assets: &Assets, name: &str, rect: Rect, color: Color) {
+        // Wide device wordmarks need more room than square hardware symbols.
+        // Contain preserves their proportions; trimmed meshes remove source padding.
+        let width = input_icon_width(name, rect.w);
+        let rect = Rect::new(rect.x + (rect.w - width) / 2., rect.y, width, rect.h);
         self.draw.push(Draw::TintedImage(
             assets.path(format!("ui-icons/{name}.lvec")),
             rect,
@@ -695,49 +708,57 @@ fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
     for input in inputs {
         let target = Target::Input(input.id.clone());
         let title = state.preferences.input_title(input);
-        let width = (assets.width(title, text(20.8, 550, -0.02)) + 80.).min(max_width);
+        let icon = format!(
+            "input-{}",
+            state
+                .preferences
+                .input_icon(&input.id)
+                .unwrap_or_else(|| input_icon(input, state.preferences.input_name(input)))
+        );
+        let icon_width = input_icon_width(&icon, 24.);
+        let inset = icon_width + 56.;
+        let width = (assets.width(title, text(20.8, 550, -0.02)) + inset).min(max_width);
         let rect = Rect::new(x, 56., width, 48.);
         let focused = state.focus == target;
         out.pill(rect, focused, false);
         let foreground = if focused { c(0x242424, 1.) } else { WHITE };
         out.icon(
             assets,
-            &format!(
-                "input-{}",
-                state
-                    .preferences
-                    .input_icon(&input.id)
-                    .unwrap_or_else(|| input_icon(input, state.preferences.input_name(input)))
-            ),
-            Rect::new(x + 14., 68., 24., 24.),
+            &icon,
+            Rect::new(x + 14. + (icon_width - 24.) / 2., 68., 24., 24.),
             foreground,
         );
-        let (label, style) = assets.fit_line(title, text(20.8, 550, -0.02), width - 80., 14.);
+        let (label, style) = assets.fit_line(title, text(20.8, 550, -0.02), width - inset, 14.);
         let label_height = style.size * style.line_height;
         out.text(
             label,
             Rect::new(
-                x + 48.,
+                x + 24. + icon_width,
                 rect.y + (rect.h - label_height) / 2.,
-                width - 80.,
+                width - inset,
                 label_height,
             ),
             style,
             foreground,
             false,
         );
-        out.shape(
-            Rect::new(x + width - 22., 76., 8., 8.),
-            4.,
-            c(
-                if input.connected == Some(true) {
-                    0x60e6a0
-                } else {
-                    0x8c949c
-                },
-                1.,
-            ),
-        );
+        if (!state.pointer && focused)
+            || state.hover.as_ref() == Some(&target)
+            || state.pressed.as_ref() == Some(&target)
+        {
+            out.shape(
+                Rect::new(x + width - 22., 76., 8., 8.),
+                4.,
+                c(
+                    if input.connected == Some(true) {
+                        0x60e6a0
+                    } else {
+                        0x8c949c
+                    },
+                    1.,
+                ),
+            );
+        }
         out.control(target, rect, false);
         x += width + 10.;
     }

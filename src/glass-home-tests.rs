@@ -370,7 +370,7 @@ fn input_pills_respect_visibility_and_launch_without_a_dropdown() {
             .iter()
             .any(|control| control.target == Target::Input(id.clone()))
     );
-    assert!(rendered.draw.iter().any(
+    assert!(!rendered.draw.iter().any(
         |draw| matches!(draw, Draw::Shape(rect, radius, _, _) if rect.w == 8. && *radius == 4.)
     ));
     assert!(!rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, ..) if label.contains("Connected") || label.contains("Disconnected") || label.contains("No signal"))));
@@ -415,7 +415,9 @@ fn input_pills_hug_short_labels_and_center_fitted_text() {
             .draw
             .iter()
             .find_map(|draw| match draw {
-                Draw::Text(_, rect, style, ..) if rect.x == pill.x + 48. && rect.y < 100. => {
+                Draw::Text(_, rect, style, ..)
+                    if rect.x > pill.x && rect.x < pill.x + pill.w && rect.y < 100. =>
+                {
                     Some((rect, style))
                 }
                 _ => None,
@@ -423,7 +425,7 @@ fn input_pills_hug_short_labels_and_center_fitted_text() {
             .unwrap();
         assert!((label_rect.center().1 - pill.center().1).abs() < 0.001);
         assert!((label_rect.h - style.size * style.line_height).abs() < 0.001);
-        assert_eq!(label_rect.w, pill.w - 80.);
+        assert!((pill.x + pill.w - label_rect.x - label_rect.w - 32.).abs() < 0.001);
     }
     assert!(
         widths[0] < 148.,
@@ -431,6 +433,68 @@ fn input_pills_hug_short_labels_and_center_fitted_text() {
     );
     assert!(widths[0] < widths[1]);
     assert!(widths[2] <= 240.);
+}
+
+#[test]
+fn input_connection_dot_only_appears_on_hover_remote_focus_or_press() {
+    for connected in [Some(true), Some(false), None] {
+        let mut state = ready();
+        let id = state.inventory.inputs[0].id.clone();
+        state.inventory.inputs[0].connected = connected;
+        state
+            .preferences
+            .input_modes
+            .insert(id.clone(), InputMode::On);
+        let target = Target::Input(id);
+        let pill = controls(&state)
+            .into_iter()
+            .find(|control| control.target == target)
+            .unwrap()
+            .rect;
+        let dot_color = |state: &State| {
+            scene(state).draw.iter().find_map(|draw| match draw {
+                Draw::Shape(rect, radius, _, color)
+                    if rect.w == 8. && *radius == 4. && pill.contains(rect.x, rect.y) =>
+                {
+                    Some(*color)
+                }
+                _ => None,
+            })
+        };
+        assert!(dot_color(&state).is_none());
+        state.pointer = false;
+        state.focus = target.clone();
+        let selected = dot_color(&state).unwrap();
+        assert_eq!(
+            selected,
+            if connected == Some(true) {
+                [96. / 255., 230. / 255., 160. / 255., 1.]
+            } else {
+                [140. / 255., 148. / 255., 156. / 255., 1.]
+            }
+        );
+        state.pointer = true;
+        assert!(
+            dot_color(&state).is_none(),
+            "stale pointer focus must not keep the dot visible"
+        );
+        state.hover = Some(target.clone());
+        assert_eq!(dot_color(&state), Some(selected));
+        state.hover = None;
+        state.pressed = Some(target.clone());
+        assert_eq!(dot_color(&state), Some(selected));
+        state.pressed = None;
+        assert!(dot_color(&state).is_none());
+        let after = controls(&state)
+            .into_iter()
+            .find(|control| control.target == target)
+            .unwrap()
+            .rect;
+        assert_eq!(
+            (pill.x, pill.y, pill.w, pill.h),
+            (after.x, after.y, after.w, after.h)
+        );
+    }
 }
 
 #[test]

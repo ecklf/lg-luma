@@ -209,3 +209,54 @@ fn media_input_icons_detect_names_and_allow_manual_overrides() {
         );
     }
 }
+
+#[test]
+fn input_icon_optical_sizes_preserve_centering_label_gap_and_pill_padding() {
+    let mut state = ready();
+    let id = state.inventory.inputs[0].id.clone();
+    state.preferences.set_input_name(&id, "Device");
+    for (icon, _) in INPUT_ICONS {
+        state.preferences.set_input_icon(&id, icon);
+        let rendered = scene(&state);
+        let pill = rendered
+            .controls
+            .iter()
+            .find(|control| control.target == Target::Input(id.clone()))
+            .unwrap()
+            .rect;
+        let artwork = rendered
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::TintedImage(path, rect, ..)
+                    if path.ends_with(&format!("ui-icons/input-{icon}.lvec"))
+                        && pill.contains(rect.x, rect.y) =>
+                {
+                    Some(rect)
+                }
+                _ => None,
+            })
+            .unwrap();
+        let label = rendered
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text(text, rect, ..) if text == "Device" && rect.y < 100. => Some(rect),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(artwork.h, 24.);
+        assert!((artwork.center().1 - pill.center().1).abs() < 0.001);
+        assert!((artwork.x - pill.x - 14.).abs() < 0.001);
+        assert!((label.x - artwork.x - artwork.w - 10.).abs() < 0.001);
+        assert_eq!(
+            artwork.w,
+            match icon {
+                "sony" => 40.,
+                "apple-tv" | "dvd" | "blu-ray" | "disk" => 32.,
+                "playstation" => 28.,
+                _ => 24.,
+            }
+        );
+    }
+}
