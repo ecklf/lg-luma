@@ -347,10 +347,7 @@ mod tests {
 
     #[test]
     fn hydrate_reattaches_existing_backdrop_files() {
-        let dir = std::env::temp_dir().join(format!(
-            "luma-tmdb-hydrate-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("luma-tmdb-hydrate-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let file = dir.join("backdrop-42.jpg");
@@ -372,7 +369,10 @@ mod tests {
             },
         ];
         hydrate_shows(&mut shows, &dir);
-        assert_eq!(shows[0].backdrop_path.as_deref(), Some(file.to_str().unwrap()));
+        assert_eq!(
+            shows[0].backdrop_path.as_deref(),
+            Some(file.to_str().unwrap())
+        );
         assert!(shows[1].backdrop_path.is_none());
         let mut cache = DiskCache {
             context: "ES|ca-ES|trending".into(),
