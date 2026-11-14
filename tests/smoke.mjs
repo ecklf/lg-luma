@@ -7,8 +7,13 @@ import sharp from 'sharp';
 const root = path.resolve(import.meta.dirname, '..');
 const out = path.join(root, '.build');
 await fs.mkdir(out, { recursive: true });
-const run = (command, args) => {
-  const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', timeout: 120000 });
+const run = (command, args, environment = {}) => {
+  const result = spawnSync(command, args, {
+    cwd: root,
+    stdio: 'inherit',
+    timeout: 120000,
+    env: { ...process.env, ...environment },
+  });
   if (result.error) throw result.error;
   assert.equal(result.status, 0, `${command} failed`);
 };
@@ -18,25 +23,30 @@ const binary = path.resolve(root, process.env.CARGO_TARGET_DIR ?? 'target', 'deb
 const temporary = await fs.mkdtemp(path.join(out, 'smoke-'));
 try {
   const preferences = path.join(temporary, 'preferences.json');
-  const scenario = async (name, script, extra = [], frames = 90) => {
+  await fs.writeFile(preferences, '{}');
+  const scenario = async (name, script, extra = [], frames = 90, environment = {}) => {
     const screenshot = path.join(out, `${name}.png`);
     const dump = path.join(temporary, `${name}.json`);
     const diagnostics = path.join(out, `${name}-render.json`);
-    run(binary, [
-      '--preferences',
-      preferences,
-      '--script',
-      script,
-      '--frames',
-      String(frames),
-      '--screenshot',
-      screenshot,
-      '--dump-state',
-      dump,
-      '--diagnostics',
-      diagnostics,
-      ...extra,
-    ]);
+    run(
+      binary,
+      [
+        '--preferences',
+        preferences,
+        '--script',
+        script,
+        '--frames',
+        String(frames),
+        '--screenshot',
+        screenshot,
+        '--dump-state',
+        dump,
+        '--diagnostics',
+        diagnostics,
+        ...extra,
+      ],
+      environment,
+    );
     const state = JSON.parse(await fs.readFile(dump, 'utf8'));
     const render = JSON.parse(await fs.readFile(diagnostics, 'utf8'));
     assert.equal(
@@ -74,8 +84,84 @@ try {
     }
     return state;
   };
-  const home = await scenario('home', 'down');
+  const manageApps = 'settings,down,enter';
+  const home = await scenario('home', 'home');
   assert.deepEqual(home.focus, { App: 'netflix' });
+  assert.ok(!home.ui_text.includes('Favorites'));
+  assert.ok(!home.ui_text.some((value) => value.startsWith('Good evening')));
+  assert.ok(home.render.capture.glass_surfaces >= 3);
+  assert.equal(home.render.capture.glass_backdrop_sampling, true);
+  const fallback = await scenario('glass-fallback', 'home', [], 90, { LUMA_GLASS: '0' });
+  assert.equal(fallback.render.capture.glass_backdrop_sampling, false);
+  const gles = await scenario('glass-gles', 'home', [], 90, { LUMA_GLES: '1' });
+  assert.match(gles.render.graphics.version, /OpenGL ES/);
+  assert.equal(gles.render.capture.glass_backdrop_sampling, true);
+  const drawer = await scenario('drawer', 'home,down');
+  assert.equal(drawer.page, 'Apps');
+  const drawerClosed = await scenario('drawer-closed', 'home,right,down,back');
+  assert.equal(drawerClosed.page, 'Home');
+  assert.deepEqual(drawerClosed.focus, { App: 'netflix' });
+  const drawerToInputs = await scenario('drawer-to-inputs', 'home,down,up,up');
+  assert.equal(drawerToInputs.page, 'Home');
+  assert.deepEqual(drawerToInputs.focus, { Input: 'com.webos.app.hdmi1' });
+  const drawerToClock = await scenario('drawer-to-clock', 'home,down,up,right,right,right,up');
+  assert.equal(drawerToClock.page, 'Home');
+  assert.equal(drawerToClock.focus, 'SettingsMenu');
+  const inputMenu = await scenario('input-pills', 'home,up');
+  assert.equal(inputMenu.modal, false);
+  assert.ok(inputMenu.ui_text.includes('HDMI 1'));
+  assert.ok(!inputMenu.ui_text.some((value) => value.includes('Connected')));
+  const clockMenu = await scenario('clock-menu', 'home,up,right,right,enter');
+  assert.equal(clockMenu.modal, true);
+  assert.ok(clockMenu.ui_text.includes('Launcher settings'));
+  assert.ok(clockMenu.ui_text.includes('Device settings'));
+  for (const [name, environment] of [
+    ['control-center-gles', { LUMA_GLES: '1' }],
+    ['control-center-fallback', { LUMA_GLASS: '0' }],
+  ]) {
+    const center = await scenario(name, 'home,up,right,right,enter,down', [], 90, environment);
+    assert.equal(center.modal, true);
+    assert.equal(center.focus, 'TvSettings');
+    assert.equal(center.render.capture.glass_backdrop_sampling, name.endsWith('gles'));
+    assert.ok(center.ui_text.includes('Launcher settings'));
+    assert.ok(center.ui_text.includes('Device settings'));
+  }
+  const originalPreferences = await fs.readFile(preferences, 'utf8');
+  for (const [index, name, fill] of [
+    [2, 'light', '#ffffff'],
+    [3, 'dark', '#080808'],
+    [4, 'busy', 'url(#grid)'],
+  ]) {
+    const id = `custom-${String(index).repeat(32)}`;
+    const directory = path.join(temporary, 'wallpapers', id);
+    await fs.mkdir(directory, { recursive: true });
+    const svg = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="40" height="40" fill="#d8b58c"/><path d="M0 0h20v20H0zM20 20h20v20H20z" fill="#173e4c"/></pattern></defs><rect width="1920" height="1080" fill="${fill}"/></svg>`,
+    );
+    await sharp(svg).jpeg().toFile(path.join(directory, 'wallpaper.jpg'));
+    await sharp(svg).resize(480, 270).jpeg().toFile(path.join(directory, 'thumbnail.jpg'));
+    await fs.writeFile(path.join(directory, 'metadata.json'), JSON.stringify({ id }));
+    await fs.writeFile(
+      preferences,
+      JSON.stringify({ ...JSON.parse(originalPreferences), background: id }),
+    );
+    const center = await scenario(`glass-${name}`, 'home,up,right,right,enter');
+    assert.equal(center.preferences.background, id);
+    assert.equal(center.render.capture.glass_backdrop_sampling, true);
+    if (name === 'light') {
+      // Sample an empty interior area of the unselected TV control. On white,
+      // adaptive absorption must still leave room for readable white labels.
+      const { data } = await sharp(path.join(out, 'glass-light.png'))
+        .resize(1920, 1080)
+        .extract({ left: 1780, top: 264, width: 8, height: 8 })
+        .removeAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      assert.ok(Math.max(...data) < 150, 'Bright glass must adapt for white foregrounds');
+    }
+    await fs.rm(directory, { recursive: true });
+  }
+  await fs.writeFile(preferences, originalPreferences);
   const recents = await scenario('recents', 'recents,await-recents');
   assert.equal(recents.modal, true);
   assert.deepEqual(recents.focus, { Recent: 'netflix' });
@@ -125,51 +211,50 @@ try {
   );
   assert.equal(recentPointerLaunch.modal, false);
   assert.equal(recentPointerLaunch.recents_visibility, 0);
-  const recentHomeBack = await scenario('recents-home-back', 'home,down,back,await-recents');
+  const recentHomeBack = await scenario('recents-home-back', 'home,back,await-recents');
   assert.equal(recentHomeBack.modal, true);
   assert.deepEqual(recentHomeBack.focus, { Recent: 'netflix' });
   const recentYoutube = await scenario('recents-youtube', 'recents,await-recents,right');
   assert.deepEqual(recentYoutube.focus, { Recent: 'youtube.leanback.v4' });
-  const appOptions = await scenario('app-options', 'apps,down,enter');
+  const appOptions = await scenario('app-options', `${manageApps},enter`);
   assert.deepEqual(appOptions.focus, 'OpenApp');
   assert.ok(appOptions.ui_text.includes('Delete app'));
-  const deleteFocused = await scenario('delete-focused', 'apps,down,enter,down,down,down');
+  const deleteFocused = await scenario('delete-focused', `${manageApps},enter,down,down,down,down`);
   assert.deepEqual(deleteFocused.focus, { Option: 2 });
-  const deleteConfirm = await scenario('delete-confirm', 'apps,down,enter,down,down,down,enter');
+  const deleteConfirm = await scenario(
+    'delete-confirm',
+    `${manageApps},enter,down,down,down,down,enter`,
+  );
   assert.deepEqual(deleteConfirm.focus, 'CancelDelete');
   assert.ok(deleteConfirm.ui_text.some((value) => value.includes('uninstall “Netflix”')));
   const deleteCancel = await scenario(
     'delete-cancel',
-    'apps,down,enter,down,down,down,enter,enter',
+    `${manageApps},enter,down,down,down,down,enter,enter`,
   );
   assert.deepEqual(deleteCancel.focus, { Option: 2 });
   assert.ok(deleteCancel.apps.includes('netflix'));
-  const hidden = await scenario('apps', 'apps,down,enter,down,down,enter');
+  const hidden = await scenario('apps', `${manageApps},enter,down,down,down,enter`);
   assert.ok(hidden.preferences.hidden.includes('netflix'));
-  assert.deepEqual(hidden.focus, { App: 'youtube.leanback.v4' });
-  // Reload from disk, find Netflix in Hidden, and restore it.
-  const restored = await scenario(
-    'restored',
-    'apps,down,up,right,right,right,right,enter,down,enter,down,down,enter',
-  );
+  assert.deepEqual(hidden.focus, { App: 'netflix' });
+  // Hidden apps stay discoverable in Settings → Apps.
+  const restored = await scenario('restored', `${manageApps},enter,down,down,enter`);
   assert.deepEqual(restored.preferences.hidden, []);
-  const searched = await scenario('search', 'apps,type:YouTube,back');
-  assert.equal(searched.query, 'YouTube');
-  assert.deepEqual(searched.apps, ['youtube.leanback.v4']);
-  for (const [id, title] of [
-    ['coupangplay', 'Coupang Play'],
-    ['com.frograms.watchaplay.webos', 'Watcha Play'],
-    ['pooq', 'Wavve'],
-    ['com.cmb.rainbowtv', 'Rainbow TV'],
-    ['com.lgtvod.kr.app', 'LG TV VOD'],
+  const allApps = await scenario('unfiltered-drawer', 'home,down');
+  assert.equal(allApps.query, '');
+  assert.ok(!allApps.ui_text.includes('Find an app'));
+  assert.ok(!allApps.ui_text.includes('Streaming'));
+  for (const id of [
+    'coupangplay',
+    'com.frograms.watchaplay.webos',
+    'pooq',
+    'com.cmb.rainbowtv',
+    'com.lgtvod.kr.app',
   ]) {
-    const koreanApp = await scenario(`korean-${id}`, `apps,type:${title},back`);
-    assert.deepEqual(koreanApp.apps, [id]);
-    assert.ok(koreanApp.ui_text.includes(title));
+    assert.ok(allApps.apps.includes(id));
   }
   const settings = await scenario('settings', 'settings,down,down,enter,down,enter,enter');
   assert.equal(settings.preferences.background, 'forest');
-  const saved = await scenario('saved', 'down,hold,right,back');
+  const saved = await scenario('saved', 'home,hold,right,back');
   assert.equal(saved.preferences.background, 'forest');
   assert.deepEqual(saved.preferences.favorites.slice(0, 2), ['youtube.leanback.v4', 'netflix']);
   const upload = await scenario(
@@ -214,24 +299,24 @@ try {
     'settings,down,down,enter,up,enter,enter',
   );
   assert.equal(bundledRestored.preferences.background, 'forest');
-  const clock = await scenario('clock', 'settings,click:900:284');
+  const clock = await scenario('clock', 'settings,click:900:200');
   assert.equal(clock.subpage, 'Clock');
   assert.equal(clock.focus, 'ClockFormat');
   assert.ok(clock.ui_text.includes('Clock format'));
   assert.ok(clock.ui_text.includes('Time format'));
-  const inputsPage = 'settings,down,down,down,enter,down,down,down,down,enter';
+  const inputsPage = 'settings,down,down,down,enter,down,down,enter';
   const inputs = await scenario('inputs-page', inputsPage);
   assert.equal(inputs.subpage, 'Inputs');
   assert.deepEqual(inputs.focus, { InputMode: 'com.webos.app.hdmi1' });
   const input = await scenario('inputs', `${inputsPage},enter,up,enter`);
   assert.equal(input.preferences.input_modes['com.webos.app.hdmi1'], 'Off');
   assert.equal(input.subpage, 'Inputs');
-  const closed = await scenario('dialog-closed', 'apps,down,menu,click:100:900');
+  const closed = await scenario('dialog-closed', `${manageApps},enter,click:100:900`);
   assert.equal(closed.modal, false);
   assert.deepEqual(closed.focus, { App: 'youtube.leanback.v4' });
   const fixedTime = ['--time', '2026-10-21T20:41:00+02:00'];
-  const one = await scenario('density-1x', 'home,down', fixedTime);
-  const two = await scenario('density-2x', 'home,down', [...fixedTime, '--capture-scale', '2']);
+  const one = await scenario('density-1x', 'home', fixedTime);
+  const two = await scenario('density-2x', 'home', [...fixedTime, '--capture-scale', '2']);
   assert.deepEqual(two.render.capture.target, { width: 3840, height: 2160 });
   assert.equal(two.render.capture.viewport.scale, 2);
   assert.equal(one.render.capture.viewport.scale, 1);
@@ -258,12 +343,12 @@ try {
   assert.equal(uhd.width, 3840);
   assert.equal(uhd.height, 2160);
   const low = await sharp(path.join(out, 'density-1x.png'))
-    .extract({ left: 84, top: 265, width: 600, height: 96 })
-    .resize(1200, 192, { kernel: 'cubic' })
+    .extract({ left: 84, top: 236, width: 400, height: 40 })
+    .resize(800, 80, { kernel: 'cubic' })
     .raw()
     .toBuffer();
   const high = await sharp(path.join(out, 'density-2x.png'))
-    .extract({ left: 168, top: 530, width: 1200, height: 192 })
+    .extract({ left: 168, top: 472, width: 800, height: 80 })
     .raw()
     .toBuffer();
   assert.notDeepEqual(high, low, '4K vector text must use the drawable pixel scale');
@@ -275,66 +360,31 @@ try {
     two.render.capture.high_resolution_wallpaper,
     hasWallpaper && two.render.graphics.max_texture_size >= 3840,
   );
-  const profiled = await scenario('profile', 'home,down', ['--profile-frames', '24', ...fixedTime]);
+  const profiled = await scenario('profile', 'home', ['--profile-frames', '24', ...fixedTime]);
   assert.equal(profiled.render.profile.presented, 24);
   assert.ok(profiled.render.profile.pacing.samples > 0);
   assert.ok(profiled.render.profile.cpu_submission.mean_ms >= 0);
   const widgetsPage = 'settings,down,down,down,enter';
   const widgets = await scenario('widgets-settings', widgetsPage);
-  assert.deepEqual(widgets.focus, { Widget: 4 });
+  assert.deepEqual(widgets.focus, { Widget: 1 });
   assert.ok(widgets.ui_text.includes('Widgets'));
-  for (const title of ['Date', 'Greeting', 'Weather', 'Shortcuts', 'Inputs'])
+  for (const title of ['Weather', 'Shortcuts', 'Inputs'])
     assert.ok(widgets.ui_text.includes(title));
-  const greetingEditor = `${widgetsPage},down,enter,down,enter`;
-  for (const [id, name] of [
-    ['Ana', 'Ana'],
-    ['Bob', 'Bob'],
-    ['long', 'Alexandra Catherine Elizabeth Montgomery'],
-    ['wide', 'W'.repeat(40)],
-    ['cjk', '小明'.repeat(20)],
-    ['korean', '한글'.repeat(20)],
-  ]) {
-    const named = await scenario(
-      `greeting-${id}`,
-      `${greetingEditor},type:${name},back,home`,
-      fixedTime,
-    );
-    assert.equal(named.preferences.greeting_name, name);
-    assert.ok(named.ui_text.includes(`Good evening, ${name}.`));
-    if (name.length > 30) {
-      assert.ok(
-        named.render.capture.max_logical_font_px < 90.4,
-        'Long greetings must shrink instead of wrapping into a cropped second line',
-      );
-    }
-    assert.equal(
-      JSON.parse(await fs.readFile(preferences, 'utf8')).greeting_name,
-      name,
-      'Keyboard completion must save without waiting for another SDL input event',
-    );
-  }
-  const greeting = await scenario('greeting-settings', `${widgetsPage},down,enter,down,down`);
-  assert.equal(greeting.subpage, 'Greeting');
-  assert.equal(greeting.focus, 'GreetingNameClear');
-  assert.ok(greeting.ui_text.includes('Clear name'));
+  assert.ok(!widgets.ui_text.includes('Greeting'));
+  assert.ok(!widgets.ui_text.includes('Date'));
 
-  const appNamesEditor = 'settings,down,enter,enter';
-  const appNames = await scenario('app-name-settings', appNamesEditor);
-  assert.equal(appNames.subpage, 'AppNames');
-  assert.ok(appNames.ui_text.includes('Show on Home'));
-  assert.ok(appNames.ui_text.includes('Show on Apps'));
-  assert.equal(appNames.preferences.show_home_names, false);
-  assert.equal(appNames.preferences.show_app_names, true);
-  const customNames = await scenario(
-    'home-names-enabled',
-    `${appNamesEditor},enter,down,enter,back,home`,
-  );
-  assert.equal(customNames.preferences.show_home_names, true);
-  assert.equal(customNames.preferences.show_app_names, false);
-  assert.ok(customNames.ui_text.includes('Netflix'));
-  const hiddenNames = await scenario('app-names-disabled', 'apps');
-  assert.equal(hiddenNames.preferences.show_app_names, false);
-  assert.ok(!hiddenNames.ui_text.includes('Netflix'));
+  const general = await scenario('general-without-app-names', 'settings,enter');
+  assert.deepEqual(general.focus, { Setting: 1 });
+  assert.ok(!general.ui_text.includes('App names'));
+  for (const [name, script] of [
+    ['home-artwork-only', 'home'],
+    ['drawer-artwork-only', 'apps'],
+    ['app-settings-artwork-only', 'settings,down,enter'],
+  ]) {
+    const artwork = await scenario(name, script);
+    assert.ok(!artwork.ui_text.includes('Netflix'));
+    assert.ok(!artwork.ui_text.includes('Amazon Music'));
+  }
 
   const renamedInput = await scenario(
     'input-rename-focus',
@@ -343,7 +393,7 @@ try {
   assert.equal(renamedInput.focus, 'InputRename');
   assert.equal(renamedInput.preferences.input_names['com.webos.app.hdmi2'], 'Console');
   assert.ok(renamedInput.ui_text.includes('Clear name'));
-  const clockEditor = 'settings,down,enter,down,enter';
+  const clockEditor = 'settings,enter,enter';
   const timeFormat = await scenario('clock-time-format', `${clockEditor},down,enter`);
   assert.equal(timeFormat.subpage, 'TimeFormat');
   assert.deepEqual(timeFormat.focus, { Choice: 0 });
@@ -362,13 +412,20 @@ try {
   assert.deepEqual(clockFocus.focus, { Choice: 1 });
   const system = await scenario(
     'system-settings',
-    'settings,down,down,down,down,right,down,down,down',
+    'settings,down,down,down,down,right,down,down,down,down',
   );
   assert.deepEqual(system.focus, { Setting: 5 });
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
   assert.ok(!system.ui_text.includes('Luma update'));
   assert.ok(system.ui_text.includes('Quit app'));
   assert.ok(system.ui_text.includes('Text rendering'));
+  assert.ok(system.ui_text.includes('Reset icon cache'));
+  const resetIcons = await scenario(
+    'reset-icon-cache',
+    'settings,down,down,down,down,right,down,down,down,enter',
+  );
+  assert.deepEqual(resetIcons.focus, { Setting: 9 });
+  assert.deepEqual(resetIcons.preferences, system.preferences);
   const updatePreview = await scenario('update-preview', 'settings,down,down,down,down,right', [
     '--test-update-version',
     '99.0.0',
@@ -398,7 +455,11 @@ try {
   assert.ok(latestPreview.ui_text.includes('Check again'));
   assert.ok(latestPreview.ui_text.includes(`Current version: ${currentVersion}`));
   assert.ok(!latestPreview.ui_text.some((label) => label.startsWith('Luma v')));
-  const textOptions = 'settings,down,down,down,down,right,down,down,enter';
+  const textRenderingRow = 'settings,down,down,down,down,right,down';
+  const textRenderingFocus = await scenario('text-rendering-focus', textRenderingRow);
+  assert.deepEqual(textRenderingFocus.focus, { Setting: 7 });
+  assert.equal(textRenderingFocus.subpage, null);
+  const textOptions = `${textRenderingRow},enter`;
   const textRendering = await scenario('text-rendering-options', textOptions);
   assert.equal(textRendering.subpage, 'TextRendering');
   assert.deepEqual(textRendering.focus, { Choice: 0 });
@@ -436,7 +497,7 @@ try {
       favorites: [...beforeShortcut.favorites, 'custom.sandmann'],
     }),
   );
-  const shortcutsPage = `${widgetsPage},down,down,down,enter`;
+  const shortcutsPage = `${widgetsPage},down,enter`;
   const shortcut = await scenario('shortcut-settings', shortcutsPage);
   assert.equal(shortcut.focus, 'TileEditor');
   assert.equal(shortcut.subpage, 'Shortcuts');
@@ -494,16 +555,16 @@ try {
     preferences,
     JSON.stringify({ favorites: edgeFavorites, show_weather: false }),
   );
-  const edgeRight = await scenario('favorites-edge-right', 'home,click:1860:600');
+  const edgeRight = await scenario('favorites-edge-right', 'home,click:1880:880');
   assert.deepEqual(edgeRight.focus, { App: edgeFavorites[6] });
   assert.equal(edgeRight.home_scroll, 0, 'Clicking the fragment must not move it');
   const edgeLeft = await scenario(
     'favorites-edge-left',
-    `home,down,${Array(6).fill('right').join(',')},click:40:600`,
+    `home,${Array(6).fill('right').join(',')},click:40:880`,
   );
   assert.deepEqual(edgeLeft.focus, { App: edgeFavorites[0] });
   assert.ok(
-    Math.abs(edgeLeft.home_scroll - 281.6) < 0.01,
+    Math.abs(edgeLeft.home_scroll - 296.4) < 0.01,
     'Pointer focus preserves strip position',
   );
   await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));

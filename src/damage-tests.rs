@@ -1,4 +1,24 @@
 use super::*;
+
+#[test]
+fn glass_tracks_its_surface_and_wallpaper_changes_invalidate_the_backdrop() {
+    let glass = |x| Draw::Glass(Rect::new(x, 200., 400., 100.), 28., [0.1, 0.15, 0.2, 0.96]);
+    let mut tracker = Tracker::default();
+    tracker.push(&[wallpaper(), glass(80.)]);
+    tracker.push(&[wallpaper(), glass(100.)]);
+    let damage = tracker.damage(1).unwrap();
+    assert!(damage.x <= 79. && damage.x + damage.w >= 501.);
+    assert!(damage.w < 1920.);
+    let changed = Draw::Image(
+        "another-wallpaper.jpg".into(),
+        Rect::new(0., 0., 1920., 1080.),
+        0.,
+        false,
+    );
+    tracker.push(&[changed, glass(100.)]);
+    let damage = tracker.damage(1).unwrap();
+    assert!(damage.w >= 1920. && damage.h >= 1080.);
+}
 use crate::renderer::TextStyle;
 
 fn shape(x: f32) -> Draw {

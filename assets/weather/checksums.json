@@ -1,0 +1,12 @@
+{
+  "sun.png": "db10eae64d5d903d08c5fcb833bba4b8f73bfea670e05965b67018cbb2e9d62d",
+  "moon.png": "f188bc75f9b8939d6ee16f00acbaffd19d4aedf8722ff379316a1febad850024",
+  "partly-cloudy.png": "7e8e553a70616dbce8934eee708b7c3c54ad162cfdc0bfdfe40d337c00aafaa2",
+  "partly-cloudy-night.png": "580488966a48007fde7a3df1f093b890b099a6b9d391fc793a8f952b4997253a",
+  "cloud.png": "a6892f890be9d758e35aea716b9d4ccd60a2f407324cf4057006960d26ee6c13",
+  "fog.png": "b5420089e52a9ada426d7dfa6e2eb1d30be466d79f0a73bfc8d98e5bd7833386",
+  "drizzle.png": "cb42d5be36f1ade1a2a322043bae8fceab0610d840b6ba836080bee24bc354c6",
+  "rain.png": "cb42d5be36f1ade1a2a322043bae8fceab0610d840b6ba836080bee24bc354c6",
+  "snow.png": "6b66bc0d374e5759fda18eabef0d887959d974cd7e32ebd3d9a174f4c4381e68",
+  "storm.png": "3ad65b8b4567fc983a5931e23721063a640073f220774a24ae47b5b950c47ac8"
+}
