@@ -88,7 +88,77 @@ pub fn normalize_channels(raw: &Value) -> Result<Vec<Channel>, String> {
             program: None,
         });
     }
+    fill_missing_logos_from_name_variants(&mut channels);
     Ok(channels)
+}
+
+/// Strip trailing quality tags so "TV3 UHD" and "TV3" share a logo key.
+pub fn logo_match_key(name: &str) -> String {
+    let mut key = name
+        .chars()
+        .filter(|c| !c.is_control())
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
+    const SUFFIXES: &[&str] = &[
+        " uhd", " fhd", " hd", " sd", " 4k", " hdr", " hevc", " uhdtv", " hdtv",
+    ];
+    loop {
+        let before = key.clone();
+        for suffix in SUFFIXES {
+            if let Some(rest) = key.strip_suffix(suffix) {
+                key = rest.trim_end().into();
+            }
+        }
+        if key == before || key.is_empty() {
+            break;
+        }
+    }
+    key
+}
+
+/// When LG omits `imgUrl` on a HD/UHD duplicate, reuse a logo from the same base name.
+fn fill_missing_logos_from_name_variants(channels: &mut [Channel]) {
+    let mut donors: HashMap<(String, bool), (String, bool)> = HashMap::new();
+    for channel in channels.iter() {
+        let Some(logo) = channel.logo.as_ref() else {
+            continue;
+        };
+        let key = logo_match_key(&channel.name);
+        if key.is_empty() {
+            continue;
+        }
+        let normalized = channel
+            .name
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase();
+        let exact = key == normalized;
+        match donors.entry((key, channel.radio)) {
+            std::collections::hash_map::Entry::Vacant(slot) => {
+                slot.insert((logo.clone(), exact));
+            }
+            std::collections::hash_map::Entry::Occupied(mut slot) => {
+                if exact && !slot.get().1 {
+                    slot.insert((logo.clone(), true));
+                }
+            }
+        }
+    }
+    for channel in channels.iter_mut() {
+        if channel.logo.is_some() {
+            continue;
+        }
+        let key = logo_match_key(&channel.name);
+        let Some((logo, _)) = donors.get(&(key, channel.radio)) else {
+            continue;
+        };
+        channel.icon = Some(app_artwork::Source::channel_logo(&channel.id, logo));
+        channel.logo = Some(logo.clone());
+    }
 }
 
 /// `getChannelCurrentProgramInfo` reply → now-playing when the show is current.
@@ -181,6 +251,50 @@ mod tests {
         assert_eq!(channels[0].name, "La 1 HD");
         assert!(channels[0].logo.is_some());
         assert!(channels[0].icon.is_some());
+    }
+
+    #[test]
+    fn borrows_logo_from_same_name_without_quality_suffix() {
+        let raw = json!([
+            {
+                "channelId": "tv3_uhd",
+                "channelNumber": "3",
+                "channelName": "TV3 UHD",
+                "Radio": false,
+                "skipped": false,
+                "Invisible": false
+            },
+            {
+                "channelId": "tv3_sd",
+                "channelNumber": "16",
+                "channelName": "TV3",
+                "Radio": false,
+                "imgUrl": "/mnt/lg/cmn_data/channel_logo/minor_logo_img/tv3.png"
+            },
+            {
+                "channelId": "telecinco",
+                "channelNumber": "5",
+                "channelName": "Telecinco",
+                "Radio": false
+            }
+        ]);
+        let channels = normalize_channels(&raw).unwrap();
+        let uhd = channels.iter().find(|c| c.id == "tv3_uhd").unwrap();
+        assert_eq!(
+            uhd.logo.as_deref(),
+            Some("/mnt/lg/cmn_data/channel_logo/minor_logo_img/tv3.png")
+        );
+        assert!(uhd.icon.is_some());
+        assert!(
+            channels
+                .iter()
+                .find(|c| c.id == "telecinco")
+                .unwrap()
+                .logo
+                .is_none()
+        );
+        assert_eq!(logo_match_key("La 1 HD"), "la 1");
+        assert_eq!(logo_match_key("TV3 UHD"), "tv3");
     }
 
     #[test]
