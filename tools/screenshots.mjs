@@ -38,65 +38,85 @@ const configuration = {
   reduced_motion: false,
 };
 const sortingPreviews = process.argv.includes('--sorting');
+const widgetPreviews = process.argv.includes('--widgets');
 const weatherPreviews = process.argv.includes('--weather-styles');
-const captures = weatherPreviews
+const captures = widgetPreviews
   ? [
-      ['weather-style-standard', 'home'],
-      ['weather-style-no-icon', 'home'],
-      ['weather-style-compact', 'home'],
-      ['weather-style-picker', 'settings,down,down,down,right,enter,down,down,down,enter'],
+      ['home-layout-grid', 'home'],
+      ['home-layout-moved', 'home'],
+      [
+        'home-layout-settings',
+        'settings,down,down,down,right,down,down,down,enter,down,down,down,enter',
+      ],
     ]
-  : sortingPreviews
+  : weatherPreviews
     ? [
-        ['app-sorting-general', 'settings,right,down,down'],
-        ['app-sorting-picker', 'settings,right,down,down,enter'],
-        ['app-sorting-az', 'apps,down'],
-        ['app-sorting-usage', 'apps,down'],
-        ['disc-input', 'home'],
+        ['weather-style-standard', 'home'],
+        ['weather-style-no-icon', 'home'],
+        ['weather-style-compact', 'home'],
+        ['weather-style-picker', 'settings,down,down,down,right,enter,down,down,down,enter'],
       ]
-    : [
-        ['home', 'home'],
-        ['weather-setup', 'home,up,down'],
-        ['apps', 'apps,down'],
-        ['settings', 'settings'],
-        ['update-card', 'settings,down,down,down,down,right'],
-        ['inputs', 'home,up'],
-        ['clock-menu', 'home,up,right,right,enter'],
-        ['manage-apps', 'settings,down,enter'],
-        ['app-actions', 'settings,down,enter,enter'],
-      ];
+    : sortingPreviews
+      ? [
+          ['app-sorting-general', 'settings,right,down,down'],
+          ['app-sorting-picker', 'settings,right,down,down,enter'],
+          ['app-sorting-az', 'apps,down'],
+          ['app-sorting-usage', 'apps,down'],
+          ['disc-input', 'home'],
+        ]
+      : [
+          ['home', 'home'],
+          ['weather-setup', 'home,up,down'],
+          ['apps', 'apps,down'],
+          ['settings', 'settings'],
+          ['update-card', 'settings,down,down,down,down,right'],
+          ['inputs', 'home,up'],
+          ['clock-menu', 'home,up,right,right,enter'],
+          ['manage-apps', 'settings,down,enter'],
+          ['app-actions', 'settings,down,enter,enter'],
+        ];
 try {
   for (const [name, script] of captures) {
     // Independent state makes screenshots stable regardless of capture order.
     await fs.writeFile(
       preferences,
       JSON.stringify(
-        weatherPreviews
+        widgetPreviews
           ? {
               ...configuration,
-              weather_style:
-                name === 'weather-style-no-icon'
-                  ? 'no_icon'
-                  : name === 'weather-style-compact'
-                    ? 'compact'
-                    : 'standard',
+              greeting_name: 'Alex',
+              reduced_motion: true,
+              greeting_position:
+                name === 'home-layout-moved' ? { column: 1, row: 2 } : { column: 0, row: 0 },
+              weather_position:
+                name === 'home-layout-moved' ? { column: 2, row: 0 } : { column: 0, row: 1 },
             }
-          : sortingPreviews
+          : weatherPreviews
             ? {
                 ...configuration,
-                app_sorting: name === 'app-sorting-az' ? 'alphabetical' : 'usage',
-                app_launch_counts: {
-                  'org.jellyfin.webos': 42,
-                  'cdp-30': 24,
-                  'spotify-beehive': 18,
-                },
-                ...(name === 'disc-input'
-                  ? { input_icons: { 'com.webos.app.hdmi1': 'disk' } }
-                  : {}),
+                weather_style:
+                  name === 'weather-style-no-icon'
+                    ? 'no_icon'
+                    : name === 'weather-style-compact'
+                      ? 'compact'
+                      : 'standard',
               }
-            : name === 'weather-setup'
-              ? { ...configuration, weather_location: null }
-              : configuration,
+            : sortingPreviews
+              ? {
+                  ...configuration,
+                  app_sorting: name === 'app-sorting-az' ? 'alphabetical' : 'usage',
+                  app_launch_counts: {
+                    'org.jellyfin.webos': 42,
+                    'cdp-30': 24,
+                    'spotify-beehive': 18,
+                  },
+                  ...(name === 'disc-input'
+                    ? { input_icons: { 'com.webos.app.hdmi1': 'disk' } }
+                    : {}),
+                }
+              : name === 'weather-setup'
+                ? { ...configuration, weather_location: null }
+                : configuration,
       ),
     );
     await fs.writeFile(

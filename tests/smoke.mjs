@@ -88,7 +88,7 @@ try {
   const home = await scenario('home', 'home');
   assert.deepEqual(home.focus, { App: 'netflix' });
   assert.ok(!home.ui_text.includes('Favorites'));
-  assert.ok(!home.ui_text.some((value) => value.startsWith('Good evening')));
+  assert.ok(home.ui_text.some((value) => value.startsWith('Good evening')));
   assert.ok(home.render.capture.glass_surfaces >= 3);
   assert.equal(home.render.capture.glass_backdrop_sampling, true);
   const fallback = await scenario('glass-fallback', 'home', [], 90, { LUMA_GLASS: '0' });
@@ -379,7 +379,7 @@ try {
   assert.ok(widgets.ui_text.includes('Widgets'));
   for (const title of ['Weather', 'Shortcuts', 'Inputs'])
     assert.ok(widgets.ui_text.includes(title));
-  assert.ok(!widgets.ui_text.includes('Greeting'));
+  assert.ok(widgets.ui_text.includes('Greeting'));
   assert.ok(!widgets.ui_text.includes('Date'));
 
   const general = await scenario('general-without-app-names', 'settings,enter');
@@ -611,30 +611,29 @@ try {
   );
   assert.equal(cycleDisabled.preferences.wallpaper_cycle, false);
   assert.ok(cycleDisabled.ui_text.includes('Rotation'));
-  for (const layout of ['row', 'centered', 'grid']) {
+  for (const column of [0, 1, 2]) {
     await fs.writeFile(
       preferences,
       JSON.stringify({
-        home_layout: layout,
-        home_widgets: ['clock', 'date', 'greeting', 'weather', 'empty', 'empty'],
+        weather_position: { column, row: 1 },
+        greeting_position: { column: 0, row: 0 },
       }),
     );
-    const widgets = await scenario(`widgets-${layout}`, 'home');
-    assert.equal(widgets.preferences.home_layout, layout);
-    assert.equal(widgets.ui_text.includes('Weather'), layout === 'grid');
+    const widgets = await scenario(`widgets-weather-column-${column}`, 'home');
+    assert.equal(widgets.preferences.weather_position.column, column);
+    assert.equal(widgets.ui_text.includes('Weather'), true);
     assert.equal(
       widgets.ui_text.some((label) => label.startsWith('Good ')),
-      layout !== 'centered',
+      true,
     );
   }
   await fs.writeFile(preferences, '{}');
-  const layoutRow = `${widgetsPage},down,down,down`;
-  const centered = await scenario('widget-layout-setting', `${layoutRow},enter`);
-  assert.equal(centered.focus, 'HomeLayout');
-  assert.equal(centered.preferences.home_layout, 'centered');
-  const assigned = await scenario('widget-slot-setting', `${layoutRow},down,enter`);
-  assert.deepEqual(assigned.focus, { HomeSlot: 0 });
-  assert.equal(assigned.preferences.home_widgets[0], 'clock');
+  const greetingPage = `${widgetsPage},down,down,down,enter`;
+  const positioned = await scenario(
+    'widget-position-setting',
+    `${greetingPage},down,down,down,enter,right,enter`,
+  );
+  assert.deepEqual(positioned.preferences.greeting_position, { column: 1, row: 0 });
   console.log(
     'Native smoke checks passed: rendering/alpha, navigation, persistence, SDL pointer input, DPI-aware glyphs, 4K capture and presentation profiling.',
   );

@@ -1,86 +1,113 @@
 use super::*;
 use crate::{
     renderer::Draw,
-    state::{APPS_SECTION, Rect},
+    state::{APPS_SECTION, Rect, Subpage},
 };
 
 #[test]
-fn widget_layout_settings_save_and_preserve_hidden_assignments() {
-    use crate::model::{HomeLayout, HomeWidget};
+fn widget_position_browsing_cancels_and_valid_selection_saves() {
+    use crate::model::{HomeWidget, WidgetPosition};
     let mut state = ready();
-    state.preferences.home_widgets[5] = HomeWidget::Date;
     state.open(2);
     state.section = crate::state::WIDGETS_SECTION;
-    state.focus = Target::HomeLayout;
-    assert_eq!(state.activate(), vec![Effect::Save]);
-    assert_eq!(state.preferences.home_layout, HomeLayout::Centered);
-    assert_eq!(state.preferences.home_widgets[5], HomeWidget::Date);
-    state.focus = Target::HomeSlot(0);
-    assert_eq!(state.activate(), vec![Effect::Save]);
-    assert_eq!(state.preferences.home_widgets[0], HomeWidget::Clock);
-    let saved = serde_json::to_vec(&state.preferences).unwrap();
-    let loaded: Preferences = serde_json::from_slice(&saved).unwrap();
-    assert_eq!(loaded.home_layout, HomeLayout::Centered);
-    assert_eq!(loaded.home_widgets, state.preferences.home_widgets);
-    state.focus = Target::HomeSlot(5);
+    state.focus = Target::MoveWidget(HomeWidget::Weather);
     state.activate();
-    assert_eq!(state.preferences.home_widgets[5], HomeWidget::Date);
+    assert_eq!(state.focus, Target::Choice(3));
+    state.direction(Direction::Right, &scene(&state).controls);
+    assert_eq!(state.focus, Target::Choice(4));
+    assert_eq!(
+        state.preferences.weather_position,
+        WidgetPosition { column: 0, row: 1 }
+    );
+    state.back();
+    assert_eq!(state.focus, Target::MoveWidget(HomeWidget::Weather));
+    state.activate();
+    state.direction(Direction::Right, &scene(&state).controls);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(
+        state.preferences.weather_position,
+        WidgetPosition { column: 1, row: 1 }
+    );
+    let loaded: Preferences =
+        serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
+    assert_eq!(loaded.weather_position, state.preferences.weather_position);
 }
 
 #[test]
-fn widget_slot_rows_scroll_and_return_to_sidebar() {
-    use crate::model::HomeLayout;
+fn widget_position_picker_blocks_overlaps_and_out_of_bounds_for_remote_and_pointer() {
+    use crate::model::HomeWidget;
     let mut state = ready();
-    state.preferences.home_layout = HomeLayout::Grid;
     state.open(2);
     state.section = crate::state::WIDGETS_SECTION;
-    state.focus = Target::HomeLayout;
-    for slot in 0..6 {
-        state.direction(Direction::Down, &scene(&state).controls);
-        assert_eq!(state.focus, Target::HomeSlot(slot));
-        let rendered = scene(&state);
-        let selected = rendered
+    state.focus = Target::MoveWidget(HomeWidget::Greeting);
+    state.activate();
+    for cell in [2, 3, 5, 6, 8] {
+        state.focus = Target::Choice(cell);
+        assert!(state.activate().is_empty());
+        assert_eq!(
+            state.subpage,
+            Some(Subpage::WidgetPosition(HomeWidget::Greeting))
+        );
+    }
+    let rendered = scene(&state);
+    for cell in 0..9 {
+        let control = rendered
             .controls
             .iter()
-            .find(|control| control.target == state.focus)
+            .find(|control| control.target == Target::Choice(cell))
             .unwrap();
-        assert!(selected.rect.y >= state.content_viewport().y);
-        assert!(selected.rect.y + selected.rect.h <= 1080.);
+        let (x, y) = control.rect.center();
+        assert_eq!(
+            state.hit_test(&rendered.controls, x, y),
+            Some(Target::Choice(cell))
+        );
     }
-    state.direction(Direction::Left, &scene(&state).controls);
-    assert_eq!(state.focus, Target::Sidebar(crate::state::WIDGETS_SECTION));
+    state.focus = Target::Choice(1);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.greeting_position.column, 1);
 }
 
 #[test]
-fn legacy_preferences_default_to_weather_and_widget_assignments_stay_unique() {
-    use crate::model::{HomeLayout, HomeWidget};
+fn widget_positions_default_to_requested_spans_and_sanitize_safely() {
+    use crate::model::{HomeWidget, WidgetPosition};
     let mut preferences: Preferences = serde_json::from_str("{}").unwrap();
-    assert_eq!(preferences.home_layout, HomeLayout::Row);
+    assert_eq!(HomeWidget::Greeting.span(), (2, 1));
+    assert_eq!(HomeWidget::Weather.span(), (1, 2));
+    assert_eq!(
+        preferences.greeting_position,
+        WidgetPosition { column: 0, row: 0 }
+    );
+    assert_eq!(
+        preferences.weather_position,
+        WidgetPosition { column: 0, row: 1 }
+    );
     assert!(preferences.weather_visible());
-    preferences.home_layout = HomeLayout::Grid;
-    for slot in 0..6 {
-        for _ in 0..10 {
-            preferences.cycle_home_widget(slot);
-            for widget in HomeWidget::ALL
-                .into_iter()
-                .filter(|widget| *widget != HomeWidget::Empty)
-            {
-                assert!(
-                    preferences
-                        .home_widgets
-                        .iter()
-                        .filter(|value| **value == widget)
-                        .count()
-                        <= 1
-                );
+    for greeting in 0..9 {
+        for weather in 0..9 {
+            preferences.greeting_position = WidgetPosition {
+                column: greeting % 3,
+                row: greeting / 3,
+            };
+            preferences.weather_position = WidgetPosition {
+                column: weather % 3,
+                row: weather / 3,
+            };
+            preferences.sanitize();
+            for widget in HomeWidget::ALL {
+                assert!(preferences.can_place_widget(widget, preferences.widget_position(widget)));
             }
         }
     }
-    preferences.home_widgets = [HomeWidget::Weather; 6];
+    preferences.greeting_position = WidgetPosition {
+        column: 255,
+        row: 255,
+    };
+    preferences.weather_position = WidgetPosition {
+        column: 255,
+        row: 255,
+    };
     preferences.sanitize();
-    assert_eq!(preferences.home_widgets[1..], [HomeWidget::Empty; 5]);
-    let unknown: Preferences = serde_json::from_value(json!({"home_layout": "future"})).unwrap();
-    assert_eq!(unknown.home_layout, HomeLayout::Row);
+    assert!(preferences.can_place_widget(HomeWidget::Weather, preferences.weather_position));
 }
 
 #[test]
@@ -144,9 +171,9 @@ fn weather_empty_state_uses_a_large_icon_and_setup_action() {
     let state = ready();
     let rendered = scene(&state);
     assert!(rendered.draw.iter().any(|draw| matches!(draw,
-        Draw::Image(path, rect, ..) | Draw::TintedImage(path, rect, ..) if path.ends_with("weather/partly-cloudy.png") && rect.w == 112. && rect.h == 112.)));
+        Draw::Image(path, rect, ..) | Draw::TintedImage(path, rect, ..) if path.ends_with("weather/partly-cloudy.png") && rect.w == 144. && rect.h == 144.)));
     assert!(rendered.draw.iter().any(|draw| matches!(draw,
-        Draw::Text(label, _, style, ..) if label == state.preferences.language.t("setWeatherLocation") && style.size >= 36.)));
+        Draw::Text(label, _, style, ..) if label == state.preferences.language.t("setWeatherLocation") && style.size >= 24.)));
     let setup = rendered
         .controls
         .iter()

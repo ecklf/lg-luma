@@ -141,13 +141,17 @@ retain their manual order. The same order fills empty dock slots and the app dra
 `xvfb-run -a pnpm screenshots --sorting` captures the sorting settings, both app orders,
 and the generic disc input icon from the native desktop renderer using seeded local counts.
 
-Home widget preferences use `home_layout` (`row`, `centered`, `grid`) and six persistent
-`home_widgets` entries (`empty`, `weather`, `clock`, `date`, `greeting`). Smaller layouts show
-only the first one or three slots without deleting the rest. Settings → Widgets cycles the
-preset and each visible assignment with OK or Right. Empty slots render nothing, and weather
-workers only run when Weather is assigned to a visible slot and enabled. Legacy greeting/date
-visibility preferences do not override explicit slot assignments. Layouts use the logical
-1920×1080 coordinate space above the unchanged favorites dock.
+Home uses a 3×3 placement grid in logical 1920×1080 space above the unchanged dock.
+Greeting spans 2 columns × 1 row; Weather spans 1 column × 2 rows. Their top-left anchors
+persist as `greeting_position` and `weather_position` (`column`, `row`, zero-based).
+Defaults are Greeting (0,0), Weather (0,1). Sanitization repairs out-of-bounds anchors and
+overlaps deterministically. The earlier draft's preset/slot fields are ignored.
+Settings → Widgets → Greeting/Weather → Position opens a scaled Home grid; arrows browse
+all nine anchors, OK/click saves a valid placement, and Back cancels without changing preferences.
+Invalid positions are red and cannot be committed. Hidden widgets keep their reserved cells.
+`show_greeting` and `show_weather` control visibility; disabled Weather never requests forecasts.
+All three weather styles reflow inside the same fixed footprint. `pnpm screenshots --widgets`
+captures the default arrangement, an alternate arrangement, and the position editor.
 
 | Input                         | Action                                                                       |
 | ----------------------------- | ---------------------------------------------------------------------------- |

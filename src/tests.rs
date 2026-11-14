@@ -2451,7 +2451,7 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
             _ => None,
         })
         .collect();
-    assert_eq!(widget_order, [1, 2, 3]);
+    assert_eq!(widget_order, [1, 2, 3, 0]);
     for (index, subpage) in [Subpage::Weather, Subpage::Shortcuts, Subpage::Inputs]
         .into_iter()
         .enumerate()
@@ -2528,9 +2528,9 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
                 .iter()
                 .filter(|c| matches!(c.target, Target::Widget(_)))
                 .count(),
-            3
+            4
         );
-        for key in ["widgets", "weather", "shortcuts", "inputs"] {
+        for key in ["widgets", "weather", "shortcuts", "inputs", "greeting"] {
             assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t(key))), "{key}/{language:?}");
         }
         state.pointer_focus(Target::Sidebar(0));
@@ -2906,7 +2906,7 @@ fn greeting_visibility_toggle_persists_without_clearing_name_or_hiding_date() {
     assert!(state.preferences.show_greeting);
     state.open(0);
     assert!(
-        !scene(&state)
+        scene(&state)
             .draw
             .iter()
             .any(|draw| matches!(draw, Draw::Text(label, ..) if label == &greeting))
