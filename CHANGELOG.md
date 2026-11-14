@@ -1,5 +1,12 @@
 # lg-luma
 
+## 3.1.0
+
+### Minor Changes
+
+- 6037963: Add Standard, No icon and Compact weather widget styles with native-rendered sample previews in Settings.
+- 9b36e99: Add configurable A–Z or usage-based app sorting with persistent local launch counts, preserving favorite order. Replace the Compact Disc wordmark with a generic disc icon.
+
 ## 3.0.1
 
 ### Patch Changes
