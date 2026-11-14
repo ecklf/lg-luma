@@ -322,6 +322,7 @@ dependencies = [
 name = "luma-vector-assets"
 version = "0.1.0"
 dependencies = [
+ "image",
  "luma-vector-geometry",
  "serde",
  "serde_json",

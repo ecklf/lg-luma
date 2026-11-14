@@ -45,6 +45,8 @@ CC BY-SA attribution. Source licence notices and this document travel inside the
 
 Generated `.build/assets/thumbnails/` are cropped/resized derivatives of the same wallpaper
 sources. Original sources remain in `assets/`; no artwork service is contacted on the TV.
+Generated `wallpapers/*.glass.png` files are lossless two-level filtered derivatives of
+the final wallpapers, prepared offline for Liquid Glass and covered by the same licenses.
 
 ## Brand SVGs
 
