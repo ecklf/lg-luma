@@ -3472,9 +3472,13 @@ impl State {
         if self.page != Page::Home {
             self.open(0);
             self.focus = self.first_content();
-            vec![]
-        } else {
-            self.open_back_overlay()
+            return vec![];
         }
+        // Short Back on Home never opens Recents (hold does). A focused channel
+        // favorite still opens the channel switcher.
+        if matches!(self.focus, Target::Channel(_)) && !self.home_channels().is_empty() {
+            return self.open_channel_switcher();
+        }
+        vec![]
     }
 }
