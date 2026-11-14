@@ -622,6 +622,59 @@ fn input_status_slot_animates_width_in_and_out_without_refitting_the_label() {
 }
 
 #[test]
+fn reaching_favorites_from_the_drawer_closes_it_and_preserves_the_column() {
+    for reduced_motion in [false, true] {
+        for favorites in [0, 3, 9] {
+            for column in 0..6 {
+                let mut state = ready();
+                state.preferences.reduced_motion = reduced_motion;
+                state.preferences.favorites = Some(
+                    state
+                        .inventory
+                        .apps
+                        .iter()
+                        .take(favorites)
+                        .map(|app| app.id.clone())
+                        .collect(),
+                );
+                // Enough apps to exercise all columns and offscreen rows.
+                state.inventory.apps.extend((0..40).map(|index| {
+                    crate::model::App::new(&format!("extra.{index}"), &format!("Extra {index}"))
+                }));
+                let dock = state.dock_apps()[column].id.clone();
+                state.open(1);
+                state.drawer_visibility = 1.;
+                let grid: Vec<_> = state.apps().iter().map(|app| app.id.clone()).collect();
+                state.focus = Target::App(grid[12 + column].clone());
+                state.scroll = 800.;
+                state.direction(Direction::Up, &controls(&state));
+                assert_eq!(state.page, Page::Apps);
+                assert_eq!(state.focus, Target::App(grid[6 + column].clone()));
+                state.direction(Direction::Up, &controls(&state));
+                assert_eq!(state.page, Page::Apps);
+                assert_eq!(state.focus, Target::App(grid[column].clone()));
+                assert!(state.direction(Direction::Up, &controls(&state)).is_empty());
+                assert_eq!(state.page, Page::Home);
+                assert_eq!(state.focus, Target::App(dock.clone()));
+                assert_eq!(state.scroll, 0.);
+                assert!(!state.pointer);
+                assert!(state.overlay.is_none());
+                assert_eq!(
+                    state.drawer_visibility,
+                    if reduced_motion { 0. } else { 1. }
+                );
+                assert!(
+                    controls(&state)
+                        .iter()
+                        .any(|control| control.target == state.focus)
+                );
+                assert_eq!(state.activate(), vec![Effect::Launch(dock)]);
+            }
+        }
+    }
+}
+
+#[test]
 fn up_from_pinned_drawer_row_closes_drawer_and_preserves_header_focus() {
     for reduced_motion in [false, true] {
         for inputs_visible in [false, true] {

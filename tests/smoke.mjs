@@ -101,6 +101,10 @@ try {
   const drawerClosed = await scenario('drawer-closed', 'home,right,down,back');
   assert.equal(drawerClosed.page, 'Home');
   assert.deepEqual(drawerClosed.focus, { App: 'netflix' });
+  const drawerUp = await scenario('drawer-up-to-favorites', 'home,down,right,right,right,up');
+  assert.equal(drawerUp.page, 'Home');
+  assert.deepEqual(drawerUp.focus, { App: home.apps[3] });
+  assert.equal(drawerUp.modal, false);
   const drawerToInputs = await scenario('drawer-to-inputs', 'home,down,up,up');
   assert.equal(drawerToInputs.page, 'Home');
   assert.deepEqual(drawerToInputs.focus, { Input: 'com.webos.app.hdmi1' });

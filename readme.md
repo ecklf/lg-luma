@@ -36,6 +36,7 @@ date have been removed.
 
 - **Left / Right** browses favorites. Hold **OK** to reorder them.
 - **Down** from favorites opens the animated six-column app drawer.
+- **Up** from the drawer’s first app row returns Home with the corresponding favorite selected.
 - **Up** from favorites reaches the corner controls.
 - **Back** closes the drawer and focuses the first favorite.
 - **Settings → General → App sorting** chooses **Alphabetically** (default) or **Usage count**.
