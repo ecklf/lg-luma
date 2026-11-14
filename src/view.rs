@@ -1207,6 +1207,7 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
         let cell = home_widget_rect(widget, state.preferences.widget_position(widget));
         if (widget == HomeWidget::Greeting && !state.preferences.show_greeting)
             || (widget == HomeWidget::Weather && !state.preferences.show_weather)
+            || (widget == HomeWidget::Date && !state.preferences.show_date)
         {
             continue;
         }
@@ -1240,14 +1241,22 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
             }
             continue;
         }
-        let label = language.greeting(now.hour(), "");
-        let (label, style) = assets.fit_line(&label, text(48., 500, -0.02), cell.w, 16.);
+        let (label, size) = if widget == HomeWidget::Date {
+            (state.preferences.date_format.format(language, now), 32.)
+        } else {
+            (language.greeting(now.hour(), ""), 72.)
+        };
+        let (label, style) = assets.fit_line(&label, text(size, 500, -0.02), cell.w, 24.);
         let height = style.size * style.line_height;
         out.text(
             label,
             Rect::new(cell.x, cell.y + (cell.h - height) / 2., cell.w, height),
             style,
-            WHITE,
+            if widget == HomeWidget::Date {
+                c(0xf5f5f5, 0.82)
+            } else {
+                WHITE
+            },
             false,
         );
     }
@@ -2605,6 +2614,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 (2, "shortcuts", "sparkles"),
                 (3, "inputs", "input-hdmi"),
                 (0, "greeting", "type"),
+                (4, "date", "clock"),
             ]
             .into_iter()
             .enumerate()
@@ -2957,6 +2967,7 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
 
 fn date_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
+    widget_position_row(out, state, assets, HomeWidget::Date, 332.8 - state.scroll);
     for (index, (target, title, value, chevron)) in [
         (
             Target::DateToggle,
@@ -4216,7 +4227,50 @@ mod tests {
                         (other.rect.x, other.rect.y)
                     );
                 }
-                assert!(!rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, ..) if label == &state.preferences.language.date(OffsetDateTime::UNIX_EPOCH))));
+                assert_eq!(rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, ..) if label == &state.preferences.language.date(OffsetDateTime::UNIX_EPOCH))), show_date);
+            }
+        }
+    }
+
+    #[test]
+    fn date_and_larger_greeting_stay_inside_their_fixed_footprints() {
+        let assets = assets();
+        for language in Language::ALL {
+            for hour in [0, 9, 15, 20] {
+                let state = State::new(Preferences {
+                    language,
+                    show_weather: false,
+                    ..Preferences::default()
+                });
+                let now = OffsetDateTime::UNIX_EPOCH + time::Duration::hours(hour);
+                let mut rendered = Scene::new();
+                home_widgets(&mut rendered, &state, &assets, now);
+                for widget in [HomeWidget::Date, HomeWidget::Greeting] {
+                    let label = if widget == HomeWidget::Date {
+                        language.date(now)
+                    } else {
+                        language.greeting(now.hour(), "")
+                    };
+                    let (rect, style) = rendered
+                        .draw
+                        .iter()
+                        .find_map(|draw| match draw {
+                            Draw::Text(text, rect, style, ..) if text == &label => {
+                                Some((*rect, *style))
+                            }
+                            _ => None,
+                        })
+                        .expect("The full localized widget label should fit without truncation");
+                    let cell = home_widget_rect(widget, state.preferences.widget_position(widget));
+                    assert!(rect.x >= cell.x && rect.y >= cell.y);
+                    assert!(
+                        rect.x + rect.w <= cell.x + cell.w && rect.y + rect.h <= cell.y + cell.h
+                    );
+                    assert_eq!(assets.lines(&label, style, rect.w), 1);
+                    if widget == HomeWidget::Greeting && language == Language::En {
+                        assert!(style.size > 48.);
+                    }
+                }
             }
         }
     }
@@ -4234,7 +4288,7 @@ mod tests {
                 assert!(rect.y >= 164.8 && rect.y + rect.h <= 796.);
                 assert_eq!(
                     rect.w,
-                    if widget == HomeWidget::Greeting {
+                    if widget != HomeWidget::Weather {
                         864.
                     } else {
                         420.

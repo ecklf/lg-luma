@@ -2454,7 +2454,7 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
             _ => None,
         })
         .collect();
-    assert_eq!(widget_order, [1, 2, 3, 0]);
+    assert_eq!(widget_order, [1, 2, 3, 0, 4]);
     for (index, subpage) in [Subpage::Weather, Subpage::Shortcuts, Subpage::Inputs]
         .into_iter()
         .enumerate()
@@ -2531,9 +2531,16 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
                 .iter()
                 .filter(|c| matches!(c.target, Target::Widget(_)))
                 .count(),
-            4
+            5
         );
-        for key in ["widgets", "weather", "shortcuts", "inputs", "greeting"] {
+        for key in [
+            "widgets",
+            "weather",
+            "shortcuts",
+            "inputs",
+            "greeting",
+            "date",
+        ] {
             assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t(key))), "{key}/{language:?}");
         }
         state.pointer_focus(Target::Sidebar(0));
@@ -2805,7 +2812,7 @@ fn drawer_ignores_stale_search_and_category_state() {
 }
 
 #[test]
-fn clock_stays_readable_and_home_omits_date_and_input_descriptions() {
+fn clock_stays_readable_and_date_widget_does_not_add_input_descriptions() {
     use crate::renderer::Draw;
     for language in crate::i18n::Language::ALL {
         let mut state = ready();
@@ -2827,8 +2834,14 @@ fn clock_stays_readable_and_home_omits_date_and_input_descriptions() {
             language,
         );
         assert!(!rendered.draw.iter().any(|draw| matches!(draw,
-            Draw::Text(text, ..) if text == &description || text == &language.date(now)
+            Draw::Text(text, ..) if text == &description
         )));
+        assert!(
+            rendered
+                .draw
+                .iter()
+                .any(|draw| matches!(draw,Draw::Text(text,..) if text==&language.date(now)))
+        );
     }
 }
 
@@ -2898,7 +2911,7 @@ fn greeting_visibility_toggle_persists_without_hiding_date() {
             .any(|draw| matches!(draw, Draw::Text(label, ..) if label == &greeting))
     );
     assert!(
-        !hidden
+        hidden
             .draw
             .iter()
             .any(|draw| matches!(draw, Draw::Text(label, ..) if label == &language.date(now)))

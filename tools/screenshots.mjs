@@ -83,9 +83,10 @@ try {
               ...configuration,
               reduced_motion: true,
               greeting_position:
-                name === 'home-layout-moved' ? { column: 2, row: 3 } : { column: 0, row: 0 },
+                name === 'home-layout-moved' ? { column: 2, row: 3 } : { column: 0, row: 1 },
               weather_position:
-                name === 'home-layout-moved' ? { column: 3, row: 0 } : { column: 0, row: 1 },
+                name === 'home-layout-moved' ? { column: 3, row: 0 } : { column: 0, row: 2 },
+              date_position: { column: 0, row: 0 },
             }
           : weatherPreviews
             ? {

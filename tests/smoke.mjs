@@ -380,7 +380,7 @@ try {
   for (const title of ['Weather', 'Shortcuts', 'Inputs'])
     assert.ok(widgets.ui_text.includes(title));
   assert.ok(widgets.ui_text.includes('Greeting'));
-  assert.ok(!widgets.ui_text.includes('Date'));
+  assert.ok(widgets.ui_text.includes('Date'));
 
   const general = await scenario('general-without-app-names', 'settings,enter');
   assert.deepEqual(general.focus, { Setting: 1 });
@@ -615,8 +615,9 @@ try {
     await fs.writeFile(
       preferences,
       JSON.stringify({
-        weather_position: { column, row: 1 },
-        greeting_position: { column: 0, row: 0 },
+        weather_position: { column, row: 2 },
+        greeting_position: { column: 0, row: 1 },
+        date_position: { column: 0, row: 0 },
       }),
     );
     const widgets = await scenario(`widgets-weather-column-${column}`, 'home');
@@ -633,7 +634,7 @@ try {
     'widget-position-setting',
     `${greetingPage},down,enter,right,enter`,
   );
-  assert.deepEqual(positioned.preferences.greeting_position, { column: 1, row: 0 });
+  assert.deepEqual(positioned.preferences.greeting_position, { column: 1, row: 1 });
   console.log(
     'Native smoke checks passed: rendering/alpha, navigation, persistence, SDL pointer input, DPI-aware glyphs, 4K capture and presentation profiling.',
   );
