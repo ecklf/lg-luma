@@ -20,6 +20,7 @@ const MAIN_TOP: f32 = 108.8;
 const FACE_HEIGHT: f32 = 154.4;
 const GRID_PITCH: f32 = 296.4;
 const RECENTS_BACKDROP_OPACITY: f32 = 0.86;
+const COMPANION_BACKGROUND: u32 = 0x1b2023;
 
 fn input_icon_width(name: &str, size: f32) -> f32 {
     size * match name {
@@ -361,7 +362,7 @@ fn companion(
     let panel = Rect::new(520., 144., 880., 816.);
     out.modal = Some(panel);
     out.shadow(panel, 24., 40., 12., 0.3);
-    out.modal_surface(panel, 24.);
+    out.shape(panel, 24., c(COMPANION_BACKGROUND, 1.));
     out.text(
         language.t(strings.title),
         Rect::new(584., 198., 752., 48.),
@@ -384,7 +385,7 @@ fn companion(
             let y = 310.;
             // Invert the normal QR polarity to blend into the dark modal, while
             // retaining a high-contrast foreground and the full quiet zone.
-            let background = c(0x1b2023, 1.);
+            let background = c(COMPANION_BACKGROUND, 1.);
             let modules = c(0xf5f4ef, 1.);
             out.shape(Rect::new(x, y, size, size), 0., background);
             for row in 0..session.qr_size {

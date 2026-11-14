@@ -275,6 +275,8 @@ ordinary glass changes participate in damage tracking.
 Modal cards (wallpaper upload, shortcut editing, app/background actions, deletion confirmations,
 and the keyboard) use opaque gray gradients rather than wallpaper-sampling glass to keep their
 content readable. The dock and regular controls retain their glass treatment.
+Wallpaper-upload and shortcut-editor panels use the same solid dark gray as the QR quiet zone
+and logo plate, avoiding a contrasting square behind the QR code without reducing its contrast.
 
 See [the research notes](docs/liquid-glass-research.md) for sources, visual decisions and limitations.
 

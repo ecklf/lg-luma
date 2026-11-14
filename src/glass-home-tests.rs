@@ -967,10 +967,57 @@ fn modal_cards_use_opaque_gray_surfaces_instead_of_glass() {
         };
         assert!(!rendered.draw.iter().any(|draw| matches!(draw,
             Draw::Glass(rect, ..) if same_panel(rect))));
-        assert!(rendered.draw.iter().any(|draw| matches!(draw,
-            Draw::RoundedGradient(rect, _, top, bottom) if same_panel(rect)
-                && *top == [52. / 255., 56. / 255., 59. / 255., 1.]
-                && *bottom == [36. / 255., 40. / 255., 45. / 255., 1.])));
+        if matches!(
+            state.overlay,
+            Some(Overlay::WallpaperUpload | Overlay::TileEditor)
+        ) {
+            assert!(rendered.draw.iter().any(|draw| matches!(draw,
+                Draw::Shape(rect, _, 0., color) if same_panel(rect)
+                    && *color == [27. / 255., 32. / 255., 35. / 255., 1.])));
+        } else {
+            assert!(rendered.draw.iter().any(|draw| matches!(draw,
+                Draw::RoundedGradient(rect, _, top, bottom) if same_panel(rect)
+                    && *top == [52. / 255., 56. / 255., 59. / 255., 1.]
+                    && *bottom == [36. / 255., 40. / 255., 45. / 255., 1.])));
+        }
+    }
+}
+
+#[test]
+fn qr_dialogs_share_one_opaque_background_with_the_quiet_zone_and_logo_plate() {
+    for overlay in [Overlay::WallpaperUpload, Overlay::TileEditor] {
+        let mut state = ready();
+        state.preferences.reduced_motion = true;
+        state.overlay = Some(overlay);
+        let session = crate::companion::Session {
+            url: "http://192.168.1.20:12345/AbCd1234/".into(),
+            qr_size: 21,
+            qr: vec![true; 21 * 21],
+        };
+        state.wallpaper_upload = Some(Ok(session.clone()));
+        state.tile_editor = Some(Ok(session));
+        let rendered = scene(&state);
+        let fills: Vec<_> = rendered
+            .draw
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Shape(rect, _, 0., color)
+                    if *color == [27. / 255., 32. / 255., 35. / 255., 1.] =>
+                {
+                    Some(rect)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            fills.len(),
+            3,
+            "panel, QR quiet zone, and logo plate must match"
+        );
+        assert_eq!((fills[0].w, fills[0].h), (880., 816.));
+        let scale = (336_f32 / 29.).floor();
+        assert_eq!((fills[1].w, fills[1].h), (29. * scale, 29. * scale));
+        assert_eq!((fills[2].w, fills[2].h), (11. * scale, 11. * scale));
     }
 }
 
