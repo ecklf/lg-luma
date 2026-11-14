@@ -437,10 +437,14 @@ fn input_pills_hug_short_labels_and_center_fitted_text() {
 
 #[test]
 fn input_connection_dot_only_appears_on_hover_remote_focus_or_press() {
-    for connected in [Some(true), Some(false), None] {
+    for (connected, signal) in [Some(true), Some(false), None]
+        .into_iter()
+        .flat_map(|connected| [Some(true), Some(false), None].map(|signal| (connected, signal)))
+    {
         let mut state = ready();
         let id = state.inventory.inputs[0].id.clone();
         state.inventory.inputs[0].connected = connected;
+        state.inventory.inputs[0].signal = signal;
         state
             .preferences
             .input_modes
@@ -467,7 +471,9 @@ fn input_connection_dot_only_appears_on_hover_remote_focus_or_press() {
         let selected = dot_color(&state).unwrap();
         assert_eq!(
             selected,
-            if connected == Some(true) {
+            if connected == Some(true) && signal == Some(false) {
+                [245. / 255., 184. / 255., 75. / 255., 1.]
+            } else if connected == Some(true) {
                 [96. / 255., 230. / 255., 160. / 255., 1.]
             } else {
                 [140. / 255., 148. / 255., 156. / 255., 1.]
@@ -494,6 +500,17 @@ fn input_connection_dot_only_appears_on_hover_remote_focus_or_press() {
             (pill.x, pill.y, pill.w, pill.h),
             (after.x, after.y, after.w, after.h)
         );
+        state.overlay = Some(Overlay::Inputs);
+        let popup = scene(&state);
+        let row = popup
+            .controls
+            .iter()
+            .find(|control| control.target == target)
+            .unwrap()
+            .rect;
+        assert!(popup.draw.iter().any(|draw| matches!(draw,
+            Draw::Shape(rect, radius, _, color) if rect.w == 10. && *radius == 5.
+                && row.contains(rect.x, rect.y) && *color == selected)));
     }
 }
 
