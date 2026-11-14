@@ -200,6 +200,37 @@ try {
   assert.equal(recentsEmpty.focus, 'RecentEmpty');
   assert.ok(recentsEmpty.ui_text.includes('No recent apps'));
   assert.ok(!recentsEmpty.ui_text.includes('Apps you open will appear here.'));
+  await fs.writeFile(
+    preferences,
+    JSON.stringify({ ...JSON.parse(originalPreferences), tab_navigation: true }),
+  );
+  const tabbedOneClosed = await scenario(
+    'tabbed-recents-one-closed',
+    'recents,await-recents,right,up,await-recents',
+  );
+  assert.equal(tabbedOneClosed.recents.length, 7);
+  assert.ok(!tabbedOneClosed.recents.some((entry) => entry.app.id === 'youtube.leanback.v4'));
+  assert.ok(tabbedOneClosed.recents.some((entry) => entry.app.id === 'netflix'));
+  const tabbedCloseAll = await scenario('tabbed-recents-close-all', 'recents,await-recents,down');
+  assert.equal(tabbedCloseAll.focus, 'RecentCloseAll');
+  assert.equal(tabbedCloseAll.recents.length, 8);
+  const tabbedReturn = await scenario(
+    'tabbed-recents-return',
+    'recents,await-recents,right,down,up',
+  );
+  assert.deepEqual(tabbedReturn.focus, { Recent: 'youtube.leanback.v4' });
+  assert.equal(tabbedReturn.recents.length, 8);
+  const tabbedAllClosed = await scenario(
+    'tabbed-recents-all-closed',
+    'recents,await-recents,down,enter,await-recents',
+  );
+  assert.deepEqual(tabbedAllClosed.recents, []);
+  const tabbedPointerClosed = await scenario(
+    'tabbed-recents-pointer-close-all',
+    'recents,await-recents,click:960:964,await-recents',
+  );
+  assert.deepEqual(tabbedPointerClosed.recents, []);
+  await fs.writeFile(preferences, originalPreferences);
   const recentBack = await scenario('recents-back', 'settings,recents,await-recents,back');
   assert.equal(recentBack.modal, false);
   assert.equal(recentBack.page, 'Settings');

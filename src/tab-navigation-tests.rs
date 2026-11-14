@@ -94,12 +94,23 @@ fn close_all_is_reachable_busy_guarded_and_refreshes_after_success() {
         .iter()
         .map(|e| e.app.id.clone())
         .collect();
-    assert!(
-        controls(&state)
-            .iter()
-            .any(|c| c.target == Target::RecentCloseAll)
+    let rendered = controls(&state);
+    let close_all = rendered
+        .iter()
+        .find(|c| c.target == Target::RecentCloseAll)
+        .unwrap();
+    assert_eq!(close_all.rect.center().0, 960.);
+    assert!(close_all.rect.y >= 900.);
+    assert!(close_all.rect.y + close_all.rect.h <= 1080.);
+    assert_eq!(
+        state.hit_test(
+            &rendered,
+            close_all.rect.center().0,
+            close_all.rect.center().1
+        ),
+        Some(Target::RecentCloseAll)
     );
-    state.direction(Direction::Up, &controls(&state));
+    state.direction(Direction::Down, &rendered);
     assert_eq!(state.focus, Target::RecentCloseAll);
     let action = state.activate();
     assert_eq!(
@@ -121,6 +132,59 @@ fn close_all_is_reachable_busy_guarded_and_refreshes_after_success() {
     state.recent_response(3, Command::List, Ok(Some(vec![])));
     assert!(state.recents.entries.is_empty());
     assert_eq!(state.focus, Target::RecentEmpty);
+}
+
+#[test]
+fn tabbed_recents_keeps_up_for_one_card_and_returns_from_close_all_without_closing() {
+    let mut state = tabbed();
+    state.open_recents();
+    let mut entries = recents::demo();
+    state.recent_response(1, Command::List, Ok(Some(entries.clone())));
+    state.direction(Direction::Right, &controls(&state));
+    let selected = state.focus.clone();
+    let Target::Recent(id) = selected.clone() else {
+        panic!("Expected a focused recent card");
+    };
+
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::RecentCloseAll);
+    assert!(state.recents.pending.is_none());
+    assert!(state.direction(Direction::Up, &controls(&state)).is_empty());
+    assert_eq!(state.focus, selected);
+    assert!(state.recents.pending.is_none());
+    assert_eq!(
+        state.direction(Direction::Up, &controls(&state)),
+        vec![Effect::Recent {
+            generation: 2,
+            command: Command::Close(id.clone()),
+        }]
+    );
+    assert!(state.direction(Direction::Up, &controls(&state)).is_empty());
+    state.recent_response(2, Command::Close(id.clone()), Ok(None));
+    entries.retain(|e| e.app.id != id);
+    state.recent_response(3, Command::List, Ok(Some(entries.clone())));
+    assert_eq!(state.recents.entries.len(), entries.len());
+    assert_eq!(entries.len(), recents::demo().len() - 1);
+    assert!(matches!(state.focus, Target::Recent(_)));
+}
+
+#[test]
+fn close_all_remains_reachable_when_empty_or_after_an_error() {
+    let mut state = tabbed();
+    state.open_recents();
+    state.recent_response(1, Command::List, Ok(Some(vec![])));
+    assert!(state.direction(Direction::Up, &controls(&state)).is_empty());
+    assert_eq!(state.focus, Target::RecentEmpty);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::RecentCloseAll);
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::RecentEmpty);
+    state.recents.error = Some("Close refused".into());
+    state.focus = Target::RecentRetry;
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::RecentCloseAll);
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::RecentRetry);
 }
 
 #[test]

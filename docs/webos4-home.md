@@ -79,7 +79,9 @@ The existing history backend remains in use when its service is available.
 
 **Settings → General → Tabbed navigation** enables Home / Apps / Settings.
 The existing drawer is the default when the preference is off. In tabbed mode,
-Back on Home opens Recent apps and Up reaches **X Close all**. It closes normal
+Back on Home opens Recent apps. Up closes the selected app; Down reaches the
+bottom-center **X Close all** button, and Up from the button returns to the card.
+Close all closes normal
 running apps and removes their recent-history cards where supported. Failed
 closes are reported instead of being presented as success.
 

@@ -64,7 +64,8 @@ clear cached artwork and reload it without changing your preferences.
 **Settings → General → Tabbed navigation** enables a Home / Apps / Settings bar. Home
 keeps the favorites dock; Apps is a separate full app library with no sliding
 drawer or duplicate pinned row. Up from favorites reaches the tabs. In Recent
-apps, Up reaches the X **Close all** button. It closes normal background card
+apps, Up closes the selected app. Down reaches the bottom-center X **Close all**
+button; Up from the button returns to the selected card. Close all closes normal background card
 apps through LG's application manager and removes recent cards, preserving Luma,
 LG Home, Live TV, the background AirPlay receiver and system overlays. Failed closes are reported.
 

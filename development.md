@@ -110,7 +110,9 @@ Settings controls while keeping the current native renderer, wallpaper tools and
 weather styles. In this mode Apps uses the full six-column inventory, drawer
 progress remains zero, Home Down does not open another surface, and pointer hits
 do not wait for drawer animation. The existing drawer remains the default for
-unchanged preferences. Recent apps adds an Up-reachable X Close all control; its
+unchanged preferences. Recent apps preserves Up-to-close for the selected card.
+Down reaches a bottom-center X Close all control, and Up from that control returns
+to the selected card without closing it. Its
 worker reads SAM's running list, closes normal card apps through `closeByAppId`
 and removes history entries. Home identities, Luma, Live TV, the background
 AirPlay receiver and overlays are excluded from the running-app batch. An empty

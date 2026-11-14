@@ -474,7 +474,7 @@ impl State {
     pub fn recent_direction(&mut self, direction: Direction) -> Vec<Effect> {
         if self.preferences.tab_navigation {
             if self.focus == Target::RecentCloseAll {
-                if matches!(direction, Direction::Down | Direction::Left) {
+                if matches!(direction, Direction::Up) {
                     self.focus = self
                         .recents
                         .entries
@@ -482,10 +482,15 @@ impl State {
                         .map_or(Target::RecentEmpty, |entry| {
                             Target::Recent(entry.app.id.clone())
                         });
+                } else if matches!(direction, Direction::Left) && self.recents.error.is_some() {
+                    self.focus = Target::RecentRetry;
                 }
                 return vec![];
             }
-            if matches!(direction, Direction::Up) && self.recents.loaded {
+            if (matches!(direction, Direction::Down)
+                || (self.focus == Target::RecentRetry && matches!(direction, Direction::Right)))
+                && self.recents.loaded
+            {
                 self.focus = Target::RecentCloseAll;
                 self.dirty = true;
                 return vec![];

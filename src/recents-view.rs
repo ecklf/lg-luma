@@ -136,21 +136,28 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
     }
 
     if state.preferences.tab_navigation && recent.loaded {
+        let label = language.t("closeAll");
+        let width = (assets.width(label, text(21., 550, -0.01)) + 74.).max(246.);
         button(
             out,
             state,
             assets,
             Target::RecentCloseAll,
-            Rect::new(1590., 64., 246., 64.),
+            Rect::new((1920. - width) / 2., 932., width, 64.),
             "close",
-            language.t("closeAll"),
+            label,
         );
     }
+    let status_y = if state.preferences.tab_navigation {
+        860.
+    } else {
+        945.
+    };
     if recent.error.is_some() {
         if !recent.entries.is_empty() {
             out.text(
                 language.t("recentError"),
-                Rect::new(420., 945., 1080., 34.),
+                Rect::new(420., status_y, 1080., 34.),
                 text(19., 450, 0.),
                 c(0xf3ddbd, 1.),
                 true,
@@ -172,7 +179,7 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
     {
         out.text(
             language.t("opening"),
-            Rect::new(660., 945., 600., 30.),
+            Rect::new(660., status_y, 600., 30.),
             text(18., 450, 0.),
             c(0xffffff, 0.6),
             true,
