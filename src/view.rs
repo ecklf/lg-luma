@@ -1249,7 +1249,12 @@ fn shelf_backdrop(out: &mut Scene, state: &State, assets: &Assets) {
         if !show.overview.is_empty() {
             out.text(
                 &show.overview,
-                Rect::new(84., title_y + title_h + overview_gap, text_width, overview_h),
+                Rect::new(
+                    84.,
+                    title_y + title_h + overview_gap,
+                    text_width,
+                    overview_h,
+                ),
                 text(20., 450, -0.01).leading(1.3),
                 c(0xffffff, 0.72 * alpha),
                 false,
