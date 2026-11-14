@@ -3130,7 +3130,7 @@ impl State {
                     Some(Subpage::ShelfLanguage) => {
                         let language = crate::tmdb::SUGGEST_LANGUAGES
                             [index.min(crate::tmdb::SUGGEST_LANGUAGES.len() - 1)]
-                            .code;
+                        .code;
                         if self.preferences.tmdb_language != language {
                             self.preferences.tmdb_language = language.into();
                             self.shelf.shows.clear();
