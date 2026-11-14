@@ -48,21 +48,34 @@ impl State {
         }
         let ready = self.shelf_app_ready(&app.id);
         if self.shelf.focus_app.as_deref() != Some(app.id.as_str()) {
+            let previous = self.shelf.focus_app.clone();
+            let was_showing = self.shelf.revealed && self.shelf.visibility > 0.05;
             self.shelf.focus_app = Some(app.id.clone());
             self.shelf.focus_since = Some(Instant::now());
             self.shelf.selected = 0;
             self.shelf.rotate_since = None;
             if ready {
-                // Cached art: swap immediately — no dwell dip back to the wallpaper.
+                // Cached art: no dwell. Shade through the wallpaper briefly when
+                // swapping from another visible shelf so the change is animated.
                 self.shelf.revealed = true;
                 self.shelf.rotate_since = Some(Instant::now());
                 if self.preferences.reduced_motion {
+                    self.shelf.display_app = None;
                     self.shelf.visibility = 1.;
+                } else if was_showing {
+                    self.shelf.display_app = self.shelf.display_app.take().or(previous);
+                } else {
+                    self.shelf.display_app = None;
                 }
             } else {
                 self.shelf.revealed = false;
-                if self.preferences.reduced_motion {
-                    self.shelf.visibility = 0.;
+                if was_showing && !self.preferences.reduced_motion {
+                    self.shelf.display_app = self.shelf.display_app.take().or(previous);
+                } else {
+                    self.shelf.display_app = None;
+                    if self.preferences.reduced_motion {
+                        self.shelf.visibility = 0.;
+                    }
                 }
             }
             self.dirty = true;
@@ -74,7 +87,7 @@ impl State {
             .unwrap_or(0);
         let mut effects = vec![];
         // Dwell only gates the first fetch for a cold app. Once art is ready, reveal
-        // without waiting for the full reveal timer (and without fading to wallpaper).
+        // without waiting for the full reveal timer.
         if !ready
             && self.shelf.pending.as_deref() != Some(app.id.as_str())
             && (dwell >= REVEAL_MS / 2 || self.preferences.reduced_motion)
@@ -87,6 +100,7 @@ impl State {
             self.dirty = true;
         }
         if self.shelf.revealed
+            && self.shelf.display_app.is_none()
             && let Some(shows) = self.shelf.shows.get(&app.id)
             && shows.len() > 1
             && let Some(started) = self.shelf.rotate_since
@@ -96,23 +110,42 @@ impl State {
             self.shelf.rotate_since = Some(Instant::now());
             self.dirty = true;
         }
-        let goal = if self.shelf.revealed && ready { 1. } else { 0. };
+        let shading = self.shelf.display_app.is_some();
+        let goal = if shading {
+            0.
+        } else if self.shelf.revealed && ready {
+            1.
+        } else {
+            0.
+        };
         self.shelf_step_visibility(goal);
+        if shading && self.shelf.visibility <= 0.001 {
+            self.shelf.visibility = 0.;
+            self.shelf.display_app = None;
+            self.dirty = true;
+        }
         effects
     }
 
-    /// Fade the backdrop out when focus leaves a mapped app. Keep `focus_app` until
-    /// visibility hits 0 so the last show can still paint during the fade.
+    /// Fade the backdrop out when focus leaves a mapped app. Keep the outgoing
+    /// show until visibility hits 0 so it can still paint during the fade.
     fn shelf_hide_tick(&mut self) -> Vec<Effect> {
         if self.shelf.revealed {
             self.shelf.revealed = false;
             self.dirty = true;
         }
+        if self.shelf.display_app.is_none() {
+            self.shelf.display_app = self.shelf.focus_app.clone();
+        }
         self.shelf_step_visibility(0.);
         if self.shelf.visibility <= 0.001 {
             self.shelf.visibility = 0.;
-            if self.shelf.focus_app.is_some() || self.shelf.focus_since.is_some() {
+            if self.shelf.focus_app.is_some()
+                || self.shelf.focus_since.is_some()
+                || self.shelf.display_app.is_some()
+            {
                 self.shelf.focus_app = None;
+                self.shelf.display_app = None;
                 self.shelf.focus_since = None;
                 self.dirty = true;
             }
@@ -181,7 +214,11 @@ impl State {
     }
 
     pub fn shelf_current_show(&self) -> Option<&tmdb::Show> {
-        let id = self.shelf.focus_app.as_ref()?;
+        let id = self
+            .shelf
+            .display_app
+            .as_ref()
+            .or(self.shelf.focus_app.as_ref())?;
         let shows = self.shelf.shows.get(id)?;
         let with_art: Vec<_> = shows
             .iter()
@@ -195,7 +232,12 @@ impl State {
         if with_art.is_empty() {
             return None;
         }
-        let index = self.shelf.selected % with_art.len();
+        // Outgoing shade keeps the first art frame; incoming uses selected.
+        let index = if self.shelf.display_app.is_some() {
+            0
+        } else {
+            self.shelf.selected % with_art.len()
+        };
         Some(with_art[index].1)
     }
 
@@ -229,10 +271,10 @@ mod tests {
         let path = std::env::temp_dir().join(format!("luma-shelf-test-{id}.jpg"));
         let _ = std::fs::write(&path, b"jpeg");
         Show {
-            id: 1,
-            name: "Silo".into(),
+            id: id.bytes().map(u64::from).sum::<u64>().max(1),
+            name: id.into(),
             overview: String::new(),
-            backdrop: "/a.jpg".into(),
+            backdrop: format!("/{id}.jpg"),
             backdrop_path: Some(path.to_string_lossy().into_owned()),
         }
     }
@@ -320,7 +362,7 @@ mod tests {
     }
 
     #[test]
-    fn cached_apps_reveal_immediately_without_wallpaper_dip() {
+    fn cached_apps_shade_between_shows_without_dwell() {
         let mut state = ready();
         let mapped: Vec<_> = state
             .inventory
@@ -349,18 +391,30 @@ mod tests {
 
         state.focus = Target::App(b.id.clone());
         state.shelf_tick();
-        assert!(
-            state.shelf.revealed,
-            "cached target must reveal without waiting for dwell"
-        );
+        assert!(state.shelf.revealed, "no dwell wait for cached target");
         assert_eq!(state.shelf.focus_app.as_deref(), Some(b.id.as_str()));
+        assert_eq!(state.shelf.display_app.as_deref(), Some(a.id.as_str()));
         assert!(
-            (state.shelf.visibility - 1.).abs() < 0.001,
-            "must not fade toward wallpaper when the next app is already cached"
+            state.shelf.visibility < 1.,
+            "shade should start fading the outgoing backdrop"
         );
         assert_eq!(
             state.shelf_current_show().map(|show| show.name.as_str()),
-            Some("Silo")
+            Some("a"),
+            "keep painting the outgoing show while shading down"
+        );
+
+        for _ in 0..40 {
+            state.shelf_tick();
+        }
+        assert!(state.shelf.display_app.is_none());
+        assert!(
+            (state.shelf.visibility - 1.).abs() < 0.001,
+            "incoming cached backdrop should shade back in"
+        );
+        assert_eq!(
+            state.shelf_current_show().map(|show| show.name.as_str()),
+            Some("b")
         );
     }
 

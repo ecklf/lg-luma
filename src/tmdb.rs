@@ -41,6 +41,8 @@ pub struct Show {
 pub struct Shelf {
     pub shows: HashMap<String, Vec<Show>>,
     pub focus_app: Option<String>,
+    /// Outgoing app still painted while visibility shades down between cached apps.
+    pub display_app: Option<String>,
     pub focus_since: Option<std::time::Instant>,
     pub revealed: bool,
     pub selected: usize,
