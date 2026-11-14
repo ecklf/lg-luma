@@ -2603,7 +2603,7 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
                 .iter()
                 .filter(|c| matches!(c.target, Target::Widget(_)))
                 .count(),
-            4
+            5
         );
         for key in [
             "widgets",
