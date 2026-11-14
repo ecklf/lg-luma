@@ -1,5 +1,11 @@
 # lg-luma
 
+## 3.0.1
+
+### Patch Changes
+
+- 52e3dca: Fix the Home header clock dropping its final digit by reserving rounding space in its single-line text box.
+
 ## 3.0.0
 
 ### Major Changes

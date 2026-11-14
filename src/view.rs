@@ -693,7 +693,9 @@ fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
         state.preferences.hour_24,
         state.preferences.show_seconds,
     );
-    let clock_width = assets.width(&clock, text(24., 550, -0.02)) + 48.;
+    // An exact-width box can wrap the last digit onto a hidden second line
+    // after padding subtraction or tiny font-metric rounding differences.
+    let clock_width = assets.width(&clock, text(24., 550, -0.02)).ceil() + 1. + 48.;
     let inputs: Vec<_> = state
         .inventory
         .inputs
@@ -3423,6 +3425,55 @@ fn full_screen_fill(draw: &Draw) -> bool {
 mod tests {
     use super::*;
     use crate::model::{Input, InputMode, Preferences, demo_inventory};
+
+    #[test]
+    fn header_clock_keeps_every_digit_on_one_line() {
+        let assets = assets();
+        let mut state = State::new(Preferences::default());
+        for language in Language::ALL {
+            state.preferences.language = language;
+            for hour_24 in [false, true] {
+                state.preferences.hour_24 = hour_24;
+                for seconds in [false, true] {
+                    state.preferences.show_seconds = seconds;
+                    for (hour, minute, second) in [
+                        (0, 0, 0),
+                        (1, 11, 1),
+                        (11, 31, 0),
+                        (12, 0, 0),
+                        (20, 41, 38),
+                        (23, 59, 59),
+                    ] {
+                        let now = OffsetDateTime::UNIX_EPOCH
+                            .replace_time(time::Time::from_hms(hour, minute, second).unwrap());
+                        let expected = language.clock(now, hour_24, seconds);
+                        let mut scene = Scene::new();
+                        header(&mut scene, &state, &assets, now);
+                        let (rect, style) = scene
+                            .draw
+                            .iter()
+                            .find_map(|draw| match draw {
+                                Draw::Text(label, rect, style, ..) if label == &expected => {
+                                    Some((*rect, *style))
+                                }
+                                _ => None,
+                            })
+                            .unwrap();
+                        let measured = assets.width(&expected, style);
+                        assert!(
+                            rect.w >= measured,
+                            "{language:?}: {expected} wraps at {}px (needs {measured}px)",
+                            rect.w
+                        );
+                        assert_eq!(style.size, 24.);
+                        let button = scene.controls.last().unwrap().rect;
+                        assert_eq!(button.x + button.w, 1836.);
+                        assert_eq!(button.h, 64.);
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn input_dropdown_rows_and_names_fit_every_language() {
