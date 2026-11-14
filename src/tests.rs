@@ -392,6 +392,7 @@ fn asset_loading_and_unknown_app_cards_do_not_require_collected_artwork() {
             crate::model::Inventory {
                 apps: vec![App::new("com.example.regional", "Regional App")],
                 inputs: vec![],
+                channels: vec![],
             },
             None,
         );

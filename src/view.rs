@@ -4,9 +4,10 @@ use crate::{
     model::{App, BACKGROUNDS, Input, InputMode},
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, APPS_SECTION, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT,
-        HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect,
-        SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
+        APPS_COLUMNS, APPS_SECTION, CHANNEL_TILE_PITCH, CHANNEL_TILE_WIDTH, Control,
+        HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT, HOME_TILE_PITCH,
+        HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage, Target,
+        TextField, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -1187,7 +1188,88 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, _now: OffsetDateTime) {
         out.fade(start, state.drawer_progress(), 1.);
         out.controls.truncate(controls);
     }
+    if !state.home_channels().is_empty() {
+        let start = out.draw.len();
+        channels_strip(out, state, assets);
+        out.fade(start, 1. - state.drawer_progress(), 1.);
+    }
     favorites_dock(out, state, assets);
+}
+
+fn channels_strip(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let channels = state.home_channels();
+    let y = state.dock_y() - 196.;
+    out.text(
+        language.t("channels"),
+        Rect::new(HOME_STRIP_LEFT, y - 36., 600., 28.),
+        text(18., 550, -0.01).leading(1.2),
+        c(0xffffff, 0.72),
+        false,
+    );
+    let tile_h = 120.;
+    out.draw.push(Draw::Clip(Some(Rect::new(
+        HOME_STRIP_LEFT - 8.,
+        y - 4.,
+        HOME_STRIP_RIGHT - HOME_STRIP_LEFT + 16.,
+        tile_h + 8.,
+    ))));
+    for (index, channel) in channels.iter().enumerate() {
+        let x = HOME_STRIP_LEFT + index as f32 * CHANNEL_TILE_PITCH - state.channel_scroll;
+        let rect = Rect::new(x, y, CHANNEL_TILE_WIDTH, tile_h);
+        let target = Target::Channel(channel.id.clone());
+        let focused = state.focus == target;
+        out.control(target.clone(), rect, false);
+        out.shadow(rect, 18., 20., 8., if focused { 0.28 } else { 0.16 });
+        out.glass(rect, 18.);
+        if focused {
+            out.shape(rect.inset(-3.), 20., c(0xffffff, 0.22));
+        }
+        if let Some(source) = &channel.icon
+            && let Some(art) = assets.artwork.get(source)
+        {
+            let face = rect.inset(14.);
+            out.image(art.key.clone(), face, 12., true);
+        } else {
+            let number = if channel.number.is_empty() {
+                "·"
+            } else {
+                &channel.number
+            };
+            out.text(
+                number,
+                Rect::new(rect.x + 12., rect.y + 22., rect.w - 24., 44.),
+                text(28., 650, -0.03),
+                WHITE,
+                true,
+            );
+            out.text(
+                &channel.name,
+                Rect::new(rect.x + 10., rect.y + 70., rect.w - 20., 36.),
+                text(13.5, 500, -0.01).leading(1.15),
+                c(0xffffff, 0.78),
+                true,
+            );
+        }
+    }
+    out.draw.push(Draw::Clip(Some(state.content_viewport())));
+    if let Target::Channel(id) = &state.focus
+        && let Some(channel) = channels.iter().find(|channel| &channel.id == id)
+    {
+        let label = channel
+            .program
+            .as_ref()
+            .map(|program| program.title.as_str())
+            .filter(|title| !title.is_empty())
+            .unwrap_or(channel.name.as_str());
+        out.text(
+            label,
+            Rect::new(HOME_STRIP_LEFT, y + tile_h + 10., 1200., 28.),
+            text(16., 500, -0.01).leading(1.2),
+            c(0xffffff, 0.86),
+            false,
+        );
+    }
 }
 
 fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
@@ -1952,6 +2034,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Weather) => language.t("weather"),
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
                 Some(Subpage::Inputs) => language.t("inputs"),
+                Some(Subpage::Channels) => language.t("channels"),
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
@@ -2031,6 +2114,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::Weather
                 | Subpage::Shortcuts
                 | Subpage::Inputs
+                | Subpage::Channels
                 | Subpage::Greeting
                 | Subpage::Date
                 | Subpage::Clock
@@ -2040,6 +2124,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::Weather => weather_settings(out, state, assets),
                 Subpage::Shortcuts => shortcut_settings(out, state, assets),
                 Subpage::Inputs => inputs_settings(out, state, assets),
+                Subpage::Channels => channels_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::Date => date_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
@@ -2357,6 +2442,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 (1, "weather", "weather-sun"),
                 (2, "shortcuts", "sparkles"),
                 (3, "inputs", "input-hdmi"),
+                (5, "channels", "tv"),
             ]
             .into_iter()
             .enumerate()
@@ -2490,6 +2576,68 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         }
         _ => {}
     }
+}
+
+fn channels_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let s = state.scroll;
+    let ordered = state.channels_settings_list();
+    for (index, channel) in ordered.iter().enumerate() {
+        let on_home = state.preferences.channel_on_home(&channel.id);
+        let title = if channel.number.is_empty() {
+            channel.name.clone()
+        } else {
+            format!("{} · {}", channel.number, channel.name)
+        };
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::ChannelFavorite(channel.id.clone()),
+                rect: Rect::new(640., 164.8 + index as f32 * 84. - s, 1120., 72.),
+                title: &title,
+                icon: Some(if channel.radio { "generic" } else { "tv" }),
+                value: Some(language.t(if on_home { "stateOn" } else { "stateOff" })),
+                description: channel
+                    .program
+                    .as_ref()
+                    .map(|program| program.title.as_str()),
+                selected: on_home,
+                chevron: false,
+            },
+        );
+    }
+    let mut y = 164.8 + ordered.len() as f32 * 84. + 16. - s;
+    if ordered.is_empty() {
+        out.text(
+            language.t("noChannels"),
+            Rect::new(664., 165. - s, 1000., 26.),
+            text(16.8, 400, 0.).leading(1.5),
+            c(0xf5f5f5, 0.72),
+            false,
+        );
+        y += 36.;
+    }
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::Setting(6),
+            rect: Rect::new(640., y, 1120., 72.),
+            title: if state.loading {
+                language.t("refreshNotice")
+            } else {
+                language.t("refreshChannels")
+            },
+            icon: Some("refresh"),
+            value: None,
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
 }
 
 fn inputs_settings(out: &mut Scene, state: &State, assets: &Assets) {

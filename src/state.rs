@@ -29,6 +29,8 @@ pub const HOME_TILE_WIDTH: f32 = 270.;
 pub const HOME_TILE_PITCH: f32 = 296.4;
 pub const HOME_FADE_LEFT: f32 = 8.;
 pub const HOME_FADE_RIGHT: f32 = 1910.;
+pub const CHANNEL_TILE_WIDTH: f32 = 168.;
+pub const CHANNEL_TILE_PITCH: f32 = 184.;
 pub const BACKGROUND_FADE: f32 = 0.4;
 pub const CYCLE_FADE: f32 = 1.6;
 
@@ -60,6 +62,10 @@ pub enum Target {
     RecentRetry,
     App(String),
     DockApp(String),
+    /// Home channels strip tile.
+    Channel(String),
+    /// Settings → Channels row: toggle Home strip membership.
+    ChannelFavorite(String),
     Input(String),
     Filter(usize),
     Search,
@@ -159,6 +165,7 @@ pub enum Subpage {
     Weather,
     Shortcuts,
     Inputs,
+    Channels,
     Clock,
     ClockFormat,
     TimeFormat,
@@ -194,6 +201,9 @@ pub enum Effect {
     /// Refresh apps: read the inventory and every app icon again.
     Reload,
     Launch(String),
+    OpenChannel(String),
+    /// Reload now-playing for Home channel favorites (or a short preview set).
+    RefreshChannelGuide,
     Uninstall(String),
     DeleteWallpaper(String),
     Recent {
@@ -224,6 +234,8 @@ pub struct State {
     pub subpage: Option<Subpage>,
     pub scroll: f32,
     pub home_scroll: f32,
+    /// Horizontal offset for the Home channels strip (independent of favorites).
+    pub channel_scroll: f32,
     pub drawer_visibility: f32,
     drawer_updated: Instant,
     input_status_visibility: std::collections::BTreeMap<String, f32>,
@@ -277,6 +289,7 @@ impl State {
             subpage: None,
             scroll: 0.,
             home_scroll: 0.,
+            channel_scroll: 0.,
             drawer_visibility: 0.,
             drawer_updated: Instant::now(),
             input_status_visibility: std::collections::BTreeMap::new(),
@@ -551,6 +564,9 @@ impl State {
         self.scroll = 0.;
         if self.page == Page::Home {
             self.home_scroll = 0.;
+            self.channel_scroll = 0.;
+        } else {
+            self.channel_scroll = 0.;
         }
         self.query.clear();
         self.filter = 0;
@@ -758,6 +774,12 @@ impl State {
         {
             return false;
         }
+        let over_channels = self.page == Page::Home
+            && position.is_some_and(|(x, y)| {
+                controls.iter().any(|control| {
+                    matches!(control.target, Target::Channel(_)) && control.rect.contains(x, y)
+                })
+            });
         let over_favorites = (self.page == Page::Home || self.page == Page::Apps)
             && position.is_some_and(|(x, y)| {
                 self.favorites_viewport().contains(x, y)
@@ -769,7 +791,9 @@ impl State {
             });
         let favorites =
             (self.page == Page::Home || self.page == Page::Apps) && (x != 0 || over_favorites);
-        if favorites {
+        if over_channels {
+            self.scroll_channels((if x != 0 { x } else { -y }) as f32 * CHANNEL_TILE_PITCH);
+        } else if favorites {
             self.scroll_favorites((if x != 0 { x } else { -y }) as f32 * HOME_TILE_PITCH);
         } else {
             let bottom = self.scroll_bottom();
@@ -784,7 +808,7 @@ impl State {
         }
         self.pointer = true;
         self.dirty = true;
-        favorites
+        over_channels || favorites
     }
 
     pub fn scroll_favorites(&mut self, delta: f32) {
@@ -802,19 +826,69 @@ impl State {
         }
     }
 
+    pub fn scroll_channels(&mut self, delta: f32) {
+        let count = self.home_channels().len();
+        let content = if count == 0 {
+            0.
+        } else {
+            (count - 1) as f32 * CHANNEL_TILE_PITCH + CHANNEL_TILE_WIDTH
+        };
+        let max = (content - (HOME_STRIP_RIGHT - HOME_STRIP_LEFT)).max(0.);
+        let next = (self.channel_scroll + delta).clamp(0., max);
+        if next != self.channel_scroll {
+            self.channel_scroll = next;
+            self.dirty = true;
+        }
+    }
+
     pub fn set_inventory(&mut self, next: Inventory, warning: Option<String>) {
         self.inventory.apps = next.apps;
         self.sync_custom_tiles();
+        let input_failed = warning
+            .as_ref()
+            .is_some_and(|text| text.contains("Inputs could not"));
+        let channel_failed = warning
+            .as_ref()
+            .is_some_and(|text| text.contains("Channels could not"));
+        if !input_failed {
+            self.inventory.inputs = next.inputs;
+        }
+        if !channel_failed {
+            self.inventory.channels = next.channels;
+        }
         if let Some(warning) = warning {
             self.notify(warning);
-        } else {
-            self.inventory.inputs = next.inputs;
         }
         self.loading = false;
         self.error = None;
         self.inventory_failures = 0;
         self.dirty = true;
         self.reconcile_focus();
+    }
+
+    pub fn set_channel_guide(
+        &mut self,
+        programs: std::collections::HashMap<String, crate::model::ChannelProgram>,
+    ) {
+        crate::channels::apply_programs(&mut self.inventory.channels, &programs);
+        self.dirty = true;
+    }
+
+    pub fn home_channels(&self) -> Vec<&crate::model::Channel> {
+        self.preferences
+            .channel_favorites(&self.inventory.channels)
+    }
+
+    /// Settings → Channels list: Home favorites first, then the rest of the map.
+    pub fn channels_settings_list(&self) -> Vec<&crate::model::Channel> {
+        let mut ordered = self.home_channels();
+        ordered.extend(
+            self.inventory
+                .channels
+                .iter()
+                .filter(|channel| !self.preferences.channel_on_home(&channel.id)),
+        );
+        ordered
     }
 
     /// Replace only input status; leave installed apps, artwork and saved preferences alone.
@@ -878,6 +952,7 @@ impl State {
     pub fn reconcile_focus(&mut self) {
         if self.page == Page::Home {
             self.scroll_favorites(0.);
+            self.scroll_channels(0.);
         }
         if let Target::App(id) = &self.focus
             && !self.apps().iter().any(|app| &app.id == id)
@@ -888,6 +963,26 @@ impl State {
             && !self.dock_apps().iter().any(|app| &app.id == id)
         {
             self.focus = self.first_content();
+        }
+        if let Target::Channel(id) = &self.focus
+            && !self.home_channels().iter().any(|channel| &channel.id == id)
+        {
+            self.focus = self
+                .home_channels()
+                .first()
+                .map(|channel| Target::Channel(channel.id.clone()))
+                .unwrap_or_else(|| self.first_content());
+        }
+        if let Target::ChannelFavorite(id) = &self.focus
+            && self.subpage == Some(Subpage::Channels)
+            && !self.inventory.channels.iter().any(|channel| &channel.id == id)
+        {
+            self.focus = self
+                .inventory
+                .channels
+                .first()
+                .map(|channel| Target::ChannelFavorite(channel.id.clone()))
+                .unwrap_or(Target::Setting(6));
         }
         if let Target::Input(id) = &self.focus
             && !self
@@ -968,6 +1063,7 @@ impl State {
     pub fn reveal_focus(&mut self, controls: &[Control]) -> bool {
         let previous = self.scroll;
         let previous_home = self.home_scroll;
+        let previous_channel = self.channel_scroll;
         if let Some(control) = controls.iter().find(|c| c.target == self.focus) {
             if (self.page == Page::Home && matches!(self.focus, Target::App(_)))
                 || matches!(self.focus, Target::DockApp(_))
@@ -976,6 +1072,13 @@ impl State {
                     self.home_scroll += control.rect.x - HOME_STRIP_LEFT;
                 } else if control.rect.x + control.rect.w > HOME_STRIP_RIGHT {
                     self.home_scroll += control.rect.x + control.rect.w - HOME_STRIP_RIGHT;
+                }
+            }
+            if self.page == Page::Home && matches!(self.focus, Target::Channel(_)) {
+                if control.rect.x < HOME_STRIP_LEFT {
+                    self.channel_scroll += control.rect.x - HOME_STRIP_LEFT;
+                } else if control.rect.x + control.rect.w > HOME_STRIP_RIGHT {
+                    self.channel_scroll += control.rect.x + control.rect.w - HOME_STRIP_RIGHT;
                 }
             }
             if matches!(
@@ -1016,10 +1119,18 @@ impl State {
         if self.page == Page::Home || self.page == Page::Apps {
             self.scroll_favorites(0.);
         }
-        if self.scroll != previous || self.home_scroll != previous_home {
+        if self.page == Page::Home {
+            self.scroll_channels(0.);
+        }
+        if self.scroll != previous
+            || self.home_scroll != previous_home
+            || self.channel_scroll != previous_channel
+        {
             self.dirty = true;
         }
-        self.scroll != previous || self.home_scroll != previous_home
+        self.scroll != previous
+            || self.home_scroll != previous_home
+            || self.channel_scroll != previous_channel
     }
 
     /// Hover and pointer-down must not move the control before pointer-up.
@@ -1222,6 +1333,7 @@ impl State {
             Some(Subpage::Weather) => Target::Widget(1),
             Some(Subpage::Shortcuts) => Target::Widget(2),
             Some(Subpage::Inputs) => Target::Widget(3),
+            Some(Subpage::Channels) => Target::Widget(5),
             Some(Subpage::Clock) => Target::Setting(1),
             Some(Subpage::ClockFormat) => {
                 self.subpage = Some(Subpage::Clock);
@@ -1379,11 +1491,16 @@ impl State {
                         self.focus = self.first_content();
                     }
                     Direction::Down => self.focus(
-                        if self.page == Page::Home
-                            && self.preferences.show_weather
-                            && self.preferences.weather_location.is_none()
-                        {
-                            Target::WeatherConfigure
+                        if self.page == Page::Home {
+                            if let Some(channel) = self.home_channels().first() {
+                                Target::Channel(channel.id.clone())
+                            } else if self.preferences.show_weather
+                                && self.preferences.weather_location.is_none()
+                            {
+                                Target::WeatherConfigure
+                            } else {
+                                self.first_content()
+                            }
                         } else {
                             self.first_content()
                         },
@@ -1417,20 +1534,49 @@ impl State {
             }
             if self.page == Page::Home && self.focus == Target::WeatherConfigure {
                 match direction {
-                    Direction::Down
-                        if self.focus == Target::WeatherConfigure
-                            && !self.dock_apps().is_empty() =>
-                    {
-                        self.focus(self.first_content(), controls)
-                    }
                     Direction::Down => {
-                        self.open(1);
-                        self.focus = self.first_content();
+                        if let Some(channel) = self.home_channels().first() {
+                            self.focus(Target::Channel(channel.id.clone()), controls);
+                        } else if !self.dock_apps().is_empty() {
+                            self.focus(self.first_content(), controls);
+                        } else {
+                            self.open(1);
+                            self.focus = self.first_content();
+                        }
                     }
                     Direction::Up => self.focus(self.first_input_target(), controls),
                     _ => {}
                 }
                 return vec![];
+            }
+            if self.page == Page::Home
+                && let Target::Channel(id) = &self.focus
+            {
+                let channels = self.home_channels();
+                if let Some(index) = channels.iter().position(|channel| &channel.id == id) {
+                    match direction {
+                        Direction::Left | Direction::Right => {
+                            let next = if matches!(direction, Direction::Left) {
+                                index.saturating_sub(1)
+                            } else {
+                                (index + 1).min(channels.len().saturating_sub(1))
+                            };
+                            if let Some(channel) = channels.get(next) {
+                                self.focus(Target::Channel(channel.id.clone()), controls);
+                            }
+                        }
+                        Direction::Up => self.focus(
+                            if index < 3 {
+                                self.first_input_target()
+                            } else {
+                                Target::SettingsMenu
+                            },
+                            controls,
+                        ),
+                        Direction::Down => self.focus(self.first_content(), controls),
+                    }
+                    return vec![];
+                }
             }
             if self.page == Page::Home
                 && let Target::App(id) = &self.focus
@@ -1447,14 +1593,29 @@ impl State {
                             let id = apps[next].id.clone();
                             self.focus(Target::App(id), controls);
                         }
-                        Direction::Up => self.focus(
-                            if index < 3 {
-                                self.first_input_target()
-                            } else {
-                                Target::SettingsMenu
-                            },
-                            controls,
-                        ),
+                        Direction::Up => {
+                            let channels = self.home_channels();
+                            self.focus(
+                                if !channels.is_empty() {
+                                    let channel = channels
+                                        .get(index.min(channels.len() - 1))
+                                        .or_else(|| channels.first())
+                                        .map(|channel| Target::Channel(channel.id.clone()));
+                                    channel.unwrap_or_else(|| {
+                                        if index < 3 {
+                                            self.first_input_target()
+                                        } else {
+                                            Target::SettingsMenu
+                                        }
+                                    })
+                                } else if index < 3 {
+                                    self.first_input_target()
+                                } else {
+                                    Target::SettingsMenu
+                                },
+                                controls,
+                            )
+                        }
                         Direction::Down => {
                             self.open(1);
                             self.focus = self.first_content();
@@ -1608,7 +1769,8 @@ impl State {
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
                     | Target::Widget(_)
-            ) || (self.focus == Target::Setting(3) && self.subpage == Some(Subpage::Inputs)))
+            ) || (self.focus == Target::Setting(3) && self.subpage == Some(Subpage::Inputs))
+                || (self.focus == Target::Setting(6) && self.subpage == Some(Subpage::Channels)))
                 && matches!(direction, Direction::Left)
             {
                 self.close_subpage();
@@ -1619,6 +1781,7 @@ impl State {
                 Target::Setting(0 | 1 | 4 | 7)
                     | Target::Widget(_)
                     | Target::InputMode(_)
+                    | Target::ChannelFavorite(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
             ) && matches!(direction, Direction::Right)
@@ -1639,6 +1802,53 @@ impl State {
                     .is_some_and(|input| &input.id == id)
             {
                 self.focus(Target::SettingsMenu, controls);
+                return vec![];
+            }
+            if let Target::ChannelFavorite(id) = &self.focus
+                && self.subpage == Some(Subpage::Channels)
+            {
+                let channels = self.channels_settings_list();
+                if let Some(index) = channels.iter().position(|channel| &channel.id == id) {
+                    match direction {
+                        Direction::Left => {
+                            self.close_subpage();
+                            return vec![];
+                        }
+                        Direction::Up if index == 0 => {
+                            self.focus(Target::SettingsMenu, controls);
+                            return vec![];
+                        }
+                        Direction::Up => {
+                            self.focus(
+                                Target::ChannelFavorite(channels[index - 1].id.clone()),
+                                controls,
+                            );
+                            return vec![];
+                        }
+                        Direction::Down if index + 1 < channels.len() => {
+                            self.focus(
+                                Target::ChannelFavorite(channels[index + 1].id.clone()),
+                                controls,
+                            );
+                            return vec![];
+                        }
+                        Direction::Down => {
+                            self.focus(Target::Setting(6), controls);
+                            return vec![];
+                        }
+                        Direction::Right => return self.activate(),
+                    }
+                }
+            }
+            if self.focus == Target::Setting(6)
+                && self.subpage == Some(Subpage::Channels)
+                && matches!(direction, Direction::Up)
+            {
+                if let Some(channel) = self.channels_settings_list().last() {
+                    self.focus(Target::ChannelFavorite(channel.id.clone()), controls);
+                } else {
+                    self.focus(Target::SettingsMenu, controls);
+                }
                 return vec![];
             }
             if self.focus == Target::Setting(1) && matches!(direction, Direction::Up) {
@@ -2369,6 +2579,15 @@ impl State {
                 return vec![Effect::Launch("com.palm.app.settings".into())];
             }
             Target::App(_) if self.managing_apps() && !self.launching => self.options(),
+            Target::Channel(id) if !self.launching => {
+                return vec![Effect::OpenChannel(id)];
+            }
+            Target::ChannelFavorite(id) => {
+                if self.preferences.toggle_channel_favorite(&id) {
+                    return vec![Effect::Save, Effect::RefreshChannelGuide];
+                }
+                self.notify(self.preferences.language.t("channelFavoritesFull"));
+            }
             Target::App(id) | Target::DockApp(id) | Target::Input(id) if !self.launching => {
                 if matches!(self.overlay, Some(Overlay::Inputs)) {
                     self.back();
@@ -2488,6 +2707,13 @@ impl State {
                             .first()
                             .map(|input| Target::InputMode(input.id.clone()))
                             .unwrap_or(Target::Setting(3)),
+                    ),
+                    5 => (
+                        Subpage::Channels,
+                        self.channels_settings_list()
+                            .first()
+                            .map(|channel| Target::ChannelFavorite(channel.id.clone()))
+                            .unwrap_or(Target::Setting(6)),
                     ),
                     _ => return vec![],
                 };
@@ -2733,7 +2959,8 @@ impl State {
                         | Subpage::Clock
                         | Subpage::Weather
                         | Subpage::Shortcuts
-                        | Subpage::Inputs,
+                        | Subpage::Inputs
+                        | Subpage::Channels,
                     ) => {
                         return vec![];
                     }

@@ -5,6 +5,7 @@ mod app_artwork;
 #[path = "app-subscription.rs"]
 mod app_subscription;
 mod branding;
+mod channels;
 mod companion;
 mod damage;
 mod diagnostics;
@@ -354,6 +355,44 @@ fn effects(
                                 .format("desktopPreview", &[("app", title)]),
                         );
                     }
+                }
+            }
+            Effect::OpenChannel(id) => {
+                if !state.launching {
+                    if platform.webos {
+                        state.launching = true;
+                        state.notify(state.preferences.language.t("opening"));
+                        platform.send(Request::OpenChannel(id));
+                    } else {
+                        let title = state
+                            .inventory
+                            .channels
+                            .iter()
+                            .find(|channel| channel.id == id)
+                            .map_or(id.as_str(), |channel| channel.name.as_str());
+                        state.notify(
+                            state
+                                .preferences
+                                .language
+                                .format("desktopPreview", &[("app", title)]),
+                        );
+                    }
+                }
+            }
+            Effect::RefreshChannelGuide => {
+                let guide_ids: Vec<_> = if state.preferences.channel_favorites.is_empty() {
+                    state
+                        .inventory
+                        .channels
+                        .iter()
+                        .take(12)
+                        .map(|channel| channel.id.clone())
+                        .collect()
+                } else {
+                    state.preferences.channel_favorites.clone()
+                };
+                if !guide_ids.is_empty() {
+                    platform.send(Request::RefreshChannelGuide(guide_ids));
                 }
             }
             Effect::FireWebhook(tile) => webhook.send(tile),
@@ -1127,6 +1166,27 @@ fn run() -> Result<(), String> {
                             .filter(|app| crate::branding::for_key(&app.brand).is_none())
                             .filter_map(|app| app.icon.clone()),
                     );
+                    assets.artwork.prefetch(
+                        state
+                            .inventory
+                            .channels
+                            .iter()
+                            .filter_map(|channel| channel.icon.clone()),
+                    );
+                    let guide_ids: Vec<_> = if state.preferences.channel_favorites.is_empty() {
+                        state
+                            .inventory
+                            .channels
+                            .iter()
+                            .take(12)
+                            .map(|channel| channel.id.clone())
+                            .collect()
+                    } else {
+                        state.preferences.channel_favorites.clone()
+                    };
+                    if !guide_ids.is_empty() {
+                        platform.send(Request::RefreshChannelGuide(guide_ids));
+                    }
                     if initial_focus
                         && state.focus == Target::Nav(0)
                         && state.page == state::Page::Home
@@ -1134,6 +1194,12 @@ fn run() -> Result<(), String> {
                         state.focus = state.first_content();
                     }
                     initial_focus = false;
+                }
+                Response::ChannelGuide(Ok(programs)) => {
+                    state.set_channel_guide(programs);
+                }
+                Response::ChannelGuide(Err(error)) => {
+                    eprintln!("Luma channel guide: {error}");
                 }
                 Response::Inventory(Err(error)) => {
                     if let Some(delay) = state.inventory_failed(error) {

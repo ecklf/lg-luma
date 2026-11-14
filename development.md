@@ -144,9 +144,12 @@ instead of once per minute. Existing saved hour and seconds preferences are reta
 App cards on Home, in the drawer, and in Settings → Apps are artwork-only, with no name captions
 or App names setting. Legacy `show_names`, `show_home_names`, and `show_app_names` preferences
 are ignored and are not written back. App titles remain available in the management popup.
-**Settings → Widgets** groups **Weather**, **Shortcuts**, and **Inputs** as separate subpages.
-Weather location and temperature choices return to Weather; Back from a widget returns to its row
-in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row.
+**Settings → Widgets** groups **Weather**, **Shortcuts**, **Inputs**, and **Channels** as separate
+subpages. Weather location and temperature choices return to Weather; Back from a widget returns to
+its row in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row. Channel
+favorites return to Channels, then its Widgets row. The Home channels strip shows only selected
+tuner channels (logos from `/mnt/lg/cmn_data/channel_logo` when present); OK tunes via
+`apiadapter/tv/openChannel`, and now-playing comes from `getChannelCurrentProgramInfo`.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
 with a tighter 48-pixel spacing for Languages and Backgrounds.

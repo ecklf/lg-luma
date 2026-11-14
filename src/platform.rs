@@ -3,8 +3,9 @@
 //! process trying to impersonate its application identity.
 use crate::{
     app_artwork,
-    model::{App, Input, Inventory, demo_inventory, valid_app_id},
+    model::{App, ChannelProgram, Input, Inventory, demo_inventory, valid_app_id},
 };
+use std::collections::HashMap;
 use serde_json::{Value, json};
 use std::{collections::HashSet, sync::mpsc, thread};
 
@@ -191,7 +192,11 @@ pub fn redirect_to_home() -> Result<bool, String> {
 pub enum Request {
     Refresh,
     RefreshInputs,
+    /// Now-playing for selected tuner channels (`getChannelCurrentProgramInfo`).
+    RefreshChannelGuide(Vec<String>),
     Launch(String),
+    /// Tune a channel via `apiadapter/tv/openChannel`.
+    OpenChannel(String),
     Uninstall(String),
     SyncSplash(String),
     Recent {
@@ -202,6 +207,7 @@ pub enum Request {
 pub enum Response {
     Inventory(Result<(Inventory, Option<String>), String>),
     Inputs(Result<Vec<Input>, String>),
+    ChannelGuide(Result<HashMap<String, ChannelProgram>, String>),
     Launched(Result<(), String>),
     Uninstalled {
         id: String,
@@ -273,6 +279,16 @@ impl Platform {
                         input_inventory()
                     } else {
                         Ok(desktop_inventory.inputs.clone())
+                    }),
+                    Request::RefreshChannelGuide(ids) => Response::ChannelGuide(if webos {
+                        channel_guide(&ids)
+                    } else {
+                        Ok(demo_channel_guide(&desktop_inventory.channels, &ids))
+                    }),
+                    Request::OpenChannel(id) => Response::Launched(if webos {
+                        open_channel(&id)
+                    } else {
+                        Ok(())
                     }),
                     Request::Uninstall(id) => {
                         // Validate again at the worker boundary, not just in the UI.
@@ -757,28 +773,97 @@ fn inventory() -> Result<(Inventory, Option<String>), String> {
         "apps",
     )?)?;
     let inputs = input_inventory();
-    match inputs {
-        Ok(inputs) => {
-            eprintln!(
-                "Luma TV inventory: {} apps, {} inputs",
-                apps.len(),
-                inputs.len()
-            );
-            Ok((Inventory { apps, inputs }, None))
+    let channels = channel_inventory();
+    let mut warnings = Vec::new();
+    let inputs = match inputs {
+        Ok(inputs) => inputs,
+        Err(error) => {
+            warnings.push(format!("Inputs could not be refreshed: {error}"));
+            vec![]
         }
-        Err(error) => Ok((
-            Inventory {
-                apps,
-                inputs: vec![],
-            },
-            Some(format!("Inputs could not be refreshed: {error}")),
-        )),
-    }
+    };
+    let channels = match channels {
+        Ok(channels) => channels,
+        Err(error) => {
+            warnings.push(format!("Channels could not be refreshed: {error}"));
+            vec![]
+        }
+    };
+    eprintln!(
+        "Luma TV inventory: {} apps, {} inputs, {} channels",
+        apps.len(),
+        inputs.len(),
+        channels.len()
+    );
+    Ok((
+        Inventory {
+            apps,
+            inputs,
+            channels,
+        },
+        (!warnings.is_empty()).then(|| warnings.join(" ")),
+    ))
 }
 
 fn input_inventory() -> Result<Vec<Input>, String> {
     inventory_read("luna://com.webos.service.eim/getAllInputStatus", "devices")
         .and_then(|raw| normalize_inputs(&raw))
+}
+
+fn channel_inventory() -> Result<Vec<crate::model::Channel>, String> {
+    inventory_read(
+        "luna://com.webos.service.apiadapter/tv/getChannelList",
+        "channelList",
+    )
+    .and_then(|raw| crate::channels::normalize_channels(&raw))
+}
+
+fn channel_guide(ids: &[String]) -> Result<HashMap<String, ChannelProgram>, String> {
+    let mut out = HashMap::new();
+    for id in ids.iter().take(crate::channels::MAX_FAVORITES) {
+        if !valid_app_id(id) {
+            continue;
+        }
+        let reply = call(
+            "luna://com.webos.service.apiadapter/tv/getChannelCurrentProgramInfo",
+            json!({ "channelId": id }),
+        )?;
+        if let Some(program) = crate::channels::normalize_program(&reply) {
+            out.insert(id.clone(), program);
+        }
+    }
+    Ok(out)
+}
+
+fn demo_channel_guide(
+    channels: &[crate::model::Channel],
+    ids: &[String],
+) -> HashMap<String, ChannelProgram> {
+    ids.iter()
+        .filter_map(|id| {
+            channels.iter().find(|channel| &channel.id == id).map(|channel| {
+                (
+                    id.clone(),
+                    ChannelProgram {
+                        title: format!("Now on {}", channel.name),
+                        start: None,
+                        end: None,
+                    },
+                )
+            })
+        })
+        .collect()
+}
+
+fn open_channel(id: &str) -> Result<(), String> {
+    if !valid_app_id(id) {
+        return Err("Invalid channel identifier".into());
+    }
+    call(
+        "luna://com.webos.service.apiadapter/tv/openChannel",
+        json!({ "channelId": id }),
+    )
+    .map(|_| ())
 }
 
 fn title(value: Option<&str>, fallback: &str) -> String {

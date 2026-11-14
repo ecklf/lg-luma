@@ -310,6 +310,13 @@ using label detection), **HDMI**, **USB**, **Apple TV**, **Computer**, **Console
 An explicit icon choice is saved separately for each input and persists across restarts.
 Choose **Automatic** to clear that input's override and restore label-based icon detection.
 
+### Channels
+
+Open **Settings → Widgets → Channels** and toggle tuner channels On to pin them to the Home
+channels strip (up to 40). Order follows the order you enable them. Focus a tile for the
+now-playing title when the guide has it; **OK** tunes that channel. Logos come from the TV's
+channel logo store when LG provides them.
+
 ### Recent app switching
 
 Press **Back** on Home, or hold **Back** for 0.6 seconds from any page, to open Recent apps.
