@@ -112,6 +112,10 @@ pub enum Target {
     WeatherSearch,
     WeatherClear,
     WeatherResult(usize),
+    ShelfToggle,
+    ShelfKey,
+    ShelfRegion,
+    ShelfLanguage,
     Tile(String),
     TileTest(String),
     TileRemove(String),
@@ -172,6 +176,10 @@ pub enum Subpage {
     Shortcuts,
     Inputs,
     Channels,
+    /// TMDB Top Shelf (API key, region, suggestion language).
+    Shelf,
+    ShelfRegion,
+    ShelfLanguage,
     Clock,
     ClockFormat,
     TimeFormat,
@@ -191,6 +199,7 @@ pub enum TextField {
     Location,
     Name,
     InputName,
+    ShelfKey,
 }
 
 #[derive(Clone, Copy)]
@@ -222,6 +231,7 @@ pub enum Effect {
     FireWebhook(CustomTile),
     Quit,
     Weather(weather::Command),
+    Shelf(crate::tmdb::Command),
     UpdateDownload(String),
 }
 
@@ -281,8 +291,10 @@ pub struct State {
     pub keyboard_field: TextField,
     pub greeting_name_draft: String,
     pub input_name: String,
+    pub shelf_key_draft: String,
     pub recents: crate::recents::Recents,
     pub channel_switcher: crate::channel_switcher::ChannelSwitcher,
+    pub shelf: crate::tmdb::Shelf,
 }
 
 impl State {
@@ -331,8 +343,10 @@ impl State {
             keyboard_field: TextField::Apps,
             greeting_name_draft: String::new(),
             input_name: String::new(),
+            shelf_key_draft: String::new(),
             recents: crate::recents::Recents::default(),
             channel_switcher: crate::channel_switcher::ChannelSwitcher::default(),
+            shelf: crate::tmdb::Shelf::default(),
         }
     }
 
@@ -553,6 +567,8 @@ impl State {
                 && (self.channel_switcher.visibility
                     != if self.channel_switcher_open() { 1. } else { 0. }
                     || self.channel_switcher.cards_animating(self.pointer)))
+            || (self.shelf.visibility > 0. && self.shelf.visibility < 1.)
+            || self.shelf.revealed
             || self.previous_background.is_some()
             || self.panel_started.is_some()
             || (!self.preferences.reduced_motion
@@ -1391,6 +1407,7 @@ impl State {
             Some(Subpage::Shortcuts) => Target::Widget(2),
             Some(Subpage::Inputs) => Target::Widget(3),
             Some(Subpage::Channels) => Target::Widget(5),
+            Some(Subpage::Shelf) => Target::Widget(6),
             Some(Subpage::Clock) => Target::Setting(1),
             Some(Subpage::ClockFormat) => {
                 self.subpage = Some(Subpage::Clock);
@@ -1419,6 +1436,14 @@ impl State {
             Some(Subpage::WeatherStyle) => {
                 self.subpage = Some(Subpage::Weather);
                 Target::WeatherStyle
+            }
+            Some(Subpage::ShelfRegion) => {
+                self.subpage = Some(Subpage::Shelf);
+                Target::ShelfRegion
+            }
+            Some(Subpage::ShelfLanguage) => {
+                self.subpage = Some(Subpage::Shelf);
+                Target::ShelfLanguage
             }
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
@@ -1751,6 +1776,8 @@ impl State {
                     ) => 2,
                     Some(Subpage::InputIcons(_)) => crate::model::INPUT_ICONS.len() + 1,
                     Some(Subpage::Language) => Language::ALL.len(),
+                    Some(Subpage::ShelfRegion) => crate::tmdb::REGIONS.len(),
+                    Some(Subpage::ShelfLanguage) => crate::tmdb::SUGGEST_LANGUAGES.len(),
                     Some(Subpage::DateFormat) => crate::model::DateFormat::ALL.len(),
                     _ => 3,
                 };
@@ -1847,6 +1874,10 @@ impl State {
                     | Target::WeatherStyle
                     | Target::ChannelsToggle
                     | Target::ChannelFavorite(_)
+                    | Target::ShelfToggle
+                    | Target::ShelfKey
+                    | Target::ShelfRegion
+                    | Target::ShelfLanguage
                     | Target::Widget(_)
                     | Target::SettingsMenu
             ) || (self.focus == Target::Setting(3) && self.subpage == Some(Subpage::Inputs))
@@ -1961,8 +1992,10 @@ impl State {
                 self.focus(Target::SettingsMenu, controls);
                 return vec![];
             }
-            if matches!(self.focus, Target::WeatherToggle | Target::ChannelsToggle)
-                && matches!(direction, Direction::Up)
+            if matches!(
+                self.focus,
+                Target::WeatherToggle | Target::ChannelsToggle | Target::ShelfToggle
+            ) && matches!(direction, Direction::Up)
             {
                 self.focus(Target::SettingsMenu, controls);
                 return vec![];
@@ -2404,6 +2437,16 @@ impl State {
                 self.dirty = true;
                 return;
             }
+            if self.keyboard_field == TextField::ShelfKey {
+                let key = &mut self.shelf_key_draft;
+                key.extend(
+                    text.chars()
+                        .filter(|c| c.is_ascii_alphanumeric())
+                        .take(64usize.saturating_sub(key.chars().count())),
+                );
+                self.dirty = true;
+                return;
+            }
             self.query.extend(
                 text.chars()
                     .filter(|c| !c.is_control())
@@ -2424,6 +2467,8 @@ impl State {
                 self.greeting_name_draft.pop();
             } else if self.keyboard_field == TextField::InputName {
                 self.input_name.pop();
+            } else if self.keyboard_field == TextField::ShelfKey {
+                self.shelf_key_draft.pop();
             } else {
                 self.query.pop();
             }
@@ -2457,6 +2502,15 @@ impl State {
             // Empty dismissal preserves the saved value; Clear name is explicit.
             if !name.is_empty() && self.preferences.greeting_name != name {
                 self.preferences.greeting_name = name.into();
+                return vec![Effect::Save];
+            }
+            return vec![];
+        }
+        if self.keyboard_field == TextField::ShelfKey {
+            let key = crate::tmdb::sanitize_key(&std::mem::take(&mut self.shelf_key_draft));
+            if key.len() >= 16 && self.preferences.tmdb_api_key != key {
+                self.preferences.tmdb_api_key = key;
+                self.shelf.shows.clear();
                 return vec![Effect::Save];
             }
             return vec![];
@@ -2561,6 +2615,8 @@ impl State {
             self.greeting_name_draft = query;
         } else if self.keyboard_field == TextField::InputName {
             self.input_name = query;
+        } else if self.keyboard_field == TextField::ShelfKey {
+            self.shelf_key_draft = crate::tmdb::sanitize_key(&query);
         } else {
             self.query = query;
             self.scroll = 0.;
@@ -2573,6 +2629,7 @@ impl State {
             TextField::Location => &self.weather.query,
             TextField::Name => &self.greeting_name_draft,
             TextField::InputName => &self.input_name,
+            TextField::ShelfKey => &self.shelf_key_draft,
             TextField::Apps => &self.query,
         }
     }
@@ -2586,6 +2643,9 @@ impl State {
             // The TV keyboard starts empty, so a new name replaces the old one.
             self.input_name.clear();
         }
+        if field == TextField::ShelfKey {
+            self.shelf_key_draft.clear();
+        }
         if cfg!(all(
             feature = "webos",
             target_os = "linux",
@@ -2596,6 +2656,7 @@ impl State {
                 TextField::Location => Target::WeatherQuery,
                 TextField::Name => Target::GreetingName,
                 TextField::InputName => Target::InputRename,
+                TextField::ShelfKey => Target::ShelfKey,
                 TextField::Apps => Target::Search,
             };
             self.panel_started = None;
@@ -2624,6 +2685,7 @@ impl State {
             TextField::Location => Target::WeatherSearch,
             TextField::Name => Target::GreetingName,
             TextField::InputName => Target::InputRename,
+            TextField::ShelfKey => Target::ShelfKey,
             TextField::Apps => Target::Search,
         }
     }
@@ -2753,6 +2815,33 @@ impl State {
                 self.dirty = true;
                 return vec![Effect::Save];
             }
+            Target::ShelfToggle => {
+                self.preferences.show_shelf = !self.preferences.show_shelf;
+                if !self.preferences.show_shelf {
+                    self.shelf.revealed = false;
+                    self.shelf.visibility = 0.;
+                }
+                return vec![Effect::Save];
+            }
+            Target::ShelfKey => self.open_keyboard(TextField::ShelfKey),
+            Target::ShelfRegion => {
+                self.subpage = Some(Subpage::ShelfRegion);
+                self.focus =
+                    Target::Choice(crate::tmdb::region_index(&self.preferences.tmdb_region));
+                self.scroll = 0.;
+                if !self.preferences.reduced_motion {
+                    self.panel_started = Some(Instant::now());
+                }
+            }
+            Target::ShelfLanguage => {
+                self.subpage = Some(Subpage::ShelfLanguage);
+                self.focus =
+                    Target::Choice(crate::tmdb::language_index(&self.preferences.tmdb_language));
+                self.scroll = 0.;
+                if !self.preferences.reduced_motion {
+                    self.panel_started = Some(Instant::now());
+                }
+            }
             Target::WeatherLocation => self.open_location(),
             Target::WeatherTemperature => {
                 self.subpage = Some(Subpage::Temperature);
@@ -2846,6 +2935,7 @@ impl State {
                             .unwrap_or(Target::Setting(3)),
                     ),
                     5 => (Subpage::Channels, Target::ChannelsToggle),
+                    6 => (Subpage::Shelf, Target::ShelfToggle),
                     _ => return vec![],
                 };
                 self.section = WIDGETS_SECTION;
@@ -3090,6 +3180,23 @@ impl State {
                             Unit::Celsius
                         }
                     }
+                    Some(Subpage::ShelfRegion) => {
+                        let region =
+                            crate::tmdb::REGIONS[index.min(crate::tmdb::REGIONS.len() - 1)].code;
+                        if self.preferences.tmdb_region != region {
+                            self.preferences.tmdb_region = region.into();
+                            self.shelf.shows.clear();
+                        }
+                    }
+                    Some(Subpage::ShelfLanguage) => {
+                        let language = crate::tmdb::SUGGEST_LANGUAGES
+                            [index.min(crate::tmdb::SUGGEST_LANGUAGES.len() - 1)]
+                        .code;
+                        if self.preferences.tmdb_language != language {
+                            self.preferences.tmdb_language = language.into();
+                            self.shelf.shows.clear();
+                        }
+                    }
                     Some(Subpage::Language) => {
                         self.preferences.language =
                             Language::ALL[index.min(Language::ALL.len() - 1)];
@@ -3110,7 +3217,8 @@ impl State {
                         | Subpage::Weather
                         | Subpage::Shortcuts
                         | Subpage::Inputs
-                        | Subpage::Channels,
+                        | Subpage::Channels
+                        | Subpage::Shelf,
                     ) => {
                         return vec![];
                     }
@@ -3256,6 +3364,7 @@ impl State {
                     TextField::Location => self.weather.edit(String::new()),
                     TextField::Name => self.greeting_name_draft.clear(),
                     TextField::InputName => self.input_name.clear(),
+                    TextField::ShelfKey => self.shelf_key_draft.clear(),
                     TextField::Apps => self.query.clear(),
                 },
                 "Done" => {

@@ -28,11 +28,15 @@ mod renderer;
 #[path = "scroll-preview.rs"]
 mod scroll_preview;
 mod sdl_events;
+mod shelf;
 mod state;
 mod storage;
 mod text_rendering;
 #[path = "tile-editor.rs"]
 mod tile_editor;
+mod tmdb;
+#[path = "tmdb-service.rs"]
+mod tmdb_service;
 mod update;
 mod vector;
 mod view;
@@ -303,6 +307,7 @@ fn effects(
     platform: &Platform,
     preferences: &std::path::Path,
     weather: &weather_service::Service,
+    tmdb: &tmdb_service::Service,
     wallpapers: &wallpapers::Service,
     webhook: &webhook::Service,
     updates: &update::Worker,
@@ -409,6 +414,9 @@ fn effects(
                 });
             }
             Effect::Weather(command) => weather.send(command),
+            Effect::Shelf(command) => {
+                tmdb.send(command);
+            }
         }
     }
     true
@@ -457,6 +465,7 @@ fn script(
                     Some(state::Subpage::Greeting) => state::TextField::Name,
                     Some(state::Subpage::WeatherLocation) => state::TextField::Location,
                     Some(state::Subpage::Input(_)) => state::TextField::InputName,
+                    Some(state::Subpage::Shelf) => state::TextField::ShelfKey,
                     _ => state::TextField::Apps,
                 }
             };
@@ -746,6 +755,13 @@ fn run() -> Result<(), String> {
         weather_service::Client::new(options.weather_test_server.as_deref())?,
         weather_cache,
     );
+    let tmdb_service =
+        tmdb_service::Service::new(tmdb_service::Client::new(), preferences_path.clone());
+    let mut disk = tmdb_service::load_cache(&tmdb_service::cache_file(&preferences_path));
+    tmdb_service::hydrate_cache(&mut disk, &tmdb_service::cache_dir(&preferences_path));
+    if !disk.items.is_empty() {
+        state.shelf.shows = disk.items;
+    }
     let updates = update::Worker::new(webos && public_update_checks);
     let platform = Platform::new(
         webos,
@@ -759,6 +775,7 @@ fn run() -> Result<(), String> {
         &platform,
         &preferences_path,
         &weather_service,
+        &tmdb_service,
         &wallpaper_service,
         &webhook_service,
         &updates,
@@ -1072,6 +1089,7 @@ fn run() -> Result<(), String> {
                         &platform,
                         &preferences_path,
                         &weather_service,
+                        &tmdb_service,
                         &wallpaper_service,
                         &webhook_service,
                         &updates,
@@ -1242,6 +1260,7 @@ fn run() -> Result<(), String> {
                                 &platform,
                                 &preferences_path,
                                 &weather_service,
+                                &tmdb_service,
                                 &wallpaper_service,
                                 &webhook_service,
                                 &updates,
@@ -1273,6 +1292,7 @@ fn run() -> Result<(), String> {
                         &platform,
                         &preferences_path,
                         &weather_service,
+                        &tmdb_service,
                         &wallpaper_service,
                         &webhook_service,
                         &updates,
@@ -1294,6 +1314,7 @@ fn run() -> Result<(), String> {
                             &platform,
                             &preferences_path,
                             &weather_service,
+                            &tmdb_service,
                             &wallpaper_service,
                             &webhook_service,
                             &updates,
@@ -1314,6 +1335,7 @@ fn run() -> Result<(), String> {
                         &platform,
                         &preferences_path,
                         &weather_service,
+                        &tmdb_service,
                         &wallpaper_service,
                         &webhook_service,
                         &updates,
@@ -1334,6 +1356,23 @@ fn run() -> Result<(), String> {
             state.notify(state.preferences.language.format(key, &[("tile", &title)]));
         }
         weather_tick(&mut state, &weather_service, visible);
+        while let Some(response) = tmdb_service.try_recv() {
+            state.shelf_response(response);
+        }
+        let shelf_pending = state.shelf_tick();
+        if !shelf_pending.is_empty() {
+            running &= effects(
+                shelf_pending,
+                &mut state,
+                &platform,
+                &preferences_path,
+                &weather_service,
+                &tmdb_service,
+                &wallpaper_service,
+                &webhook_service,
+                &updates,
+            );
+        }
         if std::mem::take(&mut state.update_check_requested) {
             if let Some(version) = &options.test_update_version {
                 state.update_response(Ok(
@@ -1746,6 +1785,7 @@ fn run() -> Result<(), String> {
                 &platform,
                 &preferences_path,
                 &weather_service,
+                &tmdb_service,
                 &wallpaper_service,
                 &webhook_service,
                 &updates,
@@ -1784,6 +1824,7 @@ fn run() -> Result<(), String> {
                 &platform,
                 &preferences_path,
                 &weather_service,
+                &tmdb_service,
                 &wallpaper_service,
                 &webhook_service,
                 &updates,
@@ -1835,6 +1876,7 @@ fn run() -> Result<(), String> {
                     &platform,
                     &preferences_path,
                     &weather_service,
+                    &tmdb_service,
                     &wallpaper_service,
                     &webhook_service,
                     &updates,
@@ -1877,6 +1919,7 @@ fn run() -> Result<(), String> {
                 &platform,
                 &preferences_path,
                 &weather_service,
+                &tmdb_service,
                 &wallpaper_service,
                 &webhook_service,
                 &updates,

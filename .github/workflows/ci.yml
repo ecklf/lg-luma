@@ -187,6 +187,8 @@ jobs:
         run: pnpm sdk
       - name: Cross-build and verify the native IPK and Homebrew feed
         id: package
+        env:
+          LUMA_TMDB_API_KEY: ${{ secrets.LUMA_TMDB_API_KEY }}
         run: |
           export WEBOS_NDK="$GITHUB_WORKSPACE/.build/toolchain/arm-webos-linux-gnueabi_sdk-buildroot"
           pnpm build

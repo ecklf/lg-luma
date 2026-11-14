@@ -2457,12 +2457,13 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
             _ => None,
         })
         .collect();
-    assert_eq!(widget_order, [1, 2, 3, 5]);
+    assert_eq!(widget_order, [1, 2, 3, 5, 6]);
     for (widget, subpage) in [
         (1, Subpage::Weather),
         (2, Subpage::Shortcuts),
         (3, Subpage::Inputs),
         (5, Subpage::Channels),
+        (6, Subpage::Shelf),
     ] {
         state.focus = Target::Widget(widget);
         state.direction(Direction::Right, &controls(&state));
@@ -2536,9 +2537,16 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
                 .iter()
                 .filter(|c| matches!(c.target, Target::Widget(_)))
                 .count(),
-            4
+            5
         );
-        for key in ["widgets", "weather", "shortcuts", "inputs", "channels"] {
+        for key in [
+            "widgets",
+            "weather",
+            "shortcuts",
+            "inputs",
+            "channels",
+            "topShelf",
+        ] {
             assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t(key))), "{key}/{language:?}");
         }
         state.pointer_focus(Target::Sidebar(0));
