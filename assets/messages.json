@@ -14,7 +14,8 @@
     "nl": "Interfacegeluiden",
     "sv": "Gränssnittsljud",
     "cs": "Zvuky rozhraní",
-    "ca": "Sons de la interfície"
+    "ca": "Sons de la interfície",
+    "hu": "Felületi hangok"
   },
   "weatherStyle": {
     "en": "Widget style",
@@ -31,7 +32,8 @@
     "nl": "Widgetstijl",
     "sv": "Widgetstil",
     "cs": "Styl widgetu",
-    "ca": "Estil del giny"
+    "ca": "Estil del giny",
+    "hu": "Widgetstílus"
   },
   "weatherStyleStandard": {
     "en": "Standard",
@@ -48,7 +50,8 @@
     "nl": "Standaard",
     "sv": "Standard",
     "cs": "Standardní",
-    "ca": "Estàndard"
+    "ca": "Estàndard",
+    "hu": "Normál"
   },
   "weatherStyleNoIcon": {
     "en": "No icon",
@@ -65,7 +68,8 @@
     "nl": "Zonder pictogram",
     "sv": "Utan ikon",
     "cs": "Bez ikony",
-    "ca": "Sense icona"
+    "ca": "Sense icona",
+    "hu": "Ikon nélkül"
   },
   "weatherStyleCompact": {
     "en": "Compact",
@@ -82,7 +86,8 @@
     "nl": "Compact",
     "sv": "Kompakt",
     "cs": "Kompaktní",
-    "ca": "Compacte"
+    "ca": "Compacte",
+    "hu": "Kompakt"
   },
   "appSorting": {
     "en": "App sorting",
@@ -99,7 +104,8 @@
     "nl": "Apps sorteren",
     "sv": "Appsortering",
     "cs": "Řazení aplikací",
-    "ca": "Ordre de les aplicacions"
+    "ca": "Ordre de les aplicacions",
+    "hu": "Alkalmazások rendezése"
   },
   "appSortingAlphabetical": {
     "en": "Alphabetically",
@@ -116,7 +122,8 @@
     "nl": "Alfabetisch",
     "sv": "Alfabetiskt",
     "cs": "Abecedně",
-    "ca": "Alfabèticament"
+    "ca": "Alfabèticament",
+    "hu": "Betűrendben"
   },
   "appSortingUsage": {
     "en": "Usage count",
@@ -133,7 +140,8 @@
     "nl": "Aantal keren gebruikt",
     "sv": "Antal användningar",
     "cs": "Počet použití",
-    "ca": "Nombre d’usos"
+    "ca": "Nombre d’usos",
+    "hu": "Használat szerint"
   },
   "wallpaperGradient": {
     "en": "Gradient",
@@ -150,7 +158,8 @@
     "nl": "Verloop",
     "sv": "Toning",
     "cs": "Přechod",
-    "ca": "Degradat"
+    "ca": "Degradat",
+    "hu": "Színátmenet"
   },
   "date": {
     "en": "Date",
@@ -167,7 +176,8 @@
     "nl": "Datum",
     "sv": "Datum",
     "cs": "Datum",
-    "ca": "Data"
+    "ca": "Data",
+    "hu": "Dátum"
   },
   "dateFormat": {
     "en": "Date format",
@@ -184,7 +194,8 @@
     "nl": "Datumnotatie",
     "sv": "Datumformat",
     "cs": "Formát data",
-    "ca": "Format de la data"
+    "ca": "Format de la data",
+    "hu": "Dátumformátum"
   },
   "dateLocalized": {
     "en": "Localized (weekday, month and day)",
@@ -201,7 +212,8 @@
     "nl": "Lokaal (weekdag, maand en dag)",
     "sv": "Lokalt (veckodag, månad och dag)",
     "cs": "Místní (den v týdnu, den a měsíc)",
-    "ca": "Format local (dia de la setmana, mes i dia)"
+    "ca": "Format local (dia de la setmana, mes i dia)",
+    "hu": "Helyi formátum (hét napja, hónap és nap)"
   },
   "latestVersionInstalled": {
     "zh-tw": "未發現更新版本",
@@ -218,7 +230,8 @@
     "nl": "Geen nieuwere versie gevonden",
     "sv": "Ingen nyare version hittades",
     "cs": "Nebyla nalezena novější verze",
-    "ca": "No hi ha cap versió més nova"
+    "ca": "No hi ha cap versió més nova",
+    "hu": "Nincs újabb verzió"
   },
   "checkAgain": {
     "zh-tw": "重新檢查",
@@ -235,7 +248,8 @@
     "nl": "Opnieuw controleren",
     "sv": "Kontrollera igen",
     "cs": "Zkontrolovat znovu",
-    "ca": "Torna-ho a comprovar"
+    "ca": "Torna-ho a comprovar",
+    "hu": "Újraellenőrzés"
   },
   "checkingUpdates": {
     "zh-tw": "正在檢查更新…",
@@ -252,7 +266,8 @@
     "nl": "Controleren op updates…",
     "sv": "Söker efter uppdateringar…",
     "cs": "Hledání aktualizací…",
-    "ca": "S’estan buscant actualitzacions…"
+    "ca": "S’estan buscant actualitzacions…",
+    "hu": "Frissítések keresése…"
   },
   "checkForUpdates": {
     "zh-tw": "檢查更新",
@@ -269,7 +284,8 @@
     "nl": "Controleren op updates",
     "sv": "Sök efter uppdateringar",
     "cs": "Vyhledat aktualizace",
-    "ca": "Busca actualitzacions"
+    "ca": "Busca actualitzacions",
+    "hu": "Frissítések keresése"
   },
   "updateCheckFailed": {
     "zh-tw": "無法檢查更新",
@@ -286,7 +302,8 @@
     "nl": "Controleren op updates mislukt",
     "sv": "Det gick inte att söka efter uppdateringar",
     "cs": "Kontrola aktualizací se nezdařila",
-    "ca": "No s’han pogut buscar actualitzacions"
+    "ca": "No s’han pogut buscar actualitzacions",
+    "hu": "Nem sikerült frissítéseket keresni"
   },
   "currentVersion": {
     "zh-tw": "目前版本：{current}",
@@ -303,7 +320,8 @@
     "nl": "Huidige versie: {current}",
     "sv": "Nuvarande version: {current}",
     "cs": "Aktuální verze: {current}",
-    "ca": "Versió actual: {current}"
+    "ca": "Versió actual: {current}",
+    "hu": "Jelenlegi verzió: {current}"
   },
   "addFirstShortcutHint": {
     "zh-tw": "按「設定」新增第一個捷徑。",
@@ -320,7 +338,8 @@
     "nl": "Druk op Configureren om je eerste snelkoppeling toe te voegen.",
     "sv": "Tryck på Konfigurera för att lägga till din första genväg.",
     "cs": "Stiskněte Konfigurovat a přidejte prvního zástupce.",
-    "ca": "Prem «Configura» per afegir la primera drecera."
+    "ca": "Prem «Configura» per afegir la primera drecera.",
+    "hu": "Az első parancsikon hozzáadásához válaszd a Beállítás lehetőséget."
   },
   "updateAvailable": {
     "zh-tw": "有可用更新",
@@ -337,7 +356,8 @@
     "nl": "Update beschikbaar",
     "sv": "Uppdatering tillgänglig",
     "cs": "K dispozici je aktualizace",
-    "ca": "Hi ha una actualització"
+    "ca": "Hi ha una actualització",
+    "hu": "Frissítés érhető el"
   },
   "updateVersions": {
     "zh-tw": "目前版本：{current} · 最新版本：{latest}",
@@ -354,7 +374,8 @@
     "nl": "Huidig: {current} · Nieuwste: {latest}",
     "sv": "Nuvarande: {current} · Senaste: {latest}",
     "cs": "Aktuální: {current} · Nejnovější: {latest}",
-    "ca": "Actual: {current} · Més recent: {latest}"
+    "ca": "Actual: {current} · Més recent: {latest}",
+    "hu": "Jelenlegi: {current} · Legújabb: {latest}"
   },
   "openHomebrewChannel": {
     "zh-tw": "開啟 Homebrew Channel 進行更新",
@@ -371,7 +392,8 @@
     "nl": "Open Homebrew Channel om bij te werken",
     "sv": "Öppna Homebrew Channel för att uppdatera",
     "cs": "Pro aktualizaci otevřete Homebrew Channel",
-    "ca": "Obre Homebrew Channel per actualitzar"
+    "ca": "Obre Homebrew Channel per actualitzar",
+    "hu": "Frissítés a Homebrew Channelből"
   },
   "testShortcut": {
     "zh-tw": "測試捷徑",
@@ -388,7 +410,8 @@
     "nl": "Snelkoppeling testen",
     "sv": "Testa genväg",
     "cs": "Vyzkoušet zástupce",
-    "ca": "Prova la drecera"
+    "ca": "Prova la drecera",
+    "hu": "Parancsikon tesztelése"
   },
   "configure": {
     "zh-tw": "設定",
@@ -405,7 +428,8 @@
     "nl": "Configureren",
     "sv": "Konfigurera",
     "cs": "Konfigurovat",
-    "ca": "Configura"
+    "ca": "Configura",
+    "hu": "Beállítás"
   },
   "widgets": {
     "zh-tw": "小工具",
@@ -422,7 +446,8 @@
     "nl": "Widgets",
     "sv": "Widgetar",
     "cs": "Widgety",
-    "ca": "Ginys"
+    "ca": "Ginys",
+    "hu": "Widgetek"
   },
   "wallpaperCycle": {
     "zh-tw": "輪播",
@@ -439,7 +464,8 @@
     "nl": "Rotatie",
     "sv": "Rotera",
     "cs": "Střídání",
-    "ca": "Fons alterns"
+    "ca": "Fons alterns",
+    "hu": "Váltakozás"
   },
   "useBackground": {
     "zh-tw": "使用背景",
@@ -456,7 +482,8 @@
     "nl": "Achtergrond gebruiken",
     "sv": "Använd bakgrund",
     "cs": "Použít pozadí",
-    "ca": "Fes servir aquest fons"
+    "ca": "Fes servir aquest fons",
+    "hu": "Háttér használata"
   },
   "deleteBackground": {
     "zh-tw": "刪除背景",
@@ -473,7 +500,8 @@
     "nl": "Achtergrond verwijderen",
     "sv": "Ta bort bakgrund",
     "cs": "Smazat pozadí",
-    "ca": "Suprimeix el fons"
+    "ca": "Suprimeix el fons",
+    "hu": "Háttér törlése"
   },
   "deleteBackgroundWarning": {
     "zh-tw": "刪除此背景？它將從圖庫中移除。",
@@ -490,7 +518,8 @@
     "nl": "Deze achtergrond verwijderen? Hij wordt uit je galerij verwijderd.",
     "sv": "Ta bort den här bakgrunden? Den tas bort från ditt galleri.",
     "cs": "Smazat toto pozadí? Bude odstraněno z vaší galerie.",
-    "ca": "Vols suprimir aquest fons? Desapareixerà de la galeria."
+    "ca": "Vols suprimir aquest fons? Desapareixerà de la galeria.",
+    "hu": "Törlöd ezt a hátteret? Eltűnik a galériából."
   },
   "deletingBackground": {
     "zh-tw": "正在刪除背景…",
@@ -507,7 +536,8 @@
     "nl": "Achtergrond verwijderen…",
     "sv": "Tar bort bakgrund…",
     "cs": "Mazání pozadí…",
-    "ca": "S’està suprimint el fons…"
+    "ca": "S’està suprimint el fons…",
+    "hu": "Háttér törlése…"
   },
   "backgroundDeleted": {
     "zh-tw": "背景已刪除",
@@ -524,7 +554,8 @@
     "nl": "Achtergrond verwijderd",
     "sv": "Bakgrunden har tagits bort",
     "cs": "Pozadí bylo smazáno",
-    "ca": "S’ha suprimit el fons"
+    "ca": "S’ha suprimit el fons",
+    "hu": "Háttér törölve"
   },
   "deleteBackgroundError": {
     "zh-tw": "無法刪除背景",
@@ -541,7 +572,8 @@
     "nl": "Kan achtergrond niet verwijderen",
     "sv": "Det gick inte att ta bort bakgrunden",
     "cs": "Pozadí se nepodařilo smazat",
-    "ca": "No s’ha pogut suprimir el fons"
+    "ca": "No s’ha pogut suprimir el fons",
+    "hu": "A háttér törlése nem sikerült"
   },
   "uploadWallpaper": {
     "zh-tw": "上傳",
@@ -558,7 +590,8 @@
     "nl": "Uploaden",
     "sv": "Ladda upp",
     "cs": "Nahrát",
-    "ca": "Puja un fons"
+    "ca": "Puja un fons",
+    "hu": "Feltöltés"
   },
   "wallpaperUploadHint": {
     "zh-tw": "掃描此 QR Code",
@@ -575,7 +608,8 @@
     "nl": "Scan deze QR-code",
     "sv": "Skanna den här QR-koden",
     "cs": "Naskenujte tento QR kód",
-    "ca": "Escaneja aquest codi QR"
+    "ca": "Escaneja aquest codi QR",
+    "hu": "Olvasd be ezt a QR-kódot"
   },
   "wallpaperUploadBrowser": {
     "zh-tw": "或在瀏覽器中輸入此網址",
@@ -592,7 +626,8 @@
     "nl": "of voer deze URL in de browser in",
     "sv": "eller ange den här webbadressen i webbläsaren",
     "cs": "nebo zadejte tuto adresu URL do prohlížeče",
-    "ca": "o escriu aquesta adreça al navegador"
+    "ca": "o escriu aquesta adreça al navegador",
+    "hu": "vagy nyisd meg ezt az URL-t a böngészőben"
   },
   "wallpaperUploadKeepOpen": {
     "zh-tw": "請保持此視窗開啟，直到上傳完成。請使用連線到同一網路的裝置。",
@@ -609,7 +644,8 @@
     "nl": "Houd dit venster open tot het uploaden klaar is. Gebruik een apparaat op hetzelfde netwerk.",
     "sv": "Låt det här fönstret vara öppet tills uppladdningen är klar. Använd en enhet på samma nätverk.",
     "cs": "Dokud nahrávání neskončí, nechte toto okno otevřené. Použijte zařízení ve stejné síti.",
-    "ca": "Deixa aquesta finestra oberta fins que s’acabi de pujar el fons. Fes servir un dispositiu connectat a la mateixa xarxa."
+    "ca": "Deixa aquesta finestra oberta fins que s’acabi de pujar el fons. Fes servir un dispositiu connectat a la mateixa xarxa.",
+    "hu": "Hagyd nyitva ezt az ablakot a feltöltés végéig. Használj azonos hálózaton lévő eszközt."
   },
   "wallpaperUploadPrivate": {
     "zh-tw": "區域網路上傳 · 連結將在 10 分鐘後失效",
@@ -626,7 +662,8 @@
     "nl": "Lokaal uploaden · Deze link verloopt over 10 minuten",
     "sv": "Lokal uppladdning · Länken slutar gälla om 10 minuter",
     "cs": "Místní nahrávání · Odkaz vyprší za 10 minut",
-    "ca": "Pujada a la xarxa local · L’enllaç caduca al cap de 10 minuts"
+    "ca": "Pujada a la xarxa local · L’enllaç caduca al cap de 10 minuts",
+    "hu": "Helyi feltöltés · A hivatkozás 10 perc múlva lejár"
   },
   "wallpaperUploadStarting": {
     "zh-tw": "正在準備上傳連結…",
@@ -643,7 +680,8 @@
     "nl": "Uploadlink voorbereiden…",
     "sv": "Förbereder uppladdningslänk…",
     "cs": "Příprava odkazu pro nahrávání…",
-    "ca": "S’està preparant l’enllaç per pujar el fons…"
+    "ca": "S’està preparant l’enllaç per pujar el fons…",
+    "hu": "Feltöltési hivatkozás előkészítése…"
   },
   "wallpaperUploadError": {
     "zh-tw": "無法啟動區域網路上傳。請檢查網路連線，然後關閉並重新開啟此對話框。",
@@ -660,7 +698,8 @@
     "nl": "Kan lokaal uploaden niet starten. Controleer je netwerkverbinding en sluit en heropen dit venster.",
     "sv": "Det gick inte att starta den lokala uppladdningen. Kontrollera nätverksanslutningen och öppna sedan dialogrutan igen.",
     "cs": "Místní nahrávání se nepodařilo spustit. Zkontrolujte připojení k síti a poté tento dialog zavřete a znovu otevřete.",
-    "ca": "No s’ha pogut iniciar la pujada. Comprova la connexió i torna a obrir aquesta finestra."
+    "ca": "No s’ha pogut iniciar la pujada. Comprova la connexió i torna a obrir aquesta finestra.",
+    "hu": "Nem sikerült elindítani a helyi feltöltést. Ellenőrizd a hálózati kapcsolatot, majd zárd be és nyisd meg újra ezt az ablakot."
   },
   "wallpaperUploadEnded": {
     "zh-tw": "上傳工作階段已結束",
@@ -677,7 +716,8 @@
     "nl": "Uploadsessie beëindigd",
     "sv": "Uppladdningssessionen har avslutats",
     "cs": "Relace nahrávání skončila",
-    "ca": "S’ha tancat la sessió de pujada"
+    "ca": "S’ha tancat la sessió de pujada",
+    "hu": "A feltöltési munkamenet véget ért"
   },
   "textRendering": {
     "zh-tw": "文字繪製",
@@ -694,7 +734,8 @@
     "nl": "Tekstweergave",
     "sv": "Textrendering",
     "cs": "Vykreslování textu",
-    "ca": "Representació del text"
+    "ca": "Representació del text",
+    "hu": "Szövegmegjelenítés"
   },
   "textRenderingMsaa": {
     "zh-tw": "MSAA（預設）",
@@ -711,7 +752,8 @@
     "nl": "MSAA (standaard)",
     "sv": "MSAA (standard)",
     "cs": "MSAA (výchozí)",
-    "ca": "MSAA (per defecte)"
+    "ca": "MSAA (per defecte)",
+    "hu": "MSAA (alapértelmezett)"
   },
   "textRenderingAnalytic": {
     "zh-tw": "解析式",
@@ -728,7 +770,8 @@
     "nl": "Analytisch",
     "sv": "Analytisk",
     "cs": "Analytické",
-    "ca": "Analítica"
+    "ca": "Analítica",
+    "hu": "Analitikus"
   },
   "textRenderingRestart": {
     "zh-tw": "重新啟動 Luma 以套用變更。",
@@ -745,7 +788,8 @@
     "nl": "Start Luma opnieuw op om de wijzigingen toe te passen.",
     "sv": "Starta om Luma för att tillämpa ändringarna.",
     "cs": "Změny se projeví po restartu aplikace Luma.",
-    "ca": "Reinicia Luma per aplicar els canvis."
+    "ca": "Reinicia Luma per aplicar els canvis.",
+    "hu": "A módosítások alkalmazásához indítsd újra a Lumát."
   },
   "recentEmpty": {
     "zh-tw": "尚無最近使用的應用程式",
@@ -762,7 +806,8 @@
     "nl": "Geen recente apps",
     "sv": "Inga senaste appar",
     "cs": "Žádné nedávné aplikace",
-    "ca": "No hi ha cap app recent"
+    "ca": "No hi ha cap app recent",
+    "hu": "Nincsenek legutóbbi alkalmazások"
   },
   "recentError": {
     "zh-tw": "無法更新最近使用的應用程式",
@@ -779,7 +824,8 @@
     "nl": "Recente apps konden niet worden bijgewerkt",
     "sv": "Senaste appar kunde inte uppdateras",
     "cs": "Nedávné aplikace se nepodařilo aktualizovat",
-    "ca": "No s’ha pogut actualitzar la llista d’apps recents"
+    "ca": "No s’ha pogut actualitzar la llista d’apps recents",
+    "hu": "A legutóbbi alkalmazásokat nem sikerült frissíteni"
   },
   "recentLoading": {
     "zh-tw": "正在更新最近使用的應用程式…",
@@ -796,7 +842,8 @@
     "nl": "Recente apps worden bijgewerkt…",
     "sv": "Uppdaterar senaste appar…",
     "cs": "Aktualizace nedávných aplikací…",
-    "ca": "S’està actualitzant la llista d’apps recents…"
+    "ca": "S’està actualitzant la llista d’apps recents…",
+    "hu": "Legutóbbi alkalmazások frissítése…"
   },
   "recentDesktop": {
     "zh-tw": "桌面預覽 · 範例記錄",
@@ -813,7 +860,8 @@
     "nl": "Desktopvoorbeeld · Voorbeeldgeschiedenis",
     "sv": "Skrivbordsförhandsvisning · Exempelhistorik",
     "cs": "Náhled na počítači · Ukázková historie",
-    "ca": "Previsualització a l’ordinador · Historial de mostra"
+    "ca": "Previsualització a l’ordinador · Historial de mostra",
+    "hu": "Asztali előnézet · Mintaelőzmények"
   },
   "home": {
     "zh-tw": "主畫面",
@@ -830,7 +878,8 @@
     "nl": "Start",
     "sv": "Hem",
     "cs": "Domů",
-    "ca": "Inici"
+    "ca": "Inici",
+    "hu": "Kezdőlap"
   },
   "apps": {
     "zh-tw": "應用程式",
@@ -847,7 +896,8 @@
     "nl": "Apps",
     "sv": "Appar",
     "cs": "Aplikace",
-    "ca": "Apps"
+    "ca": "Apps",
+    "hu": "Alkalmazások"
   },
   "inputs": {
     "zh-tw": "輸入來源",
@@ -864,7 +914,8 @@
     "nl": "Ingangen",
     "sv": "Ingångar",
     "cs": "Vstupy",
-    "ca": "Entrades"
+    "ca": "Entrades",
+    "hu": "Bemenetek"
   },
   "settings": {
     "zh-tw": "設定",
@@ -881,7 +932,8 @@
     "nl": "Instellingen",
     "sv": "Inställningar",
     "cs": "Nastavení",
-    "ca": "Configuració"
+    "ca": "Configuració",
+    "hu": "Beállítások"
   },
   "settingsRegion": {
     "zh-tw": "Luma 設定",
@@ -898,7 +950,8 @@
     "nl": "Luma-instellingen",
     "sv": "Luma-inställningar",
     "cs": "Nastavení aplikace Luma",
-    "ca": "Configuració de Luma"
+    "ca": "Configuració de Luma",
+    "hu": "Luma-beállítások"
   },
   "mainNavigation": {
     "zh-tw": "主要導覽",
@@ -915,7 +968,8 @@
     "nl": "Hoofdnavigatie",
     "sv": "Huvudnavigering",
     "cs": "Hlavní navigace",
-    "ca": "Navegació principal"
+    "ca": "Navegació principal",
+    "hu": "Fő navigáció"
   },
   "settingsSections": {
     "zh-tw": "設定分類",
@@ -932,7 +986,8 @@
     "nl": "Instellingencategorieën",
     "sv": "Inställningsavsnitt",
     "cs": "Sekce nastavení",
-    "ca": "Apartats de configuració"
+    "ca": "Apartats de configuració",
+    "hu": "Beállítási szakaszok"
   },
   "stateOn": {
     "zh-tw": "開",
@@ -949,7 +1004,8 @@
     "nl": "Aan",
     "sv": "På",
     "cs": "Zapnuto",
-    "ca": "Activat"
+    "ca": "Activat",
+    "hu": "Be"
   },
   "stateOff": {
     "zh-tw": "關",
@@ -966,7 +1022,8 @@
     "nl": "Uit",
     "sv": "Av",
     "cs": "Vypnuto",
-    "ca": "Desactivat"
+    "ca": "Desactivat",
+    "hu": "Ki"
   },
   "stateAuto": {
     "zh-tw": "自動",
@@ -983,7 +1040,8 @@
     "nl": "Automatisch",
     "sv": "Automatiskt",
     "cs": "Automaticky",
-    "ca": "Automàtic"
+    "ca": "Automàtic",
+    "hu": "Automatikus"
   },
   "inputAlways": {
     "zh-tw": "一律顯示",
@@ -1000,7 +1058,8 @@
     "nl": "Altijd tonen",
     "sv": "Visa alltid",
     "cs": "Vždy zobrazovat",
-    "ca": "Mostra-la sempre"
+    "ca": "Mostra-la sempre",
+    "hu": "Mindig jelenjen meg"
   },
   "inputNever": {
     "zh-tw": "永不顯示",
@@ -1017,7 +1076,8 @@
     "nl": "Nooit tonen",
     "sv": "Visa aldrig",
     "cs": "Nikdy nezobrazovat",
-    "ca": "No la mostris mai"
+    "ca": "No la mostris mai",
+    "hu": "Soha ne jelenjen meg"
   },
   "inputWhenConnected": {
     "zh-tw": "僅在連線時顯示",
@@ -1034,7 +1094,8 @@
     "nl": "Alleen tonen als verbonden",
     "sv": "Visa endast när ansluten",
     "cs": "Zobrazovat jen po připojení",
-    "ca": "Mostra-la només si està connectada"
+    "ca": "Mostra-la només si està connectada",
+    "hu": "Csak csatlakoztatott állapotban jelenjen meg"
   },
   "renameInput": {
     "zh-tw": "重新命名",
@@ -1051,7 +1112,8 @@
     "nl": "Hernoemen",
     "sv": "Byt namn",
     "cs": "Přejmenovat",
-    "ca": "Canvia el nom"
+    "ca": "Canvia el nom",
+    "hu": "Átnevezés"
   },
   "inputName": {
     "zh-tw": "輸入來源名稱",
@@ -1068,7 +1130,8 @@
     "nl": "Naam van de ingang",
     "sv": "Ingångens namn",
     "cs": "Název vstupu",
-    "ca": "Nom de l’entrada"
+    "ca": "Nom de l’entrada",
+    "hu": "Bemenet neve"
   },
   "inputNameHint": {
     "zh-tw": "顯示自訂名稱而非連接埠名稱",
@@ -1085,7 +1148,8 @@
     "nl": "Toon een eigen naam in plaats van de poort",
     "sv": "Visa ett eget namn i stället för porten",
     "cs": "Zobrazovat vlastní název místo portu",
-    "ca": "Mostra un nom personalitzat en lloc del port"
+    "ca": "Mostra un nom personalitzat en lloc del port",
+    "hu": "A csatlakozó neve helyett egyéni nevet jelenít meg"
   },
   "inputIcon": {
     "zh-tw": "圖示",
@@ -1102,7 +1166,8 @@
     "nl": "Pictogram",
     "sv": "Ikon",
     "cs": "Ikona",
-    "ca": "Icona"
+    "ca": "Icona",
+    "hu": "Ikon"
   },
   "inputIconAutomatic": {
     "zh-tw": "自動",
@@ -1119,7 +1184,8 @@
     "nl": "Automatisch",
     "sv": "Automatiskt",
     "cs": "Automaticky",
-    "ca": "Automàtic"
+    "ca": "Automàtic",
+    "hu": "Automatikus"
   },
   "inputIconHdmi": {
     "zh-tw": "HDMI",
@@ -1136,7 +1202,8 @@
     "nl": "HDMI",
     "sv": "HDMI",
     "cs": "HDMI",
-    "ca": "HDMI"
+    "ca": "HDMI",
+    "hu": "HDMI"
   },
   "inputIconUsb": {
     "zh-tw": "USB",
@@ -1153,7 +1220,8 @@
     "nl": "USB",
     "sv": "USB",
     "cs": "USB",
-    "ca": "USB"
+    "ca": "USB",
+    "hu": "USB"
   },
   "inputIconAppleTv": {
     "zh-tw": "Apple TV",
@@ -1170,7 +1238,8 @@
     "nl": "Apple TV",
     "sv": "Apple TV",
     "cs": "Apple TV",
-    "ca": "Apple TV"
+    "ca": "Apple TV",
+    "hu": "Apple TV"
   },
   "inputIconComputer": {
     "zh-tw": "電腦",
@@ -1187,7 +1256,8 @@
     "nl": "Computer",
     "sv": "Dator",
     "cs": "Počítač",
-    "ca": "Ordinador"
+    "ca": "Ordinador",
+    "hu": "Számítógép"
   },
   "inputIconConsole": {
     "zh-tw": "遊戲主機",
@@ -1204,7 +1274,8 @@
     "nl": "Spelcomputer",
     "sv": "Spelkonsol",
     "cs": "Herní konzole",
-    "ca": "Consola de videojocs"
+    "ca": "Consola de videojocs",
+    "hu": "Játékkonzol"
   },
   "inputIconPlaystation": {
     "zh-tw": "PlayStation",
@@ -1221,7 +1292,8 @@
     "nl": "PlayStation",
     "sv": "PlayStation",
     "cs": "PlayStation",
-    "ca": "PlayStation"
+    "ca": "PlayStation",
+    "hu": "PlayStation"
   },
   "inputIconShield": {
     "zh-tw": "NVIDIA Shield",
@@ -1238,7 +1310,8 @@
     "nl": "NVIDIA Shield",
     "sv": "NVIDIA Shield",
     "cs": "NVIDIA Shield",
-    "ca": "NVIDIA Shield"
+    "ca": "NVIDIA Shield",
+    "hu": "NVIDIA Shield"
   },
   "inputIconStreamer": {
     "zh-tw": "串流裝置",
@@ -1255,7 +1328,8 @@
     "nl": "Streamingapparaat",
     "sv": "Strömningsenhet",
     "cs": "Streamovací zařízení",
-    "ca": "Dispositiu de reproducció en continu"
+    "ca": "Dispositiu de reproducció en continu",
+    "hu": "Streamingeszköz"
   },
   "inputIconSwitch": {
     "zh-tw": "Nintendo Switch",
@@ -1272,7 +1346,8 @@
     "nl": "Nintendo Switch",
     "sv": "Nintendo Switch",
     "cs": "Nintendo Switch",
-    "ca": "Nintendo Switch"
+    "ca": "Nintendo Switch",
+    "hu": "Nintendo Switch"
   },
   "inputIconSwitch2": {
     "zh-tw": "Nintendo Switch 2",
@@ -1289,7 +1364,8 @@
     "nl": "Nintendo Switch 2",
     "sv": "Nintendo Switch 2",
     "cs": "Nintendo Switch 2",
-    "ca": "Nintendo Switch 2"
+    "ca": "Nintendo Switch 2",
+    "hu": "Nintendo Switch 2"
   },
   "inputIconSony": {
     "zh-tw": "Sony",
@@ -1306,7 +1382,8 @@
     "nl": "Sony",
     "sv": "Sony",
     "cs": "Sony",
-    "ca": "Sony"
+    "ca": "Sony",
+    "hu": "Sony"
   },
   "inputIconDvd": {
     "zh-tw": "DVD",
@@ -1323,7 +1400,8 @@
     "nl": "DVD",
     "sv": "DVD",
     "cs": "DVD",
-    "ca": "DVD"
+    "ca": "DVD",
+    "hu": "DVD"
   },
   "inputIconBluRay": {
     "zh-tw": "Blu-ray",
@@ -1340,7 +1418,8 @@
     "nl": "Blu-ray",
     "sv": "Blu-ray",
     "cs": "Blu-ray",
-    "ca": "Blu-ray"
+    "ca": "Blu-ray",
+    "hu": "Blu-ray"
   },
   "inputIconDisk": {
     "zh-tw": "光碟",
@@ -1357,7 +1436,8 @@
     "nl": "Schijf",
     "sv": "Skiva",
     "cs": "Disk",
-    "ca": "Disc"
+    "ca": "Disc",
+    "hu": "Lemez"
   },
   "inputIconXbox": {
     "zh-tw": "Xbox",
@@ -1374,7 +1454,8 @@
     "nl": "Xbox",
     "sv": "Xbox",
     "cs": "Xbox",
-    "ca": "Xbox"
+    "ca": "Xbox",
+    "hu": "Xbox"
   },
   "clearName": {
     "zh-tw": "清除名稱",
@@ -1391,7 +1472,8 @@
     "nl": "Naam wissen",
     "sv": "Rensa namn",
     "cs": "Vymazat název",
-    "ca": "Esborra el nom"
+    "ca": "Esborra el nom",
+    "hu": "Név törlése"
   },
   "back": {
     "zh-tw": "返回",
@@ -1408,7 +1490,8 @@
     "nl": "Terug",
     "sv": "Tillbaka",
     "cs": "Zpět",
-    "ca": "Enrere"
+    "ca": "Enrere",
+    "hu": "Vissza"
   },
   "background": {
     "zh-tw": "背景",
@@ -1425,7 +1508,8 @@
     "nl": "Achtergrond",
     "sv": "Bakgrund",
     "cs": "Pozadí",
-    "ca": "Fons"
+    "ca": "Fons",
+    "hu": "Háttér"
   },
   "interface": {
     "zh-tw": "一般",
@@ -1442,7 +1526,8 @@
     "nl": "Algemeen",
     "sv": "Allmänt",
     "cs": "Obecné",
-    "ca": "General"
+    "ca": "General",
+    "hu": "Általános"
   },
   "system": {
     "zh-tw": "系統",
@@ -1459,7 +1544,8 @@
     "nl": "Systeem",
     "sv": "System",
     "cs": "Systém",
-    "ca": "Sistema"
+    "ca": "Sistema",
+    "hu": "Rendszer"
   },
   "favorites": {
     "zh-tw": "我的最愛",
@@ -1476,7 +1562,8 @@
     "nl": "Favorieten",
     "sv": "Favoriter",
     "cs": "Oblíbené",
-    "ca": "Preferides"
+    "ca": "Preferides",
+    "hu": "Kedvencek"
   },
   "weather": {
     "zh-tw": "天氣",
@@ -1493,7 +1580,8 @@
     "nl": "Weer",
     "sv": "Väder",
     "cs": "Počasí",
-    "ca": "El temps"
+    "ca": "El temps",
+    "hu": "Időjárás"
   },
   "location": {
     "zh-tw": "地點",
@@ -1510,7 +1598,8 @@
     "nl": "Locatie",
     "sv": "Plats",
     "cs": "Lokalita",
-    "ca": "Ubicació"
+    "ca": "Ubicació",
+    "hu": "Hely"
   },
   "manageWeatherLocation": {
     "zh-tw": "設定地點",
@@ -1527,7 +1616,8 @@
     "nl": "Locatie instellen",
     "sv": "Ställ in plats",
     "cs": "Nastavit lokalitu",
-    "ca": "Configura la ubicació"
+    "ca": "Configura la ubicació",
+    "hu": "Hely beállítása"
   },
   "locationResults": {
     "zh-tw": "地點搜尋結果",
@@ -1544,7 +1634,8 @@
     "nl": "Zoekresultaten",
     "sv": "Sökresultat",
     "cs": "Výsledky hledání",
-    "ca": "Resultats de la cerca"
+    "ca": "Resultats de la cerca",
+    "hu": "Helytalálatok"
   },
   "clock24": {
     "zh-tw": "24 小時制",
@@ -1561,7 +1652,8 @@
     "nl": "24-uursklok",
     "sv": "24-timmarsklocka",
     "cs": "24hodinový formát",
-    "ca": "Rellotge de 24 hores"
+    "ca": "Rellotge de 24 hores",
+    "hu": "24 órás óra"
   },
   "clockFormat": {
     "zh-tw": "時鐘格式",
@@ -1578,7 +1670,8 @@
     "nl": "Klokformaat",
     "sv": "Klockformat",
     "cs": "Formát hodin",
-    "ca": "Format del rellotge"
+    "ca": "Format del rellotge",
+    "hu": "Óraformátum"
   },
   "clock": {
     "zh-tw": "時鐘",
@@ -1595,7 +1688,8 @@
     "nl": "Klok",
     "sv": "Klocka",
     "cs": "Hodiny",
-    "ca": "Rellotge"
+    "ca": "Rellotge",
+    "hu": "Óra"
   },
   "timeFormat": {
     "zh-tw": "時間顯示",
@@ -1612,7 +1706,8 @@
     "nl": "Tijdnotatie",
     "sv": "Tidsformat",
     "cs": "Formát času",
-    "ca": "Format de l’hora"
+    "ca": "Format de l’hora",
+    "hu": "Időformátum"
   },
   "hour12": {
     "zh-tw": "12 小時制",
@@ -1629,7 +1724,8 @@
     "nl": "12-uurs",
     "sv": "12 timmar",
     "cs": "12hodinový",
-    "ca": "12 hores"
+    "ca": "12 hores",
+    "hu": "12 órás"
   },
   "hour24": {
     "zh-tw": "24 小時制",
@@ -1646,7 +1742,8 @@
     "nl": "24-uurs",
     "sv": "24 timmar",
     "cs": "24hodinový",
-    "ca": "24 hores"
+    "ca": "24 hores",
+    "hu": "24 órás"
   },
   "reducedMotion": {
     "zh-tw": "減少動態效果",
@@ -1663,7 +1760,8 @@
     "nl": "Minder beweging",
     "sv": "Minskad rörelse",
     "cs": "Omezit pohyb",
-    "ca": "Redueix les animacions"
+    "ca": "Redueix les animacions",
+    "hu": "Mozgás csökkentése"
   },
   "refreshApps": {
     "zh-tw": "重新整理應用程式和輸入來源",
@@ -1680,7 +1778,8 @@
     "nl": "Apps en ingangen vernieuwen",
     "sv": "Uppdatera appar och ingångar",
     "cs": "Obnovit aplikace a vstupy",
-    "ca": "Actualitza la llista d’apps i entrades"
+    "ca": "Actualitza la llista d’apps i entrades",
+    "hu": "Alkalmazások és bemenetek frissítése"
   },
   "resetIconCache": {
     "en": "Reset icon cache",
@@ -1697,7 +1796,8 @@
     "ru": "Сбросить кэш значков",
     "zh": "重置图标缓存",
     "zh-tw": "重設圖示快取",
-    "ca": "Buida la memòria cau de les icones"
+    "ca": "Buida la memòria cau de les icones",
+    "hu": "Ikongyorsítótár törlése"
   },
   "installUpdate": {
     "zh-tw": "安裝 {version}",
@@ -1714,7 +1814,8 @@
     "vi": "Cài đặt {version}",
     "sv": "Installera {version}",
     "cs": "Nainstalovat {version}",
-    "ca": "Instal·la la versió {version}"
+    "ca": "Instal·la la versió {version}",
+    "hu": "{version} telepítése"
   },
   "updateDownloading": {
     "zh-tw": "正在下載 {percent}%",
@@ -1731,7 +1832,8 @@
     "vi": "Đang tải {percent} %",
     "sv": "Laddar ned {percent} %",
     "cs": "Stahování {percent} %",
-    "ca": "S’està baixant l’actualització ({percent} %)"
+    "ca": "S’està baixant l’actualització ({percent} %)",
+    "hu": "Letöltés: {percent} %"
   },
   "updateInstalling": {
     "zh-tw": "正在安裝…",
@@ -1748,7 +1850,8 @@
     "vi": "Đang cài đặt…",
     "sv": "Installerar…",
     "cs": "Instalace…",
-    "ca": "S’està instal·lant…"
+    "ca": "S’està instal·lant…",
+    "hu": "Telepítés…"
   },
   "updateFailed": {
     "zh-tw": "重試",
@@ -1765,7 +1868,8 @@
     "vi": "Thử lại",
     "sv": "Försök igen",
     "cs": "Zkusit znovu",
-    "ca": "Torna-ho a provar"
+    "ca": "Torna-ho a provar",
+    "hu": "Próbáld újra"
   },
   "updateError": {
     "zh-tw": "更新未成功，請稍後重試。",
@@ -1782,7 +1886,8 @@
     "vi": "Cập nhật không thành công. Hãy thử lại sau.",
     "sv": "Uppdateringen misslyckades. Försök igen senare.",
     "cs": "Aktualizace se nezdařila. Zkuste to později.",
-    "ca": "No s’ha pogut instal·lar l’actualització. Torna-ho a provar més tard."
+    "ca": "No s’ha pogut instal·lar l’actualització. Torna-ho a provar més tard.",
+    "hu": "A frissítés nem sikerült. Próbáld meg később."
   },
   "updateRestart": {
     "zh-tw": "更新安裝完成後，Luma 將重新啟動。",
@@ -1799,7 +1904,8 @@
     "vi": "Luma sẽ khởi động lại sau khi cài đặt bản cập nhật.",
     "sv": "Luma startar om när uppdateringen har installerats.",
     "cs": "Po instalaci aktualizace se Luma restartuje.",
-    "ca": "Luma es reiniciarà quan acabi la instal·lació."
+    "ca": "Luma es reiniciarà quan acabi la instal·lació.",
+    "hu": "A Luma újraindul a frissítés telepítésekor."
   },
   "quitApp": {
     "zh-tw": "結束應用程式",
@@ -1816,7 +1922,8 @@
     "nl": "App afsluiten",
     "sv": "Avsluta appen",
     "cs": "Ukončit aplikaci",
-    "ca": "Surt de Luma"
+    "ca": "Surt de Luma",
+    "hu": "Alkalmazás bezárása"
   },
   "language": {
     "zh-tw": "顯示語言",
@@ -1833,7 +1940,8 @@
     "nl": "Taal",
     "sv": "Språk",
     "cs": "Jazyk",
-    "ca": "Idioma"
+    "ca": "Idioma",
+    "hu": "Nyelv"
   },
   "greetingName": {
     "zh-tw": "問候稱呼",
@@ -1850,7 +1958,8 @@
     "nl": "Naam in de begroeting",
     "sv": "Namn i hälsningen",
     "cs": "Jméno v pozdravu",
-    "ca": "Nom per a la salutació"
+    "ca": "Nom per a la salutació",
+    "hu": "Megszólítás neve"
   },
   "greeting": {
     "zh-tw": "問候語",
@@ -1867,7 +1976,8 @@
     "nl": "Begroeting",
     "sv": "Hälsning",
     "cs": "Pozdrav",
-    "ca": "Salutació"
+    "ca": "Salutació",
+    "hu": "Üdvözlés"
   },
   "name": {
     "zh-tw": "名稱",
@@ -1884,7 +1994,8 @@
     "nl": "Naam",
     "sv": "Namn",
     "cs": "Jméno",
-    "ca": "Nom"
+    "ca": "Nom",
+    "hu": "Név"
   },
   "greetingNightNamed": {
     "zh-tw": "{name}，還沒睡嗎？",
@@ -1901,7 +2012,8 @@
     "nl": "Nog wakker, {name}?",
     "sv": "Fortfarande uppe, {name}?",
     "cs": "Ještě vzhůru, {name}?",
-    "ca": "Encara no dorms, {name}?"
+    "ca": "Encara no dorms, {name}?",
+    "hu": "Még ébren vagy, {name}?"
   },
   "morningNamed": {
     "zh-tw": "{name}，早安。",
@@ -1918,7 +2030,8 @@
     "nl": "Goedemorgen, {name}.",
     "sv": "God morgon, {name}.",
     "cs": "Dobré ráno, {name}.",
-    "ca": "Bon dia, {name}!"
+    "ca": "Bon dia, {name}!",
+    "hu": "Jó reggelt, {name}!"
   },
   "afternoonNamed": {
     "zh-tw": "{name}，午安。",
@@ -1935,7 +2048,8 @@
     "nl": "Goedemiddag, {name}.",
     "sv": "God eftermiddag, {name}.",
     "cs": "Dobré odpoledne, {name}.",
-    "ca": "Bona tarda, {name}!"
+    "ca": "Bona tarda, {name}!",
+    "hu": "Jó napot, {name}!"
   },
   "eveningNamed": {
     "zh-tw": "{name}，晚安。",
@@ -1952,7 +2066,8 @@
     "nl": "Goedenavond, {name}.",
     "sv": "God kväll, {name}.",
     "cs": "Dobrý večer, {name}.",
-    "ca": "Bon vespre, {name}!"
+    "ca": "Bon vespre, {name}!",
+    "hu": "Jó estét, {name}!"
   },
   "english": {
     "zh-tw": "English",
@@ -1969,7 +2084,8 @@
     "nl": "English",
     "sv": "English",
     "cs": "English",
-    "ca": "Anglès"
+    "ca": "Anglès",
+    "hu": "Angol"
   },
   "german": {
     "zh-tw": "Deutsch",
@@ -1986,7 +2102,8 @@
     "nl": "Deutsch",
     "sv": "Deutsch",
     "cs": "Deutsch",
-    "ca": "Alemany"
+    "ca": "Alemany",
+    "hu": "Német"
   },
   "chinese": {
     "zh-tw": "简体中文",
@@ -2003,7 +2120,8 @@
     "nl": "简体中文",
     "sv": "简体中文",
     "cs": "简体中文",
-    "ca": "Xinès simplificat"
+    "ca": "Xinès simplificat",
+    "hu": "Kínai"
   },
   "showWidget": {
     "zh-tw": "顯示小工具",
@@ -2020,7 +2138,8 @@
     "nl": "Widget tonen",
     "sv": "Visa widget",
     "cs": "Zobrazovat widget",
-    "ca": "Mostra el giny"
+    "ca": "Mostra el giny",
+    "hu": "Widget megjelenítése"
   },
   "temperature": {
     "zh-tw": "溫度",
@@ -2037,7 +2156,8 @@
     "nl": "Temperatuur",
     "sv": "Temperatur",
     "cs": "Teplota",
-    "ca": "Temperatura"
+    "ca": "Temperatura",
+    "hu": "Hőmérséklet"
   },
   "celsius": {
     "zh-tw": "攝氏度",
@@ -2054,7 +2174,8 @@
     "nl": "Celsius",
     "sv": "Celsius",
     "cs": "Celsius",
-    "ca": "Celsius"
+    "ca": "Celsius",
+    "hu": "Celsius"
   },
   "fahrenheit": {
     "zh-tw": "華氏度",
@@ -2071,7 +2192,8 @@
     "nl": "Fahrenheit",
     "sv": "Fahrenheit",
     "cs": "Fahrenheit",
-    "ca": "Fahrenheit"
+    "ca": "Fahrenheit",
+    "hu": "Fahrenheit"
   },
   "cityPostcode": {
     "zh-tw": "城市或郵遞區號",
@@ -2088,7 +2210,8 @@
     "nl": "Plaats of postcode",
     "sv": "Stad eller postnummer",
     "cs": "Město nebo PSČ",
-    "ca": "Població o codi postal"
+    "ca": "Població o codi postal",
+    "hu": "Város vagy irányítószám"
   },
   "searchLocations": {
     "zh-tw": "搜尋地點",
@@ -2105,7 +2228,8 @@
     "nl": "Locaties zoeken",
     "sv": "Sök platser",
     "cs": "Hledat lokality",
-    "ca": "Cerca ubicacions"
+    "ca": "Cerca ubicacions",
+    "hu": "Helyek keresése"
   },
   "removeWeatherLocation": {
     "zh-tw": "移除天氣地點",
@@ -2122,7 +2246,8 @@
     "nl": "Weerlocatie verwijderen",
     "sv": "Ta bort väderplats",
     "cs": "Odebrat lokalitu počasí",
-    "ca": "Treu la ubicació"
+    "ca": "Treu la ubicació",
+    "hu": "Időjárási hely eltávolítása"
   },
   "enterCity": {
     "zh-tw": "請輸入至少兩個字元的城市或郵遞區號。",
@@ -2139,7 +2264,8 @@
     "nl": "Voer een plaats of postcode in van minstens twee tekens.",
     "sv": "Ange en stad eller ett postnummer med minst två tecken.",
     "cs": "Zadejte alespoň dva znaky názvu města nebo PSČ.",
-    "ca": "Escriu almenys dos caràcters del nom de la població o del codi postal."
+    "ca": "Escriu almenys dos caràcters del nom de la població o del codi postal.",
+    "hu": "Adj meg legalább két karakterből álló városnevet vagy irányítószámot."
   },
   "noLocations": {
     "zh-tw": "找不到地點，請嘗試其他城市或郵遞區號。",
@@ -2156,7 +2282,8 @@
     "nl": "Geen locaties gevonden. Probeer een andere plaats of postcode.",
     "sv": "Inga platser hittades. Prova en annan stad eller ett annat postnummer.",
     "cs": "Nebyla nalezena žádná lokalita. Zkuste jiné město nebo PSČ.",
-    "ca": "No hem trobat cap lloc. Prova amb una altra població o un altre codi postal."
+    "ca": "No hem trobat cap lloc. Prova amb una altra població o un altre codi postal.",
+    "hu": "Nem található hely. Próbálj másik várost vagy irányítószámot."
   },
   "searchUnavailable": {
     "zh-tw": "無法搜尋地點。請檢查網路連線後重試。",
@@ -2173,7 +2300,8 @@
     "nl": "Locaties zoeken is niet beschikbaar. Controleer je verbinding en probeer het opnieuw.",
     "sv": "Platssökningen är inte tillgänglig. Kontrollera anslutningen och försök igen.",
     "cs": "Hledání lokalit není k dispozici. Zkontrolujte připojení a zkuste to znovu.",
-    "ca": "Ara mateix no es poden cercar ubicacions. Comprova la connexió i torna-ho a provar."
+    "ca": "Ara mateix no es poden cercar ubicacions. Comprova la connexió i torna-ho a provar.",
+    "hu": "A helykeresés nem érhető el. Ellenőrizd a kapcsolatot, majd próbáld újra."
   },
   "findApp": {
     "zh-tw": "搜尋應用程式",
@@ -2190,7 +2318,8 @@
     "nl": "Zoek een app",
     "sv": "Hitta en app",
     "cs": "Najít aplikaci",
-    "ca": "Cerca una app"
+    "ca": "Cerca una app",
+    "hu": "Alkalmazás keresése"
   },
   "clearCategory": {
     "zh-tw": "清除分類篩選",
@@ -2207,7 +2336,8 @@
     "nl": "Categoriefilter wissen",
     "sv": "Rensa kategorifilter",
     "cs": "Zrušit filtr kategorie",
-    "ca": "Treu el filtre de categoria"
+    "ca": "Treu el filtre de categoria",
+    "hu": "Kategóriaszűrő törlése"
   },
   "appCategories": {
     "zh-tw": "應用程式分類",
@@ -2224,7 +2354,8 @@
     "nl": "App-categorieën",
     "sv": "Appkategorier",
     "cs": "Kategorie aplikací",
-    "ca": "Categories d’apps"
+    "ca": "Categories d’apps",
+    "hu": "Alkalmazáskategóriák"
   },
   "hidden": {
     "zh-tw": "已隱藏（{count}）",
@@ -2241,7 +2372,8 @@
     "nl": "Verborgen ({count})",
     "sv": "Dolda ({count})",
     "cs": "Skryté ({count})",
-    "ca": "Ocultes ({count})"
+    "ca": "Ocultes ({count})",
+    "hu": "Rejtett ({count})"
   },
   "noMatches": {
     "zh-tw": "這裡還沒有內容。",
@@ -2258,7 +2390,8 @@
     "nl": "Nog niets hier.",
     "sv": "Inget här. Än.",
     "cs": "Zatím tu nic není.",
-    "ca": "Aquí encara no hi ha res."
+    "ca": "Aquí encara no hi ha res.",
+    "hu": "Itt még nincs semmi."
   },
   "noHidden": {
     "zh-tw": "沒有隱藏的應用程式。",
@@ -2275,7 +2408,8 @@
     "nl": "Geen verborgen apps.",
     "sv": "Inga dolda appar.",
     "cs": "Žádné skryté aplikace.",
-    "ca": "No hi ha cap app oculta."
+    "ca": "No hi ha cap app oculta.",
+    "hu": "Nincsenek rejtett alkalmazások."
   },
   "roomForNew": {
     "zh-tw": "這裡可以放入新的應用程式。",
@@ -2292,7 +2426,8 @@
     "nl": "Een beetje ruimte voor iets nieuws.",
     "sv": "Lite plats för något nytt.",
     "cs": "Trochu místa pro něco nového.",
-    "ca": "Hi ha lloc per a noves apps."
+    "ca": "Hi ha lloc per a noves apps.",
+    "hu": "Van még hely valami újnak."
   },
   "findingApps": {
     "zh-tw": "正在尋找應用程式…",
@@ -2309,7 +2444,8 @@
     "nl": "Je apps worden gezocht…",
     "sv": "Letar efter dina appar…",
     "cs": "Hledání aplikací…",
-    "ca": "S’estan cercant les apps…"
+    "ca": "S’estan cercant les apps…",
+    "hu": "Alkalmazások keresése…"
   },
   "noCategoryApps": {
     "zh-tw": "此分類中的應用程式會顯示在這裡。",
@@ -2326,7 +2462,8 @@
     "nl": "Apps in deze categorie verschijnen hier.",
     "sv": "Appar i den här kategorin visas här.",
     "cs": "Zde se zobrazí aplikace z této kategorie.",
-    "ca": "Aquí hi veuràs les apps d’aquesta categoria."
+    "ca": "Aquí hi veuràs les apps d’aquesta categoria.",
+    "hu": "Az ebbe a kategóriába tartozó alkalmazások itt jelennek meg."
   },
   "hiddenHint": {
     "zh-tw": "隱藏的應用程式會顯示在這裡。",
@@ -2343,7 +2480,8 @@
     "nl": "Apps die je verbergt, verschijnen hier.",
     "sv": "Appar du döljer visas här.",
     "cs": "Zde se zobrazí aplikace, které skryjete.",
-    "ca": "Aquí hi trobaràs les apps que amaguis."
+    "ca": "Aquí hi trobaràs les apps que amaguis.",
+    "hu": "Az elrejtett alkalmazások itt jelennek meg."
   },
   "noMatchesHint": {
     "zh-tw": "沒有與「{query}」相符的應用程式。請嘗試其他名稱。",
@@ -2360,7 +2498,8 @@
     "nl": "Geen apps gevonden voor “{query}”. Probeer een andere naam.",
     "sv": "Inga appar matchar ”{query}”. Prova ett annat namn.",
     "cs": "Výrazu „{query}“ neodpovídá žádná aplikace. Zkuste jiný název.",
-    "ca": "No hem trobat cap app amb «{query}». Prova amb un altre nom."
+    "ca": "No hem trobat cap app amb «{query}». Prova amb un altre nom.",
+    "hu": "Nincs találat erre: „{query}”. Próbálj másik nevet."
   },
   "greetingNight": {
     "zh-tw": "稍等片刻。",
@@ -2377,7 +2516,8 @@
     "nl": "Nog één momentje.",
     "sv": "Ett ögonblick till.",
     "cs": "Ještě chvilku.",
-    "ca": "Una estoneta més."
+    "ca": "Una estoneta més.",
+    "hu": "Maradj még egy kicsit."
   },
   "morning": {
     "zh-tw": "早安。",
@@ -2394,7 +2534,8 @@
     "nl": "Goedemorgen.",
     "sv": "God morgon.",
     "cs": "Dobré ráno.",
-    "ca": "Bon dia!"
+    "ca": "Bon dia!",
+    "hu": "Jó reggelt!"
   },
   "afternoon": {
     "zh-tw": "午安。",
@@ -2411,7 +2552,8 @@
     "nl": "Goedemiddag.",
     "sv": "God eftermiddag.",
     "cs": "Dobré odpoledne.",
-    "ca": "Bona tarda!"
+    "ca": "Bona tarda!",
+    "hu": "Jó napot!"
   },
   "evening": {
     "zh-tw": "晚安。",
@@ -2428,7 +2570,8 @@
     "nl": "Goedenavond.",
     "sv": "God kväll.",
     "cs": "Dobrý večer.",
-    "ca": "Bon vespre!"
+    "ca": "Bon vespre!",
+    "hu": "Jó estét!"
   },
   "aLittleHelp": {
     "zh-tw": "電視需要一點幫助。",
@@ -2445,7 +2588,8 @@
     "nl": "Een beetje hulp van je tv.",
     "sv": "Lite hjälp från din TV.",
     "cs": "Televize potřebuje trochu pomoct.",
-    "ca": "Un cop de mà de la tele."
+    "ca": "Un cop de mà de la tele.",
+    "hu": "Egy kis segítség a tévédtől."
   },
   "makeFavorites": {
     "zh-tw": "將喜歡的應用程式加入我的最愛。",
@@ -2462,7 +2606,8 @@
     "nl": "Maak ruimte voor je favorieten.",
     "sv": "Gör plats för dina favoriter.",
     "cs": "Udělejte místo pro oblíbené.",
-    "ca": "Fes lloc a les teves apps preferides."
+    "ca": "Fes lloc a les teves apps preferides.",
+    "hu": "Tegyél helyet a kedvenceidnek."
   },
   "pinHint": {
     "zh-tw": "找到喜歡的應用程式，長按 OK 將它固定在這裡。",
@@ -2479,7 +2624,8 @@
     "nl": "Zoek een app die je mooi vindt. Houd OK ingedrukt om hem hier vast te zetten.",
     "sv": "Hitta en app du älskar. Håll in OK för att fästa den här.",
     "cs": "Najděte oblíbenou aplikaci a podržením OK ji sem připněte.",
-    "ca": "Tria una app que t’agradi i mantén premut OK per afegir-la aquí."
+    "ca": "Tria una app que t’agradi i mantén premut OK per afegir-la aquí.",
+    "hu": "Keress egy kedvenc alkalmazást. Tartsd lenyomva az OK gombot a kitűzéshez."
   },
   "exploreApps": {
     "zh-tw": "瀏覽應用程式",
@@ -2496,7 +2642,8 @@
     "nl": "Ontdek je apps",
     "sv": "Utforska dina appar",
     "cs": "Procházet aplikace",
-    "ca": "Explora les teves apps"
+    "ca": "Explora les teves apps",
+    "hu": "Alkalmazások felfedezése"
   },
   "moveApps": {
     "zh-tw": "移動應用程式",
@@ -2513,7 +2660,8 @@
     "nl": "Apps verplaatsen",
     "sv": "Flytta appar",
     "cs": "Přesunout aplikace",
-    "ca": "Reordena les apps"
+    "ca": "Reordena les apps",
+    "hu": "Alkalmazások átrendezése"
   },
   "inputsHeading": {
     "zh-tw": "輸入來源",
@@ -2530,7 +2678,8 @@
     "nl": "Ingangen",
     "sv": "Ingångar",
     "cs": "Vstupy",
-    "ca": "Entrades"
+    "ca": "Entrades",
+    "hu": "Bemenetek"
   },
   "noInputs": {
     "zh-tw": "沒有可用的輸入來源。",
@@ -2547,7 +2696,8 @@
     "nl": "Geen ingangen om te tonen.",
     "sv": "Inga ingångar att visa.",
     "cs": "Žádné vstupy k zobrazení.",
-    "ca": "No hi ha cap entrada per mostrar."
+    "ca": "No hi ha cap entrada per mostrar.",
+    "hu": "Nincs megjeleníthető bemenet."
   },
   "findingInputs": {
     "zh-tw": "正在尋找輸入來源…",
@@ -2564,7 +2714,8 @@
     "nl": "Je ingangen worden gezocht…",
     "sv": "Letar efter dina ingångar…",
     "cs": "Hledání vstupů…",
-    "ca": "S’estan cercant les entrades…"
+    "ca": "S’estan cercant les entrades…",
+    "hu": "Bemenetek keresése…"
   },
   "physicalInputs": {
     "zh-tw": "電視的 HDMI 輸入來源會顯示在這裡。",
@@ -2581,7 +2732,8 @@
     "nl": "De fysieke HDMI-ingangen van je tv verschijnen hier.",
     "sv": "Din TV:s fysiska HDMI-ingångar visas här.",
     "cs": "Zde se zobrazí fyzické vstupy HDMI vaší televize.",
-    "ca": "Aquí hi veuràs les entrades HDMI del televisor."
+    "ca": "Aquí hi veuràs les entrades HDMI del televisor.",
+    "hu": "A tévé fizikai HDMI-bemenetei itt jelennek meg."
   },
   "refreshInputs": {
     "zh-tw": "重新整理輸入來源",
@@ -2598,7 +2750,8 @@
     "nl": "Ingangen vernieuwen",
     "sv": "Uppdatera ingångar",
     "cs": "Obnovit vstupy",
-    "ca": "Actualitza les entrades"
+    "ca": "Actualitza les entrades",
+    "hu": "Bemenetek frissítése"
   },
   "retry": {
     "zh-tw": "重試",
@@ -2615,7 +2768,8 @@
     "nl": "Opnieuw proberen",
     "sv": "Försök igen",
     "cs": "Zkusit znovu",
-    "ca": "Torna-ho a provar"
+    "ca": "Torna-ho a provar",
+    "hu": "Újra"
   },
   "open": {
     "zh-tw": "開啟",
@@ -2632,7 +2786,8 @@
     "nl": "Openen",
     "sv": "Öppna",
     "cs": "Otevřít",
-    "ca": "Obre"
+    "ca": "Obre",
+    "hu": "Megnyitás"
   },
   "select": {
     "zh-tw": "選取",
@@ -2649,7 +2804,8 @@
     "nl": "Selecteren",
     "sv": "Välj",
     "cs": "Vybrat",
-    "ca": "Selecciona"
+    "ca": "Selecciona",
+    "hu": "Kiválasztás"
   },
   "move": {
     "zh-tw": "移動",
@@ -2666,7 +2822,8 @@
     "nl": "Verplaatsen",
     "sv": "Flytta",
     "cs": "Přesunout",
-    "ca": "Mou"
+    "ca": "Mou",
+    "hu": "Áthelyezés"
   },
   "done": {
     "zh-tw": "完成",
@@ -2683,7 +2840,8 @@
     "nl": "Klaar",
     "sv": "Klar",
     "cs": "Hotovo",
-    "ca": "Fet"
+    "ca": "Fet",
+    "hu": "Kész"
   },
   "close": {
     "zh-tw": "關閉",
@@ -2700,7 +2858,8 @@
     "nl": "Sluiten",
     "sv": "Stäng",
     "cs": "Zavřít",
-    "ca": "Tanca"
+    "ca": "Tanca",
+    "hu": "Bezárás"
   },
   "homeLabel": {
     "zh-tw": "主畫面",
@@ -2717,7 +2876,8 @@
     "nl": "Startpagina",
     "sv": "Hem",
     "cs": "Domů",
-    "ca": "Inici"
+    "ca": "Inici",
+    "hu": "Kezdőlap"
   },
   "options": {
     "zh-tw": "選項",
@@ -2734,7 +2894,8 @@
     "nl": "Opties",
     "sv": "Alternativ",
     "cs": "Možnosti",
-    "ca": "Opcions"
+    "ca": "Opcions",
+    "hu": "Beállítások"
   },
   "deleteApp": {
     "zh-tw": "刪除應用程式",
@@ -2751,7 +2912,8 @@
     "nl": "App verwijderen",
     "sv": "Ta bort app",
     "cs": "Odstranit aplikaci",
-    "ca": "Desinstal·la l’app"
+    "ca": "Desinstal·la l’app",
+    "hu": "Alkalmazás törlése"
   },
   "deleteAppWarning": {
     "zh-tw": "這將從電視解除安裝「{app}」，並可能刪除其資料。此操作無法復原。",
@@ -2768,7 +2930,8 @@
     "nl": "Hiermee wordt “{app}” van je tv verwijderd en mogelijk ook de bijbehorende gegevens. Dit kan niet ongedaan worden gemaakt.",
     "sv": "Detta avinstallerar ”{app}” från din TV och kan radera appens data. Det går inte att ångra.",
     "cs": "Aplikace „{app}“ bude z televize odinstalována a její data mohou být smazána. Tuto akci nelze vrátit zpět.",
-    "ca": "Es desinstal·larà «{app}» del televisor i se’n podrien esborrar les dades. Aquest canvi no es pot desfer."
+    "ca": "Es desinstal·larà «{app}» del televisor i se’n podrien esborrar les dades. Aquest canvi no es pot desfer.",
+    "hu": "Ez eltávolítja a(z) „{app}” alkalmazást a tévéről, és törölheti az adatait. A művelet nem vonható vissza."
   },
   "cancel": {
     "zh-tw": "取消",
@@ -2785,7 +2948,8 @@
     "nl": "Annuleren",
     "sv": "Avbryt",
     "cs": "Zrušit",
-    "ca": "Cancel·la"
+    "ca": "Cancel·la",
+    "hu": "Mégse"
   },
   "deletingApp": {
     "zh-tw": "正在刪除應用程式…",
@@ -2802,7 +2966,8 @@
     "nl": "App wordt verwijderd…",
     "sv": "Tar bort appen…",
     "cs": "Odstraňování aplikace…",
-    "ca": "S’està desinstal·lant l’app…"
+    "ca": "S’està desinstal·lant l’app…",
+    "hu": "Alkalmazás törlése…"
   },
   "deleteAppError": {
     "zh-tw": "無法確認應用程式是否已刪除。重試前請重新整理應用程式清單。",
@@ -2819,7 +2984,8 @@
     "nl": "Het verwijderen kon niet worden bevestigd. Vernieuw de apps om dit te controleren voordat je het opnieuw probeert.",
     "sv": "Det gick inte att bekräfta att appen togs bort. Uppdatera apparna och kontrollera innan du försöker igen.",
     "cs": "Odstranění aplikace se nepodařilo ověřit. Před dalším pokusem obnovte aplikace.",
-    "ca": "No s’ha pogut confirmar la desinstal·lació. Actualitza la llista d’apps per comprovar-ho abans de tornar-ho a provar."
+    "ca": "No s’ha pogut confirmar la desinstal·lació. Actualitza la llista d’apps per comprovar-ho abans de tornar-ho a provar.",
+    "hu": "Nem sikerült megerősíteni az alkalmazás törlését. Próbálkozás előtt frissítsd az alkalmazásokat."
   },
   "appDeleted": {
     "zh-tw": "應用程式已刪除。",
@@ -2836,7 +3002,8 @@
     "nl": "App verwijderd.",
     "sv": "Appen har tagits bort.",
     "cs": "Aplikace byla odstraněna.",
-    "ca": "S’ha desinstal·lat l’app."
+    "ca": "S’ha desinstal·lat l’app.",
+    "hu": "Alkalmazás törölve."
   },
   "connected": {
     "zh-tw": "已連線",
@@ -2853,7 +3020,8 @@
     "nl": "Verbonden",
     "sv": "Ansluten",
     "cs": "Připojeno",
-    "ca": "Connectada"
+    "ca": "Connectada",
+    "hu": "Csatlakoztatva"
   },
   "noSignal": {
     "en": "No signal",
@@ -2870,7 +3038,8 @@
     "vi": "Không có tín hiệu",
     "zh-tw": "無訊號",
     "cs": "Žádný signál",
-    "ca": "Sense senyal"
+    "ca": "Sense senyal",
+    "hu": "Nincs jel"
   },
   "noDevice": {
     "zh-tw": "未連線裝置",
@@ -2887,7 +3056,8 @@
     "nl": "Geen apparaat verbonden",
     "sv": "Ingen enhet ansluten",
     "cs": "Není připojeno žádné zařízení",
-    "ca": "Cap dispositiu connectat"
+    "ca": "Cap dispositiu connectat",
+    "hu": "Nincs csatlakoztatott eszköz"
   },
   "externalInput": {
     "zh-tw": "外部輸入來源",
@@ -2904,7 +3074,8 @@
     "nl": "Externe ingang",
     "sv": "Extern ingång",
     "cs": "Externí vstup",
-    "ca": "Entrada externa"
+    "ca": "Entrada externa",
+    "hu": "Külső bemenet"
   },
   "addFavorite": {
     "zh-tw": "加入我的最愛",
@@ -2921,7 +3092,8 @@
     "nl": "Toevoegen aan favorieten",
     "sv": "Lägg till som favorit",
     "cs": "Přidat do oblíbených",
-    "ca": "Afegeix a preferides"
+    "ca": "Afegeix a preferides",
+    "hu": "Hozzáadás a kedvencekhez"
   },
   "removeFavorite": {
     "zh-tw": "從我的最愛中移除",
@@ -2938,7 +3110,8 @@
     "nl": "Verwijderen uit favorieten",
     "sv": "Ta bort som favorit",
     "cs": "Odebrat z oblíbených",
-    "ca": "Treu de preferides"
+    "ca": "Treu de preferides",
+    "hu": "Eltávolítás a kedvencek közül"
   },
   "hideApp": {
     "zh-tw": "隱藏應用程式",
@@ -2955,7 +3128,8 @@
     "nl": "App verbergen",
     "sv": "Dölj app",
     "cs": "Skrýt aplikaci",
-    "ca": "Amaga l’app"
+    "ca": "Amaga l’app",
+    "hu": "Alkalmazás elrejtése"
   },
   "showApp": {
     "zh-tw": "顯示應用程式",
@@ -2972,7 +3146,8 @@
     "nl": "App tonen",
     "sv": "Visa app",
     "cs": "Zobrazit aplikaci",
-    "ca": "Mostra l’app"
+    "ca": "Mostra l’app",
+    "hu": "Alkalmazás megjelenítése"
   },
   "favorite": {
     "zh-tw": "我的最愛",
@@ -2989,7 +3164,8 @@
     "nl": "Favoriet",
     "sv": "Favorit",
     "cs": "Oblíbené",
-    "ca": "Preferida"
+    "ca": "Preferida",
+    "hu": "Kedvenc"
   },
   "launcherSettings": {
     "zh-tw": "啟動器設定",
@@ -3006,7 +3182,8 @@
     "nl": "Launcher-instellingen",
     "sv": "Startprogramsinställningar",
     "cs": "Nastavení spouštěče",
-    "ca": "Configuració del llançador"
+    "ca": "Configuració del llançador",
+    "hu": "Indítóbeállítások"
   },
   "deviceSettings": {
     "zh-tw": "裝置設定",
@@ -3023,7 +3200,8 @@
     "nl": "Apparaatinstellingen",
     "sv": "Enhetsinställningar",
     "cs": "Nastavení zařízení",
-    "ca": "Configuració del dispositiu"
+    "ca": "Configuració del dispositiu",
+    "hu": "Eszközbeállítások"
   },
   "loadingWeather": {
     "zh-tw": "正在載入天氣…",
@@ -3040,7 +3218,8 @@
     "nl": "Weer wordt geladen…",
     "sv": "Läser in vädret…",
     "cs": "Načítání počasí…",
-    "ca": "S’està carregant la previsió…"
+    "ca": "S’està carregant la previsió…",
+    "hu": "Időjárás betöltése…"
   },
   "weatherUnavailable": {
     "zh-tw": "無法取得天氣",
@@ -3057,7 +3236,8 @@
     "nl": "Weer niet beschikbaar",
     "sv": "Vädret är inte tillgängligt",
     "cs": "Počasí není k dispozici",
-    "ca": "Informació del temps no disponible"
+    "ca": "Informació del temps no disponible",
+    "hu": "Az időjárás nem érhető el"
   },
   "setWeatherLocation": {
     "zh-tw": "設定天氣地點",
@@ -3074,7 +3254,8 @@
     "nl": "Weerlocatie instellen",
     "sv": "Ställ in väderplats",
     "cs": "Nastavit lokalitu počasí",
-    "ca": "Tria la ubicació del temps"
+    "ca": "Tria la ubicació del temps",
+    "hu": "Időjárási hely beállítása"
   },
   "configureWeather": {
     "zh-tw": "設定天氣地點",
@@ -3091,7 +3272,8 @@
     "nl": "Weerlocatie configureren",
     "sv": "Konfigurera väderplats",
     "cs": "Upravit lokalitu počasí",
-    "ca": "Configura la ubicació del temps"
+    "ca": "Configura la ubicació del temps",
+    "hu": "Időjárási hely beállítása"
   },
   "weatherInLocation": {
     "zh-tw": "{city}的天氣。設定天氣地點。",
@@ -3108,7 +3290,8 @@
     "nl": "Weer in {city}. Weerlocatie configureren.",
     "sv": "Väder i {city}. Konfigurera väderplats.",
     "cs": "Počasí: {city}. Upravit lokalitu počasí.",
-    "ca": "El temps a {city}. Configura la ubicació."
+    "ca": "El temps a {city}. Configura la ubicació.",
+    "hu": "Időjárás itt: {city}. Időjárási hely beállítása."
   },
   "lastReading": {
     "zh-tw": "上次儲存的資料",
@@ -3125,7 +3308,8 @@
     "nl": "Laatst opgeslagen waarde",
     "sv": "Senast sparade värde",
     "cs": "Poslední uložený údaj",
-    "ca": "Última lectura desada"
+    "ca": "Última lectura desada",
+    "hu": "Utoljára mentett mérés"
   },
   "selectClose": {
     "zh-tw": "選取",
@@ -3142,7 +3326,8 @@
     "nl": "Selecteren",
     "sv": "Välj",
     "cs": "Vybrat",
-    "ca": "Selecciona"
+    "ca": "Selecciona",
+    "hu": "Kiválasztás"
   },
   "closeDialog": {
     "zh-tw": "關閉",
@@ -3159,7 +3344,8 @@
     "nl": "Sluiten",
     "sv": "Stäng",
     "cs": "Zavřít",
-    "ca": "Tanca"
+    "ca": "Tanca",
+    "hu": "Párbeszédablak bezárása"
   },
   "dismissNotification": {
     "zh-tw": "關閉通知",
@@ -3176,7 +3362,8 @@
     "nl": "Melding sluiten",
     "sv": "Stäng avisering",
     "cs": "Zavřít oznámení",
-    "ca": "Tanca l’avís"
+    "ca": "Tanca l’avís",
+    "hu": "Értesítés bezárása"
   },
   "opening": {
     "zh-tw": "正在開啟…",
@@ -3193,7 +3380,8 @@
     "nl": "Openen…",
     "sv": "Öppnar…",
     "cs": "Otevírání…",
-    "ca": "S’està obrint…"
+    "ca": "S’està obrint…",
+    "hu": "Megnyitás…"
   },
   "desktopPreview": {
     "zh-tw": "桌面預覽 · {app}將在電視上開啟。",
@@ -3210,7 +3398,8 @@
     "nl": "Desktopvoorbeeld · {app} wordt geopend op je tv.",
     "sv": "Skrivbordsförhandsvisning · {app} öppnas på din TV.",
     "cs": "Náhled na počítači · {app} se otevře na televizi.",
-    "ca": "Previsualització a l’ordinador · L’app {app} s’obrirà al televisor."
+    "ca": "Previsualització a l’ordinador · L’app {app} s’obrirà al televisor.",
+    "hu": "Asztali előnézet · A(z) {app} a tévén nyílik meg."
   },
   "favoriteRemoved": {
     "zh-tw": "已從我的最愛中移除 {app}。",
@@ -3227,7 +3416,8 @@
     "nl": "{app} verwijderd uit favorieten.",
     "sv": "{app} har tagits bort från favoriterna.",
     "cs": "Odebráno z oblíbených: {app}.",
-    "ca": "Has tret {app} de les preferides."
+    "ca": "Has tret {app} de les preferides.",
+    "hu": "{app} eltávolítva a kedvencek közül."
   },
   "favoriteAdded": {
     "zh-tw": "已將 {app} 加入我的最愛。",
@@ -3244,7 +3434,8 @@
     "nl": "{app} toegevoegd aan favorieten.",
     "sv": "{app} har lagts till bland favoriterna.",
     "cs": "Přidáno do oblíbených: {app}.",
-    "ca": "Has afegit {app} a les preferides."
+    "ca": "Has afegit {app} a les preferides.",
+    "hu": "{app} hozzáadva a kedvencekhez."
   },
   "appRestored": {
     "zh-tw": "{app}已恢復到應用程式庫。",
@@ -3261,7 +3452,8 @@
     "nl": "{app} staat weer in je bibliotheek.",
     "sv": "{app} finns nu i biblioteket igen.",
     "cs": "Vráceno do knihovny: {app}.",
-    "ca": "Tornes a tenir {app} a la llista d’apps."
+    "ca": "Tornes a tenir {app} a la llista d’apps.",
+    "hu": "{app} újra megjelenik az alkalmazáskönyvtárban."
   },
   "appHidden": {
     "zh-tw": "已隱藏 {app}。你可以在「應用程式」中恢復。",
@@ -3278,7 +3470,8 @@
     "nl": "{app} verborgen. Je kunt de app herstellen via Apps.",
     "sv": "{app} är dold. Du kan återställa den från Appar.",
     "cs": "Skryto: {app}. Obnovit lze v sekci Aplikace.",
-    "ca": "Has amagat {app}. La pots tornar a mostrar des d’Apps."
+    "ca": "Has amagat {app}. La pots tornar a mostrar des d’Apps.",
+    "hu": "{app} elrejtve. Az Alkalmazások résznél visszaállíthatod."
   },
   "refreshNotice": {
     "zh-tw": "正在重新整理應用程式和輸入來源…",
@@ -3295,7 +3488,8 @@
     "nl": "Je apps en ingangen worden vernieuwd…",
     "sv": "Uppdaterar dina appar och ingångar…",
     "cs": "Obnovování aplikací a vstupů…",
-    "ca": "S’està actualitzant la llista d’apps i entrades…"
+    "ca": "S’està actualitzant la llista d’apps i entrades…",
+    "hu": "Alkalmazások és bemenetek frissítése…"
   },
   "savedError": {
     "zh-tw": "無法儲存變更。",
@@ -3312,7 +3506,8 @@
     "nl": "Je wijzigingen konden niet worden opgeslagen.",
     "sv": "Dina ändringar kunde inte sparas.",
     "cs": "Změny se nepodařilo uložit.",
-    "ca": "No s’han pogut desar els canvis."
+    "ca": "No s’han pogut desar els canvis.",
+    "hu": "A módosításokat nem sikerült menteni."
   },
   "tvUnreachable": {
     "zh-tw": "無法連線至電視。",
@@ -3329,7 +3524,8 @@
     "nl": "Je tv is niet bereikbaar.",
     "sv": "Det gick inte att nå din TV.",
     "cs": "Televize není dostupná.",
-    "ca": "No s’ha pogut connectar amb el televisor."
+    "ca": "No s’ha pogut connectar amb el televisor.",
+    "hu": "A tévét nem sikerült elérni."
   },
   "appOpenError": {
     "zh-tw": "無法開啟此應用程式。",
@@ -3346,7 +3542,8 @@
     "nl": "Deze app kon niet worden geopend.",
     "sv": "Den här appen kunde inte öppnas.",
     "cs": "Tuto aplikaci se nepodařilo otevřít.",
-    "ca": "No s’ha pogut obrir l’app."
+    "ca": "No s’ha pogut obrir l’app.",
+    "hu": "Az alkalmazást nem sikerült megnyitni."
   },
   "dismissSearch": {
     "zh-tw": "清除搜尋",
@@ -3363,7 +3560,8 @@
     "nl": "Zoekopdracht wissen",
     "sv": "Rensa sökning",
     "cs": "Vymazat hledání",
-    "ca": "Esborra la cerca"
+    "ca": "Esborra la cerca",
+    "hu": "Keresés törlése"
   },
   "languageMenu": {
     "zh-tw": "顯示語言",
@@ -3380,7 +3578,8 @@
     "nl": "Taal",
     "sv": "Språk",
     "cs": "Jazyk",
-    "ca": "Idioma"
+    "ca": "Idioma",
+    "hu": "Nyelv"
   },
   "slate": {
     "zh-tw": "石板",
@@ -3397,7 +3596,8 @@
     "nl": "Leisteen",
     "sv": "Skiffer",
     "cs": "Břidlice",
-    "ca": "Pissarra"
+    "ca": "Pissarra",
+    "hu": "Palakő"
   },
   "midnight": {
     "zh-tw": "午夜",
@@ -3414,7 +3614,8 @@
     "nl": "Middernacht",
     "sv": "Midnatt",
     "cs": "Půlnoc",
-    "ca": "Mitjanit"
+    "ca": "Mitjanit",
+    "hu": "Éjfél"
   },
   "prism": {
     "zh-tw": "稜鏡",
@@ -3431,7 +3632,8 @@
     "nl": "Prisma",
     "sv": "Prisma",
     "cs": "Hranol",
-    "ca": "Prisma"
+    "ca": "Prisma",
+    "hu": "Prizma"
   },
   "monumentValley": {
     "zh-tw": "紀念碑谷",
@@ -3448,7 +3650,8 @@
     "nl": "Monument Valley",
     "sv": "Monument Valley",
     "cs": "Monument Valley",
-    "ca": "Monument Valley"
+    "ca": "Monument Valley",
+    "hu": "Monument Valley"
   },
   "sanFrancisco": {
     "zh-tw": "舊金山",
@@ -3465,7 +3668,8 @@
     "nl": "San Francisco",
     "sv": "San Francisco",
     "cs": "San Francisco",
-    "ca": "San Francisco"
+    "ca": "San Francisco",
+    "hu": "San Francisco"
   },
   "summit": {
     "zh-tw": "山巔",
@@ -3482,7 +3686,8 @@
     "nl": "Bergtop",
     "sv": "Topp",
     "cs": "Vrchol",
-    "ca": "Cim"
+    "ca": "Cim",
+    "hu": "Hegycsúcs"
   },
   "forest": {
     "zh-tw": "森林",
@@ -3499,7 +3704,8 @@
     "nl": "Bos",
     "sv": "Skog",
     "cs": "Les",
-    "ca": "Bosc"
+    "ca": "Bosc",
+    "hu": "Erdő"
   },
   "yosemite": {
     "zh-tw": "優勝美地",
@@ -3516,7 +3722,8 @@
     "nl": "Yosemite",
     "sv": "Yosemite",
     "cs": "Yosemite",
-    "ca": "Yosemite"
+    "ca": "Yosemite",
+    "hu": "Yosemite"
   },
   "northernLights": {
     "zh-tw": "北極光",
@@ -3533,7 +3740,8 @@
     "nl": "Noorderlicht",
     "sv": "Norrsken",
     "cs": "Polární záře",
-    "ca": "Aurora boreal"
+    "ca": "Aurora boreal",
+    "hu": "Sarki fény"
   },
   "liveTV": {
     "zh-tw": "電視直播",
@@ -3550,7 +3758,8 @@
     "nl": "Live-tv",
     "sv": "Live-TV",
     "cs": "Živé vysílání",
-    "ca": "Televisió en directe"
+    "ca": "Televisió en directe",
+    "hu": "Élő tévéadás"
   },
   "homebrew": {
     "zh-tw": "Homebrew Channel",
@@ -3567,7 +3776,8 @@
     "nl": "Homebrew",
     "sv": "Homebrew",
     "cs": "Homebrew",
-    "ca": "Homebrew"
+    "ca": "Homebrew",
+    "hu": "Homebrew"
   },
   "browser": {
     "zh-tw": "瀏覽器",
@@ -3584,7 +3794,8 @@
     "nl": "Browser",
     "sv": "Webbläsare",
     "cs": "Prohlížeč",
-    "ca": "Navegador"
+    "ca": "Navegador",
+    "hu": "Böngésző"
   },
   "categoryStreaming": {
     "zh-tw": "串流影音",
@@ -3601,7 +3812,8 @@
     "nl": "Streaming",
     "sv": "Streaming",
     "cs": "Streamování",
-    "ca": "Streaming"
+    "ca": "Streaming",
+    "hu": "Streaming"
   },
   "categoryMusic": {
     "zh-tw": "音樂",
@@ -3618,7 +3830,8 @@
     "nl": "Muziek",
     "sv": "Musik",
     "cs": "Hudba",
-    "ca": "Música"
+    "ca": "Música",
+    "hu": "Zene"
   },
   "categoryGaming": {
     "zh-tw": "遊戲",
@@ -3635,7 +3848,8 @@
     "nl": "Games",
     "sv": "Spel",
     "cs": "Hry",
-    "ca": "Jocs"
+    "ca": "Jocs",
+    "hu": "Játékok"
   },
   "categoryUtilities": {
     "zh-tw": "工具",
@@ -3652,7 +3866,8 @@
     "nl": "Hulpmiddelen",
     "sv": "Verktyg",
     "cs": "Nástroje",
-    "ca": "Eines"
+    "ca": "Eines",
+    "hu": "Segédprogramok"
   },
   "clearSkies": {
     "zh-tw": "晴朗",
@@ -3669,7 +3884,8 @@
     "nl": "Heldere hemel",
     "sv": "Klart väder",
     "cs": "Jasno",
-    "ca": "Cel serè"
+    "ca": "Cel serè",
+    "hu": "Derült ég"
   },
   "clearNight": {
     "zh-tw": "晴朗的夜晚",
@@ -3686,7 +3902,8 @@
     "nl": "Heldere nacht",
     "sv": "Klar natt",
     "cs": "Jasná noc",
-    "ca": "Nit serena"
+    "ca": "Nit serena",
+    "hu": "Derült éjszaka"
   },
   "mostlyClear": {
     "zh-tw": "大致晴朗",
@@ -3703,7 +3920,8 @@
     "nl": "Overwegend helder",
     "sv": "Mestadels klart",
     "cs": "Skoro jasno",
-    "ca": "Gairebé serè"
+    "ca": "Gairebé serè",
+    "hu": "Többnyire derült"
   },
   "partlyCloudy": {
     "zh-tw": "局部多雲",
@@ -3720,7 +3938,8 @@
     "nl": "Half bewolkt",
     "sv": "Delvis molnigt",
     "cs": "Polojasno",
-    "ca": "Mig ennuvolat"
+    "ca": "Mig ennuvolat",
+    "hu": "Részben felhős"
   },
   "overcast": {
     "zh-tw": "陰天",
@@ -3737,7 +3956,8 @@
     "nl": "Bewolkt",
     "sv": "Mulet",
     "cs": "Zataženo",
-    "ca": "Cel tapat"
+    "ca": "Cel tapat",
+    "hu": "Borult"
   },
   "fog": {
     "zh-tw": "霧",
@@ -3754,7 +3974,8 @@
     "nl": "Mist",
     "sv": "Dimma",
     "cs": "Mlha",
-    "ca": "Boira"
+    "ca": "Boira",
+    "hu": "Köd"
   },
   "drizzle": {
     "zh-tw": "毛毛雨",
@@ -3771,7 +3992,8 @@
     "nl": "Motregen",
     "sv": "Duggregn",
     "cs": "Mrholení",
-    "ca": "Plugim"
+    "ca": "Plugim",
+    "hu": "Szitálás"
   },
   "rain": {
     "zh-tw": "雨",
@@ -3788,7 +4010,8 @@
     "nl": "Regen",
     "sv": "Regn",
     "cs": "Déšť",
-    "ca": "Pluja"
+    "ca": "Pluja",
+    "hu": "Eső"
   },
   "snow": {
     "zh-tw": "雪",
@@ -3805,7 +4028,8 @@
     "nl": "Sneeuw",
     "sv": "Snö",
     "cs": "Sněžení",
-    "ca": "Neu"
+    "ca": "Neu",
+    "hu": "Hó"
   },
   "thunderstorms": {
     "zh-tw": "雷雨",
@@ -3822,7 +4046,8 @@
     "nl": "Onweer",
     "sv": "Åskväder",
     "cs": "Bouřky",
-    "ca": "Tempestes"
+    "ca": "Tempestes",
+    "hu": "Zivatar"
   },
   "currentWeather": {
     "zh-tw": "目前天氣",
@@ -3839,7 +4064,8 @@
     "nl": "Huidig weer",
     "sv": "Aktuellt väder",
     "cs": "Aktuální počasí",
-    "ca": "El temps ara"
+    "ca": "El temps ara",
+    "hu": "Jelenlegi időjárás"
   },
   "searching": {
     "zh-tw": "正在搜尋…",
@@ -3856,7 +4082,8 @@
     "nl": "Zoeken…",
     "sv": "Söker…",
     "cs": "Hledání…",
-    "ca": "S’està cercant…"
+    "ca": "S’està cercant…",
+    "hu": "Keresés…"
   },
   "space": {
     "zh-tw": "空格",
@@ -3873,7 +4100,8 @@
     "nl": "Spatie",
     "sv": "Mellanslag",
     "cs": "Mezera",
-    "ca": "Espai"
+    "ca": "Espai",
+    "hu": "Szóköz"
   },
   "delete": {
     "zh-tw": "刪除",
@@ -3890,7 +4118,8 @@
     "nl": "Wissen",
     "sv": "Radera",
     "cs": "Smazat",
-    "ca": "Esborra"
+    "ca": "Esborra",
+    "hu": "Törlés"
   },
   "clear": {
     "zh-tw": "清除",
@@ -3907,7 +4136,8 @@
     "nl": "Leegmaken",
     "sv": "Rensa",
     "cs": "Vymazat",
-    "ca": "Buida"
+    "ca": "Buida",
+    "hu": "Ürítés"
   },
   "hiddenLabel": {
     "zh-tw": "已隱藏",
@@ -3924,7 +4154,8 @@
     "nl": "Verborgen",
     "sv": "Dold",
     "cs": "Skryto",
-    "ca": "Oculta"
+    "ca": "Oculta",
+    "hu": "Rejtett"
   },
   "scrollTestApp": {
     "zh-tw": "捲動測試",
@@ -3941,7 +4172,8 @@
     "nl": "Scrolltest",
     "sv": "Rullningstest",
     "cs": "Test posouvání",
-    "ca": "Prova de desplaçament"
+    "ca": "Prova de desplaçament",
+    "hu": "Görgetési teszt"
   },
   "scrollTestOnly": {
     "zh-tw": "捲動測試卡片，沒有可啟動的應用程式。",
@@ -3958,7 +4190,8 @@
     "nl": "Testkaart om te scrollen; er is geen app om te starten.",
     "sv": "Testkort för rullning; ingen app att starta.",
     "cs": "Testovací karta pro posouvání; žádná aplikace ke spuštění.",
-    "ca": "Targeta per provar el desplaçament. No obre cap app."
+    "ca": "Targeta per provar el desplaçament. No obre cap app.",
+    "hu": "Görgetési tesztkártya; nem indítható alkalmazás."
   },
   "shortcuts": {
     "zh-tw": "捷徑",
@@ -3975,7 +4208,8 @@
     "nl": "Snelkoppelingen",
     "sv": "Genvägar",
     "cs": "Zástupci",
-    "ca": "Dreceres"
+    "ca": "Dreceres",
+    "hu": "Parancsikonok"
   },
   "noTiles": {
     "zh-tw": "主畫面上的捷徑會傳送網路請求，例如傳送到 Home Assistant webhook。",
@@ -3992,7 +4226,8 @@
     "nl": "Snelkoppelingen op Start sturen een webverzoek, bijvoorbeeld naar een Home Assistant-webhook.",
     "sv": "Genvägsrutor på Hem skickar en webbförfrågan, till exempel till en Home Assistant-webhook.",
     "cs": "Dlaždice zástupců na obrazovce Domů odesílají webový požadavek, například na webhook Home Assistantu.",
-    "ca": "Les dreceres d’Inici envien peticions web, per exemple a un webhook de Home Assistant."
+    "ca": "Les dreceres d’Inici envien peticions web, per exemple a un webhook de Home Assistant.",
+    "hu": "A kezdőlap parancsikonjai webes kérést küldenek, például egy Home Assistant webhookhoz."
   },
   "addTile": {
     "zh-tw": "新增捷徑",
@@ -4009,7 +4244,8 @@
     "nl": "Snelkoppeling toevoegen",
     "sv": "Lägg till genväg",
     "cs": "Přidat zástupce",
-    "ca": "Afegeix una drecera"
+    "ca": "Afegeix una drecera",
+    "hu": "Parancsikon hozzáadása"
   },
   "newTile": {
     "zh-tw": "新捷徑",
@@ -4026,7 +4262,8 @@
     "nl": "Nieuwe snelkoppeling",
     "sv": "Ny genväg",
     "cs": "Nový zástupce",
-    "ca": "Drecera nova"
+    "ca": "Drecera nova",
+    "hu": "Új parancsikon"
   },
   "tileName": {
     "zh-tw": "捷徑名稱",
@@ -4043,7 +4280,8 @@
     "nl": "Naam van snelkoppeling",
     "sv": "Genvägens namn",
     "cs": "Název zástupce",
-    "ca": "Nom de la drecera"
+    "ca": "Nom de la drecera",
+    "hu": "Parancsikon neve"
   },
   "tileNameHint": {
     "zh-tw": "顯示在卡片上",
@@ -4060,7 +4298,8 @@
     "nl": "Wordt op de tegel getoond",
     "sv": "Visas på rutan",
     "cs": "Zobrazí se na dlaždici",
-    "ca": "És el nom que veuràs a la targeta"
+    "ca": "És el nom que veuràs a la targeta",
+    "hu": "A csempén jelenik meg"
   },
   "url": {
     "zh-tw": "網址",
@@ -4077,7 +4316,8 @@
     "nl": "URL",
     "sv": "URL",
     "cs": "URL",
-    "ca": "URL"
+    "ca": "URL",
+    "hu": "URL"
   },
   "tileUrl": {
     "zh-tw": "網址 (URL)",
@@ -4094,7 +4334,8 @@
     "nl": "Webadres (URL)",
     "sv": "Webbadress (URL)",
     "cs": "Webová adresa (URL)",
-    "ca": "Adreça web (URL)"
+    "ca": "Adreça web (URL)",
+    "hu": "Webcím (URL)"
   },
   "tileUrlHint": {
     "zh-tw": "不含 http:// 的網址，例如 homeassistant.local:8123/api/webhook/…",
@@ -4111,7 +4352,8 @@
     "nl": "Adres zonder http://, bijv. homeassistant.local:8123/api/webhook/…",
     "sv": "Adress utan http://, t.ex. homeassistant.local:8123/api/webhook/…",
     "cs": "Adresa bez http://, např. homeassistant.local:8123/api/webhook/…",
-    "ca": "Adreça sense http://. Per exemple, homeassistant.local:8123/api/webhook/…"
+    "ca": "Adreça sense http://. Per exemple, homeassistant.local:8123/api/webhook/…",
+    "hu": "Cím http:// nélkül, például homeassistant.local:8123/api/webhook/…"
   },
   "icon": {
     "zh-tw": "圖示",
@@ -4128,7 +4370,8 @@
     "nl": "Pictogram",
     "sv": "Ikon",
     "cs": "Ikona",
-    "ca": "Icona"
+    "ca": "Icona",
+    "hu": "Ikon"
   },
   "iconMoon": {
     "zh-tw": "月亮",
@@ -4145,7 +4388,8 @@
     "nl": "Maan",
     "sv": "Måne",
     "cs": "Měsíc",
-    "ca": "Lluna"
+    "ca": "Lluna",
+    "hu": "Hold"
   },
   "iconSun": {
     "zh-tw": "太陽",
@@ -4162,7 +4406,8 @@
     "nl": "Zon",
     "sv": "Sol",
     "cs": "Slunce",
-    "ca": "Sol"
+    "ca": "Sol",
+    "hu": "Nap"
   },
   "iconCloud": {
     "zh-tw": "雲",
@@ -4179,7 +4424,8 @@
     "nl": "Wolk",
     "sv": "Moln",
     "cs": "Mrak",
-    "ca": "Núvol"
+    "ca": "Núvol",
+    "hu": "Felhő"
   },
   "iconTv": {
     "zh-tw": "電視",
@@ -4196,7 +4442,8 @@
     "nl": "Tv",
     "sv": "TV",
     "cs": "Televize",
-    "ca": "Televisor"
+    "ca": "Televisor",
+    "hu": "Tévé"
   },
   "iconPower": {
     "zh-tw": "電源",
@@ -4213,7 +4460,8 @@
     "nl": "Aan/uit",
     "sv": "Ström",
     "cs": "Napájení",
-    "ca": "Encesa"
+    "ca": "Encesa",
+    "hu": "Bekapcsolás"
   },
   "iconGlobe": {
     "zh-tw": "地球",
@@ -4230,7 +4478,8 @@
     "nl": "Wereldbol",
     "sv": "Jordklot",
     "cs": "Glóbus",
-    "ca": "Globus terraqüi"
+    "ca": "Globus terraqüi",
+    "hu": "Földgömb"
   },
   "iconClock": {
     "zh-tw": "時鐘",
@@ -4247,7 +4496,8 @@
     "nl": "Klok",
     "sv": "Klocka",
     "cs": "Hodiny",
-    "ca": "Rellotge"
+    "ca": "Rellotge",
+    "hu": "Óra"
   },
   "iconCoffee": {
     "zh-tw": "咖啡",
@@ -4264,7 +4514,8 @@
     "nl": "Koffie",
     "sv": "Kaffe",
     "cs": "Káva",
-    "ca": "Cafè"
+    "ca": "Cafè",
+    "hu": "Kávé"
   },
   "iconGaming": {
     "zh-tw": "遊戲控制器",
@@ -4281,7 +4532,8 @@
     "nl": "Controller",
     "sv": "Handkontroll",
     "cs": "Herní ovladač",
-    "ca": "Comandament de joc"
+    "ca": "Comandament de joc",
+    "hu": "Kontroller"
   },
   "iconHeart": {
     "zh-tw": "愛心",
@@ -4298,7 +4550,8 @@
     "nl": "Hart",
     "sv": "Hjärta",
     "cs": "Srdce",
-    "ca": "Cor"
+    "ca": "Cor",
+    "hu": "Szív"
   },
   "iconLocation": {
     "zh-tw": "位置",
@@ -4315,7 +4568,8 @@
     "nl": "Locatie",
     "sv": "Plats",
     "cs": "Poloha",
-    "ca": "Ubicació"
+    "ca": "Ubicació",
+    "hu": "Hely"
   },
   "iconThermometer": {
     "zh-tw": "溫度計",
@@ -4332,7 +4586,8 @@
     "nl": "Thermometer",
     "sv": "Termometer",
     "cs": "Teploměr",
-    "ca": "Termòmetre"
+    "ca": "Termòmetre",
+    "hu": "Hőmérő"
   },
   "iconSparkles": {
     "zh-tw": "閃光",
@@ -4349,7 +4604,8 @@
     "nl": "Sterretjes",
     "sv": "Gnistor",
     "cs": "Třpyt",
-    "ca": "Espurnes"
+    "ca": "Espurnes",
+    "hu": "Csillogás"
   },
   "iconAlert": {
     "zh-tw": "提醒",
@@ -4366,7 +4622,8 @@
     "nl": "Melding",
     "sv": "Varning",
     "cs": "Upozornění",
-    "ca": "Alerta"
+    "ca": "Alerta",
+    "hu": "Figyelmeztetés"
   },
   "iconEye": {
     "zh-tw": "眼睛",
@@ -4383,7 +4640,8 @@
     "nl": "Oog",
     "sv": "Öga",
     "cs": "Oko",
-    "ca": "Ull"
+    "ca": "Ull",
+    "hu": "Szem"
   },
   "protocol": {
     "zh-tw": "通訊協定",
@@ -4400,7 +4658,8 @@
     "nl": "Protocol",
     "sv": "Protokoll",
     "cs": "Protokol",
-    "ca": "Protocol"
+    "ca": "Protocol",
+    "hu": "Protokoll"
   },
   "requestMethod": {
     "zh-tw": "請求方法",
@@ -4417,7 +4676,8 @@
     "nl": "Verzoekmethode",
     "sv": "HTTP-metod",
     "cs": "Metoda požadavku",
-    "ca": "Mètode de la petició"
+    "ca": "Mètode de la petició",
+    "hu": "Kérés módja"
   },
   "sendNow": {
     "zh-tw": "立即傳送",
@@ -4434,7 +4694,8 @@
     "nl": "Nu verzenden",
     "sv": "Skicka nu",
     "cs": "Odeslat nyní",
-    "ca": "Envia ara"
+    "ca": "Envia ara",
+    "hu": "Küldés most"
   },
   "removeTile": {
     "zh-tw": "移除捷徑",
@@ -4451,7 +4712,8 @@
     "nl": "Snelkoppeling verwijderen",
     "sv": "Ta bort genväg",
     "cs": "Odebrat zástupce",
-    "ca": "Treu la drecera"
+    "ca": "Treu la drecera",
+    "hu": "Parancsikon eltávolítása"
   },
   "tileAdded": {
     "zh-tw": "已將 {tile} 新增到主畫面。",
@@ -4468,7 +4730,8 @@
     "nl": "{tile} toegevoegd aan Start.",
     "sv": "{tile} har lagts till på Hem.",
     "cs": "Zástupce {tile} byl přidán na obrazovku Domů.",
-    "ca": "Has afegit {tile} a Inici."
+    "ca": "Has afegit {tile} a Inici.",
+    "hu": "{tile} hozzáadva a Kezdőlaphoz."
   },
   "tileRemoved": {
     "zh-tw": "已移除 {tile}。",
@@ -4485,7 +4748,8 @@
     "nl": "{tile} verwijderd.",
     "sv": "{tile} har tagits bort.",
     "cs": "Zástupce {tile} byl odebrán.",
-    "ca": "Has tret la drecera {tile}."
+    "ca": "Has tret la drecera {tile}.",
+    "hu": "{tile} eltávolítva."
   },
   "tileSending": {
     "zh-tw": "正在傳送 {tile}…",
@@ -4502,7 +4766,8 @@
     "nl": "{tile} wordt verzonden…",
     "sv": "Skickar {tile}…",
     "cs": "Odesílání: {tile}…",
-    "ca": "S’està enviant la petició de {tile}…"
+    "ca": "S’està enviant la petició de {tile}…",
+    "hu": "{tile} küldése…"
   },
   "tileSent": {
     "zh-tw": "{tile} 已傳送。",
@@ -4519,7 +4784,8 @@
     "nl": "{tile} verzonden.",
     "sv": "{tile} skickades.",
     "cs": "Odesláno: {tile}.",
-    "ca": "S’ha enviat la petició de {tile}."
+    "ca": "S’ha enviat la petició de {tile}.",
+    "hu": "{tile} elküldve."
   },
   "tileFailed": {
     "zh-tw": "無法傳送 {tile}。",
@@ -4536,7 +4802,8 @@
     "nl": "{tile} kon niet worden verzonden.",
     "sv": "{tile} kunde inte skickas.",
     "cs": "Nepodařilo se odeslat: {tile}.",
-    "ca": "No s’ha pogut enviar la petició de {tile}."
+    "ca": "No s’ha pogut enviar la petició de {tile}.",
+    "hu": "Nem sikerült elküldeni: {tile}."
   },
   "tileUrlInvalid": {
     "zh-tw": "請輸入包含主機名稱的有效 http:// 或 https:// 網址。",
@@ -4553,7 +4820,8 @@
     "nl": "Voer een geldig http://- of https://-adres met een hostnaam in.",
     "sv": "Ange en giltig http://- eller https://-adress med ett värdnamn.",
     "cs": "Zadejte platnou adresu http:// nebo https:// s názvem hostitele.",
-    "ca": "Escriu una adreça http:// o https:// vàlida amb un nom de servidor."
+    "ca": "Escriu una adreça http:// o https:// vàlida amb un nom de servidor.",
+    "hu": "Adj meg érvényes, http:// vagy https:// kezdetű címet gazdagépnévvel."
   },
   "tileIncomplete": {
     "zh-tw": "請先填寫名稱和網址。",
@@ -4570,7 +4838,8 @@
     "nl": "Voeg eerst een naam en een URL toe.",
     "sv": "Lägg först till ett namn och en URL.",
     "cs": "Nejdříve zadejte název a URL.",
-    "ca": "Primer escriu un nom i una adreça."
+    "ca": "Primer escriu un nom i una adreça.",
+    "hu": "Előbb adj meg egy nevet és egy URL-t."
   },
   "tileLimit": {
     "zh-tw": "無法再新增更多捷徑。",
@@ -4587,7 +4856,8 @@
     "nl": "Er kunnen geen snelkoppelingen meer worden toegevoegd.",
     "sv": "Fler genvägar kan inte läggas till.",
     "cs": "Další zástupce už nelze přidat.",
-    "ca": "No hi caben més dreceres."
+    "ca": "No hi caben més dreceres.",
+    "hu": "Nem adhatsz hozzá több parancsikont."
   },
   "editTilesElsewhere": {
     "zh-tw": "在手機或電腦上編輯",
@@ -4604,7 +4874,8 @@
     "nl": "Bewerken op telefoon of computer",
     "sv": "Redigera på mobil eller dator",
     "cs": "Upravit v telefonu nebo počítači",
-    "ca": "Edita-les amb el mòbil o l’ordinador"
+    "ca": "Edita-les amb el mòbil o l’ordinador",
+    "hu": "Szerkesztés telefonon vagy számítógépen"
   },
   "editTilesElsewhereHint": {
     "zh-tw": "在那裡輸入名稱和網址，無需使用遙控器",
@@ -4621,7 +4892,8 @@
     "nl": "Typ daar namen en adressen in plaats van met de afstandsbediening",
     "sv": "Skriv namn och adresser där i stället för med fjärrkontrollen",
     "cs": "Názvy a adresy tam napíšete snáz než dálkovým ovladačem",
-    "ca": "Hi podràs escriure els noms i les adreces sense fer servir el comandament"
+    "ca": "Hi podràs escriure els noms i les adreces sense fer servir el comandament",
+    "hu": "A távirányító helyett itt írd be a neveket és címeket."
   },
   "tileEditorKeepOpen": {
     "zh-tw": "編輯時請保持此視窗開啟。請使用連線到同一網路的裝置。",
@@ -4638,7 +4910,8 @@
     "nl": "Houd dit venster open terwijl je bewerkt. Gebruik een apparaat op hetzelfde netwerk.",
     "sv": "Låt det här fönstret vara öppet medan du redigerar. Använd en enhet på samma nätverk.",
     "cs": "Během úprav nechte toto okno otevřené. Použijte zařízení ve stejné síti.",
-    "ca": "Deixa aquesta finestra oberta mentre fas els canvis. Fes servir un dispositiu connectat a la mateixa xarxa."
+    "ca": "Deixa aquesta finestra oberta mentre fas els canvis. Fes servir un dispositiu connectat a la mateixa xarxa.",
+    "hu": "Szerkesztés közben hagyd nyitva ezt az ablakot. Használj azonos hálózaton lévő eszközt."
   },
   "tileEditorPrivate": {
     "zh-tw": "區域網路編輯 · 連結將在 10 分鐘後失效",
@@ -4655,7 +4928,8 @@
     "nl": "Lokaal bewerken · Deze link verloopt over 10 minuten",
     "sv": "Lokal redigering · Länken slutar gälla om 10 minuter",
     "cs": "Místní úpravy · Odkaz vyprší za 10 minut",
-    "ca": "Edició a la xarxa local · L’enllaç caduca al cap de 10 minuts"
+    "ca": "Edició a la xarxa local · L’enllaç caduca al cap de 10 minuts",
+    "hu": "Helyi szerkesztés · A hivatkozás 10 perc múlva lejár"
   },
   "tileEditorError": {
     "zh-tw": "無法啟動區域網路編輯。請檢查網路連線，然後關閉並重新開啟此對話框。",
@@ -4672,7 +4946,8 @@
     "nl": "Kan lokaal bewerken niet starten. Controleer je netwerkverbinding en sluit en heropen dit venster.",
     "sv": "Det gick inte att starta den lokala redigeringen. Kontrollera nätverksanslutningen och öppna sedan dialogrutan igen.",
     "cs": "Místní úpravy se nepodařilo spustit. Zkontrolujte připojení k síti a poté tento dialog zavřete a znovu otevřete.",
-    "ca": "No s’ha pogut obrir l’editor. Comprova la connexió i torna a obrir aquesta finestra."
+    "ca": "No s’ha pogut obrir l’editor. Comprova la connexió i torna a obrir aquesta finestra.",
+    "hu": "Nem sikerült elindítani a helyi szerkesztést. Ellenőrizd a hálózati kapcsolatot, majd zárd be és nyisd meg újra ezt az ablakot."
   },
   "tileEditorStarting": {
     "zh-tw": "正在準備編輯連結…",
@@ -4689,7 +4964,8 @@
     "nl": "Bewerkingslink voorbereiden…",
     "sv": "Förbereder redigeringslänk…",
     "cs": "Příprava odkazu pro úpravy…",
-    "ca": "S’està preparant l’enllaç per fer els canvis…"
+    "ca": "S’està preparant l’enllaç per fer els canvis…",
+    "hu": "Szerkesztési hivatkozás előkészítése…"
   },
   "tileEditorEnded": {
     "zh-tw": "編輯工作階段已結束",
@@ -4706,6 +4982,7 @@
     "nl": "Bewerksessie beëindigd",
     "sv": "Redigeringssessionen har avslutats",
     "cs": "Relace úprav skončila",
-    "ca": "S’ha tancat la sessió d’edició"
+    "ca": "S’ha tancat la sessió d’edició",
+    "hu": "A szerkesztési munkamenet véget ért"
   }
 }

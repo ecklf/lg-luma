@@ -14,6 +14,7 @@ const binary = path.resolve(root, process.env.CARGO_TARGET_DIR ?? 'target', 'deb
 const requests = [];
 const places = {
   ca: { name: 'Viena', region: 'Viena', country: 'Àustria' },
+  hu: { name: 'Bécs', region: 'Bécs', country: 'Ausztria' },
   en: { name: 'Vienna', region: 'Vienna', country: 'Austria' },
   de: { name: 'Wien', region: 'Wien', country: 'Österreich' },
   zh: { name: '维也纳', region: '维也纳', country: '奥地利' },
@@ -115,7 +116,14 @@ try {
   );
   const languages = await scenario('picker-en', picker);
   assert.equal(languages.subpage, 'Language');
-  for (const name of ['Català', 'English', 'Deutsch', '简体中文', 'Español', 'Português (Brasil)'])
+  for (const name of [
+    'Català',
+    'English',
+    'Deutsch',
+    '简体中文',
+    'Español',
+    'Português (Brasil)',
+  ])
     assert.ok(languages.ui_text.includes(name));
 
   const german = await scenario('de-home', `${picker},up,enter,home`);
@@ -257,7 +265,10 @@ try {
   const vietnameseFocused = await scenario('vi-picker', vietnamesePicker);
   assert.deepEqual(vietnameseFocused.focus, { Choice: 10 });
   assert.ok(vietnameseFocused.ui_text.includes('Tiếng Việt'));
-  const chineseFocused = await scenario('zh-picker-last', `${vietnamesePicker},down,down,down`);
+  const chineseFocused = await scenario(
+    'zh-picker-last',
+    `${vietnamesePicker},down,down,down`,
+  );
   assert.deepEqual(chineseFocused.focus, { Choice: 13 });
   assert.ok(chineseFocused.scroll > 0, 'Simplified Chinese must scroll fully into view');
   assert.ok(chineseFocused.ui_text.includes('简体中文'));
@@ -358,6 +369,33 @@ try {
   assert.equal(
     requests.filter((request) => request.path === '/v1/search').at(-1).query.language,
     'ca',
+  );
+
+  await fs.writeFile(
+    preferences,
+    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
+  );
+  const hungarianPicker = `${picker},${Array(13).fill('down').join(',')}`;
+  const hungarianFocused = await scenario('hu-picker', hungarianPicker);
+  assert.deepEqual(hungarianFocused.focus, { Choice: 15 });
+  assert.ok(hungarianFocused.scroll > 0);
+  assert.ok(hungarianFocused.ui_text.includes('Magyar'));
+  const hungarian = await scenario('hu-home', `${hungarianPicker},enter,home`);
+  assert.equal(hungarian.preferences.language, 'hu');
+  assert.ok(hungarian.ui_text.includes('2026. OKTÓBER 21., SZERDA'));
+  const hungarianSettings = await scenario('hu-settings', 'settings');
+  assert.ok(hungarianSettings.ui_text.includes('Magyar'));
+  contains(hungarianSettings, 'language', 'hu');
+  const hungarianWeather = await scenario(
+    'hu-weather',
+    `${location},type:Bécs,back,enter,await-search,down,enter,home,await-weather`,
+  );
+  assert.equal(hungarianWeather.preferences.weather_location.name, 'Bécs');
+  assert.equal(hungarianWeather.preferences.weather_location.country, 'Ausztria');
+  contains(hungarianWeather, 'partlyCloudy', 'hu');
+  assert.equal(
+    requests.filter((request) => request.path === '/v1/search').at(-1).query.language,
+    'hu',
   );
 
   console.log(
