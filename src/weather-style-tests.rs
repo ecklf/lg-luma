@@ -105,6 +105,8 @@ fn style_picker_previews_every_design_offline_and_only_saves_on_selection() {
     assert_eq!(state.subpage, Some(Subpage::WeatherStyle));
     assert_eq!(state.focus, Target::Choice(0));
     let rendered = scene(&state);
+    assert!(!rendered.draw.iter().any(|draw| matches!(draw,
+        Draw::Text(label, ..) if label.contains("Sample weather preview"))));
     for index in 0..3 {
         assert!(
             rendered

@@ -67,23 +67,6 @@
     "cs": "Kompaktní v řádku",
     "ca": "Compacte en línia"
   },
-  "weatherStyleSample": {
-    "en": "Sample weather preview. Your location and temperature unit are kept.",
-    "de": "Vorschau mit Beispielwetter. Ort und Temperatureinheit bleiben erhalten.",
-    "es": "Vista previa con tiempo de ejemplo. Se conservan la ubicación y la unidad.",
-    "zh": "示例天气预览。保留您的位置和温度单位。",
-    "zh-tw": "範例天氣預覽。保留您的位置與溫度單位。",
-    "pt": "Prévia com clima de exemplo. Sua localização e unidade são mantidas.",
-    "it": "Anteprima con meteo di esempio. Posizione e unità vengono mantenute.",
-    "ru": "Пример погоды. Местоположение и единица температуры сохраняются.",
-    "pl": "Podgląd przykładowej pogody. Lokalizacja i jednostka pozostają bez zmian.",
-    "fr": "Aperçu avec une météo fictive. Le lieu et l’unité sont conservés.",
-    "vi": "Xem trước thời tiết mẫu. Giữ nguyên vị trí và đơn vị nhiệt độ.",
-    "nl": "Voorbeeldweer. Je locatie en temperatuureenheid blijven behouden.",
-    "sv": "Förhandsvisning med exempelväder. Plats och temperaturenhet behålls.",
-    "cs": "Náhled ukázkového počasí. Poloha a jednotka teploty zůstávají zachovány.",
-    "ca": "Previsualització amb temps d’exemple. Es conserven la ubicació i la unitat."
-  },
   "appSorting": {
     "en": "App sorting",
     "de": "App-Sortierung",

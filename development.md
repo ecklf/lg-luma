@@ -89,7 +89,7 @@ It does not execute the test suites. A desktop display is required; on headless 
 
 Weather → Widget style persists `weather_style` (`standard`, the default, `no_icon`,
 or `compact`). Home and Settings use the same native layout and painting functions.
-The picker shows all three designs with labeled offline sample weather, in the saved
+The picker shows all three designs with offline sample weather, in the saved
 temperature unit. Browsing does not change preferences or fetch a forecast. OK/click
 saves a style and returns to Weather, while Back/Left cancels without changing the style.
 The no-icon layout reclaims the icon column. Compact uses two lines, with a small icon,

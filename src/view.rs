@@ -1893,13 +1893,6 @@ fn weather_style_settings(out: &mut Scene, state: &State, assets: &Assets) {
             );
         }
     }
-    out.text(
-        language.t("weatherStyleSample"),
-        Rect::new(640., 926.8 - state.scroll, 1120., 36.),
-        text(18.4, 400, 0.),
-        c(0xeeeeee, 0.73),
-        false,
-    );
 }
 
 fn location_settings(out: &mut Scene, state: &State, assets: &Assets) {
