@@ -14,6 +14,8 @@ pub const APPS_SECTION: usize = 4;
 pub const SECTION_COUNT: usize = 5;
 pub const SETTINGS_ORDER: [usize; SECTION_COUNT] =
     [0, APPS_SECTION, 1, WIDGETS_SECTION, SYSTEM_SECTION];
+/// General settings row: whether the Back button opens Recent apps.
+pub const BACK_RECENTS_ROW: usize = 14;
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
 pub const APPS_COLUMNS: usize = 6;
@@ -2590,6 +2592,9 @@ impl State {
                         return vec![];
                     }
                     2 => self.preferences.reduced_motion = !self.preferences.reduced_motion,
+                    BACK_RECENTS_ROW => {
+                        self.preferences.back_recents = !self.preferences.back_recents
+                    }
                     4 => {
                         self.subpage = Some(Subpage::Language);
                         self.focus = Target::Choice(self.preferences.language.index());
@@ -2976,7 +2981,17 @@ impl State {
             self.focus = self.first_content();
             vec![]
         } else {
+            self.back_recents()
+        }
+    }
+
+    /// The Back-button shortcut to Recent apps (Back on Home, or held anywhere), unless the owner
+    /// turned it off in Settings → General.
+    pub fn back_recents(&mut self) -> Vec<Effect> {
+        if self.preferences.back_recents {
             self.open_recents()
+        } else {
+            vec![]
         }
     }
 }

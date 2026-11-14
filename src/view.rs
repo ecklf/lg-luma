@@ -4,9 +4,9 @@ use crate::{
     model::{App, BACKGROUNDS, Input, InputMode},
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, APPS_SECTION, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT,
-        HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect,
-        SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
+        APPS_COLUMNS, APPS_SECTION, BACK_RECENTS_ROW, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT,
+        HOME_STRIP_LEFT, HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page,
+        Rect, SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -2200,6 +2200,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     "reducedMotion",
                     "motion",
                     Some(if state.preferences.reduced_motion {
+                        language.t("stateOn")
+                    } else {
+                        language.t("stateOff")
+                    }),
+                    false,
+                ),
+                (
+                    BACK_RECENTS_ROW,
+                    "backRecents",
+                    "recent",
+                    Some(if state.preferences.back_recents {
                         language.t("stateOn")
                     } else {
                         language.t("stateOff")
