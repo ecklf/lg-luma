@@ -24,25 +24,17 @@ impl State {
             || self.moving.is_some()
             || self.drawer_visibility > 0.01
         {
-            self.shelf_begin_hide();
-            self.shelf_step_visibility(0.);
-            return vec![];
+            return self.shelf_hide_tick();
         }
         let Some(app) = self.shelf_focus_app().cloned() else {
-            self.shelf_begin_hide();
-            self.shelf_step_visibility(0.);
-            return vec![];
+            return self.shelf_hide_tick();
         };
         let Some(catalog) = tmdb::catalog_for(&app) else {
-            self.shelf_begin_hide();
-            self.shelf_step_visibility(0.);
-            return vec![];
+            return self.shelf_hide_tick();
         };
         let key = tmdb::effective_api_key(&self.preferences.tmdb_api_key);
         if key.len() < 16 {
-            self.shelf_begin_hide();
-            self.shelf_step_visibility(0.);
-            return vec![];
+            return self.shelf_hide_tick();
         }
         if self.shelf.focus_app.as_deref() != Some(app.id.as_str()) {
             self.shelf.focus_app = Some(app.id.clone());
@@ -97,12 +89,23 @@ impl State {
         effects
     }
 
-    /// Stop revealing, but keep the last backdrop until visibility reaches 0.
-    fn shelf_begin_hide(&mut self) {
+    /// Fade the backdrop out when focus leaves a mapped app. Keep `focus_app` until
+    /// visibility hits 0 so the last show can still paint during the fade.
+    fn shelf_hide_tick(&mut self) -> Vec<Effect> {
         if self.shelf.revealed {
             self.shelf.revealed = false;
             self.dirty = true;
         }
+        self.shelf_step_visibility(0.);
+        if self.shelf.visibility <= 0.001 {
+            self.shelf.visibility = 0.;
+            if self.shelf.focus_app.is_some() || self.shelf.focus_since.is_some() {
+                self.shelf.focus_app = None;
+                self.shelf.focus_since = None;
+                self.dirty = true;
+            }
+        }
+        vec![]
     }
 
     fn shelf_step_visibility(&mut self, goal: f32) {
@@ -121,14 +124,6 @@ impl State {
             self.dirty = true;
         } else {
             self.shelf.visibility = goal;
-        }
-        if goal <= 0. && self.shelf.visibility <= 0.001 {
-            self.shelf.visibility = 0.;
-            if self.shelf.focus_app.is_some() || self.shelf.focus_since.is_some() {
-                self.shelf.focus_app = None;
-                self.shelf.focus_since = None;
-                self.dirty = true;
-            }
         }
     }
 
@@ -248,7 +243,7 @@ mod tests {
             .expect("demo inventory has an unmapped app")
             .clone();
 
-        state.focus = Target::DockApp(netflix.id.clone());
+        state.focus = Target::App(netflix.id.clone());
         state.shelf.focus_app = Some(netflix.id.clone());
         state.shelf.focus_since = Some(Instant::now() - Duration::from_secs(10));
         state.shelf.revealed = true;
@@ -258,7 +253,7 @@ mod tests {
             .shows
             .insert(netflix.id.clone(), vec![show_with_art("netflix")]);
 
-        state.focus = Target::DockApp(plain.id.clone());
+        state.focus = Target::App(plain.id.clone());
         let before = state.shelf.visibility;
         state.shelf_tick();
         assert!(!state.shelf.revealed);
@@ -278,5 +273,37 @@ mod tests {
         assert!(state.shelf.focus_app.is_none());
         assert!(state.shelf_current_show().is_none());
         let _ = plain;
+    }
+
+    #[test]
+    fn dwelling_on_a_mapped_app_keeps_focus_since_so_requests_can_fire() {
+        let mut state = ready();
+        let netflix = state
+            .inventory
+            .apps
+            .iter()
+            .find(|app| tmdb::catalog_for(app).is_some())
+            .expect("demo inventory has a mapped streaming app")
+            .clone();
+        state.focus = Target::App(netflix.id.clone());
+        state.shelf_tick();
+        let started = state.shelf.focus_since.expect("dwell clock starts");
+        for _ in 0..5 {
+            state.shelf_tick();
+        }
+        assert_eq!(state.shelf.focus_app.as_deref(), Some(netflix.id.as_str()));
+        assert_eq!(
+            state.shelf.focus_since,
+            Some(started),
+            "dwell must not reset focus_since every tick at visibility 0"
+        );
+        state.shelf.focus_since = Some(Instant::now() - Duration::from_millis(REVEAL_MS));
+        let effects = state.shelf_tick();
+        assert!(
+            effects
+                .iter()
+                .any(|effect| matches!(effect, Effect::Shelf(_))),
+            "after the dwell threshold a fetch must be scheduled: {effects:?}"
+        );
     }
 }
