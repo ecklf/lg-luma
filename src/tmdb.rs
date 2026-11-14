@@ -393,6 +393,10 @@ mod tests {
             catalog_for(&App::new("com.example.3cat", "3Cat")),
             Some(Catalog::Providers(&[2237]))
         );
+        assert_eq!(
+            catalog_for(&App::new("amazon", "Prime Video")),
+            Some(Catalog::Providers(AMAZON_PROVIDERS))
+        );
         assert!(catalog_for(&App::new("youtube.leanback.v4", "YouTube")).is_none());
     }
 
