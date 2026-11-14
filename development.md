@@ -100,7 +100,7 @@ the settings preview using the native renderer and loopback-only cached sample w
 General → App sorting stores `app_sorting` (`alphabetical`, the default, or `usage`).
 `app_launch_counts` maps app IDs to saturating launch counts, saved after successful TV
 launch responses, including Recent apps. Failed launches, desktop simulations, inputs,
-and webhook shortcuts do not count. Counting continues in A–Z mode. Non-favorites sort
+and webhook shortcuts do not count. Counting continues in Alphabetically mode. Non-favorites sort
 by descending count in usage mode, then case-insensitive title and app ID. Favorites
 retain their manual order. The same order fills empty dock slots and the app drawer.
 `xvfb-run -a pnpm screenshots --sorting` captures the sorting settings, both app orders,

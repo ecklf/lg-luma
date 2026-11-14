@@ -88,9 +88,12 @@ fn launch_counts_work_in_both_modes_and_saturate_without_counting_non_apps() {
 
 #[test]
 fn app_sorting_picker_supports_remote_pointer_and_parent_navigation() {
+    use crate::renderer::Draw;
     for pointer in [false, true] {
         let mut state = ready();
         state.open(2);
+        assert!(scene(&state).draw.iter().any(|draw| matches!(draw,
+            Draw::TintedImage(path, ..) if path.ends_with("arrow-up-down.lvec"))));
         assert!(
             controls(&state)
                 .iter()
@@ -100,6 +103,11 @@ fn app_sorting_picker_supports_remote_pointer_and_parent_navigation() {
         state.pointer = pointer;
         state.activate();
         assert_eq!(state.subpage, Some(Subpage::AppSorting));
+        let rendered = scene(&state);
+        for label in ["Alphabetically", "Usage count"] {
+            assert!(rendered.draw.iter().any(|draw| matches!(draw,
+                Draw::Text(text, ..) if text == label)));
+        }
         assert_eq!(state.focus, Target::Choice(0));
         state.direction(Direction::Down, &controls(&state));
         assert_eq!(state.focus, Target::Choice(1));
