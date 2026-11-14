@@ -347,8 +347,8 @@ fn reorder_persists_order_and_keeps_selected_identity() {
 fn keyboard_is_modal_and_back_restores_its_setting_after_editing() {
     let mut state = ready();
     state.open(2);
-    state.subpage = Some(crate::state::Subpage::Greeting);
-    state.focus = Target::GreetingName;
+    state.subpage = Some(crate::state::Subpage::Input("com.webos.app.hdmi1".into()));
+    state.focus = Target::InputRename;
     state.activate();
     assert!(
         controls(&state)
@@ -359,10 +359,13 @@ fn keyboard_is_modal_and_back_restores_its_setting_after_editing() {
     state.delete();
     state.text("x");
     state.back();
-    assert_eq!(state.preferences.greeting_name, "netflix");
-    assert_eq!(state.focus, Target::GreetingName);
+    assert_eq!(
+        state.preferences.input_names["com.webos.app.hdmi1"],
+        "netflix"
+    );
+    assert_eq!(state.focus, Target::InputRename);
     state.back();
-    assert_eq!(state.focus, Target::Widget(0));
+    assert_eq!(state.focus, Target::InputMode("com.webos.app.hdmi1".into()));
     assert_eq!(state.page, Page::Settings);
 }
 
@@ -608,7 +611,7 @@ fn settings_header_moves_between_controls_without_switching_pages() {
 }
 
 #[test]
-fn greeting_subpage_opens_the_keyboard_and_back_restores_its_parent() {
+fn greeting_settings_only_offer_visibility_and_position() {
     let mut state = ready();
     state.open(2);
     state.focus = Target::Widget(0);
@@ -620,42 +623,45 @@ fn greeting_subpage_opens_the_keyboard_and_back_restores_its_parent() {
     assert_eq!(state.subpage, Some(crate::state::Subpage::Greeting));
     assert_eq!(state.focus, Target::GreetingToggle);
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::GreetingName);
+    assert_eq!(
+        state.focus,
+        Target::MoveWidget(crate::model::HomeWidget::Greeting)
+    );
     assert!(!state.text_input_active());
     assert!(state.activate().is_empty());
-    assert!(state.text_input_active());
-    state.text("Ana");
-    assert_eq!(state.editing_text(), "Ana");
-    assert!(state.preferences.greeting_name.is_empty());
-    assert_eq!(state.finish_text_input(), vec![Effect::Save]);
-    assert_eq!(state.focus, Target::GreetingName);
-    assert!(state.finish_text_input().is_empty());
-    assert_eq!(
-        crate::i18n::Language::En.greeting(9, &state.preferences.greeting_name),
-        "Good morning, Ana."
-    );
+    assert!(!state.text_input_active());
+    state.back();
     assert_eq!(state.subpage, Some(crate::state::Subpage::Greeting));
+    assert_eq!(
+        controls(&state)
+            .iter()
+            .filter(|control| control.scrollable)
+            .count(),
+        2
+    );
     assert!(state.back().is_empty());
     assert!(state.subpage.is_none());
     assert_eq!(state.focus, Target::Widget(0));
 }
 
 #[test]
-fn greeting_name_replacement_commits_on_every_keyboard_completion_route() {
+fn input_name_replacement_commits_on_every_keyboard_completion_route() {
     for route in 0..3 {
         let mut state = ready();
-        state.preferences.greeting_name = "Ana".into();
+        state
+            .preferences
+            .input_names
+            .insert("com.webos.app.hdmi1".into(), "HDMI".into());
         state.open(2);
-        state.focus = Target::Widget(0);
-        state.activate();
-        state.direction(Direction::Down, &controls(&state));
+        state.subpage = Some(crate::state::Subpage::Input("com.webos.app.hdmi1".into()));
+        state.focus = Target::InputRename;
         state.activate();
         assert!(state.editing_text().is_empty());
         state.text("  BobX ");
         state.delete_surrounding_text(-3, 3);
         assert_eq!(state.editing_text(), "  Bo");
         state.text("b  ");
-        assert_eq!(state.preferences.greeting_name, "Ana");
+        assert_eq!(state.preferences.input_names["com.webos.app.hdmi1"], "HDMI");
         let effects = match route {
             0 => {
                 state.overlay = Some(Overlay::SystemKeyboard);
@@ -668,38 +674,36 @@ fn greeting_name_replacement_commits_on_every_keyboard_completion_route() {
             }
         };
         assert_eq!(effects, vec![Effect::Save]);
-        assert_eq!(state.preferences.greeting_name, "Bob");
-        assert_eq!(state.focus, Target::GreetingName);
+        assert_eq!(state.preferences.input_names["com.webos.app.hdmi1"], "Bob");
+        assert_eq!(state.focus, Target::InputRename);
         assert!(state.finish_text_input().is_empty());
         state.activate();
         state.text("   ");
         assert!(state.back().is_empty());
-        assert_eq!(state.preferences.greeting_name, "Bob");
+        assert_eq!(state.preferences.input_names["com.webos.app.hdmi1"], "Bob");
     }
 }
 
 #[test]
-fn remote_can_clear_a_saved_greeting_name_without_moving_the_controls() {
+fn legacy_greeting_names_are_ignored_and_not_saved() {
     let mut state = ready();
-    state.preferences.greeting_name = "Ana".into();
+    state.preferences = serde_json::from_value(json!({"greeting_name":"Ana"})).unwrap();
+    assert!(
+        serde_json::to_value(&state.preferences)
+            .unwrap()
+            .get("greeting_name")
+            .is_none()
+    );
     state.open(2);
     state.focus = Target::Widget(0);
     state.activate();
-    let before: Vec<_> = controls(&state)
-        .iter()
-        .map(|c| (c.target.clone(), c.rect.y))
-        .collect();
+    let page = scene(&state);
+    assert!(!page.draw.iter().any(|draw|matches!(draw,crate::renderer::Draw::Text(label,..) if label.contains("Ana") || label=="Name" || label=="Clear name")));
     state.direction(Direction::Down, &controls(&state));
-    state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::GreetingNameClear);
-    assert_eq!(state.activate(), vec![Effect::Save]);
-    assert!(state.preferences.greeting_name.is_empty());
-    assert_eq!(state.focus, Target::GreetingName);
-    let after: Vec<_> = controls(&state)
-        .iter()
-        .map(|c| (c.target.clone(), c.rect.y))
-        .collect();
-    assert_eq!(before, after);
+    assert_eq!(
+        state.focus,
+        Target::MoveWidget(crate::model::HomeWidget::Greeting)
+    );
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::Widget(0));
     assert!(state.subpage.is_none());
@@ -1041,10 +1045,10 @@ fn text_rendering_preferences_default_to_msaa_and_recover_invalid_values() {
         json!({"text_rendering": 4}),
     ] {
         let mut value = value;
-        value["greeting_name"] = json!("Ana");
+        value["show_greeting"] = json!(false);
         let preferences: Preferences = serde_json::from_value(value).unwrap();
         assert_eq!(preferences.text_rendering, TextRendering::Msaa);
-        assert_eq!(preferences.greeting_name, "Ana");
+        assert!(!preferences.show_greeting);
     }
 }
 
@@ -2414,7 +2418,6 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
     use crate::state::{SECTION_COUNT, Subpage, WIDGETS_SECTION};
     let mut state = ready();
     state.preferences.reduced_motion = true;
-    state.preferences.greeting_name = "Ana".into();
     state.preferences.show_weather = false;
     state.preferences.weather_location = Some(crate::weather::Location {
         name: "Vienna".into(),
@@ -2849,7 +2852,7 @@ fn clock_menu_is_aligned_top_right() {
 }
 
 #[test]
-fn greeting_visibility_toggle_persists_without_clearing_name_or_hiding_date() {
+fn greeting_visibility_toggle_persists_without_hiding_date() {
     use crate::{renderer::Draw, state::Subpage};
     let legacy: Preferences = serde_json::from_str(r#"{"greeting_name":"Ana"}"#).unwrap();
     assert!(legacy.show_greeting);
@@ -2872,12 +2875,14 @@ fn greeting_visibility_toggle_persists_without_clearing_name_or_hiding_date() {
     )));
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert!(!state.preferences.show_greeting);
-    assert_eq!(state.preferences.greeting_name, "Ana");
     let saved = serde_json::to_string(&state.preferences).unwrap();
     let restored: Preferences = serde_json::from_str(&saved).unwrap();
     assert!(!restored.show_greeting);
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::GreetingName);
+    assert_eq!(
+        state.focus,
+        Target::MoveWidget(crate::model::HomeWidget::Greeting)
+    );
     state.focus = Target::GreetingToggle;
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::Widget(0));
@@ -2885,7 +2890,7 @@ fn greeting_visibility_toggle_persists_without_clearing_name_or_hiding_date() {
     let hidden = scene(&state);
     let language = state.preferences.language;
     let now = time::OffsetDateTime::UNIX_EPOCH;
-    let greeting = language.greeting(now.hour(), "Ana");
+    let greeting = language.greeting(now.hour(), "");
     assert!(
         !hidden
             .draw

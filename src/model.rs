@@ -256,6 +256,10 @@ impl WeatherStyle {
     }
 }
 
+pub const HOME_GRID_COLUMNS: usize = 4;
+pub const HOME_GRID_ROWS: usize = 4;
+pub const HOME_GRID_CELLS: usize = HOME_GRID_COLUMNS * HOME_GRID_ROWS;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HomeWidget {
@@ -288,9 +292,21 @@ pub struct WidgetPosition {
 }
 
 impl WidgetPosition {
+    pub fn from_cell(cell: usize) -> Option<Self> {
+        (cell < HOME_GRID_CELLS).then_some(Self {
+            column: (cell % HOME_GRID_COLUMNS) as u8,
+            row: (cell / HOME_GRID_COLUMNS) as u8,
+        })
+    }
+
+    pub fn cell(self) -> usize {
+        usize::from(self.row) * HOME_GRID_COLUMNS + usize::from(self.column)
+    }
+
     pub fn fits(self, widget: HomeWidget) -> bool {
         let (width, height) = widget.span();
-        self.column <= 3 - width && self.row <= 3 - height
+        usize::from(self.column) + usize::from(width) <= HOME_GRID_COLUMNS
+            && usize::from(self.row) + usize::from(height) <= HOME_GRID_ROWS
     }
 
     fn overlaps(self, widget: HomeWidget, other: Self, other_widget: HomeWidget) -> bool {
@@ -322,8 +338,6 @@ pub struct Preferences {
     pub reduced_motion: bool,
     pub ui_sounds: bool,
     pub show_seconds: bool,
-    /// Optional name appended to the Home greeting ("Good evening, Ana."). Empty = plain greeting.
-    pub greeting_name: String,
     pub show_greeting: bool,
     pub show_date: bool,
     pub date_format: DateFormat,
@@ -368,7 +382,6 @@ impl Default for Preferences {
             reduced_motion: false,
             ui_sounds: false,
             show_seconds: false,
-            greeting_name: String::new(),
             show_greeting: true,
             show_date: true,
             date_format: DateFormat::default(),
@@ -547,11 +560,8 @@ impl Preferences {
         }
         if !self.can_place_widget(HomeWidget::Weather, self.weather_position) {
             // Keep a valid greeting and deterministically find room for Weather.
-            self.weather_position = (0..9)
-                .map(|cell| WidgetPosition {
-                    column: cell % 3,
-                    row: cell / 3,
-                })
+            self.weather_position = (0..HOME_GRID_CELLS)
+                .filter_map(WidgetPosition::from_cell)
                 .find(|position| self.can_place_widget(HomeWidget::Weather, *position))
                 .unwrap();
         }

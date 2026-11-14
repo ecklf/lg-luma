@@ -93,11 +93,11 @@ mod tests {
             serde_json::Value::Null,
         ] {
             let preferences: crate::model::Preferences = serde_json::from_value(
-                serde_json::json!({"wallpaper_cycle": value, "greeting_name": "Ana"}),
+                serde_json::json!({"wallpaper_cycle": value, "show_greeting": false}),
             )
             .unwrap();
             assert!(!preferences.wallpaper_cycle);
-            assert_eq!(preferences.greeting_name, "Ana");
+            assert!(!preferences.show_greeting);
         }
     }
 }
