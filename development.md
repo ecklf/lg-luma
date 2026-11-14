@@ -75,34 +75,41 @@ backend. Avoid copying the whole SDK library directory or the TV's graphics driv
 ### Documentation screenshots
 
 `pnpm screenshots` generates `docs/home.png`, `docs/apps.png`, `docs/settings.png` and
-`docs/inputs.png`, linked by the README. It builds the desktop executable without the TV feature,
-uses isolated temporary preferences, sample inventory and a fixed date/time, and captures actual
-1920×1080 OpenGL framebuffers. Weather is unconfigured, so no real weather APIs are contacted.
+`docs/inputs.png`, plus `docs/clock-menu.png`, `docs/manage-apps.png`, `docs/app-actions.png`,
+`docs/weather-setup.png` and `docs/update-card.png`,
+linked by the README or PR.
+It builds the desktop executable without the TV feature, uses isolated temporary preferences,
+sample inventory, cached sample weather and a fixed date/time, and captures actual 1920×1080
+OpenGL framebuffers. The weather origin is loopback-only, so no real weather APIs are contacted.
+The update-card preview uses simulated version `99.0.0`, without a network request or installation.
 It does not execute the test suites. A desktop display is required; on headless Linux use
 `xvfb-run -a pnpm screenshots`. These images document the native design, not TV hardware behavior.
 
 ### Input
 
-| Input                         | Action                                                        |
-| ----------------------------- | ------------------------------------------------------------- |
-| Arrows                        | Move focus, revealing remote-focused content                  |
-| OK / Enter                    | Activate on release                                           |
-| Hold OK for 600 ms            | Reorder Home favorite or open app options                     |
-| OK or Back in move mode       | Finish reordering without launching                           |
-| Escape / Back / Backspace     | Parent navigation, overlay dismissal or Recent apps from Home |
-| Hold Back / Escape for 600 ms | Open Recent apps while Luma is focused                        |
-| Menu / M / right-click        | App or background options side popup                          |
-| Pointer / wheel               | Hover, click, hold and scrolling                              |
-| F5                            | Refresh inventory                                             |
+| Input                         | Action                                                                       |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| Arrows                        | Move focus. Down from favorites opens the drawer, Up reaches corner controls |
+| OK / Enter                    | Activate on release                                                          |
+| Hold OK for 600 ms            | Reorder Home favorite or open app options                                    |
+| OK or Back in move mode       | Finish reordering without launching                                          |
+| Escape / Back / Backspace     | Parent navigation, overlay dismissal or Recent apps from Home                |
+| Hold Back / Escape for 600 ms | Open Recent apps while Luma is focused                                       |
+| Menu / M / right-click        | App or background options side popup                                         |
+| Pointer / wheel               | Hover, click, hold and scrolling                                             |
+| F5                            | Refresh inventory                                                            |
 
 Backspace deletes while editing. Native Back uses SDL's webOS-specific keycode. Back dismisses
 the keyboard first; Weather Location then returns to its parent Location row, HDMI choices to
 that HDMI row, and the Background gallery to Background in the sidebar. Back from the sidebar
-focuses the Settings tab, then returns Home. **System** in the sidebar groups **Refresh apps & inputs**
+returns directly Home; there is no Home header button. **System** in the sidebar groups **Refresh apps & inputs**
 and the vector power-icon **Quit app** action separately from General preferences.
-On Apps, OK or a normal pointer click on an app opens its side popup, with **Open** first and focused by
-default, followed by favorite, hide/show and **Delete app** actions. A second OK launches the app.
-Home favorites, Inputs and Recent apps launch directly. Hold OK on Home still reorders favorites.
+**Reset icon cache** clears persisted and decoded app icons, then reloads artwork on its
+worker without changing preferences. An active icon read finishes before disk entries are
+removed, so it cannot restore stale artwork after the reset.
+Home, the app drawer, Inputs and Recent apps launch directly on OK/click. **Settings → Apps** uses
+a three-column artwork gallery like Backgrounds, including hidden apps, and opens the action popup with **Open**, favorite, hide/show and
+**Delete app** actions. Hold OK on Home still reorders favorites.
 Background cards open the same side popup with **Use background** first and **Delete background**
 only for inactive backgrounds. Deletion requires confirmation with **Cancel** focused by default.
 Uploaded images are deleted on the wallpaper worker; bundled assets remain in the package, with
@@ -134,50 +141,95 @@ The **Clock** subpage contains **Clock format** (12-hour or 24-hour) and **Time 
 or `HH:MM:SS`, defaulting to `HH:MM`). Choosing a format returns to its row in Clock, and Back
 from Clock restores its General row. With seconds shown, the header clock redraws once per second
 instead of once per minute. Existing saved hour and seconds preferences are retained.
-General has an **App names** subpage with independent **Show on Home** and **Show on Apps** toggles.
-Home captions default to off and Apps captions default to on, stored independently in `show_home_names`
-and `show_app_names`. The legacy `show_names` preference does not override these defaults. Hidden
-captions do not reserve layout space.
-**Settings → Widgets** groups **Date**, **Greeting**, **Weather**, **Shortcuts**, and **Inputs** as separate subpages.
+App cards on Home, in the drawer, and in Settings → Apps are artwork-only, with no name captions
+or App names setting. Legacy `show_names`, `show_home_names`, and `show_app_names` preferences
+are ignored and are not written back. App titles remain available in the management popup.
+**Settings → Widgets** groups **Weather**, **Shortcuts**, and **Inputs** as separate subpages.
 Weather location and temperature choices return to Weather; Back from a widget returns to its row
 in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
 with a tighter 48-pixel spacing for Languages and Backgrounds.
-**Widgets → Greeting → Show widget** is the first row and hides only the greeting text, preserving the saved name,
-date and weather. Weather moves directly below the date when the greeting is hidden, without
-moving favorites or inputs. It defaults to enabled for existing and new installations.
-**Widgets → Date** contains **Show widget** (enabled by default) and **Date format**. Choose the
-existing localized weekday/month/day display (default), `DD.MM.YYYY`, `MM/DD/YYYY`, or `YYYY-MM-DD`.
-Choosing a format returns to its Date row; Back from Date restores its Widgets row. Hiding the
-date removes its reserved space above the greeting/weather and preserves the chosen format.
-Lists render behind the fixed sidebar, navigation and background actions, without viewport clipping
-or edge fades. Pointer interaction and remote focus retain their safe content viewports.
-The **Greeting** subpage contains **Name** and **Clear name**. Selecting Name opens the text keyboard
-(the system keyboard on the TV) and the name is appended to the Home greeting ("Good evening, Ana.").
-Long greetings scale down to fit their existing single-line area, centred vertically without
-moving the weather summary or favorite cards. Short greetings retain their original size.
-The keyboard starts empty; closing it without a name preserves the saved value. Clear name removes
-it. Preferences are saved when the keyboard closes, including automatic system-keyboard dismissal.
-Back from Greeting restores its Widgets row; App names returns to General. Input name removal
-also uses **Clear name**.
+The Home greeting and standalone date, along with their widget entries, are removed. Their legacy
+preferences remain readable and are not erased during other edits. Weather occupies the former
+greeting area with a large condition icon, temperature, condition and location. The colored, static
+icons are original Breezy Weather PNGs, including clear/partly-cloudy night variants, bundled locally
+with their LGPL-3.0 license, attribution and source hashes in `assets/weather/`. No icons are fetched at runtime.
+Disabled weather
+is hidden. Enabled weather without a location uses the same large 144px artwork and a prominent setup action.
+Settings lists render behind fixed controls. The drawer grid is clipped below its fixed dock so
+offscreen cards cannot capture pointer events there. Input name removal uses **Clear name**.
 Choice checkmarks identify saved values, while the bright row fill identifies only the current focus.
 
-Home favorites form one horizontal strip, never a second row. Left/Right follows saved order,
-including reorder mode, and reveals complete cards. Up returns to Home navigation; Down enters
-the nearest input in the first row. The strip position survives page changes. Wheel movement over
-favorites scrolls horizontally; elsewhere it scrolls vertically. Pointer hover/down never moves
-the clicked control. Apps Up/Down follows the six-column grid order, including offscreen rows,
-and only the first row's Up route reaches the category toolbar. Scrolling Apps content fades into
-the existing wallpaper at the header/footer, with one alpha mask for surfaces, shadows, rings,
-vector icons/logos and text. The wallpaper/header are unmasked; no blur texture is needed.
+Input icon picker: **Settings → Widgets → Inputs → select input → Icon** opens a
+native picker for bundled input SVG icons. Its choices are **Automatic** (default label detection),
+**HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**, **NVIDIA Shield**,
+**Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, **Sony**, **DVD**, **Blu-ray**,
+**Disk**, and **Xbox**. Sony, DVD, Blu-ray, and Disk use sourced trademark artwork (Disk uses
+the Compact Disc wordmark), with provenance in `assets/licenses/input-trademarks.md`.
+Sony and media-player names are detected automatically; more specific
+PlayStation or DVD/Blu-ray names take precedence over Sony. An explicit choice
+is persisted per input across restarts; choosing **Automatic** clears only that input's
+icon override and restores label-based detection. Existing inputs without an override continue
+using Automatic. This is a backward-compatible feature and does not change input names or visibility.
+
+Home favorites form one horizontal glass dock, never a second row. Left/Right follows saved order,
+including reorder mode, and reveals complete cards. Up reaches Inputs or the clock/settings control.
+Down lifts the dock to the top and reveals a six-column app grid beneath it. Favorites stay in the
+dock instead of appearing twice in the grid. The drawer has no search or category toolbar.
+The Home dock follows saved pinned order, with no Apps button or Move apps label above it.
+Unused slots (up to six cards) backfill with visible apps in alphabetical order without changing
+favorites. These backfilled apps are excluded from the drawer to avoid duplicates and cannot be
+reordered. In Settings → Apps, a visible favorite's action popup includes **Move**, which opens
+the Home dock in reorder mode; Left/Right changes saved favorite order and OK/Back finishes.
+The dock itself is decorative, not a focus/click target. Down opens the drawer; Back closes it.
+Its glass is drawn without the narrower content clip, while scrolling app cards retain their own clipping.
+The drawer leaves 24 logical pixels between the glass dock and its first card row, matching
+the 24px bottom padding when the list is scrolled to its end.
+When scrolled, grid cards continue behind the floating dock and clip at the pinned cards' top edge.
+Remote focus still reveals grid cards below the dock, keeping the selected card unobscured.
+Back closes the drawer and resets focus and horizontal scroll to the first favorite. Wheel movement
+over either favorites dock scrolls horizontally. Pointer hover/down never initiates reveal scrolling.
+Grid Up/Down follows six-column indices, including offscreen rows, with the first row leading to
+the pinned dock (or corner controls if it is empty). Up from the pinned row closes the drawer and
+focuses the inputs or clock. Top-left inputs are direct 48px-high, content-sized pills with vertically
+centered icons, names and connection dots, respecting Auto/On/Off visibility; no input button/dropdown is needed.
+Connection dots appear only while hovering, pressing, or remotely focusing an input. Idle pills
+have 14px right padding; the 18px status slot expands/collapses over 160ms with a smooth fade.
+Labels keep their fitted size throughout, and reduced motion switches immediately.
+Input meshes trim transparent source bounds; per-mark optical widths give wide wordmarks more
+room without stretching their aspect ratio. Header pills preserve a 10px icon-to-label gap.
+The time-only clock opens two compact 72px-high, right-aligned, floating Control Center-style controls for
+Launcher settings (Luma logo) and Device settings (settings icon). Device settings opens LG's native settings UI.
+
+### Liquid Glass renderer
+
+`Draw::Glass` is a GLES2 rounded-distance-field material inspired by
+[OverShifted/LiquidGlass](https://github.com/OverShifted/LiquidGlass). The implementation is original,
+not a vendored copy of that shader. It caches sharp and blurred 960×540 wallpaper levels in one
+960×1080 atlas, with rounded-box normals, narrow edge lensing, adaptive neutral absorption and
+directional hairline highlights. The rim retains more detail than the interior. Surfaces share the backdrop rather than each creating
+an FBO or sampling the framebuffer. Text and app artwork are separate, sharp draws. Wallpaper
+crossfades blend both glass backdrops. Wallpaper changes already invalidate the full scene, while
+ordinary glass changes participate in damage tracking.
+
+See [the research notes](docs/liquid-glass-research.md) for sources, visual decisions and limitations.
+
+For bounded GLES2 cost, refraction samples the wallpaper, not other UI controls behind a menu.
+Cached backdrop textures use the existing texture budget and eviction. `LUMA_GLASS=0` disables
+backdrop sampling for a tinted-surface fallback, also selected on fragment-mediump-only hardware.
+Desktop captures verify rendering, not older TV GPU speed. Manually verify performance, remote
+behavior, input switching and native LG settings before release.
+`LUMA_GLES=1` requests a desktop GLES context and the GLSL ES 1.00 shader path without enabling TV
+services. Smoke coverage renders both this path and the `LUMA_GLASS=0` fallback. Diagnostics report
+the glass surface count and whether backdrop sampling was active.
 
 TV editing uses the system keyboard through SDL-webOS. Desktop editing uses the custom panel.
 
-HDMI status refreshes every two seconds while the TV's Home or input settings are visible and
+HDMI status refreshes every two seconds while the TV's header input pills are visible and
 focused. Only inputs are read on the existing platform worker; installed apps, artwork and saved
 preferences are not reloaded. At most one input read is queued, errors retain the last valid data
-and retry after ten seconds, and an unchanged snapshot does not redraw. Holds, reordering, overlays,
+and retry after ten seconds, and an unchanged snapshot does not redraw. Holds, reordering, other overlays,
 loading and hidden/unfocused pages pause polling and defer pending snapshots, keeping pointer
 targets stationary through release. A later complete inventory supersedes deferred input data.
 Auto visibility remains cable-based: boolean `hdmiPlugIn` takes priority over `connected`, with
@@ -429,7 +481,8 @@ sampled card colour. Missing, corrupt or unsupported artwork uses the existing g
 Discovery, bounded file reads, decoding and colour sampling run on a dedicated worker. If the
 jailed app cannot read an asset directly, the native process calls Homebrew Channel's elevated
 `exec` service with the packaged native `luma-helper read-app-icon` command. It returns bounded
-image bytes without writing collected files or changing filesystem permissions. PNG, JPEG and WebP
+image bytes without changing filesystem permissions. Elevated icon reads are cached in
+`icon-cache` beside preferences, keyed by app ID, version and icon paths. PNG, JPEG and WebP
 are supported; runtime SVG parsing is not required. Source files are limited to 512 KiB and
 2048×2048 pixels; decoded icons are at most 256×256 with a 16 MiB/256-entry CPU cache. GPU uploads
 stay on the SDL thread and share the existing 48 MiB texture cache. Pending/unavailable icons do
@@ -438,7 +491,9 @@ not block input, and failures are cached until inventory is refreshed.
 Inventory also refreshes at startup and whenever the window becomes visible. Decoded icons are
 keyed by app ID, version and icon paths, so those refreshes keep them and retry only previous
 failures; an updated app has a new version and is read again. **Refresh apps** (or desktop F5)
-invalidates all artwork, including previous failures; request tokens discard stale replies. Check newly installed/updated apps and both normal tile and Home-takeover
+invalidates decoded artwork, including previous failures, while reusing matching disk entries.
+Use **Settings → System → Reset icon cache** to discard disk entries too. Request tokens discard
+stale replies. Check newly installed/updated apps and both normal tile and Home-takeover
 launches on a real TV to verify sandbox access. These paths are covered with mocked filesystem
 and worker tests, not live-TV calls in automated checks.
 
@@ -472,8 +527,7 @@ The gallery also runs as part of `pnpm test:smoke`. Asset source/licence details
 
 Live TV (`com.webos.app.livetv`) and Web Browser (`com.webos.app.browser`) also have dedicated
 SVG-backed demo cards: a blue/cyan TV display with a live indicator, and a matching globe with a
-navigation pointer. Both are original Luma vector artwork. The existing card caption remains available when
-names are visible. `Brand::artwork_size()` sets optical sizing per brand, keeping heavy wordmarks
+navigation pointer. Both are original Luma vector artwork. `Brand::artwork_size()` sets optical sizing per brand, keeping heavy wordmarks
 such as Hulu, Joyn and Plex closer to the visual weight of Apple TV, YouTube, Das Erste and ARTE.
 
 Text reads the bundled TTF's advances, kerning and line metrics lazily. Only needed glyph outlines
@@ -651,7 +705,7 @@ failures preserve the last valid inputs. No failed inventory read substitutes de
 ### Optional native Home integration
 
 `tv/home.sh` and the native Rust `luma-helper` executable are packaged beside `luma`. They are a root-only, explicit integration
-for webOS 10/25 and 11/26 (and webOS 5/6, see below). `enable` stages a native manifest with ID `com.webos.app.home` and
+for webOS 10/25 and 11/26 (and webOS 5/6 and 9/24, see below). `enable` stages a native manifest with ID `com.webos.app.home` and
 symlinks to the installed executable, libraries and assets under `/var/lib/luma-home/app`, then
 bind-mounts it over `/usr/palm/applications/com.webos.app.home`. SAM rereads that one app through
 `blockSystemApp` followed by `releaseBlockSystemApp`, including `forceBlockSystemApp: false` when
@@ -690,7 +744,7 @@ out of the last app, standby wake with the TV's chosen Quick Start+ setting, a f
 saved preferences and restoring LG Home. The broader webOS 6+ app compatibility statement does
 not establish Home-replacement support on older firmware.
 
-### Running in place of LG's Home executable (webOS 5)
+### Running in place of LG's Home executable (webOS 5/6/24)
 
 On webOS 5 the manifest takeover above does not apply: SAM restarts a v1 native Home on every
 Home launch. A root integration can instead bind-mount the installed `luma` executable over LG's
@@ -719,7 +773,7 @@ is bound to that executable path. Luma detects this (`platform::runs_as_lg_home`
 - skips the per-icon elevated-service fallback for installed artwork: as root every file is
   readable, so that fallback would only spend seconds per icon to fail the same way.
 
-`tv/home.sh` chooses this method (`"method": "executable"` in `state.json`) on webOS 5/6 when LG
+`tv/home.sh` chooses this method (`"method": "executable"` in `state.json`) on webOS 5/6 and 24 (9.x) when LG
 Home's manifest is native, starts `file:///usr/bin/com.webos.app.home` and declares
 `nativeLifeCycleInterfaceVersion: 2`. `enable` and the boot hook bind-mount the installed
 executable over that path, stop the previous Home process and open Home if it was in front (or
@@ -733,6 +787,16 @@ tile launch redirects to the Home instance: the tile's jail sees `/usr/bin` with
 shares `/var/run`, which is volatile like the mount itself. LG's file stays underneath, and a cold boot
 without the hook gives LG's Home back. Verified on an LG 49UN7100
 (webOS 5): Home key to Luma in about 0.4 s instead of a restart of about 2 s.
+
+webOS 24 (9.x) also uses this method because its SAM has no `releaseBlockSystemApp` to reread a
+mounted Home manifest. The author verified takeover, same-process Home-key relaunch and cold-boot
+reapplication on one LG OLED65G46LA (2024 G4), running `9.2.4-48`. A
+[community report](https://github.com/ecklf/lg-luma/issues/225) also confirms executable takeover,
+cold-boot reapplication and repeated Home-key activation on an LG 50QNED816RE running `9.2.2-61`
+with Luma 2.18.0. The reporter initially saw LG Home on the first startup after enabling Quick
+Start+, with subsequent startups and wakes behaving as expected. This does not verify
+same-process relaunch or early-boot timing on that model; treat this path as experimental rather
+than a claim of support for every webOS 24 TV.
 
 ### Home lifecycle on webOS 10/11
 
@@ -833,9 +897,10 @@ failure retries after five minutes. Unit changes convert unrounded cached Celsiu
 Removing a city clears its cache. The `.weather.json` sidecar uses Unix-seconds timestamps.
 Mock servers accept only literal loopback HTTP origins and are refused in TV builds.
 
-`assets/messages.json` supplies Dutch, English, French, German, Italian, Polish, Portuguese (Brazil),
-Russian, Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese, including locale formatting
-and weather labels. App/device names and saved city names remain real data. No geolocation,
+`assets/messages.json` supplies Catalan, Czech, Dutch, English, French, German, Italian, Polish,
+Portuguese (Brazil), Russian, Simplified Chinese, Spanish, Swedish, Traditional Chinese and
+Vietnamese, including locale formatting and weather labels. App/device names and saved city
+names remain real data. No geolocation,
 runtime font/translation services or telemetry are used. Weather attribution: Open-Meteo,
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
@@ -853,6 +918,7 @@ use the same endpoint and worker as TV. The card shows the current version and o
 **No newer version found** after a successful check, never while unchecked or offline.
 A newer version shows an **Update available** notice and a **Settings → System** card with both
 versions. Its **Install {version}** button explicitly starts installation on interactive TV runs.
+Only the inner action button is focusable/clickable; the surrounding card displays status.
 The read-only checker never downloads an IPK. A separate installer worker rechecks release metadata,
 requires the exact offered version, and accepts only this project's ARM release assets with a bounded
 size and SHA-256. It downloads into a private random directory and verifies both before handing off
@@ -1006,6 +1072,10 @@ not `manifest.appDescription`. The feed generator writes the root app metadata d
 to `dist/description.html` and sets the package's `fullDescriptionUrl` to that version's release
 asset. Homebrew Channel prefers this HTML description when the URL is present. CI uploads the
 HTML alongside the feed and IPK, so the feed and its description must be published together.
+The generator also writes `dist/com.ecklf.luma.manifest.json`, containing exactly the app manifest
+embedded in `repo.json`. CI publishes it with every release for the central webOS Homebrew repository's
+`manifestUrl`, using `https://github.com/ecklf/lg-luma/releases/latest/download/com.ecklf.luma.manifest.json`.
+This standalone manifest is not a replacement for the custom repository's `repo.json` feed.
 
 Key modules: `state.rs` focus/preferences, `view.rs` geometry, `renderer.rs` GPU caches/draws,
 `font.rs` lazy metrics/outlines, `vector.rs` GPU mesh upload, `platform.rs` worker/inventory,
@@ -1053,6 +1123,12 @@ and `fullhome` executable targets are supported; the latter requires matching na
 support from #142. Manifest takeover remains limited to webOS
 10/11. The optional `tv-input` subcommand implements the #124 registration/verification contract;
 its Settings integration is still tracked by that separate PR and requires `supportGIP`.
+
+On webOS 5/6 the helper also installs the early cold-boot start: `enable` copies `luma-early`,
+writes its four LS2 definitions, rescans, and appends `home-filter.js` (with the selected Home
+target written into the copy) to LG's key-filter chain, all best effort. The `early` path stays in
+`home.sh`, so it runs before the helper during a cold boot. `disable` removes the early start even
+when single cleanup steps fail.
 
 The former VM tests for interpreter code are replaced by filesystem and service fixtures in
 `tv-helper/src/tests.rs`. They do not call a TV, real LS2 service or network. Host helper executables

@@ -26,29 +26,56 @@ const configuration = {
   hour_24: false,
   show_home_names: false,
   show_weather: true,
-  weather_location: null,
+  weather_location: {
+    name: 'Vienna',
+    region: 'Vienna',
+    country: 'Austria',
+    latitude: 48.2085,
+    longitude: 16.3721,
+  },
   hidden: [],
   input_modes: {},
   reduced_motion: false,
 };
 try {
   for (const [name, script] of [
-    ['home', 'home,down'],
+    ['home', 'home'],
+    ['weather-setup', 'home,up,down'],
     ['apps', 'apps,down'],
-    ['settings', 'settings,down'],
-    ['inputs', 'settings,down,down,down,enter,down,down,down,enter'],
+    ['settings', 'settings'],
+    ['update-card', 'settings,down,down,down,down,right'],
+    ['inputs', 'home,up'],
+    ['clock-menu', 'home,up,right,right,enter'],
+    ['manage-apps', 'settings,down,enter'],
+    ['app-actions', 'settings,down,enter,enter'],
   ]) {
     // Independent state makes screenshots stable regardless of capture order.
-    await fs.writeFile(preferences, JSON.stringify(configuration));
+    await fs.writeFile(
+      preferences,
+      JSON.stringify(
+        name === 'weather-setup' ? { ...configuration, weather_location: null } : configuration,
+      ),
+    );
+    await fs.writeFile(
+      path.join(temporary, 'preferences.weather.json'),
+      JSON.stringify({
+        key: '48.2085,16.3721',
+        updated_at: Math.floor(Date.now() / 1000),
+        reading: { temperature: 14.2, code: 2, is_day: true },
+      }),
+    );
     run(binary, [
       '--assets',
       path.join(scratch, 'assets'),
       '--preferences',
       preferences,
+      '--weather-test-server',
+      'http://127.0.0.1:1',
       '--time',
       '2026-10-22T20:41:00+02:00',
       '--script',
       script,
+      ...(name === 'update-card' ? ['--test-update-version', '99.0.0'] : []),
       '--frames',
       '90',
       '--capture-scale',

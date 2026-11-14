@@ -107,6 +107,7 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
             let radius = 26. * rect.w / 900.;
             let prominence = (1. - depth).clamp(0., 1.);
             out.shadow(rect, radius, 48., 22., 0.28 + 0.27 * prominence);
+            out.glass(rect.inset(-6.), radius + 6.);
             let app = state
                 .inventory
                 .apps
