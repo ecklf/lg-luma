@@ -1439,7 +1439,6 @@ impl State {
                 self.subpage = Some(Subpage::Shelf);
                 Target::ShelfLanguage
             }
-            Some(Subpage::Shelf) => Target::Widget(6),
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
             Some(Subpage::AppSorting) => Target::Setting(10),

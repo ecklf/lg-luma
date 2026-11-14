@@ -200,9 +200,9 @@ impl Service {
                     let Command::Refresh {
                         app_id,
                         catalog,
-                        key,
                         region,
                         language,
+                        ..
                     } = &command;
                     let context = format!(
                         "{region}|{language}|{}",
