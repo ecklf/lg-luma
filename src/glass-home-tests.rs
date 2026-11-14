@@ -5,6 +5,85 @@ use crate::{
 };
 
 #[test]
+fn widget_layout_settings_save_and_preserve_hidden_assignments() {
+    use crate::model::{HomeLayout, HomeWidget};
+    let mut state = ready();
+    state.preferences.home_widgets[5] = HomeWidget::Date;
+    state.open(2);
+    state.section = crate::state::WIDGETS_SECTION;
+    state.focus = Target::HomeLayout;
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.home_layout, HomeLayout::Centered);
+    assert_eq!(state.preferences.home_widgets[5], HomeWidget::Date);
+    state.focus = Target::HomeSlot(0);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.home_widgets[0], HomeWidget::Clock);
+    let saved = serde_json::to_vec(&state.preferences).unwrap();
+    let loaded: Preferences = serde_json::from_slice(&saved).unwrap();
+    assert_eq!(loaded.home_layout, HomeLayout::Centered);
+    assert_eq!(loaded.home_widgets, state.preferences.home_widgets);
+    state.focus = Target::HomeSlot(5);
+    state.activate();
+    assert_eq!(state.preferences.home_widgets[5], HomeWidget::Date);
+}
+
+#[test]
+fn widget_slot_rows_scroll_and_return_to_sidebar() {
+    use crate::model::HomeLayout;
+    let mut state = ready();
+    state.preferences.home_layout = HomeLayout::Grid;
+    state.open(2);
+    state.section = crate::state::WIDGETS_SECTION;
+    state.focus = Target::HomeLayout;
+    for slot in 0..6 {
+        state.direction(Direction::Down, &scene(&state).controls);
+        assert_eq!(state.focus, Target::HomeSlot(slot));
+        let rendered = scene(&state);
+        let selected = rendered
+            .controls
+            .iter()
+            .find(|control| control.target == state.focus)
+            .unwrap();
+        assert!(selected.rect.y >= state.content_viewport().y);
+        assert!(selected.rect.y + selected.rect.h <= 1080.);
+    }
+    state.direction(Direction::Left, &scene(&state).controls);
+    assert_eq!(state.focus, Target::Sidebar(crate::state::WIDGETS_SECTION));
+}
+
+#[test]
+fn legacy_preferences_default_to_weather_and_widget_assignments_stay_unique() {
+    use crate::model::{HomeLayout, HomeWidget};
+    let mut preferences: Preferences = serde_json::from_str("{}").unwrap();
+    assert_eq!(preferences.home_layout, HomeLayout::Row);
+    assert!(preferences.weather_visible());
+    preferences.home_layout = HomeLayout::Grid;
+    for slot in 0..6 {
+        for _ in 0..10 {
+            preferences.cycle_home_widget(slot);
+            for widget in HomeWidget::ALL
+                .into_iter()
+                .filter(|widget| *widget != HomeWidget::Empty)
+            {
+                assert!(
+                    preferences
+                        .home_widgets
+                        .iter()
+                        .filter(|value| **value == widget)
+                        .count()
+                        <= 1
+                );
+            }
+        }
+    }
+    preferences.home_widgets = [HomeWidget::Weather; 6];
+    preferences.sanitize();
+    assert_eq!(preferences.home_widgets[1..], [HomeWidget::Empty; 5]);
+    let unknown: Preferences = serde_json::from_value(json!({"home_layout": "future"})).unwrap();
+    assert_eq!(unknown.home_layout, HomeLayout::Row);
+}
+
+#[test]
 fn dock_is_not_a_control_and_its_glass_is_not_clipped_to_the_content_area() {
     let rendered = scene(&ready());
     assert!(
@@ -65,7 +144,7 @@ fn weather_empty_state_uses_a_large_icon_and_setup_action() {
     let state = ready();
     let rendered = scene(&state);
     assert!(rendered.draw.iter().any(|draw| matches!(draw,
-        Draw::Image(path, rect, ..) | Draw::TintedImage(path, rect, ..) if path.ends_with("weather/partly-cloudy.png") && rect.w == 144. && rect.h == 144.)));
+        Draw::Image(path, rect, ..) | Draw::TintedImage(path, rect, ..) if path.ends_with("weather/partly-cloudy.png") && rect.w == 112. && rect.h == 112.)));
     assert!(rendered.draw.iter().any(|draw| matches!(draw,
         Draw::Text(label, _, style, ..) if label == state.preferences.language.t("setWeatherLocation") && style.size >= 36.)));
     let setup = rendered

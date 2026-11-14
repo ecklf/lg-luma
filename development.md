@@ -87,6 +87,14 @@ It does not execute the test suites. A desktop display is required; on headless 
 
 ### Input
 
+Home widget preferences use `home_layout` (`row`, `centered`, `grid`) and six persistent
+`home_widgets` entries (`empty`, `weather`, `clock`, `date`, `greeting`). Smaller layouts show
+only the first one or three slots without deleting the rest. Settings → Widgets cycles the
+preset and each visible assignment with OK or Right. Empty slots render nothing, and weather
+workers only run when Weather is assigned to a visible slot and enabled. Legacy greeting/date
+visibility preferences do not override explicit slot assignments. Layouts use the logical
+1920×1080 coordinate space above the unchanged favorites dock.
+
 | Input                         | Action                                                                       |
 | ----------------------------- | ---------------------------------------------------------------------------- |
 | Arrows                        | Move focus. Down from favorites opens the drawer, Up reaches corner controls |

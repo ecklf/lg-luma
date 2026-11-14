@@ -30,6 +30,12 @@ https://github.com/user-attachments/assets/2156d640-b8fa-4ea4-a02c-0db4c93bcc5a
 
 ## Home and app drawer
 
+Choose a **1×3**, **centered 1×1**, or **2×3** widget grid in **Settings → Widgets → Home layout**.
+Press OK on a numbered widget row to cycle through available Weather, Clock, Date, Greeting,
+and Empty choices. Each widget can be assigned once. Assignments in hidden slots are retained
+when changing layouts, so clear a hidden assignment in the larger layout to reuse it elsewhere.
+The favorites dock and input controls stay unchanged.
+
 Home uses Liquid Glass controls over your wallpaper, a floating favorites dock, and a weather
 block with a condition icon, temperature, condition, and location. The greeting and standalone
 date have been removed.
