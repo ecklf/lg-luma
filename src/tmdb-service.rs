@@ -58,6 +58,48 @@ impl Client {
         serde_json::from_slice(&body).map_err(|error| format!("TMDB JSON: {error}"))
     }
 
+    fn discover_provider(
+        &self,
+        key: &str,
+        region: &str,
+        language: &str,
+        provider: u32,
+    ) -> Result<Vec<Show>, String> {
+        let url = format!(
+            "{API}/discover/tv?api_key={key}&watch_region={region}&language={language}&with_watch_providers={provider}&sort_by=popularity.desc&vote_count.gte=40&include_adult=false"
+        );
+        Ok(tmdb::parse_shows(&self.get_json(&url)?))
+    }
+
+    fn discover_all_platforms(
+        &self,
+        key: &str,
+        region: &str,
+        language: &str,
+    ) -> Result<Vec<Show>, String> {
+        // One title per major platform so Stremio previews a cross-service mix.
+        let mut picked = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        let mut last_error = None;
+        for provider in tmdb::ALL_PLATFORM_PROVIDERS {
+            if picked.len() >= tmdb::MAX_SHOWS {
+                break;
+            }
+            match self.discover_provider(key, region, language, *provider) {
+                Ok(shows) => {
+                    if let Some(show) = shows.into_iter().find(|show| seen.insert(show.id)) {
+                        picked.push(show);
+                    }
+                }
+                Err(error) => last_error = Some(error),
+            }
+        }
+        if picked.is_empty() {
+            return Err(last_error.unwrap_or_else(|| "No TMDB providers".into()));
+        }
+        Ok(picked)
+    }
+
     fn download(&self, url: &str, dest: &Path) -> Result<(), String> {
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -111,12 +153,8 @@ impl Client {
             Catalog::Providers(ids) => {
                 let mut last = Err("No TMDB providers".into());
                 for id in *ids {
-                    let url = format!(
-                        "{API}/discover/tv?api_key={key}&watch_region={region}&language={language}&with_watch_providers={id}&sort_by=popularity.desc&vote_count.gte=40&include_adult=false"
-                    );
-                    match self.get_json(&url) {
-                        Ok(value) => {
-                            let shows = tmdb::parse_shows(&value);
+                    match self.discover_provider(key, region, language, *id) {
+                        Ok(shows) => {
                             if !shows.is_empty() {
                                 last = Ok(shows);
                                 break;
@@ -128,10 +166,7 @@ impl Client {
                 }
                 last?
             }
-            Catalog::Trending => {
-                let url = format!("{API}/trending/all/week?api_key={key}&language={language}");
-                tmdb::parse_shows(&self.get_json(&url)?)
-            }
+            Catalog::AllPlatforms => self.discover_all_platforms(key, region, language)?,
         };
         let mut shows = raw;
         for show in &mut shows {
@@ -212,7 +247,7 @@ impl Service {
                                 .map(|id| id.to_string())
                                 .collect::<Vec<_>>()
                                 .join("|"),
-                            Catalog::Trending => "trending".into(),
+                            Catalog::AllPlatforms => "all-platforms".into(),
                         }
                     );
                     let now = time::OffsetDateTime::now_utc().unix_timestamp();

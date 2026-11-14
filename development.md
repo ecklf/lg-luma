@@ -205,11 +205,12 @@ favorites return to Channels, then its Widgets row. Top Shelf is on by default: 
 TMDB key via `LUMA_TMDB_API_KEY`, and Settings can still override it, plus streaming region and
 suggestion language (Automatic follows the UI language). After resting about three seconds on a mapped
 Home favorite, popular show art fades over the wallpaper while the weather summary yields the left
-column (Stremio uses trending without a platform filter). The Home channels strip shows only selected
+column (Stremio mixes one popular title from each major platform). The Home channels strip shows only selected
 tuner channels (logos from `/mnt/lg/cmn_data/channel_logo` when present); OK tunes via
 `apiadapter/tv/openChannel`. Guide titles prefer `getChannelProgramInfo` (now and next) and fall
 back to `getChannelCurrentProgramInfo`. Back (short or long-hold) on a focused Home channel opens a
-Recents-style switcher over Home favorites with logo and now/next text; OK tunes, Back/Up dismiss.
+Recents-style switcher over Home favorites with logo and now/next text; OK dismisses the carousel,
+tunes, and launches Live TV so the channel can take the foreground, Back/Up dismiss.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
 with a tighter 48-pixel spacing for Languages and Backgrounds.

@@ -1,4 +1,4 @@
-//! TMDB Top Shelf: popular shows for mapped streaming apps (or global trending for Stremio).
+//! TMDB Top Shelf: popular shows for mapped streaming apps (or a cross-platform mix for Stremio).
 use crate::model::App;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -9,12 +9,16 @@ pub const ROTATE_MS: u64 = 8_000;
 pub const MAX_SHOWS: usize = 3;
 pub const CACHE_TTL_SECS: i64 = 12 * 3600;
 
+/// Major JustWatch / TMDB provider ids sampled for Stremio-style aggregators.
+pub const ALL_PLATFORM_PROVIDERS: &[u32] =
+    &[8, 9, 337, 350, 1899, 384, 541, 2237, 62, 456, 119, 2241];
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Catalog {
     /// JustWatch / TMDB watch-provider id(s); first matching discover reply wins.
     Providers(&'static [u32]),
-    /// No platform filter (Stremio / aggregators).
-    Trending,
+    /// Mix one popular title from each major platform (Stremio / aggregators).
+    AllPlatforms,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -273,7 +277,7 @@ pub fn catalog_for(app: &App) -> Option<Catalog> {
     let title = app.title.to_lowercase();
     let brand = app.brand.to_lowercase();
     if id.contains("stremio") || title.contains("stremio") {
-        return Some(Catalog::Trending);
+        return Some(Catalog::AllPlatforms);
     }
     if brand == "netflix" || id == "netflix" {
         return Some(Catalog::Providers(&[8]));
@@ -374,7 +378,11 @@ mod tests {
         );
         assert_eq!(
             catalog_for(&App::new("com.stremio.tv", "Stremio")),
-            Some(Catalog::Trending)
+            Some(Catalog::AllPlatforms)
+        );
+        assert_eq!(
+            catalog_for(&App::new("com.stremio.origin", "Stremio Origin")),
+            Some(Catalog::AllPlatforms)
         );
         assert_eq!(
             catalog_for(&App::new("com.example.rtve", "RTVE Play")),
