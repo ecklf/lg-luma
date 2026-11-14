@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
-pub const REVEAL_MS: u64 = 5_000;
+pub const REVEAL_MS: u64 = 3_000;
 pub const ROTATE_MS: u64 = 8_000;
 pub const MAX_SHOWS: usize = 3;
 pub const CACHE_TTL_SECS: i64 = 12 * 3600;
@@ -212,6 +212,24 @@ pub fn sanitize_key(raw: &str) -> String {
         .collect()
 }
 
+/// Optional key baked in at build time (`LUMA_TMDB_API_KEY`). Used when the
+/// user has not set one in preferences so Top Shelf works without setup.
+pub fn bundled_api_key() -> &'static str {
+    option_env!("LUMA_TMDB_API_KEY").unwrap_or("")
+}
+
+pub fn effective_api_key(user: &str) -> String {
+    let user = sanitize_key(user);
+    if user.len() >= 16 {
+        return user;
+    }
+    sanitize_key(bundled_api_key())
+}
+
+pub fn has_usable_api_key(user: &str) -> bool {
+    effective_api_key(user).len() >= 16
+}
+
 pub fn resolve_region(pref: &str, ui: crate::i18n::Language) -> String {
     if pref != "auto" && REGIONS.iter().any(|region| region.code == pref) {
         return pref.into();
@@ -386,5 +404,13 @@ mod tests {
     #[test]
     fn sanitizes_api_keys() {
         assert_eq!(sanitize_key(" ab-cd_12! "), "abcd12");
+        assert_eq!(
+            effective_api_key("  short "),
+            sanitize_key(bundled_api_key())
+        );
+        assert_eq!(
+            effective_api_key("0123456789abcdef"),
+            "0123456789abcdef"
+        );
     }
 }

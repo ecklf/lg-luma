@@ -1231,9 +1231,13 @@ fn shelf_backdrop(out: &mut Scene, state: &State, assets: &Assets) {
         ));
         out.shape(rect, 0., c(0x080b12, 0.28 * alpha));
         let language = state.preferences.language;
+        // Sit above the favorites/channels strip and clear of the header clock.
+        let meta_bottom = state.dock_y() - 210.;
+        let title_y = (meta_bottom - 120.).max(132.);
+        let text_width = 980.;
         out.text(
             &show.name,
-            Rect::new(84., 120., 1200., 56.),
+            Rect::new(84., title_y, text_width, 56.),
             text(40., 600, -0.03).leading(1.1),
             c(0xffffff, 0.94 * alpha),
             false,
@@ -1241,7 +1245,7 @@ fn shelf_backdrop(out: &mut Scene, state: &State, assets: &Assets) {
         if !show.overview.is_empty() {
             out.text(
                 &show.overview,
-                Rect::new(84., 184., 980., 96.),
+                Rect::new(84., title_y + 64., text_width, 96.),
                 text(20., 450, -0.01).leading(1.3),
                 c(0xffffff, 0.72 * alpha),
                 false,
@@ -1278,7 +1282,12 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, _now: OffsetDateTime) {
             weather_summary_layout(state, assets),
             236.,
         );
-        out.fade(start, 1. - state.drawer_progress(), 1.);
+        // Fade the weather block out while Top Shelf copy owns the left column.
+        out.fade(
+            start,
+            (1. - state.drawer_progress()) * (1. - state.shelf.visibility),
+            1.,
+        );
     }
     if state.drawer_visibility > 0. {
         let controls = out.controls.len();
@@ -2918,7 +2927,11 @@ fn shelf_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let key_label = if state.text_input_active() && state.keyboard_field == TextField::ShelfKey {
         format!("{}|", state.shelf_key_draft)
     } else if key.is_empty() {
-        language.t("tmdbKeyMissing").into()
+        if crate::tmdb::bundled_api_key().len() >= 16 {
+            language.t("tmdbKeyBundled").into()
+        } else {
+            language.t("tmdbKeyMissing").into()
+        }
     } else {
         format!("{}…", key.chars().take(4).collect::<String>())
     };

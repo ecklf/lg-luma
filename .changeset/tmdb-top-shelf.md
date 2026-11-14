@@ -2,4 +2,4 @@
 "lg-luma": minor
 ---
 
-Add an optional TMDB Top Shelf on Home with Settings for API key, streaming region and suggestion language.
+Add a TMDB Top Shelf on Home (on by default) with optional API key override, streaming region and suggestion language.

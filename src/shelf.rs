@@ -30,7 +30,7 @@ impl State {
             self.shelf_hide(false);
             return vec![];
         };
-        let key = tmdb::sanitize_key(&self.preferences.tmdb_api_key);
+        let key = tmdb::effective_api_key(&self.preferences.tmdb_api_key);
         if key.len() < 16 {
             self.shelf_hide(false);
             return vec![];

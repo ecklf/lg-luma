@@ -373,7 +373,7 @@ impl Default for Preferences {
             wallpaper_cycle: false,
             wallpaper_gradient: true,
             wallpaper_changed: 0,
-            show_shelf: false,
+            show_shelf: true,
             tmdb_api_key: String::new(),
             tmdb_region: "auto".into(),
             tmdb_language: "auto".into(),
