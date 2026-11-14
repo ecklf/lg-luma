@@ -2604,7 +2604,14 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
                 .count(),
             4
         );
-        for key in ["widgets", "weather", "shortcuts", "inputs", "channels"] {
+        for key in [
+            "widgets",
+            "weather",
+            "shortcuts",
+            "inputs",
+            "channels",
+            "topShelf",
+        ] {
             assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t(key))), "{key}/{language:?}");
         }
         state.pointer_focus(Target::Sidebar(0));

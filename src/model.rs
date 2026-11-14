@@ -332,6 +332,14 @@ pub struct Preferences {
     pub wallpaper_gradient: bool,
     /// Unix seconds of the last automatic or chosen wallpaper change, for the timed modes.
     pub wallpaper_changed: u64,
+    /// Home Top Shelf: TMDB popular shows for mapped streaming favorites.
+    pub show_shelf: bool,
+    /// User TMDB v3 API key (https://www.themoviedb.org/settings/api). Never logged.
+    pub tmdb_api_key: String,
+    /// `auto` or ISO 3166-1 alpha-2 watch region.
+    pub tmdb_region: String,
+    /// `auto` or BCP-47 suggestion language (e.g. `ca-ES`).
+    pub tmdb_language: String,
 }
 
 impl Default for Preferences {
@@ -365,6 +373,10 @@ impl Default for Preferences {
             wallpaper_cycle: false,
             wallpaper_gradient: true,
             wallpaper_changed: 0,
+            show_shelf: false,
+            tmdb_api_key: String::new(),
+            tmdb_region: "auto".into(),
+            tmdb_language: "auto".into(),
         }
     }
 }
@@ -579,6 +591,19 @@ impl Preferences {
             .filter(|(_, name)| !name.is_empty())
             .take(128)
             .collect();
+        self.tmdb_api_key = crate::tmdb::sanitize_key(&self.tmdb_api_key);
+        if !crate::tmdb::REGIONS
+            .iter()
+            .any(|region| region.code == self.tmdb_region)
+        {
+            self.tmdb_region = "auto".into();
+        }
+        if !crate::tmdb::SUGGEST_LANGUAGES
+            .iter()
+            .any(|language| language.code == self.tmdb_language)
+        {
+            self.tmdb_language = "auto".into();
+        }
     }
 }
 

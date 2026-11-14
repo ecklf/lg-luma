@@ -163,10 +163,12 @@ instead of once per minute. Existing saved hour and seconds preferences are reta
 App cards on Home, in the drawer, and in Settings → Apps are artwork-only, with no name captions
 or App names setting. Legacy `show_names`, `show_home_names`, and `show_app_names` preferences
 are ignored and are not written back. App titles remain available in the management popup.
-**Settings → Widgets** groups **Weather**, **Shortcuts**, **Inputs**, and **Channels** as separate
-subpages. Weather location and temperature choices return to Weather; Back from a widget returns to
+**Settings → Widgets** groups **Weather**, **Shortcuts**, **Inputs**, **Channels**, and **Top Shelf** as
+separate subpages. Weather location and temperature choices return to Weather; Back from a widget returns to
 its row in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row. Channel
-favorites return to Channels, then its Widgets row. The Home channels strip shows only selected
+favorites return to Channels, then its Widgets row. Top Shelf stores your TMDB API key plus streaming
+region and suggestion language (Automatic follows the UI language); after resting on a mapped Home
+favorite, popular show art fades over the wallpaper (Stremio uses trending without a platform filter). The Home channels strip shows only selected
 tuner channels (logos from `/mnt/lg/cmn_data/channel_logo` when present); OK tunes via
 `apiadapter/tv/openChannel`. Guide titles prefer `getChannelProgramInfo` (now and next) and fall
 back to `getChannelCurrentProgramInfo`. Back (short or long-hold) on a focused Home channel opens a
