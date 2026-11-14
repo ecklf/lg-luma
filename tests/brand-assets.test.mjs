@@ -71,6 +71,7 @@ test('disk input uses a generic disc icon rather than the Compact Disc wordmark'
   );
   assert.doesNotMatch(svg, /Compact_Disc|<image\b|<text\b/);
   assert.match(svg, /<circle/);
+  assert.match(svg, /color="#fff"/);
   const { data } = await sharp(Buffer.from(svg))
     .resize(128, 128)
     .ensureAlpha()
