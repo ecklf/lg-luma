@@ -66,6 +66,8 @@ pub enum Target {
     Channel(String),
     /// Channel Back switcher carousel card.
     ChannelSwitch(String),
+    /// Settings → Channels: show/hide the Home strip widget.
+    ChannelsToggle,
     /// Settings → Channels row: toggle Home strip membership.
     ChannelFavorite(String),
     Input(String),
@@ -911,12 +913,16 @@ impl State {
     }
 
     pub fn home_channels(&self) -> Vec<&crate::model::Channel> {
+        if !self.preferences.show_channels {
+            return vec![];
+        }
         self.preferences.channel_favorites(&self.inventory.channels)
     }
 
     /// Settings → Channels list: Home favorites first, then the rest of the map.
+    /// Independent of `show_channels` so favorites can still be edited while the strip is off.
     pub fn channels_settings_list(&self) -> Vec<&crate::model::Channel> {
-        let mut ordered = self.home_channels();
+        let mut ordered = self.preferences.channel_favorites(&self.inventory.channels);
         ordered.extend(
             self.inventory
                 .channels
@@ -1033,7 +1039,7 @@ impl State {
                 .channels
                 .first()
                 .map(|channel| Target::ChannelFavorite(channel.id.clone()))
-                .unwrap_or(Target::Setting(6));
+                .unwrap_or(Target::ChannelsToggle);
         }
         if let Target::Input(id) = &self.focus
             && !self
@@ -1829,11 +1835,18 @@ impl State {
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
                     | Target::WeatherStyle
+                    | Target::ChannelsToggle
+                    | Target::ChannelFavorite(_)
                     | Target::Widget(_)
+                    | Target::SettingsMenu
             ) || (self.focus == Target::Setting(3) && self.subpage == Some(Subpage::Inputs))
                 || (self.focus == Target::Setting(6) && self.subpage == Some(Subpage::Channels)))
                 && matches!(direction, Direction::Left)
+                && self.subpage.is_some()
             {
+                // Left from a widget subpage (or its header) always restores the
+                // Widgets row. Never spatial-navigate to the sidebar while the
+                // subpage is still open — that left Channels looking "stuck".
                 self.close_subpage();
                 return vec![];
             }
@@ -1866,6 +1879,24 @@ impl State {
                 self.focus(Target::SettingsMenu, controls);
                 return vec![];
             }
+            if self.focus == Target::ChannelsToggle && self.subpage == Some(Subpage::Channels) {
+                match direction {
+                    Direction::Up => self.focus(Target::SettingsMenu, controls),
+                    Direction::Down => {
+                        if let Some(channel) = self.channels_settings_list().first() {
+                            self.focus(Target::ChannelFavorite(channel.id.clone()), controls);
+                        } else {
+                            self.focus(Target::Setting(6), controls);
+                        }
+                    }
+                    Direction::Right => return self.activate(),
+                    Direction::Left => {
+                        self.close_subpage();
+                        return vec![];
+                    }
+                }
+                return vec![];
+            }
             if let Target::ChannelFavorite(id) = &self.focus
                 && self.subpage == Some(Subpage::Channels)
             {
@@ -1877,7 +1908,7 @@ impl State {
                             return vec![];
                         }
                         Direction::Up if index == 0 => {
-                            self.focus(Target::SettingsMenu, controls);
+                            self.focus(Target::ChannelsToggle, controls);
                             return vec![];
                         }
                         Direction::Up => {
@@ -1900,6 +1931,9 @@ impl State {
                         }
                         Direction::Right => return self.activate(),
                     }
+                } else if matches!(direction, Direction::Left) {
+                    self.close_subpage();
+                    return vec![];
                 }
             }
             if self.focus == Target::Setting(6)
@@ -1909,7 +1943,7 @@ impl State {
                 if let Some(channel) = self.channels_settings_list().last() {
                     self.focus(Target::ChannelFavorite(channel.id.clone()), controls);
                 } else {
-                    self.focus(Target::SettingsMenu, controls);
+                    self.focus(Target::ChannelsToggle, controls);
                 }
                 return vec![];
             }
@@ -1917,7 +1951,9 @@ impl State {
                 self.focus(Target::SettingsMenu, controls);
                 return vec![];
             }
-            if self.focus == Target::WeatherToggle && matches!(direction, Direction::Up) {
+            if matches!(self.focus, Target::WeatherToggle | Target::ChannelsToggle)
+                && matches!(direction, Direction::Up)
+            {
                 self.focus(Target::SettingsMenu, controls);
                 return vec![];
             }
@@ -2702,6 +2738,11 @@ impl State {
                 self.weather.invalidate_forecast();
                 return vec![Effect::Save];
             }
+            Target::ChannelsToggle => {
+                self.preferences.show_channels = !self.preferences.show_channels;
+                self.dirty = true;
+                return vec![Effect::Save];
+            }
             Target::WeatherLocation => self.open_location(),
             Target::WeatherTemperature => {
                 self.subpage = Some(Subpage::Temperature);
@@ -2794,13 +2835,7 @@ impl State {
                             .map(|input| Target::InputMode(input.id.clone()))
                             .unwrap_or(Target::Setting(3)),
                     ),
-                    5 => (
-                        Subpage::Channels,
-                        self.channels_settings_list()
-                            .first()
-                            .map(|channel| Target::ChannelFavorite(channel.id.clone()))
-                            .unwrap_or(Target::Setting(6)),
-                    ),
+                    5 => (Subpage::Channels, Target::ChannelsToggle),
                     _ => return vec![],
                 };
                 self.section = WIDGETS_SECTION;
