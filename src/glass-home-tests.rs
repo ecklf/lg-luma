@@ -498,6 +498,33 @@ fn input_connection_dot_only_appears_on_hover_remote_focus_or_press() {
 }
 
 #[test]
+fn remote_navigation_ignores_stale_input_hover() {
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    let id = state.inventory.inputs[0].id.clone();
+    state
+        .preferences
+        .input_modes
+        .insert(id.clone(), InputMode::On);
+    let target = Target::Input(id.clone());
+    state.pointer_focus(target.clone());
+    state.hover = Some(target);
+    assert_eq!(state.input_status_progress(&id), 1.);
+
+    // A stationary mouse does not send a leave event when the remote takes over.
+    state.focus(Target::SettingsMenu, &controls(&state));
+    assert!(state.hover.is_some());
+    assert!(!state.input_status_active(&id));
+    assert_eq!(state.input_status_progress(&id), 0.);
+
+    state.focus(Target::Input(id.clone()), &controls(&state));
+    assert_eq!(state.input_status_progress(&id), 1.);
+    state.focus(Target::SettingsMenu, &controls(&state));
+    state.pointer_focus(Target::Input(id.clone()));
+    assert_eq!(state.input_status_progress(&id), 1.);
+}
+
+#[test]
 fn clock_is_time_only_and_corner_actions_use_luma_and_settings_icons() {
     let mut state = ready();
     let rendered = scene(&state);

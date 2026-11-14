@@ -460,7 +460,7 @@ impl State {
     pub fn input_status_active(&self, id: &str) -> bool {
         let target = Target::Input(id.into());
         (!self.pointer && self.focus == target)
-            || self.hover.as_ref() == Some(&target)
+            || (self.pointer && self.hover.as_ref() == Some(&target))
             || self.pressed.as_ref() == Some(&target)
     }
 
