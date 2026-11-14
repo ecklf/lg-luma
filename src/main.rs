@@ -9,6 +9,7 @@ mod companion;
 mod damage;
 mod diagnostics;
 mod egl_damage;
+mod feedback;
 mod font;
 mod glass_backdrop;
 mod i18n;
@@ -45,6 +46,7 @@ mod webos_compat;
 #[cfg(test)]
 mod tests;
 
+use feedback::{Cue, Route};
 use platform::{Platform, Request, Response};
 use raster::Size;
 use sdl2::{
@@ -715,6 +717,7 @@ fn run() -> Result<(), String> {
     startup_stage("preferences and workers");
 
     let sdl = sdl2::init()?;
+    let mut feedback = feedback::Feedback::default();
     let drivers: Vec<_> = sdl2::video::drivers().collect();
     if webos && !drivers.contains(&"wayland") {
         return Err(format!(
@@ -1303,6 +1306,8 @@ fn run() -> Result<(), String> {
                 eprintln!("Luma window: {win_event:?}");
             }
             let mut pending = vec![];
+            let before_input = Route::capture(&state);
+            let mut cue = None;
             match event {
                 Event::Quit { .. } => running = false,
                 Event::User { type_, code, .. } if Some(type_) == lifecycle_event => {
@@ -1421,31 +1426,38 @@ fn run() -> Result<(), String> {
                             if !repeat && back_button.native_hold(Instant::now()) {
                                 press = None;
                                 pending = state.open_recents();
+                                cue = Some(Cue::Select);
                             }
                         }
                         key if is_back(key, webos) => {
                             if !repeat {
                                 press = None;
                                 pending = back_button.key_down(&mut state, key, Instant::now());
+                                cue = Some(Cue::Back);
                             }
                         }
                         Keycode::Up if !repeat || !state.recents_open() => {
                             pending = state.direction(Direction::Up, &scene.controls);
+                            cue = Some(Cue::Navigate);
                         }
                         Keycode::Down => {
-                            pending = state.direction(Direction::Down, &scene.controls)
+                            pending = state.direction(Direction::Down, &scene.controls);
+                            cue = Some(Cue::Navigate);
                         }
                         Keycode::Left => {
-                            pending = state.direction(Direction::Left, &scene.controls)
+                            pending = state.direction(Direction::Left, &scene.controls);
+                            cue = Some(Cue::Navigate);
                         }
                         Keycode::Right => {
-                            pending = state.direction(Direction::Right, &scene.controls)
+                            pending = state.direction(Direction::Right, &scene.controls);
+                            cue = Some(Cue::Navigate);
                         }
                         Keycode::Return | Keycode::KpEnter
                             if matches!(state.overlay, Some(Overlay::SystemKeyboard)) =>
                         {
                             press = None;
                             pending = state.finish_text_input();
+                            cue = Some(Cue::Select);
                         }
                         Keycode::Return | Keycode::KpEnter if !repeat => {
                             press = Some(Press {
@@ -1459,6 +1471,7 @@ fn run() -> Result<(), String> {
                         Keycode::Backspace if !repeat => {
                             press = None;
                             pending = state.back();
+                            cue = Some(Cue::Back);
                         }
                         Keycode::Clear
                             if matches!(state.overlay, Some(Overlay::SystemKeyboard)) =>
@@ -1469,6 +1482,7 @@ fn run() -> Result<(), String> {
                         Keycode::M | Keycode::Menu if !repeat && state.overlay.is_none() => {
                             press = None;
                             state.options();
+                            cue = Some(Cue::Select);
                         }
                         Keycode::F5 if !repeat => pending.push(Effect::Reload),
                         _ => {}
@@ -1488,6 +1502,7 @@ fn run() -> Result<(), String> {
                         } else {
                             state.back()
                         };
+                        cue = Some(if long { Cue::Select } else { Cue::Back });
                     }
                 }
                 Event::KeyUp {
@@ -1500,6 +1515,7 @@ fn run() -> Result<(), String> {
                         && held.target == state.focus
                     {
                         pending = state.activate();
+                        cue = Some(Cue::Select);
                     }
                 }
                 Event::MouseMotion { x, y, .. }
@@ -1509,6 +1525,7 @@ fn run() -> Result<(), String> {
                     let hovered = hit(&scene.controls, &window, x, y, &state);
                     if let Some(target) = hovered.clone() {
                         state.pointer_focus(target);
+                        cue = Some(Cue::Navigate);
                     }
                     if state.hover != hovered {
                         state.hover = hovered.clone();
@@ -1535,6 +1552,7 @@ fn run() -> Result<(), String> {
                         state.pointer_focus(target);
                         if mouse_btn == MouseButton::Right {
                             state.options();
+                            cue = Some(Cue::Select);
                             press = None;
                         } else if mouse_btn == MouseButton::Left {
                             press = Some(Press {
@@ -1560,13 +1578,15 @@ fn run() -> Result<(), String> {
                             && hit(&scene.controls, &window, x, y, &state).as_ref()
                                 == Some(&held.target) =>
                     {
-                        pending = state.activate()
+                        pending = state.activate();
+                        cue = Some(Cue::Select);
                     }
                     None if scene.modal.is_some_and(|rect| {
                         pointer_position(&window, x, y).is_some_and(|(x, y)| !rect.contains(x, y))
                     }) =>
                     {
-                        pending = state.back()
+                        pending = state.back();
+                        cue = Some(Cue::Back);
                     }
                     _ => {}
                 },
@@ -1579,6 +1599,7 @@ fn run() -> Result<(), String> {
                         } else {
                             Direction::Left
                         });
+                        cue = Some(Cue::Navigate);
                     }
                     state.pointer = false;
                     state.dirty = true;
@@ -1600,6 +1621,15 @@ fn run() -> Result<(), String> {
                     }
                 }
                 _ => {}
+            }
+            feedback.sync(state.preferences.ui_sounds, focused && visible);
+            if state.preferences.ui_sounds
+                && focused
+                && visible
+                && !scripted_input
+                && let Some(cue) = before_input.cue(cue, &state, !pending.is_empty())
+            {
+                feedback.play(&sdl, cue);
             }
             running &= effects(
                 pending,
@@ -1636,6 +1666,9 @@ fn run() -> Result<(), String> {
         if back_button.held(Instant::now()) {
             press = None;
             let pending = state.open_recents();
+            if state.preferences.ui_sounds && focused && visible && !scripted_input {
+                feedback.play(&sdl, Cue::Select);
+            }
             running &= effects(
                 pending,
                 &mut state,
@@ -1653,7 +1686,18 @@ fn run() -> Result<(), String> {
         {
             held.held = true;
             state.pressed = None;
+            let before_hold = Route::capture(&state);
             state.hold();
+            if state.preferences.ui_sounds
+                && focused
+                && visible
+                && !scripted_input
+                && before_hold
+                    .cue(Some(Cue::Navigate), &state, false)
+                    .is_some()
+            {
+                feedback.play(&sdl, Cue::Select);
+            }
         }
         if !state.loading
             && frame.is_multiple_of(3)

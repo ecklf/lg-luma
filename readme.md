@@ -41,6 +41,8 @@ date have been removed.
 - **Settings → General → App sorting** chooses **Alphabetically** (default) or **Usage count**.
   Usage sorts by successful launches from Luma, most used first, with alphabetical ties.
   Counts stay local and persist across restarts. Favorites keep their manual order.
+- **Settings → General → UI sounds** enables soft, tvOS-inspired navigation, select, and back
+  feedback. Off by default; uses original synthesized sounds, not Apple recordings.
 - **Settings → Widgets → Weather → Widget style** offers **Standard**, **No icon**,
   and **Compact**, with a preview of every design before choosing. Compact
   places a small condition icon on the second line beside the condition and location.

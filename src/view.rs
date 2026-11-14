@@ -2385,6 +2385,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     }),
                     false,
                 ),
+                (
+                    11,
+                    "uiSounds",
+                    "volume",
+                    Some(language.t(if state.preferences.ui_sounds {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
+                    false,
+                ),
             ]
             .into_iter()
             .enumerate()
