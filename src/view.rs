@@ -1226,13 +1226,22 @@ fn shelf_backdrop(out: &mut Scene, state: &State, assets: &Assets) {
         ));
         out.shape(rect, 0., c(0x080b12, 0.28 * alpha));
         let language = state.preferences.language;
-        // Sit above the favorites/channels strip and clear of the header clock.
-        let meta_bottom = state.dock_y() - 210.;
-        let title_y = (meta_bottom - 120.).max(132.);
+        // Keep title + overview clear of the channels label (dock_y - 232) or the
+        // favorites glass top when the strip is hidden.
+        let strip_top = if !state.home_channels().is_empty() {
+            state.dock_y() - 232.
+        } else {
+            state.dock_y() - 24.
+        };
+        let title_h = 56.;
+        let overview_gap = 18.;
+        let overview_h = 68.;
+        let clearance = 40.;
+        let title_y = (strip_top - clearance - title_h - overview_gap - overview_h).max(132.);
         let text_width = 980.;
         out.text(
             &show.name,
-            Rect::new(84., title_y, text_width, 56.),
+            Rect::new(84., title_y, text_width, title_h),
             text(40., 600, -0.03).leading(1.1),
             c(0xffffff, 0.94 * alpha),
             false,
@@ -1240,7 +1249,7 @@ fn shelf_backdrop(out: &mut Scene, state: &State, assets: &Assets) {
         if !show.overview.is_empty() {
             out.text(
                 &show.overview,
-                Rect::new(84., title_y + 64., text_width, 96.),
+                Rect::new(84., title_y + title_h + overview_gap, text_width, overview_h),
                 text(20., 450, -0.01).leading(1.3),
                 c(0xffffff, 0.72 * alpha),
                 false,
