@@ -1531,6 +1531,16 @@ impl State {
                 self.focus,
                 Target::Input(_) | Target::InputsMenu | Target::SettingsMenu
             ) {
+                // Header Left must not steal focus among input pills while a
+                // Settings widget subpage is open — restore the Widgets row.
+                if self.page == Page::Settings
+                    && self.subpage.is_some()
+                    && matches!(direction, Direction::Left)
+                    && matches!(self.focus, Target::SettingsMenu)
+                {
+                    self.close_subpage();
+                    return vec![];
+                }
                 let mut targets: Vec<_> = self
                     .inventory
                     .inputs
