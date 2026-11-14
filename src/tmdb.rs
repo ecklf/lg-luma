@@ -408,9 +408,6 @@ mod tests {
             effective_api_key("  short "),
             sanitize_key(bundled_api_key())
         );
-        assert_eq!(
-            effective_api_key("0123456789abcdef"),
-            "0123456789abcdef"
-        );
+        assert_eq!(effective_api_key("0123456789abcdef"), "0123456789abcdef");
     }
 }
