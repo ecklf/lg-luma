@@ -30,15 +30,17 @@ https://github.com/user-attachments/assets/5b2c6e78-ec77-41f5-a79a-1fcfbe8e524b
 
 ## Home and app drawer
 
-Choose a **1×3**, **centered 1×1**, or **2×3** widget grid in **Settings → Widgets → Home layout**.
-Press OK on a numbered widget row to cycle through available Weather, Clock, Date, Greeting,
-and Empty choices. Each widget can be assigned once. Assignments in hidden slots are retained
-when changing layouts, so clear a hidden assignment in the larger layout to reuse it elsewhere.
-The favorites dock and input controls stay unchanged.
+Home widgets use an invisible **3×3 placement grid** above the unchanged favorites dock.
+**Greeting** is fixed at **2 columns × 1 row**; **Weather** is **1 column × 2 rows**.
+By default Greeting sits at the top left, with Weather below it. Empty cells remain transparent.
+Open **Settings → Widgets → Greeting / Weather → Position** to move either widget.
+Use the arrows or point at a cell to choose its top-left anchor, then **OK / click** to save;
+**Back** cancels. Red placements overlap the other widget or exceed the grid and cannot be saved.
+Widget sizes cannot be changed. Hidden widgets retain and reserve their saved positions.
+Greeting settings also let you show/hide the greeting and add an optional name.
 
 Home uses Liquid Glass controls over your wallpaper, a floating favorites dock, and a weather
-block with a condition icon, temperature, condition, and location. The greeting and standalone
-date have been removed.
+block with a condition icon, temperature, condition, and location. The standalone date is not shown.
 
 - **Left / Right** browses favorites. Hold **OK** to reorder them.
 - **Down** from favorites opens the animated six-column app drawer.

@@ -200,6 +200,7 @@ impl DateFormat {
         }
     }
 
+    #[cfg(test)]
     pub fn format(self, language: Language, now: time::OffsetDateTime) -> String {
         let (year, month, day) = (now.year(), now.month() as u8, now.day());
         match self {
@@ -255,71 +256,50 @@ impl WeatherStyle {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum HomeLayout {
-    Centered,
-    Grid,
-    #[default]
-    #[serde(other)]
-    Row,
-}
-
-impl HomeLayout {
-    pub fn slots(self) -> usize {
-        match self {
-            Self::Row => 3,
-            Self::Centered => 1,
-            Self::Grid => 6,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Row => "1 × 3",
-            Self::Centered => "1 × 1",
-            Self::Grid => "2 × 3",
-        }
-    }
-
-    pub fn next(self) -> Self {
-        match self {
-            Self::Row => Self::Centered,
-            Self::Centered => Self::Grid,
-            Self::Grid => Self::Row,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HomeWidget {
     Weather,
-    Clock,
-    Date,
     Greeting,
-    #[default]
-    #[serde(other)]
-    Empty,
 }
 
 impl HomeWidget {
-    pub const ALL: [Self; 5] = [
-        Self::Empty,
-        Self::Weather,
-        Self::Clock,
-        Self::Date,
-        Self::Greeting,
-    ];
+    pub const ALL: [Self; 2] = [Self::Greeting, Self::Weather];
+
+    pub fn span(self) -> (u8, u8) {
+        match self {
+            Self::Greeting => (2, 1),
+            Self::Weather => (1, 2),
+        }
+    }
 
     pub fn key(self) -> &'static str {
         match self {
-            Self::Empty => "emptySlot",
             Self::Weather => "weather",
-            Self::Clock => "clock",
-            Self::Date => "date",
             Self::Greeting => "greeting",
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub struct WidgetPosition {
+    pub column: u8,
+    pub row: u8,
+}
+
+impl WidgetPosition {
+    pub fn fits(self, widget: HomeWidget) -> bool {
+        let (width, height) = widget.span();
+        self.column <= 3 - width && self.row <= 3 - height
+    }
+
+    fn overlaps(self, widget: HomeWidget, other: Self, other_widget: HomeWidget) -> bool {
+        let (w, h) = widget.span();
+        let (ow, oh) = other_widget.span();
+        u16::from(self.column) < u16::from(other.column) + u16::from(ow)
+            && u16::from(other.column) < u16::from(self.column) + u16::from(w)
+            && u16::from(self.row) < u16::from(other.row) + u16::from(oh)
+            && u16::from(other.row) < u16::from(self.row) + u16::from(h)
     }
 }
 
@@ -329,8 +309,8 @@ pub struct Preferences {
     pub weather_style: WeatherStyle,
     pub app_sorting: AppSorting,
     pub app_launch_counts: BTreeMap<String, u64>,
-    pub home_layout: HomeLayout,
-    pub home_widgets: [HomeWidget; 6],
+    pub greeting_position: WidgetPosition,
+    pub weather_position: WidgetPosition,
     pub favorites: Option<Vec<String>>,
     pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
@@ -376,15 +356,8 @@ impl Default for Preferences {
             weather_style: WeatherStyle::default(),
             app_sorting: AppSorting::default(),
             app_launch_counts: BTreeMap::new(),
-            home_layout: HomeLayout::default(),
-            home_widgets: [
-                HomeWidget::Weather,
-                HomeWidget::Empty,
-                HomeWidget::Empty,
-                HomeWidget::Empty,
-                HomeWidget::Empty,
-                HomeWidget::Empty,
-            ],
+            greeting_position: WidgetPosition { column: 0, row: 0 },
+            weather_position: WidgetPosition { column: 0, row: 1 },
             favorites: None,
             custom_tiles: vec![],
             hidden: vec![],
@@ -428,25 +401,32 @@ impl Preferences {
 
     pub fn weather_visible(&self) -> bool {
         self.show_weather
-            && self.home_widgets[..self.home_layout.slots()].contains(&HomeWidget::Weather)
     }
 
-    pub fn cycle_home_widget(&mut self, slot: usize) {
-        if slot >= self.home_layout.slots() {
-            return;
+    pub fn widget_position(&self, widget: HomeWidget) -> WidgetPosition {
+        match widget {
+            HomeWidget::Greeting => self.greeting_position,
+            HomeWidget::Weather => self.weather_position,
         }
-        let current = HomeWidget::ALL
-            .iter()
-            .position(|widget| *widget == self.home_widgets[slot])
-            .unwrap_or(0);
-        // Keep actionable widgets unique, including slots hidden by a smaller preset.
-        for step in 1..=HomeWidget::ALL.len() {
-            let next = HomeWidget::ALL[(current + step) % HomeWidget::ALL.len()];
-            if next == HomeWidget::Empty || !self.home_widgets.contains(&next) {
-                self.home_widgets[slot] = next;
-                break;
-            }
+    }
+
+    pub fn can_place_widget(&self, widget: HomeWidget, position: WidgetPosition) -> bool {
+        position.fits(widget)
+            && HomeWidget::ALL
+                .into_iter()
+                .filter(|other| *other != widget)
+                .all(|other| !position.overlaps(widget, self.widget_position(other), other))
+    }
+
+    pub fn place_widget(&mut self, widget: HomeWidget, position: WidgetPosition) -> bool {
+        if !self.can_place_widget(widget, position) || self.widget_position(widget) == position {
+            return false;
         }
+        match widget {
+            HomeWidget::Greeting => self.greeting_position = position,
+            HomeWidget::Weather => self.weather_position = position,
+        }
+        true
     }
 
     pub fn splash_background(&self) -> &str {
@@ -562,12 +542,18 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
-        for slot in 0..self.home_widgets.len() {
-            if self.home_widgets[slot] != HomeWidget::Empty
-                && self.home_widgets[..slot].contains(&self.home_widgets[slot])
-            {
-                self.home_widgets[slot] = HomeWidget::Empty;
-            }
+        if !self.greeting_position.fits(HomeWidget::Greeting) {
+            self.greeting_position = WidgetPosition::default();
+        }
+        if !self.can_place_widget(HomeWidget::Weather, self.weather_position) {
+            // Keep a valid greeting and deterministically find room for Weather.
+            self.weather_position = (0..9)
+                .map(|cell| WidgetPosition {
+                    column: cell % 3,
+                    row: cell / 3,
+                })
+                .find(|position| self.can_place_widget(HomeWidget::Weather, *position))
+                .unwrap();
         }
         if self.splash_background.as_ref().is_some_and(|id| {
             !BACKGROUNDS.iter().any(|(known, _)| *known == id) && !crate::wallpapers::valid_id(id)

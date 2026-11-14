@@ -1,7 +1,7 @@
 use crate::i18n::Language;
 use crate::model::{
-    App, BACKGROUNDS, CUSTOM_TILE_PREFIX, CustomTile, INPUT_NAME_LIMIT, InputMode, Inventory,
-    Preferences, clean_input_name,
+    App, BACKGROUNDS, CUSTOM_TILE_PREFIX, CustomTile, HomeWidget, INPUT_NAME_LIMIT, InputMode,
+    Inventory, Preferences, WidgetPosition, clean_input_name,
 };
 use crate::text_rendering::TextRendering;
 use crate::weather::{self, Unit};
@@ -66,8 +66,7 @@ pub enum Target {
     Sidebar(usize),
     Setting(usize),
     Widget(usize),
-    HomeLayout,
-    HomeSlot(usize),
+    MoveWidget(HomeWidget),
     GreetingName,
     GreetingNameClear,
     GreetingToggle,
@@ -156,6 +155,7 @@ pub enum Overlay {
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Subpage {
+    WidgetPosition(HomeWidget),
     Greeting,
     Date,
     DateFormat,
@@ -1231,6 +1231,13 @@ impl State {
         self.panel_started = None;
         self.pointer = false;
         self.focus = match self.subpage.take() {
+            Some(Subpage::WidgetPosition(widget)) => {
+                self.subpage = Some(match widget {
+                    HomeWidget::Greeting => Subpage::Greeting,
+                    HomeWidget::Weather => Subpage::Weather,
+                });
+                Target::MoveWidget(widget)
+            }
             Some(Subpage::Greeting) => Target::Widget(0),
             Some(Subpage::Date) => Target::Widget(4),
             Some(Subpage::DateFormat) => {
@@ -1283,6 +1290,20 @@ impl State {
         self.dirty = true;
         if self.recents_open() {
             return self.recent_direction(direction);
+        }
+        if self.overlay.is_none()
+            && matches!(self.subpage, Some(Subpage::WidgetPosition(_)))
+            && let Target::Choice(index) = self.focus
+        {
+            let next = match direction {
+                Direction::Left if index % 3 > 0 => index - 1,
+                Direction::Right if index % 3 < 2 => index + 1,
+                Direction::Up if index >= 3 => index - 3,
+                Direction::Down if index < 6 => index + 3,
+                _ => index,
+            };
+            self.focus(Target::Choice(next), controls);
+            return vec![];
         }
         if matches!(self.overlay, Some(Overlay::Inputs | Overlay::Settings)) {
             let targets: Vec<_> = if matches!(self.overlay, Some(Overlay::Inputs)) {
@@ -1491,6 +1512,7 @@ impl State {
                     Target::GreetingToggle,
                     Target::GreetingName,
                     Target::GreetingNameClear,
+                    Target::MoveWidget(HomeWidget::Greeting),
                 ]),
                 Some(Subpage::Date) => Some(&[Target::DateToggle, Target::DateFormat]),
                 Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
@@ -1519,6 +1541,7 @@ impl State {
                                 | Target::ClockFormat
                                 | Target::ClockTimeFormat
                                 | Target::DateFormat
+                                | Target::MoveWidget(_)
                         ) =>
                     {
                         return self.activate();
@@ -1633,8 +1656,7 @@ impl State {
                     | Target::WeatherTemperature
                     | Target::WeatherStyle
                     | Target::Widget(_)
-                    | Target::HomeLayout
-                    | Target::HomeSlot(_)
+                    | Target::MoveWidget(_)
             ) || (self.focus == Target::Setting(3) && self.subpage == Some(Subpage::Inputs)))
                 && matches!(direction, Direction::Left)
             {
@@ -1645,8 +1667,7 @@ impl State {
                 self.focus,
                 Target::Setting(0 | 1 | 4 | 7 | 10)
                     | Target::Widget(_)
-                    | Target::HomeLayout
-                    | Target::HomeSlot(_)
+                    | Target::MoveWidget(_)
                     | Target::InputMode(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
@@ -2542,15 +2563,12 @@ impl State {
                     self.panel_started = Some(Instant::now());
                 }
             }
-            Target::HomeLayout => {
-                self.preferences.home_layout = self.preferences.home_layout.next();
-                self.dirty = true;
-                return vec![Effect::Save];
-            }
-            Target::HomeSlot(slot) => {
-                self.preferences.cycle_home_widget(slot);
-                self.dirty = true;
-                return vec![Effect::Save];
+            Target::MoveWidget(widget) => {
+                let position = self.preferences.widget_position(widget);
+                self.subpage = Some(Subpage::WidgetPosition(widget));
+                self.focus = Target::Choice(usize::from(position.row * 3 + position.column));
+                self.scroll = 0.;
+                self.panel_started = None;
             }
             Target::InstallUpdate => {
                 if !self.update_busy()
@@ -2749,6 +2767,21 @@ impl State {
             }
             Target::Choice(index) => {
                 match self.subpage.clone() {
+                    Some(Subpage::WidgetPosition(widget)) => {
+                        if index >= 9 {
+                            return vec![];
+                        }
+                        let position = WidgetPosition {
+                            column: (index % 3) as u8,
+                            row: (index / 3) as u8,
+                        };
+                        if !self.preferences.can_place_widget(widget, position) {
+                            return vec![];
+                        }
+                        let changed = self.preferences.place_widget(widget, position);
+                        self.close_subpage();
+                        return if changed { vec![Effect::Save] } else { vec![] };
+                    }
                     Some(Subpage::WeatherStyle) => {
                         self.preferences.weather_style =
                             crate::model::WeatherStyle::ALL[index.min(2)];

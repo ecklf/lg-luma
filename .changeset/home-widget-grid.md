@@ -2,4 +2,4 @@
 'lg-luma': minor
 ---
 
-Add customizable Home widget layouts with 1×3, centered 1×1, and 2×3 presets and persistent slots for weather, clock, date, greeting, or empty space.
+Add a Greeting widget and movable fixed-size Home widgets on a 3×3 placement grid. Greeting spans two columns and one row; Weather spans one column and two rows. Preview placements with the remote or pointer, reject overlaps and out-of-bounds positions, and save positions without changing the app dock.

@@ -120,20 +120,17 @@ fn no_requests_without_a_location_enabled_widget_and_visible_home() {
 }
 
 #[test]
-fn hidden_or_unassigned_weather_slots_do_not_request_forecasts() {
-    use crate::model::{HomeLayout, HomeWidget};
+fn hidden_weather_widgets_do_not_request_forecasts() {
     let mut weather = Weather::default();
     let mut preferences = preferences();
-    preferences.home_widgets = [HomeWidget::Empty; 6];
+    preferences.show_weather = false;
     assert!(weather.sync(&preferences, true, 1000).0.is_none());
-    preferences.home_widgets[5] = HomeWidget::Weather;
-    assert!(weather.sync(&preferences, true, 1000).0.is_none());
-    preferences.home_layout = HomeLayout::Grid;
+    preferences.show_weather = true;
     assert!(matches!(
         weather.sync(&preferences, true, 1000).0,
         Some(Command::Forecast { .. })
     ));
-    preferences.home_layout = HomeLayout::Centered;
+    preferences.show_weather = false;
     assert!(weather.sync(&preferences, true, 1001).0.is_none());
 }
 
