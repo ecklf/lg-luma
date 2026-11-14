@@ -215,9 +215,14 @@ try {
   );
   assert.equal(recentPointerLaunch.modal, false);
   assert.equal(recentPointerLaunch.recents_visibility, 0);
-  const recentHomeBack = await scenario('recents-home-back', 'home,back,await-recents');
-  assert.equal(recentHomeBack.modal, true);
-  assert.deepEqual(recentHomeBack.focus, { Recent: 'netflix' });
+  const homeBack = await scenario('home-back', 'home,back,back');
+  assert.equal(homeBack.modal, false);
+  assert.equal(homeBack.page, 'Home');
+  assert.deepEqual(homeBack.focus, { App: 'netflix' });
+  assert.deepEqual(homeBack.recents, []);
+  const recentHomeHold = await scenario('recents-home-hold', 'home,hold-back,await-recents');
+  assert.equal(recentHomeHold.modal, true);
+  assert.deepEqual(recentHomeHold.focus, { Recent: 'netflix' });
   const recentYoutube = await scenario('recents-youtube', 'recents,await-recents,right');
   assert.deepEqual(recentYoutube.focus, { Recent: 'youtube.leanback.v4' });
   const appOptions = await scenario('app-options', `${manageApps},enter`);
