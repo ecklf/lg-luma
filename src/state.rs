@@ -16,6 +16,8 @@ pub const SETTINGS_ORDER: [usize; SECTION_COUNT] =
     [0, APPS_SECTION, 1, WIDGETS_SECTION, SYSTEM_SECTION];
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
+/// System row registering Luma as a TV input (luma-helper tv-input).
+pub const TV_INPUT_ROW: usize = 12;
 pub const APPS_COLUMNS: usize = 6;
 pub const DRAWER_PADDING: f32 = 24.;
 /// Automatic inventory retries before the error shows: with the 6.5 s Luna timeout about 50 s.
@@ -37,6 +39,18 @@ pub fn unix_now() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+/// Whether LG lists Luma as a TV input. Read once when the System section first shows.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum TvInput {
+    #[default]
+    Unknown,
+    /// A status read or a change is running on the platform worker.
+    Busy,
+    Known(bool),
+    /// The status read failed (e.g. no Homebrew root); selecting the row still tries to add it.
+    Unavailable,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -204,6 +218,8 @@ pub enum Effect {
     FireWebhook(CustomTile),
     Quit,
     Weather(weather::Command),
+    /// Read (`None`) or change Luma's TV input registration.
+    TvInput(Option<bool>),
     UpdateDownload(String),
 }
 
@@ -262,6 +278,7 @@ pub struct State {
     pub greeting_name_draft: String,
     pub input_name: String,
     pub recents: crate::recents::Recents,
+    pub tv_input: TvInput,
 }
 
 impl State {
@@ -310,6 +327,7 @@ impl State {
             greeting_name_draft: String::new(),
             input_name: String::new(),
             recents: crate::recents::Recents::default(),
+            tv_input: TvInput::Unknown,
         }
     }
 
@@ -1979,6 +1997,44 @@ impl State {
         }
     }
 
+    /// The first time the System section shows, read whether LG lists Luma as an input.
+    pub fn tv_input_due(&mut self) -> Option<Effect> {
+        if self.page != Page::Settings
+            || self.section != SYSTEM_SECTION
+            || self.tv_input != TvInput::Unknown
+        {
+            return None;
+        }
+        self.tv_input = TvInput::Busy;
+        self.dirty = true;
+        Some(Effect::TvInput(None))
+    }
+
+    pub fn tv_input_response(
+        &mut self,
+        request: Option<bool>,
+        result: Result<bool, String>,
+    ) -> Vec<Effect> {
+        self.dirty = true;
+        match result {
+            Ok(registered) => {
+                self.tv_input = TvInput::Known(registered);
+                vec![]
+            }
+            Err(error) => {
+                eprintln!("Luma TV input: {error}");
+                self.tv_input = TvInput::Unavailable;
+                if request.is_none() {
+                    return vec![];
+                }
+                self.notify(self.preferences.language.t("tvInputError"));
+                // The helper rolls back a failed add; read what the TV actually lists now.
+                self.tv_input = TvInput::Busy;
+                vec![Effect::TvInput(None)]
+            }
+        }
+    }
+
     pub fn uninstall_response(&mut self, id: String, result: Result<(), String>) -> Vec<Effect> {
         if self.uninstalling.as_ref() != Some(&id) {
             return vec![];
@@ -2599,6 +2655,16 @@ impl State {
                         return vec![];
                     }
                     5 => return vec![Effect::Quit],
+                    TV_INPUT_ROW => {
+                        let enable = match self.tv_input {
+                            TvInput::Busy => return vec![],
+                            TvInput::Known(registered) => !registered,
+                            TvInput::Unknown | TvInput::Unavailable => true,
+                        };
+                        self.tv_input = TvInput::Busy;
+                        self.dirty = true;
+                        return vec![Effect::TvInput(Some(enable))];
+                    }
                     9 => {
                         self.reset_icon_cache = true;
                         return vec![];

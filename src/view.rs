@@ -6,7 +6,7 @@ use crate::{
     state::{
         APPS_COLUMNS, APPS_SECTION, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT,
         HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect,
-        SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
+        SYSTEM_SECTION, State, Subpage, TV_INPUT_ROW, Target, TextField, TvInput, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -2457,6 +2457,18 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     false,
                 ),
                 (9, language.t("resetIconCache"), "refresh", None, false),
+                (
+                    TV_INPUT_ROW,
+                    language.t("tvInput"),
+                    "tv",
+                    match state.tv_input {
+                        TvInput::Known(true) => Some(language.t("stateOn")),
+                        TvInput::Known(false) => Some(language.t("stateOff")),
+                        TvInput::Unknown | TvInput::Busy => Some("…"),
+                        TvInput::Unavailable => None,
+                    },
+                    false,
+                ),
                 (5, language.t("quitApp"), "power", None, false),
             ]
             .into_iter()
@@ -2473,7 +2485,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                             408.8
                                 + position as f32 * 84.
                                 + if position > 0 { 16. } else { 0. }
-                                + if position > 2 { 16. } else { 0. }
+                                + if position > 3 { 16. } else { 0. }
                                 - s,
                             1120.,
                             72.,
