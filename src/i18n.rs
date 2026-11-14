@@ -42,6 +42,7 @@ impl Language {
         Self::Es,
         Self::Fr,
         Self::It,
+        Self::Hu,
         Self::Nl,
         Self::Pl,
         Self::Pt,
@@ -51,7 +52,6 @@ impl Language {
         Self::Ru,
         Self::Zh,
         Self::ZhTw,
-        Self::Hu,
     ];
     pub fn code(self) -> &'static str {
         match self {
