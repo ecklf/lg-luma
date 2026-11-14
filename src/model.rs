@@ -200,7 +200,6 @@ impl DateFormat {
         }
     }
 
-    #[cfg(test)]
     pub fn format(self, language: Language, now: time::OffsetDateTime) -> String {
         let (year, month, day) = (now.year(), now.month() as u8, now.day());
         match self {
@@ -212,9 +211,79 @@ impl DateFormat {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HomeLayout {
+    Centered,
+    Grid,
+    #[default]
+    #[serde(other)]
+    Row,
+}
+
+impl HomeLayout {
+    pub fn slots(self) -> usize {
+        match self {
+            Self::Row => 3,
+            Self::Centered => 1,
+            Self::Grid => 6,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Row => "1 × 3",
+            Self::Centered => "1 × 1",
+            Self::Grid => "2 × 3",
+        }
+    }
+
+    pub fn next(self) -> Self {
+        match self {
+            Self::Row => Self::Centered,
+            Self::Centered => Self::Grid,
+            Self::Grid => Self::Row,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HomeWidget {
+    Weather,
+    Clock,
+    Date,
+    Greeting,
+    #[default]
+    #[serde(other)]
+    Empty,
+}
+
+impl HomeWidget {
+    pub const ALL: [Self; 5] = [
+        Self::Empty,
+        Self::Weather,
+        Self::Clock,
+        Self::Date,
+        Self::Greeting,
+    ];
+
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Empty => "emptySlot",
+            Self::Weather => "weather",
+            Self::Clock => "clock",
+            Self::Date => "date",
+            Self::Greeting => "greeting",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
+    pub home_layout: HomeLayout,
+    pub home_widgets: [HomeWidget; 6],
     pub favorites: Option<Vec<String>>,
     pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
@@ -256,6 +325,15 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
+            home_layout: HomeLayout::default(),
+            home_widgets: [
+                HomeWidget::Weather,
+                HomeWidget::Empty,
+                HomeWidget::Empty,
+                HomeWidget::Empty,
+                HomeWidget::Empty,
+                HomeWidget::Empty,
+            ],
             favorites: None,
             custom_tiles: vec![],
             hidden: vec![],
@@ -285,6 +363,29 @@ impl Default for Preferences {
 }
 
 impl Preferences {
+    pub fn weather_visible(&self) -> bool {
+        self.show_weather
+            && self.home_widgets[..self.home_layout.slots()].contains(&HomeWidget::Weather)
+    }
+
+    pub fn cycle_home_widget(&mut self, slot: usize) {
+        if slot >= self.home_layout.slots() {
+            return;
+        }
+        let current = HomeWidget::ALL
+            .iter()
+            .position(|widget| *widget == self.home_widgets[slot])
+            .unwrap_or(0);
+        // Keep actionable widgets unique, including slots hidden by a smaller preset.
+        for step in 1..=HomeWidget::ALL.len() {
+            let next = HomeWidget::ALL[(current + step) % HomeWidget::ALL.len()];
+            if next == HomeWidget::Empty || !self.home_widgets.contains(&next) {
+                self.home_widgets[slot] = next;
+                break;
+            }
+        }
+    }
+
     pub fn splash_background(&self) -> &str {
         self.splash_background
             .as_deref()
@@ -398,6 +499,13 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
+        for slot in 0..self.home_widgets.len() {
+            if self.home_widgets[slot] != HomeWidget::Empty
+                && self.home_widgets[..slot].contains(&self.home_widgets[slot])
+            {
+                self.home_widgets[slot] = HomeWidget::Empty;
+            }
+        }
         if self.splash_background.as_ref().is_some_and(|id| {
             !BACKGROUNDS.iter().any(|(known, _)| *known == id) && !crate::wallpapers::valid_id(id)
         }) {

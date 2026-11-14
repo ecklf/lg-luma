@@ -602,6 +602,30 @@ try {
   );
   assert.equal(cycleDisabled.preferences.wallpaper_cycle, false);
   assert.ok(cycleDisabled.ui_text.includes('Rotation'));
+  for (const layout of ['row', 'centered', 'grid']) {
+    await fs.writeFile(
+      preferences,
+      JSON.stringify({
+        home_layout: layout,
+        home_widgets: ['clock', 'date', 'greeting', 'weather', 'empty', 'empty'],
+      }),
+    );
+    const widgets = await scenario(`widgets-${layout}`, 'home');
+    assert.equal(widgets.preferences.home_layout, layout);
+    assert.equal(widgets.ui_text.includes('Weather'), layout === 'grid');
+    assert.equal(
+      widgets.ui_text.some((label) => label.startsWith('Good ')),
+      layout !== 'centered',
+    );
+  }
+  await fs.writeFile(preferences, '{}');
+  const layoutRow = `${widgetsPage},down,down,down`;
+  const centered = await scenario('widget-layout-setting', `${layoutRow},enter`);
+  assert.equal(centered.focus, 'HomeLayout');
+  assert.equal(centered.preferences.home_layout, 'centered');
+  const assigned = await scenario('widget-slot-setting', `${layoutRow},down,enter`);
+  assert.deepEqual(assigned.focus, { HomeSlot: 0 });
+  assert.equal(assigned.preferences.home_widgets[0], 'clock');
   console.log(
     'Native smoke checks passed: rendering/alpha, navigation, persistence, SDL pointer input, DPI-aware glyphs, 4K capture and presentation profiling.',
   );

@@ -1,7 +1,7 @@
 //! Remote-first Liquid Glass surfaces in a logical 1920×1080 layout.
 use crate::{
     i18n::Language,
-    model::{App, BACKGROUNDS, Input, InputMode},
+    model::{App, BACKGROUNDS, HomeLayout, HomeWidget, Input, InputMode},
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
         APPS_COLUMNS, APPS_SECTION, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT,
@@ -549,7 +549,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
     }
     match state.page {
         Page::Home => home(&mut out, state, assets, now),
-        Page::Apps => library(&mut out, state, assets),
+        Page::Apps => library(&mut out, state, assets, now),
         Page::Settings => settings(&mut out, state, assets),
     }
     if let Some(error) = &state.error
@@ -1168,18 +1168,8 @@ fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language:
     }
 }
 
-fn home(out: &mut Scene, state: &State, assets: &Assets, _now: OffsetDateTime) {
-    if state.preferences.show_weather {
-        let start = out.draw.len();
-        weather_summary(
-            out,
-            state,
-            assets,
-            weather_summary_layout(state, assets),
-            236.,
-        );
-        out.fade(start, 1. - state.drawer_progress(), 1.);
-    }
+fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
+    home_widgets(out, state, assets, now);
     if state.drawer_visibility > 0. {
         let controls = out.controls.len();
         let start = out.draw.len();
@@ -1188,6 +1178,92 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, _now: OffsetDateTime) {
         out.controls.truncate(controls);
     }
     favorites_dock(out, state, assets);
+}
+
+fn home_widget_rect(layout: HomeLayout, slot: usize) -> Rect {
+    let columns = if layout == HomeLayout::Centered { 1 } else { 3 };
+    let rows = if layout == HomeLayout::Grid { 2 } else { 1 };
+    let width = 568.;
+    let height = (584. - (rows - 1) as f32 * 24.) / rows as f32;
+    Rect::new(
+        if columns == 1 {
+            676.
+        } else {
+            84. + (slot % columns) as f32 * 592.
+        },
+        188. + (slot / columns) as f32 * (height + 24.),
+        width,
+        height,
+    )
+}
+
+fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
+    let start = out.draw.len();
+    let language = state.preferences.language;
+    for (slot, widget) in state
+        .preferences
+        .home_widgets
+        .iter()
+        .take(state.preferences.home_layout.slots())
+        .enumerate()
+    {
+        let cell = home_widget_rect(state.preferences.home_layout, slot);
+        if *widget == HomeWidget::Empty
+            || (*widget == HomeWidget::Weather && !state.preferences.show_weather)
+        {
+            continue;
+        }
+        if *widget == HomeWidget::Weather {
+            let mut summary = weather_summary_layout(state, assets);
+            // Reflow rather than shrinking the entire widget: text remains legible
+            // even when a translated condition or location name is unusually long.
+            summary.width = cell.w;
+            summary.height = 268.;
+            summary.icon_rect = Rect::new(cell.x, 64., 112., 112.);
+            for (_, style, _, rect) in &mut summary.parts {
+                let inset = if rect.x > 84. { 136. } else { 0. };
+                rect.x = cell.x + inset;
+                rect.w = cell.w - inset;
+                if style.size > 64. {
+                    style.size = 64.;
+                }
+            }
+            for (label, style, _, rect) in &mut summary.parts {
+                (*label, *style) = assets.fit_line(label, *style, rect.w, 24.);
+            }
+            let controls = out.controls.len();
+            weather_summary(out, state, assets, summary, cell.y + (cell.h - 268.) / 2.);
+            if let Some(control) = out.controls.get_mut(controls) {
+                control.rect.x = cell.x;
+            }
+            continue;
+        }
+        let label = match widget {
+            HomeWidget::Clock => language.clock(
+                now,
+                state.preferences.hour_24,
+                state.preferences.show_seconds,
+            ),
+            HomeWidget::Date => state.preferences.date_format.format(language, now),
+            HomeWidget::Greeting => language.greeting(now.hour(), &state.preferences.greeting_name),
+            _ => continue,
+        };
+        let size = if *widget == HomeWidget::Clock {
+            72.
+        } else {
+            40.
+        };
+        let (label, style) = assets.fit_line(&label, text(size, 500, -0.02), cell.w, 24.);
+        let height = style.size * style.line_height;
+        out.text(
+            label,
+            Rect::new(cell.x, cell.y + (cell.h - height) / 2., cell.w, height),
+            style,
+            WHITE,
+            true,
+        );
+    }
+    out.fade(start, 1. - state.drawer_progress(), 1.);
 }
 
 fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
@@ -1425,18 +1501,10 @@ fn weather_summary(
     }
 }
 
-fn library(out: &mut Scene, state: &State, assets: &Assets) {
-    if state.preferences.show_weather && state.drawer_visibility < 1. {
-        let start = out.draw.len();
+fn library(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
+    if state.drawer_visibility < 1. {
         let controls = out.controls.len();
-        weather_summary(
-            out,
-            state,
-            assets,
-            weather_summary_layout(state, assets),
-            236.,
-        );
-        out.fade(start, 1. - state.drawer_progress(), 1.);
+        home_widgets(out, state, assets, now);
         out.controls.truncate(controls);
     }
     let start = out.draw.len();
@@ -2374,6 +2442,39 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                         description: None,
                         selected: false,
                         chevron: true,
+                    },
+                );
+            }
+            row(
+                out,
+                state,
+                assets,
+                Row {
+                    target: Target::HomeLayout,
+                    rect: Rect::new(640., 416.8 - s, 1120., 72.),
+                    title: language.t("homeLayout"),
+                    icon: Some("grid"),
+                    value: Some(state.preferences.home_layout.label()),
+                    description: None,
+                    selected: false,
+                    chevron: false,
+                },
+            );
+            for slot in 0..state.preferences.home_layout.slots() {
+                row(
+                    out,
+                    state,
+                    assets,
+                    Row {
+                        target: Target::HomeSlot(slot),
+                        rect: Rect::new(640., 500.8 + slot as f32 * 84. - s, 1120., 72.),
+                        title: &language
+                            .format("widgetSlot", &[("number", &(slot + 1).to_string())]),
+                        icon: None,
+                        value: Some(language.t(state.preferences.home_widgets[slot].key())),
+                        description: None,
+                        selected: false,
+                        chevron: false,
                     },
                 );
             }
@@ -3883,6 +3984,63 @@ mod tests {
                     );
                 }
                 assert!(!rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, ..) if label == &state.preferences.language.date(OffsetDateTime::UNIX_EPOCH))));
+            }
+        }
+    }
+
+    #[test]
+    fn widget_grids_fit_above_dock_and_center_single_column() {
+        for layout in [HomeLayout::Row, HomeLayout::Centered, HomeLayout::Grid] {
+            for slot in 0..layout.slots() {
+                let rect = home_widget_rect(layout, slot);
+                assert!(rect.x >= 84. && rect.x + rect.w <= 1836.);
+                assert!(rect.y >= 164.8 && rect.y + rect.h <= 796.);
+                if layout == HomeLayout::Centered {
+                    assert_eq!(rect.center().0, 960.);
+                }
+                for other in 0..slot {
+                    let other = home_widget_rect(layout, other);
+                    assert!(
+                        rect.x >= other.x + other.w
+                            || other.x >= rect.x + rect.w
+                            || rect.y >= other.y + other.h
+                            || other.y >= rect.y + rect.h
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn widget_layouts_preserve_dock_and_weather_hit_targets() {
+        let assets = assets();
+        let mut state = State::new(Preferences::default());
+        state.set_inventory(demo_inventory(), None);
+        for layout in [HomeLayout::Row, HomeLayout::Centered, HomeLayout::Grid] {
+            state.preferences.home_layout = layout;
+            for slot in 0..layout.slots() {
+                state.preferences.home_widgets = [HomeWidget::Empty; 6];
+                state.preferences.home_widgets[slot] = HomeWidget::Weather;
+                let mut rendered = Scene::new();
+                home(&mut rendered, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+                let cell = home_widget_rect(layout, slot);
+                let control = rendered
+                    .controls
+                    .iter()
+                    .find(|control| control.target == Target::WeatherConfigure)
+                    .unwrap();
+                assert_eq!(control.rect.x, cell.x);
+                assert!(
+                    control.rect.y >= cell.y && control.rect.y + control.rect.h <= cell.y + cell.h
+                );
+                assert_eq!(control.rect.w, cell.w);
+                assert!(
+                    rendered
+                        .controls
+                        .iter()
+                        .filter(|control| matches!(control.target, Target::App(_)))
+                        .all(|control| control.rect.y == 820.)
+                );
             }
         }
     }
