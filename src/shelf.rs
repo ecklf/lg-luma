@@ -1,6 +1,8 @@
 //! Home Top Shelf dwell/reveal and TMDB request scheduling.
 use crate::state::{Effect, Page, State, Target};
-use crate::tmdb::{self, Catalog, Command, REVEAL_MS, ROTATE_MS, Response};
+use crate::tmdb::{
+    self, CROSSFADE_STEP, Catalog, Command, REVEAL_MS, ROTATE_MS, Response, VISIBILITY_STEP,
+};
 use std::path::Path;
 use std::time::Instant;
 
@@ -25,6 +27,24 @@ impl State {
                     .is_some_and(|path| path_exists(path))
             })
         })
+    }
+
+    fn shelf_show_for(&self, app_id: &str, selected: usize) -> Option<&tmdb::Show> {
+        let shows = self.shelf.shows.get(app_id)?;
+        let with_art: Vec<_> = shows
+            .iter()
+            .enumerate()
+            .filter(|(_, show)| {
+                show.backdrop_path
+                    .as_ref()
+                    .is_some_and(|path| path_exists(path))
+            })
+            .collect();
+        if with_art.is_empty() {
+            return None;
+        }
+        let index = selected % with_art.len();
+        Some(with_art[index].1)
     }
 
     pub fn shelf_tick(&mut self) -> Vec<Effect> {
@@ -55,21 +75,25 @@ impl State {
             self.shelf.selected = 0;
             self.shelf.rotate_since = None;
             if ready {
-                // Cached art: no dwell. Shade through the wallpaper briefly when
-                // swapping from another visible shelf so the change is animated.
+                // Cached art: no dwell. Crossfade series→series (keep visibility).
                 self.shelf.revealed = true;
                 self.shelf.rotate_since = Some(Instant::now());
                 if self.preferences.reduced_motion {
                     self.shelf.display_app = None;
+                    self.shelf.crossfade = 1.;
                     self.shelf.visibility = 1.;
                 } else if was_showing {
                     self.shelf.display_app = self.shelf.display_app.take().or(previous);
+                    self.shelf.crossfade = 0.;
                 } else {
                     self.shelf.display_app = None;
+                    self.shelf.crossfade = 1.;
                 }
             } else {
                 self.shelf.revealed = false;
+                self.shelf.crossfade = 1.;
                 if was_showing && !self.preferences.reduced_motion {
+                    // Fade outgoing art out to the wallpaper while the cold app dwells.
                     self.shelf.display_app = self.shelf.display_app.take().or(previous);
                 } else {
                     self.shelf.display_app = None;
@@ -86,8 +110,7 @@ impl State {
             .map(|start| start.elapsed().as_millis() as u64)
             .unwrap_or(0);
         let mut effects = vec![];
-        // Dwell only gates the first fetch for a cold app. Once art is ready, reveal
-        // without waiting for the full reveal timer.
+        // Dwell only gates the first fetch for a cold app.
         if !ready
             && self.shelf.pending.as_deref() != Some(app.id.as_str())
             && (dwell >= REVEAL_MS / 2 || self.preferences.reduced_motion)
@@ -110,19 +133,35 @@ impl State {
             self.shelf.rotate_since = Some(Instant::now());
             self.dirty = true;
         }
-        let shading = self.shelf.display_app.is_some();
-        let goal = if shading {
-            0.
-        } else if self.shelf.revealed && ready {
-            1.
+
+        let crossfading = ready && self.shelf.display_app.is_some() && self.shelf.revealed;
+        if crossfading {
+            // Keep full shelf visibility; blend outgoing→incoming only.
+            if self.shelf.visibility < 1. {
+                self.shelf_step_visibility(1.);
+            }
+            if self.preferences.reduced_motion {
+                self.shelf.crossfade = 1.;
+            } else if self.shelf.crossfade < 1. {
+                self.shelf.crossfade = (self.shelf.crossfade + CROSSFADE_STEP).min(1.);
+                self.dirty = true;
+            }
+            if self.shelf.crossfade >= 0.999 {
+                self.shelf.crossfade = 1.;
+                self.shelf.display_app = None;
+                self.dirty = true;
+            }
+        } else if self.shelf.display_app.is_some() && !ready {
+            // Cold target: shade outgoing down to wallpaper.
+            self.shelf_step_visibility(0.);
+            if self.shelf.visibility <= 0.001 {
+                self.shelf.visibility = 0.;
+                self.shelf.display_app = None;
+                self.dirty = true;
+            }
         } else {
-            0.
-        };
-        self.shelf_step_visibility(goal);
-        if shading && self.shelf.visibility <= 0.001 {
-            self.shelf.visibility = 0.;
-            self.shelf.display_app = None;
-            self.dirty = true;
+            let goal = if self.shelf.revealed && ready { 1. } else { 0. };
+            self.shelf_step_visibility(goal);
         }
         effects
     }
@@ -137,6 +176,7 @@ impl State {
         if self.shelf.display_app.is_none() {
             self.shelf.display_app = self.shelf.focus_app.clone();
         }
+        self.shelf.crossfade = 0.;
         self.shelf_step_visibility(0.);
         if self.shelf.visibility <= 0.001 {
             self.shelf.visibility = 0.;
@@ -147,6 +187,7 @@ impl State {
                 self.shelf.focus_app = None;
                 self.shelf.display_app = None;
                 self.shelf.focus_since = None;
+                self.shelf.crossfade = 1.;
                 self.dirty = true;
             }
         }
@@ -160,11 +201,10 @@ impl State {
                 self.dirty = true;
             }
         } else if (self.shelf.visibility - goal).abs() > 0.001 {
-            let step = 0.08;
             self.shelf.visibility = if goal > self.shelf.visibility {
-                (self.shelf.visibility + step).min(goal)
+                (self.shelf.visibility + VISIBILITY_STEP).min(goal)
             } else {
-                (self.shelf.visibility - step).max(goal)
+                (self.shelf.visibility - VISIBILITY_STEP).max(goal)
             };
             self.dirty = true;
         } else {
@@ -213,32 +253,20 @@ impl State {
         }
     }
 
+    /// Incoming (focused) show — used when not crossfading, or as the fade-in layer.
     pub fn shelf_current_show(&self) -> Option<&tmdb::Show> {
-        let id = self
-            .shelf
-            .display_app
-            .as_ref()
-            .or(self.shelf.focus_app.as_ref())?;
-        let shows = self.shelf.shows.get(id)?;
-        let with_art: Vec<_> = shows
-            .iter()
-            .enumerate()
-            .filter(|(_, show)| {
-                show.backdrop_path
-                    .as_ref()
-                    .is_some_and(|path| path_exists(path))
-            })
-            .collect();
-        if with_art.is_empty() {
+        // Wallpaper fades only paint the outgoing layer.
+        if self.shelf.display_app.is_some() && !self.shelf.revealed {
             return None;
         }
-        // Outgoing shade keeps the first art frame; incoming uses selected.
-        let index = if self.shelf.display_app.is_some() {
-            0
-        } else {
-            self.shelf.selected % with_art.len()
-        };
-        Some(with_art[index].1)
+        let id = self.shelf.focus_app.as_ref()?;
+        self.shelf_show_for(id, self.shelf.selected)
+    }
+
+    /// Outgoing show while crossfading or fading out to the wallpaper.
+    pub fn shelf_outgoing_show(&self) -> Option<&tmdb::Show> {
+        let id = self.shelf.display_app.as_ref()?;
+        self.shelf_show_for(id, 0)
     }
 
     pub fn shelf_fallback_colors(app: &crate::model::App) -> (u32, u32) {
@@ -302,6 +330,7 @@ mod tests {
         state.shelf.focus_since = Some(Instant::now() - Duration::from_secs(10));
         state.shelf.revealed = true;
         state.shelf.visibility = 1.;
+        state.shelf.crossfade = 1.;
         state
             .shelf
             .shows
@@ -362,7 +391,7 @@ mod tests {
     }
 
     #[test]
-    fn cached_apps_shade_between_shows_without_dwell() {
+    fn cached_apps_crossfade_without_wallpaper_dip() {
         let mut state = ready();
         let mapped: Vec<_> = state
             .inventory
@@ -388,6 +417,7 @@ mod tests {
         assert!(state.shelf.revealed);
         assert_eq!(state.shelf.focus_app.as_deref(), Some(a.id.as_str()));
         state.shelf.visibility = 1.;
+        state.shelf.crossfade = 1.;
 
         state.focus = Target::App(b.id.clone());
         state.shelf_tick();
@@ -395,23 +425,28 @@ mod tests {
         assert_eq!(state.shelf.focus_app.as_deref(), Some(b.id.as_str()));
         assert_eq!(state.shelf.display_app.as_deref(), Some(a.id.as_str()));
         assert!(
-            state.shelf.visibility < 1.,
-            "shade should start fading the outgoing backdrop"
+            (state.shelf.visibility - 1.).abs() < 0.001,
+            "series→series must keep visibility (no wallpaper dip)"
+        );
+        assert!(
+            state.shelf.crossfade > 0. && state.shelf.crossfade < 1.,
+            "crossfade should be in progress"
+        );
+        assert_eq!(
+            state.shelf_outgoing_show().map(|show| show.name.as_str()),
+            Some("a")
         );
         assert_eq!(
             state.shelf_current_show().map(|show| show.name.as_str()),
-            Some("a"),
-            "keep painting the outgoing show while shading down"
+            Some("b")
         );
 
-        for _ in 0..40 {
+        for _ in 0..20 {
             state.shelf_tick();
         }
         assert!(state.shelf.display_app.is_none());
-        assert!(
-            (state.shelf.visibility - 1.).abs() < 0.001,
-            "incoming cached backdrop should shade back in"
-        );
+        assert!((state.shelf.crossfade - 1.).abs() < 0.001);
+        assert!((state.shelf.visibility - 1.).abs() < 0.001);
         assert_eq!(
             state.shelf_current_show().map(|show| show.name.as_str()),
             Some("b")

@@ -41,8 +41,10 @@ pub struct Show {
 pub struct Shelf {
     pub shows: HashMap<String, Vec<Show>>,
     pub focus_app: Option<String>,
-    /// Outgoing app still painted while visibility shades down between cached apps.
+    /// Outgoing app while crossfading into `focus_app` (series → series, no wallpaper).
     pub display_app: Option<String>,
+    /// 0 = fully outgoing (`display_app`), 1 = fully incoming (`focus_app`).
+    pub crossfade: f32,
     pub focus_since: Option<std::time::Instant>,
     pub revealed: bool,
     pub selected: usize,
@@ -52,6 +54,11 @@ pub struct Shelf {
     pub generation: u64,
     pub error: Option<String>,
 }
+
+/// Per-frame step for series→series crossfades (~6 frames).
+pub const CROSSFADE_STEP: f32 = 0.18;
+/// Per-frame step for shelf visibility (enter/leave wallpaper).
+pub const VISIBILITY_STEP: f32 = 0.12;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Command {

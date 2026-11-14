@@ -1209,14 +1209,55 @@ fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language:
 }
 
 fn shelf_backdrop(out: &mut Scene, state: &State, assets: &Assets) {
-    let alpha = state.shelf.visibility;
-    if alpha <= 0.001 {
+    let vis = state.shelf.visibility;
+    if vis <= 0.001 {
         return;
     }
     let rect = Rect::new(0., 0., 1920., 1080.);
-    if let Some(show) = state.shelf_current_show()
-        && let Some(path) = &show.backdrop_path
+    let crossfading = state.shelf.display_app.is_some() && state.shelf.revealed;
+    let fade = if crossfading {
+        state.shelf.crossfade.clamp(0., 1.)
+    } else {
+        1.
+    };
+    let outgoing = state.shelf_outgoing_show();
+    let incoming = state.shelf_current_show();
+    let out_alpha = if outgoing.is_some() {
+        vis * (1. - fade)
+    } else {
+        0.
+    };
+    let in_alpha = if incoming.is_some() { vis * fade } else { 0. };
+
+    if let Some(show) = outgoing
+        && out_alpha > 0.001
     {
+        shelf_paint_show(out, state, show, rect, out_alpha, fade < 0.5);
+    }
+    if let Some(show) = incoming
+        && in_alpha > 0.001
+    {
+        shelf_paint_show(out, state, show, rect, in_alpha, fade >= 0.5);
+    } else if incoming.is_none()
+        && outgoing.is_none()
+        && let Some(app) = state.shelf_focus_app()
+    {
+        let (top, bottom) = State::shelf_fallback_colors(app);
+        out.draw
+            .push(Draw::RoundedGradient(rect, 0., c(top, vis), c(bottom, vis)));
+    }
+    let _ = assets;
+}
+
+fn shelf_paint_show(
+    out: &mut Scene,
+    state: &State,
+    show: &crate::tmdb::Show,
+    rect: Rect,
+    alpha: f32,
+    paint_copy: bool,
+) {
+    if let Some(path) = &show.backdrop_path {
         out.draw.push(Draw::TintedImage(
             path.clone(),
             rect,
@@ -1224,61 +1265,53 @@ fn shelf_backdrop(out: &mut Scene, state: &State, assets: &Assets) {
             false,
             [1., 1., 1., alpha],
         ));
-        out.shape(rect, 0., c(0x080b12, 0.28 * alpha));
-        let language = state.preferences.language;
-        // Keep title + overview clear of the channels label (dock_y - 232) or the
-        // favorites glass top when the strip is hidden.
-        let strip_top = if !state.home_channels().is_empty() {
-            state.dock_y() - 232.
-        } else {
-            state.dock_y() - 24.
-        };
-        let title_h = 56.;
-        let overview_gap = 18.;
-        let overview_h = 68.;
-        let clearance = 40.;
-        let title_y = (strip_top - clearance - title_h - overview_gap - overview_h).max(132.);
-        let text_width = 980.;
-        out.text(
-            &show.name,
-            Rect::new(84., title_y, text_width, title_h),
-            text(40., 600, -0.03).leading(1.1),
-            c(0xffffff, 0.94 * alpha),
-            false,
-        );
-        if !show.overview.is_empty() {
-            out.text(
-                &show.overview,
-                Rect::new(
-                    84.,
-                    title_y + title_h + overview_gap,
-                    text_width,
-                    overview_h,
-                ),
-                text(20., 450, -0.01).leading(1.3),
-                c(0xffffff, 0.72 * alpha),
-                false,
-            );
-        }
-        out.text(
-            language.t("tmdbAttribution"),
-            Rect::new(84., 980., 900., 28.),
-            text(14., 400, 0.),
-            c(0xffffff, 0.40 * alpha),
-            false,
-        );
+    }
+    out.shape(rect, 0., c(0x080b12, 0.28 * alpha));
+    if !paint_copy {
         return;
     }
-    if let Some(app) = state.shelf_focus_app() {
-        let (top, bottom) = State::shelf_fallback_colors(app);
-        out.draw.push(Draw::RoundedGradient(
-            rect,
-            0.,
-            c(top, alpha),
-            c(bottom, alpha),
-        ));
+    let language = state.preferences.language;
+    // Keep title + overview clear of the channels label (dock_y - 232) or the
+    // favorites glass top when the strip is hidden.
+    let strip_top = if !state.home_channels().is_empty() {
+        state.dock_y() - 232.
+    } else {
+        state.dock_y() - 24.
+    };
+    let title_h = 56.;
+    let overview_gap = 18.;
+    let overview_h = 68.;
+    let clearance = 40.;
+    let title_y = (strip_top - clearance - title_h - overview_gap - overview_h).max(132.);
+    let text_width = 980.;
+    out.text(
+        &show.name,
+        Rect::new(84., title_y, text_width, title_h),
+        text(40., 600, -0.03).leading(1.1),
+        c(0xffffff, 0.94 * alpha),
+        false,
+    );
+    if !show.overview.is_empty() {
+        out.text(
+            &show.overview,
+            Rect::new(
+                84.,
+                title_y + title_h + overview_gap,
+                text_width,
+                overview_h,
+            ),
+            text(20., 450, -0.01).leading(1.3),
+            c(0xffffff, 0.72 * alpha),
+            false,
+        );
     }
-    let _ = assets;
+    out.text(
+        language.t("tmdbAttribution"),
+        Rect::new(84., 980., 900., 28.),
+        text(14., 400, 0.),
+        c(0xffffff, 0.40 * alpha),
+        false,
+    );
 }
 
 fn home(out: &mut Scene, state: &State, assets: &Assets, _now: OffsetDateTime) {
