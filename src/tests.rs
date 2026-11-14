@@ -2523,12 +2523,13 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
             _ => None,
         })
         .collect();
-    assert_eq!(widget_order, [1, 2, 3, 5]);
+    assert_eq!(widget_order, [1, 2, 3, 5, 6]);
     for (widget, subpage) in [
         (1, Subpage::Weather),
         (2, Subpage::Shortcuts),
         (3, Subpage::Inputs),
         (5, Subpage::Channels),
+        (6, Subpage::Shelf),
     ] {
         state.focus = Target::Widget(widget);
         state.direction(Direction::Right, &controls(&state));
