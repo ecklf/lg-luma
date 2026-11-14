@@ -437,10 +437,14 @@ fn input_pills_hug_short_labels_and_center_fitted_text() {
 
 #[test]
 fn input_connection_dot_only_appears_on_hover_remote_focus_or_press() {
-    for connected in [Some(true), Some(false), None] {
+    for (connected, signal) in [Some(true), Some(false), None]
+        .into_iter()
+        .flat_map(|connected| [Some(true), Some(false), None].map(|signal| (connected, signal)))
+    {
         let mut state = ready();
         let id = state.inventory.inputs[0].id.clone();
         state.inventory.inputs[0].connected = connected;
+        state.inventory.inputs[0].signal = signal;
         state
             .preferences
             .input_modes
@@ -467,7 +471,9 @@ fn input_connection_dot_only_appears_on_hover_remote_focus_or_press() {
         let selected = dot_color(&state).unwrap();
         assert_eq!(
             selected,
-            if connected == Some(true) {
+            if connected == Some(true) && signal == Some(false) {
+                [245. / 255., 184. / 255., 75. / 255., 1.]
+            } else if connected == Some(true) {
                 [96. / 255., 230. / 255., 160. / 255., 1.]
             } else {
                 [140. / 255., 148. / 255., 156. / 255., 1.]
@@ -494,7 +500,45 @@ fn input_connection_dot_only_appears_on_hover_remote_focus_or_press() {
             (pill.x, pill.y, pill.w, pill.h),
             (after.x, after.y, after.w, after.h)
         );
+        state.overlay = Some(Overlay::Inputs);
+        let popup = scene(&state);
+        let row = popup
+            .controls
+            .iter()
+            .find(|control| control.target == target)
+            .unwrap()
+            .rect;
+        assert!(popup.draw.iter().any(|draw| matches!(draw,
+            Draw::Shape(rect, radius, _, color) if rect.w == 10. && *radius == 5.
+                && row.contains(rect.x, rect.y) && *color == selected)));
     }
+}
+
+#[test]
+fn remote_navigation_ignores_stale_input_hover() {
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    let id = state.inventory.inputs[0].id.clone();
+    state
+        .preferences
+        .input_modes
+        .insert(id.clone(), InputMode::On);
+    let target = Target::Input(id.clone());
+    state.pointer_focus(target.clone());
+    state.hover = Some(target);
+    assert_eq!(state.input_status_progress(&id), 1.);
+
+    // A stationary mouse does not send a leave event when the remote takes over.
+    state.focus(Target::SettingsMenu, &controls(&state));
+    assert!(state.hover.is_some());
+    assert!(!state.input_status_active(&id));
+    assert_eq!(state.input_status_progress(&id), 0.);
+
+    state.focus(Target::Input(id.clone()), &controls(&state));
+    assert_eq!(state.input_status_progress(&id), 1.);
+    state.focus(Target::SettingsMenu, &controls(&state));
+    state.pointer_focus(Target::Input(id.clone()));
+    assert_eq!(state.input_status_progress(&id), 1.);
 }
 
 #[test]
@@ -591,6 +635,59 @@ fn input_status_slot_animates_width_in_and_out_without_refitting_the_label() {
         assert_eq!(restored.w, collapsed.w);
         assert_eq!(label, fitted);
         assert_eq!(state.input_status_progress(&id), 0.);
+    }
+}
+
+#[test]
+fn reaching_favorites_from_the_drawer_closes_it_and_preserves_the_column() {
+    for reduced_motion in [false, true] {
+        for favorites in [0, 3, 9] {
+            for column in 0..6 {
+                let mut state = ready();
+                state.preferences.reduced_motion = reduced_motion;
+                state.preferences.favorites = Some(
+                    state
+                        .inventory
+                        .apps
+                        .iter()
+                        .take(favorites)
+                        .map(|app| app.id.clone())
+                        .collect(),
+                );
+                // Enough apps to exercise all columns and offscreen rows.
+                state.inventory.apps.extend((0..40).map(|index| {
+                    crate::model::App::new(&format!("extra.{index}"), &format!("Extra {index}"))
+                }));
+                let dock = state.dock_apps()[column].id.clone();
+                state.open(1);
+                state.drawer_visibility = 1.;
+                let grid: Vec<_> = state.apps().iter().map(|app| app.id.clone()).collect();
+                state.focus = Target::App(grid[12 + column].clone());
+                state.scroll = 800.;
+                state.direction(Direction::Up, &controls(&state));
+                assert_eq!(state.page, Page::Apps);
+                assert_eq!(state.focus, Target::App(grid[6 + column].clone()));
+                state.direction(Direction::Up, &controls(&state));
+                assert_eq!(state.page, Page::Apps);
+                assert_eq!(state.focus, Target::App(grid[column].clone()));
+                assert!(state.direction(Direction::Up, &controls(&state)).is_empty());
+                assert_eq!(state.page, Page::Home);
+                assert_eq!(state.focus, Target::App(dock.clone()));
+                assert_eq!(state.scroll, 0.);
+                assert!(!state.pointer);
+                assert!(state.overlay.is_none());
+                assert_eq!(
+                    state.drawer_visibility,
+                    if reduced_motion { 0. } else { 1. }
+                );
+                assert!(
+                    controls(&state)
+                        .iter()
+                        .any(|control| control.target == state.focus)
+                );
+                assert_eq!(state.activate(), vec![Effect::Launch(dock)]);
+            }
+        }
     }
 }
 
@@ -823,7 +920,7 @@ fn settings_move_action_reorders_only_saved_favorites() {
 }
 
 #[test]
-fn glass_surfaces_are_used_on_home_settings_and_keyboard() {
+fn glass_surfaces_are_used_on_home_and_settings() {
     let mut state = ready();
     for page in [0, 1, 2] {
         state.open(page);
@@ -834,13 +931,94 @@ fn glass_surfaces_are_used_on_home_settings_and_keyboard() {
                 .any(|draw| matches!(draw, Draw::Glass(..)))
         );
     }
-    state.open_keyboard(crate::state::TextField::Apps);
-    assert!(
-        scene(&state)
+}
+
+#[test]
+fn modal_cards_use_opaque_gray_surfaces_instead_of_glass() {
+    let restore = Target::App("netflix".into());
+    for overlay in [
+        Overlay::WallpaperUpload,
+        Overlay::TileEditor,
+        Overlay::Options {
+            id: "netflix".into(),
+            restore: restore.clone(),
+        },
+        Overlay::Delete {
+            id: "netflix".into(),
+            restore: restore.clone(),
+        },
+        Overlay::BackgroundOptions {
+            id: "dunes".into(),
+            restore: Target::Background(0),
+        },
+        Overlay::BackgroundDelete {
+            id: "dunes".into(),
+            restore: Target::Background(0),
+        },
+        Overlay::Keyboard,
+    ] {
+        let mut state = ready();
+        state.preferences.reduced_motion = true;
+        state.overlay = Some(overlay);
+        let rendered = scene(&state);
+        let panel = rendered.modal.unwrap();
+        let same_panel = |rect: &crate::state::Rect| {
+            (rect.x, rect.y, rect.w, rect.h) == (panel.x, panel.y, panel.w, panel.h)
+        };
+        assert!(!rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::Glass(rect, ..) if same_panel(rect))));
+        if matches!(
+            state.overlay,
+            Some(Overlay::WallpaperUpload | Overlay::TileEditor)
+        ) {
+            assert!(rendered.draw.iter().any(|draw| matches!(draw,
+                Draw::Shape(rect, _, 0., color) if same_panel(rect)
+                    && *color == [27. / 255., 32. / 255., 35. / 255., 1.])));
+        } else {
+            assert!(rendered.draw.iter().any(|draw| matches!(draw,
+                Draw::RoundedGradient(rect, _, top, bottom) if same_panel(rect)
+                    && *top == [52. / 255., 56. / 255., 59. / 255., 1.]
+                    && *bottom == [36. / 255., 40. / 255., 45. / 255., 1.])));
+        }
+    }
+}
+
+#[test]
+fn qr_dialogs_share_one_opaque_background_with_the_quiet_zone_and_logo_plate() {
+    for overlay in [Overlay::WallpaperUpload, Overlay::TileEditor] {
+        let mut state = ready();
+        state.preferences.reduced_motion = true;
+        state.overlay = Some(overlay);
+        let session = crate::companion::Session {
+            url: "http://192.168.1.20:12345/AbCd1234/".into(),
+            qr_size: 21,
+            qr: vec![true; 21 * 21],
+        };
+        state.wallpaper_upload = Some(Ok(session.clone()));
+        state.tile_editor = Some(Ok(session));
+        let rendered = scene(&state);
+        let fills: Vec<_> = rendered
             .draw
             .iter()
-            .any(|draw| matches!(draw, Draw::Glass(rect, ..) if rect.w == 1220.))
-    );
+            .filter_map(|draw| match draw {
+                Draw::Shape(rect, _, 0., color)
+                    if *color == [27. / 255., 32. / 255., 35. / 255., 1.] =>
+                {
+                    Some(rect)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            fills.len(),
+            3,
+            "panel, QR quiet zone, and logo plate must match"
+        );
+        assert_eq!((fills[0].w, fills[0].h), (880., 816.));
+        let scale = (336_f32 / 29.).floor();
+        assert_eq!((fills[1].w, fills[1].h), (29. * scale, 29. * scale));
+        assert_eq!((fills[2].w, fills[2].h), (11. * scale, 11. * scale));
+    }
 }
 
 #[test]

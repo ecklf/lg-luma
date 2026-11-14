@@ -22,10 +22,59 @@ mod input_icon_tests;
 #[path = "glass-home-tests.rs"]
 mod glass_home_tests;
 
+#[path = "app-sorting-tests.rs"]
+mod app_sorting_tests;
+
+#[path = "weather-style-tests.rs"]
+mod weather_style_tests;
+
 fn ready() -> State {
     let mut state = State::new(Preferences::default());
     state.set_inventory(demo_inventory(), None);
     state
+}
+
+#[test]
+fn ui_sounds_default_off_and_toggle_without_moving_controls() {
+    assert!(!Preferences::default().ui_sounds);
+    let legacy: Preferences = serde_json::from_value(json!({"hour_24": true})).unwrap();
+    assert!(!legacy.ui_sounds);
+    assert!(legacy.hour_24);
+    for pointer in [false, true] {
+        let mut state = ready();
+        state.open(2);
+        state.direction(Direction::Right, &controls(&state));
+        for _ in 0..4 {
+            state.direction(Direction::Down, &controls(&state));
+        }
+        assert_eq!(state.focus, Target::Setting(11));
+        state.pointer = pointer;
+        let before = controls(&state)
+            .into_iter()
+            .find(|c| c.target == state.focus)
+            .unwrap()
+            .rect;
+        assert_eq!(state.activate(), [Effect::Save]);
+        assert!(state.preferences.ui_sounds);
+        assert_eq!(state.focus, Target::Setting(11));
+        let loaded: Preferences =
+            serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
+        assert!(loaded.ui_sounds);
+        assert_eq!(loaded.hour_24, state.preferences.hour_24);
+        let after = controls(&state)
+            .into_iter()
+            .find(|c| c.target == state.focus)
+            .unwrap()
+            .rect;
+        assert_eq!(
+            (before.x, before.y, before.w, before.h),
+            (after.x, after.y, after.w, after.h)
+        );
+        assert_eq!(state.activate(), [Effect::Save]);
+        assert!(!state.preferences.ui_sounds);
+        state.back();
+        assert!(!state.preferences.ui_sounds);
+    }
 }
 
 fn manage_apps(state: &mut State) {
@@ -250,14 +299,10 @@ fn remote_routes_from_header_and_back_through_settings() {
     assert_eq!(state.focus, Target::Sidebar(0));
     state.back();
     assert_eq!(state.page, Page::Home);
-    assert_eq!(
-        state.back(),
-        vec![Effect::Recent {
-            generation: 1,
-            command: crate::recents::Command::List
-        }]
-    );
-    assert!(state.recents_open());
+    let focus = state.focus.clone();
+    assert!(state.back().is_empty());
+    assert!(!state.recents_open());
+    assert_eq!(state.focus, focus);
 }
 
 #[test]
