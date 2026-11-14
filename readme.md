@@ -309,7 +309,8 @@ Choose **Automatic** to clear that input's override and restore label-based icon
 
 ### Recent app switching
 
-Press **Back** on Home, or hold **Back** for 0.6 seconds from any page, to open Recent apps.
+Hold **Back** for 0.6 seconds from any page to open Recent apps. A short press never opens it,
+including on Home.
 
 - **Left / Right**, the pointer, or the scroll wheel browses recent apps and inputs.
 - **OK** or a pointer click opens the selected app or input.

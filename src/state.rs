@@ -3030,9 +3030,7 @@ impl State {
         if self.page != Page::Home {
             self.open(0);
             self.focus = self.first_content();
-            vec![]
-        } else {
-            self.open_recents()
         }
+        vec![]
     }
 }
