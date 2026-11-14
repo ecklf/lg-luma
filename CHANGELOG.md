@@ -1,5 +1,18 @@
 # lg-luma
 
+## 3.2.0
+
+### Minor Changes
+
+- e5eb588: Add optional tvOS-inspired UI feedback sounds for navigation, selection, and Back, with a General setting that defaults to off. Sounds are originally synthesized and gracefully fall back to silence if audio is unavailable.
+
+### Patch Changes
+
+- 21e5199: Dismiss the app drawer when remote selection moves up to the favorites row, keeping the corresponding favorite selected on Home.
+- 88f6431: Restore opaque gray backgrounds for upload and shortcut dialogs, action cards, delete confirmations, and the keyboard instead of Liquid Glass.
+- db61888: Precompute lossless Liquid Glass wallpaper backdrops during asset preparation and uploads instead of decoding, resizing and blurring them before the first frame. Add startup diagnostics and regression coverage while preserving legacy wallpaper fallback.
+- 91a25bc: Hide input connection badges left behind by mouse hover when remote navigation moves focus away.
+
 ## 3.1.0
 
 ### Minor Changes
