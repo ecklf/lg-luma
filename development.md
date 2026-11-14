@@ -72,6 +72,29 @@ backend. Avoid copying the whole SDK library directory or the TV's graphics driv
 
 ## Controls and navigation
 
+### Startup profiling
+
+See [startup measurements](docs/startup.md) for the Liquid Glass startup regression and
+the benchmark procedure. `xvfb-run -a pnpm benchmark:startup` builds a release desktop
+binary and alternates five process starts with runtime-filtered and precomputed glass.
+It records `.build/startup-benchmark.json`, without contacting TV or public HTTP services.
+Use `LUMA_STARTUP_RUNS=10` to change the sample count. These are process starts with warm
+filesystem/driver caches, not TV cold-boot measurements.
+
+`--diagnostics PATH` includes `startup.stages_ms` and `startup.first_frame`, separate from
+steady-state frame pacing. The glass counters distinguish prepared atlas loads from legacy
+runtime filtering. TV startup logs also report this breakdown after the first presentation.
+Inventory completion and the first successfully populated frame are timed separately, so a
+quick loading frame cannot conceal slow TV inventory responses.
+`LUMA_GLASS_PRECOMPUTED=0` forces the original filtering path for diagnostic comparison.
+
+`pnpm assets` prepares lossless `wallpapers/*.glass.png` atlases from the final 1080p JPEGs,
+including unshaded variants. The host and legacy renderer share the exact Rust resize/blur
+implementation. New uploads prepare both atlases on the wallpaper worker before publishing
+the immutable directory. Older uploads or missing/corrupt atlases fall back to the original
+renderer. Shader sampling, glass appearance, GPU cache budgets and lazy text are unchanged.
+`xvfb-run -a pnpm test:startup` verifies desktop GL/GLES framebuffer equality and fallback.
+
 ### Documentation screenshots
 
 `pnpm screenshots` generates `docs/home.png`, `docs/apps.png`, `docs/settings.png` and
@@ -86,6 +109,18 @@ It does not execute the test suites. A desktop display is required; on headless 
 `xvfb-run -a pnpm screenshots`. These images document the native design, not TV hardware behavior.
 
 ### Input
+
+General → UI sounds stores `ui_sounds` (default `false`, also for existing preferences).
+The SDL queue opens lazily on the first audible interaction, plays short original synthesized
+navigation/select/back cues at a fixed quiet level, and closes when disabled or the window loses
+focus/visibility. Navigation repeats are rate-limited and queued audio cannot accumulate.
+Unchanged navigation, worker responses, redraws, and scripted captures stay silent. Audio errors
+are logged once per enabled session and never prevent navigation; toggling off/on retries.
+No sound recordings or extra audio libraries are packaged. TV routing/volume and behavior alongside
+other apps need manual hardware verification. A desktop-only backend check is available with
+`SDL_AUDIODRIVER=dummy cargo test --locked --bin luma dummy_audio_ -- --ignored --test-threads=1`.
+The unavailable-backend check runs with
+`SDL_AUDIODRIVER=luma-unavailable cargo test --locked --bin luma unavailable_audio_ -- --ignored --test-threads=1`.
 
 Weather → Widget style persists `weather_style` (`standard`, the default, `no_icon`,
 or `compact`). Home and Settings use the same native layout and painting functions.
@@ -203,6 +238,8 @@ using Automatic. This is a backward-compatible feature and does not change input
 
 Home favorites form one horizontal glass dock, never a second row. Left/Right follows saved order,
 including reorder mode, and reveals complete cards. Up reaches Inputs or the clock/settings control.
+Up from the drawer’s first app row dismisses the drawer immediately while preserving the
+corresponding dock app as the selected Home favorite. Up within later grid rows stays in the drawer.
 Down lifts the dock to the top and reveals a six-column app grid beneath it. Favorites stay in the
 dock instead of appearing twice in the grid. The drawer has no search or category toolbar.
 The Home dock follows saved pinned order, with no Apps button or Move apps label above it.
@@ -240,6 +277,10 @@ directional hairline highlights. The rim retains more detail than the interior. 
 an FBO or sampling the framebuffer. Text and app artwork are separate, sharp draws. Wallpaper
 crossfades blend both glass backdrops. Wallpaper changes already invalidate the full scene, while
 ordinary glass changes participate in damage tracking.
+
+Modal cards (wallpaper upload, shortcut editing, app/background actions, deletion confirmations,
+and the keyboard) use opaque gray gradients rather than wallpaper-sampling glass to keep their
+content readable. The dock and regular controls retain their glass treatment.
 
 See [the research notes](docs/liquid-glass-research.md) for sources, visual decisions and limitations.
 

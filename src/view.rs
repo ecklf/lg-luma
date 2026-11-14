@@ -197,6 +197,14 @@ impl Scene {
     fn glass(&mut self, rect: Rect, radius: f32) {
         self.draw.push(Draw::Glass(rect, radius, c(0x202020, 0.96)));
     }
+    fn modal_surface(&mut self, rect: Rect, radius: f32) {
+        self.draw.push(Draw::RoundedGradient(
+            rect,
+            radius,
+            c(0x34383b, 1.),
+            c(0x24282d, 1.),
+        ));
+    }
     fn new() -> Self {
         Self {
             draw: Vec::new(),
@@ -356,7 +364,7 @@ fn companion(
     let panel = Rect::new(520., 144., 880., 816.);
     out.modal = Some(panel);
     out.shadow(panel, 24., 40., 12., 0.3);
-    out.glass(panel, 24.);
+    out.modal_surface(panel, 24.);
     out.text(
         language.t(strings.title),
         Rect::new(584., 198., 752., 48.),
@@ -2613,6 +2621,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     }),
                     false,
                 ),
+                (
+                    11,
+                    "uiSounds",
+                    "volume",
+                    Some(language.t(if state.preferences.ui_sounds {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
+                    false,
+                ),
             ]
             .into_iter()
             .enumerate()
@@ -3664,7 +3683,7 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
     let panel_start = out.draw.len();
     out.modal = Some(panel);
     out.shadow(panel, 27.2, 120., 25., 0.47);
-    out.glass(panel, 27.2);
+    out.modal_surface(panel, 27.2);
     out.border(panel, 27.2, 1., c(0xffffff, 0.12));
     let hidden = state.preferences.hidden.iter().any(|item| item == id);
     let actions = if shortcut {
@@ -3824,7 +3843,7 @@ fn delete_confirmation(out: &mut Scene, state: &State, assets: &Assets, id: &str
     let panel = Rect::new(640., (1080. - height) / 2., 640., height);
     out.modal = Some(panel);
     out.shadow(panel, 28., 100., 24., 0.47);
-    out.glass(panel, 28.);
+    out.modal_surface(panel, 28.);
     out.border(panel, 28., 1., c(0xffffff, 0.12));
     out.text(
         body,
@@ -3895,7 +3914,7 @@ fn keyboard(out: &mut Scene, state: &State, assets: &Assets) {
     let panel = Rect::new(350., 290., 1220., 530.);
     out.modal = Some(panel);
     out.shadow(panel, 27.2, 90., 20., 0.45);
-    out.glass(panel, 27.2);
+    out.modal_surface(panel, 27.2);
     out.border(panel, 27.2, 1., c(0xffffff, 0.12));
     out.text(
         match state.keyboard_field {

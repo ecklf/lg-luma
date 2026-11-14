@@ -305,6 +305,7 @@ pub struct Preferences {
     pub deleted_backgrounds: Vec<String>,
     pub hour_24: bool,
     pub reduced_motion: bool,
+    pub ui_sounds: bool,
     pub show_seconds: bool,
     /// Optional name appended to the Home greeting ("Good evening, Ana."). Empty = plain greeting.
     pub greeting_name: String,
@@ -357,6 +358,7 @@ impl Default for Preferences {
             deleted_backgrounds: vec![],
             hour_24: false,
             reduced_motion: false,
+            ui_sounds: false,
             show_seconds: false,
             greeting_name: String::new(),
             show_greeting: true,

@@ -41,7 +41,7 @@ jobs:
             await core.summary
               .addHeading(`Luma ${process.env.RELEASE_TAG}`)
               .addRaw(publish
-                ? 'Release authorized: this main commit merged Version Packages with a version increase. Publication waits for checks, all four smoke suites, and the verified ARM package.'
+                ? 'Release authorized: this main commit merged Version Packages with a version increase. Publication waits for checks, all smoke suites, and the verified ARM package.'
                 : 'Validation only: this run cannot publish. Merge the Version Packages PR to start the eligible main-commit release run.')
               .write();
             return publish;
@@ -114,6 +114,9 @@ jobs:
           - suite: Translations
             script: tests/translations-smoke.mjs
             artifact: translations
+          - suite: Startup and glass cache
+            script: tests/startup-smoke.mjs
+            artifact: startup
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

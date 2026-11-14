@@ -501,7 +501,7 @@ impl State {
     pub fn input_status_active(&self, id: &str) -> bool {
         let target = Target::Input(id.into());
         (!self.pointer && self.focus == target)
-            || self.hover.as_ref() == Some(&target)
+            || (self.pointer && self.hover.as_ref() == Some(&target))
             || self.pressed.as_ref() == Some(&target)
     }
 
@@ -2053,8 +2053,9 @@ impl State {
                         Direction::Right => Some(Target::App(
                             apps[(index + 1).min(apps.len() - 1)].id.clone(),
                         )),
-                        Direction::Up if index < APPS_COLUMNS => Some(
-                            self.dock_apps()
+                        Direction::Up if index < APPS_COLUMNS => {
+                            let target = self
+                                .dock_apps()
                                 .get(index.min(self.dock_apps().len().saturating_sub(1)))
                                 .map_or(
                                     if index < 3 {
@@ -2062,9 +2063,13 @@ impl State {
                                     } else {
                                         Target::SettingsMenu
                                     },
-                                    |app| Target::DockApp(app.id.clone()),
-                                ),
-                        ),
+                                    |app| Target::App(app.id.clone()),
+                                );
+                            // Reaching the favorites row returns to Home immediately,
+                            // preserving the selected column instead of requiring another Up.
+                            self.open(0);
+                            Some(target)
+                        }
                         Direction::Up => Some(Target::App(apps[index - APPS_COLUMNS].id.clone())),
                         Direction::Down
                             if (index / APPS_COLUMNS + 1) * APPS_COLUMNS < apps.len() =>
@@ -2644,7 +2649,12 @@ impl State {
         }
         if self.channel_switcher_open() {
             return match self.focus.clone() {
-                Target::ChannelSwitch(id) if !self.launching => vec![Effect::OpenChannel(id)],
+                Target::ChannelSwitch(id) if !self.launching => {
+                    // Match Recents: dismiss the carousel first, then tune so Live TV
+                    // can take the foreground instead of leaving the overlay up.
+                    let _ = self.back();
+                    vec![Effect::OpenChannel(id)]
+                }
                 _ => vec![],
             };
         }
@@ -2987,6 +2997,7 @@ impl State {
                         return vec![];
                     }
                     2 => self.preferences.reduced_motion = !self.preferences.reduced_motion,
+                    11 => self.preferences.ui_sounds = !self.preferences.ui_sounds,
                     4 => {
                         self.subpage = Some(Subpage::Language);
                         self.focus = Target::Choice(self.preferences.language.index());

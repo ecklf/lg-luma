@@ -498,6 +498,33 @@ fn input_connection_dot_only_appears_on_hover_remote_focus_or_press() {
 }
 
 #[test]
+fn remote_navigation_ignores_stale_input_hover() {
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    let id = state.inventory.inputs[0].id.clone();
+    state
+        .preferences
+        .input_modes
+        .insert(id.clone(), InputMode::On);
+    let target = Target::Input(id.clone());
+    state.pointer_focus(target.clone());
+    state.hover = Some(target);
+    assert_eq!(state.input_status_progress(&id), 1.);
+
+    // A stationary mouse does not send a leave event when the remote takes over.
+    state.focus(Target::SettingsMenu, &controls(&state));
+    assert!(state.hover.is_some());
+    assert!(!state.input_status_active(&id));
+    assert_eq!(state.input_status_progress(&id), 0.);
+
+    state.focus(Target::Input(id.clone()), &controls(&state));
+    assert_eq!(state.input_status_progress(&id), 1.);
+    state.focus(Target::SettingsMenu, &controls(&state));
+    state.pointer_focus(Target::Input(id.clone()));
+    assert_eq!(state.input_status_progress(&id), 1.);
+}
+
+#[test]
 fn clock_is_time_only_and_corner_actions_use_luma_and_settings_icons() {
     let mut state = ready();
     let rendered = scene(&state);
@@ -591,6 +618,59 @@ fn input_status_slot_animates_width_in_and_out_without_refitting_the_label() {
         assert_eq!(restored.w, collapsed.w);
         assert_eq!(label, fitted);
         assert_eq!(state.input_status_progress(&id), 0.);
+    }
+}
+
+#[test]
+fn reaching_favorites_from_the_drawer_closes_it_and_preserves_the_column() {
+    for reduced_motion in [false, true] {
+        for favorites in [0, 3, 9] {
+            for column in 0..6 {
+                let mut state = ready();
+                state.preferences.reduced_motion = reduced_motion;
+                state.preferences.favorites = Some(
+                    state
+                        .inventory
+                        .apps
+                        .iter()
+                        .take(favorites)
+                        .map(|app| app.id.clone())
+                        .collect(),
+                );
+                // Enough apps to exercise all columns and offscreen rows.
+                state.inventory.apps.extend((0..40).map(|index| {
+                    crate::model::App::new(&format!("extra.{index}"), &format!("Extra {index}"))
+                }));
+                let dock = state.dock_apps()[column].id.clone();
+                state.open(1);
+                state.drawer_visibility = 1.;
+                let grid: Vec<_> = state.apps().iter().map(|app| app.id.clone()).collect();
+                state.focus = Target::App(grid[12 + column].clone());
+                state.scroll = 800.;
+                state.direction(Direction::Up, &controls(&state));
+                assert_eq!(state.page, Page::Apps);
+                assert_eq!(state.focus, Target::App(grid[6 + column].clone()));
+                state.direction(Direction::Up, &controls(&state));
+                assert_eq!(state.page, Page::Apps);
+                assert_eq!(state.focus, Target::App(grid[column].clone()));
+                assert!(state.direction(Direction::Up, &controls(&state)).is_empty());
+                assert_eq!(state.page, Page::Home);
+                assert_eq!(state.focus, Target::App(dock.clone()));
+                assert_eq!(state.scroll, 0.);
+                assert!(!state.pointer);
+                assert!(state.overlay.is_none());
+                assert_eq!(
+                    state.drawer_visibility,
+                    if reduced_motion { 0. } else { 1. }
+                );
+                assert!(
+                    controls(&state)
+                        .iter()
+                        .any(|control| control.target == state.focus)
+                );
+                assert_eq!(state.activate(), vec![Effect::Launch(dock)]);
+            }
+        }
     }
 }
 
@@ -823,7 +903,7 @@ fn settings_move_action_reorders_only_saved_favorites() {
 }
 
 #[test]
-fn glass_surfaces_are_used_on_home_settings_and_keyboard() {
+fn glass_surfaces_are_used_on_home_and_settings() {
     let mut state = ready();
     for page in [0, 1, 2] {
         state.open(page);
@@ -834,13 +914,47 @@ fn glass_surfaces_are_used_on_home_settings_and_keyboard() {
                 .any(|draw| matches!(draw, Draw::Glass(..)))
         );
     }
-    state.open_keyboard(crate::state::TextField::Apps);
-    assert!(
-        scene(&state)
-            .draw
-            .iter()
-            .any(|draw| matches!(draw, Draw::Glass(rect, ..) if rect.w == 1220.))
-    );
+}
+
+#[test]
+fn modal_cards_use_opaque_gray_surfaces_instead_of_glass() {
+    let restore = Target::App("netflix".into());
+    for overlay in [
+        Overlay::WallpaperUpload,
+        Overlay::TileEditor,
+        Overlay::Options {
+            id: "netflix".into(),
+            restore: restore.clone(),
+        },
+        Overlay::Delete {
+            id: "netflix".into(),
+            restore: restore.clone(),
+        },
+        Overlay::BackgroundOptions {
+            id: "dunes".into(),
+            restore: Target::Background(0),
+        },
+        Overlay::BackgroundDelete {
+            id: "dunes".into(),
+            restore: Target::Background(0),
+        },
+        Overlay::Keyboard,
+    ] {
+        let mut state = ready();
+        state.preferences.reduced_motion = true;
+        state.overlay = Some(overlay);
+        let rendered = scene(&state);
+        let panel = rendered.modal.unwrap();
+        let same_panel = |rect: &crate::state::Rect| {
+            (rect.x, rect.y, rect.w, rect.h) == (panel.x, panel.y, panel.w, panel.h)
+        };
+        assert!(!rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::Glass(rect, ..) if same_panel(rect))));
+        assert!(rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::RoundedGradient(rect, _, top, bottom) if same_panel(rect)
+                && *top == [52. / 255., 56. / 255., 59. / 255., 1.]
+                && *bottom == [36. / 255., 40. / 255., 45. / 255., 1.])));
+    }
 }
 
 #[test]

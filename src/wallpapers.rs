@@ -400,6 +400,23 @@ fn store(directory: &Path, bytes: &[u8], valid: impl Fn() -> bool) -> Result<Wal
         write_new(&staging.join("wallpaper.jpg"), &image)?;
         write_new(&staging.join("original.jpg"), &original)?;
         write_new(&staging.join("thumbnail.jpg"), &thumbnail)?;
+        // Derive from the final JPEG bytes, just like legacy rendering, without
+        // adding blur/decode work to the SDL thread on the next app start.
+        for (name, bytes) in [("wallpaper.jpg", &image), ("original.jpg", &original)] {
+            if !valid() {
+                return Err("Upload session ended".into());
+            }
+            let decoded = image::load_from_memory(bytes).map_err(|error| error.to_string())?;
+            let atlas = crate::glass_backdrop::prepare(decoded);
+            let mut png = std::io::Cursor::new(Vec::new());
+            atlas
+                .write_to(&mut png, image::ImageFormat::Png)
+                .map_err(|error| error.to_string())?;
+            write_new(
+                &crate::glass_backdrop::sidecar_path(&staging.join(name)),
+                png.get_ref(),
+            )?;
+        }
         write_new(
             &staging.join("metadata.json"),
             &serde_json::to_vec(&item).map_err(|e| e.to_string())?,
@@ -415,6 +432,8 @@ fn store(directory: &Path, bytes: &[u8], valid: impl Fn() -> bool) -> Result<Wal
             "wallpaper.jpg",
             "original.jpg",
             "thumbnail.jpg",
+            "wallpaper.glass.png",
+            "original.glass.png",
             "metadata.json",
         ] {
             let _ = fs::remove_file(staging.join(file));

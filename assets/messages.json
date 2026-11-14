@@ -1,4 +1,21 @@
 {
+  "uiSounds": {
+    "en": "UI sounds",
+    "de": "Bedientöne",
+    "es": "Sonidos de la interfaz",
+    "zh": "界面音效",
+    "zh-tw": "介面音效",
+    "pt": "Sons da interface",
+    "it": "Suoni dell’interfaccia",
+    "ru": "Звуки интерфейса",
+    "pl": "Dźwięki interfejsu",
+    "fr": "Sons de l’interface",
+    "vi": "Âm thanh giao diện",
+    "nl": "Interfacegeluiden",
+    "sv": "Gränssnittsljud",
+    "cs": "Zvuky rozhraní",
+    "ca": "Sons de la interfície"
+  },
   "weatherStyle": {
     "en": "Widget style",
     "de": "Widget-Stil",

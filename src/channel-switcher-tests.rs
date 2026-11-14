@@ -47,11 +47,13 @@ fn hold_back_on_home_channel_opens_switcher() {
 #[test]
 fn switcher_ok_tunes_selected_channel() {
     let mut state = with_favorites();
+    state.preferences.reduced_motion = true;
     state.open_channel_switcher();
     let right = state.home_channels()[2].id.clone();
     state.channel_switcher_direction(Direction::Right);
     assert_eq!(state.focus, Target::ChannelSwitch(right.clone()));
     assert_eq!(state.activate(), vec![Effect::OpenChannel(right)]);
+    assert!(!state.channel_switcher_open());
 }
 
 #[test]
