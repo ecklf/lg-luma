@@ -1,5 +1,67 @@
 # lg-luma
 
+## 2.19.0
+
+### Minor Changes
+
+- ea1b6d5: Add a native bundled SVG icon picker under Settings → Widgets → Inputs → select input → Icon.
+  Choose Automatic (default label detection), HDMI, USB, Apple TV, Computer, Console, PlayStation,
+  NVIDIA Shield, Streaming device, Nintendo Switch, Nintendo Switch 2, or Xbox. Explicit icon
+  choices persist per input across restarts; choosing Automatic clears that input's override and
+  restores label-based detection. Existing inputs keep Automatic unless an override is selected.
+
+### Patch Changes
+
+- ea1b6d5: Group Refresh apps & inputs and Reset icon cache below Text rendering in System settings, keeping their existing refresh icon and adding spacing around the group.
+
+## 2.18.1
+
+### Patch Changes
+
+- 6dbc626: Publish a standalone application manifest with release assets for central webOS Homebrew repository submissions, while preserving the existing custom repository feed.
+
+## 2.18.0
+
+### Minor Changes
+
+- 2bc5d0a: App icons that can only be read through Homebrew Channel are now kept on disk, so they appear at once after a restart instead of seconds later.
+
+  Add Reset icon cache in Settings → System to clear persisted and decoded icons and reload artwork without changing preferences.
+
+### Patch Changes
+
+- 0504a6f: Show up to four HDMI inputs on one Home row, matching the most ports any LG TV has. Cards keep their size when Auto shows or hides an input. Long names and statuses shrink to fit, and names too long even at a readable size end with an ellipsis instead of being cut off.
+- 622f7de: Highlight the Home, Apps and Settings tab under the Magic Remote pointer with a faint pill that never looks like the active page, and clear it when the pointer moves away.
+- 73e799f: Recognize PlayStation input logos when TV labels include a category, such as "PS5 Game Console".
+- 59f3520: Fix a crash on webOS 4 when some remote keys were pressed: text input now stays off until the on-screen keyboard opens.
+
+## 2.17.0
+
+### Minor Changes
+
+- 7a1e3ec: Add dedicated Nintendo Switch, Switch 2, NVIDIA Shield, and Xbox input icons, selected from detected or custom input names.
+- bb1871f: Support Home takeover on webOS 24 (9.x). Its SAM has no `releaseBlockSystemApp`,
+  so a mounted Home manifest is never reread; webOS 24 therefore takes the same
+  executable method as webOS 5/6 instead of the manifest method used on 10.x/11.x.
+
+### Patch Changes
+
+- e22d48e: Add Czech (`cs`) translation: full `messages.json` catalog and locale registration, including localized date formatting with genitive month names. The bundled Inter subset already covers all Czech letters (á, č, ď, é, ě, í, ň, ó, ř, š, ť, ú, ů, ý, ž and their capitals).
+
+## 2.16.2
+
+### Patch Changes
+
+- c635023: Fix rectangular seams around installed app icons when favorite cards fade at the screen edges.
+
+## 2.16.1
+
+### Patch Changes
+
+- 652d8e7: Choose black or white favorite hearts for contrast against the card background, without a circular backing.
+- 33f78cc: Refresh HDMI cable and signal status while Home or input settings are visible, without reloading apps or losing the last valid status on read failures. Preserve the existing cable-based Auto visibility and `hdmiPlugIn` priority, and show No signal when a connected cable has no signal.
+- 161a9a3: Replace TV-side Node helpers with a bounded native Rust helper and synchronize splash images directly from privileged Home processes.
+
 ## 2.16.0
 
 ### Minor Changes

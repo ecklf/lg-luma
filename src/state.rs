@@ -78,6 +78,7 @@ pub enum Target {
     DeleteBackground,
     InputMode(String),
     InputRename,
+    InputIcon,
     InputNameReset,
     Choice(usize),
     CloseDialog,
@@ -157,6 +158,7 @@ pub enum Subpage {
     ClockFormat,
     TimeFormat,
     Input(String),
+    InputIcons(String),
     WeatherLocation,
     Temperature,
     Language,
@@ -222,6 +224,8 @@ pub struct State {
     pub loading: bool,
     /// Set by Refresh apps: the next inventory also reloads every app icon.
     pub reload_artwork: bool,
+    /// System action consumed by the SDL loop, with disk work delegated to artwork's worker.
+    pub reset_icon_cache: bool,
     pub launching: bool,
     pub uninstalling: Option<String>,
     pub notice: Option<(String, Instant)>,
@@ -233,6 +237,8 @@ pub struct State {
     pub inventory_failures: u32,
     pub dirty: bool,
     pub pointer: bool,
+    /// The control under the pointer right now; unlike focus, cleared when it leaves.
+    pub hover: Option<Target>,
     pub pressed: Option<Target>,
     pub previous_background: Option<(String, Instant)>,
     pub background_fade: f32,
@@ -267,6 +273,7 @@ impl State {
             moving: None,
             loading: false,
             reload_artwork: false,
+            reset_icon_cache: false,
             launching: false,
             uninstalling: None,
             notice: None,
@@ -277,6 +284,7 @@ impl State {
             inventory_failures: 0,
             dirty: true,
             pointer: false,
+            hover: None,
             pressed: None,
             previous_background: None,
             background_fade: BACKGROUND_FADE,
@@ -653,7 +661,7 @@ impl State {
         self.reconcile_focus();
         let missing = |id: &str| !self.inventory.inputs.iter().any(|input| input.id == id);
         if self.page == Page::Settings
-            && (matches!(&self.subpage, Some(Subpage::Input(id)) if missing(id))
+            && (matches!(&self.subpage, Some(Subpage::Input(id) | Subpage::InputIcons(id)) if missing(id))
                 || matches!(&self.focus, Target::InputMode(id) if missing(id)))
         {
             self.subpage = Some(Subpage::Inputs);
@@ -1008,6 +1016,10 @@ impl State {
                 self.subpage = Some(Subpage::Clock);
                 Target::ClockTimeFormat
             }
+            Some(Subpage::InputIcons(id)) => {
+                self.subpage = Some(Subpage::Input(id));
+                Target::InputIcon
+            }
             Some(Subpage::Input(id)) => {
                 self.subpage = Some(Subpage::Inputs);
                 Target::InputMode(id)
@@ -1167,6 +1179,7 @@ impl State {
                         | Subpage::Temperature
                         | Subpage::TextRendering,
                     ) => 2,
+                    Some(Subpage::InputIcons(_)) => crate::model::INPUT_ICONS.len() + 1,
                     Some(Subpage::Language) => Language::ALL.len(),
                     Some(Subpage::DateFormat) => crate::model::DateFormat::ALL.len(),
                     _ => 3,
@@ -1192,23 +1205,33 @@ impl State {
                 }
                 return vec![];
             }
-            if matches!(self.focus, Target::InputRename | Target::InputNameReset) {
+            if matches!(
+                self.focus,
+                Target::InputRename | Target::InputNameReset | Target::InputIcon
+            ) {
+                let mut rows = vec![Target::InputRename];
+                if controls.iter().any(|c| c.target == Target::InputNameReset) {
+                    rows.push(Target::InputNameReset);
+                }
+                rows.push(Target::InputIcon);
+                let index = rows
+                    .iter()
+                    .position(|target| *target == self.focus)
+                    .unwrap();
                 match direction {
                     Direction::Left => self.close_subpage(),
                     Direction::Up => self.focus(
-                        if self.focus == Target::InputNameReset {
-                            Target::InputRename
-                        } else {
+                        if index == 0 {
                             Target::Choice(2)
+                        } else {
+                            rows[index - 1].clone()
                         },
                         controls,
                     ),
-                    Direction::Down
-                        if self.focus == Target::InputRename
-                            && controls.iter().any(|c| c.target == Target::InputNameReset) =>
-                    {
-                        self.focus(Target::InputNameReset, controls)
+                    Direction::Down if index + 1 < rows.len() => {
+                        self.focus(rows[index + 1].clone(), controls)
                     }
+                    Direction::Right if self.focus == Target::InputIcon => return self.activate(),
                     _ => {}
                 }
                 return vec![];
@@ -2061,6 +2084,25 @@ impl State {
                     self.panel_started = Some(Instant::now());
                 }
             }
+            Target::InputIcon => {
+                if let Some(Subpage::Input(id)) = self.subpage.clone() {
+                    let selected = self
+                        .preferences
+                        .input_icon(&id)
+                        .and_then(|saved| {
+                            crate::model::INPUT_ICONS
+                                .iter()
+                                .position(|(icon, _)| *icon == saved)
+                        })
+                        .map_or(0, |index| index + 1);
+                    self.subpage = Some(Subpage::InputIcons(id));
+                    self.focus = Target::Choice(selected);
+                    self.scroll = 0.;
+                    if !self.preferences.reduced_motion {
+                        self.panel_started = Some(Instant::now());
+                    }
+                }
+            }
             Target::InputRename => self.open_keyboard(TextField::InputName),
             Target::Widget(index) => {
                 let (subpage, focus) = match index {
@@ -2195,6 +2237,10 @@ impl State {
                         return vec![];
                     }
                     5 => return vec![Effect::Quit],
+                    9 => {
+                        self.reset_icon_cache = true;
+                        return vec![];
+                    }
                     7 => {
                         self.subpage = Some(Subpage::TextRendering);
                         self.focus = Target::Choice(self.preferences.text_rendering.index());
@@ -2280,6 +2326,18 @@ impl State {
                     Some(Subpage::TimeFormat) => self.preferences.show_seconds = index == 1,
                     Some(Subpage::DateFormat) => {
                         self.preferences.date_format = crate::model::DateFormat::ALL[index.min(3)];
+                    }
+                    Some(Subpage::InputIcons(id)) => {
+                        let icon = if index == 0 {
+                            ""
+                        } else if let Some((icon, _)) = crate::model::INPUT_ICONS.get(index - 1) {
+                            *icon
+                        } else {
+                            return vec![];
+                        };
+                        let changed = self.preferences.set_input_icon(&id, icon);
+                        self.close_subpage();
+                        return if changed { vec![Effect::Save] } else { vec![] };
                     }
                     Some(Subpage::Input(id)) => {
                         self.preferences.input_modes.insert(

@@ -196,6 +196,7 @@ jobs:
             dist/*.ipk
             dist/sha256sums
             dist/repo.json
+            dist/com.ecklf.luma.manifest.json
             dist/description.html
             dist/app-icon-large.png
   build:
@@ -261,7 +262,7 @@ jobs:
             fi
           fi
 
-          files=(release/*.ipk release/sha256sums release/repo.json release/description.html release/app-icon-large.png)
+          files=(release/*.ipk release/sha256sums release/repo.json release/com.ecklf.luma.manifest.json release/description.html release/app-icon-large.png)
           if [ "$state" = true ]; then
             gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
             gh release edit "$RELEASE_TAG" --draft=false

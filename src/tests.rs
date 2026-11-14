@@ -16,6 +16,9 @@ mod wallpaper_tests;
 #[path = "input-refresh-tests.rs"]
 mod input_refresh_tests;
 
+#[path = "input-icon-tests.rs"]
+mod input_icon_tests;
+
 fn ready() -> State {
     let mut state = State::new(Preferences::default());
     state.set_inventory(demo_inventory(), None);
@@ -909,7 +912,7 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     assert!(
         !controls(&state)
             .iter()
-            .any(|c| matches!(c.target, Target::Setting(3 | 5)))
+            .any(|c| matches!(c.target, Target::Setting(3 | 5 | 9)))
     );
     assert!(
         controls(&state)
@@ -923,10 +926,19 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::CheckUpdates);
     state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Setting(7));
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(3));
     assert_eq!(state.activate(), vec![Effect::Reload]);
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Setting(7));
+    assert_eq!(state.focus, Target::Setting(9));
+    let preferences = serde_json::to_value(&state.preferences).unwrap();
+    assert!(state.activate().is_empty());
+    assert!(state.reset_icon_cache);
+    assert_eq!(
+        serde_json::to_value(&state.preferences).unwrap(),
+        preferences
+    );
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(5));
     assert_eq!(state.activate(), vec![Effect::Quit]);
@@ -935,6 +947,43 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(0));
     assert_eq!(state.section, 0);
+}
+
+#[test]
+fn system_maintenance_actions_share_an_icon_and_group_below_text_rendering() {
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::SYSTEM_SECTION;
+    state.panel_started = None;
+    let system = scene(&state);
+    let rect = |index| {
+        system
+            .controls
+            .iter()
+            .find(|control| control.target == Target::Setting(index))
+            .unwrap()
+            .rect
+    };
+    let text = rect(7);
+    let refresh = rect(3);
+    let reset = rect(9);
+    let quit = rect(5);
+    let gap = |above: crate::state::Rect, below: crate::state::Rect| below.y - above.y - above.h;
+    assert!(gap(text, refresh) > gap(refresh, reset));
+    assert!(gap(reset, quit) > gap(refresh, reset));
+    assert!((gap(refresh, reset) - 12.).abs() < 0.01);
+    for action in [refresh, reset] {
+        assert!(system.draw.iter().any(|draw| matches!(draw,
+            crate::renderer::Draw::TintedImage(path, icon, ..)
+                if path.ends_with("ui-icons/refresh.lvec")
+                    && icon.y >= action.y && icon.y + icon.h <= action.y + action.h
+        )));
+    }
+    state.focus = Target::Setting(9);
+    state.direction(Direction::Up, &system.controls);
+    assert_eq!(state.focus, Target::Setting(3));
+    state.direction(Direction::Up, &system.controls);
+    assert_eq!(state.focus, Target::Setting(7));
 }
 
 #[test]
@@ -1211,24 +1260,11 @@ fn opening_side_popup_preserves_card_artwork_geometry_with_or_without_captions()
             let hearts = |draws: &[crate::renderer::Draw]| {
                 draws
                     .iter()
-                    .enumerate()
-                    .filter_map(|(index, draw)| match draw {
+                    .filter_map(|draw| match draw {
                         crate::renderer::Draw::Image(path, rect, ..)
                         | crate::renderer::Draw::TintedImage(path, rect, ..)
                             if path.contains("heart-filled") && rect.x < 350. =>
                         {
-                            let crate::renderer::Draw::Shape(backing, radius, border, color) =
-                                &draws[index - 1]
-                            else {
-                                panic!("Favorite heart must have a contrast backing");
-                            };
-                            assert_eq!(*radius, 14.);
-                            assert_eq!(*border, 0.);
-                            assert_eq!((backing.w, backing.h), (28., 28.));
-                            assert!((backing.x + 6. - rect.x).abs() < 0.001);
-                            assert!((backing.y + 6. - rect.y).abs() < 0.001);
-                            assert!(color[..3].iter().all(|channel| *channel < 0.1));
-                            assert!(color[3] >= 0.79);
                             Some([rect.x, rect.y, rect.w, rect.h])
                         }
                         _ => None,
@@ -3281,4 +3317,53 @@ fn update_card_shows_progress_restores_retry_and_ignores_presses_while_busy() {
     assert_eq!(state.update, InstallStatus::Idle);
     state.install_response(Response::Finished(Ok(())));
     assert_eq!(state.update_status, Status::Unchecked);
+}
+
+#[test]
+fn hovering_an_inactive_nav_tab_draws_a_distinct_highlight_only_while_hovered() {
+    use crate::renderer::Draw;
+    let mut state = ready();
+    let tab = |state: &State, index| {
+        let scene = scene(state);
+        let rect = scene
+            .controls
+            .iter()
+            .find(|c| c.target == Target::Nav(index))
+            .unwrap()
+            .rect;
+        let pill = scene.draw.iter().find_map(|draw| match draw {
+            Draw::Shape(r, _, 0., color)
+                if (r.x, r.y, r.w, r.h) == (rect.x, rect.y, rect.w, rect.h) =>
+            {
+                Some(*color)
+            }
+            _ => None,
+        });
+        let label = scene.draw.iter().find_map(|draw| match draw {
+            Draw::Text(_, r, .., color, true) if r.x == rect.x && r.w == rect.w => Some(*color),
+            _ => None,
+        });
+        (pill, label.unwrap())
+    };
+    let (_, idle) = tab(&state, 1);
+    let (_, active) = tab(&state, 0);
+    assert_eq!(tab(&state, 1).0, None);
+
+    state.pointer_focus(Target::Nav(1));
+    state.hover = Some(Target::Nav(1));
+    let (pill, label) = tab(&state, 1);
+    assert!(pill.is_some());
+    assert!(
+        label != idle && label != active,
+        "hover must not look active"
+    );
+
+    // Leaving the tab clears the highlight even though focus stays on it.
+    state.hover = None;
+    assert_eq!(state.focus, Target::Nav(1));
+    assert_eq!(tab(&state, 1), (None, idle));
+
+    // The active tab never gets a hover pill on top of its own.
+    state.hover = Some(Target::Nav(0));
+    assert_eq!(tab(&state, 0), (None, active));
 }

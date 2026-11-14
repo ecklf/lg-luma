@@ -113,6 +113,22 @@ impl Assets {
         style
     }
 
+    /// One line in `width`: shrink down to `min` px, then cut with an ellipsis.
+    fn fit_line(&self, value: &str, style: TextStyle, width: f32, min: f32) -> (String, TextStyle) {
+        let mut style = self.fit_text(value, style, width);
+        if style.size >= min {
+            return (value.into(), style);
+        }
+        style.size = min;
+        let mut chars: Vec<char> = value.chars().collect();
+        let mut line = value.to_owned();
+        while !chars.is_empty() && self.width(&line, style) > width - 1. {
+            chars.pop();
+            line = format!("{}…", chars.iter().collect::<String>().trim_end());
+        }
+        (line, style)
+    }
+
     fn lines(&self, value: &str, style: TextStyle, width: f32) -> usize {
         let key = format!(
             "{}{}",
@@ -256,7 +272,7 @@ impl Scene {
                 | Draw::Shadow(_, _, _, color)
                 | Draw::Text(_, _, _, color, _)
                 | Draw::TintedImage(_, _, _, _, color)
-                | Draw::AppImage(_, _, color) => apply(color),
+                | Draw::AppImage(_, _, _, color) => apply(color),
                 Draw::RoundedGradient(_, _, a, b) => {
                     apply(a);
                     apply(b);
@@ -738,12 +754,21 @@ fn header(
     }
     for (index, key) in ["home", "apps", "settings"].into_iter().enumerate() {
         let rect = layout.items[index];
+        let active = state.page_index() == index;
+        // The focus ring is hidden for the pointer, so a hovered inactive tab gets a
+        // faint pill: clearly hovered, never mistaken for the active page.
+        let hovered = !active && state.pointer && state.hover == Some(Target::Nav(index));
+        if hovered {
+            out.shape(rect, 32., c(0xffffff, 0.14));
+        }
         out.text(
             language.t(key),
             Rect::new(rect.x, 64.3, rect.w, 25.),
             text(20.8, 550, -0.02),
-            if state.page_index() == index {
+            if active {
                 c(0x2c2c2c, 1.)
+            } else if hovered {
+                WHITE
             } else {
                 c(0xeeeeee, 0.73)
             },
@@ -824,9 +849,9 @@ fn tile(
         if focused { 14. } else { 9. },
         if focused { 0.4 } else { 0.165 },
     );
-    app_face(out, assets, app, rect, state.preferences.language, 19.2);
+    let favorite_color = app_face(out, assets, app, rect, state.preferences.language, 19.2);
     if pinned {
-        favorite_badge(out, assets, rect);
+        favorite_badge(out, assets, rect, favorite_color);
     }
     if state.moving.as_ref() == Some(&app.id) {
         let indicator = Rect::new(
@@ -889,11 +914,9 @@ fn tile(
     }
 }
 
-fn favorite_badge(out: &mut Scene, assets: &Assets, card: Rect) {
+fn favorite_badge(out: &mut Scene, assets: &Assets, card: Rect, color: Color) {
     let icon = Rect::new(card.x + card.w - 27.2, card.y + 11.2, 16., 16.);
-    // Keep the white heart legible even over white installed artwork.
-    out.shape(icon.inset(-6.), 14., c(0x101318, 0.79));
-    out.icon(assets, "heart-filled", icon, c(0xffffff, 0.9));
+    out.icon(assets, "heart-filled", icon, color);
 }
 
 /// Shared card artwork for Home, Apps and Recents. Curated vectors always take
@@ -905,7 +928,7 @@ fn app_face(
     rect: Rect,
     language: Language,
     radius: f32,
-) {
+) -> Color {
     let logo = crate::branding::for_key(&app.brand);
     let artwork = logo
         .is_none()
@@ -915,19 +938,19 @@ fn app_face(
                 .and_then(|source| assets.artwork.get(source))
         })
         .flatten();
-    if let Some([top, bottom]) = artwork.as_ref().map(|image| image.backdrop) {
-        let color = |rgb: [u8; 3]| rgb.map(|c| c as f32 / 255.);
-        let [top, bottom] = [color(top), color(bottom)];
-        if top == bottom {
-            out.shape(rect, radius, [top[0], top[1], top[2], 1.]);
-        } else {
-            out.draw.push(Draw::RoundedGradient(
-                rect,
-                radius,
-                [top[0], top[1], top[2], 1.],
-                [bottom[0], bottom[1], bottom[2], 1.],
-            ));
-        }
+    // The heart's centre is 19.2px below the top, outside the inset installed icon.
+    // Bundled and generic surfaces are dark, so their badge remains white.
+    let favorite_color = if artwork
+        .as_ref()
+        .is_some_and(|image| image.dark_badge(19.2 / rect.h))
+    {
+        c(0x000000, 1.)
+    } else {
+        c(0xffffff, 1.)
+    };
+    let installed = artwork.is_some();
+    if let Some(image) = artwork {
+        out.draw.push(Draw::AppImage(image, rect, radius, [1.; 4]));
     } else {
         out.image(
             assets.path(format!("surfaces/{}.png", app.brand)),
@@ -951,20 +974,10 @@ fn app_face(
             0.,
             true,
         );
-    } else if let Some(image) = artwork {
-        out.draw.push(Draw::AppImage(
-            image,
-            Rect::new(
-                rect.x + rect.w * 0.16,
-                rect.y + rect.h * 0.16,
-                rect.w * 0.68,
-                rect.h * 0.68,
-            ),
-            [1.; 4],
-        ));
-    } else {
+    } else if !installed {
         brand_mark(out, assets, app, rect, language);
     }
+    favorite_color
 }
 
 fn caption_height(state: &State, assets: &Assets, app: &App, width: f32) -> f32 {
@@ -1271,11 +1284,16 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             false,
         );
     }
+    // LG TVs have at most four HDMI ports, so one row fits every model and
+    // cards keep their size when Auto shows or hides an input.
+    const COLUMNS: usize = 4;
+    const GAP: f32 = 22.35;
+    let width = (1752. - GAP * (COLUMNS - 1) as f32) / COLUMNS as f32;
     for (index, input) in inputs.iter().enumerate() {
         let rect = Rect::new(
-            84. + (index % 3) as f32 * 591.45,
-            input_y + 58.4 + (index / 3) as f32 * 126.4,
-            569.1,
+            84. + (index % COLUMNS) as f32 * (width + GAP),
+            input_y + 58.4 + (index / COLUMNS) as f32 * 126.4,
+            width,
             104.,
         );
         let focused = state.focus == Target::Input(input.id.clone());
@@ -1314,7 +1332,10 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             c(0xa0a0a0, 0.10),
         ));
         let name = state.preferences.input_name(input);
-        let icon = input_icon(input, name);
+        let icon = state
+            .preferences
+            .input_icon(&input.id)
+            .unwrap_or_else(|| input_icon(input, name));
         let size = if icon == "apple-tv" { 41.6 } else { 35.2 };
         out.icon(
             assets,
@@ -1327,20 +1348,39 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
             ),
             c(0xdedede, 1.),
         );
-        out.text(
-            state.preferences.input_title(input),
-            Rect::new(rect.x + 93., rect.y + 24.3, 450., 28.8),
-            text(24., 500, -0.03),
-            WHITE,
-            false,
-        );
-        out.text(
-            input_status(input, name.is_some(), language),
-            Rect::new(rect.x + 93., rect.y + 57.4, 450., 25.2),
-            text(16.8, 400, 0.).leading(1.5),
-            c(0xe8e8e8, 0.48),
-            false,
-        );
+        // Text starts after the 56px artwork and keeps its 21px inset on the right.
+        // Each row has room for one line: shrink to a readable floor, then
+        // ellipsize. Shrunk text stays centred on its row.
+        let text_width = rect.w - 93. - 21.;
+        let rows = [
+            (
+                state.preferences.input_title(input).to_owned(),
+                text(24., 500, -0.03),
+                18.,
+                24.3,
+                28.8,
+                WHITE,
+            ),
+            (
+                input_status(input, name.is_some(), language),
+                text(16.8, 400, 0.).leading(1.5),
+                14.,
+                57.4,
+                25.2,
+                c(0xe8e8e8, 0.48),
+            ),
+        ];
+        for (value, base, min, y, height, color) in rows {
+            let (line, style) = assets.fit_line(&value, base, text_width, min);
+            let shift = (base.size - style.size) * base.line_height / 2.;
+            out.text(
+                line,
+                Rect::new(rect.x + 93., rect.y + y + shift, text_width, height),
+                style,
+                color,
+                false,
+            );
+        }
         if focused {
             out.ring(rect, 18.4);
         }
@@ -2139,6 +2179,9 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                         "temperature"
                     }),
                 ]),
+                Some(Subpage::InputIcons(_)) => {
+                    Some(vec![language.t("inputs"), language.t("inputIcon")])
+                }
                 Some(Subpage::Input(id)) => Some(vec![
                     language.t("inputs"),
                     state
@@ -2278,6 +2321,16 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 ("HH:MM", None, !state.preferences.show_seconds),
                 ("HH:MM:SS", None, state.preferences.show_seconds),
             ],
+            Subpage::InputIcons(id) => {
+                let current = state.preferences.input_icon(id);
+                std::iter::once((language.t("inputIconAutomatic"), None, current.is_none()))
+                    .chain(
+                        crate::model::INPUT_ICONS
+                            .iter()
+                            .map(|(icon, key)| (language.t(key), None, current == Some(*icon))),
+                    )
+                    .collect()
+            }
             Subpage::Input(id) => {
                 let current = state
                     .preferences
@@ -2342,6 +2395,11 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         };
         for (index, (title, description, selected)) in options.into_iter().enumerate() {
             let h = if description.is_some() { 90.7 } else { 72. };
+            let icon = if matches!(subpage, Subpage::InputIcons(_)) && index > 0 {
+                Some(format!("input-{}", crate::model::INPUT_ICONS[index - 1].0))
+            } else {
+                None
+            };
             row(
                 out,
                 state,
@@ -2350,7 +2408,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     target: Target::Choice(index),
                     rect: Rect::new(640., 164.8 + index as f32 * (h + 12.) - s, 1120., h),
                     title,
-                    icon: None,
+                    icon: icon.as_deref(),
                     value: None,
                     description,
                     selected,
@@ -2618,6 +2676,13 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             );
             for (position, (index, title, icon, value, chevron)) in [
                 (
+                    7,
+                    language.t("textRendering"),
+                    "type",
+                    Some(language.t(state.preferences.text_rendering.label_key())),
+                    true,
+                ),
+                (
                     3,
                     language.t(if state.loading {
                         "refreshNotice"
@@ -2628,13 +2693,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     None,
                     false,
                 ),
-                (
-                    7,
-                    language.t("textRendering"),
-                    "type",
-                    Some(language.t(state.preferences.text_rendering.label_key())),
-                    true,
-                ),
+                (9, language.t("resetIconCache"), "refresh", None, false),
                 (5, language.t("quitApp"), "power", None, false),
             ]
             .into_iter()
@@ -2646,7 +2705,16 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     assets,
                     Row {
                         target: Target::Setting(index),
-                        rect: Rect::new(640., 408.8 + position as f32 * 84. - s, 1120., 72.),
+                        rect: Rect::new(
+                            640.,
+                            408.8
+                                + position as f32 * 84.
+                                + if position > 0 { 16. } else { 0. }
+                                + if position > 2 { 16. } else { 0. }
+                                - s,
+                            1120.,
+                            72.,
+                        ),
                         title,
                         icon: Some(icon),
                         value,
@@ -2681,7 +2749,10 @@ fn inputs_settings(out: &mut Scene, state: &State, assets: &Assets) {
                 title: state.preferences.input_title(input),
                 icon: Some(&format!(
                     "input-{}",
-                    input_icon(input, state.preferences.input_name(input))
+                    state
+                        .preferences
+                        .input_icon(&input.id)
+                        .unwrap_or_else(|| input_icon(input, state.preferences.input_name(input)))
                 )),
                 value: Some(language.t(match mode {
                     InputMode::On => "stateOn",
@@ -2953,6 +3024,44 @@ fn input_name_rows(out: &mut Scene, state: &State, assets: &Assets, id: &str, y:
             },
         );
     }
+    let icon = state.preferences.input_icon(id);
+    let label = icon
+        .and_then(|icon| {
+            crate::model::INPUT_ICONS
+                .iter()
+                .find(|(known, _)| *known == icon)
+        })
+        .map_or("inputIconAutomatic", |(_, key)| *key);
+    let preview = icon
+        .or_else(|| {
+            state
+                .inventory
+                .inputs
+                .iter()
+                .find(|input| input.id == id)
+                .map(|input| input_icon(input, state.preferences.input_name(input)))
+        })
+        .unwrap_or("hdmi");
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::InputIcon,
+            rect: Rect::new(
+                640.,
+                y + if custom.is_some() { 186.7 } else { 102.7 },
+                1120.,
+                72.,
+            ),
+            title: language.t("inputIcon"),
+            icon: Some(&format!("input-{preview}")),
+            value: Some(language.t(label)),
+            description: None,
+            selected: false,
+            chevron: true,
+        },
+    );
 }
 
 fn settings_surface(out: &mut Scene, rect: Rect, radius: f32) {
@@ -3043,18 +3152,32 @@ fn input_icon(input: &Input, custom: Option<&str>) -> &'static str {
 }
 
 fn device_icon(name: &str) -> &'static str {
+    // TV labels can append a device category, e.g. "PS5 Game Console".
+    // Match short aliases as words so unrelated names do not acquire branding.
+    let playstation_alias = name.split(|ch: char| !ch.is_alphanumeric()).any(|word| {
+        ["ps1", "ps2", "ps3", "ps4", "ps5"]
+            .iter()
+            .any(|alias| word.eq_ignore_ascii_case(alias))
+    });
     let name = name.to_lowercase().replace(' ', "");
-    if name.contains("playstation") || ["ps1", "ps2", "ps3", "ps4", "ps5"].contains(&name.as_str())
+    if playstation_alias
+        || name.contains("playstation")
+        || ["ps1", "ps2", "ps3", "ps4", "ps5"].contains(&name.as_str())
     {
         "playstation"
     } else if name.contains("appletv") {
         "apple-tv"
     } else if name.contains("usb") {
         "usb"
-    } else if ["xbox", "switch", "console"]
-        .iter()
-        .any(|part| name.contains(part))
-    {
+    } else if name.contains("switch2") {
+        "switch2"
+    } else if name.contains("switch") {
+        "switch"
+    } else if name.contains("shield") {
+        "shield"
+    } else if name.contains("xbox") {
+        "xbox"
+    } else if name.contains("console") {
         "console"
     } else if ["pc", "computer", "laptop"]
         .iter()
@@ -3212,9 +3335,9 @@ fn options(out: &mut Scene, state: &State, assets: &Assets, id: &str, anchor: Op
         out.image(path, card, 16., false);
         out.border(card, 16., 1., c(0xffffff, 0.086));
     } else if let Some(app) = app.filter(|_| !shortcut) {
-        app_face(out, assets, app, card, language, 19.2);
+        let favorite_color = app_face(out, assets, app, card, language, 19.2);
         if favorite {
-            favorite_badge(out, assets, card);
+            favorite_badge(out, assets, card, favorite_color);
         }
     }
     let panel_start = out.draw.len();
@@ -3572,7 +3695,107 @@ fn full_screen_fill(draw: &Draw) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Preferences, demo_inventory};
+    use crate::model::{Input, InputMode, Preferences, demo_inventory};
+
+    #[test]
+    fn four_inputs_share_one_row_and_their_text_fits_every_language() {
+        let assets = assets();
+        let mut state = State::new(Preferences::default());
+        let mut inventory = demo_inventory();
+        // The longest status per card: renamed, no signal, no device, unknown cable.
+        inventory.inputs[0].signal = Some(false);
+        inventory.inputs.push(Input {
+            id: "com.webos.app.hdmi4".into(),
+            title: "HDMI 4".into(),
+            port: "HDMI 4".into(),
+            connected: None,
+            signal: None,
+        });
+        state.set_inventory(inventory, None);
+        state
+            .preferences
+            .set_input_name("com.webos.app.hdmi1", "PS5");
+        // The widest custom name allowed (W is the widest test glyph) must ellipsize.
+        let widest = "W".repeat(crate::model::INPUT_NAME_LIMIT);
+        state
+            .preferences
+            .set_input_name("com.webos.app.hdmi2", &widest);
+        for id in ["com.webos.app.hdmi3", "com.webos.app.hdmi4"] {
+            state
+                .preferences
+                .input_modes
+                .insert(id.into(), InputMode::On);
+        }
+        for language in Language::ALL {
+            state.preferences.language = language;
+            let mut scene = Scene::new();
+            home(&mut scene, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+            let cards: Vec<_> = scene
+                .controls
+                .iter()
+                .filter(|control| matches!(control.target, Target::Input(_)))
+                .map(|control| control.rect)
+                .collect();
+            assert_eq!(cards.len(), 4);
+            assert!(cards.iter().all(|card| card.y == cards[0].y));
+            assert!((cards[3].x + cards[3].w - 1836.).abs() < 0.01);
+            assert!(scene.draw.iter().any(|draw| matches!(
+                draw,
+                Draw::Text(value, _, style, ..) if value.starts_with('W') && value.ends_with('…')
+                    && style.size == 18.
+            )));
+            for draw in &scene.draw {
+                let Draw::Text(value, rect, style, ..) = draw else {
+                    continue;
+                };
+                if !cards.iter().any(|card| {
+                    rect.x >= card.x
+                        && rect.x + rect.w <= card.x + card.w
+                        && rect.y > card.y
+                        && rect.y < card.y + card.h
+                }) {
+                    continue;
+                }
+                // One line, still readable from the couch.
+                assert!(
+                    assets.width(value, *style) <= rect.w,
+                    "{language:?}: {value}"
+                );
+                assert!(
+                    style.size >= 14.,
+                    "{language:?}: {value} at {}px",
+                    style.size
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn playstation_input_aliases_allow_device_categories() {
+        for label in [
+            "PS5 Game Console",
+            "ps4 game console",
+            "Sony PS5 (Game Console)",
+            "PS3 - Console",
+            "PS2",
+            "PS1",
+            "PS 5",
+            "PlayStation 5 Game Console",
+        ] {
+            assert_eq!(device_icon(label), "playstation", "{label}");
+        }
+        assert_eq!(device_icon("Game Console"), "console");
+        assert_eq!(device_icon("PS50 Game Console"), "console");
+        assert_eq!(device_icon("UPS5"), "hdmi");
+
+        let mut input = demo_inventory().inputs.remove(0);
+        input.title = "PS5 Game Console".into();
+        assert_eq!(input_icon(&input, None), "playstation");
+        assert_eq!(input_icon(&input, Some("Living room")), "playstation");
+        input.title = "Game Console".into();
+        assert_eq!(input_icon(&input, Some("PS5 Game Console")), "playstation");
+        assert_eq!(input_icon(&input, Some("Xbox")), "xbox");
+    }
 
     fn assets() -> Assets {
         Assets {

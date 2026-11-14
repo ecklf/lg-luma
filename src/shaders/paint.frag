@@ -2,6 +2,9 @@ uniform sampler2D u_texture;
 uniform float u_aa;
 uniform vec4 u_edge_fade;
 uniform vec4 u_edge_fade_x;
+uniform vec3 u_app_top;
+uniform vec3 u_app_bottom;
+uniform bool u_app;
 varying PAINT_PRECISION vec2 v_uv;
 varying PAINT_PRECISION vec4 v_color;
 varying PAINT_PRECISION vec4 v_shape;
@@ -42,5 +45,13 @@ void main() {
     if (v_params.y > 0.0) {
         alpha *= clamp(0.5 + (d + v_params.y) / u_aa, 0.0, 1.0);
     }
-    gl_FragColor = texture2D(u_texture, v_uv) * v_color * vec4(1.0, 1.0, 1.0, alpha * edge_coverage());
+    vec4 color = texture2D(u_texture, v_uv);
+    if (u_app) {
+        float y = v_shape.y / (2.0 * half_size.y) + 0.5;
+        vec3 background = mix(u_app_top, u_app_bottom, y);
+        float inside = step(0.0, v_uv.x) * step(v_uv.x, 1.0) *
+            step(0.0, v_uv.y) * step(v_uv.y, 1.0);
+        color = vec4(mix(background, color.rgb, color.a * inside), 1.0);
+    }
+    gl_FragColor = color * v_color * vec4(1.0, 1.0, 1.0, alpha * edge_coverage());
 }
