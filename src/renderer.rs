@@ -974,15 +974,16 @@ impl Renderer {
             && Path::new(path)
                 .parent()
                 .and_then(Path::file_name)
-                .is_some_and(|p| p == "wallpapers")
+                .is_some_and(|p| p == "wallpapers" || p == "foregrounds")
         {
             self.artwork_variants
                 .entry(path.into())
                 .or_insert_with(|| {
                     let original = Path::new(path);
                     let variant = original.with_file_name(format!(
-                        "{}@2x.jpg",
-                        original.file_stem().unwrap_or_default().to_string_lossy()
+                        "{}@2x.{}",
+                        original.file_stem().unwrap_or_default().to_string_lossy(),
+                        original.extension().unwrap_or_default().to_string_lossy()
                     ));
                     if variant.is_file() {
                         variant.to_string_lossy().into_owned()

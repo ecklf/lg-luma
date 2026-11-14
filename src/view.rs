@@ -38,7 +38,14 @@ pub struct Assets {
     pub version: String,
     pub metrics: BTreeMap<String, BTreeMap<char, f32>>,
     pub artwork: crate::app_artwork::Service,
+    pub foregrounds: BTreeMap<String, ClockForeground>,
 }
+
+#[derive(serde::Deserialize)]
+pub struct ClockForeground {
+    pub placements: BTreeMap<String, Vec<Option<f32>>>,
+}
+
 impl Assets {
     pub fn load(root: PathBuf, webos: bool) -> Result<Self, String> {
         let load = |file: &str| {
@@ -49,11 +56,25 @@ impl Assets {
         let version = env!("CARGO_PKG_VERSION").to_owned();
         let metrics =
             serde_json::from_slice(&load("font-metrics.json")?).map_err(|e| e.to_string())?;
+        // Older or incomplete asset bundles must fall back to an ordinary clock,
+        // never a missing full-screen image. Resolve availability once at startup.
+        let mut foregrounds: BTreeMap<String, ClockForeground> =
+            std::fs::read(root.join("foregrounds/manifest.json"))
+                .ok()
+                .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+                .unwrap_or_default();
+        foregrounds.retain(|id, _| {
+            BACKGROUNDS.iter().any(|(known, _)| *known == id)
+                && ["", "-plain"]
+                    .iter()
+                    .all(|suffix| root.join(format!("foregrounds/{id}{suffix}.png")).is_file())
+        });
         Ok(Self {
             root,
             version,
             metrics,
             artwork: crate::app_artwork::Service::new(webos),
+            foregrounds,
         })
     }
     fn path(&self, path: impl AsRef<Path>) -> String {
@@ -1199,6 +1220,7 @@ fn home_widget_rect(layout: HomeLayout, slot: usize) -> Rect {
 
 fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     let start = out.draw.len();
+    let mut foreground_draws = Vec::new();
     let language = state.preferences.language;
     for (slot, widget) in state
         .preferences
@@ -1248,7 +1270,12 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
             HomeWidget::Greeting => language.greeting(now.hour(), &state.preferences.greeting_name),
             _ => continue,
         };
-        let size = if *widget == HomeWidget::Clock {
+        let depth = (*widget == HomeWidget::Clock)
+            .then(|| clock_foreground(state, assets, slot, cell))
+            .flatten();
+        let size = if depth.is_some() {
+            180.
+        } else if *widget == HomeWidget::Clock {
             72.
         } else {
             40.
@@ -1257,13 +1284,63 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
         let height = style.size * style.line_height;
         out.text(
             label,
-            Rect::new(cell.x, cell.y + (cell.h - height) / 2., cell.w, height),
+            Rect::new(
+                cell.x,
+                depth
+                    .as_ref()
+                    .map_or(cell.y + cell.h / 2., |(_, center)| *center)
+                    - height / 2.,
+                cell.w,
+                height,
+            ),
             style,
             WHITE,
             true,
         );
+        if let Some((foreground, _)) = depth {
+            // Repaint only this clock's cell. Other widgets, the dock and corner
+            // controls always stay in front. `contain` excludes the transparent
+            // layer from wallpaper folding and the Liquid Glass backdrop picker.
+            out.draw.push(Draw::Clip(Some(cell)));
+            foreground_draws.push(out.draw.len());
+            out.image(foreground, Rect::new(0., 0., 1920., 1080.), 0., true);
+            out.draw.push(Draw::Clip(Some(state.content_viewport())));
+        }
     }
     out.fade(start, 1. - state.drawer_progress(), 1.);
+    // Restore identical wallpaper pixels at full opacity, so a fading clock
+    // cannot show through what should remain opaque foreground scenery.
+    for index in foreground_draws {
+        if let Draw::TintedImage(_, _, _, _, tint) = &mut out.draw[index] {
+            tint[3] = 1.;
+        }
+    }
+}
+
+fn clock_foreground(
+    state: &State,
+    assets: &Assets,
+    slot: usize,
+    cell: Rect,
+) -> Option<(String, f32)> {
+    if !state.preferences.home_clock_depth || state.previous_background.is_some() {
+        return None;
+    }
+    let id = &state.preferences.background;
+    let foreground = assets.foregrounds.get(id)?;
+    let center = (*foreground
+        .placements
+        .get(state.preferences.home_layout.key())?
+        .get(slot)?)?;
+    if !center.is_finite() || center < cell.y + 108. || center > cell.y + cell.h - 108. {
+        return None;
+    }
+    let suffix = if state.preferences.wallpaper_gradient {
+        ""
+    } else {
+        "-plain"
+    };
+    Some((assets.path(format!("foregrounds/{id}{suffix}.png")), center))
 }
 
 fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
@@ -2478,6 +2555,30 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     },
                 );
             }
+            row(
+                out,
+                state,
+                assets,
+                Row {
+                    target: Target::ClockDepth,
+                    rect: Rect::new(
+                        640.,
+                        500.8 + state.preferences.home_layout.slots() as f32 * 84. - s,
+                        1120.,
+                        72.,
+                    ),
+                    title: language.t("clockDepth"),
+                    icon: None,
+                    value: Some(language.t(if state.preferences.home_clock_depth {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
+                    description: None,
+                    selected: false,
+                    chevron: false,
+                },
+            );
         }
         SYSTEM_SECTION => {
             let rect = Rect::new(640., 164.8 - s, 1120., 220.);
@@ -3685,6 +3786,7 @@ mod tests {
         Assets {
             root: PathBuf::new(),
             version: "test".into(),
+            foregrounds: BTreeMap::new(),
             metrics: BTreeMap::from([
                 ("display-500".into(), BTreeMap::from([('W', 1.)])),
                 ("500".into(), BTreeMap::from([('W', 1.2)])),
@@ -4009,6 +4111,72 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn depth_clock_composites_after_text_inside_its_cell_only() {
+        let mut assets = assets();
+        assets.foregrounds.insert(
+            "dunes".into(),
+            ClockForeground {
+                placements: BTreeMap::from([("centered".into(), vec![Some(632.)])]),
+            },
+        );
+        let mut state = State::new(Preferences {
+            home_layout: HomeLayout::Centered,
+            home_widgets: [
+                HomeWidget::Clock,
+                HomeWidget::Empty,
+                HomeWidget::Empty,
+                HomeWidget::Empty,
+                HomeWidget::Empty,
+                HomeWidget::Empty,
+            ],
+            ..Preferences::default()
+        });
+        let mut rendered = Scene::new();
+        home(&mut rendered, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+        let overlay = rendered.draw.iter().position(|draw| matches!(draw, Draw::TintedImage(path, _, 0., true, _) if path.ends_with("foregrounds/dunes.png"))).unwrap();
+        assert!(
+            rendered.draw[..overlay]
+                .iter()
+                .any(|draw| matches!(draw, Draw::Text(_, _, style, ..) if style.size > 72.))
+        );
+        assert!(
+            matches!(rendered.draw[overlay - 1], Draw::Clip(Some(rect)) if rect.x == 676. && rect.w == 568.)
+        );
+        assert!(
+            rendered
+                .controls
+                .iter()
+                .all(|control| control.target != Target::ClockDepth)
+        );
+        state.drawer_visibility = 0.5;
+        let mut fading = Scene::new();
+        home_widgets(&mut fading, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+        assert!(fading.draw.iter().any(|draw| matches!(draw, Draw::TintedImage(path, _, _, true, tint) if path.ends_with("foregrounds/dunes.png") && tint[3] == 1.)));
+        assert!(
+            fading
+                .draw
+                .iter()
+                .any(|draw| matches!(draw, Draw::Text(_, _, _, tint, _) if tint[3] == 0.5))
+        );
+        let cell = home_widget_rect(HomeLayout::Centered, 0);
+        state.preferences.wallpaper_gradient = false;
+        assert!(
+            clock_foreground(&state, &assets, 0, cell)
+                .unwrap()
+                .0
+                .ends_with("dunes-plain.png")
+        );
+        state.preferences.home_clock_depth = false;
+        assert!(clock_foreground(&state, &assets, 0, cell).is_none());
+        state.preferences.home_clock_depth = true;
+        state.previous_background = Some(("summit".into(), std::time::Instant::now()));
+        assert!(clock_foreground(&state, &assets, 0, cell).is_none());
+        state.previous_background = None;
+        state.preferences.background = "custom-unknown".into();
+        assert!(clock_foreground(&state, &assets, 0, cell).is_none());
     }
 
     #[test]

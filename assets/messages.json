@@ -1,4 +1,21 @@
 {
+  "clockDepth": {
+    "en": "Clock depth effect",
+    "de": "Tiefeneffekt der Uhr",
+    "es": "Efecto de profundidad del reloj",
+    "zh": "时钟景深效果",
+    "zh-tw": "時鐘景深效果",
+    "pt": "Efeito de profundidade do relógio",
+    "it": "Effetto profondità dell’orologio",
+    "ru": "Эффект глубины часов",
+    "pl": "Efekt głębi zegara",
+    "fr": "Effet de profondeur de l’horloge",
+    "vi": "Hiệu ứng chiều sâu đồng hồ",
+    "nl": "Diepte-effect klok",
+    "sv": "Klockans djupeffekt",
+    "cs": "Efekt hloubky hodin",
+    "ca": "Efecte de profunditat del rellotge"
+  },
   "homeLayout": {
     "en": "Home layout",
     "de": "Startbildschirm-Layout",

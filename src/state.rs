@@ -68,6 +68,7 @@ pub enum Target {
     Widget(usize),
     HomeLayout,
     HomeSlot(usize),
+    ClockDepth,
     GreetingName,
     GreetingNameClear,
     GreetingToggle,
@@ -1612,6 +1613,7 @@ impl State {
                     | Target::Widget(_)
                     | Target::HomeLayout
                     | Target::HomeSlot(_)
+                    | Target::ClockDepth
             ) || (self.focus == Target::Setting(3) && self.subpage == Some(Subpage::Inputs)))
                 && matches!(direction, Direction::Left)
             {
@@ -1624,6 +1626,7 @@ impl State {
                     | Target::Widget(_)
                     | Target::HomeLayout
                     | Target::HomeSlot(_)
+                    | Target::ClockDepth
                     | Target::InputMode(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
@@ -2507,6 +2510,11 @@ impl State {
             }
             Target::HomeLayout => {
                 self.preferences.home_layout = self.preferences.home_layout.next();
+                self.dirty = true;
+                return vec![Effect::Save];
+            }
+            Target::ClockDepth => {
+                self.preferences.home_clock_depth = !self.preferences.home_clock_depth;
                 self.dirty = true;
                 return vec![Effect::Save];
             }

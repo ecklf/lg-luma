@@ -1,0 +1,74 @@
+{
+  "dunes": {
+    "source_sha256": "ce53c774308910edc734a9a417fdcf6db247ea0998a42c659c023c13a64a3503",
+    "mask_sha256": "4d1d44e7098bd81cbaecaf7057130fe4930cfd3a7f40ecf9a543765d424a2f5b",
+    "model_revision": "4472b7362082ad9968fee890ca0f1e5aca36b93d",
+    "model_sha256": "fcf51f1b230362b28690bb9d1809bf0431f29cad20534e3f589bd7285547f20d",
+    "threshold": 0.01,
+    "placements": {
+      "row": [296, 536, 456],
+      "centered": [536],
+      "grid": [296, null, null, null, null, null]
+    }
+  },
+  "forest": {
+    "source_sha256": "d069396ffe22f2757574c2ff4aa26195816e2e449c0310cdf3cd8ce6aa2721d8",
+    "mask_sha256": "190334dd2850d4b3db190b49faeb6a64512bfc8ba090a2c462f3b25a02225a05",
+    "model_revision": "4472b7362082ad9968fee890ca0f1e5aca36b93d",
+    "model_sha256": "fcf51f1b230362b28690bb9d1809bf0431f29cad20534e3f589bd7285547f20d",
+    "threshold": 0.3,
+    "placements": {
+      "row": [null, 448, null],
+      "centered": [448],
+      "grid": [null, null, null, null, null, null]
+    }
+  },
+  "northern-lights": {
+    "source_sha256": "f7b744a61a2736af5d34a90c429e7b642a4c319c9bb3e7bbd557930601ca4c33",
+    "mask_sha256": "1af546c2f916174d466d86ff06c4e65f831ca4fd21db8e959a6d128e3a08af14",
+    "model_revision": "4472b7362082ad9968fee890ca0f1e5aca36b93d",
+    "model_sha256": "fcf51f1b230362b28690bb9d1809bf0431f29cad20534e3f589bd7285547f20d",
+    "threshold": 0.02,
+    "placements": {
+      "row": [null, null, 564],
+      "centered": [null],
+      "grid": [null, null, null, null, null, 600]
+    }
+  },
+  "san-francisco": {
+    "source_sha256": "72988716ebd7acd1b3413a23e25badfc98e2204d98b7a665e56b39aa197680bf",
+    "mask_sha256": "9281d998b69857a1989957282f02519ea19350dbbeeabf4c2de8ffe6a0dd6240",
+    "model_revision": "4472b7362082ad9968fee890ca0f1e5aca36b93d",
+    "model_sha256": "fcf51f1b230362b28690bb9d1809bf0431f29cad20534e3f589bd7285547f20d",
+    "threshold": 0.01,
+    "placements": {
+      "row": [436, 356, 416],
+      "centered": [356],
+      "grid": [null, 356, null, null, null, null]
+    }
+  },
+  "summit": {
+    "source_sha256": "f8f759dfd6f5728e73d19a08378a3c0c6b4283037183b6d76f3dec6ae05086bd",
+    "mask_sha256": "9ede6e572f26f3aabbb36922d085337d892dc085f6b59be02e4f20b51c7182ba",
+    "model_revision": "4472b7362082ad9968fee890ca0f1e5aca36b93d",
+    "model_sha256": "fcf51f1b230362b28690bb9d1809bf0431f29cad20534e3f589bd7285547f20d",
+    "threshold": 0.01,
+    "placements": {
+      "row": [480, 412, 532],
+      "centered": [412],
+      "grid": [null, null, null, null, null, null]
+    }
+  },
+  "yosemite": {
+    "source_sha256": "f2ae57340b618a9906269c88338cf6dc149c9ef9a319dd96583fc8f6da5d08cd",
+    "mask_sha256": "da1935bc049a0b407c292abd45a00a8430116bbfbe1816c379011657a3cf49d0",
+    "model_revision": "4472b7362082ad9968fee890ca0f1e5aca36b93d",
+    "model_sha256": "fcf51f1b230362b28690bb9d1809bf0431f29cad20534e3f589bd7285547f20d",
+    "threshold": 0.01,
+    "placements": {
+      "row": [null, 400, null],
+      "centered": [400],
+      "grid": [null, null, null, null, null, null]
+    }
+  }
+}

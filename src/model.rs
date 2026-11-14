@@ -222,6 +222,13 @@ pub enum HomeLayout {
 }
 
 impl HomeLayout {
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Row => "row",
+            Self::Centered => "centered",
+            Self::Grid => "grid",
+        }
+    }
     pub fn slots(self) -> usize {
         match self {
             Self::Row => 3,
@@ -284,6 +291,7 @@ impl HomeWidget {
 pub struct Preferences {
     pub home_layout: HomeLayout,
     pub home_widgets: [HomeWidget; 6],
+    pub home_clock_depth: bool,
     pub favorites: Option<Vec<String>>,
     pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
@@ -326,6 +334,7 @@ impl Default for Preferences {
     fn default() -> Self {
         Self {
             home_layout: HomeLayout::default(),
+            home_clock_depth: true,
             home_widgets: [
                 HomeWidget::Weather,
                 HomeWidget::Empty,

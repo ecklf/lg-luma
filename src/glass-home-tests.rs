@@ -52,6 +52,22 @@ fn widget_slot_rows_scroll_and_return_to_sidebar() {
 }
 
 #[test]
+fn clock_depth_toggle_saves_without_changing_widget_assignments() {
+    let mut state = ready();
+    let widgets = state.preferences.home_widgets;
+    state.open(2);
+    state.section = crate::state::WIDGETS_SECTION;
+    state.focus = Target::ClockDepth;
+    assert!(state.preferences.home_clock_depth);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!state.preferences.home_clock_depth);
+    assert_eq!(state.preferences.home_widgets, widgets);
+    let restored: Preferences =
+        serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
+    assert!(!restored.home_clock_depth);
+}
+
+#[test]
 fn legacy_preferences_default_to_weather_and_widget_assignments_stay_unique() {
     use crate::model::{HomeLayout, HomeWidget};
     let mut preferences: Preferences = serde_json::from_str("{}").unwrap();

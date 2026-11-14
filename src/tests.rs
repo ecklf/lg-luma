@@ -161,6 +161,7 @@ fn scene(state: &State) -> view::Scene {
         root: PathBuf::new(),
         version: "test".into(),
         metrics: BTreeMap::new(),
+        foregrounds: BTreeMap::new(),
         artwork: crate::app_artwork::Service::new(false),
     };
     view::scene(state, &assets, time::OffsetDateTime::UNIX_EPOCH)

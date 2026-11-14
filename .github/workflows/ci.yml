@@ -41,7 +41,7 @@ jobs:
             await core.summary
               .addHeading(`Luma ${process.env.RELEASE_TAG}`)
               .addRaw(publish
-                ? 'Release authorized: this main commit merged Version Packages with a version increase. Publication waits for checks, all four smoke suites, and the verified ARM package.'
+                ? 'Release authorized: this main commit merged Version Packages with a version increase. Publication waits for checks, all five smoke suites, and the verified ARM package.'
                 : 'Validation only: this run cannot publish. Merge the Version Packages PR to start the eligible main-commit release run.')
               .write();
             return publish;
@@ -108,6 +108,9 @@ jobs:
           - suite: Brand gallery
             script: tests/brands-smoke.mjs
             artifact: brands
+          - suite: Depth clock
+            script: tests/depth-clock-smoke.mjs
+            artifact: depth-clock
           - suite: Mock weather
             script: tests/weather-smoke.mjs
             artifact: weather

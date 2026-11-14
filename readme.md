@@ -36,6 +36,11 @@ and Empty choices. Each widget can be assigned once. Assignments in hidden slots
 when changing layouts, so clear a hidden assignment in the larger layout to reuse it elsewhere.
 The favorites dock and input controls stay unchanged.
 
+The Clock widget supports a **depth effect** on bundled photo backgrounds: foreground scenery
+can cover the lower part of its oversized digits. Masks are generated ahead of time, not on the
+TV. Turn it off in **Settings → Widgets → Clock depth effect**. A normal clock is used for
+uploaded/abstract backgrounds, cells without a readable depth placement, or missing mask assets.
+
 Home uses Liquid Glass controls over your wallpaper, a floating favorites dock, and a weather
 block with a condition icon, temperature, condition, and location. The greeting and standalone
 date have been removed.
