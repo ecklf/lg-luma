@@ -42,7 +42,7 @@ date have been removed.
   Usage sorts by successful launches from Luma, most used first, with alphabetical ties.
   Counts stay local and persist across restarts. Favorites keep their manual order.
 - **Settings → Widgets → Weather → Widget style** offers **Standard**, **No icon**,
-  and **Compact inline**, with a preview of every design before choosing. Compact inline
+  and **Compact**, with a preview of every design before choosing. Compact
   places a small condition icon on the second line beside the condition and location.
 - **OK / click** launches apps directly. Manage favorites, hidden apps, and uninstall actions in
   **Luma Settings → Apps**. Hidden apps remain listed there.
