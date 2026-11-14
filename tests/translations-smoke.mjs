@@ -382,7 +382,8 @@ try {
   assert.ok(hungarianFocused.ui_text.includes('Magyar'));
   const hungarian = await scenario('hu-home', `${hungarianPicker},enter,home`);
   assert.equal(hungarian.preferences.language, 'hu');
-  assert.ok(hungarian.ui_text.includes('2026. OKTÓBER 21., SZERDA'));
+  contains(hungarian, 'setWeatherLocation', 'hu');
+  assert.ok(!hungarian.ui_text.includes('2026. OKTÓBER 21., SZERDA'));
   const hungarianSettings = await scenario('hu-settings', 'settings');
   assert.ok(hungarianSettings.ui_text.includes('Magyar'));
   contains(hungarianSettings, 'language', 'hu');
