@@ -2209,7 +2209,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 (
                     10,
                     "appSorting",
-                    "grid",
+                    "arrow-up-down",
                     Some(language.t(state.preferences.app_sorting.label_key())),
                     true,
                 ),

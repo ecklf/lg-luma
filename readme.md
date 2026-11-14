@@ -38,7 +38,7 @@ date have been removed.
 - **Down** from favorites opens the animated six-column app drawer.
 - **Up** from favorites reaches the corner controls.
 - **Back** closes the drawer and focuses the first favorite.
-- **Settings → General → App sorting** chooses **A–Z** (default) or **By usage**.
+- **Settings → General → App sorting** chooses **Alphabetically** (default) or **Usage count**.
   Usage sorts by successful launches from Luma, most used first, with alphabetical ties.
   Counts stay local and persist across restarts. Favorites keep their manual order.
 - **OK / click** launches apps directly. Manage favorites, hidden apps, and uninstall actions in
