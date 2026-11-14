@@ -31,10 +31,10 @@ https://github.com/user-attachments/assets/5b2c6e78-ec77-41f5-a79a-1fcfbe8e524b
 ## Home and app drawer
 
 Home widgets use an invisible **4×4 placement grid** above the unchanged favorites dock.
-**Date** and **Greeting** each occupy **2 columns × 1 row**; **Weather** is **1 column × 2 rows**.
-By default the weekday/date sits on the first row, a larger Greeting on the second,
-and Weather across the third/fourth rows, all left-aligned. Empty cells remain transparent.
-Open **Settings → Widgets → Date / Greeting / Weather → Position** to move a widget.
+**Greeting** combines the weekday/date and greeting in **2 columns × 1 row**;
+**Weather** is **1 column × 2 rows**. By default Greeting sits on the first row and
+Weather spans the second/third rows, left-aligned. Empty cells remain transparent.
+Open **Settings → Widgets → Greeting / Weather → Position** to move a widget.
 Use the arrows or point at a cell to choose its top-left anchor, then **OK / click** to save;
 **Back** cancels. Red placements overlap the other widget or exceed the grid and cannot be saved.
 Widget sizes cannot be changed. Hidden widgets retain and reserve their saved positions.
@@ -42,8 +42,9 @@ Greeting settings let you show/hide the time-based greeting. There is no configu
 names stored by earlier drafts are ignored and removed on the next preferences save.
 
 Home uses Liquid Glass controls over your wallpaper, a floating favorites dock, and a weather
-block with a condition icon, temperature, condition, and location. Date settings include a
-visibility toggle and date-format choices; the default format includes the weekday.
+block with a condition icon, temperature, condition, and location. The combined Greeting restores
+the original small, spaced weekday/date above a large, tightly tracked greeting. Greeting settings
+include a date visibility toggle and date-format choices; Date is not a separate widget.
 
 - **Left / Right** browses favorites. Hold **OK** to reorder them.
 - **Down** from favorites opens the animated six-column app drawer.

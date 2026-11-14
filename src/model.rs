@@ -262,17 +262,16 @@ pub const HOME_GRID_CELLS: usize = HOME_GRID_COLUMNS * HOME_GRID_ROWS;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HomeWidget {
-    Date,
     Weather,
     Greeting,
 }
 
 impl HomeWidget {
-    pub const ALL: [Self; 3] = [Self::Date, Self::Greeting, Self::Weather];
+    pub const ALL: [Self; 2] = [Self::Greeting, Self::Weather];
 
     pub fn span(self) -> (u8, u8) {
         match self {
-            Self::Greeting | Self::Date => (2, 1),
+            Self::Greeting => (2, 1),
             Self::Weather => (1, 2),
         }
     }
@@ -281,7 +280,6 @@ impl HomeWidget {
         match self {
             Self::Weather => "weather",
             Self::Greeting => "greeting",
-            Self::Date => "date",
         }
     }
 
@@ -289,9 +287,8 @@ impl HomeWidget {
         WidgetPosition {
             column: 0,
             row: match self {
-                Self::Date => 0,
-                Self::Greeting => 1,
-                Self::Weather => 2,
+                Self::Greeting => 0,
+                Self::Weather => 1,
             },
         }
     }
@@ -339,7 +336,6 @@ pub struct Preferences {
     pub app_launch_counts: BTreeMap<String, u64>,
     pub greeting_position: WidgetPosition,
     pub weather_position: WidgetPosition,
-    pub date_position: WidgetPosition,
     pub favorites: Option<Vec<String>>,
     pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
@@ -385,7 +381,6 @@ impl Default for Preferences {
             app_launch_counts: BTreeMap::new(),
             greeting_position: HomeWidget::Greeting.default_position(),
             weather_position: HomeWidget::Weather.default_position(),
-            date_position: HomeWidget::Date.default_position(),
             favorites: None,
             custom_tiles: vec![],
             hidden: vec![],
@@ -434,7 +429,6 @@ impl Preferences {
         match widget {
             HomeWidget::Greeting => self.greeting_position,
             HomeWidget::Weather => self.weather_position,
-            HomeWidget::Date => self.date_position,
         }
     }
 
@@ -458,7 +452,6 @@ impl Preferences {
         match widget {
             HomeWidget::Greeting => self.greeting_position = position,
             HomeWidget::Weather => self.weather_position = position,
-            HomeWidget::Date => self.date_position = position,
         }
     }
 
@@ -575,17 +568,16 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
-        // Upgrade the previous draft's untouched two-widget default arrangement.
-        // Custom arrangements are retained below, making room for Date around them.
-        if self.date_position == HomeWidget::Date.default_position()
-            && self.greeting_position == (WidgetPosition { column: 0, row: 0 })
-            && self.weather_position == (WidgetPosition { column: 0, row: 1 })
+        // Collapse the previous draft's untouched separate-Date arrangement.
+        // Custom Greeting/Weather anchors remain unchanged.
+        if self.greeting_position == (WidgetPosition { column: 0, row: 1 })
+            && self.weather_position == (WidgetPosition { column: 0, row: 2 })
         {
             self.greeting_position = HomeWidget::Greeting.default_position();
             self.weather_position = HomeWidget::Weather.default_position();
         }
         let mut placed = Vec::new();
-        for widget in [HomeWidget::Greeting, HomeWidget::Weather, HomeWidget::Date] {
+        for widget in HomeWidget::ALL {
             let valid = |position: WidgetPosition| {
                 position.fits(widget)
                     && placed.iter().all(|other| {
