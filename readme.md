@@ -81,9 +81,14 @@ clear cached artwork and reload it without changing your preferences.
 
 | TV        | Model identifier | Takeover Support |
 | --------- | ---------------- | ---------------- |
+| LG B1     | `OLED65B19LA`    | ✅               |
 | LG C1     | `OLED48C1KNB`    | ✅               |
 | LG G1     | `OLED65G1RLA`    | ✅               |
 | LG UP8000 | `86UP80009LA`    | Unknown          |
+
+The B1 was verified on firmware `03.53.45`, webOS `6.5.3-47`, using a customized Luma 2.16.2
+build: normal app launch, executable Home takeover, Home-key return from apps and takeover
+reapplication after a software reboot.
 
 </details>
 
