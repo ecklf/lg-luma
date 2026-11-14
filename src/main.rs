@@ -768,7 +768,8 @@ fn run() -> Result<(), String> {
     );
     let tmdb_service =
         tmdb_service::Service::new(tmdb_service::Client::new(), preferences_path.clone());
-    let disk = tmdb_service::load_cache(&tmdb_service::cache_file(&preferences_path));
+    let mut disk = tmdb_service::load_cache(&tmdb_service::cache_file(&preferences_path));
+    tmdb_service::hydrate_cache(&mut disk, &tmdb_service::cache_dir(&preferences_path));
     if !disk.items.is_empty() {
         state.shelf.shows = disk.items;
     }

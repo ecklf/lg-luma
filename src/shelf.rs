@@ -1,7 +1,12 @@
 //! Home Top Shelf dwell/reveal and TMDB request scheduling.
 use crate::state::{Effect, Page, State, Target};
 use crate::tmdb::{self, Catalog, Command, REVEAL_MS, ROTATE_MS, Response};
+use std::path::Path;
 use std::time::Instant;
+
+fn path_exists(path: &str) -> bool {
+    Path::new(path).is_file()
+}
 
 impl State {
     pub fn shelf_focus_app(&self) -> Option<&crate::model::App> {
@@ -53,16 +58,25 @@ impl State {
             .focus_since
             .map(|start| start.elapsed().as_millis() as u64)
             .unwrap_or(0);
-        let ready = self
-            .shelf
-            .shows
-            .get(&app.id)
-            .is_some_and(|shows| !shows.is_empty());
+        let ready = self.shelf.shows.get(&app.id).is_some_and(|shows| {
+            shows
+                .iter()
+                .any(|show| show.backdrop_path.as_ref().is_some_and(|path| path_exists(path)))
+        });
         let mut effects = vec![];
         if !ready
             && self.shelf.pending.as_deref() != Some(app.id.as_str())
             && (dwell >= REVEAL_MS / 2 || self.preferences.reduced_motion)
         {
+            // Drop pathless cache entries so a retry can replace a stale catalog.
+            if self
+                .shelf
+                .shows
+                .get(&app.id)
+                .is_some_and(|shows| !shows.is_empty())
+            {
+                self.shelf.shows.remove(&app.id);
+            }
             effects.extend(self.shelf_request(&app.id, catalog, key));
         }
         let want_reveal = ready && (dwell >= REVEAL_MS || self.preferences.reduced_motion);
@@ -157,7 +171,20 @@ impl State {
     pub fn shelf_current_show(&self) -> Option<&tmdb::Show> {
         let id = self.shelf.focus_app.as_ref()?;
         let shows = self.shelf.shows.get(id)?;
-        shows.get(self.shelf.selected.min(shows.len().saturating_sub(1)))
+        let with_art: Vec<_> = shows
+            .iter()
+            .enumerate()
+            .filter(|(_, show)| {
+                show.backdrop_path
+                    .as_ref()
+                    .is_some_and(|path| path_exists(path))
+            })
+            .collect();
+        if with_art.is_empty() {
+            return None;
+        }
+        let index = self.shelf.selected % with_art.len();
+        Some(with_art[index].1)
     }
 
     pub fn shelf_fallback_colors(app: &crate::model::App) -> (u32, u32) {

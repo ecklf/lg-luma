@@ -205,6 +205,27 @@ pub fn load_cache(path: &Path) -> DiskCache {
         .unwrap_or_default()
 }
 
+/// `backdrop_path` is skipped in JSON; reattach local files after load so the
+/// shelf can reveal art instead of the brand-gray fallback.
+pub fn hydrate_shows(shows: &mut [Show], images: &Path) {
+    for show in shows {
+        let file = images.join(format!("backdrop-{}.jpg", show.id));
+        if file.is_file() {
+            show.backdrop_path = Some(file.to_string_lossy().into_owned());
+        } else {
+            show.backdrop_path = None;
+        }
+    }
+}
+
+pub fn hydrate_cache(cache: &mut DiskCache, images: &Path) {
+    for shows in cache.items.values_mut() {
+        hydrate_shows(shows, images);
+        shows.retain(|show| show.backdrop_path.is_some());
+    }
+    cache.items.retain(|_, shows| !shows.is_empty());
+}
+
 pub fn save_cache(path: &Path, cache: &DiskCache) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
@@ -256,12 +277,7 @@ impl Service {
                         && let Some(mut shows) = cache.items.get(app_id).cloned()
                         && !shows.is_empty()
                     {
-                        for show in &mut shows {
-                            let file = images.join(format!("backdrop-{}.jpg", show.id));
-                            if file.is_file() {
-                                show.backdrop_path = Some(file.to_string_lossy().into_owned());
-                            }
-                        }
+                        hydrate_shows(&mut shows, &images);
                         shows.retain(|show| show.backdrop_path.is_some());
                         if !shows.is_empty() {
                             let _ = res_tx.send(Response {
@@ -321,5 +337,52 @@ use std::collections::HashMap;
 impl Default for Client {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tmdb::Show;
+
+    #[test]
+    fn hydrate_reattaches_existing_backdrop_files() {
+        let dir = std::env::temp_dir().join(format!(
+            "luma-tmdb-hydrate-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("backdrop-42.jpg");
+        fs::write(&file, b"jpeg").unwrap();
+        let mut shows = vec![
+            Show {
+                id: 42,
+                name: "Silo".into(),
+                overview: String::new(),
+                backdrop: "/a.jpg".into(),
+                backdrop_path: None,
+            },
+            Show {
+                id: 7,
+                name: "Missing".into(),
+                overview: String::new(),
+                backdrop: "/b.jpg".into(),
+                backdrop_path: Some("stale".into()),
+            },
+        ];
+        hydrate_shows(&mut shows, &dir);
+        assert_eq!(shows[0].backdrop_path.as_deref(), Some(file.to_str().unwrap()));
+        assert!(shows[1].backdrop_path.is_none());
+        let mut cache = DiskCache {
+            context: "ES|ca-ES|trending".into(),
+            ts: 1,
+            items: HashMap::from([("tv.stremioorigin.app".into(), shows)]),
+        };
+        hydrate_cache(&mut cache, &dir);
+        let kept = &cache.items["tv.stremioorigin.app"];
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].id, 42);
+        let _ = fs::remove_dir_all(&dir);
     }
 }
