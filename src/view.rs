@@ -697,6 +697,30 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
 
 fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     let language = state.preferences.language;
+    if state.preferences.tab_navigation {
+        let rect = Rect::new(720., 42., 480., 76.);
+        out.glass(rect, 38.);
+        for (index, key) in ["home", "apps", "settings"].iter().enumerate() {
+            let target = Target::Nav(index);
+            let tab = Rect::new(726. + index as f32 * 156., 48., 156., 64.);
+            let selected = state.page_index() == index;
+            let focused = state.focus == target;
+            if selected {
+                out.shape(tab, 32., c(0xffffff, 0.17));
+            }
+            if focused {
+                out.border(tab.inset(-2.), 34., 2., WHITE);
+            }
+            out.text(
+                language.t(key),
+                Rect::new(tab.x + 10., 67., tab.w - 20., 30.),
+                text(23., if selected { 650 } else { 500 }, -0.02),
+                WHITE,
+                true,
+            );
+            out.control(target, tab, false);
+        }
+    }
     let clock = language.clock(
         now,
         state.preferences.hour_24,
@@ -711,7 +735,11 @@ fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
         .iter()
         .filter(|input| state.preferences.input_visible(input))
         .collect();
-    let available = 1836. - clock_width - 32. - 84.;
+    let available = if state.preferences.tab_navigation {
+        600.
+    } else {
+        1836. - clock_width - 32. - 84.
+    };
     let max_width = ((available - inputs.len().saturating_sub(1) as f32 * 10.)
         / inputs.len().max(1) as f32)
         .min(240.);
@@ -1504,6 +1532,10 @@ fn weather_summary(
 }
 
 fn library(out: &mut Scene, state: &State, assets: &Assets) {
+    if state.preferences.tab_navigation {
+        library_grid(out, state, assets);
+        return;
+    }
     if state.preferences.show_weather && state.drawer_visibility < 1. {
         let start = out.draw.len();
         let controls = out.controls.len();
@@ -1549,7 +1581,11 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
         );
     }
     out.draw.push(Draw::Clip(Some(state.apps_viewport())));
-    let offset = state.dock_y() - 164.8;
+    let offset = if state.preferences.tab_navigation {
+        0.
+    } else {
+        state.dock_y() - 164.8
+    };
     let mut y = state.drawer_grid_top();
     for row in apps.chunks(APPS_COLUMNS) {
         let row_height = FACE_HEIGHT;
@@ -2377,6 +2413,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     "uiSounds",
                     "volume",
                     Some(language.t(if state.preferences.ui_sounds {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
+                    false,
+                ),
+                (
+                    12,
+                    "tabNavigation",
+                    "arrow-up-down",
+                    Some(language.t(if state.preferences.tab_navigation {
                         "stateOn"
                     } else {
                         "stateOff"

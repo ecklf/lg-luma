@@ -58,6 +58,7 @@ pub enum Target {
     Recent(String),
     RecentEmpty,
     RecentRetry,
+    RecentCloseAll,
     App(String),
     DockApp(String),
     Input(String),
@@ -394,7 +395,11 @@ impl State {
 
     pub fn tick(&mut self) {
         let now = Instant::now();
-        let goal = if self.page == Page::Apps { 1. } else { 0. };
+        let goal = if self.page == Page::Apps && !self.preferences.tab_navigation {
+            1.
+        } else {
+            0.
+        };
         let dt = now
             .duration_since(self.drawer_updated)
             .as_secs_f32()
@@ -512,7 +517,12 @@ impl State {
     }
 
     pub fn animating(&self) -> bool {
-        (self.drawer_visibility != if self.page == Page::Apps { 1. } else { 0. })
+        (self.drawer_visibility
+            != if self.page == Page::Apps && !self.preferences.tab_navigation {
+                1.
+            } else {
+                0.
+            })
             || (!self.preferences.reduced_motion
                 && self.input_status_visibility.iter().any(|(id, value)| {
                     *value != if self.input_status_active(id) { 1. } else { 0. }
@@ -569,7 +579,12 @@ impl State {
         }
         self.drawer_updated = Instant::now();
         if self.preferences.reduced_motion {
-            self.drawer_visibility = if self.page == Page::Apps { 1. } else { 0. };
+            self.drawer_visibility = if self.page == Page::Apps && !self.preferences.tab_navigation
+            {
+                1.
+            } else {
+                0.
+            };
         }
         self.dirty = true;
     }
@@ -579,6 +594,9 @@ impl State {
     }
 
     pub fn drawer_progress(&self) -> f32 {
+        if self.preferences.tab_navigation {
+            return 0.;
+        }
         let t = self.drawer_visibility;
         t * t * (3. - 2. * t)
     }
@@ -592,11 +610,11 @@ impl State {
         if self.page == Page::Home {
             return self.dock_apps();
         }
-        self.app_list(self.page == Page::Apps)
+        self.app_list(self.page == Page::Apps && !self.preferences.tab_navigation)
     }
 
     pub fn drawer_apps(&self) -> Vec<&App> {
-        self.app_list(true)
+        self.app_list(!self.preferences.tab_navigation)
     }
 
     /// Count successful app launches only, never inputs, system actions or preview cards.
@@ -711,6 +729,9 @@ impl State {
     }
 
     pub fn drawer_grid_top(&self) -> f32 {
+        if self.preferences.tab_navigation {
+            return 172.;
+        }
         // Pinned artwork height, glass inset, then the matching outer list padding.
         164.8 + 154.4 + 24. + DRAWER_PADDING
     }
@@ -730,7 +751,8 @@ impl State {
             .rev()
             .find(|control| {
                 // Moving presentations are not pointer targets until they reach their layout.
-                if matches!(control.target, Target::App(_) | Target::DockApp(_))
+                if !self.preferences.tab_navigation
+                    && matches!(control.target, Target::App(_) | Target::DockApp(_))
                     && ((self.page == Page::Apps && self.drawer_visibility < 1.)
                         || (self.page == Page::Home && self.drawer_visibility > 0.))
                 {
@@ -783,8 +805,9 @@ impl State {
                             && control.rect.contains(x, y)
                     })
             });
-        let favorites =
-            (self.page == Page::Home || self.page == Page::Apps) && (x != 0 || over_favorites);
+        let favorites = (self.page == Page::Home
+            || (self.page == Page::Apps && !self.preferences.tab_navigation))
+            && (x != 0 || over_favorites);
         if favorites {
             self.scroll_favorites((if x != 0 { x } else { -y }) as f32 * HOME_TILE_PITCH);
         } else {
@@ -1340,6 +1363,46 @@ impl State {
             return vec![];
         }
         if self.overlay.is_none() {
+            if self.preferences.tab_navigation {
+                let next = match (&self.focus, direction) {
+                    (Target::Nav(index), Direction::Left) => Some(if *index > 0 {
+                        Target::Nav(index - 1)
+                    } else {
+                        self.first_input_target()
+                    }),
+                    (Target::Nav(index), Direction::Right) => Some(if *index < 2 {
+                        Target::Nav(index + 1)
+                    } else {
+                        Target::SettingsMenu
+                    }),
+                    (Target::Nav(_), Direction::Down) => Some(self.first_content()),
+                    (Target::Nav(_), Direction::Up) => Some(self.focus.clone()),
+                    (Target::SettingsMenu, Direction::Left) => Some(Target::Nav(2)),
+                    (Target::App(_), Direction::Down) if self.page == Page::Home => {
+                        Some(self.focus.clone())
+                    }
+                    (Target::App(_), Direction::Up) if self.page == Page::Home => {
+                        Some(Target::Nav(0))
+                    }
+                    (Target::WeatherConfigure, Direction::Up) => Some(Target::Nav(0)),
+                    (Target::WeatherConfigure, Direction::Down) => Some(self.first_content()),
+                    (Target::App(id), Direction::Up)
+                        if self.page == Page::Apps
+                            && self
+                                .apps()
+                                .iter()
+                                .take(APPS_COLUMNS)
+                                .any(|app| &app.id == id) =>
+                    {
+                        Some(Target::Nav(1))
+                    }
+                    _ => None,
+                };
+                if let Some(next) = next {
+                    self.focus(next, controls);
+                    return vec![];
+                }
+            }
             if self.page == Page::Apps
                 && let Target::DockApp(id) = &self.focus
             {
@@ -2340,6 +2403,13 @@ impl State {
             return match self.focus.clone() {
                 Target::Recent(id) => self.recent_request(Command::Launch(id)),
                 Target::RecentRetry => self.recent_request(Command::List),
+                Target::RecentCloseAll => self.recent_request(Command::CloseAll(
+                    self.recents
+                        .entries
+                        .iter()
+                        .map(|entry| entry.app.id.clone())
+                        .collect(),
+                )),
                 _ => vec![],
             };
         }
@@ -2357,7 +2427,11 @@ impl State {
             return self.send_tile(tile);
         }
         match self.focus.clone() {
-            Target::Nav(index) => self.open(if index == 2 { 0 } else { index }),
+            Target::Nav(index) => self.open(if index == 2 && !self.preferences.tab_navigation {
+                0
+            } else {
+                index
+            }),
             Target::InputsMenu => {
                 self.overlay = Some(Overlay::Inputs);
                 self.focus = self
@@ -2639,6 +2713,10 @@ impl State {
                     }
                     2 => self.preferences.reduced_motion = !self.preferences.reduced_motion,
                     11 => self.preferences.ui_sounds = !self.preferences.ui_sounds,
+                    12 => {
+                        self.preferences.tab_navigation = !self.preferences.tab_navigation;
+                        self.drawer_visibility = 0.;
+                    }
                     4 => {
                         self.subpage = Some(Subpage::Language);
                         self.focus = Target::Choice(self.preferences.language.index());

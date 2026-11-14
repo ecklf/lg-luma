@@ -259,6 +259,8 @@ impl WeatherStyle {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
+    /// Separate Home / Apps / Settings pages instead of the sliding app drawer.
+    pub tab_navigation: bool,
     pub weather_style: WeatherStyle,
     pub app_sorting: AppSorting,
     pub app_launch_counts: BTreeMap<String, u64>,
@@ -304,6 +306,7 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
+            tab_navigation: false,
             weather_style: WeatherStyle::default(),
             app_sorting: AppSorting::default(),
             app_launch_counts: BTreeMap::new(),

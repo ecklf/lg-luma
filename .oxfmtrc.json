@@ -5,7 +5,7 @@
   "trailingComma": "all",
   "sortPackageJson": false,
   "overrides": [
-    { "files": ["tv/*.cjs", "tv/home-filter.js"], "options": { "trailingComma": "none" } }
+    { "files": ["tv/*.cjs", "tv/*home-filter.js"], "options": { "trailingComma": "none" } }
   ],
   "ignorePatterns": [
     "**/.changeset/**",

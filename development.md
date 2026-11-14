@@ -12,6 +12,8 @@ tools/                       Asset preparation, SDK/runtime setup, packaging and
 tests/                       Desktop rendering and mocked HTTP smoke scripts
 tv/autostart.sh              Optional cold-boot launch hook
 tv/home.sh / luma-helper         Optional root-only native Home integration
+tv/legacy-home.py             Optional webOS 4 compositor routing with saved config and restore
+tv/legacy-home-filter.js      ES5 key, ribbon and app-close routing for the older embedded Home
 dist/                        Generated ARM IPK, checksum and Homebrew feed
 .build/                      Generated assets, SDK/runtime caches and rendering diagnostics
 ```
@@ -22,6 +24,14 @@ is the Rust executable `luma`, with app ID `com.ecklf.luma`. The companion pages
 `assets/wallpaper-upload/` and `assets/tile-editor/` are plain HTML/CSS/JavaScript, embedded in the
 native executable and served temporarily to the owner's phone or computer; they do not render the
 TV interface.
+
+On webOS 4, Home is embedded in the compositor. The optional `legacy-home.py`
+manager installs a config-selected ES5 filter and a Homebrew boot hook, with a
+saved original filter list and a disable command that preserves later changes.
+The native LS2 client resolves `LSRegisterPubPriv` dynamically for Homebrew
+requests on old split-bus LS2; all other calls retain their original registration.
+Newer unified LS2 has no such symbol and uses `LSRegister`. No caller identity is
+impersonated and failed mutations are not retried on another bus.
 
 ## Toolchain and commands
 
@@ -94,6 +104,18 @@ implementation. New uploads prepare both atlases on the wallpaper worker before 
 the immutable directory. Older uploads or missing/corrupt atlases fall back to the original
 renderer. Shader sampling, glass appearance, GPU cache budgets and lazy text are unchanged.
 `xvfb-run -a pnpm test:startup` verifies desktop GL/GLES framebuffer equality and fallback.
+
+The optional `Preferences::tab_navigation` mode restores explicit Home / Apps /
+Settings controls while keeping the current native renderer, wallpaper tools and
+weather styles. In this mode Apps uses the full six-column inventory, drawer
+progress remains zero, Home Down does not open another surface, and pointer hits
+do not wait for drawer animation. The existing drawer remains the default for
+unchanged preferences. Recent apps adds an Up-reachable X Close all control; its
+worker reads SAM's running list, closes normal card apps through `closeByAppId`
+and removes history entries. Home identities, Luma, Live TV, the background
+AirPlay receiver and overlays are excluded from the running-app batch. An empty
+LG history falls back to real running apps; individual closes also use SAM.
+Desktop tests use isolated sample history.
 
 ### Documentation screenshots
 
@@ -1217,3 +1239,6 @@ synchronization, copied recovery files, protected uninstall rejection, and compl
 new disposable test app through status 31. The previous build, preferences and integration policy
 were restored after testing. Manifest takeover on webOS 10/11 is covered by fixtures, but was not
 tested on hardware in this run; standby and cold boot were not tested.
+
+The General settings row toggles tabbed navigation without editing a preferences file.
+See [webOS 4 Home integration](docs/webos4-home.md) for hardware evidence and recovery.

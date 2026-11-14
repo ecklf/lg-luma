@@ -4707,5 +4707,39 @@
     "sv": "Redigeringssessionen har avslutats",
     "cs": "Relace úprav skončila",
     "ca": "S’ha tancat la sessió d’edició"
+  },
+  "closeAll": {
+    "en": "Close all",
+    "de": "Alle schließen",
+    "es": "Cerrar todas",
+    "fr": "Tout fermer",
+    "it": "Chiudi tutte",
+    "pt": "Fechar todos",
+    "nl": "Alles sluiten",
+    "sv": "Stäng alla",
+    "pl": "Zamknij wszystkie",
+    "ru": "Закрыть все",
+    "vi": "Đóng tất cả",
+    "zh": "全部关闭",
+    "zh-tw": "全部關閉",
+    "ca": "Tanca-ho tot",
+    "cs": "Zavřít vše"
+  },
+  "tabNavigation": {
+    "en": "Tabbed navigation",
+    "de": "Navigation mit Registerkarten",
+    "es": "Navegación por pestañas",
+    "zh": "标签页导航",
+    "zh-tw": "分頁導覽",
+    "pt": "Navegação por abas",
+    "it": "Navigazione a schede",
+    "ru": "Навигация по вкладкам",
+    "pl": "Nawigacja kartami",
+    "fr": "Navigation par onglets",
+    "vi": "Điều hướng theo thẻ",
+    "nl": "Navigatie met tabbladen",
+    "sv": "Fliknavigering",
+    "cs": "Navigace pomocí karet",
+    "ca": "Navegació per pestanyes"
   }
 }

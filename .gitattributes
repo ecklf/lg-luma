@@ -1,0 +1,3 @@
+* text=auto eol=lf
+# Keep licensed/pinned SVG source bytes exactly as supplied upstream.
+*.svg -text

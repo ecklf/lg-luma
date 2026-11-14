@@ -17,6 +17,7 @@ pub enum Command {
     List,
     Launch(String),
     Close(String),
+    CloseAll(Vec<String>),
 }
 
 impl Command {
@@ -38,6 +39,7 @@ impl Command {
                 json!({"id": id, "params": {}, "reason": "recent",
                     "checkUpdateOnLaunch": true, "autoInstallation": true}),
             ),
+            Self::CloseAll(_) => return Err("Close all uses the managed application batch".into()),
         })
     }
 }
@@ -48,10 +50,43 @@ fn excluded(id: &str) -> bool {
         APP_ID
             | HOME_ID
             | FULL_HOME_ID
+            | "com.webos.app.livetv"
+            | "airplay"
             | "com.luma.native"
             | "com.luma.launcher"
             | "com.luma.launcher.native"
     )
+}
+
+/// Close normal card applications through SAM; never target Home, overlays or TV services.
+pub fn background_app_ids(reply: &Value) -> Result<Vec<String>, String> {
+    let running = reply
+        .get("running")
+        .and_then(Value::as_array)
+        .filter(|apps| apps.len() <= 1000)
+        .ok_or("Invalid running apps reply")?;
+    let mut ids = HashSet::new();
+    Ok(running
+        .iter()
+        .filter(|app| app["defaultWindowType"] == "card")
+        .filter_map(|app| app["id"].as_str())
+        .filter(|id| {
+            valid_app_id(id)
+                && !excluded(id)
+                && !matches!(
+                    *id,
+                    "com.webos.app.livetv" | "airplay" | "com.webos.app.container"
+                )
+                && !id.starts_with("com.webos.app.hdmi")
+                && !id.starts_with("com.webos.app.externalinput.")
+                && ids.insert((*id).to_owned())
+        })
+        .map(str::to_owned)
+        .collect())
+}
+
+pub fn valid_recent_id(id: &str) -> bool {
+    valid_app_id(id) && !excluded(id) && !crate::scroll_preview::is_placeholder(id)
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -422,12 +457,40 @@ impl State {
                         .unwrap_or(Target::RecentEmpty);
                     return self.recent_request(Command::List);
                 }
+                Command::CloseAll(_) => {
+                    self.recents.entries.clear();
+                    self.recents.dismissals.clear();
+                    self.recents.slots.clear();
+                    self.recents.selected = 0;
+                    self.recents.position = 0.;
+                    self.focus = Target::RecentEmpty;
+                    return self.recent_request(Command::List);
+                }
             },
         }
         vec![]
     }
 
     pub fn recent_direction(&mut self, direction: Direction) -> Vec<Effect> {
+        if self.preferences.tab_navigation {
+            if self.focus == Target::RecentCloseAll {
+                if matches!(direction, Direction::Down | Direction::Left) {
+                    self.focus = self
+                        .recents
+                        .entries
+                        .get(self.recents.selected)
+                        .map_or(Target::RecentEmpty, |entry| {
+                            Target::Recent(entry.app.id.clone())
+                        });
+                }
+                return vec![];
+            }
+            if matches!(direction, Direction::Up) && self.recents.loaded {
+                self.focus = Target::RecentCloseAll;
+                self.dirty = true;
+                return vec![];
+            }
+        }
         if matches!(direction, Direction::Up)
             && let Target::Recent(id) = &self.focus
         {

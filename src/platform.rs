@@ -243,6 +243,10 @@ impl Platform {
                                     Ok(None)
                                 }
                                 crate::recents::Command::Launch(_) => Ok(None),
+                                crate::recents::Command::CloseAll(_) => {
+                                    desktop_recents.clear();
+                                    Ok(None)
+                                }
                             }
                         };
                         Response::Recent {
@@ -725,7 +729,111 @@ fn command_reply(envelope: &Value) -> Result<Value, String> {
 }
 
 fn recent_call(command: &crate::recents::Command) -> Result<Value, String> {
+    // The jailed app cannot read /etc/starfish-release. Detect the actual service
+    // capability once; permission errors and timeouts must remain visible errors.
+    static LEGACY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let legacy = if let Some(legacy) = LEGACY.get() {
+        *legacy
+    } else {
+        let legacy =
+            match recent_operation("luna://com.webos.service.recent/listRecents", json!({})) {
+                Ok(_) => false,
+                Err(error)
+                    if error.contains("Service does not exist: com.webos.service.recent") =>
+                {
+                    true
+                }
+                Err(error) => return Err(error),
+            };
+        let _ = LEGACY.set(legacy);
+        legacy
+    };
+    recent_call_with(command, legacy, recent_operation)
+}
+
+fn running_recents(reply: &Value) -> Result<Value, String> {
+    Ok(json!({"returnValue":true, "recentsAppList":
+        crate::recents::background_app_ids(reply)?.into_iter()
+            .map(|id| json!({"appId": id, "title": id})).collect::<Vec<_>>()
+    }))
+}
+
+fn recent_call_with(
+    command: &crate::recents::Command,
+    legacy: bool,
+    mut operation: impl FnMut(&str, Value) -> Result<Value, String>,
+) -> Result<Value, String> {
+    // webOS 4 has no com.webos.service.recent. Use its real running-card inventory
+    // and SAM closes, without querying or mutating a nonexistent history service.
+    if legacy && matches!(command, crate::recents::Command::List) {
+        return running_recents(&operation(
+            "luna://com.webos.applicationManager/running",
+            json!({}),
+        )?);
+    }
+    if let crate::recents::Command::Close(id) = command {
+        // Validate before either mutation, including the protected Home identities.
+        command.request()?;
+        let reply = operation(
+            "luna://com.webos.applicationManager/closeByAppId",
+            json!({"id": id}),
+        )?;
+        if legacy {
+            return Ok(reply);
+        }
+    }
+    if let crate::recents::Command::CloseAll(history) = command {
+        let running = operation("luna://com.webos.applicationManager/running", json!({}))?;
+        let mut errors = vec![];
+        for id in crate::recents::background_app_ids(&running)? {
+            if let Err(error) = operation(
+                "luna://com.webos.applicationManager/closeByAppId",
+                json!({"id": id}),
+            ) {
+                errors.push(format!("{id}: {error}"));
+            }
+        }
+        for id in history
+            .iter()
+            .filter(|id| !legacy && crate::recents::valid_recent_id(id))
+        {
+            if let Err(error) = operation(
+                "luna://com.webos.service.recent/removeRecent",
+                json!({"appId": id}),
+            ) {
+                errors.push(format!("{id}: {error}"));
+            }
+        }
+        return if errors.is_empty() {
+            Ok(json!({"returnValue": true}))
+        } else {
+            Err(errors.join("; "))
+        };
+    }
+    if legacy && let crate::recents::Command::Launch(id) = command {
+        command.request()?;
+        return operation(
+            "luna://com.webos.applicationManager/launch",
+            json!({"id":id}),
+        );
+    }
     let (uri, payload) = command.request()?;
+    let mut reply = operation(uri, payload)?;
+    if matches!(command, crate::recents::Command::List)
+        && crate::recents::normalize(&reply)?.is_empty()
+    {
+        // Some webOS versions expose no history while card apps remain open.
+        // Use real SAM inventory, never demo data, for that empty-history case.
+        let running = operation("luna://com.webos.applicationManager/running", json!({}))?;
+        reply["recentsAppList"] = crate::recents::background_app_ids(&running)?
+            .into_iter()
+            .map(|id| json!({"appId": id, "title": id}))
+            .collect();
+    }
+    Ok(reply)
+}
+
+fn recent_operation(uri: &str, payload: Value) -> Result<Value, String> {
     // The native process uses its own authenticated Homebrew connection, as
     // inventory does. Fixed operations only; no app-ID impersonation or retries
     // of mutations after an ambiguous timeout. LG owns close/keep-alive policy.
@@ -881,6 +989,10 @@ pub fn normalize_inputs(raw: &Value) -> Result<Vec<Input>, String> {
     }
     Ok(inputs)
 }
+
+#[cfg(test)]
+#[path = "platform-recents-tests.rs"]
+mod recent_backend_tests;
 
 #[cfg(test)]
 mod update_argument_tests {

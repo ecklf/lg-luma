@@ -59,6 +59,28 @@ Screenshots are native desktop previews, not hardware performance claims.
 If installed app icons look stale, use **Settings → System → Reset icon cache** to
 clear cached artwork and reload it without changing your preferences.
 
+### Optional tabbed Home and legacy integration
+
+**Settings → General → Tabbed navigation** enables a Home / Apps / Settings bar. Home
+keeps the favorites dock; Apps is a separate full app library with no sliding
+drawer or duplicate pinned row. Up from favorites reaches the tabs. In Recent
+apps, Up reaches the X **Close all** button. It closes normal background card
+apps through LG's application manager and removes recent cards, preserving Luma,
+LG Home, Live TV, the background AirPlay receiver and system overlays. Failed closes are reported.
+
+For webOS 4, [the legacy Home guide](docs/webos4-home.md) describes a separate reversible
+compositor integration. It redirects Home/Menu/Recent and OEM ribbon requests to
+Luma, and returns to Luma after the foreground app closes. Screen-saver and
+accessibility filters retain their order; Prime/Voice mappings pass through.
+Restore LG routing with `python2 /var/lib/luma-legacy-home/legacy-home.py disable`.
+This generation embeds LG Home in the compositor and has no native Home app
+identity to replace. A failed launch falls back to LG Home. Verify physical keys,
+app closing and cold boot on each model.
+
+On older firmware without LG's recent-history service, Recent apps lists the
+currently running apps instead. Close all closes those apps while preserving
+Home, TV inputs, AirPlay, the hidden system container and overlays.
+
 ## Compatibility
 
 > [!NOTE]
@@ -68,11 +90,12 @@ clear cached artwork and reload it without changing your preferences.
 <details>
 <summary>webOS 4</summary>
 
-| TV        | Model identifier | Takeover Support |
-| --------- | ---------------- | ---------------- |
-| LG C8     | `OLED??C8*`      | ❌               |
-| LG C9     | `OLED65C97LA`    | Unknown          |
-| LG UM7450 | `UM74507LA`      | ❌               |
+| TV        | Model identifier | Takeover Support                     |
+| --------- | ---------------- | ------------------------------------ |
+| LG UK6300 | `65UK6300YVB`    | ✅ Legacy routing (tested SDK 4.4.0) |
+| LG C8     | `OLED??C8*`      | ❌                                   |
+| LG C9     | `OLED65C97LA`    | Unknown                              |
+| LG UM7450 | `UM74507LA`      | ❌                                   |
 
 </details>
 

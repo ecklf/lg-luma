@@ -135,6 +135,17 @@ pub fn render(out: &mut Scene, state: &State, assets: &Assets) {
         }
     }
 
+    if state.preferences.tab_navigation && recent.loaded {
+        button(
+            out,
+            state,
+            assets,
+            Target::RecentCloseAll,
+            Rect::new(1590., 64., 246., 64.),
+            "close",
+            language.t("closeAll"),
+        );
+    }
     if recent.error.is_some() {
         if !recent.entries.is_empty() {
             out.text(
