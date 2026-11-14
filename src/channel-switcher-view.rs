@@ -183,7 +183,12 @@ fn channel_epg(
         let width = assets.width(label, text(18. * scale, 550, -0.01));
         out.text(
             label,
-            Rect::new(text_x, rect.y + rect.h * 0.82, width.min(text_w), 28. * scale),
+            Rect::new(
+                text_x,
+                rect.y + rect.h * 0.82,
+                width.min(text_w),
+                28. * scale,
+            ),
             text(18. * scale, 550, -0.01),
             c(0xffffff, 0.55),
             false,

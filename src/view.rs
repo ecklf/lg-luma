@@ -31,10 +31,10 @@ fn input_icon_width(name: &str, size: f32) -> f32 {
     }
 }
 
-#[path = "recents-view.rs"]
-mod recents_view;
 #[path = "channel-switcher-view.rs"]
 mod channel_switcher_view;
+#[path = "recents-view.rs"]
+mod recents_view;
 
 pub struct Assets {
     pub root: PathBuf,

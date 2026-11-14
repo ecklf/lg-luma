@@ -5,9 +5,9 @@ mod app_artwork;
 #[path = "app-subscription.rs"]
 mod app_subscription;
 mod branding;
-mod channels;
 #[path = "channel-switcher.rs"]
 mod channel_switcher;
+mod channels;
 mod companion;
 mod damage;
 mod diagnostics;

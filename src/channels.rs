@@ -390,7 +390,13 @@ mod tests {
             ]
         });
         let guide = normalize_schedule(&raw);
-        assert_eq!(guide.program.as_ref().map(|p| p.title.as_str()), Some("Now playing"));
-        assert_eq!(guide.next.as_ref().map(|p| p.title.as_str()), Some("Up next"));
+        assert_eq!(
+            guide.program.as_ref().map(|p| p.title.as_str()),
+            Some("Now playing")
+        );
+        assert_eq!(
+            guide.next.as_ref().map(|p| p.title.as_str()),
+            Some("Up next")
+        );
     }
 }

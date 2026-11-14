@@ -549,11 +549,7 @@ impl State {
                     || self.recents.cards_animating(self.pointer)))
             || ((self.channel_switcher_open() || self.channel_switcher.visibility > 0.)
                 && (self.channel_switcher.visibility
-                    != if self.channel_switcher_open() {
-                        1.
-                    } else {
-                        0.
-                    }
+                    != if self.channel_switcher_open() { 1. } else { 0. }
                     || self.channel_switcher.cards_animating(self.pointer)))
             || self.previous_background.is_some()
             || self.panel_started.is_some()
