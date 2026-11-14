@@ -114,10 +114,10 @@ pub fn normalize_program(raw: &Value) -> Option<ChannelProgram> {
         .duration_since(std::time::UNIX_EPOCH)
         .ok()?
         .as_secs();
-    if let (Some(start), Some(end)) = (start, end) {
-        if start > now || end <= now {
-            return None;
-        }
+    if let (Some(start), Some(end)) = (start, end)
+        && (start > now || end <= now)
+    {
+        return None;
     }
     Some(ChannelProgram {
         title: title.into(),
