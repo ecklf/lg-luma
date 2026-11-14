@@ -3033,6 +3033,25 @@ fn shelf_settings(out: &mut Scene, state: &State, assets: &Assets) {
 fn channels_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let s = state.scroll;
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::ChannelsToggle,
+            rect: Rect::new(640., 164.8 - s, 1120., 72.),
+            title: language.t("showWidget"),
+            icon: Some("eye"),
+            value: Some(language.t(if state.preferences.show_channels {
+                "stateOn"
+            } else {
+                "stateOff"
+            })),
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
     let ordered = state.channels_settings_list();
     for (index, channel) in ordered.iter().enumerate() {
         let on_home = state.preferences.channel_on_home(&channel.id);
@@ -3047,7 +3066,7 @@ fn channels_settings(out: &mut Scene, state: &State, assets: &Assets) {
             assets,
             Row {
                 target: Target::ChannelFavorite(channel.id.clone()),
-                rect: Rect::new(640., 164.8 + index as f32 * 84. - s, 1120., 72.),
+                rect: Rect::new(640., 248.8 + index as f32 * 84. - s, 1120., 72.),
                 title: &title,
                 icon: Some(if channel.radio { "generic" } else { "tv" }),
                 value: Some(language.t(if on_home { "stateOn" } else { "stateOff" })),
@@ -3060,11 +3079,11 @@ fn channels_settings(out: &mut Scene, state: &State, assets: &Assets) {
             },
         );
     }
-    let mut y = 164.8 + ordered.len() as f32 * 84. + 16. - s;
+    let mut y = 248.8 + ordered.len() as f32 * 84. + 16. - s;
     if ordered.is_empty() {
         out.text(
             language.t("noChannels"),
-            Rect::new(664., 165. - s, 1000., 26.),
+            Rect::new(664., 249. - s, 1000., 26.),
             text(16.8, 400, 0.).leading(1.5),
             c(0xf5f5f5, 0.72),
             false,

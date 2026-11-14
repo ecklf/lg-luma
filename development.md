@@ -201,7 +201,9 @@ are ignored and are not written back. App titles remain available in the managem
 **Settings → Widgets** groups **Weather**, **Shortcuts**, **Inputs**, **Channels**, and **Top Shelf** as
 separate subpages. Weather location and temperature choices return to Weather; Back from a widget returns to
 its row in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row. Channel
-favorites return to Channels, then its Widgets row. Top Shelf is on by default: packaging may bake in a
+favorites return to Channels, then its Widgets row. Channels can be shown or hidden from that
+subpage without clearing favorites; Left from the list or header restores the Channels Widgets
+row instead of jumping to the sidebar. Top Shelf is on by default: packaging may bake in a
 TMDB key via `LUMA_TMDB_API_KEY`, and Settings can still override it, plus streaming region and
 suggestion language (Automatic follows the UI language). After resting about three seconds on a mapped
 Home favorite, popular show art fades over the wallpaper while the weather summary yields the left

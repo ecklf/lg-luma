@@ -78,6 +78,35 @@ fn switcher_back_and_up_restore_prior_focus() {
 }
 
 #[test]
+fn channels_widget_toggle_hides_home_strip_and_left_closes_to_widgets_row() {
+    use crate::state::Subpage;
+    let mut state = with_favorites();
+    assert!(!state.home_channels().is_empty());
+    state.open(2);
+    state.section = crate::state::WIDGETS_SECTION;
+    state.focus = Target::Widget(5);
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::Channels));
+    assert_eq!(state.focus, Target::ChannelsToggle);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!state.preferences.show_channels);
+    assert!(state.home_channels().is_empty());
+    assert!(
+        !state.channels_settings_list().is_empty(),
+        "settings list stays editable while the strip is hidden"
+    );
+    state.focus = Target::ChannelFavorite(state.channels_settings_list()[0].id.clone());
+    state.direction(Direction::Left, &[]);
+    assert!(state.subpage.is_none());
+    assert_eq!(state.focus, Target::Widget(5));
+    state.activate();
+    state.focus = Target::SettingsMenu;
+    state.direction(Direction::Left, &[]);
+    assert!(state.subpage.is_none());
+    assert_eq!(state.focus, Target::Widget(5));
+}
+
+#[test]
 fn guide_entry_applies_now_and_next_titles() {
     let mut state = with_favorites();
     let id = state.home_channels()[0].id.clone();

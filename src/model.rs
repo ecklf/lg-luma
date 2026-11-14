@@ -297,6 +297,8 @@ pub struct Preferences {
     pub favorites: Option<Vec<String>>,
     /// Ordered tuner channel IDs shown on the Home channels strip.
     pub channel_favorites: Vec<String>,
+    /// When false, the Home channels strip is hidden (favorites are kept).
+    pub show_channels: bool,
     pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
     pub background: String,
@@ -351,6 +353,7 @@ impl Default for Preferences {
             app_launch_counts: BTreeMap::new(),
             favorites: None,
             channel_favorites: vec![],
+            show_channels: true,
             custom_tiles: vec![],
             hidden: vec![],
             background: "dunes".into(),
