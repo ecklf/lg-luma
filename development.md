@@ -72,6 +72,29 @@ backend. Avoid copying the whole SDK library directory or the TV's graphics driv
 
 ## Controls and navigation
 
+### Startup profiling
+
+See [startup measurements](docs/startup.md) for the Liquid Glass startup regression and
+the benchmark procedure. `xvfb-run -a pnpm benchmark:startup` builds a release desktop
+binary and alternates five process starts with runtime-filtered and precomputed glass.
+It records `.build/startup-benchmark.json`, without contacting TV or public HTTP services.
+Use `LUMA_STARTUP_RUNS=10` to change the sample count. These are process starts with warm
+filesystem/driver caches, not TV cold-boot measurements.
+
+`--diagnostics PATH` includes `startup.stages_ms` and `startup.first_frame`, separate from
+steady-state frame pacing. The glass counters distinguish prepared atlas loads from legacy
+runtime filtering. TV startup logs also report this breakdown after the first presentation.
+Inventory completion and the first successfully populated frame are timed separately, so a
+quick loading frame cannot conceal slow TV inventory responses.
+`LUMA_GLASS_PRECOMPUTED=0` forces the original filtering path for diagnostic comparison.
+
+`pnpm assets` prepares lossless `wallpapers/*.glass.png` atlases from the final 1080p JPEGs,
+including unshaded variants. The host and legacy renderer share the exact Rust resize/blur
+implementation. New uploads prepare both atlases on the wallpaper worker before publishing
+the immutable directory. Older uploads or missing/corrupt atlases fall back to the original
+renderer. Shader sampling, glass appearance, GPU cache budgets and lazy text are unchanged.
+`xvfb-run -a pnpm test:startup` verifies desktop GL/GLES framebuffer equality and fallback.
+
 ### Documentation screenshots
 
 `pnpm screenshots` generates `docs/home.png`, `docs/apps.png`, `docs/settings.png` and
@@ -86,6 +109,37 @@ It does not execute the test suites. A desktop display is required; on headless 
 `xvfb-run -a pnpm screenshots`. These images document the native design, not TV hardware behavior.
 
 ### Input
+
+General → UI sounds stores `ui_sounds` (default `false`, also for existing preferences).
+The SDL queue opens lazily on the first audible interaction, plays short original synthesized
+navigation/select/back cues at a fixed quiet level, and closes when disabled or the window loses
+focus/visibility. Navigation repeats are rate-limited and queued audio cannot accumulate.
+Unchanged navigation, worker responses, redraws, and scripted captures stay silent. Audio errors
+are logged once per enabled session and never prevent navigation; toggling off/on retries.
+No sound recordings or extra audio libraries are packaged. TV routing/volume and behavior alongside
+other apps need manual hardware verification. A desktop-only backend check is available with
+`SDL_AUDIODRIVER=dummy cargo test --locked --bin luma dummy_audio_ -- --ignored --test-threads=1`.
+The unavailable-backend check runs with
+`SDL_AUDIODRIVER=luma-unavailable cargo test --locked --bin luma unavailable_audio_ -- --ignored --test-threads=1`.
+
+Weather → Widget style persists `weather_style` (`standard`, the default, `no_icon`,
+or `compact`). Home and Settings use the same native layout and painting functions.
+The picker shows all three designs with offline sample weather, in the saved
+temperature unit. Browsing does not change preferences or fetch a forecast. OK/click
+saves a style and returns to Weather, while Back/Left cancels without changing the style.
+The no-icon layout reclaims the icon column. Compact uses two lines, with a small icon,
+condition and location on the second. Cached-reading warnings and setup/error states
+remain visible. `xvfb-run -a pnpm screenshots --weather-styles` captures all designs and
+the settings preview using the native renderer and loopback-only cached sample weather.
+
+General → App sorting stores `app_sorting` (`alphabetical`, the default, or `usage`).
+`app_launch_counts` maps app IDs to saturating launch counts, saved after successful TV
+launch responses, including Recent apps. Failed launches, desktop simulations, inputs,
+and webhook shortcuts do not count. Counting continues in Alphabetically mode. Non-favorites sort
+by descending count in usage mode, then case-insensitive title and app ID. Favorites
+retain their manual order. The same order fills empty dock slots and the app drawer.
+`xvfb-run -a pnpm screenshots --sorting` captures the sorting settings, both app orders,
+and the generic disc input icon from the native desktop renderer using seeded local counts.
 
 | Input                         | Action                                                                       |
 | ----------------------------- | ---------------------------------------------------------------------------- |
@@ -160,6 +214,9 @@ is hidden. Enabled weather without a location uses the same large 144px artwork 
 Settings lists render behind fixed controls. The drawer grid is clipped below its fixed dock so
 offscreen cards cannot capture pointer events there. Input name removal uses **Clear name**.
 Choice checkmarks identify saved values, while the bright row fill identifies only the current focus.
+Input connection dots are amber when a connected cable explicitly reports no signal, green for
+other connected inputs, and gray for disconnected or unknown cable states. An unknown signal
+report alone does not imply no signal, and signal reports never override cable-based visibility.
 
 Input icon picker: **Settings → Widgets → Inputs → select input → Icon** opens a
 native picker for bundled input SVG icons. Its choices are **Automatic** (default label detection),
@@ -175,6 +232,8 @@ using Automatic. This is a backward-compatible feature and does not change input
 
 Home favorites form one horizontal glass dock, never a second row. Left/Right follows saved order,
 including reorder mode, and reveals complete cards. Up reaches Inputs or the clock/settings control.
+Up from the drawer’s first app row dismisses the drawer immediately while preserving the
+corresponding dock app as the selected Home favorite. Up within later grid rows stays in the drawer.
 Down lifts the dock to the top and reveals a six-column app grid beneath it. Favorites stay in the
 dock instead of appearing twice in the grid. The drawer has no search or category toolbar.
 The Home dock follows saved pinned order, with no Apps button or Move apps label above it.
@@ -213,6 +272,12 @@ an FBO or sampling the framebuffer. Text and app artwork are separate, sharp dra
 crossfades blend both glass backdrops. Wallpaper changes already invalidate the full scene, while
 ordinary glass changes participate in damage tracking.
 
+Modal cards (wallpaper upload, shortcut editing, app/background actions, deletion confirmations,
+and the keyboard) use opaque gray gradients rather than wallpaper-sampling glass to keep their
+content readable. The dock and regular controls retain their glass treatment.
+Wallpaper-upload and shortcut-editor panels use the same solid dark gray as the QR quiet zone
+and logo plate, avoiding a contrasting square behind the QR code without reducing its contrast.
+
 See [the research notes](docs/liquid-glass-research.md) for sources, visual decisions and limitations.
 
 For bounded GLES2 cost, refraction samples the wallpaper, not other UI controls behind a menu.
@@ -242,9 +307,10 @@ System text events update app/location queries; Done/Back stops editing and rest
 
 ### Recent apps
 
-Press Back on Home to open Recent apps, or hold Back (Escape on desktop) for 600 ms from any page.
-Short Back navigates on release. Back in an overlay, the system keyboard or
-move mode keeps its immediate dismissal behavior; Backspace keeps its editing/navigation role.
+Hold Back (Escape on desktop) for 600 ms from any page to open Recent apps.
+Short Back navigates on release and does nothing on Home; it never opens Recent apps.
+Back in an overlay, the system keyboard or move mode keeps its immediate dismissal behavior;
+Backspace keeps its editing/navigation role.
 Losing window focus cancels an unfinished hold. This is an app-local shortcut while Luma is focused.
 SDL-webOS Back (scancode 482) and long-Back Exit (505) are normalized before rust-sdl2 decodes the
 event, since the native keymap can leave their keycodes unset and the Rust scancode enum does not

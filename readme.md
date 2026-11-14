@@ -2,7 +2,7 @@
 
 A native launcher for rooted LG webOS TVs, inspired by Apple TV.
 
-https://github.com/user-attachments/assets/2156d640-b8fa-4ea4-a02c-0db4c93bcc5a
+https://github.com/user-attachments/assets/5b2c6e78-ec77-41f5-a79a-1fcfbe8e524b
 
 <details>
 <summary>Screenshots</summary>
@@ -36,8 +36,17 @@ date have been removed.
 
 - **Left / Right** browses favorites. Hold **OK** to reorder them.
 - **Down** from favorites opens the animated six-column app drawer.
+- **Up** from the drawer’s first app row returns Home with the corresponding favorite selected.
 - **Up** from favorites reaches the corner controls.
 - **Back** closes the drawer and focuses the first favorite.
+- **Settings → General → App sorting** chooses **Alphabetically** (default) or **Usage count**.
+  Usage sorts by successful launches from Luma, most used first, with alphabetical ties.
+  Counts stay local and persist across restarts. Favorites keep their manual order.
+- **Settings → General → UI sounds** enables soft, tvOS-inspired navigation, select, and back
+  feedback. Off by default; uses original synthesized sounds, not Apple recordings.
+- **Settings → Widgets → Weather → Widget style** offers **Standard**, **No icon**,
+  and **Compact**, with a preview of every design before choosing. Compact
+  places a small condition icon on the second line beside the condition and location.
 - **OK / click** launches apps directly. Manage favorites, hidden apps, and uninstall actions in
   **Luma Settings → Apps**. Hidden apps remain listed there.
 - Direct **input pills** at the top left show names, icons, and connection dots, respecting
@@ -81,6 +90,7 @@ clear cached artwork and reload it without changing your preferences.
 
 | TV        | Model identifier | Takeover Support |
 | --------- | ---------------- | ---------------- |
+| LG B1     | `OLED65B19LA`    | ✅               |
 | LG C1     | `OLED48C1KNB`    | ✅               |
 | LG G1     | `OLED65G1RLA`    | ✅               |
 | LG UP8000 | `86UP80009LA`    | Unknown          |
@@ -151,7 +161,7 @@ to help make Luma available by default.
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_3.0.1_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_3.2.1_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -309,7 +319,8 @@ Choose **Automatic** to clear that input's override and restore label-based icon
 
 ### Recent app switching
 
-Press **Back** on Home, or hold **Back** for 0.6 seconds from any page, to open Recent apps.
+Hold **Back** for 0.6 seconds from any page to open Recent apps. A short press never opens it,
+including on Home.
 
 - **Left / Right**, the pointer, or the scroll wheel browses recent apps and inputs.
 - **OK** or a pointer click opens the selected app or input.
@@ -344,7 +355,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_3.0.1_arm.ipk
+dist/com.ecklf.luma_3.2.1_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png
