@@ -253,7 +253,7 @@ fn input_icon_optical_sizes_preserve_centering_label_gap_and_pill_padding() {
             artwork.w,
             match icon {
                 "sony" => 40.,
-                "apple-tv" | "dvd" | "blu-ray" | "disk" => 32.,
+                "apple-tv" | "dvd" | "blu-ray" => 32.,
                 "playstation" => 28.,
                 _ => 24.,
             }

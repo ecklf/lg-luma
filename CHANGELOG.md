@@ -1,5 +1,32 @@
 # lg-luma
 
+## 3.2.1
+
+### Patch Changes
+
+- 6d96a1b: Darken wallpaper-upload and shortcut-editor modals to match their QR code backgrounds, removing the visible square while preserving QR contrast and quiet zones.
+- 792782c: Fix the UI sounds icon rendering black and show amber input badges when a connected input explicitly reports no signal. Disconnected or unknown connections stay gray, and connected inputs without a no-signal report stay green.
+
+## 3.2.0
+
+### Minor Changes
+
+- e5eb588: Add optional tvOS-inspired UI feedback sounds for navigation, selection, and Back, with a General setting that defaults to off. Sounds are originally synthesized and gracefully fall back to silence if audio is unavailable.
+
+### Patch Changes
+
+- 21e5199: Dismiss the app drawer when remote selection moves up to the favorites row, keeping the corresponding favorite selected on Home.
+- 88f6431: Restore opaque gray backgrounds for upload and shortcut dialogs, action cards, delete confirmations, and the keyboard instead of Liquid Glass.
+- db61888: Precompute lossless Liquid Glass wallpaper backdrops during asset preparation and uploads instead of decoding, resizing and blurring them before the first frame. Add startup diagnostics and regression coverage while preserving legacy wallpaper fallback.
+- 91a25bc: Hide input connection badges left behind by mouse hover when remote navigation moves focus away.
+
+## 3.1.0
+
+### Minor Changes
+
+- 6037963: Add Standard, No icon and Compact weather widget styles with native-rendered sample previews in Settings.
+- 9b36e99: Add configurable A–Z or usage-based app sorting with persistent local launch counts, preserving favorite order. Replace the Compact Disc wordmark with a generic disc icon.
+
 ## 3.0.1
 
 ### Patch Changes
