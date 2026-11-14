@@ -230,10 +230,6 @@ pub fn effective_api_key(user: &str) -> String {
     sanitize_key(bundled_api_key())
 }
 
-pub fn has_usable_api_key(user: &str) -> bool {
-    effective_api_key(user).len() >= 16
-}
-
 pub fn resolve_region(pref: &str, ui: crate::i18n::Language) -> String {
     if pref != "auto" && REGIONS.iter().any(|region| region.code == pref) {
         return pref.into();
