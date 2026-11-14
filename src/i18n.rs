@@ -117,7 +117,6 @@ impl Language {
         }
         value
     }
-    #[cfg(test)]
     pub fn greeting(self, hour: u8, name: &str) -> String {
         let key = match hour {
             0..=4 => "greetingNight",
@@ -132,7 +131,6 @@ impl Language {
             self.format(&format!("{key}Named"), &[("name", name)])
         }
     }
-    #[cfg(test)]
     pub fn date(self, now: OffsetDateTime) -> String {
         let weekday = now.weekday().number_days_from_monday() as usize;
         let month = now.month() as usize - 1;

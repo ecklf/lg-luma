@@ -66,6 +66,8 @@ pub enum Target {
     Sidebar(usize),
     Setting(usize),
     Widget(usize),
+    HomeLayout,
+    HomeSlot(usize),
     GreetingName,
     GreetingNameClear,
     GreetingToggle,
@@ -934,7 +936,7 @@ impl State {
                 .map(|app| Target::App(app.id.clone()))
                 .unwrap_or(if self.error.is_some() {
                     Target::Retry
-                } else if self.preferences.show_weather
+                } else if self.preferences.weather_visible()
                     && self.preferences.weather_location.is_none()
                 {
                     Target::WeatherConfigure
@@ -1401,7 +1403,7 @@ impl State {
                     }
                     Direction::Down => self.focus(
                         if self.page == Page::Home
-                            && self.preferences.show_weather
+                            && self.preferences.weather_visible()
                             && self.preferences.weather_location.is_none()
                         {
                             Target::WeatherConfigure
@@ -1631,6 +1633,8 @@ impl State {
                     | Target::WeatherTemperature
                     | Target::WeatherStyle
                     | Target::Widget(_)
+                    | Target::HomeLayout
+                    | Target::HomeSlot(_)
             ) || (self.focus == Target::Setting(3) && self.subpage == Some(Subpage::Inputs)))
                 && matches!(direction, Direction::Left)
             {
@@ -1641,6 +1645,8 @@ impl State {
                 self.focus,
                 Target::Setting(0 | 1 | 4 | 7 | 10)
                     | Target::Widget(_)
+                    | Target::HomeLayout
+                    | Target::HomeSlot(_)
                     | Target::InputMode(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
@@ -2535,6 +2541,16 @@ impl State {
                 if !self.preferences.reduced_motion {
                     self.panel_started = Some(Instant::now());
                 }
+            }
+            Target::HomeLayout => {
+                self.preferences.home_layout = self.preferences.home_layout.next();
+                self.dirty = true;
+                return vec![Effect::Save];
+            }
+            Target::HomeSlot(slot) => {
+                self.preferences.cycle_home_widget(slot);
+                self.dirty = true;
+                return vec![Effect::Save];
             }
             Target::InstallUpdate => {
                 if !self.update_busy()
