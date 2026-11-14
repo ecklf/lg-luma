@@ -470,6 +470,17 @@ fn load(source: &Source) -> Option<Artwork> {
     if !valid_app_id(&source.id) {
         return None;
     }
+    // Channel logos store the absolute path in `version` after validation under LOGO_ROOT.
+    if let Some(path) = source.version.as_deref().map(Path::new).filter(|path| {
+        path.is_absolute()
+            && path.starts_with("/mnt/lg/cmn_data/channel_logo")
+            && path
+                .components()
+                .all(|c| !matches!(c, Component::ParentDir))
+    }) && let Some(image) = read_bounded(path, MAX_FILE).and_then(|bytes| decode(&bytes))
+    {
+        return Some(image);
+    }
     if let Some(image) = load_local(source, read_bounded) {
         return Some(image);
     }

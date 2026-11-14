@@ -753,16 +753,31 @@ fn recent_call(command: &crate::recents::Command) -> Result<Value, String> {
     // The native process uses its own authenticated Homebrew connection, as
     // inventory does. Fixed operations only; no app-ID impersonation or retries
     // of mutations after an ambiguous timeout. LG owns close/keep-alive policy.
+    elevated_call(uri, payload)
+}
+
+/// Prefer a direct Luna call when Luma is already root Home; otherwise the same
+/// Homebrew-elevated `luna-send` path used for inventory and recent apps.
+fn elevated_call(uri: &str, payload: Value) -> Result<Value, String> {
+    if runs_as_lg_home()
+        && let Ok(response) = call(uri, payload.clone())
+    {
+        return Ok(response);
+    }
     let quote = |s: &str| format!("'{}'", s.replace('\'', "'\\''"));
     let command = format!(
-        "if [ \"$(id -u)\" = 0 ]; then /usr/bin/luna-send -n 1 -w 4000 {uri} {}; else printf '%s\\n' '{{\"returnValue\":false,\"errorText\":\"Homebrew Channel needs root access\"}}'; fi",
+        "if [ \"$(id -u)\" = 0 ]; then /usr/bin/luna-send -n 1 -w 8000 {uri} {}; else printf '%s\\n' '{{\"returnValue\":false,\"errorText\":\"Homebrew Channel needs root access\"}}'; fi",
         quote(&payload.to_string())
     );
     let envelope = call(
         "luna://org.webosbrew.hbchannel.service/exec",
         json!({"command": command}),
     )?;
-    command_reply(&envelope)
+    command_reply(&envelope).map_err(|error| {
+        let error = format!("{uri}: {error}");
+        eprintln!("Luma TV service: {error}");
+        error
+    })
 }
 
 fn inventory() -> Result<(Inventory, Option<String>), String> {
@@ -822,10 +837,17 @@ fn channel_guide(ids: &[String]) -> Result<HashMap<String, ChannelProgram>, Stri
         if !valid_app_id(id) {
             continue;
         }
-        let reply = call(
+        // apiadapter TV methods need the elevated bus; a jailed app call is refused.
+        let reply = match elevated_call(
             "luna://com.webos.service.apiadapter/tv/getChannelCurrentProgramInfo",
             json!({ "channelId": id }),
-        )?;
+        ) {
+            Ok(reply) => reply,
+            Err(error) => {
+                eprintln!("Luma channel guide {id}: {error}");
+                continue;
+            }
+        };
         if let Some(program) = crate::channels::normalize_program(&reply) {
             out.insert(id.clone(), program);
         }
@@ -860,7 +882,8 @@ fn open_channel(id: &str) -> Result<(), String> {
     if !valid_app_id(id) {
         return Err("Invalid channel identifier".into());
     }
-    call(
+    // Same privilege boundary as channel inventory: jailed apps cannot openChannel.
+    elevated_call(
         "luna://com.webos.service.apiadapter/tv/openChannel",
         json!({ "channelId": id }),
     )

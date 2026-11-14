@@ -1229,6 +1229,22 @@ fn run() -> Result<(), String> {
                         Ok(()) => {
                             state.notice = None;
                             state.dirty = true;
+                            // First successful tune unlocks apiadapter now-playing for the session.
+                            let guide_ids: Vec<_> =
+                                if state.preferences.channel_favorites.is_empty() {
+                                    state
+                                        .inventory
+                                        .channels
+                                        .iter()
+                                        .take(12)
+                                        .map(|channel| channel.id.clone())
+                                        .collect()
+                                } else {
+                                    state.preferences.channel_favorites.clone()
+                                };
+                            if !guide_ids.is_empty() {
+                                platform.send(Request::RefreshChannelGuide(guide_ids));
+                            }
                         }
                     }
                 }
