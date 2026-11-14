@@ -2,7 +2,7 @@
 #[path = "../../src/webos-compat.rs"]
 mod webos_compat;
 use luma_tv_helper::{
-    files, home, input,
+    app_update, files, home, input,
     system::{System, Tv},
     uninstall,
 };
@@ -11,7 +11,7 @@ fn run() -> luma_tv_helper::Result<Value> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.first().is_some_and(|s| s == "--help") {
         println!(
-            "luma-helper: home COMMAND [APP_DIR] [HOME_ID] | read-app-icon JSON | sync-splash JSON | uninstall-app ID | tv-input COMMAND [APP_DIR]"
+            "luma-helper: home COMMAND [APP_DIR] [HOME_ID] | read-app-icon JSON | sync-splash JSON | uninstall-app ID | tv-input COMMAND [APP_DIR] | app-update ID VERSION SHA256 IPK"
         );
         return Ok(serde_json::json!({"returnValue":true}));
     }
@@ -63,6 +63,13 @@ fn run() -> luma_tv_helper::Result<Value> {
                 .ok_or("Cannot determine installation")?;
             input::configure(&sys, arg(1)?, &directory)
         }
+        "app-update" => app_update::install(
+            &sys,
+            arg(1)?,
+            arg(2)?,
+            arg(3)?,
+            std::path::Path::new(arg(4)?),
+        ),
         _ => Err("Unknown TV helper command".into()),
     }
 }

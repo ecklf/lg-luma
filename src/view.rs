@@ -5,8 +5,8 @@ use crate::{
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
         APPS_COLUMNS, APPS_SECTION, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT,
-        HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect,
-        SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
+        HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH, HOMEBREW_UPDATES_ROW, KEYS, Overlay,
+        Page, Rect, SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -2457,6 +2457,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     false,
                 ),
                 (9, language.t("resetIconCache"), "refresh", None, false),
+                (
+                    HOMEBREW_UPDATES_ROW,
+                    language.t("homebrewUpdates"),
+                    "refresh",
+                    Some(language.t(if state.preferences.homebrew_updates {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
+                    false,
+                ),
                 (5, language.t("quitApp"), "power", None, false),
             ]
             .into_iter()
@@ -2473,7 +2484,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                             408.8
                                 + position as f32 * 84.
                                 + if position > 0 { 16. } else { 0. }
-                                + if position > 2 { 16. } else { 0. }
+                                + if position > 3 { 16. } else { 0. }
                                 - s,
                             1120.,
                             72.,

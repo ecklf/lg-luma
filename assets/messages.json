@@ -4571,5 +4571,39 @@
     "sv": "Redigeringssessionen har avslutats",
     "cs": "Relace úprav skončila",
     "ca": "S’ha tancat la sessió d’edició"
+  },
+  "homebrewUpdates": {
+    "en": "Update Homebrew apps automatically",
+    "de": "Homebrew-Apps automatisch aktualisieren",
+    "es": "Actualizar apps de Homebrew automáticamente",
+    "zh": "自动更新 Homebrew 应用",
+    "zh-tw": "自動更新 Homebrew 應用程式",
+    "pt": "Atualizar apps do Homebrew automaticamente",
+    "it": "Aggiorna automaticamente le app Homebrew",
+    "ru": "Автоматически обновлять приложения Homebrew",
+    "pl": "Automatycznie aktualizuj aplikacje Homebrew",
+    "fr": "Mettre à jour les apps Homebrew automatiquement",
+    "vi": "Tự động cập nhật ứng dụng Homebrew",
+    "nl": "Homebrew-apps automatisch bijwerken",
+    "sv": "Uppdatera Homebrew-appar automatiskt",
+    "cs": "Automaticky aktualizovat aplikace Homebrew",
+    "ca": "Actualitza les apps de Homebrew automàticament"
+  },
+  "homebrewUpdated": {
+    "en": "updated",
+    "de": "aktualisiert",
+    "es": "actualizada",
+    "zh": "已更新",
+    "zh-tw": "已更新",
+    "pt": "atualizado",
+    "it": "aggiornata",
+    "ru": "обновлено",
+    "pl": "zaktualizowano",
+    "fr": "mise à jour",
+    "vi": "đã cập nhật",
+    "nl": "bijgewerkt",
+    "sv": "uppdaterad",
+    "cs": "aktualizováno",
+    "ca": "actualitzada"
   }
 }

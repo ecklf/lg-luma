@@ -10,6 +10,7 @@ mod damage;
 mod diagnostics;
 mod egl_damage;
 mod font;
+mod homebrew_updates;
 mod i18n;
 #[path = "input-refresh.rs"]
 mod input_refresh;
@@ -692,6 +693,7 @@ fn run() -> Result<(), String> {
         weather_cache,
     );
     let updates = update::Worker::new(webos && public_update_checks);
+    let homebrew = homebrew_updates::Worker::new(webos && public_update_checks);
     let platform = Platform::new(
         webos,
         options.preferences.is_none() && options.test_extra_apps == 0,
@@ -1069,6 +1071,11 @@ fn run() -> Result<(), String> {
         }
         while let Ok(response) = updates.receiver.try_recv() {
             state.install_response(response);
+        }
+        homebrew.set_enabled(state.preferences.homebrew_updates);
+        while let Ok(homebrew_updates::Event::Updated(title)) = homebrew.receiver.try_recv() {
+            let updated = state.preferences.language.t("homebrewUpdated");
+            state.notify(format!("{title} · {updated}"));
         }
         if std::mem::take(&mut state.reset_icon_cache) {
             assets.artwork.reset_icon_cache();

@@ -314,6 +314,7 @@ name = "luma-tv-helper"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "ring",
  "serde",
  "serde_json",
 ]

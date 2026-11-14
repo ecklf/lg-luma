@@ -436,6 +436,39 @@ pub fn start_update(
     Ok(())
 }
 
+/// Installs a downloaded, verified update of a Homebrew app through the packaged root helper
+/// (`luma-helper app-update`), which checks the package and the app again before installing.
+pub fn update_app(
+    id: &str,
+    version: &str,
+    sha256: &str,
+    ipk: &std::path::Path,
+) -> Result<(), String> {
+    let command = helper_command(
+        "app-update",
+        &[
+            id.to_owned(),
+            version.to_owned(),
+            sha256.to_owned(),
+            ipk.to_string_lossy().into_owned(),
+        ],
+    )?;
+    let payload = json!({"command": command});
+    // The helper waits up to four minutes for LG's installer.
+    #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
+    let envelope = crate::luna::call_with_timeout(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        &payload,
+        std::time::Duration::from_secs(300),
+    );
+    #[cfg(not(all(feature = "webos", target_os = "linux", target_arch = "arm")))]
+    let envelope = raw_call("luna://org.webosbrew.hbchannel.service/exec", &payload);
+    envelope
+        .and_then(checked_response)
+        .and_then(|envelope| command_reply(&envelope))
+        .map(|_| ())
+}
+
 /// Read only the root-owned result; the caller matches its unguessable attempt ID.
 pub fn update_result_for(
     attempt: Option<&str>,
