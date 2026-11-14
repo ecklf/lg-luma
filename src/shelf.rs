@@ -17,6 +17,16 @@ impl State {
         self.inventory.apps.iter().find(|app| app.id == id)
     }
 
+    fn shelf_app_ready(&self, app_id: &str) -> bool {
+        self.shelf.shows.get(app_id).is_some_and(|shows| {
+            shows.iter().any(|show| {
+                show.backdrop_path
+                    .as_ref()
+                    .is_some_and(|path| path_exists(path))
+            })
+        })
+    }
+
     pub fn shelf_tick(&mut self) -> Vec<Effect> {
         if self.page != Page::Home
             || !self.preferences.show_shelf
@@ -36,17 +46,25 @@ impl State {
         if key.len() < 16 {
             return self.shelf_hide_tick();
         }
+        let ready = self.shelf_app_ready(&app.id);
         if self.shelf.focus_app.as_deref() != Some(app.id.as_str()) {
             self.shelf.focus_app = Some(app.id.clone());
             self.shelf.focus_since = Some(Instant::now());
-            self.shelf.revealed = false;
             self.shelf.selected = 0;
             self.shelf.rotate_since = None;
-            self.shelf.visibility = if self.preferences.reduced_motion {
-                0.
+            if ready {
+                // Cached art: swap immediately — no dwell dip back to the wallpaper.
+                self.shelf.revealed = true;
+                self.shelf.rotate_since = Some(Instant::now());
+                if self.preferences.reduced_motion {
+                    self.shelf.visibility = 1.;
+                }
             } else {
-                self.shelf.visibility
-            };
+                self.shelf.revealed = false;
+                if self.preferences.reduced_motion {
+                    self.shelf.visibility = 0.;
+                }
+            }
             self.dirty = true;
         }
         let dwell = self
@@ -54,22 +72,16 @@ impl State {
             .focus_since
             .map(|start| start.elapsed().as_millis() as u64)
             .unwrap_or(0);
-        let ready = self.shelf.shows.get(&app.id).is_some_and(|shows| {
-            shows.iter().any(|show| {
-                show.backdrop_path
-                    .as_ref()
-                    .is_some_and(|path| path_exists(path))
-            })
-        });
         let mut effects = vec![];
+        // Dwell only gates the first fetch for a cold app. Once art is ready, reveal
+        // without waiting for the full reveal timer (and without fading to wallpaper).
         if !ready
             && self.shelf.pending.as_deref() != Some(app.id.as_str())
             && (dwell >= REVEAL_MS / 2 || self.preferences.reduced_motion)
         {
             effects.extend(self.shelf_request(&app.id, catalog, key));
         }
-        let want_reveal = ready && (dwell >= REVEAL_MS || self.preferences.reduced_motion);
-        if want_reveal && !self.shelf.revealed {
+        if ready && !self.shelf.revealed {
             self.shelf.revealed = true;
             self.shelf.rotate_since = Some(Instant::now());
             self.dirty = true;
@@ -305,5 +317,69 @@ mod tests {
                 .any(|effect| matches!(effect, Effect::Shelf(_))),
             "after the dwell threshold a fetch must be scheduled: {effects:?}"
         );
+    }
+
+    #[test]
+    fn cached_apps_reveal_immediately_without_wallpaper_dip() {
+        let mut state = ready();
+        let mapped: Vec<_> = state
+            .inventory
+            .apps
+            .iter()
+            .filter(|app| tmdb::catalog_for(app).is_some())
+            .cloned()
+            .collect();
+        assert!(mapped.len() >= 2, "need two mapped apps");
+        let a = &mapped[0];
+        let b = &mapped[1];
+        state
+            .shelf
+            .shows
+            .insert(a.id.clone(), vec![show_with_art("a")]);
+        state
+            .shelf
+            .shows
+            .insert(b.id.clone(), vec![show_with_art("b")]);
+
+        state.focus = Target::App(a.id.clone());
+        state.shelf_tick();
+        assert!(state.shelf.revealed);
+        assert_eq!(state.shelf.focus_app.as_deref(), Some(a.id.as_str()));
+        state.shelf.visibility = 1.;
+
+        state.focus = Target::App(b.id.clone());
+        state.shelf_tick();
+        assert!(
+            state.shelf.revealed,
+            "cached target must reveal without waiting for dwell"
+        );
+        assert_eq!(state.shelf.focus_app.as_deref(), Some(b.id.as_str()));
+        assert!(
+            (state.shelf.visibility - 1.).abs() < 0.001,
+            "must not fade toward wallpaper when the next app is already cached"
+        );
+        assert_eq!(
+            state.shelf_current_show().map(|show| show.name.as_str()),
+            Some("Silo")
+        );
+    }
+
+    #[test]
+    fn cold_app_still_waits_before_fetching() {
+        let mut state = ready();
+        let netflix = state
+            .inventory
+            .apps
+            .iter()
+            .find(|app| tmdb::catalog_for(app).is_some())
+            .expect("mapped app")
+            .clone();
+        state.focus = Target::App(netflix.id.clone());
+        let effects = state.shelf_tick();
+        assert!(
+            effects.is_empty(),
+            "cold focus must not fetch before the dwell: {effects:?}"
+        );
+        assert!(!state.shelf.revealed);
     }
 }
