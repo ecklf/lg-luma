@@ -63,9 +63,11 @@ impl State {
             .map(|start| start.elapsed().as_millis() as u64)
             .unwrap_or(0);
         let ready = self.shelf.shows.get(&app.id).is_some_and(|shows| {
-            shows
-                .iter()
-                .any(|show| show.backdrop_path.as_ref().is_some_and(|path| path_exists(path)))
+            shows.iter().any(|show| {
+                show.backdrop_path
+                    .as_ref()
+                    .is_some_and(|path| path_exists(path))
+            })
         });
         let mut effects = vec![];
         if !ready
