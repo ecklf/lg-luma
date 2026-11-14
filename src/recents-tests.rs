@@ -265,41 +265,75 @@ fn native_hold_opens_once_and_the_next_physical_back_press_dismisses() {
 }
 
 #[test]
-fn a_short_back_on_home_opens_recents_and_the_next_press_restores_the_app() {
+fn home_requires_a_back_hold_and_the_next_press_restores_the_app() {
     use sdl2::keyboard::Keycode;
-    let mut state = ready();
-    state.focus = Target::App("youtube.leanback.v4".into());
-    let mut button = BackButton::default();
-    let start = Instant::now();
-    assert!(
-        button
-            .key_down(&mut state, Keycode::AcBack, start)
-            .is_empty()
-    );
-    assert_eq!(
-        button.release(Keycode::AcBack, start + Duration::from_millis(100)),
-        Some(false)
-    );
-    assert_eq!(
-        state.back(),
-        vec![Effect::Recent {
-            generation: 1,
-            command: Command::List
-        }]
-    );
-    accept(&mut state, recents::demo());
-    assert!(state.recents_open());
-    assert!(
-        button
-            .key_down(&mut state, Keycode::AcBack, start + Duration::from_secs(1))
-            .is_empty()
-    );
-    assert_eq!(
-        button.release(Keycode::AcBack, start + Duration::from_millis(1100)),
-        None
-    );
-    assert!(!state.recents_open());
-    assert_eq!(state.focus, Target::App("youtube.leanback.v4".into()));
+    for key in [Keycode::AcBack, Keycode::Escape] {
+        let mut state = ready();
+        let focus = Target::App("youtube.leanback.v4".into());
+        state.focus = focus.clone();
+        let mut button = BackButton::default();
+        let start = Instant::now();
+        for millis in [100, 599] {
+            assert!(button.key_down(&mut state, key, start).is_empty());
+            assert_eq!(
+                button.release(key, start + Duration::from_millis(millis)),
+                Some(false)
+            );
+            assert!(state.back().is_empty());
+            assert!(!state.recents_open());
+            assert!(state.recents.pending.is_none());
+            assert_eq!(state.page, Page::Home);
+            assert_eq!(state.focus, focus);
+        }
+        assert!(
+            button
+                .key_down(&mut state, key, start + Duration::from_secs(1))
+                .is_empty()
+        );
+        assert!(button.held(start + Duration::from_millis(1600)));
+        assert_eq!(
+            state.open_recents(),
+            vec![Effect::Recent {
+                generation: 1,
+                command: Command::List
+            }]
+        );
+        accept(&mut state, recents::demo());
+        assert!(state.recents_open());
+        assert_eq!(
+            button.release(key, start + Duration::from_millis(1700)),
+            None
+        );
+        assert!(state.recents_open());
+        assert!(
+            button
+                .key_down(&mut state, key, start + Duration::from_secs(2))
+                .is_empty()
+        );
+        assert_eq!(
+            button.release(key, start + Duration::from_millis(2100)),
+            None
+        );
+        assert!(!state.recents_open());
+        assert_eq!(state.focus, focus);
+    }
+}
+
+#[test]
+fn short_back_from_other_pages_returns_home_without_opening_recents() {
+    for page in [1, 2] {
+        let mut state = ready();
+        state.open(page);
+        assert!(state.back().is_empty());
+        assert_eq!(state.page, Page::Home);
+        let focus = state.focus.clone();
+        for _ in 0..2 {
+            assert!(state.back().is_empty());
+            assert!(!state.recents_open());
+            assert!(state.recents.pending.is_none());
+            assert_eq!(state.focus, focus);
+        }
+    }
 }
 
 #[test]

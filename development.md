@@ -314,11 +314,12 @@ System text events update app/location queries; Done/Back stops editing and rest
 
 ### Recent apps
 
-Press Back on Home to open Recent apps (or the channel switcher when a Home channel tile is
-focused), or hold Back (Escape on desktop) for 600 ms from any page with the same channel/Recents
-gate.
-Short Back navigates on release. Back in an overlay, the system keyboard or
-move mode keeps its immediate dismissal behavior; Backspace keeps its editing/navigation role.
+Hold Back (Escape on desktop) for 600 ms from any page to open Recent apps (or the channel
+switcher when a Home channel tile is focused).
+Short Back navigates on release and does nothing on Home, except when a Home channel favorite
+is focused — then it opens the channel switcher. It never opens Recent apps.
+Back in an overlay, the system keyboard or move mode keeps its immediate dismissal behavior;
+Backspace keeps its editing/navigation role.
 Losing window focus cancels an unfinished hold. This is an app-local shortcut while Luma is focused.
 SDL-webOS Back (scancode 482) and long-Back Exit (505) are normalized before rust-sdl2 decodes the
 event, since the native keymap can leave their keycodes unset and the Rust scancode enum does not

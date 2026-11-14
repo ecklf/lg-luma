@@ -139,7 +139,7 @@ impl Options {
                     "  --test-update-version VERSION  Preview an available update without HTTP; also LUMA_TEST_UPDATE_VERSION"
                 );
                 println!(
-                    "\n  Press Back / Escape on Home, or hold for 600 ms, to open Recent apps.\n  --script recents,await-recents  Open the desktop recent-app preview."
+                    "\n  Hold Back / Escape for 600 ms from any page to open Recent apps.\n  --script recents,await-recents  Open the desktop recent-app preview."
                 );
                 std::process::exit(0);
             }
