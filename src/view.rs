@@ -2205,6 +2205,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::Weather
             | Subpage::Shortcuts
             | Subpage::Inputs
+            | Subpage::Channels
             | Subpage::Greeting
             | Subpage::Date
             | Subpage::Clock => {
