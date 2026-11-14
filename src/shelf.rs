@@ -24,20 +24,24 @@ impl State {
             || self.moving.is_some()
             || self.drawer_visibility > 0.01
         {
-            self.shelf_hide(false);
+            self.shelf_begin_hide();
+            self.shelf_step_visibility(0.);
             return vec![];
         }
         let Some(app) = self.shelf_focus_app().cloned() else {
-            self.shelf_hide(false);
+            self.shelf_begin_hide();
+            self.shelf_step_visibility(0.);
             return vec![];
         };
         let Some(catalog) = tmdb::catalog_for(&app) else {
-            self.shelf_hide(false);
+            self.shelf_begin_hide();
+            self.shelf_step_visibility(0.);
             return vec![];
         };
         let key = tmdb::effective_api_key(&self.preferences.tmdb_api_key);
         if key.len() < 16 {
-            self.shelf_hide(false);
+            self.shelf_begin_hide();
+            self.shelf_step_visibility(0.);
             return vec![];
         }
         if self.shelf.focus_app.as_deref() != Some(app.id.as_str()) {
@@ -96,6 +100,19 @@ impl State {
             self.dirty = true;
         }
         let goal = if self.shelf.revealed && ready { 1. } else { 0. };
+        self.shelf_step_visibility(goal);
+        effects
+    }
+
+    /// Stop revealing, but keep the last backdrop until visibility reaches 0.
+    fn shelf_begin_hide(&mut self) {
+        if self.shelf.revealed {
+            self.shelf.revealed = false;
+            self.dirty = true;
+        }
+    }
+
+    fn shelf_step_visibility(&mut self, goal: f32) {
         if self.preferences.reduced_motion {
             if self.shelf.visibility != goal {
                 self.shelf.visibility = goal;
@@ -109,21 +126,16 @@ impl State {
                 (self.shelf.visibility - step).max(goal)
             };
             self.dirty = true;
+        } else {
+            self.shelf.visibility = goal;
         }
-        effects
-    }
-
-    fn shelf_hide(&mut self, clear_focus: bool) {
-        if clear_focus {
-            self.shelf.focus_app = None;
-            self.shelf.focus_since = None;
-        }
-        if self.shelf.revealed || self.shelf.visibility > 0. {
-            self.shelf.revealed = false;
-            if self.preferences.reduced_motion {
-                self.shelf.visibility = 0.;
+        if goal <= 0. && self.shelf.visibility <= 0.001 {
+            self.shelf.visibility = 0.;
+            if self.shelf.focus_app.is_some() || self.shelf.focus_since.is_some() {
+                self.shelf.focus_app = None;
+                self.shelf.focus_since = None;
+                self.dirty = true;
             }
-            self.dirty = true;
         }
     }
 
@@ -194,5 +206,84 @@ impl State {
             "disney-plus" => (0x0b1c3f, 0x1a3a6b),
             _ => (0x1a1d24, 0x0b0e15),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Preferences, demo_inventory};
+    use crate::tmdb::Show;
+    use std::time::{Duration, Instant};
+
+    fn ready() -> State {
+        let mut state = State::new(Preferences::default());
+        state.preferences.tmdb_api_key = "0123456789abcdef".into();
+        state.preferences.show_shelf = true;
+        state.set_inventory(demo_inventory(), None);
+        state.page = Page::Home;
+        state
+    }
+
+    fn show_with_art(id: &str) -> Show {
+        let path = std::env::temp_dir().join(format!("luma-shelf-test-{id}.jpg"));
+        let _ = std::fs::write(&path, b"jpeg");
+        Show {
+            id: 1,
+            name: "Silo".into(),
+            overview: String::new(),
+            backdrop: "/a.jpg".into(),
+            backdrop_path: Some(path.to_string_lossy().into_owned()),
+        }
+    }
+
+    #[test]
+    fn leaving_a_shelf_app_fades_backdrop_out_to_the_wallpaper() {
+        let mut state = ready();
+        let netflix = state
+            .inventory
+            .apps
+            .iter()
+            .find(|app| tmdb::catalog_for(app).is_some())
+            .expect("demo inventory has a mapped streaming app")
+            .clone();
+        let plain = state
+            .inventory
+            .apps
+            .iter()
+            .find(|app| tmdb::catalog_for(app).is_none())
+            .expect("demo inventory has an unmapped app")
+            .clone();
+
+        state.focus = Target::DockApp(netflix.id.clone());
+        state.shelf.focus_app = Some(netflix.id.clone());
+        state.shelf.focus_since = Some(Instant::now() - Duration::from_secs(10));
+        state.shelf.revealed = true;
+        state.shelf.visibility = 1.;
+        state
+            .shelf
+            .shows
+            .insert(netflix.id.clone(), vec![show_with_art("netflix")]);
+
+        state.focus = Target::DockApp(plain.id.clone());
+        let before = state.shelf.visibility;
+        state.shelf_tick();
+        assert!(!state.shelf.revealed);
+        assert!(
+            state.shelf.visibility < before,
+            "visibility should start fading toward the wallpaper"
+        );
+        assert!(
+            state.shelf.focus_app.as_deref() == Some(netflix.id.as_str()),
+            "keep the last show while fading out"
+        );
+
+        for _ in 0..40 {
+            state.shelf_tick();
+        }
+        assert_eq!(state.shelf.visibility, 0.);
+        assert!(state.shelf.focus_app.is_none());
+        assert!(state.shelf_current_show().is_none());
+        let _ = plain;
     }
 }
