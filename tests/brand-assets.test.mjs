@@ -63,6 +63,24 @@ test('input trademark marks retain pinned artwork and render without distortion'
   assert.match(prepared, /width="24" height="24"/);
 });
 
+test('sound icon has white source ink for runtime tinting instead of SVG default black', async () => {
+  const svg = await fs.readFile(new URL('../assets/ui-icons/volume.svg', import.meta.url));
+  const { data } = await sharp(svg)
+    .resize(128, 128)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let visible = 0;
+  for (let index = 0; index < data.length; index += 4) {
+    if (data[index + 3] < 128) continue;
+    visible++;
+    assert.equal(data[index], 255);
+    assert.equal(data[index + 1], 255);
+    assert.equal(data[index + 2], 255);
+  }
+  assert.ok(visible > 100, 'Sound icon must contain visible white strokes');
+});
+
 test('disk input uses a generic disc icon rather than the Compact Disc wordmark', async () => {
   assert.ok(!inputSources.some(([name]) => name === 'disk'));
   const svg = await fs.readFile(
