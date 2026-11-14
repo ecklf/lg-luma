@@ -938,9 +938,7 @@ impl State {
     /// Settings → Channels list: Home favorites first, then the rest of the map.
     /// Independent of `show_channels` so favorites can still be edited while the strip is off.
     pub fn channels_settings_list(&self) -> Vec<&crate::model::Channel> {
-        let mut ordered = self
-            .preferences
-            .channel_favorites(&self.inventory.channels);
+        let mut ordered = self.preferences.channel_favorites(&self.inventory.channels);
         ordered.extend(
             self.inventory
                 .channels
@@ -1917,10 +1915,7 @@ impl State {
                     Direction::Up => self.focus(Target::SettingsMenu, controls),
                     Direction::Down => {
                         if let Some(channel) = self.channels_settings_list().first() {
-                            self.focus(
-                                Target::ChannelFavorite(channel.id.clone()),
-                                controls,
-                            );
+                            self.focus(Target::ChannelFavorite(channel.id.clone()), controls);
                         } else {
                             self.focus(Target::Setting(6), controls);
                         }
