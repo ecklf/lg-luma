@@ -142,14 +142,17 @@ retain their manual order. The same order fills empty dock slots and the app dra
 and the generic disc input icon from the native desktop renderer using seeded local counts.
 
 Home uses a 4×4 placement grid in logical 1920×1080 space above the unchanged dock.
-Greeting spans 2 columns × 1 row; Weather spans 1 column × 2 rows. Their top-left anchors
-persist as `greeting_position` and `weather_position` (`column`, `row`, zero-based).
-Defaults are Greeting (0,0), Weather (0,1). Sanitization repairs out-of-bounds anchors and
-overlaps deterministically. The earlier draft's preset/slot fields are ignored.
-Settings → Widgets → Greeting/Weather → Position opens a scaled Home grid; arrows browse
+Date and Greeting each span 2 columns × 1 row; Weather spans 1 column × 2 rows. Their anchors
+persist as `date_position`, `greeting_position`, and `weather_position` (`column`, `row`, zero-based).
+Defaults are Date (0,0), Greeting (0,1), Weather (0,2). Untouched two-widget defaults migrate
+to this arrangement; custom Greeting/Weather anchors are preserved and Date finds free space.
+Sanitization repairs out-of-bounds anchors and overlaps deterministically.
+Settings → Widgets → Date/Greeting/Weather → Position opens a scaled Home grid; arrows browse
 all sixteen anchors, OK/click saves a valid placement, and Back cancels without changing preferences.
 Invalid positions are red and cannot be committed. Hidden widgets keep their reserved cells.
-`show_greeting` and `show_weather` control visibility; disabled Weather never requests forecasts.
+`show_date`, `show_greeting` and `show_weather` control visibility; disabled Weather never requests forecasts.
+Date uses the existing locale-aware weekday/date formatter and saved date-format choice.
+Greeting targets 72 logical pixels (previously 48), fitting shorter for long translations within its fixed cell.
 Greeting has no name editor; legacy `greeting_name` fields are ignored and not serialized.
 All three weather styles reflow inside the same fixed footprint. `pnpm screenshots --widgets`
 captures the default arrangement, an alternate arrangement, and the position editor.

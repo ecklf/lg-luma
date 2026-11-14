@@ -200,7 +200,6 @@ impl DateFormat {
         }
     }
 
-    #[cfg(test)]
     pub fn format(self, language: Language, now: time::OffsetDateTime) -> String {
         let (year, month, day) = (now.year(), now.month() as u8, now.day());
         match self {
@@ -263,16 +262,17 @@ pub const HOME_GRID_CELLS: usize = HOME_GRID_COLUMNS * HOME_GRID_ROWS;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HomeWidget {
+    Date,
     Weather,
     Greeting,
 }
 
 impl HomeWidget {
-    pub const ALL: [Self; 2] = [Self::Greeting, Self::Weather];
+    pub const ALL: [Self; 3] = [Self::Date, Self::Greeting, Self::Weather];
 
     pub fn span(self) -> (u8, u8) {
         match self {
-            Self::Greeting => (2, 1),
+            Self::Greeting | Self::Date => (2, 1),
             Self::Weather => (1, 2),
         }
     }
@@ -281,6 +281,18 @@ impl HomeWidget {
         match self {
             Self::Weather => "weather",
             Self::Greeting => "greeting",
+            Self::Date => "date",
+        }
+    }
+
+    pub fn default_position(self) -> WidgetPosition {
+        WidgetPosition {
+            column: 0,
+            row: match self {
+                Self::Date => 0,
+                Self::Greeting => 1,
+                Self::Weather => 2,
+            },
         }
     }
 }
@@ -327,6 +339,7 @@ pub struct Preferences {
     pub app_launch_counts: BTreeMap<String, u64>,
     pub greeting_position: WidgetPosition,
     pub weather_position: WidgetPosition,
+    pub date_position: WidgetPosition,
     pub favorites: Option<Vec<String>>,
     pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
@@ -370,8 +383,9 @@ impl Default for Preferences {
             weather_style: WeatherStyle::default(),
             app_sorting: AppSorting::default(),
             app_launch_counts: BTreeMap::new(),
-            greeting_position: WidgetPosition { column: 0, row: 0 },
-            weather_position: WidgetPosition { column: 0, row: 1 },
+            greeting_position: HomeWidget::Greeting.default_position(),
+            weather_position: HomeWidget::Weather.default_position(),
+            date_position: HomeWidget::Date.default_position(),
             favorites: None,
             custom_tiles: vec![],
             hidden: vec![],
@@ -420,6 +434,7 @@ impl Preferences {
         match widget {
             HomeWidget::Greeting => self.greeting_position,
             HomeWidget::Weather => self.weather_position,
+            HomeWidget::Date => self.date_position,
         }
     }
 
@@ -435,11 +450,16 @@ impl Preferences {
         if !self.can_place_widget(widget, position) || self.widget_position(widget) == position {
             return false;
         }
+        self.set_widget_position(widget, position);
+        true
+    }
+
+    fn set_widget_position(&mut self, widget: HomeWidget, position: WidgetPosition) {
         match widget {
             HomeWidget::Greeting => self.greeting_position = position,
             HomeWidget::Weather => self.weather_position = position,
+            HomeWidget::Date => self.date_position = position,
         }
-        true
     }
 
     pub fn splash_background(&self) -> &str {
@@ -555,15 +575,31 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
-        if !self.greeting_position.fits(HomeWidget::Greeting) {
-            self.greeting_position = WidgetPosition::default();
+        // Upgrade the previous draft's untouched two-widget default arrangement.
+        // Custom arrangements are retained below, making room for Date around them.
+        if self.date_position == HomeWidget::Date.default_position()
+            && self.greeting_position == (WidgetPosition { column: 0, row: 0 })
+            && self.weather_position == (WidgetPosition { column: 0, row: 1 })
+        {
+            self.greeting_position = HomeWidget::Greeting.default_position();
+            self.weather_position = HomeWidget::Weather.default_position();
         }
-        if !self.can_place_widget(HomeWidget::Weather, self.weather_position) {
-            // Keep a valid greeting and deterministically find room for Weather.
-            self.weather_position = (0..HOME_GRID_CELLS)
-                .filter_map(WidgetPosition::from_cell)
-                .find(|position| self.can_place_widget(HomeWidget::Weather, *position))
-                .unwrap();
+        let mut placed = Vec::new();
+        for widget in [HomeWidget::Greeting, HomeWidget::Weather, HomeWidget::Date] {
+            let valid = |position: WidgetPosition| {
+                position.fits(widget)
+                    && placed.iter().all(|other| {
+                        !position.overlaps(widget, self.widget_position(*other), *other)
+                    })
+            };
+            if !valid(self.widget_position(widget)) {
+                let position = std::iter::once(widget.default_position())
+                    .chain((0..HOME_GRID_CELLS).filter_map(WidgetPosition::from_cell))
+                    .find(|position| valid(*position))
+                    .unwrap();
+                self.set_widget_position(widget, position);
+            }
+            placed.push(widget);
         }
         if self.splash_background.as_ref().is_some_and(|id| {
             !BACKGROUNDS.iter().any(|(known, _)| *known == id) && !crate::wallpapers::valid_id(id)

@@ -1229,6 +1229,7 @@ impl State {
         self.focus = match self.subpage.take() {
             Some(Subpage::WidgetPosition(widget)) => {
                 self.subpage = Some(match widget {
+                    HomeWidget::Date => Subpage::Date,
                     HomeWidget::Greeting => Subpage::Greeting,
                     HomeWidget::Weather => Subpage::Weather,
                 });
@@ -1510,7 +1511,11 @@ impl State {
                     Target::GreetingToggle,
                     Target::MoveWidget(HomeWidget::Greeting),
                 ]),
-                Some(Subpage::Date) => Some(&[Target::DateToggle, Target::DateFormat]),
+                Some(Subpage::Date) => Some(&[
+                    Target::DateToggle,
+                    Target::DateFormat,
+                    Target::MoveWidget(HomeWidget::Date),
+                ]),
                 Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
                 _ => None,
             };
