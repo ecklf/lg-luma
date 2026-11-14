@@ -38,6 +38,12 @@ date have been removed.
 - **Down** from favorites opens the animated six-column app drawer.
 - **Up** from favorites reaches the corner controls.
 - **Back** closes the drawer and focuses the first favorite.
+- **Settings → General → App sorting** chooses **Alphabetically** (default) or **Usage count**.
+  Usage sorts by successful launches from Luma, most used first, with alphabetical ties.
+  Counts stay local and persist across restarts. Favorites keep their manual order.
+- **Settings → Widgets → Weather → Widget style** offers **Standard**, **No icon**,
+  and **Compact**, with a preview of every design before choosing. Compact
+  places a small condition icon on the second line beside the condition and location.
 - **OK / click** launches apps directly. Manage favorites, hidden apps, and uninstall actions in
   **Luma Settings → Apps**. Hidden apps remain listed there.
 - Direct **input pills** at the top left show names, icons, and connection dots, respecting
@@ -163,7 +169,7 @@ to help make Luma available by default.
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_3.0.1_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_3.1.0_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -354,7 +360,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_3.0.1_arm.ipk
+dist/com.ecklf.luma_3.1.0_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png

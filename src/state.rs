@@ -103,6 +103,7 @@ pub enum Target {
     WeatherToggle,
     WeatherLocation,
     WeatherTemperature,
+    WeatherStyle,
     WeatherQuery,
     WeatherSearch,
     WeatherClear,
@@ -173,7 +174,9 @@ pub enum Subpage {
     InputIcons(String),
     WeatherLocation,
     Temperature,
+    WeatherStyle,
     Language,
+    AppSorting,
     TextRendering,
 }
 
@@ -612,6 +615,24 @@ impl State {
         self.app_list(true)
     }
 
+    /// Count successful app launches only, never inputs, system actions or preview cards.
+    pub fn record_app_launch(&mut self, id: &str) -> Vec<Effect> {
+        if !self.inventory.apps.iter().any(|app| app.id == id)
+            || crate::scroll_preview::is_placeholder(id)
+            || self.preferences.custom_tile(id).is_some()
+        {
+            return vec![];
+        }
+        let count = self
+            .preferences
+            .app_launch_counts
+            .entry(id.into())
+            .or_default();
+        *count = count.saturating_add(1);
+        self.dirty = true;
+        vec![Effect::Save]
+    }
+
     fn app_list(&self, drawer: bool) -> Vec<&App> {
         let ids = self.preferences.favorites(&self.inventory.apps);
         let dock = if drawer { self.dock_apps() } else { vec![] };
@@ -632,7 +653,7 @@ impl State {
             };
             rank(a)
                 .cmp(&rank(b))
-                .then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
+                .then_with(|| self.preferences.compare_apps(a, b))
         });
         apps
     }
@@ -659,12 +680,7 @@ impl State {
                         && !apps.iter().any(|pinned| pinned.id == app.id)
                 })
                 .collect();
-            remaining.sort_by(|a, b| {
-                a.title
-                    .to_lowercase()
-                    .cmp(&b.title.to_lowercase())
-                    .then_with(|| a.id.cmp(&b.id))
-            });
+            remaining.sort_by(|a, b| self.preferences.compare_apps(a, b));
             apps.extend(remaining.into_iter().take(6 - apps.len()));
         }
         apps
@@ -1362,8 +1378,13 @@ impl State {
                 self.subpage = Some(Subpage::Weather);
                 Target::WeatherTemperature
             }
+            Some(Subpage::WeatherStyle) => {
+                self.subpage = Some(Subpage::Weather);
+                Target::WeatherStyle
+            }
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
+            Some(Subpage::AppSorting) => Target::Setting(10),
             None => Target::Sidebar(self.section),
         };
         self.scroll = 0.;
@@ -1674,7 +1695,8 @@ impl State {
                         Subpage::ClockFormat
                         | Subpage::TimeFormat
                         | Subpage::Temperature
-                        | Subpage::TextRendering,
+                        | Subpage::TextRendering
+                        | Subpage::AppSorting,
                     ) => 2,
                     Some(Subpage::InputIcons(_)) => crate::model::INPUT_ICONS.len() + 1,
                     Some(Subpage::Language) => Language::ALL.len(),
@@ -1771,6 +1793,7 @@ impl State {
                     | Target::WeatherToggle
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
+                    | Target::WeatherStyle
                     | Target::Widget(_)
             ) || (self.focus == Target::Setting(3) && self.subpage == Some(Subpage::Inputs))
                 || (self.focus == Target::Setting(6) && self.subpage == Some(Subpage::Channels)))
@@ -1781,12 +1804,13 @@ impl State {
             }
             if matches!(
                 self.focus,
-                Target::Setting(0 | 1 | 4 | 7)
+                Target::Setting(0 | 1 | 4 | 7 | 10)
                     | Target::Widget(_)
                     | Target::InputMode(_)
                     | Target::ChannelFavorite(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
+                    | Target::WeatherStyle
             ) && matches!(direction, Direction::Right)
             {
                 return self.activate();
@@ -2637,6 +2661,14 @@ impl State {
                     self.panel_started = Some(Instant::now());
                 }
             }
+            Target::WeatherStyle => {
+                self.subpage = Some(Subpage::WeatherStyle);
+                self.focus = Target::Choice(self.preferences.weather_style.index());
+                self.scroll = 0.;
+                if !self.preferences.reduced_motion {
+                    self.panel_started = Some(Instant::now());
+                }
+            }
             Target::WeatherQuery => self.open_keyboard(TextField::Location),
             Target::GreetingToggle => {
                 self.preferences.show_greeting = !self.preferences.show_greeting;
@@ -2809,6 +2841,17 @@ impl State {
             }
             Target::Setting(index) => {
                 match index {
+                    10 => {
+                        self.subpage = Some(Subpage::AppSorting);
+                        self.focus = Target::Choice(usize::from(
+                            self.preferences.app_sorting == crate::model::AppSorting::Usage,
+                        ));
+                        self.scroll = 0.;
+                        if !self.preferences.reduced_motion {
+                            self.panel_started = Some(Instant::now());
+                        }
+                        return vec![];
+                    }
                     1 => {
                         self.subpage = Some(Subpage::Clock);
                         self.scroll = 0.;
@@ -2913,6 +2956,13 @@ impl State {
             }
             Target::Choice(index) => {
                 match self.subpage.clone() {
+                    Some(Subpage::WeatherStyle) => {
+                        self.preferences.weather_style =
+                            crate::model::WeatherStyle::ALL[index.min(2)];
+                    }
+                    Some(Subpage::AppSorting) => {
+                        self.preferences.app_sorting = crate::model::AppSorting::ALL[index.min(1)];
+                    }
                     Some(Subpage::ClockFormat) => self.preferences.hour_24 = index == 1,
                     Some(Subpage::TimeFormat) => self.preferences.show_seconds = index == 1,
                     Some(Subpage::DateFormat) => {

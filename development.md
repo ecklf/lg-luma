@@ -87,6 +87,25 @@ It does not execute the test suites. A desktop display is required; on headless 
 
 ### Input
 
+Weather → Widget style persists `weather_style` (`standard`, the default, `no_icon`,
+or `compact`). Home and Settings use the same native layout and painting functions.
+The picker shows all three designs with offline sample weather, in the saved
+temperature unit. Browsing does not change preferences or fetch a forecast. OK/click
+saves a style and returns to Weather, while Back/Left cancels without changing the style.
+The no-icon layout reclaims the icon column. Compact uses two lines, with a small icon,
+condition and location on the second. Cached-reading warnings and setup/error states
+remain visible. `xvfb-run -a pnpm screenshots --weather-styles` captures all designs and
+the settings preview using the native renderer and loopback-only cached sample weather.
+
+General → App sorting stores `app_sorting` (`alphabetical`, the default, or `usage`).
+`app_launch_counts` maps app IDs to saturating launch counts, saved after successful TV
+launch responses, including Recent apps. Failed launches, desktop simulations, inputs,
+and webhook shortcuts do not count. Counting continues in Alphabetically mode. Non-favorites sort
+by descending count in usage mode, then case-insensitive title and app ID. Favorites
+retain their manual order. The same order fills empty dock slots and the app drawer.
+`xvfb-run -a pnpm screenshots --sorting` captures the sorting settings, both app orders,
+and the generic disc input icon from the native desktop renderer using seeded local counts.
+
 | Input                         | Action                                                                       |
 | ----------------------------- | ---------------------------------------------------------------------------- |
 | Arrows                        | Move focus. Down from favorites opens the drawer, Up reaches corner controls |

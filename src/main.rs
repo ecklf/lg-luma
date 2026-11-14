@@ -1219,7 +1219,7 @@ fn run() -> Result<(), String> {
                         eprintln!("Luma HDMI refresh: {error}");
                     }
                 }
-                Response::Launched(result) => {
+                Response::Launched { id, result } => {
                     state.launching = false;
                     match result {
                         Err(error) => {
@@ -1229,6 +1229,17 @@ fn run() -> Result<(), String> {
                         Ok(()) => {
                             state.notice = None;
                             state.dirty = true;
+                            let pending = state.record_app_launch(&id);
+                            running &= effects(
+                                pending,
+                                &mut state,
+                                &platform,
+                                &preferences_path,
+                                &weather_service,
+                                &wallpaper_service,
+                                &webhook_service,
+                                &updates,
+                            );
                             // First successful tune unlocks apiadapter now-playing for the session.
                             let guide_ids: Vec<_> =
                                 if state.preferences.channel_favorites.is_empty() {
@@ -1266,6 +1277,22 @@ fn run() -> Result<(), String> {
                     command,
                     result,
                 } => {
+                    if webos
+                        && result.is_ok()
+                        && let recents::Command::Launch(id) = &command
+                    {
+                        let pending = state.record_app_launch(id);
+                        running &= effects(
+                            pending,
+                            &mut state,
+                            &platform,
+                            &preferences_path,
+                            &weather_service,
+                            &wallpaper_service,
+                            &webhook_service,
+                            &updates,
+                        );
+                    }
                     let preview = !webos
                         && state.recents_open()
                         && generation == state.recents.generation

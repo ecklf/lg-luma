@@ -25,7 +25,7 @@ const RECENTS_BACKDROP_OPACITY: f32 = 0.86;
 fn input_icon_width(name: &str, size: f32) -> f32 {
     size * match name {
         "input-sony" => 5. / 3.,
-        "input-apple-tv" | "input-dvd" | "input-blu-ray" | "input-disk" => 4. / 3.,
+        "input-apple-tv" | "input-dvd" | "input-blu-ray" => 4. / 3.,
         "input-playstation" => 7. / 6.,
         _ => 1.,
     }
@@ -1228,8 +1228,10 @@ fn channels_strip(out: &mut Scene, state: &State, assets: &Assets) {
         if let Some(source) = &channel.icon
             && let Some(art) = assets.artwork.get(source)
         {
+            // Same GPU path as installed app icons: `Draw::Image` only loads filesystem paths.
             let face = rect.inset(14.);
-            out.image(art.key.clone(), face, 12., true);
+            out.draw
+                .push(Draw::AppImage(art, face, 12., [1., 1., 1., 1.]));
         } else {
             let number = if channel.number.is_empty() {
                 "·"
@@ -1354,10 +1356,43 @@ struct WeatherSummary {
     width: f32,
     icon: String,
     icon_rect: Rect,
+    show_icon: bool,
     parts: Vec<(String, TextStyle, Color, Rect)>,
 }
 fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
+    weather_summary_layout_for(state, assets, state.preferences.weather_style, false)
+}
+
+fn weather_summary_layout_for(
+    state: &State,
+    assets: &Assets,
+    style: crate::model::WeatherStyle,
+    preview: bool,
+) -> WeatherSummary {
+    use crate::model::WeatherStyle;
     let language = state.preferences.language;
+    // Settings previews are deliberately offline samples, even before a location is configured.
+    let sample = weather::Location {
+        name: "Vienna".into(),
+        region: String::new(),
+        country: String::new(),
+        latitude: 48.2085,
+        longitude: 16.3721,
+    };
+    let place = if preview {
+        Some(&sample)
+    } else {
+        state.preferences.weather_location.as_ref()
+    };
+    let reading = if preview {
+        Some(weather::Reading {
+            temperature: 14.2,
+            code: 2,
+            is_day: true,
+        })
+    } else {
+        place.and_then(|place| state.weather.reading(place))
+    };
     let mut parts = Vec::new();
     let mut add = |label: String, style: TextStyle, x: f32, y: f32, width: f32, opacity: f32| {
         let (label, style) = assets.fit_line(&label, style, width, 24.);
@@ -1370,7 +1405,7 @@ fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
         parts.push((label, style, c(0xf5f5f5, opacity), rect));
     };
     let mut icon = "weather/partly-cloudy.png".to_owned();
-    if let Some(place) = &state.preferences.weather_location {
+    if let Some(place) = place {
         add(
             place.name.clone(),
             text(30., 550, -0.02),
@@ -1379,7 +1414,7 @@ fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
             860.,
             0.85,
         );
-        if let Some(reading) = state.weather.reading(place) {
+        if let Some(reading) = reading {
             let condition = weather::condition(reading);
             icon = format!("weather/{}.png", condition.icon);
             add(
@@ -1401,7 +1436,7 @@ fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
                 760.,
                 0.78,
             );
-            if state.weather.failed {
+            if state.weather.failed && !preview {
                 add(
                     language.t("lastReading").into(),
                     text(24., 400, 0.),
@@ -1444,16 +1479,85 @@ fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
             0.92,
         );
     }
+    let mut icon_rect = Rect::new(84., 64., 144., 144.);
+    let mut height = 268.;
+    if style == WeatherStyle::NoIcon {
+        for (_, _, _, rect) in parts.iter_mut().skip(1) {
+            rect.x = 84.;
+        }
+    } else if style == WeatherStyle::Compact {
+        icon_rect = Rect::new(84., 116., 32., 32.);
+        if reading.is_some() {
+            let city = parts.remove(0).0;
+            let temperature = &mut parts[0];
+            temperature.1 = text(88., 500, -0.055);
+            temperature.3 = Rect::new(
+                84.,
+                0.,
+                assets.width(&temperature.0, temperature.1) + 2.,
+                106.,
+            );
+            let condition = &mut parts[1];
+            let label = format!("{} · {city}", condition.0);
+            let (label, font) = assets.fit_line(&label, text(26., 450, -0.02), 800., 24.);
+            condition.0 = label;
+            condition.1 = font;
+            condition.3 = Rect::new(128., 116., assets.width(&condition.0, font) + 2., 36.);
+            if let Some((_, _, _, rect)) = parts.get_mut(2) {
+                rect.x = 84.;
+                rect.y = 168.;
+            }
+            height = if parts.len() > 2 { 212. } else { 164. };
+        } else {
+            icon_rect.y = 90.;
+            if let Some((_, _, _, rect)) = parts.get_mut(1) {
+                rect.x = 128.;
+            }
+            height = 168.;
+        }
+    }
     let right = parts
         .iter()
         .map(|(_, _, _, rect)| rect.x + rect.w)
         .fold(228., f32::max);
     WeatherSummary {
-        height: 268.,
+        height,
         width: right - 84.,
         icon,
-        icon_rect: Rect::new(84., 64., 144., 144.),
+        icon_rect,
+        show_icon: style != WeatherStyle::NoIcon,
         parts,
+    }
+}
+
+fn paint_weather_summary(
+    out: &mut Scene,
+    assets: &Assets,
+    summary: &WeatherSummary,
+    x: f32,
+    y: f32,
+    scale: f32,
+) {
+    let transform = |rect: Rect| {
+        Rect::new(
+            x + rect.x * scale,
+            y + rect.y * scale,
+            rect.w * scale,
+            rect.h * scale,
+        )
+    };
+    if summary.show_icon {
+        out.image(
+            assets.path(&summary.icon),
+            transform(summary.icon_rect),
+            0.,
+            true,
+        );
+    }
+    for (label, style, color, rect) in &summary.parts {
+        let mut style = *style;
+        style.size *= scale;
+        out.text(label.clone(), transform(*rect), style, *color, false);
     }
 }
 fn weather_summary(
@@ -1475,26 +1579,7 @@ fn weather_summary(
             (rect.h - leading).max(style.size),
         )
     });
-    let icon_rect = Rect::new(
-        summary.icon_rect.x,
-        y + summary.icon_rect.y,
-        summary.icon_rect.w,
-        summary.icon_rect.h,
-    );
-    if summary.icon.ends_with(".png") {
-        out.image(assets.path(&summary.icon), icon_rect, 0., true);
-    } else {
-        out.icon(assets, &summary.icon, icon_rect, c(0xdedede, 0.83));
-    }
-    for (label, style, color, rect) in summary.parts {
-        out.text(
-            label,
-            Rect::new(rect.x, rect.y + y, rect.w, rect.h),
-            style,
-            color,
-            false,
-        );
-    }
+    paint_weather_summary(out, assets, &summary, 0., y, 1.);
     if state.preferences.weather_location.is_none() {
         let rect = Rect::new(84., y, summary.width, summary.height);
         if state.focus == Target::WeatherConfigure
@@ -1829,6 +1914,69 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
             chevron: true,
         },
     );
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::WeatherStyle,
+            rect: Rect::new(640., y + 84., 1120., 72.),
+            title: language.t("weatherStyle"),
+            icon: Some("grid"),
+            value: Some(language.t(state.preferences.weather_style.label_key())),
+            description: None,
+            selected: false,
+            chevron: true,
+        },
+    );
+}
+
+fn weather_style_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    for (index, style) in crate::model::WeatherStyle::ALL.into_iter().enumerate() {
+        let rect = Rect::new(
+            640.,
+            164.8 + index as f32 * 248. - state.scroll,
+            1120.,
+            232.,
+        );
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::Choice(index),
+                rect,
+                title: language.t(style.label_key()),
+                icon: None,
+                value: None,
+                description: None,
+                selected: false,
+                chevron: false,
+            },
+        );
+        // A dark inset keeps the real weather treatment readable on the white focus surface.
+        let preview = Rect::new(1040., rect.y + 12., 700., 208.);
+        out.shape(preview, 16., c(0x192129, 1.));
+        let summary = weather_summary_layout_for(state, assets, style, true);
+        let scale = 0.58_f32.min((preview.w - 64.) / summary.width);
+        paint_weather_summary(
+            out,
+            assets,
+            &summary,
+            preview.x + 32. - 84. * scale,
+            preview.y + (preview.h - summary.height * scale) / 2.,
+            scale,
+        );
+        if style == state.preferences.weather_style {
+            out.icon(
+                assets,
+                "check",
+                Rect::new(1696., rect.y + 24., 24., 24.),
+                WHITE,
+            );
+        }
+    }
 }
 
 fn location_settings(out: &mut Scene, state: &State, assets: &Assets) {
@@ -2004,14 +2152,18 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::TimeFormat) => {
                     Some(vec![language.t("clock"), language.t("timeFormat")])
                 }
-                Some(Subpage::WeatherLocation | Subpage::Temperature) => Some(vec![
-                    language.t("weather"),
-                    language.t(if state.subpage == Some(Subpage::WeatherLocation) {
-                        "location"
-                    } else {
-                        "temperature"
-                    }),
-                ]),
+                Some(Subpage::WeatherLocation | Subpage::Temperature | Subpage::WeatherStyle) => {
+                    Some(vec![
+                        language.t("weather"),
+                        language.t(if state.subpage == Some(Subpage::WeatherLocation) {
+                            "location"
+                        } else if state.subpage == Some(Subpage::Temperature) {
+                            "temperature"
+                        } else {
+                            "weatherStyle"
+                        }),
+                    ])
+                }
                 Some(Subpage::InputIcons(_)) => {
                     Some(vec![language.t("inputs"), language.t("inputIcon")])
                 }
@@ -2037,6 +2189,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Channels) => language.t("channels"),
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
+                Some(Subpage::AppSorting) => language.t("appSorting"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
                 _ => "",
             };
@@ -2112,6 +2265,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             subpage,
             Subpage::WeatherLocation
                 | Subpage::Weather
+                | Subpage::WeatherStyle
                 | Subpage::Shortcuts
                 | Subpage::Inputs
                 | Subpage::Channels
@@ -2122,6 +2276,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             match subpage {
                 Subpage::WeatherLocation => location_settings(out, state, assets),
                 Subpage::Weather => weather_settings(out, state, assets),
+                Subpage::WeatherStyle => weather_style_settings(out, state, assets),
                 Subpage::Shortcuts => shortcut_settings(out, state, assets),
                 Subpage::Inputs => inputs_settings(out, state, assets),
                 Subpage::Channels => channels_settings(out, state, assets),
@@ -2203,6 +2358,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             ],
             Subpage::WeatherLocation
             | Subpage::Weather
+            | Subpage::WeatherStyle
             | Subpage::Shortcuts
             | Subpage::Inputs
             | Subpage::Channels
@@ -2214,6 +2370,16 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             Subpage::Language => Language::ALL
                 .into_iter()
                 .map(|option| (option.name(), None, option == language))
+                .collect(),
+            Subpage::AppSorting => crate::model::AppSorting::ALL
+                .into_iter()
+                .map(|mode| {
+                    (
+                        language.t(mode.label_key()),
+                        None,
+                        mode == state.preferences.app_sorting,
+                    )
+                })
                 .collect(),
             Subpage::TextRendering => crate::text_rendering::TextRendering::ALL
                 .into_iter()
@@ -2281,6 +2447,13 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             for (position, (index, key, icon, value, chevron)) in [
                 (1, "clock", "clock", None, true),
                 (4, "language", "language", Some(language.name()), true),
+                (
+                    10,
+                    "appSorting",
+                    "arrow-up-down",
+                    Some(language.t(state.preferences.app_sorting.label_key())),
+                    true,
+                ),
                 (
                     2,
                     "reducedMotion",

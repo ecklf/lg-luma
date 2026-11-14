@@ -208,7 +208,10 @@ pub enum Response {
     Inventory(Result<(Inventory, Option<String>), String>),
     Inputs(Result<Vec<Input>, String>),
     ChannelGuide(Result<HashMap<String, ChannelProgram>, String>),
-    Launched(Result<(), String>),
+    Launched {
+        id: String,
+        result: Result<(), String>,
+    },
     Uninstalled {
         id: String,
         result: Result<(), String>,
@@ -286,7 +289,8 @@ impl Platform {
                         Ok(demo_channel_guide(&desktop_inventory.channels, &ids))
                     }),
                     Request::OpenChannel(id) => {
-                        Response::Launched(if webos { open_channel(&id) } else { Ok(()) })
+                        let result = if webos { open_channel(&id) } else { Ok(()) };
+                        Response::Launched { id, result }
                     }
                     Request::Uninstall(id) => {
                         // Validate again at the worker boundary, not just in the UI.
@@ -355,21 +359,24 @@ impl Platform {
                         });
                         Response::Uninstalled { id, result }
                     }
-                    Request::Launch(id) => Response::Launched(if webos {
-                        if crate::scroll_preview::is_placeholder(&id) {
-                            Err("Scroll preview cards cannot be launched".into())
-                        } else if !valid_app_id(&id) {
-                            Err("Invalid application identifier".into())
+                    Request::Launch(id) => {
+                        let result = if webos {
+                            if crate::scroll_preview::is_placeholder(&id) {
+                                Err("Scroll preview cards cannot be launched".into())
+                            } else if !valid_app_id(&id) {
+                                Err("Invalid application identifier".into())
+                            } else {
+                                call(
+                                    "luna://com.webos.applicationManager/launch",
+                                    json!({"id": id}),
+                                )
+                                .map(|_| ())
+                            }
                         } else {
-                            call(
-                                "luna://com.webos.applicationManager/launch",
-                                json!({"id": id}),
-                            )
-                            .map(|_| ())
-                        }
-                    } else {
-                        Ok(())
-                    }),
+                            Ok(())
+                        };
+                        Response::Launched { id, result }
+                    }
                     Request::SyncSplash(background) => {
                         if webos
                             && splash_enabled
