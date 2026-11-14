@@ -434,16 +434,10 @@ fn main() {
     }
 }
 
-fn compose(
-    state: &mut State,
-    assets: &view::Assets,
-    pill: f32,
-    width: f32,
-    now: OffsetDateTime,
-) -> view::Scene {
-    let scene = view::scene_with_pill(state, assets, pill, width, now);
+fn compose(state: &mut State, assets: &view::Assets, now: OffsetDateTime) -> view::Scene {
+    let scene = view::scene(state, assets, now);
     if !state.pointer && state.overlay.is_none() && state.reveal_focus(&scene.controls) {
-        view::scene_with_pill(state, assets, pill, width, now)
+        view::scene(state, assets, now)
     } else {
         scene
     }
@@ -459,16 +453,10 @@ fn input_refresh_active(state: &State, webos: bool, focused: bool, visible: bool
         && focused
         && visible
         && !state.loading
-        && state.overlay.is_none()
+        && (state.overlay.is_none() || matches!(state.overlay, Some(Overlay::Inputs)))
         && state.moving.is_none()
         && state.pressed.is_none()
         && state.recents.visibility == 0.
-        && (state.page == state::Page::Home
-            || (state.page == state::Page::Settings
-                && matches!(
-                    state.subpage,
-                    Some(state::Subpage::Inputs | state::Subpage::Input(_))
-                )))
 }
 
 fn weather_tick(state: &mut State, service: &weather_service::Service, visible: bool) {
@@ -586,6 +574,8 @@ fn run() -> Result<(), String> {
         log_home_output();
     }
     let webos = cfg!(feature = "webos");
+    // Exercise the shipping shader profile on a desktop without enabling TV services.
+    let gles = webos || std::env::var("LUMA_GLES").as_deref() == Ok("1");
     let startup_stage = |stage: &str| {
         if webos {
             eprintln!(
@@ -740,7 +730,7 @@ fn run() -> Result<(), String> {
     eprintln!("Luma SDL video driver: {}", video.current_video_driver());
     startup_stage("SDL video");
     let attributes = video.gl_attr();
-    if webos {
+    if gles {
         attributes.set_context_profile(GLProfile::GLES);
         attributes.set_context_version(2, 0);
     } else {
@@ -806,7 +796,7 @@ fn run() -> Result<(), String> {
         eprintln!("VSync: {error}");
     }
     let mut renderer =
-        renderer::Renderer::new(&assets.root.join("font.ttf"), webos, text_config.embolden)?;
+        renderer::Renderer::new(&assets.root.join("font.ttf"), gles, text_config.embolden)?;
     startup_stage("renderer");
     // Redraw only what changed since the back buffer's frame (LUMA_PARTIAL=0 draws in full).
     let partial = (std::env::var("LUMA_PARTIAL").as_deref() != Ok("0"))
@@ -941,10 +931,6 @@ fn run() -> Result<(), String> {
     let mut focused = true;
     let mut press: Option<Press> = None;
     let mut back_button = BackButton::default();
-    let initial_nav = view::navigation(&assets, state.preferences.language);
-    let mut pill = initial_nav.items[0].x;
-    let mut pill_width = initial_nav.items[0].w;
-    let mut last_frame = Instant::now();
     let mut last_minute = None;
     let mut frame = 0u64;
     let mut visible = true;
@@ -966,8 +952,6 @@ fn run() -> Result<(), String> {
     let mut scene = compose(
         &mut state,
         &assets,
-        pill,
-        pill_width,
         options.time.unwrap_or_else(OffsetDateTime::now_utc),
     );
     while running {
@@ -1231,7 +1215,7 @@ fn run() -> Result<(), String> {
         }
         // Rebuild hit regions before input whenever inventory/layout changed.
         if state.dirty {
-            scene = compose(&mut state, &assets, pill, pill_width, now);
+            scene = compose(&mut state, &assets, now);
         }
         for event in queued_event
             .take()
@@ -1609,7 +1593,7 @@ fn run() -> Result<(), String> {
             }
             // SDL may deliver several navigation events in a single poll.
             if state.dirty {
-                scene = compose(&mut state, &assets, pill, pill_width, now);
+                scene = compose(&mut state, &assets, now);
             }
         }
         if back_button.held(Instant::now()) {
@@ -1717,21 +1701,6 @@ fn run() -> Result<(), String> {
             }
             text_active = keyboard;
         }
-        let dt = last_frame.elapsed().as_secs_f32().min(0.1);
-        last_frame = Instant::now();
-        let navigation = view::navigation(&assets, state.preferences.language);
-        let target = navigation.items[state.page_index()].x;
-        let target_width = navigation.items[state.page_index()].w;
-        if state.preferences.reduced_motion
-            || ((pill - target).abs() < 0.2 && (pill_width - target_width).abs() < 0.2)
-        {
-            pill = target;
-            pill_width = target_width;
-        } else {
-            pill += (target - pill) * (1. - (-20. * dt).exp());
-            pill_width += (target_width - pill_width) * (1. - (-20. * dt).exp());
-            state.dirty = true;
-        }
         let final_frame = options.frames.is_some_and(|limit| frame + 1 >= limit)
             || (visible
                 && options
@@ -1739,7 +1708,7 @@ fn run() -> Result<(), String> {
                     .is_some_and(|limit| presented + 1 >= limit));
         if ((state.dirty || options.profile_frames.is_some()) && visible) || final_frame {
             let compose_started = Instant::now();
-            scene = compose(&mut state, &assets, pill, pill_width, now);
+            scene = compose(&mut state, &assets, now);
             let compose_ms = compose_started.elapsed().as_secs_f64() * 1000.;
             let (width, height) = window.drawable_size();
             if width > 0 && height > 0 {
@@ -1870,7 +1839,7 @@ fn run() -> Result<(), String> {
             if page != state.page {
                 let started = Instant::now();
                 let current = std::mem::replace(&mut state.page, page);
-                let hidden = view::scene_with_pill(&state, &assets, pill, pill_width, now);
+                let hidden = view::scene(&state, &assets, now);
                 state.page = current;
                 let (width, height) = window.drawable_size();
                 renderer.prepare(&hidden.draw, width, height);
@@ -1891,11 +1860,7 @@ fn run() -> Result<(), String> {
         // decoded need short timed wakes.
         let timeout = if !visible {
             250
-        } else if pill != target
-            || pill_width != target_width
-            || state.animating()
-            || options.profile_frames.is_some()
-        {
+        } else if state.animating() || options.profile_frames.is_some() {
             0
         } else if press.is_some()
             || back_button.press.is_some()

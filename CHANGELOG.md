@@ -1,18 +1,67 @@
 # lg-luma
 
+## 3.0.1
+
+### Patch Changes
+
+- 52e3dca: Fix the Home header clock dropping its final digit by reserving rounding space in its single-line text box.
+
+## 3.0.0
+
+### Major Changes
+
+- 34b7711: Redesign the native interface with Liquid Glass surfaces, a wallpaper-first Home, a floating
+  favorites dock, compact weather, and an animated app drawer. Down opens the drawer, Up reaches
+  the corner controls, and Back closes the drawer and focuses the first favorite.
+
+  Apps now launch directly from the main interface. Manage favorites, hidden apps, and uninstall
+  actions in Settings → Apps. Inputs move into a top-left dropdown with names, icons, and connection
+  dots. The top-right clock opens floating Control Center-style actions for Luma Settings or native
+  LG settings. Glass uses neutral adaptive tint, sharper edge lensing and softer interiors. Remove the Home greeting,
+  standalone date, and navigation tabs while preserving existing saved preferences.
+
+  Keep the drawer artwork-only, without categories/search or extra Apps/Move apps labels. Back from
+  any Settings sidebar item now returns Home directly. Apps management uses a three-column card
+  gallery with the existing action popup. Bundle colored Breezy Weather icons with day/night variants
+  and their license/source notices.
+
+  Enlarge and reorganize the weather widget and its empty state, show direct compact input pills,
+  reduce settings action sizes, and place Apps immediately after General. Keep the dock decorative
+  with unclipped glass edges and more space before the drawer grid.
+
+  Size input pills to their labels and center their contents vertically. Keep the clock time-only,
+  use the Luma logo and settings gear for the corner menu actions, and close the drawer when Up
+  leaves the pinned row for the header. Preserve the original System update status card and inner
+  action button, including versions, progress and retry behavior.
+
+  Let drawer apps scroll behind the floating dock, clipping at the pinned cards' top edge rather
+  than below the glass. Keep remote-focused grid cards fully visible below the dock.
+
+  Remove App names settings and captions across Home, the drawer, and Settings → Apps. Ignore legacy
+  caption preferences. Tighten the drawer's dock-to-list gap to 24px and match its bottom padding.
+
+  Backfill unused dock slots with visible apps without saving them as favorites or duplicating them
+  in the drawer. Add Move to visible favorites' Settings → Apps menus to start dock reordering;
+  only saved favorites can be reordered.
+
+  Add Sony, DVD, Blu-ray, and Disk input icons with manual selection and automatic name matching.
+  Use sourced Sony, DVD, Blu-ray Disc, and Compact Disc trademark vectors, with pinned source
+  hashes and trademark notices, rather than hand-drawn approximations.
+
+  Show input connection dots only on hover, press, or remote selection. Animate the extra status
+  slot width in and out, leaving compact 14px right padding when idle and honoring reduced motion.
+  Normalize input artwork by trimming source whitespace and applying optical widths to wide
+  wordmarks while preserving their proportions and consistent label spacing.
+
 ## 2.19.0
 
 ### Minor Changes
 
-- ea1b6d5: Add a native bundled SVG icon picker under Settings → Widgets → Inputs → select input → Icon.
-  Choose Automatic (default label detection), HDMI, USB, Apple TV, Computer, Console, PlayStation,
-  NVIDIA Shield, Streaming device, Nintendo Switch, Nintendo Switch 2, or Xbox. Explicit icon
-  choices persist per input across restarts; choosing Automatic clears that input's override and
-  restores label-based detection. Existing inputs keep Automatic unless an override is selected.
+- 02c5bf7: Consolidate the unpublished changes into the 2.19.0 minor release, using the last published IPK version, 2.18.1, as the release baseline.
 
-### Patch Changes
+  Include the per-input SVG icon picker, Catalan localization, grouped System maintenance actions, and earlier cold-boot Home integration on webOS 5 and 6. Existing input icon choices default to Automatic and remain configurable under Settings → Widgets → Inputs → select input → Icon. The early Home helper is registered by `home.sh enable`, removed by `home.sh disable`, and retains the Homebrew cold-boot fallback.
 
-- ea1b6d5: Group Refresh apps & inputs and Reset icon cache below Text rendering in System settings, keeping their existing refresh icon and adding spacing around the group.
+  Complete the Catalan input-icon translations and align both the unit and desktop smoke navigation tests with Text rendering appearing before Refresh apps & inputs. The smoke test verifies focus on Text rendering before opening its options and exercising mode persistence across restarts.
 
 ## 2.18.1
 

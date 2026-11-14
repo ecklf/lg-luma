@@ -965,7 +965,8 @@
     "vi": "Biểu tượng",
     "nl": "Pictogram",
     "sv": "Ikon",
-    "cs": "Ikona"
+    "cs": "Ikona",
+    "ca": "Icona"
   },
   "inputIconAutomatic": {
     "zh-tw": "自動",
@@ -981,7 +982,8 @@
     "vi": "Tự động",
     "nl": "Automatisch",
     "sv": "Automatiskt",
-    "cs": "Automaticky"
+    "cs": "Automaticky",
+    "ca": "Automàtic"
   },
   "inputIconHdmi": {
     "zh-tw": "HDMI",
@@ -997,7 +999,8 @@
     "vi": "HDMI",
     "nl": "HDMI",
     "sv": "HDMI",
-    "cs": "HDMI"
+    "cs": "HDMI",
+    "ca": "HDMI"
   },
   "inputIconUsb": {
     "zh-tw": "USB",
@@ -1013,7 +1016,8 @@
     "vi": "USB",
     "nl": "USB",
     "sv": "USB",
-    "cs": "USB"
+    "cs": "USB",
+    "ca": "USB"
   },
   "inputIconAppleTv": {
     "zh-tw": "Apple TV",
@@ -1029,7 +1033,8 @@
     "vi": "Apple TV",
     "nl": "Apple TV",
     "sv": "Apple TV",
-    "cs": "Apple TV"
+    "cs": "Apple TV",
+    "ca": "Apple TV"
   },
   "inputIconComputer": {
     "zh-tw": "電腦",
@@ -1045,7 +1050,8 @@
     "vi": "Máy tính",
     "nl": "Computer",
     "sv": "Dator",
-    "cs": "Počítač"
+    "cs": "Počítač",
+    "ca": "Ordinador"
   },
   "inputIconConsole": {
     "zh-tw": "遊戲主機",
@@ -1061,7 +1067,8 @@
     "vi": "Máy chơi game",
     "nl": "Spelcomputer",
     "sv": "Spelkonsol",
-    "cs": "Herní konzole"
+    "cs": "Herní konzole",
+    "ca": "Consola de videojocs"
   },
   "inputIconPlaystation": {
     "zh-tw": "PlayStation",
@@ -1077,7 +1084,8 @@
     "vi": "PlayStation",
     "nl": "PlayStation",
     "sv": "PlayStation",
-    "cs": "PlayStation"
+    "cs": "PlayStation",
+    "ca": "PlayStation"
   },
   "inputIconShield": {
     "zh-tw": "NVIDIA Shield",
@@ -1093,7 +1101,8 @@
     "vi": "NVIDIA Shield",
     "nl": "NVIDIA Shield",
     "sv": "NVIDIA Shield",
-    "cs": "NVIDIA Shield"
+    "cs": "NVIDIA Shield",
+    "ca": "NVIDIA Shield"
   },
   "inputIconStreamer": {
     "zh-tw": "串流裝置",
@@ -1109,7 +1118,8 @@
     "vi": "Thiết bị phát trực tuyến",
     "nl": "Streamingapparaat",
     "sv": "Strömningsenhet",
-    "cs": "Streamovací zařízení"
+    "cs": "Streamovací zařízení",
+    "ca": "Dispositiu de reproducció en continu"
   },
   "inputIconSwitch": {
     "zh-tw": "Nintendo Switch",
@@ -1125,7 +1135,8 @@
     "vi": "Nintendo Switch",
     "nl": "Nintendo Switch",
     "sv": "Nintendo Switch",
-    "cs": "Nintendo Switch"
+    "cs": "Nintendo Switch",
+    "ca": "Nintendo Switch"
   },
   "inputIconSwitch2": {
     "zh-tw": "Nintendo Switch 2",
@@ -1141,7 +1152,76 @@
     "vi": "Nintendo Switch 2",
     "nl": "Nintendo Switch 2",
     "sv": "Nintendo Switch 2",
-    "cs": "Nintendo Switch 2"
+    "cs": "Nintendo Switch 2",
+    "ca": "Nintendo Switch 2"
+  },
+  "inputIconSony": {
+    "zh-tw": "Sony",
+    "en": "Sony",
+    "de": "Sony",
+    "es": "Sony",
+    "zh": "Sony",
+    "pt": "Sony",
+    "it": "Sony",
+    "ru": "Sony",
+    "pl": "Sony",
+    "fr": "Sony",
+    "vi": "Sony",
+    "nl": "Sony",
+    "sv": "Sony",
+    "cs": "Sony",
+    "ca": "Sony"
+  },
+  "inputIconDvd": {
+    "zh-tw": "DVD",
+    "en": "DVD",
+    "de": "DVD",
+    "es": "DVD",
+    "zh": "DVD",
+    "pt": "DVD",
+    "it": "DVD",
+    "ru": "DVD",
+    "pl": "DVD",
+    "fr": "DVD",
+    "vi": "DVD",
+    "nl": "DVD",
+    "sv": "DVD",
+    "cs": "DVD",
+    "ca": "DVD"
+  },
+  "inputIconBluRay": {
+    "zh-tw": "Blu-ray",
+    "en": "Blu-ray",
+    "de": "Blu-ray",
+    "es": "Blu-ray",
+    "zh": "Blu-ray",
+    "pt": "Blu-ray",
+    "it": "Blu-ray",
+    "ru": "Blu-ray",
+    "pl": "Blu-ray",
+    "fr": "Blu-ray",
+    "vi": "Blu-ray",
+    "nl": "Blu-ray",
+    "sv": "Blu-ray",
+    "cs": "Blu-ray",
+    "ca": "Blu-ray"
+  },
+  "inputIconDisk": {
+    "zh-tw": "光碟",
+    "en": "Disk",
+    "de": "Disc",
+    "es": "Disco",
+    "zh": "光盘",
+    "pt": "Disco",
+    "it": "Disco",
+    "ru": "Диск",
+    "pl": "Dysk",
+    "fr": "Disque",
+    "vi": "Đĩa",
+    "nl": "Schijf",
+    "sv": "Skiva",
+    "cs": "Disk",
+    "ca": "Disc"
   },
   "inputIconXbox": {
     "zh-tw": "Xbox",
@@ -1157,7 +1237,8 @@
     "vi": "Xbox",
     "nl": "Xbox",
     "sv": "Xbox",
-    "cs": "Xbox"
+    "cs": "Xbox",
+    "ca": "Xbox"
   },
   "clearName": {
     "zh-tw": "清除名稱",
@@ -1328,57 +1409,6 @@
     "sv": "Sökresultat",
     "cs": "Výsledky hledání",
     "ca": "Resultats de la cerca"
-  },
-  "appNames": {
-    "zh-tw": "應用程式名稱",
-    "en": "App names",
-    "de": "App-Namen",
-    "es": "Nombres de apps",
-    "zh": "应用名称",
-    "pt": "Nomes dos apps",
-    "it": "Nomi app",
-    "ru": "Названия приложений",
-    "pl": "Nazwy aplikacji",
-    "fr": "Noms des applications",
-    "vi": "Tên ứng dụng",
-    "nl": "App-namen",
-    "sv": "Appnamn",
-    "cs": "Názvy aplikací",
-    "ca": "Noms de les apps"
-  },
-  "showOnHome": {
-    "zh-tw": "在主畫面顯示",
-    "en": "Show on Home",
-    "de": "Auf der Startseite anzeigen",
-    "es": "Mostrar en Inicio",
-    "zh": "在主页显示",
-    "pt": "Mostrar no Início",
-    "it": "Mostra nella Home",
-    "ru": "Показывать на главной",
-    "pl": "Pokazuj na ekranie Start",
-    "fr": "Afficher sur l’Accueil",
-    "vi": "Hiển thị trên Trang chính",
-    "nl": "Tonen op Start",
-    "sv": "Visa på Hem",
-    "cs": "Zobrazovat na obrazovce Domů",
-    "ca": "Mostra’ls a Inici"
-  },
-  "showOnApps": {
-    "zh-tw": "在應用程式頁面顯示",
-    "en": "Show on Apps",
-    "de": "In Apps anzeigen",
-    "es": "Mostrar en Aplicaciones",
-    "zh": "在应用页显示",
-    "pt": "Mostrar em Apps",
-    "it": "Mostra in App",
-    "ru": "Показывать в приложениях",
-    "pl": "Pokazuj w Aplikacjach",
-    "fr": "Afficher dans Applications",
-    "vi": "Hiển thị trong Ứng dụng",
-    "nl": "Tonen in Apps",
-    "sv": "Visa i Appar",
-    "cs": "Zobrazovat v Aplikacích",
-    "ca": "Mostra’ls a Apps"
   },
   "clock24": {
     "zh-tw": "24 小時制",
@@ -2825,22 +2855,39 @@
     "cs": "Oblíbené",
     "ca": "Preferida"
   },
-  "tvSettings": {
-    "zh-tw": "電視設定",
-    "en": "TV settings",
-    "de": "TV-Einstellungen",
-    "es": "Ajustes del televisor",
-    "zh": "电视设置",
-    "pt": "Configurações da TV",
-    "it": "Impostazioni TV",
-    "ru": "Настройки ТВ",
-    "pl": "Ustawienia telewizora",
-    "fr": "Paramètres de la TV",
-    "vi": "Cài đặt TV",
-    "nl": "Tv-instellingen",
-    "sv": "TV-inställningar",
-    "cs": "Nastavení televize",
-    "ca": "Configuració del televisor"
+  "launcherSettings": {
+    "zh-tw": "啟動器設定",
+    "en": "Launcher settings",
+    "de": "Launcher-Einstellungen",
+    "es": "Ajustes del lanzador",
+    "zh": "启动器设置",
+    "pt": "Configurações do launcher",
+    "it": "Impostazioni launcher",
+    "ru": "Настройки лаунчера",
+    "pl": "Ustawienia launchera",
+    "fr": "Paramètres du lanceur",
+    "vi": "Cài đặt trình khởi chạy",
+    "nl": "Launcher-instellingen",
+    "sv": "Startprogramsinställningar",
+    "cs": "Nastavení spouštěče",
+    "ca": "Configuració del llançador"
+  },
+  "deviceSettings": {
+    "zh-tw": "裝置設定",
+    "en": "Device settings",
+    "de": "Geräteeinstellungen",
+    "es": "Ajustes del dispositivo",
+    "zh": "设备设置",
+    "pt": "Configurações do dispositivo",
+    "it": "Impostazioni dispositivo",
+    "ru": "Настройки устройства",
+    "pl": "Ustawienia urządzenia",
+    "fr": "Paramètres de l’appareil",
+    "vi": "Cài đặt thiết bị",
+    "nl": "Apparaatinstellingen",
+    "sv": "Enhetsinställningar",
+    "cs": "Nastavení zařízení",
+    "ca": "Configuració del dispositiu"
   },
   "loadingWeather": {
     "zh-tw": "正在載入天氣…",
