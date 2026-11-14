@@ -25,6 +25,13 @@ pub const FILTER: &str = "/var/lib/luma-home/home-filter.js";
 const KEY_FILTERS: &str = "com.webos.surfacemanager.keyFilters";
 const FILTER_HANDLER: &str = "lumaHomeKey";
 const FILTER_TARGET: &str = "var lumaHomeTarget = 'com.webos.app.home';";
+const FILTER_OVERRIDE: &str = "var lumaHomeInputOverride = false;";
+// The startup-home policy is separately opt-in: ordinary Home takeover leaves TV inputs unchanged.
+// home.sh pins PINNED over INPUT_FILE, also early in a cold boot without the helper.
+const INPUT_FILE: &str = "/var/lib/eim/lastinput";
+const INPUT_SAVED: &str = "/var/lib/luma-home/input-policy.json";
+const INPUT_FLAG: &str = "/var/lib/luma-home/startup-home";
+const PINNED: &str = "/var/lib/luma-home/lastinput";
 
 /// The LS2 definitions of luma-early: dynamic service, role bound to its executable, the one
 /// method in API group "all" (the only group LG grants com.webos.starfish.keyfilters), callable
@@ -80,13 +87,35 @@ pub fn key_filters(list: &[Value], on: bool) -> Vec<Value> {
     rest
 }
 
-/// The installed key filter launches the selected Home target.
-pub fn filter_source(source: &str, id: &str) -> Result<String> {
+/// A TV input bootd or Back/Exit may return to: Live TV, HDMI or an external input.
+pub fn valid_input(id: &str) -> bool {
+    let Some(name) = id.strip_prefix("com.webos.app.") else {
+        return false;
+    };
+    name == "livetv"
+        || name
+            .strip_prefix("hdmi")
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        || name.strip_prefix("externalinput.").is_some_and(|rest| {
+            !rest.is_empty()
+                && rest
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
+        })
+}
+
+/// The installed key filter launches the selected Home target and carries the input policy.
+pub fn filter_source(source: &str, id: &str, input_override: bool) -> Result<String> {
     target(id)?;
-    if source.matches(FILTER_TARGET).count() != 1 {
-        return Err("home-filter.js has no Home target line".into());
+    if source.matches(FILTER_TARGET).count() != 1 || source.matches(FILTER_OVERRIDE).count() != 1 {
+        return Err("home-filter.js has no Home target or input policy line".into());
     }
-    Ok(source.replace(FILTER_TARGET, &format!("var lumaHomeTarget = '{id}';")))
+    Ok(source
+        .replace(FILTER_TARGET, &format!("var lumaHomeTarget = '{id}';"))
+        .replace(
+            FILTER_OVERRIDE,
+            &format!("var lumaHomeInputOverride = {input_override};"),
+        ))
 }
 fn default_home() -> String {
     HOME.into()
@@ -368,6 +397,109 @@ impl<'a, S: System> Home<'a, S> {
         }
         Err("Close Luma before enabling Home integration".into())
     }
+    fn input_settings(&self, method: &str, payload: Value) -> Result<Value> {
+        accepted(system::luna(
+            self.system,
+            "com.webos.settingsservice",
+            method,
+            &payload,
+        )?)
+        .map_err(|e| format!("Input settings: {e}"))
+    }
+    fn last_input_app(&self) -> Result<String> {
+        let reply = self.input_settings(
+            "getSystemSettings",
+            json!({"category": "general", "keys": ["lastInputApp"]}),
+        )?;
+        Ok(reply["settings"]["lastInputApp"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned())
+    }
+    fn input_mounted(&self) -> Result<bool> {
+        Ok(self.mounts()?.iter().any(|(_, p)| p == INPUT_FILE))
+    }
+    /// Undo startup-home: EIM's lastinput and Back/Exit's lastInputApp return to the saved input,
+    /// unless the owner or another integration already changed them. Recovery data is kept if a
+    /// step fails, so disable can be retried.
+    pub fn restore_input_policy(&self) -> Result<()> {
+        if !self.exists(INPUT_SAVED) && !self.exists(PINNED) {
+            return Ok(());
+        }
+        if self.input_mounted()? {
+            system::command(self.system, "/bin/umount", &[INPUT_FILE])?;
+        }
+        let mut current = system::json(self.system, INPUT_FILE)?;
+        let saved = if self.exists(INPUT_SAVED) {
+            Some(system::json(self.system, INPUT_SAVED)?)
+        } else {
+            None
+        };
+        // Migration from the original draft: its unmodified appId is the only available prior input.
+        let fallback = current["appId"]
+            .as_str()
+            .filter(|id| valid_input(id))
+            .map(str::to_owned);
+        if current["physicalLastSourceAppId"] == self.id.as_str() {
+            let input = saved
+                .as_ref()
+                .and_then(|s| s["lastinput"]["physicalLastSourceAppId"].as_str())
+                .filter(|id| valid_input(id))
+                .map(str::to_owned)
+                .or_else(|| fallback.clone())
+                .ok_or("Cannot identify the previous TV input; recovery data retained")?;
+            current["physicalLastSourceAppId"] = json!(input);
+            // Write in place: EIM owns this inode and may keep it open.
+            fs::write(
+                self.system.path(Path::new(INPUT_FILE)),
+                serde_json::to_vec(&current).map_err(|e| e.to_string())?,
+            )
+            .map_err(|e| format!("{INPUT_FILE}: {e}"))?;
+        }
+        if self.last_input_app()? == self.id {
+            let last = saved
+                .as_ref()
+                .and_then(|s| s["lastInputApp"].as_str())
+                .filter(|id| valid_input(id))
+                .map(str::to_owned)
+                .or(fallback)
+                .ok_or("Cannot identify the previous Back/Exit input")?;
+            self.input_settings(
+                "setSystemSettings",
+                json!({"category": "general", "settings": {"lastInputApp": last}}),
+            )?;
+        }
+        for file in [INPUT_FLAG, INPUT_SAVED, PINNED] {
+            system::remove(self.system, file)?;
+        }
+        Ok(())
+    }
+    /// Pin lastinput through home.sh, which also runs it early in a cold boot. Best effort: without
+    /// it LG still opens Live TV first at power-on.
+    fn pin_input(&self) {
+        if let Err(error) = self.run_home_sh("pin") {
+            eprintln!("Luma Home: lastinput pin failed: {error}");
+        }
+    }
+    fn run_home_sh(&self, command: &str) -> Result<()> {
+        let result = self.system.run(
+            "/bin/sh",
+            &[format!("{STATE}/home.sh"), command.into()],
+            std::time::Duration::from_secs(20),
+            64 * 1024,
+        )?;
+        if result.success {
+            Ok(())
+        } else {
+            Err(format!(
+                "home.sh {command}: {}",
+                String::from_utf8_lossy(&result.stderr)
+                    .chars()
+                    .take(480)
+                    .collect::<String>()
+            ))
+        }
+    }
     fn set_key_filters(&self, on: bool) -> Result<()> {
         let reply = accepted(system::luna(
             self.system,
@@ -391,6 +523,66 @@ impl<'a, S: System> Home<'a, S> {
         )?)
         .map_err(|e| format!("Write key filters: {e}"))?;
         Ok(())
+    }
+    /// configd may suppress unchanged filter lists. Remove our entry before replacing and readding
+    /// it, otherwise the old live QML context can immediately overwrite restored settings.
+    fn write_input_filter(&self) -> Result<()> {
+        self.set_key_filters(false)?;
+        self.system.pause();
+        let source = String::from_utf8(self.read(FILTER)?).map_err(|e| e.to_string())?;
+        let flag = self.exists(INPUT_FLAG);
+        let source = source
+            .replace(
+                "var lumaHomeInputOverride = true;",
+                "var lumaHomeInputOverride = false;",
+            )
+            .replace(
+                FILTER_OVERRIDE,
+                &format!("var lumaHomeInputOverride = {flag};"),
+            );
+        system::write(self.system, FILTER, source.as_bytes(), 0o644)?;
+        self.set_key_filters(true)
+    }
+    /// `home.sh startup-home on|off`: open Luma instead of Live TV at power-on and point Back/Exit
+    /// at Home. Requires executable takeover; the previous input is saved for restoration.
+    pub fn configure_input_policy(&self, config: &Config, enabled: bool) -> Result<()> {
+        if !config.enabled || config.method != "executable" {
+            return Err("Requires executable Home takeover".into());
+        }
+        if enabled {
+            if !self.exists(INPUT_SAVED) {
+                let original = system::json(self.system, INPUT_FILE)?;
+                let last = self.last_input_app()?;
+                if !original["physicalLastSourceAppId"]
+                    .as_str()
+                    .is_some_and(valid_input)
+                    || !valid_input(&last)
+                {
+                    return Err("Select a TV input before enabling startup-home".into());
+                }
+                system::write_json(
+                    self.system,
+                    INPUT_SAVED,
+                    &json!({"lastinput": original, "lastInputApp": last}),
+                )?;
+            }
+            let mut pinned = system::json(self.system, INPUT_SAVED)?["lastinput"].clone();
+            if !pinned.is_object() {
+                return Err("Invalid saved input policy".into());
+            }
+            pinned["physicalLastSourceAppId"] = json!(self.id);
+            system::write_json(self.system, PINNED, &pinned)?;
+            system::write(self.system, INPUT_FLAG, b"enabled\n", 0o644)?;
+            // Unlike the boot fallback, an explicit opt-in must report a failed mount.
+            self.run_home_sh("pin")?;
+        } else {
+            // Stop the setting writer before restoring its saved value.
+            system::remove(self.system, INPUT_FLAG)?;
+            let filter = self.write_input_filter();
+            self.restore_input_policy()?;
+            filter?;
+        }
+        self.write_input_filter()
     }
     /// Best effort: without it a cold boot still reaches Luma through the Homebrew hook.
     fn install_early(&self, app: &Path) {
@@ -462,10 +654,13 @@ impl<'a, S: System> Home<'a, S> {
                 false
             }
         };
+        let mut input_error = None;
         if config.method == "executable" {
             let root = self.owned_mount()?;
             system::remove(self.system, MARKER)?;
             system::remove(self.system, format!("{MARKER}-target"))?;
+            // Detach Home even if the input cannot be restored, so recovery can be retried.
+            input_error = self.restore_input_policy().err();
             if root.is_some() {
                 self.unmount(&self.exe)?;
                 if self.exe_mount()?.is_some() {
@@ -491,7 +686,7 @@ impl<'a, S: System> Home<'a, S> {
         if was_home {
             self.launch()?;
         }
-        Ok(())
+        input_error.map_or(Ok(()), Err)
     }
     pub fn apply(&self, config: &Config, open: bool) -> Result<()> {
         if !self.exists(Path::new(&config.app_dir).join("luma")) {
@@ -543,7 +738,12 @@ impl<'a, S: System> Home<'a, S> {
                 self.reread(&system::json(self.system, format!("{STAGE}/appinfo.json"))?)?;
             }
             self.stop_home(&config.app_dir)?;
-            if open || (front == self.id && self.foreground()? == self.id) {
+            if config.method == "executable" {
+                self.pin_input();
+            }
+            // With lastinput pinned, a cold boot whose early start failed has nothing in front.
+            let empty = config.method == "executable" && front.is_empty();
+            if open || empty || (front == self.id && self.foreground()? == self.id) {
                 if config.method == "executable" {
                     self.open_executable()?;
                 } else {
@@ -566,14 +766,14 @@ impl<'a, S: System> Home<'a, S> {
             let bytes = system::read(self.system, app.join(name), 16 * 1024 * 1024)?;
             system::write(self.system, format!("{STATE}/{name}"), &bytes, mode)?;
         }
-        // The compositor key filter that opens Home early in a cold boot.
+        // The compositor key filter (early launch, Back/Exit).
         let source = String::from_utf8(system::read(
             self.system,
             app.join("home-filter.js"),
             1024 * 1024,
         )?)
         .map_err(|e| e.to_string())?;
-        let filter = filter_source(&source, &self.id)?;
+        let filter = filter_source(&source, &self.id, self.exists(INPUT_FLAG))?;
         system::write(self.system, FILTER, filter.as_bytes(), 0o644)?;
         // Retire the former interpreter script only after both replacement files are available.
         system::remove(self.system, format!("{STATE}/home.cjs"))?;
@@ -784,10 +984,25 @@ pub fn dispatch(
     let home = Home::new(system, id)?;
     match command {
         "status" => Ok(
-            json!({"enabled":saved.as_ref().is_some_and(|c|c.enabled),"method":saved.as_ref().map(|c|c.method.as_str()),"homeId":id,"homeKeyVerified":null,"availableTargets":([HOME,FULL_HOME].into_iter().filter(|id|home.exists(format!("/usr/palm/applications/{id}/appinfo.json"))).collect::<Vec<_>>()),"mounted":saved.as_ref().is_some_and(|c|if c.method=="executable"{home.exe_mounted(&c.app_dir)}else{home.mounted()}),"bootHook":hook_owned(system),"earlyStart":saved.as_ref().is_some_and(|c|c.method=="executable")&&home.exists(format!("{LS2}/services.d/{EARLY}.service")),"appDir":saved.as_ref().map(|c|c.app_dir.as_str())}),
+            json!({"enabled":saved.as_ref().is_some_and(|c|c.enabled),"method":saved.as_ref().map(|c|c.method.as_str()),"homeId":id,"homeKeyVerified":null,"availableTargets":([HOME,FULL_HOME].into_iter().filter(|id|home.exists(format!("/usr/palm/applications/{id}/appinfo.json"))).collect::<Vec<_>>()),"mounted":saved.as_ref().is_some_and(|c|if c.method=="executable"{home.exe_mounted(&c.app_dir)}else{home.mounted()}),"bootHook":hook_owned(system),"earlyStart":saved.as_ref().is_some_and(|c|c.method=="executable")&&home.exists(format!("{LS2}/services.d/{EARLY}.service")),"startupHome":home.exists(INPUT_FLAG),"appDir":saved.as_ref().map(|c|c.app_dir.as_str())}),
         ),
         "enable" => {
             home.install(Path::new(app.ok_or("Missing installation directory")?))?;
+            Ok(json!({"returnValue":true}))
+        }
+        // home.sh passes on|off where other commands pass the installation directory.
+        "startup-home" => {
+            let enabled = match app {
+                Some("on") => true,
+                Some("off") => false,
+                _ => return Err("Usage: home.sh startup-home on|off".into()),
+            };
+            let config = saved.ok_or("Luma Home has not been enabled")?;
+            home.configure_input_policy(&config, enabled)?;
+            Ok(json!({"returnValue":true}))
+        }
+        "unpin" => {
+            home.restore_input_policy()?;
             Ok(json!({"returnValue":true}))
         }
         "apply" | "disable" | "restore" => {

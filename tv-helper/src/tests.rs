@@ -27,6 +27,8 @@ struct Fixture {
     stuck: Cell<bool>,
     /// LG's com.webos.surfacemanager.keyFilters chain in com.webos.service.config.
     filters: RefCell<Vec<Value>>,
+    /// general/lastInputApp in com.webos.settingsservice.
+    last_input_app: RefCell<String>,
     fail_config: Cell<bool>,
     fail_ls_control: Cell<bool>,
 }
@@ -62,6 +64,7 @@ impl Fixture {
                 json!({"handler":"handleScreenSaver","file":"/usr/lib/qt5/qml/KeyFilters/systemUi.js"}),
                 json!({"handler":"handleSystemKeys","file":"/usr/lib/qt5/qml/KeyFilters/systemUi.js"}),
             ]),
+            last_input_app: RefCell::new("com.webos.app.livetv".into()),
             fail_config: Cell::new(false),
             fail_ls_control: Cell::new(false),
         };
@@ -87,6 +90,11 @@ impl Fixture {
         f.put(&format!("{DIR}/luma-helper"), b"native-helper");
         f.put(&format!("{DIR}/luma-early"), b"native-early");
         f.put(&format!("{DIR}/home-filter.js"), FILTER_SOURCE.as_bytes());
+        f.put(&format!("{DIR}/home.sh"), b"#!/bin/sh\n");
+        f.put_json(
+            "/var/lib/eim/lastinput",
+            json!({"type":"DTV","appId":"com.webos.app.livetv","physicalLastSourceId":"DTV","physicalLastSourceAppId":"com.webos.app.livetv"}),
+        );
         f.put(&format!("{DIR}/home.sh"), b"#!/bin/sh\n");
         f.put(&format!("{DIR}/splash.png"), b"default");
         for name in ["dunes", "forest", "prism"] {
@@ -208,8 +216,8 @@ impl System for Fixture {
             self.unmount(args.last().unwrap());
             return Ok(ok(json!({})));
         }
-        if program == "/usr/sbin/ls-control" {
-            let fail = self.fail_ls_control.get();
+        if program == "/bin/sh" || program == "/usr/sbin/ls-control" {
+            let fail = program == "/usr/sbin/ls-control" && self.fail_ls_control.get();
             return Ok(Output {
                 stdout: vec![],
                 stderr: if fail {
@@ -275,6 +283,14 @@ impl System for Fixture {
                         .as_array()
                         .unwrap()
                         .clone();
+                json!({"returnValue":true})
+            }
+            "getSystemSettings" => {
+                json!({"returnValue":true,"settings":{"lastInputApp":*self.last_input_app.borrow()}})
+            }
+            "setSystemSettings" => {
+                *self.last_input_app.borrow_mut() =
+                    payload["settings"]["lastInputApp"].as_str().unwrap().into();
                 json!({"returnValue":true})
             }
             "blockSystemApp" | "releaseBlockSystemApp" | "addDevice" | "deleteDevice" => {
@@ -1090,8 +1106,10 @@ fn enable_installs_the_early_start_and_disable_removes_it_again() {
     assert!(!system::exists(&f, "/var/lib/luma-home/home.cjs"));
     let filter = String::from_utf8(f.read(home::FILTER)).unwrap();
     assert!(filter.contains("var lumaHomeTarget = 'com.webos.app.home';"));
+    assert!(filter.contains("var lumaHomeInputOverride = false;"));
     let status = home::dispatch(&f, "status", None, None).unwrap();
     assert_eq!(status["earlyStart"], true);
+    assert_eq!(status["startupHome"], false);
     home::dispatch(&f, "disable", None, None).unwrap();
     assert!(!system::exists(&f, LS2_SERVICE));
     assert!(!system::exists(&f, "/var/lib/luma-home/luma-early"));
@@ -1124,9 +1142,146 @@ fn disable_restores_lg_home_and_removes_the_hook_and_helper_even_when_ls2_cleanu
     }
 }
 #[test]
-fn installed_filter_template_names_the_selected_target() {
-    let installed = home::filter_source(FILTER_SOURCE, home::FULL_HOME).unwrap();
+fn a_boot_apply_opens_home_over_an_empty_screen_as_lastinput_no_longer_opens_live_tv() {
+    let f = Fixture::new();
+    *f.front.borrow_mut() = String::new();
+    let h = home::Home::new(&f, home::HOME).unwrap();
+    h.apply(&f.config("executable", home::HOME), false).unwrap();
+    assert_eq!(f.front.borrow().as_str(), home::HOME);
+    assert!(
+        f.calls()
+            .iter()
+            .any(|c| c == "/bin/sh /var/lib/luma-home/home.sh pin")
+    );
+}
+#[test]
+fn startup_home_pins_the_selected_target_and_off_restores_the_saved_input() {
+    for id in [home::HOME, home::FULL_HOME] {
+        let f = Fixture::new();
+        home::dispatch(&f, "enable", Some(DIR), Some(id)).unwrap();
+        *f.last_input_app.borrow_mut() = "com.webos.app.hdmi2".into();
+        home::dispatch(&f, "startup-home", Some("on"), None).unwrap();
+        let pinned = system::json(&f, "/var/lib/luma-home/lastinput").unwrap();
+        assert_eq!(pinned["physicalLastSourceAppId"], id);
+        assert_eq!(pinned["appId"], "com.webos.app.livetv");
+        let filter = String::from_utf8(f.read(home::FILTER)).unwrap();
+        assert!(filter.contains("var lumaHomeInputOverride = true;"));
+        assert!(filter.contains(&format!("var lumaHomeTarget = '{id}';")));
+        assert!(
+            f.calls()
+                .iter()
+                .any(|c| c == "/bin/sh /var/lib/luma-home/home.sh pin")
+        );
+        assert_eq!(
+            home::dispatch(&f, "status", None, None).unwrap()["startupHome"],
+            true
+        );
+        // What bootd and Back/Exit see while the policy is on.
+        f.put_json(
+            "/var/lib/eim/lastinput",
+            json!({"appId":"com.webos.app.livetv","physicalLastSourceAppId":id}),
+        );
+        *f.last_input_app.borrow_mut() = id.into();
+        home::dispatch(&f, "startup-home", Some("off"), None).unwrap();
+        let restored = system::json(&f, "/var/lib/eim/lastinput").unwrap();
+        assert_eq!(restored["physicalLastSourceAppId"], "com.webos.app.livetv");
+        assert_eq!(*f.last_input_app.borrow(), "com.webos.app.hdmi2");
+        for file in ["startup-home", "input-policy.json", "lastinput"] {
+            assert!(!system::exists(&f, format!("/var/lib/luma-home/{file}")));
+        }
+        let filter = String::from_utf8(f.read(home::FILTER)).unwrap();
+        assert!(filter.contains("var lumaHomeInputOverride = false;"));
+        assert_eq!(ours(&f), 1);
+    }
+}
+#[test]
+fn startup_home_requires_executable_takeover_and_a_real_tv_input() {
+    let f = Fixture::new();
+    assert!(home::dispatch(&f, "startup-home", Some("on"), None).is_err());
+    home::dispatch(&f, "enable", Some(DIR), None).unwrap();
+    assert!(home::dispatch(&f, "startup-home", Some("maybe"), None).is_err());
+    *f.last_input_app.borrow_mut() = "youtube.leanback.v4".into();
+    let error = home::dispatch(&f, "startup-home", Some("on"), None).unwrap_err();
+    assert!(error.contains("Select a TV input"));
+    assert!(!system::exists(&f, "/var/lib/luma-home/startup-home"));
+}
+#[test]
+fn restoration_parses_arbitrary_json_and_restores_only_while_owned() {
+    for input in ["com.webos.app.hdmi2", "com.webos.app.livetv"] {
+        for pretty in [false, true] {
+            let f = Fixture::new();
+            let pinned = json!({"appId":input,"physicalLastSourceAppId":home::HOME});
+            let text = if pretty {
+                serde_json::to_vec_pretty(&pinned).unwrap()
+            } else {
+                serde_json::to_vec(&pinned).unwrap()
+            };
+            f.put("/var/lib/eim/lastinput", &text);
+            f.put("/var/lib/luma-home/lastinput", &text);
+            f.put("/var/lib/luma-home/startup-home", b"enabled\n");
+            f.put_json(
+                "/var/lib/luma-home/input-policy.json",
+                json!({"lastinput":{"physicalLastSourceAppId":input},"lastInputApp":input}),
+            );
+            *f.last_input_app.borrow_mut() = home::HOME.into();
+            let h = home::Home::new(&f, home::HOME).unwrap();
+            h.restore_input_policy().unwrap();
+            let file = system::json(&f, "/var/lib/eim/lastinput").unwrap();
+            assert_eq!(file["physicalLastSourceAppId"], input);
+            assert_eq!(*f.last_input_app.borrow(), input);
+            assert!(!system::exists(&f, "/var/lib/luma-home/input-policy.json"));
+            // An intentional change by the owner or another integration wins.
+            f.put("/var/lib/luma-home/lastinput", &text);
+            f.put_json(
+                "/var/lib/eim/lastinput",
+                json!({"appId":input,"physicalLastSourceAppId":"com.webos.app.hdmi3"}),
+            );
+            *f.last_input_app.borrow_mut() = "com.webos.app.hdmi3".into();
+            h.restore_input_policy().unwrap();
+            assert_eq!(*f.last_input_app.borrow(), "com.webos.app.hdmi3");
+            assert_eq!(
+                system::json(&f, "/var/lib/eim/lastinput").unwrap()["physicalLastSourceAppId"],
+                "com.webos.app.hdmi3"
+            );
+        }
+    }
+}
+#[test]
+fn input_restoration_failure_still_detaches_home_so_recovery_can_be_retried() {
+    let f = Fixture::new();
+    home::dispatch(&f, "enable", Some(DIR), None).unwrap();
+    // Recovery data without any input to return to.
+    f.put_json(
+        "/var/lib/eim/lastinput",
+        json!({"appId":"youtube.leanback.v4","physicalLastSourceAppId":home::HOME}),
+    );
+    f.put_json("/var/lib/luma-home/lastinput", json!({}));
+    let error = home::dispatch(&f, "disable", None, None).unwrap_err();
+    assert!(error.contains("previous TV input"));
+    assert_eq!(f.read(EXE), b"stock-com.webos.app.home");
+    assert!(system::exists(&f, "/var/lib/luma-home/lastinput"));
+}
+#[test]
+fn installed_filter_templates_are_strict() {
+    let installed = home::filter_source(FILTER_SOURCE, home::FULL_HOME, true).unwrap();
     assert!(installed.contains("var lumaHomeTarget = 'com.webos.app.fullhome';"));
-    assert!(home::filter_source("var other = 1;", home::HOME).is_err());
-    assert!(home::filter_source(FILTER_SOURCE, "com.webos.app.livetv").is_err());
+    assert!(installed.contains("var lumaHomeInputOverride = true;"));
+    assert!(home::filter_source("var other = 1;", home::HOME, false).is_err());
+    assert!(home::filter_source(FILTER_SOURCE, "com.webos.app.livetv", false).is_err());
+    for id in [
+        "com.webos.app.livetv",
+        "com.webos.app.hdmi1",
+        "com.webos.app.externalinput.av1",
+    ] {
+        assert!(home::valid_input(id), "{id}");
+    }
+    for id in [
+        "com.webos.app.home",
+        "com.webos.app.hdmi",
+        "com.webos.app.externalinput.",
+        "youtube.leanback.v4",
+        "com.webos.app.hdmi1;reboot",
+    ] {
+        assert!(!home::valid_input(id), "{id}");
+    }
 }
