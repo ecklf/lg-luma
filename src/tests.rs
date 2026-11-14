@@ -2512,17 +2512,19 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
             _ => None,
         })
         .collect();
-    assert_eq!(widget_order, [1, 2, 3]);
-    for (index, subpage) in [Subpage::Weather, Subpage::Shortcuts, Subpage::Inputs]
-        .into_iter()
-        .enumerate()
-    {
-        state.focus = Target::Widget(index + 1);
+    assert_eq!(widget_order, [1, 2, 3, 5]);
+    for (widget, subpage) in [
+        (1, Subpage::Weather),
+        (2, Subpage::Shortcuts),
+        (3, Subpage::Inputs),
+        (5, Subpage::Channels),
+    ] {
+        state.focus = Target::Widget(widget);
         state.direction(Direction::Right, &controls(&state));
         assert_eq!(state.subpage, Some(subpage));
         state.back();
         assert!(state.subpage.is_none());
-        assert_eq!(state.focus, Target::Widget(index + 1));
+        assert_eq!(state.focus, Target::Widget(widget));
     }
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(WIDGETS_SECTION));
