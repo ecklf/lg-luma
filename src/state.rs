@@ -575,6 +575,9 @@ impl State {
         self.pointer = false;
         self.pressed = None;
         self.open(0);
+        // A system relaunch reveals Home directly, not the previous app's drawer
+        // closing over it. Ordinary navigation keeps its open/close animation.
+        self.drawer_visibility = 0.;
         pending
     }
 

@@ -845,13 +845,18 @@ draws the wallpaper once with m and k per vertex (16 strips keep gradients' colo
 exact) instead of one full-screen pass per fill. During the Recents crossfade these fills sit
 beneath the outgoing interface rather than over it, so they fold in while both fade.
 
-### Idle preparation
+### Demand-driven page preparation
 
-The first visit to a page pays for laying out its text, outlining new glyphs, loading logo meshes
-and uploading icons. After each inventory, once the screen has been still for 1.5 s, Luma builds
-the other pages' scenes without drawing them (`Renderer::prepare`), one page per idle wake; the TV
-log reports each (`Luma prewarm: …`). The script action `prewarm` triggers it at once, and the
-profiling timeline records first-use work per frame (`glyph_ms`, `vector_ms`, `image_ms`).
+Hidden Apps and Settings pages are prepared only when opened. Their first visit pays for text
+layout, new glyph outlines, logo meshes and GPU uploads; subsequent visits reuse bounded caches.
+Installed icon decoding still runs on its artwork worker, prioritizing visible cards. Inventory
+refreshes no longer schedule hidden-page rendering on the SDL thread, where that work could block
+Home relaunches and input even while Luma was behind another app. System Home relaunches also
+close the drawer immediately instead of replaying its closing animation.
+
+The explicit diagnostic script action `prewarm` still builds hidden scenes without drawing them
+(`Renderer::prepare`); the TV log reports each (`Luma prewarm: …`). The profiling timeline records
+first-use work per frame (`glyph_ms`, `vector_ms`, `image_ms`).
 
 ## TV startup diagnostics
 
