@@ -87,6 +87,18 @@ It does not execute the test suites. A desktop display is required; on headless 
 
 ### Input
 
+General → UI sounds stores `ui_sounds` (default `false`, also for existing preferences).
+The SDL queue opens lazily on the first audible interaction, plays short original synthesized
+navigation/select/back cues at a fixed quiet level, and closes when disabled or the window loses
+focus/visibility. Navigation repeats are rate-limited and queued audio cannot accumulate.
+Unchanged navigation, worker responses, redraws, and scripted captures stay silent. Audio errors
+are logged once per enabled session and never prevent navigation; toggling off/on retries.
+No sound recordings or extra audio libraries are packaged. TV routing/volume and behavior alongside
+other apps need manual hardware verification. A desktop-only backend check is available with
+`SDL_AUDIODRIVER=dummy cargo test --locked --bin luma dummy_audio_ -- --ignored --test-threads=1`.
+The unavailable-backend check runs with
+`SDL_AUDIODRIVER=luma-unavailable cargo test --locked --bin luma unavailable_audio_ -- --ignored --test-threads=1`.
+
 Weather → Widget style persists `weather_style` (`standard`, the default, `no_icon`,
 or `compact`). Home and Settings use the same native layout and painting functions.
 The picker shows all three designs with offline sample weather, in the saved

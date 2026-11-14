@@ -34,6 +34,49 @@ fn ready() -> State {
     state
 }
 
+#[test]
+fn ui_sounds_default_off_and_toggle_without_moving_controls() {
+    assert!(!Preferences::default().ui_sounds);
+    let legacy: Preferences = serde_json::from_value(json!({"hour_24": true})).unwrap();
+    assert!(!legacy.ui_sounds);
+    assert!(legacy.hour_24);
+    for pointer in [false, true] {
+        let mut state = ready();
+        state.open(2);
+        state.direction(Direction::Right, &controls(&state));
+        for _ in 0..4 {
+            state.direction(Direction::Down, &controls(&state));
+        }
+        assert_eq!(state.focus, Target::Setting(11));
+        state.pointer = pointer;
+        let before = controls(&state)
+            .into_iter()
+            .find(|c| c.target == state.focus)
+            .unwrap()
+            .rect;
+        assert_eq!(state.activate(), [Effect::Save]);
+        assert!(state.preferences.ui_sounds);
+        assert_eq!(state.focus, Target::Setting(11));
+        let loaded: Preferences =
+            serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
+        assert!(loaded.ui_sounds);
+        assert_eq!(loaded.hour_24, state.preferences.hour_24);
+        let after = controls(&state)
+            .into_iter()
+            .find(|c| c.target == state.focus)
+            .unwrap()
+            .rect;
+        assert_eq!(
+            (before.x, before.y, before.w, before.h),
+            (after.x, after.y, after.w, after.h)
+        );
+        assert_eq!(state.activate(), [Effect::Save]);
+        assert!(!state.preferences.ui_sounds);
+        state.back();
+        assert!(!state.preferences.ui_sounds);
+    }
+}
+
 fn manage_apps(state: &mut State) {
     state.open(2);
     state.section = crate::state::APPS_SECTION;
