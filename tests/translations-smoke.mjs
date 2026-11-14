@@ -378,7 +378,7 @@ try {
   const hungarianPicker = `${picker},${Array(4).fill('down').join(',')}`;
   const hungarianFocused = await scenario('hu-picker', hungarianPicker);
   assert.deepEqual(hungarianFocused.focus, { Choice: 6 });
-  assert.ok(hungarianFocused.scroll > 0);
+  assert.equal(hungarianFocused.scroll, 0);
   assert.ok(hungarianFocused.ui_text.includes('Magyar'));
   const hungarian = await scenario('hu-home', `${hungarianPicker},enter,home`);
   assert.equal(hungarian.preferences.language, 'hu');
