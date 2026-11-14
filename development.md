@@ -141,17 +141,17 @@ retain their manual order. The same order fills empty dock slots and the app dra
 `xvfb-run -a pnpm screenshots --sorting` captures the sorting settings, both app orders,
 and the generic disc input icon from the native desktop renderer using seeded local counts.
 
-| Input                         | Action                                                                       |
-| ----------------------------- | ---------------------------------------------------------------------------- |
-| Arrows                        | Move focus. Down from favorites opens the drawer, Up reaches corner controls |
-| OK / Enter                    | Activate on release                                                          |
-| Hold OK for 600 ms            | Reorder Home favorite or open app options                                    |
-| OK or Back in move mode       | Finish reordering without launching                                          |
-| Escape / Back / Backspace     | Parent navigation, overlay dismissal or Recent apps from Home                |
-| Hold Back / Escape for 600 ms | Open Recent apps while Luma is focused                                       |
-| Menu / M / right-click        | App or background options side popup                                         |
-| Pointer / wheel               | Hover, click, hold and scrolling                                             |
-| F5                            | Refresh inventory                                                            |
+| Input                         | Action                                                                           |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| Arrows                        | Move focus. Down from favorites opens the drawer, Up reaches corner controls     |
+| OK / Enter                    | Activate on release                                                              |
+| Hold OK for 600 ms            | Reorder Home favorite or open app options                                        |
+| OK or Back in move mode       | Finish reordering without launching                                              |
+| Escape / Back / Backspace     | Parent navigation, overlay dismissal, channel switcher, or Recent apps from Home |
+| Hold Back / Escape for 600 ms | Channel switcher when a Home channel is focused; otherwise Recent apps           |
+| Menu / M / right-click        | App or background options side popup                                             |
+| Pointer / wheel               | Hover, click, hold and scrolling                                                 |
+| F5                            | Refresh inventory                                                                |
 
 Backspace deletes while editing. Native Back uses SDL's webOS-specific keycode. Back dismisses
 the keyboard first; Weather Location then returns to its parent Location row, HDMI choices to
@@ -198,9 +198,16 @@ instead of once per minute. Existing saved hour and seconds preferences are reta
 App cards on Home, in the drawer, and in Settings → Apps are artwork-only, with no name captions
 or App names setting. Legacy `show_names`, `show_home_names`, and `show_app_names` preferences
 are ignored and are not written back. App titles remain available in the management popup.
-**Settings → Widgets** groups **Weather**, **Shortcuts**, and **Inputs** as separate subpages.
-Weather location and temperature choices return to Weather; Back from a widget returns to its row
-in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row.
+**Settings → Widgets** groups **Weather**, **Shortcuts**, **Inputs**, and **Channels** as separate
+subpages. Weather location and temperature choices return to Weather; Back from a widget returns to
+its row in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row. Channel
+favorites return to Channels, then its Widgets row. Channels can be shown or hidden from that
+subpage without clearing favorites; Left from the list or header restores the Channels Widgets
+row instead of jumping to the sidebar. The Home channels strip shows only selected
+tuner channels (logos from `/mnt/lg/cmn_data/channel_logo` when present); OK tunes via
+`apiadapter/tv/openChannel`. Guide titles prefer `getChannelProgramInfo` (now and next) and fall
+back to `getChannelCurrentProgramInfo`. Back (short or long-hold) on a focused Home channel opens a
+Recents-style switcher over Home favorites with logo and now/next text; OK tunes, Back/Up dismiss.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
 with a tighter 48-pixel spacing for Languages and Backgrounds.
@@ -307,8 +314,10 @@ System text events update app/location queries; Done/Back stops editing and rest
 
 ### Recent apps
 
-Hold Back (Escape on desktop) for 600 ms from any page to open Recent apps.
-Short Back navigates on release and does nothing on Home; it never opens Recent apps.
+Hold Back (Escape on desktop) for 600 ms from any page to open Recent apps (or the channel
+switcher when a Home channel tile is focused).
+Short Back navigates on release and does nothing on Home, except when a Home channel favorite
+is focused — then it opens the channel switcher. It never opens Recent apps.
 Back in an overlay, the system keyboard or move mode keeps its immediate dismissal behavior;
 Backspace keeps its editing/navigation role.
 Losing window focus cancels an unfinished hold. This is an app-local shortcut while Luma is focused.
@@ -771,7 +780,7 @@ failures preserve the last valid inputs. No failed inventory read substitutes de
 ### Optional native Home integration
 
 `tv/home.sh` and the native Rust `luma-helper` executable are packaged beside `luma`. They are a root-only, explicit integration
-for webOS 10/25 and 11/26 (and webOS 5/6 and 9/24, see below). `enable` stages a native manifest with ID `com.webos.app.home` and
+for webOS 10/25 and 11/26 (and webOS 5/6, 7/22 and 9/24, see below). `enable` stages a native manifest with ID `com.webos.app.home` and
 symlinks to the installed executable, libraries and assets under `/var/lib/luma-home/app`, then
 bind-mounts it over `/usr/palm/applications/com.webos.app.home`. SAM rereads that one app through
 `blockSystemApp` followed by `releaseBlockSystemApp`, including `forceBlockSystemApp: false` when

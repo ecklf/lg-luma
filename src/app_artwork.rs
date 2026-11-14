@@ -104,12 +104,14 @@ fn clear_disk_cache_at(directory: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-const ROOTS: [&str; 5] = [
+const ROOTS: [&str; 6] = [
     "/media/developer/apps/usr/palm/applications",
     "/media/cryptofs/apps/usr/palm/applications",
     "/usr/palm/applications",
     "/media/system/apps/usr/palm/applications",
     "/mnt/otncabi/usr/palm/applications",
+    // LG tuner channel logos (imgUrl from apiadapter getChannelList).
+    "/mnt/lg/cmn_data/channel_logo",
 ];
 pub const MAX_FILE: usize = 512 * 1024;
 const CACHE_BYTES: usize = 16 * 1024 * 1024;
@@ -146,6 +148,22 @@ impl Source {
             large_icon: text("largeIcon").map(str::to_owned),
             icon: text("icon").map(str::to_owned),
             version: text("version").map(str::to_owned),
+        }
+    }
+
+    /// Absolute logo path already validated under the channel logo root.
+    pub fn channel_logo(id: &str, path: &str) -> Self {
+        let path = Path::new(path);
+        Self {
+            id: id.into(),
+            directory: path.parent().map(Path::to_path_buf),
+            large_icon: None,
+            icon: path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(str::to_owned)
+                .or_else(|| Some(path.to_string_lossy().into_owned())),
+            version: Some(path.to_string_lossy().into_owned()),
         }
     }
 
@@ -451,6 +469,17 @@ fn hsl(hue: f32, saturation: f32, lightness: f32) -> [u8; 3] {
 fn load(source: &Source) -> Option<Artwork> {
     if !valid_app_id(&source.id) {
         return None;
+    }
+    // Channel logos store the absolute path in `version` after validation under LOGO_ROOT.
+    if let Some(path) = source.version.as_deref().map(Path::new).filter(|path| {
+        path.is_absolute()
+            && path.starts_with("/mnt/lg/cmn_data/channel_logo")
+            && path
+                .components()
+                .all(|c| !matches!(c, Component::ParentDir))
+    }) && let Some(image) = read_bounded(path, MAX_FILE).and_then(|bytes| decode(&bytes))
+    {
+        return Some(image);
     }
     if let Some(image) = load_local(source, read_bounded) {
         return Some(image);

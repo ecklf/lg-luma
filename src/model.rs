@@ -89,10 +89,42 @@ pub struct Input {
     pub signal: Option<bool>,
 }
 
+/// A tuner channel from LG's channel map (`apiadapter/tv/getChannelList`).
+#[derive(Clone, Debug, Serialize)]
+pub struct Channel {
+    pub id: String,
+    pub number: String,
+    pub name: String,
+    pub radio: bool,
+    /// Absolute logo path under `/mnt/lg/cmn_data/channel_logo`, when present.
+    pub logo: Option<String>,
+    #[serde(skip)]
+    pub icon: Option<crate::app_artwork::Source>,
+    #[serde(skip)]
+    pub program: Option<ChannelProgram>,
+    #[serde(skip)]
+    pub next: Option<ChannelProgram>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ChannelProgram {
+    pub title: String,
+    pub start: Option<u64>,
+    pub end: Option<u64>,
+}
+
+/// Now-playing and optional next show from the tuner guide.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ChannelGuideEntry {
+    pub program: Option<ChannelProgram>,
+    pub next: Option<ChannelProgram>,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Inventory {
     pub apps: Vec<App>,
     pub inputs: Vec<Input>,
+    pub channels: Vec<Channel>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -263,6 +295,10 @@ pub struct Preferences {
     pub app_sorting: AppSorting,
     pub app_launch_counts: BTreeMap<String, u64>,
     pub favorites: Option<Vec<String>>,
+    /// Ordered tuner channel IDs shown on the Home channels strip.
+    pub channel_favorites: Vec<String>,
+    /// When false, the Home channels strip is hidden (favorites are kept).
+    pub show_channels: bool,
     pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
     pub background: String,
@@ -308,6 +344,8 @@ impl Default for Preferences {
             app_sorting: AppSorting::default(),
             app_launch_counts: BTreeMap::new(),
             favorites: None,
+            channel_favorites: vec![],
+            show_channels: true,
             custom_tiles: vec![],
             hidden: vec![],
             background: "dunes".into(),
@@ -379,6 +417,34 @@ impl Preferences {
             }
             ids
         })
+    }
+
+    /// Home strip order: saved favorites that still exist in the tuner map.
+    pub fn channel_favorites<'a>(&self, channels: &'a [Channel]) -> Vec<&'a Channel> {
+        self.channel_favorites
+            .iter()
+            .filter_map(|id| channels.iter().find(|channel| &channel.id == id))
+            .take(crate::channels::MAX_FAVORITES)
+            .collect()
+    }
+
+    pub fn toggle_channel_favorite(&mut self, id: &str) -> bool {
+        if !valid_app_id(id) {
+            return false;
+        }
+        if let Some(index) = self.channel_favorites.iter().position(|saved| saved == id) {
+            self.channel_favorites.remove(index);
+            return true;
+        }
+        if self.channel_favorites.len() >= crate::channels::MAX_FAVORITES {
+            return false;
+        }
+        self.channel_favorites.push(id.into());
+        true
+    }
+
+    pub fn channel_on_home(&self, id: &str) -> bool {
+        self.channel_favorites.iter().any(|saved| saved == id)
     }
 
     /// Synthetic `App` entries for custom tiles, merged into the real
@@ -485,6 +551,9 @@ impl Preferences {
         if let Some(ids) = &mut self.favorites {
             clean(ids);
         }
+        clean(&mut self.channel_favorites);
+        self.channel_favorites
+            .truncate(crate::channels::MAX_FAVORITES);
         clean(&mut self.hidden);
         {
             let mut seen = HashSet::new();
@@ -702,6 +771,28 @@ pub fn demo_inventory() -> Inventory {
                 signal: None,
             },
         ],
+        channels: [
+            ("1_31_1_0_1008_494_8916", "1", "La 1 HD", false),
+            ("1_33_2_0_1007_10560_8916", "2", "La 2Cat", false),
+            ("1_33_3_0_1007_10550_8916", "3", "TV3 UHD", false),
+            ("1_26_4_0_1001_5001_8916", "4", "SX3/33", false),
+            ("1_34_6_0_1002_2563_8916", "6", "Antena 3", false),
+            ("1_35_7_0_1003_2571_8916", "7", "Cuatro", false),
+            ("1_36_9_0_1004_2583_8916", "9", "laSexta", false),
+            ("1_40_21_0_1101_1_8916", "21", "Catalunya Ràdio", true),
+        ]
+        .into_iter()
+        .map(|(id, number, name, radio)| Channel {
+            id: id.into(),
+            number: number.into(),
+            name: name.into(),
+            radio,
+            logo: None,
+            icon: None,
+            program: None,
+            next: None,
+        })
+        .collect(),
     };
     // Desktop-only artwork gallery. TV inventory is always read from services.
     for brand in crate::branding::BRANDS {
