@@ -205,10 +205,11 @@ favorites return to Channels, then its Widgets row. Channels can be shown or hid
 subpage without clearing favorites; Left from the list or header restores the Channels Widgets
 row instead of jumping to the sidebar. Top Shelf is on by default: packaging may bake in a
 TMDB key via `LUMA_TMDB_API_KEY`, and Settings can still override it, plus streaming region and
-suggestion language (Automatic follows the UI language). After resting about three seconds on a mapped
-Home favorite, popular show art fades over the wallpaper while the weather summary yields the left
-column (Stremio mixes one popular title from each major platform). The Home channels strip shows only selected
-tuner channels (logos from `/mnt/lg/cmn_data/channel_logo` when present); OK tunes via
+suggestion language (Automatic follows the UI language). After about 1.5s on a cold mapped Home
+favorite, popular show art fades in; already-cached apps crossfade series→series without dipping
+to the wallpaper. Weather yields the left column while the shelf is visible (Stremio uses weekly
+trending with a short provider fallback). The Home channels strip shows only selected tuner
+channels (logos from `/mnt/lg/cmn_data/channel_logo` when present); OK tunes via
 `apiadapter/tv/openChannel`. Guide titles prefer `getChannelProgramInfo` (now and next) and fall
 back to `getChannelCurrentProgramInfo`. Back (short or long-hold) on a focused Home channel opens a
 Recents-style switcher over Home favorites with logo and now/next text; OK dismisses the carousel,
