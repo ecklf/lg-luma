@@ -6,8 +6,9 @@ import vm from 'node:vm';
 const script = await fs.readFile(new URL('../tv/home-filter.js', import.meta.url), 'utf8');
 
 // LG's compositor filter context: luna calls, a timer, and subscriptions the test drives.
-function compositor(source = script) {
+function compositor({ window = false, inputOverride = true, source = script } = {}) {
   const calls = [];
+  const splashes = [];
   const subscriptions = {};
   const prepares = [];
   const timers = [];
@@ -15,10 +16,21 @@ function compositor(source = script) {
     JSON,
     console: { warn() {} },
     KeyPolicy: { NextPolicy: 0, Accepted: 1 },
+    Qt: {
+      createQmlObject(qml, parent) {
+        const splash = { qml, parent, opacity: 1, destroyed: false };
+        splash.destroy = () => (splash.destroyed = true);
+        splashes.push(splash);
+        return splash;
+      },
+    },
+    ...(window ? { compositorWindow: { contentItem: 'compositor root' } } : {}),
     genericTimer: { set: (ms, fn) => timers.push([ms, fn]) },
     lunaCall: {
       send(service, method, payload, callback) {
         if (method === '/prepare') prepares.push(callback);
+        else if (method === '/setSystemSettings')
+          calls.push(`lastInputApp ${JSON.parse(payload).settings.lastInputApp}`);
         else calls.push(`${method} ${JSON.parse(payload).id}`);
       },
       subscribe(service, method, payload, callback) {
@@ -27,6 +39,7 @@ function compositor(source = script) {
     },
   });
   vm.runInContext(source, context);
+  context.lumaHomeInputOverride = inputOverride;
   context.init();
   const emit = (method, value) => subscriptions[method](JSON.stringify(value));
   return {
@@ -34,8 +47,12 @@ function compositor(source = script) {
     calls,
     prepares,
     timers,
+    splashes,
+    shown: () => splashes.filter((splash) => splash.opacity === 1 && !splash.destroyed).length,
     boot: (done) => emit('/getBootStatus', { returnValue: true, signals: { 'boot-done': done } }),
     front: (appId) => emit('/getForegroundAppInfo', { returnValue: true, appId }),
+    lastInput: (id) =>
+      emit('/getSystemSettings', { returnValue: true, settings: { lastInputApp: id } }),
     early: (ok) => prepares.at(-1)(JSON.stringify({ returnValue: ok, exitCode: ok ? 0 : 1 })),
   };
 }
@@ -121,10 +138,88 @@ test('keys pass through unchanged', () => {
   assert.equal(tv.context.lumaHomeKey(1, true, false), 0);
 });
 
+test('an app in front points Back/Exit at Home, once', () => {
+  const tv = compositor();
+  tv.boot(true);
+  tv.lastInput('com.webos.app.livetv');
+  tv.front('youtube.leanback.v4');
+  tv.front('netflix');
+  assert.deepEqual(tv.calls, ['lastInputApp com.webos.app.home']);
+});
+
+test('an input in front keeps its own lastInputApp', () => {
+  const tv = compositor();
+  tv.boot(true);
+  tv.front('com.webos.app.hdmi1');
+  tv.lastInput('com.webos.app.hdmi1');
+  assert.deepEqual(tv.calls, []);
+});
+
+test('lastInputApp is only written once the settings service has answered', () => {
+  const tv = compositor();
+  tv.boot(true);
+  tv.front('youtube.leanback.v4');
+  assert.deepEqual(tv.calls, []);
+  tv.lastInput('com.webos.app.livetv');
+  assert.deepEqual(tv.calls, ['lastInputApp com.webos.app.home']);
+});
+
+test('a cold boot shows the loading screen on the compositor window until an app is in front', () => {
+  const tv = compositor({ window: true });
+  tv.boot(false);
+  tv.front('');
+  assert.equal(tv.shown(), 1);
+  assert.equal(tv.splashes[0].parent, 'compositor root');
+  assert.match(tv.splashes[0].qml, /file:\/\/\/var\/lib\/luma-home\/boot-logo\.png/);
+  tv.front('');
+  assert.equal(tv.splashes.length, 1);
+  tv.front('com.webos.app.home');
+  assert.equal(tv.shown(), 0);
+  tv.timers.find(([ms]) => ms === 500)[1]();
+  assert.equal(tv.splashes[0].destroyed, true);
+});
+
+test('any key ends the loading screen and passes through', () => {
+  const tv = compositor({ window: true });
+  tv.boot(false);
+  assert.equal(tv.context.lumaHomeKey(1, true, false), 0);
+  assert.equal(tv.shown(), 0);
+  tv.front('');
+  assert.equal(tv.splashes.length, 1);
+});
+
+test('no loading screen on a running TV or without the compositor window', () => {
+  const running = compositor({ window: true });
+  running.boot(true);
+  running.front('');
+  const plain = compositor();
+  plain.boot(false);
+  plain.front('');
+  assert.equal(running.splashes.length + plain.splashes.length, 0);
+  assert.equal(plain.prepares.length, 1);
+});
+
+test('the loading screen ends after 90 s at the latest', () => {
+  const tv = compositor({ window: true });
+  tv.boot(false);
+  tv.timers.find(([ms]) => ms === 90000)[1]();
+  assert.equal(tv.shown(), 0);
+});
+
+test('ordinary Home takeover never overrides Back/Exit', () => {
+  const tv = compositor({ inputOverride: false });
+  tv.boot(true);
+  tv.lastInput('com.webos.app.hdmi2');
+  tv.front('netflix');
+  assert.deepEqual(tv.calls, []);
+});
+
 test('with fullhome selected, the filter launches and recognizes fullhome', () => {
   const line = "var lumaHomeTarget = 'com.webos.app.home';";
   assert.ok(script.includes(line));
-  const tv = compositor(script.replace(line, "var lumaHomeTarget = 'com.webos.app.fullhome';"));
+  const tv = compositor({
+    source: script.replace(line, "var lumaHomeTarget = 'com.webos.app.fullhome';"),
+  });
   tv.boot(false);
   tv.front('com.webos.app.livetv');
   tv.early(true);
