@@ -120,6 +120,24 @@ fn no_requests_without_a_location_enabled_widget_and_visible_home() {
 }
 
 #[test]
+fn hidden_or_unassigned_weather_slots_do_not_request_forecasts() {
+    use crate::model::{HomeLayout, HomeWidget};
+    let mut weather = Weather::default();
+    let mut preferences = preferences();
+    preferences.home_widgets = [HomeWidget::Empty; 6];
+    assert!(weather.sync(&preferences, true, 1000).0.is_none());
+    preferences.home_widgets[5] = HomeWidget::Weather;
+    assert!(weather.sync(&preferences, true, 1000).0.is_none());
+    preferences.home_layout = HomeLayout::Grid;
+    assert!(matches!(
+        weather.sync(&preferences, true, 1000).0,
+        Some(Command::Forecast { .. })
+    ));
+    preferences.home_layout = HomeLayout::Centered;
+    assert!(weather.sync(&preferences, true, 1001).0.is_none());
+}
+
+#[test]
 fn weather_failure_keeps_valid_cache_labels_it_saved_and_retries_later() {
     let mut weather = Weather {
         cache: Some(cache(1000)),
