@@ -232,6 +232,10 @@ an FBO or sampling the framebuffer. Text and app artwork are separate, sharp dra
 crossfades blend both glass backdrops. Wallpaper changes already invalidate the full scene, while
 ordinary glass changes participate in damage tracking.
 
+Modal cards (wallpaper upload, shortcut editing, app/background actions, deletion confirmations,
+and the keyboard) use opaque gray gradients rather than wallpaper-sampling glass to keep their
+content readable. The dock and regular controls retain their glass treatment.
+
 See [the research notes](docs/liquid-glass-research.md) for sources, visual decisions and limitations.
 
 For bounded GLES2 cost, refraction samples the wallpaper, not other UI controls behind a menu.
