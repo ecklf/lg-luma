@@ -611,7 +611,7 @@ try {
   );
   assert.equal(cycleDisabled.preferences.wallpaper_cycle, false);
   assert.ok(cycleDisabled.ui_text.includes('Rotation'));
-  for (const column of [0, 1, 2]) {
+  for (const column of [0, 1, 2, 3]) {
     await fs.writeFile(
       preferences,
       JSON.stringify({
@@ -631,7 +631,7 @@ try {
   const greetingPage = `${widgetsPage},down,down,down,enter`;
   const positioned = await scenario(
     'widget-position-setting',
-    `${greetingPage},down,down,down,enter,right,enter`,
+    `${greetingPage},down,enter,right,enter`,
   );
   assert.deepEqual(positioned.preferences.greeting_position, { column: 1, row: 0 });
   console.log(

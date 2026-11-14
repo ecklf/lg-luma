@@ -1,7 +1,8 @@
 use crate::i18n::Language;
 use crate::model::{
-    App, BACKGROUNDS, CUSTOM_TILE_PREFIX, CustomTile, HomeWidget, INPUT_NAME_LIMIT, InputMode,
-    Inventory, Preferences, WidgetPosition, clean_input_name,
+    App, BACKGROUNDS, CUSTOM_TILE_PREFIX, CustomTile, HOME_GRID_CELLS, HOME_GRID_COLUMNS,
+    HomeWidget, INPUT_NAME_LIMIT, InputMode, Inventory, Preferences, WidgetPosition,
+    clean_input_name,
 };
 use crate::text_rendering::TextRendering;
 use crate::weather::{self, Unit};
@@ -67,8 +68,6 @@ pub enum Target {
     Setting(usize),
     Widget(usize),
     MoveWidget(HomeWidget),
-    GreetingName,
-    GreetingNameClear,
     GreetingToggle,
     DateToggle,
     DateFormat,
@@ -179,7 +178,6 @@ pub enum Subpage {
 pub enum TextField {
     Apps,
     Location,
-    Name,
     InputName,
 }
 
@@ -264,7 +262,6 @@ pub struct State {
     pub panel_started: Option<Instant>,
     pub weather: weather::Weather,
     pub keyboard_field: TextField,
-    pub greeting_name_draft: String,
     pub input_name: String,
     pub recents: crate::recents::Recents,
 }
@@ -312,7 +309,6 @@ impl State {
             panel_started: None,
             weather: weather::Weather::default(),
             keyboard_field: TextField::Apps,
-            greeting_name_draft: String::new(),
             input_name: String::new(),
             recents: crate::recents::Recents::default(),
         }
@@ -1296,10 +1292,12 @@ impl State {
             && let Target::Choice(index) = self.focus
         {
             let next = match direction {
-                Direction::Left if index % 3 > 0 => index - 1,
-                Direction::Right if index % 3 < 2 => index + 1,
-                Direction::Up if index >= 3 => index - 3,
-                Direction::Down if index < 6 => index + 3,
+                Direction::Left if index % HOME_GRID_COLUMNS > 0 => index - 1,
+                Direction::Right if index % HOME_GRID_COLUMNS + 1 < HOME_GRID_COLUMNS => index + 1,
+                Direction::Up if index >= HOME_GRID_COLUMNS => index - HOME_GRID_COLUMNS,
+                Direction::Down if index + HOME_GRID_COLUMNS < HOME_GRID_CELLS => {
+                    index + HOME_GRID_COLUMNS
+                }
                 _ => index,
             };
             self.focus(Target::Choice(next), controls);
@@ -1510,8 +1508,6 @@ impl State {
             let setting_rows: Option<&[Target]> = match self.subpage {
                 Some(Subpage::Greeting) => Some(&[
                     Target::GreetingToggle,
-                    Target::GreetingName,
-                    Target::GreetingNameClear,
                     Target::MoveWidget(HomeWidget::Greeting),
                 ]),
                 Some(Subpage::Date) => Some(&[Target::DateToggle, Target::DateFormat]),
@@ -1537,8 +1533,7 @@ impl State {
                     Direction::Right
                         if matches!(
                             self.focus,
-                            Target::GreetingName
-                                | Target::ClockFormat
+                            Target::ClockFormat
                                 | Target::ClockTimeFormat
                                 | Target::DateFormat
                                 | Target::MoveWidget(_)
@@ -2117,16 +2112,6 @@ impl State {
                 self.dirty = true;
                 return;
             }
-            if self.keyboard_field == TextField::Name {
-                let name = &mut self.greeting_name_draft;
-                name.extend(
-                    text.chars()
-                        .filter(|c| !c.is_control())
-                        .take(40usize.saturating_sub(name.chars().count())),
-                );
-                self.dirty = true;
-                return;
-            }
             if self.keyboard_field == TextField::InputName {
                 let length = self.input_name.chars().count();
                 self.input_name.extend(
@@ -2153,8 +2138,6 @@ impl State {
                 let mut query = self.weather.query.clone();
                 query.pop();
                 self.weather.edit(query);
-            } else if self.keyboard_field == TextField::Name {
-                self.greeting_name_draft.pop();
             } else if self.keyboard_field == TextField::InputName {
                 self.input_name.pop();
             } else {
@@ -2184,16 +2167,6 @@ impl State {
     }
 
     fn commit_text_input(&mut self) -> Vec<Effect> {
-        if self.keyboard_field == TextField::Name {
-            let name = std::mem::take(&mut self.greeting_name_draft);
-            let name = name.trim();
-            // Empty dismissal preserves the saved value; Clear name is explicit.
-            if !name.is_empty() && self.preferences.greeting_name != name {
-                self.preferences.greeting_name = name.into();
-                return vec![Effect::Save];
-            }
-            return vec![];
-        }
         self.commit_input_name()
     }
 
@@ -2290,8 +2263,6 @@ impl State {
         query.replace_range(start..end, "");
         if self.keyboard_field == TextField::Location {
             self.weather.edit(query);
-        } else if self.keyboard_field == TextField::Name {
-            self.greeting_name_draft = query;
         } else if self.keyboard_field == TextField::InputName {
             self.input_name = query;
         } else {
@@ -2304,17 +2275,12 @@ impl State {
     pub fn editing_text(&self) -> &str {
         match self.keyboard_field {
             TextField::Location => &self.weather.query,
-            TextField::Name => &self.greeting_name_draft,
             TextField::InputName => &self.input_name,
             TextField::Apps => &self.query,
         }
     }
     pub fn open_keyboard(&mut self, field: TextField) {
         self.keyboard_field = field;
-        if field == TextField::Name {
-            // SDL-webOS cannot pre-fill the system keyboard's text model.
-            self.greeting_name_draft.clear();
-        }
         if field == TextField::InputName {
             // The TV keyboard starts empty, so a new name replaces the old one.
             self.input_name.clear();
@@ -2327,7 +2293,6 @@ impl State {
             self.overlay = Some(Overlay::SystemKeyboard);
             self.focus = match field {
                 TextField::Location => Target::WeatherQuery,
-                TextField::Name => Target::GreetingName,
                 TextField::InputName => Target::InputRename,
                 TextField::Apps => Target::Search,
             };
@@ -2355,7 +2320,6 @@ impl State {
     fn keyboard_return(&self) -> Target {
         match self.keyboard_field {
             TextField::Location => Target::WeatherSearch,
-            TextField::Name => Target::GreetingName,
             TextField::InputName => Target::InputRename,
             TextField::Apps => Target::Search,
         }
@@ -2496,12 +2460,6 @@ impl State {
                     self.panel_started = Some(Instant::now());
                 }
             }
-            Target::GreetingName => self.open_keyboard(TextField::Name),
-            Target::GreetingNameClear => {
-                self.preferences.greeting_name.clear();
-                self.focus = Target::GreetingName;
-                return vec![Effect::Save];
-            }
             Target::ClockFormat | Target::ClockTimeFormat => {
                 let format = self.focus == Target::ClockFormat;
                 self.subpage = Some(if format {
@@ -2566,7 +2524,7 @@ impl State {
             Target::MoveWidget(widget) => {
                 let position = self.preferences.widget_position(widget);
                 self.subpage = Some(Subpage::WidgetPosition(widget));
-                self.focus = Target::Choice(usize::from(position.row * 3 + position.column));
+                self.focus = Target::Choice(position.cell());
                 self.scroll = 0.;
                 self.panel_started = None;
             }
@@ -2768,12 +2726,8 @@ impl State {
             Target::Choice(index) => {
                 match self.subpage.clone() {
                     Some(Subpage::WidgetPosition(widget)) => {
-                        if index >= 9 {
+                        let Some(position) = WidgetPosition::from_cell(index) else {
                             return vec![];
-                        }
-                        let position = WidgetPosition {
-                            column: (index % 3) as u8,
-                            row: (index / 3) as u8,
                         };
                         if !self.preferences.can_place_widget(widget, position) {
                             return vec![];
@@ -2982,7 +2936,6 @@ impl State {
                 "Delete" => self.delete(),
                 "Clear" => match self.keyboard_field {
                     TextField::Location => self.weather.edit(String::new()),
-                    TextField::Name => self.greeting_name_draft.clear(),
                     TextField::InputName => self.input_name.clear(),
                     TextField::Apps => self.query.clear(),
                 },

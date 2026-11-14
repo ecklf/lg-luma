@@ -12,9 +12,9 @@ fn widget_position_browsing_cancels_and_valid_selection_saves() {
     state.section = crate::state::WIDGETS_SECTION;
     state.focus = Target::MoveWidget(HomeWidget::Weather);
     state.activate();
-    assert_eq!(state.focus, Target::Choice(3));
-    state.direction(Direction::Right, &scene(&state).controls);
     assert_eq!(state.focus, Target::Choice(4));
+    state.direction(Direction::Right, &scene(&state).controls);
+    assert_eq!(state.focus, Target::Choice(5));
     assert_eq!(
         state.preferences.weather_position,
         WidgetPosition { column: 0, row: 1 }
@@ -41,7 +41,7 @@ fn widget_position_picker_blocks_overlaps_and_out_of_bounds_for_remote_and_point
     state.section = crate::state::WIDGETS_SECTION;
     state.focus = Target::MoveWidget(HomeWidget::Greeting);
     state.activate();
-    for cell in [2, 3, 5, 6, 8] {
+    for cell in [3, 4, 7, 8, 11, 15] {
         state.focus = Target::Choice(cell);
         assert!(state.activate().is_empty());
         assert_eq!(
@@ -50,7 +50,7 @@ fn widget_position_picker_blocks_overlaps_and_out_of_bounds_for_remote_and_point
         );
     }
     let rendered = scene(&state);
-    for cell in 0..9 {
+    for cell in 0..crate::model::HOME_GRID_CELLS {
         let control = rendered
             .controls
             .iter()
@@ -68,6 +68,50 @@ fn widget_position_picker_blocks_overlaps_and_out_of_bounds_for_remote_and_point
 }
 
 #[test]
+fn four_by_four_widget_navigation_reaches_last_row_and_column_without_wrapping() {
+    use crate::model::{HomeWidget, WidgetPosition};
+    let mut state = ready();
+    state.open(2);
+    state.focus = Target::MoveWidget(HomeWidget::Greeting);
+    state.activate();
+    for direction in [
+        Direction::Right,
+        Direction::Right,
+        Direction::Right,
+        Direction::Down,
+        Direction::Down,
+        Direction::Down,
+    ] {
+        state.direction(direction, &scene(&state).controls);
+    }
+    assert_eq!(state.focus, Target::Choice(15));
+    for direction in [Direction::Right, Direction::Down] {
+        state.direction(direction, &scene(&state).controls);
+        assert_eq!(state.focus, Target::Choice(15));
+    }
+    assert!(
+        state.activate().is_empty(),
+        "Greeting cannot extend past the right edge"
+    );
+    state.direction(Direction::Left, &scene(&state).controls);
+    assert_eq!(state.focus, Target::Choice(14));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(
+        state.preferences.greeting_position,
+        WidgetPosition { column: 2, row: 3 }
+    );
+    state.focus = Target::MoveWidget(HomeWidget::Weather);
+    state.activate();
+    state.pointer_focus(Target::Choice(3));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(
+        state.preferences.weather_position,
+        WidgetPosition { column: 3, row: 0 }
+    );
+    assert!(WidgetPosition::from_cell(16).is_none());
+}
+
+#[test]
 fn widget_positions_default_to_requested_spans_and_sanitize_safely() {
     use crate::model::{HomeWidget, WidgetPosition};
     let mut preferences: Preferences = serde_json::from_str("{}").unwrap();
@@ -82,16 +126,10 @@ fn widget_positions_default_to_requested_spans_and_sanitize_safely() {
         WidgetPosition { column: 0, row: 1 }
     );
     assert!(preferences.weather_visible());
-    for greeting in 0..9 {
-        for weather in 0..9 {
-            preferences.greeting_position = WidgetPosition {
-                column: greeting % 3,
-                row: greeting / 3,
-            };
-            preferences.weather_position = WidgetPosition {
-                column: weather % 3,
-                row: weather / 3,
-            };
+    for greeting in 0..crate::model::HOME_GRID_CELLS {
+        for weather in 0..crate::model::HOME_GRID_CELLS {
+            preferences.greeting_position = WidgetPosition::from_cell(greeting).unwrap();
+            preferences.weather_position = WidgetPosition::from_cell(weather).unwrap();
             preferences.sanitize();
             for widget in HomeWidget::ALL {
                 assert!(preferences.can_place_widget(widget, preferences.widget_position(widget)));

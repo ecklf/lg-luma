@@ -44,10 +44,7 @@ const captures = widgetPreviews
   ? [
       ['home-layout-grid', 'home'],
       ['home-layout-moved', 'home'],
-      [
-        'home-layout-settings',
-        'settings,down,down,down,right,down,down,down,enter,down,down,down,enter',
-      ],
+      ['home-layout-settings', 'settings,down,down,down,right,down,down,down,enter,down,enter'],
     ]
   : weatherPreviews
     ? [
@@ -84,12 +81,11 @@ try {
         widgetPreviews
           ? {
               ...configuration,
-              greeting_name: 'Alex',
               reduced_motion: true,
               greeting_position:
-                name === 'home-layout-moved' ? { column: 1, row: 2 } : { column: 0, row: 0 },
+                name === 'home-layout-moved' ? { column: 2, row: 3 } : { column: 0, row: 0 },
               weather_position:
-                name === 'home-layout-moved' ? { column: 2, row: 0 } : { column: 0, row: 1 },
+                name === 'home-layout-moved' ? { column: 3, row: 0 } : { column: 0, row: 1 },
             }
           : weatherPreviews
             ? {
