@@ -55,11 +55,29 @@ const widgets = {
   'home-layout-settings': {
     home_layout: 'grid',
     home_widgets: ['clock', 'date', 'greeting', 'weather', 'empty', 'empty'],
+    home_clock_height: 250,
+    home_clock_glass: true,
   },
   'home-clock-depth': {
     background: 'summit',
     home_layout: 'centered',
     home_widgets: ['clock', 'empty', 'empty', 'empty', 'empty', 'empty'],
+  },
+  'home-clock-glass': {
+    background: 'summit',
+    home_layout: 'centered',
+    home_widgets: ['clock', 'empty', 'empty', 'empty', 'empty', 'empty'],
+    home_clock_height: 250,
+    home_clock_glass: true,
+    home_clock_depth: false,
+  },
+  'home-clock-glass-depth': {
+    background: 'summit',
+    home_layout: 'centered',
+    home_widgets: ['clock', 'empty', 'empty', 'empty', 'empty', 'empty'],
+    home_clock_height: 250,
+    home_clock_glass: true,
+    home_clock_depth: true,
   },
 };
 try {
@@ -76,7 +94,7 @@ try {
     ...Object.keys(widgets).map((name) => [
       name,
       name === 'home-layout-settings'
-        ? `settings,down,down,down,enter,${Array(10).fill('down').join(',')}`
+        ? `settings,down,down,down,enter,${Array(12).fill('down').join(',')}`
         : 'home',
     ]),
   ].filter(([name]) => !widgetsOnly || widgets[name])) {

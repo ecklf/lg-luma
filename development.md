@@ -85,7 +85,8 @@ The update-card preview uses simulated version `99.0.0`, without a network reque
 It does not execute the test suites. A desktop display is required; on headless Linux use
 `xvfb-run -a pnpm screenshots`. These images document the native design, not TV hardware behavior.
 `pnpm screenshots --widgets` refreshes only the three Home layouts, widget settings, the masked
-clock on Summit, and a cropped clock detail. All captures come from the actual native renderer.
+clock on Summit, a cropped clock detail, and tall glass-clock previews with and without depth.
+All captures come from the actual native renderer.
 
 ### Input
 
@@ -98,6 +99,14 @@ visibility preferences do not override explicit slot assignments. Layouts use th
 1920×1080 coordinate space above the unchanged favorites dock.
 
 ### Clock foreground masks
+
+`home_clock_height` selects 100, 125, 150, 175, 200, 250 or 300 percent. Height is capped to
+the widget cell and its centre is clamped to keep the full line inside it. Vector run geometry
+stretches vertically without changing horizontal advances, and inverse-transpose normals retain
+physical-pixel AA. Stretch and material participate in text caching and damage invalidation.
+`home_clock_glass` defaults false. Glass text uses a separate text fragment shader with cool
+reflections, a luminous analytic edge and the existing bounded wallpaper backdrop textures.
+Other text keeps its unchanged flat shader path. No proprietary Apple font is used or shipped.
 
 `home_clock_depth` defaults on. Asset preparation combines checked-in grayscale masks with the
 final shaded and unshaded wallpaper pixels, so the foreground has exactly the same crop and

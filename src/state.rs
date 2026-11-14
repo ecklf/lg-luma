@@ -69,6 +69,8 @@ pub enum Target {
     HomeLayout,
     HomeSlot(usize),
     ClockDepth,
+    ClockHeight,
+    ClockGlass,
     GreetingName,
     GreetingNameClear,
     GreetingToggle,
@@ -1614,6 +1616,8 @@ impl State {
                     | Target::HomeLayout
                     | Target::HomeSlot(_)
                     | Target::ClockDepth
+                    | Target::ClockHeight
+                    | Target::ClockGlass
             ) || (self.focus == Target::Setting(3) && self.subpage == Some(Subpage::Inputs)))
                 && matches!(direction, Direction::Left)
             {
@@ -1627,6 +1631,8 @@ impl State {
                     | Target::HomeLayout
                     | Target::HomeSlot(_)
                     | Target::ClockDepth
+                    | Target::ClockHeight
+                    | Target::ClockGlass
                     | Target::InputMode(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
@@ -2515,6 +2521,21 @@ impl State {
             }
             Target::ClockDepth => {
                 self.preferences.home_clock_depth = !self.preferences.home_clock_depth;
+                self.dirty = true;
+                return vec![Effect::Save];
+            }
+            Target::ClockHeight => {
+                let heights = [100, 125, 150, 175, 200, 250, 300];
+                let index = heights
+                    .iter()
+                    .position(|value| *value == self.preferences.home_clock_height)
+                    .unwrap_or(0);
+                self.preferences.home_clock_height = heights[(index + 1) % heights.len()];
+                self.dirty = true;
+                return vec![Effect::Save];
+            }
+            Target::ClockGlass => {
+                self.preferences.home_clock_glass = !self.preferences.home_clock_glass;
                 self.dirty = true;
                 return vec![Effect::Save];
             }

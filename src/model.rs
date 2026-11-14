@@ -292,6 +292,8 @@ pub struct Preferences {
     pub home_layout: HomeLayout,
     pub home_widgets: [HomeWidget; 6],
     pub home_clock_depth: bool,
+    pub home_clock_height: u16,
+    pub home_clock_glass: bool,
     pub favorites: Option<Vec<String>>,
     pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
@@ -335,6 +337,8 @@ impl Default for Preferences {
         Self {
             home_layout: HomeLayout::default(),
             home_clock_depth: true,
+            home_clock_height: 100,
+            home_clock_glass: false,
             home_widgets: [
                 HomeWidget::Weather,
                 HomeWidget::Empty,
@@ -508,6 +512,9 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
+        if ![100, 125, 150, 175, 200, 250, 300].contains(&self.home_clock_height) {
+            self.home_clock_height = 100;
+        }
         for slot in 0..self.home_widgets.len() {
             if self.home_widgets[slot] != HomeWidget::Empty
                 && self.home_widgets[..slot].contains(&self.home_widgets[slot])

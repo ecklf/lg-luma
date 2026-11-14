@@ -1273,26 +1273,24 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
         let depth = (*widget == HomeWidget::Clock)
             .then(|| clock_foreground(state, assets, slot, cell))
             .flatten();
-        let size = if depth.is_some() {
-            180.
-        } else if *widget == HomeWidget::Clock {
-            72.
-        } else {
-            40.
-        };
-        let (label, style) = assets.fit_line(&label, text(size, 500, -0.02), cell.w, 24.);
-        let height = style.size * style.line_height;
+        let clock = *widget == HomeWidget::Clock;
+        let size = if clock { 180. } else { 40. };
+        let (label, mut style) = assets.fit_line(&label, text(size, 500, -0.02), cell.w, 24.);
+        if clock {
+            let requested = f32::from(state.preferences.home_clock_height) / 100.;
+            let scale = requested.min(cell.h / (style.size * style.line_height));
+            style = style
+                .stretched(scale)
+                .glass(state.preferences.home_clock_glass);
+        }
+        let height = (style.size * style.line_height * style.vertical_scale).min(cell.h);
+        let center = depth
+            .as_ref()
+            .map_or(cell.y + cell.h / 2., |(_, center)| *center)
+            .clamp(cell.y + height / 2., cell.y + cell.h - height / 2.);
         out.text(
             label,
-            Rect::new(
-                cell.x,
-                depth
-                    .as_ref()
-                    .map_or(cell.y + cell.h / 2., |(_, center)| *center)
-                    - height / 2.,
-                cell.w,
-                height,
-            ),
+            Rect::new(cell.x, center - height / 2., cell.w, height),
             style,
             WHITE,
             true,
@@ -2579,6 +2577,49 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     chevron: false,
                 },
             );
+            for (index, (target, key, value)) in [
+                (
+                    Target::ClockHeight,
+                    "clockHeight",
+                    format!("{}%", state.preferences.home_clock_height),
+                ),
+                (
+                    Target::ClockGlass,
+                    "clockAppearance",
+                    language
+                        .t(if state.preferences.home_clock_glass {
+                            "clockGlass"
+                        } else {
+                            "clockPlain"
+                        })
+                        .to_owned(),
+                ),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                row(
+                    out,
+                    state,
+                    assets,
+                    Row {
+                        target,
+                        rect: Rect::new(
+                            640.,
+                            584.8 + (state.preferences.home_layout.slots() + index) as f32 * 84.
+                                - s,
+                            1120.,
+                            72.,
+                        ),
+                        title: language.t(key),
+                        icon: None,
+                        value: Some(&value),
+                        description: None,
+                        selected: false,
+                        chevron: false,
+                    },
+                );
+            }
         }
         SYSTEM_SECTION => {
             let rect = Rect::new(640., 164.8 - s, 1120., 220.);
@@ -4110,6 +4151,36 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn clock_height_stretches_without_widening_or_overflowing_any_layout() {
+        let assets = assets();
+        for layout in [HomeLayout::Row, HomeLayout::Centered, HomeLayout::Grid] {
+            let mut state = State::new(Preferences {
+                home_layout: layout,
+                ..Preferences::default()
+            });
+            state.preferences.home_widgets[0] = HomeWidget::Clock;
+            let cell = home_widget_rect(layout, 0);
+            let mut original = Scene::new();
+            home_widgets(&mut original, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+            state.preferences.home_clock_height = 300;
+            state.preferences.home_clock_glass = true;
+            let mut tall = Scene::new();
+            home_widgets(&mut tall, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+            let Draw::Text(_, old, old_style, ..) = &original.draw[0] else {
+                panic!("Expected clock")
+            };
+            let Draw::Text(_, new, style, ..) = &tall.draw[0] else {
+                panic!("Expected clock")
+            };
+            assert_eq!(new.w, old.w);
+            assert_eq!(style.size, old_style.size);
+            assert!(style.vertical_scale > old_style.vertical_scale);
+            assert!(style.glass);
+            assert!(new.y >= cell.y && new.y + new.h <= cell.y + cell.h + 0.001);
         }
     }
 

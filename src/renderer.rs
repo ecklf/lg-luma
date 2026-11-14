@@ -30,6 +30,8 @@ pub struct TextStyle {
     pub tracking: f32,
     pub line_height: f32,
     pub align_right: bool,
+    pub vertical_scale: f32,
+    pub glass: bool,
 }
 impl TextStyle {
     pub const fn new(size: f32) -> Self {
@@ -39,6 +41,8 @@ impl TextStyle {
             tracking: 0.,
             line_height: 1.2,
             align_right: false,
+            vertical_scale: 1.,
+            glass: false,
         }
     }
     pub const fn weight(mut self, weight: u16) -> Self {
@@ -55,6 +59,18 @@ impl TextStyle {
     }
     pub const fn right(mut self) -> Self {
         self.align_right = true;
+        self
+    }
+    pub fn stretched(mut self, scale: f32) -> Self {
+        self.vertical_scale = if scale.is_finite() {
+            scale.clamp(1., 3.)
+        } else {
+            1.
+        };
+        self
+    }
+    pub const fn glass(mut self, enabled: bool) -> Self {
+        self.glass = enabled;
         self
     }
 }
@@ -101,7 +117,7 @@ struct TextKey {
     text: String,
     weight: u16,
     // Logical size, tracking, line height, available width and height.
-    layout: [u32; 5],
+    layout: [u32; 6],
     flags: u8,
 }
 
@@ -419,7 +435,7 @@ impl Renderer {
         };
         let text_program = match link(
             &(vertex_prefix + include_str!("shaders/text.vert")),
-            &(fragment_prefix + include_str!("shaders/vector.frag")),
+            &(fragment_prefix + include_str!("shaders/text.frag")),
             &[c"a_position", c"a_offset", c"a_origin", c"a_coverage"],
         ) {
             Ok(program) => program,
@@ -714,12 +730,14 @@ impl Renderer {
         // Layout remains logical. Reuse the same run geometry at every density;
         // its shader snaps insertion origins and computes pixel-sized coverage.
         let size_f = style.size;
+        let vertical_scale = style.stretched(style.vertical_scale).vertical_scale;
         let viewport = self.stats.viewport;
-        self.stats.max_logical_font_px = self.stats.max_logical_font_px.max(size_f);
+        self.stats.max_logical_font_px =
+            self.stats.max_logical_font_px.max(size_f * vertical_scale);
         self.stats.max_physical_font_px = self
             .stats
             .max_physical_font_px
-            .max(size_f * viewport.text_scale());
+            .max(size_f * vertical_scale * viewport.text_scale());
         let padded = rect.inset(-size_f);
         if padded.x + padded.w < 0.
             || padded.y + padded.h < 0.
@@ -744,16 +762,18 @@ impl Renderer {
                 style.line_height.to_bits(),
                 rect.w.to_bits(),
                 rect.h.to_bits(),
+                vertical_scale.to_bits(),
             ],
             flags: u8::from(style.align_right)
                 | (u8::from(centered) << 1)
-                | (u8::from(self.stats.multisample_samples > 1) << 2),
+                | (u8::from(self.stats.multisample_samples > 1 && !style.glass) << 2)
+                | (u8::from(style.glass) << 3),
         };
         if self.text_runs.contains_key(&key) {
             self.submit_text(key, origin, color);
             return;
         }
-        let rect = Rect::new(0., 0., rect.w, rect.h);
+        let rect = Rect::new(0., 0., rect.w, rect.h / vertical_scale);
         let font_id = style.weight + if style.size >= 32. { 1000 } else { 0 };
         let cjk_id = if style.weight >= 500 { 2500 } else { 2400 };
         let hangul_id = cjk_id + 1000;
@@ -879,7 +899,7 @@ impl Renderer {
         let mut vertices = Vec::new();
         let mut missing_glyphs = 0;
         let mut failures = 0;
-        let multisampled = self.stats.multisample_samples > 1;
+        let multisampled = self.stats.multisample_samples > 1 && !style.glass;
         for (c, x, baseline, selected) in placed {
             if self.fonts[&selected].lookup_glyph_index(c) == 0 && !c.is_whitespace() {
                 missing_glyphs += 1;
@@ -913,6 +933,7 @@ impl Renderer {
                 }
             }
         }
+        stretch_text_vertices(&mut vertices, vertical_scale);
         let mesh = if vertices.is_empty() {
             None
         } else {
@@ -1378,6 +1399,7 @@ impl Renderer {
                 None => gl::Disable(gl::SCISSOR_TEST),
             }
         };
+        let mut material_draws = 0;
         unsafe {
             gl::Viewport(0, 0, width as i32, height as i32);
             scissor(damage);
@@ -1425,6 +1447,23 @@ impl Renderer {
                 0,
             );
             gl::ActiveTexture(gl::TEXTURE0);
+            gl::UseProgram(self.text_program);
+            gl::Uniform1i(
+                gl::GetUniformLocation(self.text_program, c"u_glass_enabled".as_ptr()),
+                i32::from(glass_enabled),
+            );
+            gl::Uniform1i(
+                gl::GetUniformLocation(self.text_program, c"u_glass_a".as_ptr()),
+                1,
+            );
+            gl::Uniform1i(
+                gl::GetUniformLocation(self.text_program, c"u_glass_b".as_ptr()),
+                2,
+            );
+            gl::Uniform1f(
+                gl::GetUniformLocation(self.text_program, c"u_glass_mix".as_ptr()),
+                second.map_or(0., |(_, alpha)| alpha),
+            );
             let mut paint_bound = false;
             let mut current_fade = None;
             for batch in &self.batches {
@@ -1518,6 +1557,7 @@ impl Renderer {
                             [rect.w / mesh.width, rect.h / mesh.height, rect.x, rect.y],
                             *tint,
                             0.,
+                            false,
                         );
                         paint_bound = false;
                     }
@@ -1527,12 +1567,32 @@ impl Renderer {
                             continue;
                         };
                         let size = f32::from_bits(key.layout[0]) * vh as f32 / 1080.;
+                        gl::UseProgram(self.text_program);
+                        gl::Uniform2f(
+                            gl::GetUniformLocation(self.text_program, c"u_text_bounds".as_ptr()),
+                            origin[1],
+                            f32::from_bits(key.layout[4]),
+                        );
+                        if key.flags & 8 != 0 {
+                            // A tiny expanded vector underlay provides a crisp
+                            // icy bevel, rather than a blurred bitmap glow.
+                            self.draw_mesh(
+                                self.text_program,
+                                mesh,
+                                [1., 1., origin[0], origin[1]],
+                                [0.72, 0.96, 1., tint[3] * 0.85],
+                                1.1,
+                                false,
+                            );
+                            material_draws += 1;
+                        }
                         self.draw_mesh(
                             self.text_program,
                             mesh,
                             [1., 1., origin[0], origin[1]],
                             *tint,
                             embolden(size, self.text_embolden),
+                            key.flags & 8 != 0,
                         );
                         paint_bound = false;
                     }
@@ -1571,7 +1631,7 @@ impl Renderer {
         self.stats.vector_meshes = self.vectors.values().flatten().count();
         self.stats.vector_bytes = self.vectors.values().flatten().map(|mesh| mesh.bytes).sum();
         self.stats.artwork_bytes = bytes + self.stats.vector_bytes;
-        self.stats.draw_calls = self.batches.len();
+        self.stats.draw_calls = self.batches.len() + material_draws;
         self.stats.cpu_submission_ms = started.elapsed().as_secs_f64() * 1000.;
     }
 
@@ -1582,14 +1642,19 @@ impl Renderer {
         transform: [f32; 4],
         tint: Color,
         embolden: f32,
+        glass: bool,
     ) {
         let viewport = self.stats.viewport;
         unsafe {
             gl::UseProgram(program);
             if program == self.text_program {
+                gl::Uniform1i(
+                    gl::GetUniformLocation(program, c"u_clock_glass".as_ptr()),
+                    i32::from(glass),
+                );
                 gl::Uniform1f(
                     gl::GetUniformLocation(program, c"u_fringe".as_ptr()),
-                    if self.stats.multisample_samples > 1 {
+                    if self.stats.multisample_samples > 1 && !glass {
                         0.
                     } else {
                         0.5
@@ -1846,6 +1911,23 @@ impl Drop for Renderer {
     }
 }
 
+fn stretch_text_vertices(vertices: &mut [f32], scale: f32) {
+    if scale == 1. {
+        return;
+    }
+    for vertex in vertices.chunks_exact_mut(9) {
+        vertex[1] *= scale;
+        vertex[5] *= scale;
+        // Inverse-transpose normals retain physical-pixel AA on stretched curves.
+        let length = vertex[2].hypot(vertex[3]);
+        let transformed = vertex[2].hypot(vertex[3] / scale);
+        if transformed > 0. {
+            vertex[2] *= length / transformed;
+            vertex[3] = vertex[3] / scale * length / transformed;
+        }
+    }
+}
+
 fn texture(width: u32, height: u32, pixels: &[u8]) -> Texture {
     let mut id = 0;
     unsafe {
@@ -1946,5 +2028,22 @@ fn link(vertex: &str, fragment: &str, attributes: &[&CStr]) -> Result<GLuint, St
             ));
         }
         Ok(program)
+    }
+}
+
+#[cfg(test)]
+mod clock_text_tests {
+    use super::*;
+
+    #[test]
+    fn stretching_preserves_width_and_normal_length() {
+        let mut vertex = [12., 20., 0.3, 0.4, 50., 80., 0., 0., 1.];
+        stretch_text_vertices(&mut vertex, 2.5);
+        assert_eq!(vertex[0], 12.);
+        assert_eq!(vertex[4], 50.);
+        assert_eq!(vertex[1], 50.);
+        assert_eq!(vertex[5], 200.);
+        assert!((vertex[2].hypot(vertex[3]) - 0.5).abs() < 0.00001);
+        assert_eq!(TextStyle::new(180.).stretched(f32::NAN).vertical_scale, 1.);
     }
 }

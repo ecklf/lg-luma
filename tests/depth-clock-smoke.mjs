@@ -37,7 +37,14 @@ try {
       .png()
       .toFile(path.join(fake, `foregrounds/summit${suffix}.png`));
   }
-  const capture = async (name, folder, clock = true, gradient = true, depth = true) => {
+  const capture = async (
+    name,
+    folder,
+    clock = true,
+    gradient = true,
+    depth = true,
+    options = {},
+  ) => {
     await fs.writeFile(
       preferences,
       JSON.stringify({
@@ -49,6 +56,7 @@ try {
         show_weather: false,
         hour_24: true,
         reduced_motion: true,
+        ...options,
       }),
     );
     const image = path.join(root, '.build', `depth-clock-${name}.png`);
@@ -77,10 +85,15 @@ try {
     assert.equal(render.capture.glyph_failures, 0);
     return sharp(image).ensureAlpha().raw().toBuffer();
   };
-  for (const gradient of [true, false]) {
-    const base = await capture(`base-${gradient}`, assets, false, gradient);
-    const clear = await capture(`unoccluded-${gradient}`, fake, true, gradient);
-    const depth = await capture(`depth-${gradient}`, assets, true, gradient);
+  for (const [gradient, options] of [
+    [true, {}],
+    [false, {}],
+    [true, { home_clock_glass: true, home_clock_height: 250 }],
+  ]) {
+    const variant = `${gradient}-${options.home_clock_glass ? 'glass' : 'plain'}`;
+    const base = await capture(`base-${variant}`, assets, false, gradient);
+    const clear = await capture(`unoccluded-${variant}`, fake, true, gradient, true, options);
+    const depth = await capture(`depth-${variant}`, assets, true, gradient, true, options);
     const mask = await sharp(path.join(assets, `foregrounds/summit${gradient ? '' : '-plain'}.png`))
       .ensureAlpha()
       .raw()
@@ -122,6 +135,36 @@ try {
     );
   }
   await capture('disabled', assets, true, true, false);
+  const base = await capture('height-base', assets, false);
+  const short = await capture('height-100', assets, true, true, false);
+  const tall = await capture('height-250', assets, true, true, false, { home_clock_height: 250 });
+  const bounds = (pixels) => {
+    let left = 1920,
+      right = 0,
+      top = 1080,
+      bottom = 0;
+    for (let y = 188; y < 772; y++)
+      for (let x = 676; x < 1244; x++) {
+        const offset = (y * 1920 + x) * 4;
+        if (
+          Math.max(
+            ...[0, 1, 2].map((channel) =>
+              Math.abs(pixels[offset + channel] - base[offset + channel]),
+            ),
+          ) > 80
+        ) {
+          left = Math.min(left, x);
+          right = Math.max(right, x);
+          top = Math.min(top, y);
+          bottom = Math.max(bottom, y);
+        }
+      }
+    return { width: right - left, height: bottom - top };
+  };
+  const small = bounds(short),
+    large = bounds(tall);
+  assert.ok(Math.abs(small.width - large.width) <= 2, 'Height must not widen the clock');
+  assert.ok(large.height > small.height * 2.2, 'Height control must stretch the actual glyphs');
   console.log(
     'Native depth-clock checks passed: real glyph occlusion, colour matching, gradient toggle, readable clock and unobscured dock.',
   );

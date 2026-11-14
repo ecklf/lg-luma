@@ -131,6 +131,8 @@ fn text_damages_the_full_width_of_its_line() {
         tracking: 0.,
         line_height: 1.2,
         align_right: false,
+        vertical_scale: 1.,
+        glass: false,
     };
     let clock = |value: &str| {
         Draw::Text(
@@ -146,6 +148,28 @@ fn text_damages_the_full_width_of_its_line() {
     let damage = area(tracker.damage(1));
     assert_eq!((damage.x, damage.w), (0., 1920.));
     assert_eq!((damage.y, damage.h), (20., 70.));
+}
+
+#[test]
+fn clock_height_and_glass_material_invalidate_text_damage() {
+    let clock = |style| {
+        Draw::Text(
+            "20:41".into(),
+            Rect::new(676., 188., 568., 540.),
+            style,
+            [1.; 4],
+            true,
+        )
+    };
+    let mut tracker = Tracker::default();
+    tracker.push(&[wallpaper(), clock(TextStyle::new(180.))]);
+    tracker.push(&[wallpaper(), clock(TextStyle::new(180.).stretched(2.5))]);
+    assert!(tracker.damage(1).unwrap().h >= 540.);
+    tracker.push(&[
+        wallpaper(),
+        clock(TextStyle::new(180.).stretched(2.5).glass(true)),
+    ]);
+    assert!(tracker.damage(1).unwrap().h >= 540.);
 }
 
 #[test]

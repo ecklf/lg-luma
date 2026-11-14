@@ -40,6 +40,9 @@ The Clock widget supports a **depth effect** on bundled photo backgrounds: foreg
 can cover the lower part of its oversized digits. Masks are generated ahead of time, not on the
 TV. Turn it off in **Settings → Widgets → Clock depth effect**. A normal clock is used for
 uploaded/abstract backgrounds, cells without a readable depth placement, or missing mask assets.
+**Clock height** cycles from 100% to 300%, stretching the vector digits vertically without
+widening them (capped to the available slot). **Clock appearance** switches between Plain and
+Glass, with cool highlights and wallpaper refraction. Both controls are under **Settings → Widgets**.
 
 Home uses Liquid Glass controls over your wallpaper, a floating favorites dock, and a weather
 block with a condition icon, temperature, condition, and location. The greeting and standalone

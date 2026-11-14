@@ -90,9 +90,9 @@ pub fn bounds(command: &Draw) -> Option<Rect> {
         // Glyphs may extend past their layout box: redraw the full width of the line.
         Draw::Text(_, rect, style, ..) => Some(Rect::new(
             0.,
-            rect.y - style.size,
+            rect.y - style.size * style.vertical_scale,
             1920.,
-            rect.h + 2. * style.size,
+            rect.h + 2. * style.size * style.vertical_scale,
         )),
         Draw::Clip(_) | Draw::EdgeFade(_) | Draw::EdgeFadeX(_) => None,
     }
@@ -119,6 +119,8 @@ fn same(a: &Draw, b: &Draw) -> bool {
                 && s1.tracking == s2.tracking
                 && s1.line_height == s2.line_height
                 && s1.align_right == s2.align_right
+                && s1.vertical_scale == s2.vertical_scale
+                && s1.glass == s2.glass
                 && c1 == c2
                 && x1 == x2
         }

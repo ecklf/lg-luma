@@ -68,6 +68,27 @@ fn clock_depth_toggle_saves_without_changing_widget_assignments() {
 }
 
 #[test]
+fn clock_height_and_material_save_and_recover_invalid_heights() {
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::WIDGETS_SECTION;
+    state.focus = Target::ClockHeight;
+    for height in [125, 150, 175, 200, 250, 300, 100] {
+        assert_eq!(state.activate(), vec![Effect::Save]);
+        assert_eq!(state.preferences.home_clock_height, height);
+    }
+    state.focus = Target::ClockGlass;
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.home_clock_glass);
+    let restored: Preferences =
+        serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
+    assert!(restored.home_clock_glass);
+    state.preferences.home_clock_height = u16::MAX;
+    state.preferences.sanitize();
+    assert_eq!(state.preferences.home_clock_height, 100);
+}
+
+#[test]
 fn legacy_preferences_default_to_weather_and_widget_assignments_stay_unique() {
     use crate::model::{HomeLayout, HomeWidget};
     let mut preferences: Preferences = serde_json::from_str("{}").unwrap();
