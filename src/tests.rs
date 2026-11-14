@@ -324,12 +324,14 @@ fn keyboard_is_modal_and_back_restores_its_setting_after_editing() {
 #[test]
 fn partial_refresh_preserves_valid_inputs_and_never_invents_tv_apps() {
     let mut state = ready();
+    let channels = state.inventory.channels.len();
     state.set_inventory(
         crate::model::Inventory::default(),
-        Some("Inputs unavailable".into()),
+        Some("Inputs could not be refreshed: unavailable. Channels could not be refreshed: unavailable".into()),
     );
     assert!(state.inventory.apps.is_empty());
     assert_eq!(state.inventory.inputs.len(), 3);
+    assert_eq!(state.inventory.channels.len(), channels);
     assert_eq!(state.first_content(), Target::WeatherConfigure);
 }
 
@@ -2591,9 +2593,9 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
                 .iter()
                 .filter(|c| matches!(c.target, Target::Widget(_)))
                 .count(),
-            3
+            4
         );
-        for key in ["widgets", "weather", "shortcuts", "inputs"] {
+        for key in ["widgets", "weather", "shortcuts", "inputs", "channels"] {
             assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t(key))), "{key}/{language:?}");
         }
         state.pointer_focus(Target::Sidebar(0));
