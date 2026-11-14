@@ -36,7 +36,7 @@
 - QR Code generator (`qrcodegen`): Project Nayuki, MIT; `assets/licenses/qrcodegen.txt`.
 - Local interface discovery (`if-addrs`): MaidSafe.net limited and messense, MIT;
   `assets/licenses/if-addrs.txt`.
-- `assets/ui-icons/upload.svg` and `assets/wallpaper-upload/`: original Luma artwork/UI, MIT.
+- `assets/ui-icons/upload.svg`, `assets/ui-icons/input-disk.svg` and `assets/wallpaper-upload/`: original Luma artwork/UI, MIT.
 
 The bundled icon/logo SVG sources are compiled into derived `.lvec` triangles with the same
 source licenses. Apple TV, Disney+, Prime Video and Das Erste retain the white display treatment.

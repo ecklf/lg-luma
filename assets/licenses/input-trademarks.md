@@ -9,11 +9,10 @@ all trademarks remain the property of their respective owners.
 | Sony | [Sony wordmark](https://commons.wikimedia.org/wiki/File:Sony_logo.svg), Sony / Yasuo Kuroki |
 | DVD | [DVD logo](https://commons.wikimedia.org/wiki/File:DVD_logo.svg), DVD Forum, extracted from the official member PDF |
 | Blu-ray | [Blu-ray Disc logo](https://commons.wikimedia.org/wiki/File:Blu-ray_Disc.svg), Blu-ray Disc Association, derived from the press EPS |
-| Disk | [Compact Disc wordmark](https://commons.wikimedia.org/wiki/File:Compact_Disc_wordmark.svg), Sony / Philips |
 
 The linked Commons descriptions classify these text/geometric logos as **PD-textlogo**.
 That copyright classification does not grant trademark rights or certify a device.
-“Disk” uses the Compact Disc trademark: a generic disk has no official trademark logo.
+“Disk” uses an original generic disc icon, not trademark artwork.
 
 `tools/input-trademark-assets.mjs` pins SHA-256 hashes of the original downloads.
 It preserves the complete mark and its paths, centers it in a square viewport without

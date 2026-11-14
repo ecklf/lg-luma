@@ -34,7 +34,6 @@ test('input trademark marks retain pinned artwork and render without distortion'
     sony: 'd71dc296ee3e376ff1082776d0ba7b9a779ae13909b696635ce87e112d2f70c7',
     dvd: '23cbe414dcf8eec711d1ca58cce9319a1ce13b5095a69b16e85c35c05fba71ec',
     'blu-ray': '28fcf3afb168cafdc8be275ec8b0d3f06475b56a5a8f6eeb82413434da1ecb18',
-    disk: '16ae4b2b233c88e603137ea237485ef6ab2034390eedd943cbd5d753d982549b',
   };
   for (const [name, file, originalHash] of inputSources) {
     assert.match(originalHash, /^[0-9a-f]{64}$/);
@@ -62,6 +61,22 @@ test('input trademark marks retain pinned artwork and render without distortion'
   assert.ok(prepared.includes('viewBox="0 0 512 128"'));
   assert.ok(prepared.includes('<path d="M0 0h512v128H0z"/>'));
   assert.match(prepared, /width="24" height="24"/);
+});
+
+test('disk input uses a generic disc icon rather than the Compact Disc wordmark', async () => {
+  assert.ok(!inputSources.some(([name]) => name === 'disk'));
+  const svg = await fs.readFile(
+    new URL('../assets/ui-icons/input-disk.svg', import.meta.url),
+    'utf8',
+  );
+  assert.doesNotMatch(svg, /Compact_Disc|<image\b|<text\b/);
+  assert.match(svg, /<circle/);
+  const { data } = await sharp(Buffer.from(svg))
+    .resize(128, 128)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  assert.ok(data.some((value, index) => index % 4 === 3 && value > 0));
 });
 
 test('source preparation preserves paths and removes component syntax and redundant clipping', () => {

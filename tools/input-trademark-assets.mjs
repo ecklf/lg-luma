@@ -11,11 +11,6 @@ export const sources = [
     'Blu-ray_Disc.svg',
     '575bfcc076b9b137c71b3aa039c1ac1aa2d0fcfb667774496250b82a0dc2d7b1',
   ],
-  [
-    'disk',
-    'Compact_Disc_wordmark.svg',
-    'fd0c6fa71b72b6887611511b99e25dca128ec46d0f62aaf246932bc3c29103b1',
-  ],
 ];
 
 export function sourceUrl(file) {

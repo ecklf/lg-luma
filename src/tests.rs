@@ -22,6 +22,9 @@ mod input_icon_tests;
 #[path = "glass-home-tests.rs"]
 mod glass_home_tests;
 
+#[path = "app-sorting-tests.rs"]
+mod app_sorting_tests;
+
 fn ready() -> State {
     let mut state = State::new(Preferences::default());
     state.set_inventory(demo_inventory(), None);

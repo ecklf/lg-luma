@@ -24,7 +24,7 @@ const RECENTS_BACKDROP_OPACITY: f32 = 0.86;
 fn input_icon_width(name: &str, size: f32) -> f32 {
     size * match name {
         "input-sony" => 5. / 3.,
-        "input-apple-tv" | "input-dvd" | "input-blu-ray" | "input-disk" => 4. / 3.,
+        "input-apple-tv" | "input-dvd" | "input-blu-ray" => 4. / 3.,
         "input-playstation" => 7. / 6.,
         _ => 1.,
     }
@@ -1954,6 +1954,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Inputs) => language.t("inputs"),
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
+                Some(Subpage::AppSorting) => language.t("appSorting"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
                 _ => "",
             };
@@ -2129,6 +2130,16 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 .into_iter()
                 .map(|option| (option.name(), None, option == language))
                 .collect(),
+            Subpage::AppSorting => crate::model::AppSorting::ALL
+                .into_iter()
+                .map(|mode| {
+                    (
+                        language.t(mode.label_key()),
+                        None,
+                        mode == state.preferences.app_sorting,
+                    )
+                })
+                .collect(),
             Subpage::TextRendering => crate::text_rendering::TextRendering::ALL
                 .into_iter()
                 .map(|mode| {
@@ -2195,6 +2206,13 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             for (position, (index, key, icon, value, chevron)) in [
                 (1, "clock", "clock", None, true),
                 (4, "language", "language", Some(language.name()), true),
+                (
+                    10,
+                    "appSorting",
+                    "grid",
+                    Some(language.t(state.preferences.app_sorting.label_key())),
+                    true,
+                ),
                 (
                     2,
                     "reducedMotion",
