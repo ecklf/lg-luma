@@ -760,14 +760,7 @@ fn header(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) 
             out.shape(
                 Rect::new(x + 34. + icon_width + label_width, 76., 8., 8.),
                 4.,
-                c(
-                    if input.connected == Some(true) {
-                        0x60e6a0
-                    } else {
-                        0x8c949c
-                    },
-                    (progress - 0.55) / 0.45,
-                ),
+                c(input_status_color(input), (progress - 0.55) / 0.45),
             );
         }
         out.control(target, rect, false);
@@ -858,7 +851,7 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
                         .input_icon(&input.id)
                         .unwrap_or_else(|| input_icon(input, state.preferences.input_name(input)))
                 ),
-                input.connected,
+                input_status_color(input),
             )
         })
         .collect();
@@ -882,7 +875,7 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
             true,
         );
     }
-    for (index, (target, label, icon, connected)) in entries.into_iter().enumerate() {
+    for (index, (target, label, icon, status_color)) in entries.into_iter().enumerate() {
         let rect = Rect::new(
             panel.x + 12.,
             panel.y + 12. + index as f32 * 76.,
@@ -910,14 +903,7 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
         out.shape(
             Rect::new(rect.x + rect.w - 28., rect.y + 29., 10., 10.),
             5.,
-            c(
-                if connected == Some(true) {
-                    0x60e6a0
-                } else {
-                    0x8c949c
-                },
-                1.,
-            ),
+            c(status_color, 1.),
         );
         out.control(target, rect, false);
     }
@@ -3118,6 +3104,14 @@ fn device_icon(name: &str) -> &'static str {
         "hdmi"
     }
 }
+fn input_status_color(input: &Input) -> u32 {
+    match (input.connected, input.signal) {
+        (Some(true), Some(false)) => 0xf5b84b,
+        (Some(true), _) => 0x60e6a0,
+        _ => 0x8c949c,
+    }
+}
+
 /// Detail under an input title: the TV's own label (when connected and not just
 /// the port), the port when a custom name replaces it, then the status.
 pub fn input_status(input: &Input, renamed: bool, language: Language) -> String {
