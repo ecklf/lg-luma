@@ -5,8 +5,8 @@ use crate::{
     app_artwork,
     model::{App, ChannelProgram, Input, Inventory, demo_inventory, valid_app_id},
 };
-use std::collections::HashMap;
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use std::{collections::HashSet, sync::mpsc, thread};
 
 #[path = "platform-install.rs"]
@@ -285,11 +285,9 @@ impl Platform {
                     } else {
                         Ok(demo_channel_guide(&desktop_inventory.channels, &ids))
                     }),
-                    Request::OpenChannel(id) => Response::Launched(if webos {
-                        open_channel(&id)
-                    } else {
-                        Ok(())
-                    }),
+                    Request::OpenChannel(id) => {
+                        Response::Launched(if webos { open_channel(&id) } else { Ok(()) })
+                    }
                     Request::Uninstall(id) => {
                         // Validate again at the worker boundary, not just in the UI.
                         let result = uninstall_request(&id).and_then(|(_, _)| {
@@ -841,16 +839,19 @@ fn demo_channel_guide(
 ) -> HashMap<String, ChannelProgram> {
     ids.iter()
         .filter_map(|id| {
-            channels.iter().find(|channel| &channel.id == id).map(|channel| {
-                (
-                    id.clone(),
-                    ChannelProgram {
-                        title: format!("Now on {}", channel.name),
-                        start: None,
-                        end: None,
-                    },
-                )
-            })
+            channels
+                .iter()
+                .find(|channel| &channel.id == id)
+                .map(|channel| {
+                    (
+                        id.clone(),
+                        ChannelProgram {
+                            title: format!("Now on {}", channel.name),
+                            start: None,
+                            end: None,
+                        },
+                    )
+                })
         })
         .collect()
 }

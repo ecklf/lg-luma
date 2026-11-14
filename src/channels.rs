@@ -63,7 +63,9 @@ pub fn normalize_channels(raw: &Value) -> Result<Vec<Channel>, String> {
             .get("imgUrl")
             .and_then(Value::as_str)
             .map(str::trim)
-            .filter(|url| !url.is_empty() && url.len() <= 4096 && !url.chars().any(char::is_control))
+            .filter(|url| {
+                !url.is_empty() && url.len() <= 4096 && !url.chars().any(char::is_control)
+            })
             .filter(|url| {
                 let path = Path::new(url.strip_prefix("file://").unwrap_or(url));
                 path.is_absolute()
@@ -136,11 +138,9 @@ pub fn guide_time(value: Option<&str>) -> Option<u64> {
     let hour: u8 = parts[3].parse().ok()?;
     let minute: u8 = parts[4].parse().ok()?;
     let second: u8 = parts.get(5).and_then(|s| s.parse().ok()).unwrap_or(0);
-    let date = time::Date::from_calendar_date(year, time::Month::try_from(month).ok()?, day).ok()?;
-    let datetime = date
-        .with_hms(hour, minute, second)
-        .ok()?
-        .assume_utc();
+    let date =
+        time::Date::from_calendar_date(year, time::Month::try_from(month).ok()?, day).ok()?;
+    let datetime = date.with_hms(hour, minute, second).ok()?.assume_utc();
     Some(datetime.unix_timestamp().max(0) as u64)
 }
 

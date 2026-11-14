@@ -875,8 +875,7 @@ impl State {
     }
 
     pub fn home_channels(&self) -> Vec<&crate::model::Channel> {
-        self.preferences
-            .channel_favorites(&self.inventory.channels)
+        self.preferences.channel_favorites(&self.inventory.channels)
     }
 
     /// Settings → Channels list: Home favorites first, then the rest of the map.
@@ -975,7 +974,11 @@ impl State {
         }
         if let Target::ChannelFavorite(id) = &self.focus
             && self.subpage == Some(Subpage::Channels)
-            && !self.inventory.channels.iter().any(|channel| &channel.id == id)
+            && !self
+                .inventory
+                .channels
+                .iter()
+                .any(|channel| &channel.id == id)
         {
             self.focus = self
                 .inventory
