@@ -37,6 +37,16 @@
 - Local interface discovery (`if-addrs`): MaidSafe.net limited and messense, MIT;
   `assets/licenses/if-addrs.txt`.
 - `assets/ui-icons/upload.svg` and `assets/wallpaper-upload/`: original Luma artwork/UI, MIT.
+- ONNX Runtime Web 1.31.1: Microsoft Corporation, MIT. The upload page serves the pinned
+  npm package's WASM-only module, loader and WASM binary to the owner's browser; it never
+  executes on the TV. Notices: `assets/licenses/onnxruntime-web.txt` and
+  `assets/licenses/onnxruntime-third-party.txt` (upstream v1.31.1 ThirdPartyNotices.txt).
+- `assets/wallpaper-masks/*.png`: grayscale derivatives of the corresponding bundled photo
+  wallpapers listed above, retaining their source licenses (including David Iliff's CC BY-SA 3.0
+  for Yosemite). Generated off-TV with [Depth Anything V2 Small](https://github.com/DepthAnything/Depth-Anything-V2),
+  Lihe Yang et al., Apache-2.0. The pinned ONNX model is not shipped. Checksums and provenance are
+  recorded in `assets/wallpaper-masks/manifest.json`. Generated transparent foregrounds reuse the
+  same licensed wallpaper pixels, crop and gradient as the background.
 
 The bundled icon/logo SVG sources are compiled into derived `.lvec` triangles with the same
 source licenses. Apple TV, Disney+, Prime Video and Das Erste retain the white display treatment.

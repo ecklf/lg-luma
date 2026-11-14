@@ -84,6 +84,9 @@ OpenGL framebuffers. The weather origin is loopback-only, so no real weather API
 The update-card preview uses simulated version `99.0.0`, without a network request or installation.
 It does not execute the test suites. A desktop display is required; on headless Linux use
 `xvfb-run -a pnpm screenshots`. These images document the native design, not TV hardware behavior.
+`pnpm screenshots --widgets` refreshes only the three Home layouts, widget settings, the masked
+clock on Summit, a cropped clock detail, and tall glass-clock previews with and without depth.
+All captures come from the actual native renderer.
 
 ### Input
 
@@ -94,6 +97,73 @@ preset and each visible assignment with OK or Right. Empty slots render nothing,
 workers only run when Weather is assigned to a visible slot and enabled. Legacy greeting/date
 visibility preferences do not override explicit slot assignments. Layouts use the logical
 1920×1080 coordinate space above the unchanged favorites dock.
+
+### Clock foreground masks
+
+`home_clock_height` selects 100, 125, 150, 175, 200, 250 or 300 percent. Height is capped to
+the widget cell and its centre is clamped to keep the full line inside it. Vector run geometry
+stretches vertically without changing horizontal advances, and inverse-transpose normals retain
+physical-pixel AA. Stretch and material participate in text caching and damage invalidation.
+`home_clock_glass` defaults false. Glass text uses a separate text fragment shader with cool
+reflections, a luminous analytic edge and the existing bounded wallpaper backdrop textures.
+Other text keeps its unchanged flat shader path. No proprietary Apple font is used or shipped.
+
+`home_clock_depth` defaults on. Asset preparation combines checked-in grayscale masks with the
+final shaded and unshaded wallpaper pixels, so the foreground has exactly the same crop and
+colours as the wallpaper. The Home view draws the clock, clips to its widget cell, then composites
+the transparent foreground before the dock and header. Foregrounds are excluded from wallpaper
+folding and Liquid Glass backdrop selection. They add no input controls. During wallpaper
+crossfades, missing assets, uploaded backgrounds without a mask, abstract backgrounds, or cells without a safe placement,
+the ordinary clock is used. The texture cache retains its existing memory budget.
+
+The six photo masks in `assets/wallpaper-masks/` were generated with Depth Anything V2 Small
+(Apache-2.0), using the pinned q8 ONNX export from
+`onnx-community/depth-anything-v2-small@4472b7362082ad9968fee890ca0f1e5aca36b93d`.
+The manifest records source/mask/model checksums, depth thresholds and per-cell placement centres.
+The generator chooses lightly occluded positions and leaves unsuitable cells without an effect.
+Bundled mask preparation uses the checked-in masks offline and ships no model weights or TV-side
+inference runtime. The upload page additionally serves a browser-only WASM runtime as described below.
+
+To regenerate after changing a photo, use Python with `numpy`, `Pillow`, and `onnxruntime`.
+The command prepares fresh inference frames with the same crop/colour pipeline as the wallpaper.
+Download `onnx/model_quantized.onnx` from that
+pinned revision, then run `pnpm assets:depth --model /path/to/model_quantized.onnx` and `pnpm assets`.
+The script checks model SHA-256 `fcf51f1b230362b28690bb9d1809bf0431f29cad20534e3f589bd7285547f20d`
+before inference. Neither generation nor runtime uploads images. The optional model download
+is about 26 MiB. `pnpm test:depth` compares actual rendered clock pixels against the foreground
+alpha, including glyph occlusion and untouched controls. Use `xvfb-run -a` on headless Linux.
+
+### Uploaded foreground masks
+
+The upload page optionally runs checksum-pinned Depth Anything V2 Small in a dedicated
+browser worker using ONNX Runtime Web 1.31.1, single-threaded WASM. Model weights download
+only on **Generate mask**; photographs never go to Hugging Face. The runtime is served
+locally by the TV, but inference runs on the phone/computer. Private-LAN HTTP works without
+Web Crypto or cross-origin isolation: SHA-256 verification has a bounded JavaScript fallback.
+Generation requires a modern browser with WASM and OffscreenCanvas, sufficient memory,
+and internet for the model. Cancellation terminates the worker; generation times out after
+240 seconds. A matching manual PNG or ordinary photo-only upload remains available.
+
+After cropping, the preview offers a foreground cutoff and centered sample clock. Crop changes
+invalidate the mask. The preview clock is never baked into exported JPEGs. Optional real-model
+Firefox coverage uses an isolated profile and loopback model fixture with the production checksum:
+`LUMA_DEPTH_MODEL=/path/to/model_quantized.onnx pnpm test:wallpapers:browser`.
+Run `pnpm assets` first; ordinary tests do not download or run the model.
+
+Paired uploads retain the existing session URL, same-origin/Host checks and `X-Luma-Upload`
+capability header. Content type `application/x-luma-wallpaper` contains the eight-byte ASCII
+magic `LUMAWP01`, two big-endian u32 lengths (photo, mask), then exactly those photo and PNG
+bytes, with no trailing data. The combined 12 MiB limit still applies. Raw image uploads are
+unchanged. Masks must decode to nonuniform 1920×1080 PNGs under bounded decoder limits;
+foreground alpha is luminance multiplied by source alpha. The TV independently searches safe
+clock placements and derives foreground RGB from the final shaded and unshaded JPEGs.
+Photo, mask, foregrounds and placement metadata commit together by atomic directory rename.
+Missing/unsafe foreground files disable depth without hiding the wallpaper.
+
+Only the wallpaper companion CSP permits local WASM and Hugging Face model-data fetches;
+executable modules remain same-origin and runtime filenames are explicitly allowlisted.
+Other companion pages retain their stricter CSP. Runtime licenses and upstream third-party
+notices are included in `assets/licenses/`; see [assets.md](assets.md).
 
 | Input                         | Action                                                                       |
 | ----------------------------- | ---------------------------------------------------------------------------- |
@@ -982,8 +1052,8 @@ pnpm assets
 xvfb-run -a pnpm test:smoke
 ```
 
-CI prepares checks, unit tests, native assets and the desktop binary once. Four independent
-jobs run navigation/rendering, the brand gallery, mocked weather and translations in parallel,
+CI prepares checks, unit tests, native assets and the desktop binary once. Five independent
+jobs run navigation/rendering, depth-clock occlusion, the brand gallery, mocked weather and translations in parallel,
 each with its own Xvfb display, scratch preferences and diagnostic artifact. They consume a
 same-run tar archive that preserves the binary's executable mode and use `LUMA_SMOKE_SKIP_BUILD=1`
 to avoid compiling the same executable again. Local smoke commands still build by default.
@@ -1058,7 +1128,7 @@ also pass the existing checks, desktop smoke tests and native packaging build. O
 unmerged PRs and manual CI runs do not publish. To retry a failed publication, rerun the original
 CI run for the merged version PR's main-branch commit.
 
-The Actions graph now shows **Release eligibility → shared preparation → four parallel smoke
+The Actions graph now shows **Release eligibility → shared preparation → five parallel smoke
 suites + ARM package → aggregate validation → Publish release and Homebrew feed**. Eligibility
 runs on PRs and manual dispatches too, explicitly reporting validation-only rather than leaving
 a skipped job to interpret. The **Release rollout summary** runs even when earlier jobs fail,

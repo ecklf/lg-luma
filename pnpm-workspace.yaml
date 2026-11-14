@@ -7,3 +7,5 @@ ignoredBuiltDependencies:
   - '@webos-tools/cli'
   - cpu-features
   - ssh2
+  # The browser runtime uses prebuilt modules, not protobufjs's code-generation step.
+  - protobufjs

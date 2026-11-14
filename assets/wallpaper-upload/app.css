@@ -169,6 +169,42 @@ input[type='range'] {
   gap: 9px;
   margin-top: 22px;
 }
+.depth-tools {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid #ffffff18;
+}
+.depth-tools h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 560;
+}
+.depth-tools h2 span {
+  color: #89928d;
+  font-size: 12px;
+  font-weight: 400;
+}
+.depth-tools p {
+  color: #969e9a;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.depth-tools .actions {
+  margin-top: 12px;
+}
+.depth-tools .check {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin-top: 14px;
+  font-size: 12px;
+  color: #c4c9c5;
+}
+#cancel-mask,
+#clear-mask {
+  width: 100%;
+  margin-top: 12px;
+}
 button {
   flex: 1;
   min-height: 43px;

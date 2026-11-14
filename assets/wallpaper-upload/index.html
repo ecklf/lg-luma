@@ -35,6 +35,39 @@
         <label class="zoom" for="zoom"
           ><span>Zoom</span><input id="zoom" type="range" min="1" max="3" step="0.01" value="1"
         /></label>
+        <section class="depth-tools" aria-labelledby="depth-title">
+          <h2 id="depth-title">Foreground depth <span>optional</span></h2>
+          <p>
+            Generate a mask on this phone or computer. Downloads a verified ~26 MiB AI model from
+            Hugging Face. Your photo stays on this device until you save it to your TV.
+          </p>
+          <div class="actions">
+            <button id="generate-mask" type="button" class="secondary">Generate mask</button>
+            <button id="choose-mask" type="button" class="secondary">Use mask PNG</button>
+            <input id="mask-file" type="file" accept="image/png" hidden />
+          </div>
+          <button id="cancel-mask" type="button" class="secondary" hidden>Cancel generation</button>
+          <p class="hint">
+            For a manual mask, use a 1920 × 1080 PNG matching this crop: white is foreground, black
+            is background. Changing the crop clears its mask.
+          </p>
+          <div id="mask-controls" hidden>
+            <label id="cutoff-row" class="zoom" for="cutoff"
+              ><span>Foreground cutoff</span
+              ><input id="cutoff" type="range" min="1" max="254" step="1" value="10"
+            /></label>
+            <label class="check"
+              ><input id="use-mask" type="checkbox" checked /> Save foreground mask</label
+            >
+            <label class="check"><input id="show-mask" type="checkbox" /> Show mask only</label>
+            <p class="hint">
+              Preview uses a centered sample clock. Your TV keeps its own clock layout, height and
+              appearance.
+            </p>
+            <p id="mask-warning" class="hint"></p>
+            <button id="clear-mask" type="button" class="secondary">Remove mask</button>
+          </div>
+        </section>
         <div class="actions">
           <button id="change" type="button" class="secondary">Choose another</button>
           <button id="submit" type="submit">Save to TV</button>
