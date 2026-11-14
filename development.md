@@ -106,17 +106,17 @@ retain their manual order. The same order fills empty dock slots and the app dra
 `xvfb-run -a pnpm screenshots --sorting` captures the sorting settings, both app orders,
 and the generic disc input icon from the native desktop renderer using seeded local counts.
 
-| Input                         | Action                                                                       |
-| ----------------------------- | ---------------------------------------------------------------------------- |
-| Arrows                        | Move focus. Down from favorites opens the drawer, Up reaches corner controls |
-| OK / Enter                    | Activate on release                                                          |
-| Hold OK for 600 ms            | Reorder Home favorite or open app options                                    |
-| OK or Back in move mode       | Finish reordering without launching                                          |
+| Input                         | Action                                                                           |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| Arrows                        | Move focus. Down from favorites opens the drawer, Up reaches corner controls     |
+| OK / Enter                    | Activate on release                                                              |
+| Hold OK for 600 ms            | Reorder Home favorite or open app options                                        |
+| OK or Back in move mode       | Finish reordering without launching                                              |
 | Escape / Back / Backspace     | Parent navigation, overlay dismissal, channel switcher, or Recent apps from Home |
-| Hold Back / Escape for 600 ms | Channel switcher when a Home channel is focused; otherwise Recent apps       |
-| Menu / M / right-click        | App or background options side popup                                         |
-| Pointer / wheel               | Hover, click, hold and scrolling                                             |
-| F5                            | Refresh inventory                                                            |
+| Hold Back / Escape for 600 ms | Channel switcher when a Home channel is focused; otherwise Recent apps           |
+| Menu / M / right-click        | App or background options side popup                                             |
+| Pointer / wheel               | Hover, click, hold and scrolling                                                 |
+| F5                            | Refresh inventory                                                                |
 
 Backspace deletes while editing. Native Back uses SDL's webOS-specific keycode. Back dismisses
 the keyboard first; Weather Location then returns to its parent Location row, HDMI choices to
