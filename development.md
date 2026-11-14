@@ -229,6 +229,8 @@ using Automatic. This is a backward-compatible feature and does not change input
 
 Home favorites form one horizontal glass dock, never a second row. Left/Right follows saved order,
 including reorder mode, and reveals complete cards. Up reaches Inputs or the clock/settings control.
+Up from the drawer’s first app row dismisses the drawer immediately while preserving the
+corresponding dock app as the selected Home favorite. Up within later grid rows stays in the drawer.
 Down lifts the dock to the top and reveals a six-column app grid beneath it. Favorites stay in the
 dock instead of appearing twice in the grid. The drawer has no search or category toolbar.
 The Home dock follows saved pinned order, with no Apps button or Move apps label above it.

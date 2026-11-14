@@ -1778,8 +1778,9 @@ impl State {
                         Direction::Right => Some(Target::App(
                             apps[(index + 1).min(apps.len() - 1)].id.clone(),
                         )),
-                        Direction::Up if index < APPS_COLUMNS => Some(
-                            self.dock_apps()
+                        Direction::Up if index < APPS_COLUMNS => {
+                            let target = self
+                                .dock_apps()
                                 .get(index.min(self.dock_apps().len().saturating_sub(1)))
                                 .map_or(
                                     if index < 3 {
@@ -1787,9 +1788,13 @@ impl State {
                                     } else {
                                         Target::SettingsMenu
                                     },
-                                    |app| Target::DockApp(app.id.clone()),
-                                ),
-                        ),
+                                    |app| Target::App(app.id.clone()),
+                                );
+                            // Reaching the favorites row returns to Home immediately,
+                            // preserving the selected column instead of requiring another Up.
+                            self.open(0);
+                            Some(target)
+                        }
                         Direction::Up => Some(Target::App(apps[index - APPS_COLUMNS].id.clone())),
                         Direction::Down
                             if (index / APPS_COLUMNS + 1) * APPS_COLUMNS < apps.len() =>
