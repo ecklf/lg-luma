@@ -97,6 +97,7 @@ pub enum Target {
     WeatherToggle,
     WeatherLocation,
     WeatherTemperature,
+    WeatherStyle,
     WeatherQuery,
     WeatherSearch,
     WeatherClear,
@@ -166,6 +167,7 @@ pub enum Subpage {
     InputIcons(String),
     WeatherLocation,
     Temperature,
+    WeatherStyle,
     Language,
     AppSorting,
     TextRendering,
@@ -1261,6 +1263,10 @@ impl State {
                 self.subpage = Some(Subpage::Weather);
                 Target::WeatherTemperature
             }
+            Some(Subpage::WeatherStyle) => {
+                self.subpage = Some(Subpage::Weather);
+                Target::WeatherStyle
+            }
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
             Some(Subpage::AppSorting) => Target::Setting(10),
@@ -1623,6 +1629,7 @@ impl State {
                     | Target::WeatherToggle
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
+                    | Target::WeatherStyle
                     | Target::Widget(_)
             ) || (self.focus == Target::Setting(3) && self.subpage == Some(Subpage::Inputs)))
                 && matches!(direction, Direction::Left)
@@ -1637,6 +1644,7 @@ impl State {
                     | Target::InputMode(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
+                    | Target::WeatherStyle
             ) && matches!(direction, Direction::Right)
             {
                 return self.activate();
@@ -2431,6 +2439,14 @@ impl State {
                     self.panel_started = Some(Instant::now());
                 }
             }
+            Target::WeatherStyle => {
+                self.subpage = Some(Subpage::WeatherStyle);
+                self.focus = Target::Choice(self.preferences.weather_style.index());
+                self.scroll = 0.;
+                if !self.preferences.reduced_motion {
+                    self.panel_started = Some(Instant::now());
+                }
+            }
             Target::WeatherQuery => self.open_keyboard(TextField::Location),
             Target::GreetingToggle => {
                 self.preferences.show_greeting = !self.preferences.show_greeting;
@@ -2711,6 +2727,10 @@ impl State {
             }
             Target::Choice(index) => {
                 match self.subpage.clone() {
+                    Some(Subpage::WeatherStyle) => {
+                        self.preferences.weather_style =
+                            crate::model::WeatherStyle::ALL[index.min(2)];
+                    }
                     Some(Subpage::AppSorting) => {
                         self.preferences.app_sorting = crate::model::AppSorting::ALL[index.min(1)];
                     }
