@@ -722,6 +722,23 @@ fn invalid_ids_and_unrelated_manifests_cannot_select_private_artwork() {
 }
 
 #[test]
+fn channel_logo_files_under_lg_store_are_readable() {
+    let f = Fixture::new();
+    let dir = "/mnt/lg/cmn_data/channel_logo/major_logo_img";
+    f.put(&format!("{dir}/la1.png"), b"logo");
+    let source = files::IconSource {
+        id: "1_31_1_0_1008_494_8916".into(),
+        directory: Some(dir.into()),
+        large_icon: None,
+        icon: Some("la1.png".into()),
+    };
+    assert_eq!(
+        files::read_icons(&f, &source).unwrap()["icons"],
+        json!(["6c6f676f"])
+    );
+}
+
+#[test]
 fn splash_updates_tile_and_only_the_enabled_own_manifest_stage() {
     let f = Fixture::new();
     f.put_json(
