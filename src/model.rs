@@ -231,9 +231,35 @@ impl AppSorting {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WeatherStyle {
+    #[default]
+    Standard,
+    NoIcon,
+    Compact,
+}
+
+impl WeatherStyle {
+    pub const ALL: [Self; 3] = [Self::Standard, Self::NoIcon, Self::Compact];
+
+    pub fn label_key(self) -> &'static str {
+        match self {
+            Self::Standard => "weatherStyleStandard",
+            Self::NoIcon => "weatherStyleNoIcon",
+            Self::Compact => "weatherStyleCompact",
+        }
+    }
+
+    pub fn index(self) -> usize {
+        Self::ALL.iter().position(|style| *style == self).unwrap()
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
+    pub weather_style: WeatherStyle,
     pub app_sorting: AppSorting,
     pub app_launch_counts: BTreeMap<String, u64>,
     pub favorites: Option<Vec<String>>,
@@ -277,6 +303,7 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
+            weather_style: WeatherStyle::default(),
             app_sorting: AppSorting::default(),
             app_launch_counts: BTreeMap::new(),
             favorites: None,

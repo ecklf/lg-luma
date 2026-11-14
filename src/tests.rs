@@ -25,6 +25,9 @@ mod glass_home_tests;
 #[path = "app-sorting-tests.rs"]
 mod app_sorting_tests;
 
+#[path = "weather-style-tests.rs"]
+mod weather_style_tests;
+
 fn ready() -> State {
     let mut state = State::new(Preferences::default());
     state.set_inventory(demo_inventory(), None);
