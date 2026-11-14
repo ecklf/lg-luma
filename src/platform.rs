@@ -109,7 +109,7 @@ impl ForegroundCheck {
 )]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Lifecycle {
-    /// Bring the running instance to the front instead of a restart.
+    /// Bring the running instance to the front for an ordinary launch, not a preload.
     Relaunch,
     /// Exit.
     Close,
@@ -128,11 +128,27 @@ impl Lifecycle {
             .or_else(|| reply.get("message"))
             .and_then(Value::as_str)?;
         match name {
-            "relaunch" => Some(Self::Relaunch),
+            // SAM can preload an already-running Home too. Do not post a foreground
+            // activation, reset its UI, refresh inventory, or arm the foreground watchdog.
+            "relaunch"
+                if preload_mode(reply).is_none()
+                    && reply.get("parameters").and_then(preload_mode).is_none() =>
+            {
+                Some(Self::Relaunch)
+            }
             "close" => Some(Self::Close),
             _ => None,
         }
     }
+}
+
+/// A nonempty SAM preload mode means a background request, including future modes.
+/// Shared by initial launch metadata and lifecycle relaunch parameters.
+pub fn preload_mode(metadata: &Value) -> Option<&str> {
+    metadata
+        .get("preload")
+        .and_then(Value::as_str)
+        .filter(|mode| !mode.is_empty())
 }
 
 /// Directory holding assets/, lib/ and splash/: next to the executable, or the installed
