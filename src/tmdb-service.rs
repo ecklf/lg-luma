@@ -153,7 +153,7 @@ impl Client {
             Catalog::Providers(ids) => {
                 let mut last = Err("No TMDB providers".into());
                 for id in *ids {
-                    match self.discover_provider(key, region, language, *id) {
+                    match self.discover_provider(&key, region, language, *id) {
                         Ok(shows) => {
                             if !shows.is_empty() {
                                 last = Ok(shows);
@@ -166,7 +166,7 @@ impl Client {
                 }
                 last?
             }
-            Catalog::AllPlatforms => self.discover_all_platforms(key, region, language)?,
+            Catalog::AllPlatforms => self.discover_all_platforms(&key, region, language)?,
         };
         let mut shows = raw;
         for show in &mut shows {
