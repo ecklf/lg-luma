@@ -43,15 +43,27 @@ try {
   for (const [index, logo] of logos.entries()) {
     const app = inventory.find((app) => app.brand === logo);
     assert.ok(app, `Desktop demo is missing ${logo}`);
+    // Put this app first in the management gallery without the removed search UI.
+    await fs.writeFile(
+      preferences,
+      JSON.stringify({
+        reduced_motion: true,
+        show_weather: false,
+        show_app_names: true,
+        favorites: [app.id],
+      }),
+    );
     run(binary, [
       '--preferences',
       preferences,
       '--script',
-      `apps,type:${app.title},back`,
+      'settings,down,enter',
       '--frames',
       '18',
       '--screenshot',
       screenshot,
+      '--capture-scale',
+      '1',
       '--dump-state',
       dump,
       '--diagnostics',
@@ -59,12 +71,14 @@ try {
     ]);
     const state = JSON.parse(await fs.readFile(dump, 'utf8'));
     const report = JSON.parse(await fs.readFile(diagnostics, 'utf8'));
-    assert.ok(state.apps.includes(app.id), `${logo} must be searchable in the demo`);
+    assert.deepEqual(state.focus, { App: app.id }, `${logo} must be first in the gallery`);
+    assert.ok(state.apps.includes(app.id), `${logo} must be manageable in the demo`);
     assert.equal(report.capture.missing_images, 0, `Missing artwork for ${logo}`);
     assert.equal(report.capture.glyph_failures, 0, `Invalid caption for ${logo}`);
     assert.ok(report.capture.vector_meshes > 0);
     const input = await sharp(screenshot)
-      .extract({ left: 78, top: 264, width: 282, height: 238 })
+      .extract({ left: 628, top: 154, width: 384, height: 294 })
+      .resize(282, 238, { fit: 'contain', background: '#11151b' })
       .png()
       .toBuffer();
     cards.push({ input, left: (index % 6) * 282, top: Math.floor(index / 6) * 238 });
