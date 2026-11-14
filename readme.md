@@ -169,6 +169,8 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 > [!NOTE]
 > Takeover is supported on **webOS 5, 6, 24, 25 and 26**.\
 > On 5, 6 and 24 it replaces the Home executable; on 25 and 26 it mounts Luma's Home app.\
+> **webOS 7 (webOS 22)** can also use executable takeover when LG Home is native and declares
+> lifecycle v2. This path is experimental and has not been verified on a webOS 7 TV.\
 > The takeover does not delete LG Home: it remains underneath a temporary mount, which is cleared by
 > a reboot. If Luma is uninstalled first, LG Home returns on reboot, but the separate takeover boot
 > hook remains and logs an error because it can no longer find Luma. No TV reset is needed. For
@@ -205,12 +207,16 @@ Boot log: `/var/lib/luma-home/boot.log`. See the
 [development guide](development.md#optional-native-home-integration) for implementation details.
 
 <details>
-<summary>Method for webOS 5 / 6 / 24</summary>
+<summary>Method for webOS 5 / 6 / 7 / 24</summary>
 
 On **webOS 5, 6 and 24**, SAM cannot reread a mounted Home manifest, so `home.sh enable` instead
 bind-mounts Luma's executable over LG's `/usr/bin/com.webos.app.home`. LG's Home manifest stays
 in place and Luma registers with SAM itself, so the Home key brings the running Luma back instead
 of restarting it. The commands and the cold-boot hook are the same.
+
+webOS 7 uses this same executable method, with the native Home and lifecycle-v2 checks retained.
+Verify the remote Home key, disable/restore, standby and cold boot on the target TV before relying
+on it. Automated fixtures do not establish hardware compatibility.
 
 webOS 24 belongs here rather than with 25/26 because its SAM has no `releaseBlockSystemApp`, so a
 mounted Home manifest is never reread and the manifest method fails on that missing method.
