@@ -16,10 +16,13 @@ playback, Recent apps and Close all. Two software restarts verified startup in
 Luma. An additional real-TV key test exercised app launch, Home, Recent apps and
 Close all, and checked that Home, inputs and system services remained running.
 Disable/re-enable restored LG's original behavior and then Luma's routing.
-The live tests used the earlier 3.1-based local build. The contribution is rebased
-onto 3.2.1 and receives separate code, rendering and ARM package checks; that
-rebased package has not been deployed to the TV. Hard power removal and all
-Quick Start/standby combinations were not tested.
+The startup and restoration tests used the earlier 3.1-based local build. A later
+3.2.1-based contribution package was installed on the same TV. Live key checks
+confirmed Up closes only the selected app, Down reaches the bottom-center Close
+all button, Up from that button returns without closing, and Down then OK closes
+the remaining normal apps. Home routing and byte-identical preferences and remote
+mapping files were retained. Hard power removal and all Quick Start/standby
+combinations were not tested.
 
 ## Enable or restore
 
@@ -91,3 +94,5 @@ TV screenshots or the owner's installed-app data:
 ![Optional tabbed Home](previews/webos4/tabbed-home.png)
 
 ![General settings navigation switch](previews/webos4/navigation-setting.png)
+
+![Recent apps with bottom-center Close all](previews/webos4/recents.png)
