@@ -30,9 +30,12 @@ pub enum Language {
     Vi,
     Nl,
     Sv,
+    Cs,
+    Ca,
 }
 impl Language {
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 15] = [
+        Self::Ca,
         Self::De,
         Self::En,
         Self::Es,
@@ -43,6 +46,7 @@ impl Language {
         Self::Pt,
         Self::Sv,
         Self::Vi,
+        Self::Cs,
         Self::Ru,
         Self::Zh,
         Self::ZhTw,
@@ -62,6 +66,8 @@ impl Language {
             Self::Vi => "vi",
             Self::Nl => "nl",
             Self::Sv => "sv",
+            Self::Cs => "cs",
+            Self::Ca => "ca",
         }
     }
     pub fn name(self) -> &'static str {
@@ -79,6 +85,8 @@ impl Language {
             Self::Vi => "Tiếng Việt",
             Self::Nl => "Nederlands",
             Self::Sv => "Svenska",
+            Self::Cs => "Čeština",
+            Self::Ca => "Català",
         }
     }
     pub fn index(self) -> usize {
@@ -109,15 +117,7 @@ impl Language {
         }
         value
     }
-    pub fn category(self, value: &str) -> &str {
-        match value {
-            "Streaming" => self.t("categoryStreaming"),
-            "Music" => self.t("categoryMusic"),
-            "Gaming" => self.t("categoryGaming"),
-            "Utilities" => self.t("categoryUtilities"),
-            _ => self.t("categoryUtilities"),
-        }
-    }
+    #[cfg(test)]
     pub fn greeting(self, hour: u8, name: &str) -> String {
         let key = match hour {
             0..=4 => "greetingNight",
@@ -132,6 +132,7 @@ impl Language {
             self.format(&format!("{key}Named"), &[("name", name)])
         }
     }
+    #[cfg(test)]
     pub fn date(self, now: OffsetDateTime) -> String {
         let weekday = now.weekday().number_days_from_monday() as usize;
         let month = now.month() as usize - 1;
@@ -441,6 +442,62 @@ impl Language {
                 ][month]
             )
             .to_uppercase(),
+            Self::Cs => format!(
+                "{} {}. {}",
+                [
+                    "pondělí",
+                    "úterý",
+                    "středa",
+                    "čtvrtek",
+                    "pátek",
+                    "sobota",
+                    "neděle"
+                ][weekday],
+                now.day(),
+                [
+                    "ledna",
+                    "února",
+                    "března",
+                    "dubna",
+                    "května",
+                    "června",
+                    "července",
+                    "srpna",
+                    "září",
+                    "října",
+                    "listopadu",
+                    "prosince"
+                ][month]
+            )
+            .to_uppercase(),
+            Self::Ca => format!(
+                "{}, {} {}",
+                [
+                    "dilluns",
+                    "dimarts",
+                    "dimecres",
+                    "dijous",
+                    "divendres",
+                    "dissabte",
+                    "diumenge"
+                ][weekday],
+                now.day(),
+                [
+                    "de gener",
+                    "de febrer",
+                    "de març",
+                    "d’abril",
+                    "de maig",
+                    "de juny",
+                    "de juliol",
+                    "d’agost",
+                    "de setembre",
+                    "d’octubre",
+                    "de novembre",
+                    "de desembre"
+                ][month]
+            )
+            .to_uppercase(),
         }
     }
     pub fn clock(self, now: OffsetDateTime, hour24: bool, seconds: bool) -> String {
@@ -473,11 +530,13 @@ impl Language {
                 now.minute()
             )
         } else {
-            format!(
-                "{hour}:{:02} {}",
-                now.minute(),
-                if now.hour() >= 12 { "PM" } else { "AM" }
-            )
+            let period = match (self, now.hour() >= 12) {
+                (Self::Ca, false) => "a. m.",
+                (Self::Ca, true) => "p. m.",
+                (_, false) => "AM",
+                (_, true) => "PM",
+            };
+            format!("{hour}:{:02} {period}", now.minute())
         }
     }
 }
@@ -498,6 +557,8 @@ pub fn deserialize_language<'de, D: Deserializer<'de>>(
             Some("vi") => Language::Vi,
             Some("nl") => Language::Nl,
             Some("sv") => Language::Sv,
+            Some("cs") => Language::Cs,
+            Some("ca") => Language::Ca,
             _ => Language::En,
         },
     )
@@ -573,6 +634,8 @@ mod tests {
                 super::Language::Vi => "Vietnamese",
                 super::Language::Nl => "Dutch",
                 super::Language::Sv => "Swedish",
+                super::Language::Cs => "Czech",
+                super::Language::Ca => "Catalan",
             };
             assert!(
                 description.contains(name),
@@ -661,14 +724,20 @@ mod tests {
             "Netflix toegevoegd aan favorieten."
         );
         assert_eq!(Language::Nl.greeting(2, "Ana"), "Nog wakker, Ana?");
-        assert_eq!(Language::Nl.category("Gaming"), "Games");
+        assert_eq!(Language::Nl.t("categoryGaming"), "Games");
         assert_eq!(
             Language::Sv.format("favoriteAdded", &[("app", "Netflix")]),
             "Netflix har lagts till bland favoriterna."
         );
         assert_eq!(Language::Sv.greeting(2, "Ana"), "Fortfarande uppe, Ana?");
-        assert_eq!(Language::Sv.category("Gaming"), "Spel");
-        assert_eq!(Language::De.category("Gaming"), "Spiele");
+        assert_eq!(Language::Sv.t("categoryGaming"), "Spel");
+        assert_eq!(
+            Language::Cs.format("favoriteAdded", &[("app", "Netflix")]),
+            "Přidáno do oblíbených: Netflix."
+        );
+        assert_eq!(Language::Cs.greeting(2, "Ana"), "Ještě vzhůru, Ana?");
+        assert_eq!(Language::Cs.t("categoryGaming"), "Hry");
+        assert_eq!(Language::De.t("categoryGaming"), "Spiele");
         assert_eq!(Language::En.greeting(15, ""), "Good afternoon.");
         assert_eq!(Language::En.greeting(15, "  Ana "), "Good afternoon, Ana.");
         assert_eq!(Language::Es.greeting(2, "Ana"), "¿Aún despiertos, Ana?");
@@ -697,6 +766,8 @@ mod tests {
         assert_eq!(Language::Nl.clock(now, true, false), "20:41");
         assert_eq!(Language::Sv.date(now), "ONSDAG 21 OKTOBER");
         assert_eq!(Language::Sv.clock(now, true, false), "20:41");
+        assert_eq!(Language::Cs.date(now), "STŘEDA 21. ŘÍJNA");
+        assert_eq!(Language::Cs.clock(now, true, false), "20:41");
         assert_eq!(Language::Zh.clock(now, false, false), "下午8:41");
         assert_eq!(Language::Zh.clock(now, false, true), "下午8:41:00");
         assert_eq!(Language::En.clock(now, true, false), "20:41");
@@ -752,5 +823,40 @@ mod tests {
                 .unwrap();
             assert_eq!(Language::Nl.date(now), expected);
         }
+    }
+
+    #[test]
+    fn czech_dates_use_genitive_months_and_accented_names() {
+        for (date, expected) in [
+            ("2024-02-29T00:05:00+01:00", "ČTVRTEK 29. ÚNORA"),
+            ("2026-05-01T12:00:00+02:00", "PÁTEK 1. KVĚTNA"),
+            ("2026-09-29T09:00:00+02:00", "ÚTERÝ 29. ZÁŘÍ"),
+            ("2026-12-27T20:41:00+01:00", "NEDĚLE 27. PROSINCE"),
+        ] {
+            let now = OffsetDateTime::parse(date, &time::format_description::well_known::Rfc3339)
+                .unwrap();
+            assert_eq!(Language::Cs.date(now), expected);
+        }
+    }
+
+    #[test]
+    fn catalan_dates_and_clock_use_local_conventions() {
+        for (date, expected) in [
+            ("2026-03-03T09:05:04+01:00", "DIMARTS, 3 DE MARÇ"),
+            ("2026-04-01T09:05:04+02:00", "DIMECRES, 1 D’ABRIL"),
+            ("2026-08-01T09:05:04+02:00", "DISSABTE, 1 D’AGOST"),
+            ("2026-10-21T20:41:00+02:00", "DIMECRES, 21 D’OCTUBRE"),
+        ] {
+            let now = OffsetDateTime::parse(date, &time::format_description::well_known::Rfc3339)
+                .unwrap();
+            assert_eq!(Language::Ca.date(now), expected);
+        }
+        let now = OffsetDateTime::parse(
+            "2026-10-21T20:41:00+02:00",
+            &time::format_description::well_known::Rfc3339,
+        )
+        .unwrap();
+        assert_eq!(Language::Ca.clock(now, true, false), "20:41");
+        assert_eq!(Language::Ca.clock(now, false, true), "8:41:00 p. m.");
     }
 }

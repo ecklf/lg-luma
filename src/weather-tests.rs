@@ -68,6 +68,9 @@ fn api_readings_and_conditions_cover_invalid_data_and_night() {
     for (code, day, icon) in [
         (0, false, "moon"),
         (0, true, "sun"),
+        (1, false, "partly-cloudy-night"),
+        (2, false, "partly-cloudy-night"),
+        (2, true, "partly-cloudy"),
         (45, true, "fog"),
         (56, true, "drizzle"),
         (81, true, "rain"),

@@ -80,7 +80,8 @@ fn diff(old: &[Draw], new: &[Draw]) -> Damage {
 /// The area a command can paint. `None` for state that affects everything drawn after it.
 pub fn bounds(command: &Draw) -> Option<Rect> {
     match command {
-        Draw::Shape(rect, ..)
+        Draw::Glass(rect, ..)
+        | Draw::Shape(rect, ..)
         | Draw::RoundedGradient(rect, ..)
         | Draw::Image(_, rect, ..)
         | Draw::TintedImage(_, rect, ..)
@@ -100,6 +101,7 @@ pub fn bounds(command: &Draw) -> Option<Rect> {
 fn same(a: &Draw, b: &Draw) -> bool {
     let rect = |a: &Rect, b: &Rect| a.x == b.x && a.y == b.y && a.w == b.w && a.h == b.h;
     match (a, b) {
+        (Draw::Glass(r1, a1, c1), Draw::Glass(r2, a2, c2)) => rect(r1, r2) && a1 == a2 && c1 == c2,
         (Draw::Shape(r1, a1, b1, c1), Draw::Shape(r2, a2, b2, c2)) => {
             rect(r1, r2) && a1 == a2 && b1 == b2 && c1 == c2
         }

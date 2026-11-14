@@ -2,7 +2,7 @@
 
 A native launcher for rooted LG webOS TVs, inspired by Apple TV.
 
-https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
+https://github.com/user-attachments/assets/2156d640-b8fa-4ea4-a02c-0db4c93bcc5a
 
 <details>
 <summary>Screenshots</summary>
@@ -21,12 +21,34 @@ https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
       <img src="docs/settings.png" alt="Luma native General settings, desktop preview">
     </td>
     <td width="50%" align="center">
-      <img src="docs/inputs.png" alt="Luma native input settings, desktop preview">
+      <img src="docs/inputs.png" alt="Luma native input pills, desktop preview">
     </td>
   </tr>
 </table>
 
 </details>
+
+## Home and app drawer
+
+Home uses Liquid Glass controls over your wallpaper, a floating favorites dock, and a weather
+block with a condition icon, temperature, condition, and location. The greeting and standalone
+date have been removed.
+
+- **Left / Right** browses favorites. Hold **OK** to reorder them.
+- **Down** from favorites opens the animated six-column app drawer.
+- **Up** from favorites reaches the corner controls.
+- **Back** closes the drawer and focuses the first favorite.
+- **OK / click** launches apps directly. Manage favorites, hidden apps, and uninstall actions in
+  **Luma Settings → Apps**. Hidden apps remain listed there.
+- Direct **input pills** at the top left show names, icons, and connection dots, respecting
+  each input's Auto / On / Off visibility setting.
+- The **clock** opens floating Control Center-style actions for **Luma Settings** or LG's native
+  **TV settings**. LG's native settings UI is unchanged.
+
+Screenshots are native desktop previews, not hardware performance claims.
+
+If installed app icons look stale, use **Settings → System → Reset icon cache** to
+clear cached artwork and reload it without changing your preferences.
 
 ## Compatibility
 
@@ -60,6 +82,7 @@ https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
 | TV        | Model identifier | Takeover Support |
 | --------- | ---------------- | ---------------- |
 | LG C1     | `OLED48C1KNB`    | ✅               |
+| LG G1     | `OLED65G1RLA`    | ✅               |
 | LG UP8000 | `86UP80009LA`    | Unknown          |
 
 </details>
@@ -67,9 +90,11 @@ https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
 <details>
 <summary>webOS 24</summary>
 
-| TV    | Model identifier | Takeover Support |
-| ----- | ---------------- | ---------------- |
-| LG B2 | `OLED65B29LA`    | ✅               |
+| TV        | Model identifier | Takeover Support |
+| --------- | ---------------- | ---------------- |
+| LG G4     | `OLED65G46LA`    | ✅               |
+| LG B2     | `OLED65B29LA`    | ✅               |
+| LG QNED81 | `50QNED816RE`    | ✅               |
 
 </details>
 
@@ -98,6 +123,7 @@ https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
 | LG C2 | `OLED65C2PSA`         | ✅               |
 | LG C3 | `OLED65C31LA`         | ✅               |
 | LG C3 | `OLED65C36LC`         | ✅               |
+| LG C4 | `OLED77C44LA`         | ✅               |
 | LG C5 | `OLED55C57LA`         | ✅               |
 | LG C5 | `OLED55C5PSA`         | Unknown          |
 | LG C6 | `OLED65C6*`           | Unknown          |
@@ -111,16 +137,21 @@ https://github.com/user-attachments/assets/3d3564d9-5942-4aef-a726-0323f5e86a07
 
 ### Homebrew Channel
 
+Add this custom repository URL to Homebrew Channel:
+
 ```text
 https://github.com/ecklf/lg-luma/releases/latest/download/repo.json
 ```
+
+Upvote [the official Homebrew Channel repository PR](https://github.com/webosbrew/apps-repo/pull/343)
+to help make Luma available by default.
 
 ### SSH
 
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_2.16.2_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_3.0.1_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -136,7 +167,8 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 ### Takeover Method
 
 > [!NOTE]
-> Takeover is supported on **webOS 5, 6, 25 and 26**.\
+> Takeover is supported on **webOS 5, 6, 24, 25 and 26**.\
+> On 5, 6 and 24 it replaces the Home executable; on 25 and 26 it mounts Luma's Home app.\
 > The takeover does not delete LG Home: it remains underneath a temporary mount, which is cleared by
 > a reboot. If Luma is uninstalled first, LG Home returns on reboot, but the separate takeover boot
 > hook remains and logs an error because it can no longer find Luma. No TV reset is needed. For
@@ -173,12 +205,24 @@ Boot log: `/var/lib/luma-home/boot.log`. See the
 [development guide](development.md#optional-native-home-integration) for implementation details.
 
 <details>
-<summary>Method for webOS 5 / 6</summary>
+<summary>Method for webOS 5 / 6 / 24</summary>
 
-On **webOS 5 and 6**, SAM cannot reread a mounted Home manifest, so `home.sh enable` instead
+On **webOS 5, 6 and 24**, SAM cannot reread a mounted Home manifest, so `home.sh enable` instead
 bind-mounts Luma's executable over LG's `/usr/bin/com.webos.app.home`. LG's Home manifest stays
 in place and Luma registers with SAM itself, so the Home key brings the running Luma back instead
 of restarting it. The commands and the cold-boot hook are the same.
+
+webOS 24 belongs here rather than with 25/26 because its SAM has no `releaseBlockSystemApp`, so a
+mounted Home manifest is never reread and the manifest method fails on that missing method.
+
+On webOS 5/6, a cold boot opens Luma at about 20 s instead of after the Homebrew hook (~50 s or
+later). The Homebrew hooks start late, but LG's service hub reads `/var/luna-service2` at
+`core-boot-done`. `home.sh enable` therefore also registers a small root helper there
+(`com.webos.service.lumahome`, a copy of the package's `luma-early` in `/var/lib/luma-home`) and adds
+a compositor key filter (`home-filter.js`) to LG's chain. While the TV boots, the filter asks the
+helper to mount Luma and then opens Home. If this fails, the cold-boot hook mounts Luma as before.
+Keys pass through the filter unchanged, and `home.sh disable` removes both. The early-boot timing
+has not been verified on webOS 24.
 
 </details>
 
@@ -223,6 +267,10 @@ Test on a spare button first. Disable the mapping in Input Hook to restore norma
 
 ## Features
 
+Choose the interface language in **Settings → General → Language**. Luma supports Catalan,
+Czech, Dutch, English, French, German, Italian, Polish, Portuguese (Brazil), Russian,
+Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese.
+
 ### Backgrounds
 
 Open **Settings → Background → Upload**, then scan the QR code or open the shown
@@ -238,6 +286,16 @@ LG splash unchanged.
 Toggle **Gradient** beside **Rotation** to turn background shading on or off. It defaults to On
 and remembers your choice. Older uploads without an unshaded copy keep their full-resolution
 shaded image. This does not change LG's launch splash.
+
+### Input icons
+
+Open **Settings → Widgets → Inputs**, select an input, then choose
+**Icon** to open a native picker for bundled SVG icons. Choices are **Automatic** (the default,
+using label detection), **HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**,
+**NVIDIA Shield**, **Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, and **Xbox**.
+
+An explicit icon choice is saved separately for each input and persists across restarts.
+Choose **Automatic** to clear that input's override and restore label-based icon detection.
 
 ### Recent app switching
 
@@ -279,7 +337,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_2.16.2_arm.ipk
+dist/com.ecklf.luma_3.0.1_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png
@@ -289,10 +347,8 @@ Open [webOS Dev Manager](https://github.com/webosbrew/dev-manager-desktop), conn
 IP on port **22** as **root**, and install the IPK. Open **Luma** from the TV menu. Homebrew
 Channel must be elevated; on webOS 26 use **0.8.0-rc1 or newer** for its `lunabus.query` mapping.
 
-The native package uses **`com.ecklf.luma`** and installs separately from the old
-`com.luma.launcher` web app and the former `com.luma.launcher.native` / `com.luma.native` prototypes. Native preferences
-are local JSON files and are separate for each installation; browser preferences are not migrated.
-Homebrew Channel treats this ID as a separate app rather than an update to the old launcher.
+The native package uses **`com.ecklf.luma`**. Preferences are stored in local JSON files
+separately for each installation.
 
 Wait for installation success; Ctrl+C closes an ongoing subscription. Fully close and reopen
 Luma after updating. The [development guide](development.md#tv-startup-diagnostics) has a jailed
@@ -323,5 +379,6 @@ See [Releases](development.md#releases) for the workflow and repository setup.
 
 ## License
 
-Luma is licensed under MIT.\
+Luma's code is licensed under MIT. Bundled [Breezy Weather icons](assets/weather/README.md)
+are separately licensed under LGPL-3.0.\
 Luma is not affiliated with LG, Apple, or any other brands shown in its UI.
