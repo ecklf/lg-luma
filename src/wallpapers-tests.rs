@@ -46,7 +46,9 @@ fn http(path: &Path, request: impl FnOnce(&str) -> Vec<u8>) -> (String, bool) {
     });
     let mut socket = TcpStream::connect(address).unwrap();
     socket
-        .set_read_timeout(Some(Duration::from_secs(10)))
+        // Match the browser's upload budget: a debug build also prepares two
+        // lossless glass atlases before replying, often alongside other tests.
+        .set_read_timeout(Some(Duration::from_secs(45)))
         .unwrap();
     socket.write_all(&request(&address.to_string())).unwrap();
     let mut response = String::new();
@@ -94,6 +96,15 @@ fn upload_tokens_are_eight_unbiased_alphanumeric_characters() {
 fn uploads_retain_full_resolution_unshaded_images_and_discover_legacy_fallbacks() {
     let fixture = Fixture::new();
     let item = store(&fixture.wallpapers(), &image(1920, 1080), || true).unwrap();
+    for name in ["wallpaper.jpg", "original.jpg"] {
+        let source = item.directory.join(name);
+        let cached =
+            crate::glass_backdrop::load(&crate::glass_backdrop::sidecar_path(&source)).unwrap();
+        assert_eq!(
+            cached,
+            crate::glass_backdrop::prepare(image::open(source).unwrap())
+        );
+    }
     assert!(item.has_original);
     let original = image::open(item.unshaded_image()).unwrap().to_rgb8();
     let shaded = image::open(item.image()).unwrap().to_rgb8();

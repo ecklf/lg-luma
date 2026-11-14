@@ -138,6 +138,9 @@ pub struct RenderStats {
     pub glyph_ms: f64,
     pub vector_load_ms: f64,
     pub image_load_ms: f64,
+    pub glass_prepare_ms: f64,
+    pub glass_precomputed_loads: usize,
+    pub glass_runtime_prepares: usize,
     pub glyph_failures: usize,
     pub missing_glyphs: usize,
     pub missing_images: usize,
@@ -171,6 +174,9 @@ impl RenderStats {
             glyph_ms: 0.,
             vector_load_ms: 0.,
             image_load_ms: 0.,
+            glass_prepare_ms: 0.,
+            glass_precomputed_loads: 0,
+            glass_runtime_prepares: 0,
             glyph_failures: 0,
             missing_glyphs: 0,
             missing_images: 0,
@@ -1193,20 +1199,35 @@ impl Renderer {
     /// Cache a bounded, prefiltered backdrop once per wallpaper, not once per surface/frame.
     /// Wallpaper-only sampling avoids framebuffer feedback and works with partial redraw on GLES2.
     fn glass_backdrop(&mut self, path: &str) -> GLuint {
+        let started = Instant::now();
         let key = format!("glass:{path}");
+        let loaded = !self.textures.contains_key(&key);
+        let mut precomputed = false;
+        let mut generated = false;
         let entry = self.textures.entry(key).or_insert_with(|| {
-            image::open(path).ok().map(|image| {
-                // Two filter levels in one atlas keep the GLES2 sampler count unchanged.
-                // The rim retains detail while larger interiors scatter more light.
-                let small = image.resize_exact(960, 540, image::imageops::FilterType::Triangle);
-                let sharp = small.to_rgba8();
-                let blurred = small.blur(8.).to_rgba8();
-                let mut atlas = image::RgbaImage::new(960, 1080);
-                image::imageops::replace(&mut atlas, &sharp, 0, 0);
-                image::imageops::replace(&mut atlas, &blurred, 0, 540);
-                texture(960, 1080, atlas.as_raw())
-            })
+            // Shipped assets and new uploads prepare this off the SDL thread. Keep the
+            // exact legacy path for older uploads, missing/corrupt sidecars and A/B checks.
+            let prepared = (std::env::var("LUMA_GLASS_PRECOMPUTED").as_deref() != Ok("0"))
+                .then(|| {
+                    crate::glass_backdrop::load(&crate::glass_backdrop::sidecar_path(Path::new(
+                        path,
+                    )))
+                    .ok()
+                })
+                .flatten();
+            precomputed = prepared.is_some();
+            let atlas = prepared.or_else(|| {
+                let image = image::open(path).ok()?;
+                generated = true;
+                Some(crate::glass_backdrop::prepare(image))
+            })?;
+            Some(texture(atlas.width(), atlas.height(), atlas.as_raw()))
         });
+        if loaded {
+            self.stats.glass_prepare_ms += started.elapsed().as_secs_f64() * 1000.;
+            self.stats.glass_precomputed_loads += usize::from(precomputed);
+            self.stats.glass_runtime_prepares += usize::from(generated);
+        }
         if let Some(texture) = entry {
             texture.frame = self.frame;
             texture.id
