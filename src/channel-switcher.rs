@@ -82,18 +82,19 @@ impl State {
         if self.overlay.is_some() || self.moving.is_some() {
             return vec![];
         }
-        let channels = self.home_channels();
-        if channels.is_empty() {
+        let ids: Vec<String> = self
+            .home_channels()
+            .iter()
+            .map(|channel| channel.id.clone())
+            .collect();
+        if ids.is_empty() {
             return vec![];
         }
         let selected = match &self.focus {
-            Target::Channel(id) => channels
-                .iter()
-                .position(|channel| &channel.id == id)
-                .unwrap_or(0),
+            Target::Channel(id) => ids.iter().position(|channel| channel == id).unwrap_or(0),
             _ => 0,
         };
-        let id = channels[selected].id.clone();
+        let id = ids[selected].clone();
         self.overlay = Some(Overlay::ChannelSwitcher {
             restore: self.focus.clone(),
         });
@@ -123,29 +124,33 @@ impl State {
         if matches!(direction, Direction::Up) {
             return self.back();
         }
-        let channels = self.home_channels();
-        if channels.is_empty() {
+        let ids: Vec<String> = self
+            .home_channels()
+            .iter()
+            .map(|channel| channel.id.clone())
+            .collect();
+        if ids.is_empty() {
             return vec![];
         }
         let index = match &self.focus {
-            Target::ChannelSwitch(id) => channels.iter().position(|channel| &channel.id == id),
+            Target::ChannelSwitch(id) => ids.iter().position(|channel| channel == id),
             _ => None,
         };
         if let Some(index) = index {
             let next = match direction {
                 Direction::Left => index.saturating_sub(1),
-                Direction::Right => (index + 1).min(channels.len() - 1),
+                Direction::Right => (index + 1).min(ids.len() - 1),
                 _ => index,
             };
             self.channel_switcher.selected = next;
-            self.focus = Target::ChannelSwitch(channels[next].id.clone());
+            self.focus = Target::ChannelSwitch(ids[next].clone());
         } else {
             let selected = self
                 .channel_switcher
                 .selected
-                .min(channels.len().saturating_sub(1));
+                .min(ids.len().saturating_sub(1));
             self.channel_switcher.selected = selected;
-            self.focus = Target::ChannelSwitch(channels[selected].id.clone());
+            self.focus = Target::ChannelSwitch(ids[selected].clone());
         }
         vec![]
     }
