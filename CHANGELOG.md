@@ -1,5 +1,12 @@
 # lg-luma
 
+## 3.2.1
+
+### Patch Changes
+
+- 6d96a1b: Darken wallpaper-upload and shortcut-editor modals to match their QR code backgrounds, removing the visible square while preserving QR contrast and quiet zones.
+- 792782c: Fix the UI sounds icon rendering black and show amber input badges when a connected input explicitly reports no signal. Disconnected or unknown connections stay gray, and connected inputs without a no-signal report stay green.
+
 ## 3.2.0
 
 ### Minor Changes

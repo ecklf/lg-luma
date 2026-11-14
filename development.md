@@ -226,6 +226,9 @@ is hidden. Enabled weather without a location uses the same large 144px artwork 
 Settings lists render behind fixed controls. The drawer grid is clipped below its fixed dock so
 offscreen cards cannot capture pointer events there. Input name removal uses **Clear name**.
 Choice checkmarks identify saved values, while the bright row fill identifies only the current focus.
+Input connection dots are amber when a connected cable explicitly reports no signal, green for
+other connected inputs, and gray for disconnected or unknown cable states. An unknown signal
+report alone does not imply no signal, and signal reports never override cable-based visibility.
 
 Input icon picker: **Settings → Widgets → Inputs → select input → Icon** opens a
 native picker for bundled input SVG icons. Its choices are **Automatic** (default label detection),
@@ -284,6 +287,8 @@ ordinary glass changes participate in damage tracking.
 Modal cards (wallpaper upload, shortcut editing, app/background actions, deletion confirmations,
 and the keyboard) use opaque gray gradients rather than wallpaper-sampling glass to keep their
 content readable. The dock and regular controls retain their glass treatment.
+Wallpaper-upload and shortcut-editor panels use the same solid dark gray as the QR quiet zone
+and logo plate, avoiding a contrasting square behind the QR code without reducing its contrast.
 
 See [the research notes](docs/liquid-glass-research.md) for sources, visual decisions and limitations.
 
