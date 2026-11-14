@@ -64,6 +64,8 @@ pub enum Target {
     DockApp(String),
     /// Home channels strip tile.
     Channel(String),
+    /// Channel Back switcher carousel card.
+    ChannelSwitch(String),
     /// Settings → Channels row: toggle Home strip membership.
     ChannelFavorite(String),
     Input(String),
@@ -150,6 +152,7 @@ pub enum Overlay {
     Options { id: String, restore: Target },
     Delete { id: String, restore: Target },
     Recents { restore: Target },
+    ChannelSwitcher { restore: Target },
     Keyboard,
     SystemKeyboard,
     WallpaperUpload,
@@ -277,6 +280,7 @@ pub struct State {
     pub greeting_name_draft: String,
     pub input_name: String,
     pub recents: crate::recents::Recents,
+    pub channel_switcher: crate::channel_switcher::ChannelSwitcher,
 }
 
 impl State {
@@ -326,6 +330,7 @@ impl State {
             greeting_name_draft: String::new(),
             input_name: String::new(),
             recents: crate::recents::Recents::default(),
+            channel_switcher: crate::channel_switcher::ChannelSwitcher::default(),
         }
     }
 
@@ -436,6 +441,15 @@ impl State {
                 Instant::now(),
             );
         }
+        let switcher_open = self.channel_switcher_open();
+        if switcher_open || self.channel_switcher.visibility > 0. {
+            self.dirty |= self.channel_switcher.animate(
+                switcher_open,
+                self.preferences.reduced_motion,
+                self.pointer,
+                Instant::now(),
+            );
+        }
         if let Some(start) = self.panel_started {
             self.dirty = true;
             let duration = if self.overlay.is_some() { 120 } else { 150 };
@@ -533,6 +547,14 @@ impl State {
             || ((self.recents_open() || self.recents.visibility > 0.)
                 && (self.recents.visibility != if self.recents_open() { 1. } else { 0. }
                     || self.recents.cards_animating(self.pointer)))
+            || ((self.channel_switcher_open() || self.channel_switcher.visibility > 0.)
+                && (self.channel_switcher.visibility
+                    != if self.channel_switcher_open() {
+                        1.
+                    } else {
+                        0.
+                    }
+                    || self.channel_switcher.cards_animating(self.pointer)))
             || self.previous_background.is_some()
             || self.panel_started.is_some()
             || (!self.preferences.reduced_motion
@@ -549,6 +571,8 @@ impl State {
         self.recents.pending = None;
         self.recents.visibility = 0.;
         self.recents.closing_focus = None;
+        self.channel_switcher.visibility = 0.;
+        self.channel_switcher.closing_focus = None;
         self.wallpaper_upload = None;
         self.pointer = false;
         self.pressed = None;
@@ -884,7 +908,7 @@ impl State {
 
     pub fn set_channel_guide(
         &mut self,
-        programs: std::collections::HashMap<String, crate::model::ChannelProgram>,
+        programs: std::collections::HashMap<String, crate::model::ChannelGuideEntry>,
     ) {
         crate::channels::apply_programs(&mut self.inventory.channels, &programs);
         self.dirty = true;
@@ -987,6 +1011,18 @@ impl State {
                 .first()
                 .map(|channel| Target::Channel(channel.id.clone()))
                 .unwrap_or_else(|| self.first_content());
+        }
+        if let Target::ChannelSwitch(id) = &self.focus
+            && self.channel_switcher_open()
+        {
+            let channels = self.home_channels();
+            if !channels.iter().any(|channel| &channel.id == id) {
+                self.focus = channels
+                    .get(self.channel_switcher.selected)
+                    .or_else(|| channels.first())
+                    .map(|channel| Target::ChannelSwitch(channel.id.clone()))
+                    .unwrap_or_else(|| self.first_content());
+            }
         }
         if let Target::ChannelFavorite(id) = &self.focus
             && self.subpage == Some(Subpage::Channels)
@@ -1396,6 +1432,9 @@ impl State {
         self.dirty = true;
         if self.recents_open() {
             return self.recent_direction(direction);
+        }
+        if self.channel_switcher_open() {
+            return self.channel_switcher_direction(direction);
         }
         if matches!(self.overlay, Some(Overlay::Inputs | Overlay::Settings)) {
             let targets: Vec<_> = if matches!(self.overlay, Some(Overlay::Inputs)) {
@@ -2551,6 +2590,12 @@ impl State {
                 _ => vec![],
             };
         }
+        if self.channel_switcher_open() {
+            return match self.focus.clone() {
+                Target::ChannelSwitch(id) if !self.launching => vec![Effect::OpenChannel(id)],
+                _ => vec![],
+            };
+        }
         if self.moving.take().is_some() {
             // Order was saved at every move. A fresh OK release finishes the
             // mode and keeps the selected favorite, rather than launching it.
@@ -3229,7 +3274,19 @@ impl State {
                     self.recents.closing_focus = None;
                 }
             }
-            if let Overlay::Options { restore, .. } | Overlay::Recents { restore } = overlay {
+            if matches!(overlay, Overlay::ChannelSwitcher { .. }) {
+                self.channel_switcher.closing_focus = Some(self.focus.clone());
+                self.channel_switcher.updated = Instant::now();
+                self.pressed = None;
+                if self.preferences.reduced_motion {
+                    self.channel_switcher.visibility = 0.;
+                    self.channel_switcher.closing_focus = None;
+                }
+            }
+            if let Overlay::Options { restore, .. }
+            | Overlay::Recents { restore }
+            | Overlay::ChannelSwitcher { restore } = overlay
+            {
                 self.focus = restore;
                 self.recents.pending = None;
                 self.reconcile_focus();
@@ -3256,7 +3313,7 @@ impl State {
             self.focus = self.first_content();
             vec![]
         } else {
-            self.open_recents()
+            self.open_back_overlay()
         }
     }
 }

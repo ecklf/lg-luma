@@ -33,6 +33,8 @@ fn input_icon_width(name: &str, size: f32) -> f32 {
 
 #[path = "recents-view.rs"]
 mod recents_view;
+#[path = "channel-switcher-view.rs"]
+mod channel_switcher_view;
 
 pub struct Assets {
     pub root: PathBuf,
@@ -505,6 +507,11 @@ pub fn recents_replaces_page(state: &State) -> bool {
     state.recents_open() && state.recents.visibility == 1.
 }
 
+/// Fully shown channel switcher replaces the page like Recents.
+pub fn channel_switcher_replaces_page(state: &State) -> bool {
+    state.channel_switcher_open() && state.channel_switcher.visibility == 1.
+}
+
 pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
     let mut out = Scene::new();
     if let Some((previous, start)) = &state.previous_background {
@@ -538,6 +545,18 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             c(0x080b12, RECENTS_BACKDROP_OPACITY),
         );
         recents_view::render(&mut out, state, assets);
+        if let Some((notice, _)) = &state.notice {
+            toast(&mut out, state, assets, notice);
+        }
+        return out;
+    }
+    if channel_switcher_replaces_page(state) {
+        out.shape(
+            Rect::new(0., 0., 1920., 1080.),
+            0.,
+            c(0x080b12, RECENTS_BACKDROP_OPACITY),
+        );
+        channel_switcher_view::render(&mut out, state, assets);
         if let Some((notice, _)) = &state.notice {
             toast(&mut out, state, assets, notice);
         }
@@ -640,6 +659,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             Overlay::TileEditor => tile_editor(&mut out, state, assets),
             Overlay::SystemKeyboard
             | Overlay::Recents { .. }
+            | Overlay::ChannelSwitcher { .. }
             | Overlay::Inputs
             | Overlay::Settings => {}
         }
@@ -677,6 +697,29 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
         let moved: Vec<_> = out.draw.drain(start..start + fills).collect();
         out.draw.splice(content_start..content_start, moved);
         if !state.recents_open() {
+            out.controls = parent_controls;
+            out.modal = parent_modal;
+        }
+    }
+    if state.channel_switcher_open() || state.channel_switcher.visibility > 0. {
+        let parent_controls = std::mem::take(&mut out.controls);
+        let parent_modal = out.modal;
+        out.fade(content_start, 1. - state.channel_switcher.visibility, 1.);
+        let start = out.draw.len();
+        out.shape(
+            Rect::new(0., 0., 1920., 1080.),
+            0.,
+            c(0x080b12, RECENTS_BACKDROP_OPACITY),
+        );
+        channel_switcher_view::render(&mut out, state, assets);
+        out.fade(start, state.channel_switcher.visibility, 1.);
+        let fills = out.draw[start..]
+            .iter()
+            .take_while(|draw| full_screen_fill(draw))
+            .count();
+        let moved: Vec<_> = out.draw.drain(start..start + fills).collect();
+        out.draw.splice(content_start..content_start, moved);
+        if !state.channel_switcher_open() {
             out.controls = parent_controls;
             out.modal = parent_modal;
         }

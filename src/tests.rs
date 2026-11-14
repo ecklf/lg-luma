@@ -10,6 +10,9 @@ use std::{collections::BTreeMap, path::PathBuf};
 #[path = "recents-tests.rs"]
 mod recent_tests;
 
+#[path = "channel-switcher-tests.rs"]
+mod channel_switcher_tests;
+
 #[path = "wallpapers-ui-tests.rs"]
 mod wallpaper_tests;
 

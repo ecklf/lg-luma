@@ -3,7 +3,9 @@
 //! process trying to impersonate its application identity.
 use crate::{
     app_artwork,
-    model::{App, ChannelProgram, Input, Inventory, demo_inventory, valid_app_id},
+    model::{
+        App, ChannelGuideEntry, ChannelProgram, Input, Inventory, demo_inventory, valid_app_id,
+    },
 };
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -207,7 +209,7 @@ pub enum Request {
 pub enum Response {
     Inventory(Result<(Inventory, Option<String>), String>),
     Inputs(Result<Vec<Input>, String>),
-    ChannelGuide(Result<HashMap<String, ChannelProgram>, String>),
+    ChannelGuide(Result<HashMap<String, ChannelGuideEntry>, String>),
     Launched {
         id: String,
         result: Result<(), String>,
@@ -838,25 +840,37 @@ fn channel_inventory() -> Result<Vec<crate::model::Channel>, String> {
     .and_then(|raw| crate::channels::normalize_channels(&raw))
 }
 
-fn channel_guide(ids: &[String]) -> Result<HashMap<String, ChannelProgram>, String> {
+fn channel_guide(ids: &[String]) -> Result<HashMap<String, ChannelGuideEntry>, String> {
     let mut out = HashMap::new();
     for id in ids.iter().take(crate::channels::MAX_FAVORITES) {
         if !valid_app_id(id) {
             continue;
         }
+        // Prefer the schedule list (now + next); fall back to current-only.
         // apiadapter TV methods need the elevated bus; a jailed app call is refused.
-        let reply = match elevated_call(
-            "luna://com.webos.service.apiadapter/tv/getChannelCurrentProgramInfo",
+        let mut entry = match elevated_call(
+            "luna://com.webos.service.apiadapter/tv/getChannelProgramInfo",
             json!({ "channelId": id }),
         ) {
-            Ok(reply) => reply,
+            Ok(reply) => crate::channels::normalize_schedule(&reply),
             Err(error) => {
-                eprintln!("Luma channel guide {id}: {error}");
-                continue;
+                eprintln!("Luma channel schedule {id}: {error}");
+                ChannelGuideEntry::default()
             }
         };
-        if let Some(program) = crate::channels::normalize_program(&reply) {
-            out.insert(id.clone(), program);
+        if entry.program.is_none() {
+            match elevated_call(
+                "luna://com.webos.service.apiadapter/tv/getChannelCurrentProgramInfo",
+                json!({ "channelId": id }),
+            ) {
+                Ok(reply) => {
+                    entry.program = crate::channels::normalize_program(&reply);
+                }
+                Err(error) => eprintln!("Luma channel guide {id}: {error}"),
+            }
+        }
+        if entry.program.is_some() || entry.next.is_some() {
+            out.insert(id.clone(), entry);
         }
     }
     Ok(out)
@@ -865,7 +879,7 @@ fn channel_guide(ids: &[String]) -> Result<HashMap<String, ChannelProgram>, Stri
 fn demo_channel_guide(
     channels: &[crate::model::Channel],
     ids: &[String],
-) -> HashMap<String, ChannelProgram> {
+) -> HashMap<String, ChannelGuideEntry> {
     ids.iter()
         .filter_map(|id| {
             channels
@@ -874,10 +888,17 @@ fn demo_channel_guide(
                 .map(|channel| {
                     (
                         id.clone(),
-                        ChannelProgram {
-                            title: format!("Now on {}", channel.name),
-                            start: None,
-                            end: None,
+                        ChannelGuideEntry {
+                            program: Some(ChannelProgram {
+                                title: format!("Now on {}", channel.name),
+                                start: None,
+                                end: None,
+                            }),
+                            next: Some(ChannelProgram {
+                                title: format!("Later on {}", channel.name),
+                                start: None,
+                                end: None,
+                            }),
                         },
                     )
                 })

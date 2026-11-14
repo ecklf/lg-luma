@@ -4758,5 +4758,22 @@
     "sv": "Home channel list is full",
     "cs": "Home channel list is full",
     "ca": "La llista de canals a Home és plena"
+  },
+  "upNext": {
+    "en": "Up next",
+    "de": "Up next",
+    "es": "A continuación",
+    "zh": "Up next",
+    "zh-tw": "Up next",
+    "pt": "Up next",
+    "it": "Up next",
+    "ru": "Up next",
+    "pl": "Up next",
+    "fr": "Up next",
+    "vi": "Up next",
+    "nl": "Up next",
+    "sv": "Up next",
+    "cs": "Up next",
+    "ca": "Tot seguit"
   }
 }

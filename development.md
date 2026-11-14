@@ -112,8 +112,8 @@ and the generic disc input icon from the native desktop renderer using seeded lo
 | OK / Enter                    | Activate on release                                                          |
 | Hold OK for 600 ms            | Reorder Home favorite or open app options                                    |
 | OK or Back in move mode       | Finish reordering without launching                                          |
-| Escape / Back / Backspace     | Parent navigation, overlay dismissal or Recent apps from Home                |
-| Hold Back / Escape for 600 ms | Open Recent apps while Luma is focused                                       |
+| Escape / Back / Backspace     | Parent navigation, overlay dismissal, channel switcher, or Recent apps from Home |
+| Hold Back / Escape for 600 ms | Channel switcher when a Home channel is focused; otherwise Recent apps       |
 | Menu / M / right-click        | App or background options side popup                                         |
 | Pointer / wheel               | Hover, click, hold and scrolling                                             |
 | F5                            | Refresh inventory                                                            |
@@ -168,7 +168,9 @@ subpages. Weather location and temperature choices return to Weather; Back from 
 its row in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row. Channel
 favorites return to Channels, then its Widgets row. The Home channels strip shows only selected
 tuner channels (logos from `/mnt/lg/cmn_data/channel_logo` when present); OK tunes via
-`apiadapter/tv/openChannel`, and now-playing comes from `getChannelCurrentProgramInfo`.
+`apiadapter/tv/openChannel`. Guide titles prefer `getChannelProgramInfo` (now and next) and fall
+back to `getChannelCurrentProgramInfo`. Back (short or long-hold) on a focused Home channel opens a
+Recents-style switcher over Home favorites with logo and now/next text; OK tunes, Back/Up dismiss.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
 with a tighter 48-pixel spacing for Languages and Backgrounds.
@@ -264,7 +266,9 @@ System text events update app/location queries; Done/Back stops editing and rest
 
 ### Recent apps
 
-Press Back on Home to open Recent apps, or hold Back (Escape on desktop) for 600 ms from any page.
+Press Back on Home to open Recent apps (or the channel switcher when a Home channel tile is
+focused), or hold Back (Escape on desktop) for 600 ms from any page with the same channel/Recents
+gate.
 Short Back navigates on release. Back in an overlay, the system keyboard or
 move mode keeps its immediate dismissal behavior; Backspace keeps its editing/navigation role.
 Losing window focus cancels an unfinished hold. This is an app-local shortcut while Luma is focused.

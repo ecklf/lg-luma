@@ -102,6 +102,8 @@ pub struct Channel {
     pub icon: Option<crate::app_artwork::Source>,
     #[serde(skip)]
     pub program: Option<ChannelProgram>,
+    #[serde(skip)]
+    pub next: Option<ChannelProgram>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -109,6 +111,13 @@ pub struct ChannelProgram {
     pub title: String,
     pub start: Option<u64>,
     pub end: Option<u64>,
+}
+
+/// Now-playing and optional next show from the tuner guide.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ChannelGuideEntry {
+    pub program: Option<ChannelProgram>,
+    pub next: Option<ChannelProgram>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -776,6 +785,7 @@ pub fn demo_inventory() -> Inventory {
             logo: None,
             icon: None,
             program: None,
+            next: None,
         })
         .collect(),
     };

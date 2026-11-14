@@ -1,7 +1,7 @@
 //! LG tuner channels and now-playing guide (apiadapter / Glasshouse-compatible).
 
 use crate::app_artwork;
-use crate::model::{Channel, ChannelProgram, valid_app_id};
+use crate::model::{Channel, ChannelGuideEntry, ChannelProgram, valid_app_id};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
@@ -86,6 +86,7 @@ pub fn normalize_channels(raw: &Value) -> Result<Vec<Channel>, String> {
             logo,
             icon,
             program: None,
+            next: None,
         });
     }
     fill_missing_logos_from_name_variants(&mut channels);
@@ -161,11 +162,7 @@ fn fill_missing_logos_from_name_variants(channels: &mut [Channel]) {
     }
 }
 
-/// `getChannelCurrentProgramInfo` reply → now-playing when the show is current.
-pub fn normalize_program(raw: &Value) -> Option<ChannelProgram> {
-    if raw.get("returnValue") == Some(&Value::Bool(false)) {
-        return None;
-    }
+fn program_title(raw: &Value) -> Option<String> {
     let title = raw
         .get("programName")
         .and_then(Value::as_str)
@@ -175,25 +172,73 @@ pub fn normalize_program(raw: &Value) -> Option<ChannelProgram> {
         .take(160)
         .collect::<String>();
     let title = title.trim();
-    if title.is_empty() {
+    (!title.is_empty()).then(|| title.into())
+}
+
+fn program_from_entry(raw: &Value) -> Option<ChannelProgram> {
+    Some(ChannelProgram {
+        title: program_title(raw)?,
+        start: guide_time(raw.get("startTime").and_then(Value::as_str)),
+        end: guide_time(raw.get("endTime").and_then(Value::as_str)),
+    })
+}
+
+/// `getChannelCurrentProgramInfo` reply → now-playing when the show is current.
+pub fn normalize_program(raw: &Value) -> Option<ChannelProgram> {
+    if raw.get("returnValue") == Some(&Value::Bool(false)) {
         return None;
     }
-    let start = guide_time(raw.get("startTime").and_then(Value::as_str));
-    let end = guide_time(raw.get("endTime").and_then(Value::as_str));
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .ok()?
-        .as_secs();
-    if let (Some(start), Some(end)) = (start, end)
+    let program = program_from_entry(raw)?;
+    let now = unix_now()?;
+    if let (Some(start), Some(end)) = (program.start, program.end)
         && (start > now || end <= now)
     {
         return None;
     }
-    Some(ChannelProgram {
-        title: title.into(),
-        start,
-        end,
-    })
+    Some(program)
+}
+
+/// `getChannelProgramInfo` → now and the following show when times are present.
+pub fn normalize_schedule(raw: &Value) -> ChannelGuideEntry {
+    if raw.get("returnValue") == Some(&Value::Bool(false)) {
+        return ChannelGuideEntry::default();
+    }
+    let Some(list) = raw.get("programList").and_then(Value::as_array) else {
+        return ChannelGuideEntry {
+            program: normalize_program(raw),
+            next: None,
+        };
+    };
+    let Some(now) = unix_now() else {
+        return ChannelGuideEntry::default();
+    };
+    let mut programs: Vec<ChannelProgram> = list
+        .iter()
+        .filter_map(program_from_entry)
+        .take(64)
+        .collect();
+    programs.sort_by_key(|program| program.start.unwrap_or(u64::MAX));
+    let current = programs.iter().position(|program| {
+        matches!(
+            (program.start, program.end),
+            (Some(start), Some(end)) if start <= now && now < end
+        )
+    });
+    let program = current.map(|index| programs[index].clone());
+    let next = match current {
+        Some(index) => programs.get(index + 1).cloned(),
+        None => programs
+            .into_iter()
+            .find(|program| program.start.is_some_and(|start| start > now)),
+    };
+    ChannelGuideEntry { program, next }
+}
+
+fn unix_now() -> Option<u64> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_secs())
 }
 
 /// Glasshouse `guideTime`: `"2026,11,14,12,05,00"` is UTC.
@@ -214,9 +259,15 @@ pub fn guide_time(value: Option<&str>) -> Option<u64> {
     Some(datetime.unix_timestamp().max(0) as u64)
 }
 
-pub fn apply_programs(channels: &mut [Channel], programs: &HashMap<String, ChannelProgram>) {
+pub fn apply_programs(channels: &mut [Channel], programs: &HashMap<String, ChannelGuideEntry>) {
     for channel in channels {
-        channel.program = programs.get(&channel.id).cloned();
+        if let Some(entry) = programs.get(&channel.id) {
+            channel.program = entry.program.clone();
+            channel.next = entry.next.clone();
+        } else {
+            channel.program = None;
+            channel.next = None;
+        }
     }
 }
 
@@ -314,5 +365,32 @@ mod tests {
         });
         let program = normalize_program(&open).unwrap();
         assert_eq!(program.title, "Live show");
+    }
+
+    #[test]
+    fn schedule_picks_current_and_following_show() {
+        let raw = json!({
+            "returnValue": true,
+            "programList": [
+                {
+                    "programName": "Earlier",
+                    "startTime": "2000,01,01,00,00,00",
+                    "endTime": "2000,01,01,01,00,00"
+                },
+                {
+                    "programName": "Now playing",
+                    "startTime": "2000,01,01,00,00,00",
+                    "endTime": "2099,01,01,00,00,00"
+                },
+                {
+                    "programName": "Up next",
+                    "startTime": "2099,01,01,00,00,00",
+                    "endTime": "2099,01,01,01,00,00"
+                }
+            ]
+        });
+        let guide = normalize_schedule(&raw);
+        assert_eq!(guide.program.as_ref().map(|p| p.title.as_str()), Some("Now playing"));
+        assert_eq!(guide.next.as_ref().map(|p| p.title.as_str()), Some("Up next"));
     }
 }

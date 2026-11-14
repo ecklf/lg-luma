@@ -6,6 +6,8 @@ mod app_artwork;
 mod app_subscription;
 mod branding;
 mod channels;
+#[path = "channel-switcher.rs"]
+mod channel_switcher;
 mod companion;
 mod damage;
 mod diagnostics;
@@ -441,7 +443,8 @@ fn script(
         "right" => state.direction(Direction::Right, controls),
         "enter" => state.activate(),
         "back" => state.back(),
-        "recents" | "hold-back" => state.open_recents(),
+        "recents" => state.open_recents(),
+        "hold-back" => state.open_back_overlay(),
         "menu" => {
             state.options();
             vec![]
@@ -507,6 +510,7 @@ fn input_refresh_active(state: &State, webos: bool, focused: bool, visible: bool
         && state.moving.is_none()
         && state.pressed.is_none()
         && state.recents.visibility == 0.
+        && state.channel_switcher.visibility == 0.
 }
 
 fn weather_tick(state: &mut State, service: &weather_service::Service, visible: bool) {
@@ -604,7 +608,11 @@ fn next_prewarm(
     state: &state::State,
     idle: bool,
 ) -> Option<state::Page> {
-    if !idle || state.dirty || view::recents_replaces_page(state) {
+    if !idle
+        || state.dirty
+        || view::recents_replaces_page(state)
+        || view::channel_switcher_replaces_page(state)
+    {
         return None;
     }
     prewarm.pop()
@@ -1510,7 +1518,7 @@ fn run() -> Result<(), String> {
                         _ if native_hold => {
                             if !repeat && back_button.native_hold(Instant::now()) {
                                 press = None;
-                                pending = state.open_recents();
+                                pending = state.open_back_overlay();
                             }
                         }
                         key if is_back(key, webos) => {
@@ -1519,7 +1527,10 @@ fn run() -> Result<(), String> {
                                 pending = back_button.key_down(&mut state, key, Instant::now());
                             }
                         }
-                        Keycode::Up if !repeat || !state.recents_open() => {
+                        Keycode::Up
+                            if !repeat
+                                || (!state.recents_open() && !state.channel_switcher_open()) =>
+                        {
                             pending = state.direction(Direction::Up, &scene.controls);
                         }
                         Keycode::Down => {
@@ -1574,7 +1585,7 @@ fn run() -> Result<(), String> {
                 } if is_back(key, webos) => {
                     if let Some(long) = back_button.release(key, Instant::now()) {
                         pending = if long {
-                            state.open_recents()
+                            state.open_back_overlay()
                         } else {
                             state.back()
                         };
@@ -1673,6 +1684,19 @@ fn run() -> Result<(), String> {
                     state.pointer = false;
                     state.dirty = true;
                 }
+                Event::MouseWheel { x, y, .. } if state.channel_switcher_open() => {
+                    press = None;
+                    let delta = if x != 0 { x } else { -y };
+                    if delta != 0 {
+                        pending = state.channel_switcher_direction(if delta > 0 {
+                            Direction::Right
+                        } else {
+                            Direction::Left
+                        });
+                    }
+                    state.pointer = false;
+                    state.dirty = true;
+                }
                 Event::MouseWheel {
                     x,
                     y,
@@ -1725,7 +1749,7 @@ fn run() -> Result<(), String> {
         }
         if back_button.held(Instant::now()) {
             press = None;
-            let pending = state.open_recents();
+            let pending = state.open_back_overlay();
             running &= effects(
                 pending,
                 &mut state,
