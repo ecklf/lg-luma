@@ -36,11 +36,14 @@ date have been removed.
 
 - **Left / Right** browses favorites. Hold **OK** to reorder them.
 - **Down** from favorites opens the animated six-column app drawer.
+- **Up** from the drawer’s first app row returns Home with the corresponding favorite selected.
 - **Up** from favorites reaches the corner controls.
 - **Back** closes the drawer and focuses the first favorite.
 - **Settings → General → App sorting** chooses **Alphabetically** (default) or **Usage count**.
   Usage sorts by successful launches from Luma, most used first, with alphabetical ties.
   Counts stay local and persist across restarts. Favorites keep their manual order.
+- **Settings → General → UI sounds** enables soft, tvOS-inspired navigation, select, and back
+  feedback. Off by default; uses original synthesized sounds, not Apple recordings.
 - **Settings → Widgets → Weather → Widget style** offers **Standard**, **No icon**,
   and **Compact**, with a preview of every design before choosing. Compact
   places a small condition icon on the second line beside the condition and location.
@@ -87,6 +90,7 @@ clear cached artwork and reload it without changing your preferences.
 
 | TV        | Model identifier | Takeover Support |
 | --------- | ---------------- | ---------------- |
+| LG B1     | `OLED65B19LA`    | ✅               |
 | LG C1     | `OLED48C1KNB`    | ✅               |
 | LG G1     | `OLED65G1RLA`    | ✅               |
 | LG UP8000 | `86UP80009LA`    | Unknown          |
@@ -169,7 +173,7 @@ to help make Luma available by default.
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_3.1.0_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_3.2.0_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -360,7 +364,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_3.1.0_arm.ipk
+dist/com.ecklf.luma_3.2.0_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png
