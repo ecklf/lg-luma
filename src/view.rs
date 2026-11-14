@@ -2963,7 +2963,9 @@ fn shelf_settings(out: &mut Scene, state: &State, assets: &Assets) {
         },
     );
     let suggest = crate::tmdb::SUGGEST_LANGUAGES
-        .get(crate::tmdb::language_index(&state.preferences.tmdb_language))
+        .get(crate::tmdb::language_index(
+            &state.preferences.tmdb_language,
+        ))
         .map(|option| {
             if option.code == "auto" {
                 language.t("stateAuto")
@@ -3887,6 +3889,7 @@ fn keyboard(out: &mut Scene, state: &State, assets: &Assets) {
             TextField::Location => language.t("cityPostcode"),
             TextField::Name => language.t("greetingName"),
             TextField::InputName => language.t("inputName"),
+            TextField::ShelfKey => language.t("tmdbApiKey"),
             TextField::Apps => language.t("findApp"),
         },
         Rect::new(389., 324., 1000., 44.),

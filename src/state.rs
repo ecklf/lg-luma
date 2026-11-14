@@ -2760,9 +2760,8 @@ impl State {
             Target::ShelfKey => self.open_keyboard(TextField::ShelfKey),
             Target::ShelfRegion => {
                 self.subpage = Some(Subpage::ShelfRegion);
-                self.focus = Target::Choice(crate::tmdb::region_index(
-                    &self.preferences.tmdb_region,
-                ));
+                self.focus =
+                    Target::Choice(crate::tmdb::region_index(&self.preferences.tmdb_region));
                 self.scroll = 0.;
                 if !self.preferences.reduced_motion {
                     self.panel_started = Some(Instant::now());
@@ -2770,9 +2769,8 @@ impl State {
             }
             Target::ShelfLanguage => {
                 self.subpage = Some(Subpage::ShelfLanguage);
-                self.focus = Target::Choice(crate::tmdb::language_index(
-                    &self.preferences.tmdb_language,
-                ));
+                self.focus =
+                    Target::Choice(crate::tmdb::language_index(&self.preferences.tmdb_language));
                 self.scroll = 0.;
                 if !self.preferences.reduced_motion {
                     self.panel_started = Some(Instant::now());
@@ -3122,9 +3120,8 @@ impl State {
                         }
                     }
                     Some(Subpage::ShelfRegion) => {
-                        let region = crate::tmdb::REGIONS
-                            [index.min(crate::tmdb::REGIONS.len() - 1)]
-                        .code;
+                        let region =
+                            crate::tmdb::REGIONS[index.min(crate::tmdb::REGIONS.len() - 1)].code;
                         if self.preferences.tmdb_region != region {
                             self.preferences.tmdb_region = region.into();
                             self.shelf.shows.clear();
@@ -3133,7 +3130,7 @@ impl State {
                     Some(Subpage::ShelfLanguage) => {
                         let language = crate::tmdb::SUGGEST_LANGUAGES
                             [index.min(crate::tmdb::SUGGEST_LANGUAGES.len() - 1)]
-                        .code;
+                            .code;
                         if self.preferences.tmdb_language != language {
                             self.preferences.tmdb_language = language.into();
                             self.shelf.shows.clear();

@@ -17,7 +17,7 @@ pub enum Catalog {
     Trending,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Show {
     pub id: u64,
     pub name: String,
@@ -229,7 +229,11 @@ pub fn resolve_region(pref: &str, ui: crate::i18n::Language) -> String {
 }
 
 pub fn resolve_language(pref: &str, ui: crate::i18n::Language) -> String {
-    if pref != "auto" && SUGGEST_LANGUAGES.iter().any(|language| language.code == pref) {
+    if pref != "auto"
+        && SUGGEST_LANGUAGES
+            .iter()
+            .any(|language| language.code == pref)
+    {
         return pref.into();
     }
     match ui {

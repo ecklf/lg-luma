@@ -6,7 +6,7 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex,
+        Mutex,
         atomic::{AtomicU64, Ordering},
         mpsc,
     },
@@ -95,11 +95,7 @@ impl Client {
         Ok(())
     }
 
-    fn fetch_shows(
-        &self,
-        command: &Command,
-        cache_dir: &Path,
-    ) -> Result<Vec<Show>, String> {
+    fn fetch_shows(&self, command: &Command, cache_dir: &Path) -> Result<Vec<Show>, String> {
         let Command::Refresh {
             catalog,
             key,

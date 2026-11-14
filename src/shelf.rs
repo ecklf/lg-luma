@@ -1,6 +1,6 @@
 //! Home Top Shelf dwell/reveal and TMDB request scheduling.
 use crate::state::{Effect, Page, State, Target};
-use crate::tmdb::{self, Catalog, Command, Response, REVEAL_MS, ROTATE_MS};
+use crate::tmdb::{self, Catalog, Command, REVEAL_MS, ROTATE_MS, Response};
 use std::time::Instant;
 
 impl State {

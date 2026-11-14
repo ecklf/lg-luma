@@ -26,15 +26,15 @@ mod renderer;
 #[path = "scroll-preview.rs"]
 mod scroll_preview;
 mod sdl_events;
-mod state;
 mod shelf;
+mod state;
 mod storage;
 mod text_rendering;
+#[path = "tile-editor.rs"]
+mod tile_editor;
 mod tmdb;
 #[path = "tmdb-service.rs"]
 mod tmdb_service;
-#[path = "tile-editor.rs"]
-mod tile_editor;
 mod update;
 mod vector;
 mod view;
@@ -758,10 +758,8 @@ fn run() -> Result<(), String> {
         weather_service::Client::new(options.weather_test_server.as_deref())?,
         weather_cache,
     );
-    let tmdb_service = tmdb_service::Service::new(
-        tmdb_service::Client::new(),
-        preferences_path.clone(),
-    );
+    let tmdb_service =
+        tmdb_service::Service::new(tmdb_service::Client::new(), preferences_path.clone());
     let disk = tmdb_service::load_cache(&tmdb_service::cache_file(&preferences_path));
     if !disk.items.is_empty() {
         state.shelf.shows = disk.items;
