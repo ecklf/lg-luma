@@ -72,6 +72,29 @@ backend. Avoid copying the whole SDK library directory or the TV's graphics driv
 
 ## Controls and navigation
 
+### Startup profiling
+
+See [startup measurements](docs/startup.md) for the Liquid Glass startup regression and
+the benchmark procedure. `xvfb-run -a pnpm benchmark:startup` builds a release desktop
+binary and alternates five process starts with runtime-filtered and precomputed glass.
+It records `.build/startup-benchmark.json`, without contacting TV or public HTTP services.
+Use `LUMA_STARTUP_RUNS=10` to change the sample count. These are process starts with warm
+filesystem/driver caches, not TV cold-boot measurements.
+
+`--diagnostics PATH` includes `startup.stages_ms` and `startup.first_frame`, separate from
+steady-state frame pacing. The glass counters distinguish prepared atlas loads from legacy
+runtime filtering. TV startup logs also report this breakdown after the first presentation.
+Inventory completion and the first successfully populated frame are timed separately, so a
+quick loading frame cannot conceal slow TV inventory responses.
+`LUMA_GLASS_PRECOMPUTED=0` forces the original filtering path for diagnostic comparison.
+
+`pnpm assets` prepares lossless `wallpapers/*.glass.png` atlases from the final 1080p JPEGs,
+including unshaded variants. The host and legacy renderer share the exact Rust resize/blur
+implementation. New uploads prepare both atlases on the wallpaper worker before publishing
+the immutable directory. Older uploads or missing/corrupt atlases fall back to the original
+renderer. Shader sampling, glass appearance, GPU cache budgets and lazy text are unchanged.
+`xvfb-run -a pnpm test:startup` verifies desktop GL/GLES framebuffer equality and fallback.
+
 ### Documentation screenshots
 
 `pnpm screenshots` generates `docs/home.png`, `docs/apps.png`, `docs/settings.png` and
