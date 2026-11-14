@@ -37,23 +37,42 @@ const configuration = {
   input_modes: {},
   reduced_motion: false,
 };
+const sortingPreviews = process.argv.includes('--sorting');
+const captures = sortingPreviews
+  ? [
+      ['app-sorting-general', 'settings,right,down,down'],
+      ['app-sorting-picker', 'settings,right,down,down,enter'],
+      ['app-sorting-az', 'apps,down'],
+      ['app-sorting-usage', 'apps,down'],
+      ['disc-input', 'home'],
+    ]
+  : [
+      ['home', 'home'],
+      ['weather-setup', 'home,up,down'],
+      ['apps', 'apps,down'],
+      ['settings', 'settings'],
+      ['update-card', 'settings,down,down,down,down,right'],
+      ['inputs', 'home,up'],
+      ['clock-menu', 'home,up,right,right,enter'],
+      ['manage-apps', 'settings,down,enter'],
+      ['app-actions', 'settings,down,enter,enter'],
+    ];
 try {
-  for (const [name, script] of [
-    ['home', 'home'],
-    ['weather-setup', 'home,up,down'],
-    ['apps', 'apps,down'],
-    ['settings', 'settings'],
-    ['update-card', 'settings,down,down,down,down,right'],
-    ['inputs', 'home,up'],
-    ['clock-menu', 'home,up,right,right,enter'],
-    ['manage-apps', 'settings,down,enter'],
-    ['app-actions', 'settings,down,enter,enter'],
-  ]) {
+  for (const [name, script] of captures) {
     // Independent state makes screenshots stable regardless of capture order.
     await fs.writeFile(
       preferences,
       JSON.stringify(
-        name === 'weather-setup' ? { ...configuration, weather_location: null } : configuration,
+        sortingPreviews
+          ? {
+              ...configuration,
+              app_sorting: name === 'app-sorting-az' ? 'alphabetical' : 'usage',
+              app_launch_counts: { 'org.jellyfin.webos': 42, 'cdp-30': 24, 'spotify-beehive': 18 },
+              ...(name === 'disc-input' ? { input_icons: { 'com.webos.app.hdmi1': 'disk' } } : {}),
+            }
+          : name === 'weather-setup'
+            ? { ...configuration, weather_location: null }
+            : configuration,
       ),
     );
     await fs.writeFile(

@@ -212,9 +212,30 @@ impl DateFormat {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AppSorting {
+    #[default]
+    Alphabetical,
+    Usage,
+}
+
+impl AppSorting {
+    pub const ALL: [Self; 2] = [Self::Alphabetical, Self::Usage];
+
+    pub fn label_key(self) -> &'static str {
+        match self {
+            Self::Alphabetical => "appSortingAlphabetical",
+            Self::Usage => "appSortingUsage",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
+    pub app_sorting: AppSorting,
+    pub app_launch_counts: BTreeMap<String, u64>,
     pub favorites: Option<Vec<String>>,
     pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
@@ -256,6 +277,8 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
+            app_sorting: AppSorting::default(),
+            app_launch_counts: BTreeMap::new(),
             favorites: None,
             custom_tiles: vec![],
             hidden: vec![],
@@ -285,6 +308,17 @@ impl Default for Preferences {
 }
 
 impl Preferences {
+    pub fn compare_apps(&self, a: &App, b: &App) -> std::cmp::Ordering {
+        let usage = |app: &App| self.app_launch_counts.get(&app.id).copied().unwrap_or(0);
+        let count = match self.app_sorting {
+            AppSorting::Alphabetical => std::cmp::Ordering::Equal,
+            AppSorting::Usage => usage(b).cmp(&usage(a)),
+        };
+        count
+            .then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
+            .then_with(|| a.id.cmp(&b.id))
+    }
+
     pub fn splash_background(&self) -> &str {
         self.splash_background
             .as_deref()

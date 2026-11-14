@@ -87,6 +87,15 @@ It does not execute the test suites. A desktop display is required; on headless 
 
 ### Input
 
+General → App sorting stores `app_sorting` (`alphabetical`, the default, or `usage`).
+`app_launch_counts` maps app IDs to saturating launch counts, saved after successful TV
+launch responses, including Recent apps. Failed launches, desktop simulations, inputs,
+and webhook shortcuts do not count. Counting continues in Alphabetically mode. Non-favorites sort
+by descending count in usage mode, then case-insensitive title and app ID. Favorites
+retain their manual order. The same order fills empty dock slots and the app drawer.
+`xvfb-run -a pnpm screenshots --sorting` captures the sorting settings, both app orders,
+and the generic disc input icon from the native desktop renderer using seeded local counts.
+
 | Input                         | Action                                                                       |
 | ----------------------------- | ---------------------------------------------------------------------------- |
 | Arrows                        | Move focus. Down from favorites opens the drawer, Up reaches corner controls |
