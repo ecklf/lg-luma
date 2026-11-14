@@ -9,15 +9,20 @@ pub const ROTATE_MS: u64 = 8_000;
 pub const MAX_SHOWS: usize = 3;
 pub const CACHE_TTL_SECS: i64 = 12 * 3600;
 
-/// Major JustWatch / TMDB provider ids sampled for Stremio-style aggregators.
-pub const ALL_PLATFORM_PROVIDERS: &[u32] =
-    &[8, 9, 337, 350, 1899, 384, 541, 2237, 62, 456, 119, 2241];
+/// JustWatch / TMDB provider ids tried for Amazon-style catalogs (9 is often
+/// empty in ES; 119 is Amazon Prime Video).
+pub const AMAZON_PROVIDERS: &[u32] = &[119, 9];
+
+/// Providers sampled when building a cross-service mix. Prefer ids that return
+/// results in common European `watch_region`s; keep the list short so Home is
+/// not blocked on a long sequential discover chain.
+pub const ALL_PLATFORM_PROVIDERS: &[u32] = &[8, 119, 337, 350, 2237, 1899];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Catalog {
-    /// JustWatch / TMDB watch-provider id(s); first matching discover reply wins.
+    /// JustWatch / TMDB watch-provider id(s); first non-empty discover reply wins.
     Providers(&'static [u32]),
-    /// Mix one popular title from each major platform (Stremio / aggregators).
+    /// Popular weekly mix for aggregators (Stremio); one trending request.
     AllPlatforms,
 }
 
@@ -279,7 +284,7 @@ pub fn catalog_for(app: &App) -> Option<Catalog> {
         return Some(Catalog::Providers(&[8]));
     }
     if brand == "prime-video" || id == "amazon" || id.contains("primevideo") {
-        return Some(Catalog::Providers(&[9, 119]));
+        return Some(Catalog::Providers(AMAZON_PROVIDERS));
     }
     if brand == "disney-plus" || id.contains("disney") {
         return Some(Catalog::Providers(&[337]));

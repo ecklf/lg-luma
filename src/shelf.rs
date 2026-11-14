@@ -74,15 +74,6 @@ impl State {
             && self.shelf.pending.as_deref() != Some(app.id.as_str())
             && (dwell >= REVEAL_MS / 2 || self.preferences.reduced_motion)
         {
-            // Drop pathless cache entries so a retry can replace a stale catalog.
-            if self
-                .shelf
-                .shows
-                .get(&app.id)
-                .is_some_and(|shows| !shows.is_empty())
-            {
-                self.shelf.shows.remove(&app.id);
-            }
             effects.extend(self.shelf_request(&app.id, catalog, key));
         }
         let want_reveal = ready && (dwell >= REVEAL_MS || self.preferences.reduced_motion);

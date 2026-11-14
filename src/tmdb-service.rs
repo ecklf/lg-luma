@@ -26,7 +26,9 @@ pub struct Client {
 impl Client {
     pub fn new() -> Self {
         let agent = ureq::Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(10)))
+            // Keep discovers snappy: long timeouts made Stremio appear broken while
+            // a sequential multi-provider chain waited on dead addresses.
+            .timeout_global(Some(Duration::from_secs(5)))
             .max_redirects(0)
             .proxy(None)
             .build()
@@ -65,10 +67,24 @@ impl Client {
         language: &str,
         provider: u32,
     ) -> Result<Vec<Show>, String> {
+        // `with_watch_monetization_types` is required for reliable provider filtering.
         let url = format!(
-            "{API}/discover/tv?api_key={key}&watch_region={region}&language={language}&with_watch_providers={provider}&sort_by=popularity.desc&vote_count.gte=40&include_adult=false"
+            "{API}/discover/tv?api_key={key}&watch_region={region}&language={language}&with_watch_providers={provider}&with_watch_monetization_types=flatrate&sort_by=popularity.desc&vote_count.gte=40&include_adult=false"
         );
-        Ok(tmdb::parse_shows(&self.get_json(&url)?))
+        let shows = tmdb::parse_shows(&self.get_json(&url)?);
+        if shows.is_empty() {
+            return Err(format!("TMDB provider {provider} returned no shows"));
+        }
+        Ok(shows)
+    }
+
+    fn discover_trending(&self, key: &str, language: &str) -> Result<Vec<Show>, String> {
+        let url = format!("{API}/trending/tv/week?api_key={key}&language={language}");
+        let shows = tmdb::parse_shows(&self.get_json(&url)?);
+        if shows.is_empty() {
+            return Err("TMDB trending returned no shows".into());
+        }
+        Ok(shows)
     }
 
     fn discover_all_platforms(
@@ -77,27 +93,34 @@ impl Client {
         region: &str,
         language: &str,
     ) -> Result<Vec<Show>, String> {
-        // One title per major platform so Stremio previews a cross-service mix.
-        let mut picked = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-        let mut last_error = None;
-        for provider in tmdb::ALL_PLATFORM_PROVIDERS {
-            if picked.len() >= tmdb::MAX_SHOWS {
-                break;
-            }
-            match self.discover_provider(key, region, language, *provider) {
-                Ok(shows) => {
-                    if let Some(show) = shows.into_iter().find(|show| seen.insert(show.id)) {
-                        picked.push(show);
+        // Prefer one trending reply so aggregators are not blocked on a long
+        // sequential discover chain (and on provider ids that are empty in-region).
+        match self.discover_trending(key, language) {
+            Ok(shows) => Ok(shows),
+            Err(trending_error) => {
+                let mut picked = Vec::new();
+                let mut seen = std::collections::HashSet::new();
+                let mut last_error = Some(trending_error);
+                for provider in tmdb::ALL_PLATFORM_PROVIDERS {
+                    if picked.len() >= tmdb::MAX_SHOWS {
+                        break;
+                    }
+                    match self.discover_provider(key, region, language, *provider) {
+                        Ok(shows) => {
+                            if let Some(show) = shows.into_iter().find(|show| seen.insert(show.id))
+                            {
+                                picked.push(show);
+                            }
+                        }
+                        Err(error) => last_error = Some(error),
                     }
                 }
-                Err(error) => last_error = Some(error),
+                if picked.is_empty() {
+                    return Err(last_error.unwrap_or_else(|| "No TMDB providers".into()));
+                }
+                Ok(picked)
             }
         }
-        if picked.is_empty() {
-            return Err(last_error.unwrap_or_else(|| "No TMDB providers".into()));
-        }
-        Ok(picked)
     }
 
     fn download(&self, url: &str, dest: &Path) -> Result<(), String> {
@@ -149,17 +172,21 @@ impl Client {
         if key.len() < 16 {
             return Err("TMDB API key required".into());
         }
+        eprintln!(
+            "Luma TMDB: fetching {} ({region}/{language})",
+            match catalog {
+                Catalog::Providers(ids) => format!("providers {ids:?}"),
+                Catalog::AllPlatforms => "trending/all-platforms".into(),
+            }
+        );
         let raw = match catalog {
             Catalog::Providers(ids) => {
                 let mut last = Err("No TMDB providers".into());
                 for id in *ids {
                     match self.discover_provider(&key, region, language, *id) {
                         Ok(shows) => {
-                            if !shows.is_empty() {
-                                last = Ok(shows);
-                                break;
-                            }
                             last = Ok(shows);
+                            break;
                         }
                         Err(error) => last = Err(error),
                     }
@@ -183,6 +210,10 @@ impl Client {
             }
         }
         shows.retain(|show| show.backdrop_path.is_some());
+        if shows.is_empty() {
+            return Err("TMDB produced no usable backdrops".into());
+        }
+        eprintln!("Luma TMDB: ready {} show(s)", shows.len());
         Ok(shows)
     }
 }
@@ -268,7 +299,7 @@ impl Service {
                                 .map(|id| id.to_string())
                                 .collect::<Vec<_>>()
                                 .join("|"),
-                            Catalog::AllPlatforms => "all-platforms".into(),
+                            Catalog::AllPlatforms => "trending-week".into(),
                         }
                     );
                     let now = time::OffsetDateTime::now_utc().unix_timestamp();
