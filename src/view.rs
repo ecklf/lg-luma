@@ -1207,7 +1207,6 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
         let cell = home_widget_rect(widget, state.preferences.widget_position(widget));
         if (widget == HomeWidget::Greeting && !state.preferences.show_greeting)
             || (widget == HomeWidget::Weather && !state.preferences.show_weather)
-            || (widget == HomeWidget::Date && !state.preferences.show_date)
         {
             continue;
         }
@@ -1241,22 +1240,33 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
             }
             continue;
         }
-        let (label, size) = if widget == HomeWidget::Date {
-            (state.preferences.date_format.format(language, now), 32.)
-        } else {
-            (language.greeting(now.hour(), ""), 72.)
-        };
-        let (label, style) = assets.fit_line(&label, text(size, 500, -0.02), cell.w, 24.);
+        // Restore the pre-redesign type treatment, fitting the whole heading
+        // into the fixed 2×1 footprint rather than widening or clipping it.
+        let label = language.greeting(now.hour(), "");
+        let style = assets.fit_text(&label, text(90.4, 500, -0.065).leading(1.05), cell.w);
         let height = style.size * style.line_height;
+        let date_band = if state.preferences.show_date {
+            32.8
+        } else {
+            0.
+        };
+        let top = cell.y + (cell.h - date_band - height) / 2.;
+        if state.preferences.show_date {
+            let date = state.preferences.date_format.format(language, now);
+            let (date, date_style) = assets.fit_line(&date, text(18.4, 600, 0.12), cell.w, 14.);
+            out.text(
+                date,
+                Rect::new(cell.x, top, cell.w, 24.),
+                date_style,
+                c(0xf5f5f5, 0.72),
+                false,
+            );
+        }
         out.text(
             label,
-            Rect::new(cell.x, cell.y + (cell.h - height) / 2., cell.w, height),
+            Rect::new(cell.x, top + date_band, cell.w, height),
             style,
-            if widget == HomeWidget::Date {
-                c(0xf5f5f5, 0.82)
-            } else {
-                WHITE
-            },
+            WHITE,
             false,
         );
     }
@@ -2126,7 +2136,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
         if state.section == index && state.subpage.is_some() {
             let nested_path = match &state.subpage {
                 Some(Subpage::DateFormat) => {
-                    Some(vec![language.t("date"), language.t("dateFormat")])
+                    Some(vec![language.t("greeting"), language.t("dateFormat")])
                 }
                 Some(Subpage::ClockFormat) => {
                     Some(vec![language.t("clock"), language.t("clockFormat")])
@@ -2167,7 +2177,6 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
             };
             let sub = match &state.subpage {
                 Some(Subpage::Greeting) => language.t("greeting"),
-                Some(Subpage::Date) => language.t("date"),
                 Some(Subpage::Weather) => language.t("weather"),
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
                 Some(Subpage::Inputs) => language.t("inputs"),
@@ -2253,7 +2262,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::Shortcuts
                 | Subpage::Inputs
                 | Subpage::Greeting
-                | Subpage::Date
                 | Subpage::Clock
                 | Subpage::WidgetPosition(_)
         ) {
@@ -2264,7 +2272,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::Shortcuts => shortcut_settings(out, state, assets),
                 Subpage::Inputs => inputs_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
-                Subpage::Date => date_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
                 Subpage::WidgetPosition(widget) => {
                     widget_position_settings(out, state, assets, *widget)
@@ -2348,7 +2355,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::Shortcuts
             | Subpage::Inputs
             | Subpage::Greeting
-            | Subpage::Date
             | Subpage::Clock => {
                 unreachable!()
             }
@@ -2614,7 +2620,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 (2, "shortcuts", "sparkles"),
                 (3, "inputs", "input-hdmi"),
                 (0, "greeting", "type"),
-                (4, "date", "clock"),
             ]
             .into_iter()
             .enumerate()
@@ -2942,7 +2947,7 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
         state,
         assets,
         HomeWidget::Greeting,
-        248.8 - state.scroll,
+        416.8 - state.scroll,
     );
     row(
         out,
@@ -2963,15 +2968,10 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
             chevron: false,
         },
     );
-}
-
-fn date_settings(out: &mut Scene, state: &State, assets: &Assets) {
-    let language = state.preferences.language;
-    widget_position_row(out, state, assets, HomeWidget::Date, 332.8 - state.scroll);
     for (index, (target, title, value, chevron)) in [
         (
             Target::DateToggle,
-            "showWidget",
+            "date",
             language.t(if state.preferences.show_date {
                 "stateOn"
             } else {
@@ -2995,7 +2995,7 @@ fn date_settings(out: &mut Scene, state: &State, assets: &Assets) {
             assets,
             Row {
                 target,
-                rect: Rect::new(640., 164.8 + index as f32 * 84. - state.scroll, 1120., 72.),
+                rect: Rect::new(640., 248.8 + index as f32 * 84. - state.scroll, 1120., 72.),
                 title: language.t(title),
                 icon: None,
                 value: Some(value),
@@ -3975,7 +3975,7 @@ mod tests {
                     .collect();
                 assert_eq!(parts.len(), 3);
                 assert_eq!(parts[0].0, language.t("widgets"));
-                assert_eq!(parts[1].0, language.t("date"));
+                assert_eq!(parts[1].0, language.t("greeting"));
                 assert_eq!(parts[2].0, language.t("dateFormat"));
                 assert_eq!(parts[0].3, parts[1].3);
                 assert!(parts[2].3[3] > parts[1].3[3]);
@@ -4227,13 +4227,13 @@ mod tests {
                         (other.rect.x, other.rect.y)
                     );
                 }
-                assert_eq!(rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, ..) if label == &state.preferences.language.date(OffsetDateTime::UNIX_EPOCH))), show_date);
+                assert_eq!(rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, ..) if label == &state.preferences.language.date(OffsetDateTime::UNIX_EPOCH))), show_date && show_greeting);
             }
         }
     }
 
     #[test]
-    fn date_and_larger_greeting_stay_inside_their_fixed_footprints() {
+    fn combined_greeting_restores_original_typography_inside_one_footprint() {
         let assets = assets();
         for language in Language::ALL {
             for hour in [0, 9, 15, 20] {
@@ -4245,8 +4245,8 @@ mod tests {
                 let now = OffsetDateTime::UNIX_EPOCH + time::Duration::hours(hour);
                 let mut rendered = Scene::new();
                 home_widgets(&mut rendered, &state, &assets, now);
-                for widget in [HomeWidget::Date, HomeWidget::Greeting] {
-                    let label = if widget == HomeWidget::Date {
+                for is_date in [true, false] {
+                    let label = if is_date {
                         language.date(now)
                     } else {
                         language.greeting(now.hour(), "")
@@ -4261,14 +4261,24 @@ mod tests {
                             _ => None,
                         })
                         .expect("The full localized widget label should fit without truncation");
-                    let cell = home_widget_rect(widget, state.preferences.widget_position(widget));
+                    let cell =
+                        home_widget_rect(HomeWidget::Greeting, state.preferences.greeting_position);
                     assert!(rect.x >= cell.x && rect.y >= cell.y);
                     assert!(
                         rect.x + rect.w <= cell.x + cell.w && rect.y + rect.h <= cell.y + cell.h
                     );
                     assert_eq!(assets.lines(&label, style, rect.w), 1);
-                    if widget == HomeWidget::Greeting && language == Language::En {
-                        assert!(style.size > 48.);
+                    if is_date {
+                        assert_eq!(style.size, 18.4);
+                        assert_eq!(style.weight, 600);
+                        assert_eq!(style.tracking, 0.12);
+                    } else {
+                        assert_eq!(style.weight, 500);
+                        assert_eq!(style.tracking, -0.065);
+                        assert_eq!(style.line_height, 1.05);
+                        if language == Language::En {
+                            assert_eq!(style.size, 90.4);
+                        }
                     }
                 }
             }

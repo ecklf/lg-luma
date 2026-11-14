@@ -156,7 +156,6 @@ pub enum Overlay {
 pub enum Subpage {
     WidgetPosition(HomeWidget),
     Greeting,
-    Date,
     DateFormat,
     Weather,
     Shortcuts,
@@ -1229,16 +1228,14 @@ impl State {
         self.focus = match self.subpage.take() {
             Some(Subpage::WidgetPosition(widget)) => {
                 self.subpage = Some(match widget {
-                    HomeWidget::Date => Subpage::Date,
                     HomeWidget::Greeting => Subpage::Greeting,
                     HomeWidget::Weather => Subpage::Weather,
                 });
                 Target::MoveWidget(widget)
             }
             Some(Subpage::Greeting) => Target::Widget(0),
-            Some(Subpage::Date) => Target::Widget(4),
             Some(Subpage::DateFormat) => {
-                self.subpage = Some(Subpage::Date);
+                self.subpage = Some(Subpage::Greeting);
                 Target::DateFormat
             }
             Some(Subpage::Weather) => Target::Widget(1),
@@ -1509,12 +1506,9 @@ impl State {
             let setting_rows: Option<&[Target]> = match self.subpage {
                 Some(Subpage::Greeting) => Some(&[
                     Target::GreetingToggle,
-                    Target::MoveWidget(HomeWidget::Greeting),
-                ]),
-                Some(Subpage::Date) => Some(&[
                     Target::DateToggle,
                     Target::DateFormat,
-                    Target::MoveWidget(HomeWidget::Date),
+                    Target::MoveWidget(HomeWidget::Greeting),
                 ]),
                 Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
                 _ => None,
@@ -2507,7 +2501,6 @@ impl State {
                     0 => (Subpage::Greeting, Target::GreetingToggle),
                     1 => (Subpage::Weather, Target::WeatherToggle),
                     2 => (Subpage::Shortcuts, Target::TileEditor),
-                    4 => (Subpage::Date, Target::DateToggle),
                     3 => (
                         Subpage::Inputs,
                         self.inventory
@@ -2793,7 +2786,6 @@ impl State {
                     Some(
                         Subpage::WeatherLocation
                         | Subpage::Greeting
-                        | Subpage::Date
                         | Subpage::Clock
                         | Subpage::Weather
                         | Subpage::Shortcuts
