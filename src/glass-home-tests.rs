@@ -850,7 +850,7 @@ fn settings_move_action_reorders_only_saved_favorites() {
 }
 
 #[test]
-fn glass_surfaces_are_used_on_home_settings_and_keyboard() {
+fn glass_surfaces_are_used_on_home_and_settings() {
     let mut state = ready();
     for page in [0, 1, 2] {
         state.open(page);
@@ -861,13 +861,47 @@ fn glass_surfaces_are_used_on_home_settings_and_keyboard() {
                 .any(|draw| matches!(draw, Draw::Glass(..)))
         );
     }
-    state.open_keyboard(crate::state::TextField::Apps);
-    assert!(
-        scene(&state)
-            .draw
-            .iter()
-            .any(|draw| matches!(draw, Draw::Glass(rect, ..) if rect.w == 1220.))
-    );
+}
+
+#[test]
+fn modal_cards_use_opaque_gray_surfaces_instead_of_glass() {
+    let restore = Target::App("netflix".into());
+    for overlay in [
+        Overlay::WallpaperUpload,
+        Overlay::TileEditor,
+        Overlay::Options {
+            id: "netflix".into(),
+            restore: restore.clone(),
+        },
+        Overlay::Delete {
+            id: "netflix".into(),
+            restore: restore.clone(),
+        },
+        Overlay::BackgroundOptions {
+            id: "dunes".into(),
+            restore: Target::Background(0),
+        },
+        Overlay::BackgroundDelete {
+            id: "dunes".into(),
+            restore: Target::Background(0),
+        },
+        Overlay::Keyboard,
+    ] {
+        let mut state = ready();
+        state.preferences.reduced_motion = true;
+        state.overlay = Some(overlay);
+        let rendered = scene(&state);
+        let panel = rendered.modal.unwrap();
+        let same_panel = |rect: &crate::state::Rect| {
+            (rect.x, rect.y, rect.w, rect.h) == (panel.x, panel.y, panel.w, panel.h)
+        };
+        assert!(!rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::Glass(rect, ..) if same_panel(rect))));
+        assert!(rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::RoundedGradient(rect, _, top, bottom) if same_panel(rect)
+                && *top == [52. / 255., 56. / 255., 59. / 255., 1.]
+                && *bottom == [36. / 255., 40. / 255., 45. / 255., 1.])));
+    }
 }
 
 #[test]
