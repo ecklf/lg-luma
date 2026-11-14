@@ -6,6 +6,8 @@ fn custom(index: u32) -> Wallpaper {
         id: format!("custom-{index:032x}"),
         directory: PathBuf::from(format!("/preview/wallpapers/custom-{index:032x}")),
         has_original: true,
+        has_foreground: false,
+        clock_placements: BTreeMap::new(),
     }
 }
 

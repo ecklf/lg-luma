@@ -85,6 +85,7 @@ try {
     assert.equal(render.capture.glyph_failures, 0);
     return sharp(image).ensureAlpha().raw().toBuffer();
   };
+  let reference;
   for (const [gradient, options] of [
     [true, {}],
     [false, {}],
@@ -94,6 +95,7 @@ try {
     const base = await capture(`base-${variant}`, assets, false, gradient);
     const clear = await capture(`unoccluded-${variant}`, fake, true, gradient, true, options);
     const depth = await capture(`depth-${variant}`, assets, true, gradient, true, options);
+    if (gradient && !options.home_clock_glass) reference = depth;
     const mask = await sharp(path.join(assets, `foregrounds/summit${gradient ? '' : '-plain'}.png`))
       .ensureAlpha()
       .raw()
@@ -165,6 +167,32 @@ try {
     large = bounds(tall);
   assert.ok(Math.abs(small.width - large.width) <= 2, 'Height must not widen the clock');
   assert.ok(large.height > small.height * 2.2, 'Height control must stretch the actual glyphs');
+  const uploadedId = 'custom-' + 'a'.repeat(32);
+  const directory = path.join(temporary, 'wallpapers', uploadedId);
+  await fs.mkdir(directory, { recursive: true });
+  const manifest = JSON.parse(
+    await fs.readFile(path.join(assets, 'foregrounds/manifest.json'), 'utf8'),
+  );
+  await fs.writeFile(
+    path.join(directory, 'metadata.json'),
+    JSON.stringify({ id: uploadedId, clock_placements: manifest.summit.placements }),
+  );
+  for (const [source, destination] of [
+    ['wallpapers/summit.jpg', 'wallpaper.jpg'],
+    ['wallpapers/summit-plain.jpg', 'original.jpg'],
+    ['thumbnails/summit.jpg', 'thumbnail.jpg'],
+    ['foregrounds/summit.png', 'foreground.png'],
+    ['foregrounds/summit-plain.png', 'foreground-plain.png'],
+  ])
+    await fs.copyFile(path.join(assets, source), path.join(directory, destination));
+  const uploaded = await capture('uploaded-mask', assets, true, true, true, {
+    background: uploadedId,
+  });
+  assert.deepEqual(
+    uploaded,
+    reference,
+    'Uploaded wallpaper foregrounds must render like identical bundled foregrounds',
+  );
   console.log(
     'Native depth-clock checks passed: real glyph occlusion, colour matching, gradient toggle, readable clock and unobscured dock.',
   );

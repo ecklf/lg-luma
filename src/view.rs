@@ -1325,9 +1325,16 @@ fn clock_foreground(
         return None;
     }
     let id = &state.preferences.background;
-    let foreground = assets.foregrounds.get(id)?;
-    let center = (*foreground
-        .placements
+    let uploaded = state
+        .wallpapers
+        .iter()
+        .find(|item| &item.id == id && item.has_foreground);
+    let placements = if let Some(item) = uploaded {
+        &item.clock_placements
+    } else {
+        &assets.foregrounds.get(id)?.placements
+    };
+    let center = (*placements
         .get(state.preferences.home_layout.key())?
         .get(slot)?)?;
     if !center.is_finite() || center < cell.y + 108. || center > cell.y + cell.h - 108. {
@@ -1338,7 +1345,11 @@ fn clock_foreground(
     } else {
         "-plain"
     };
-    Some((assets.path(format!("foregrounds/{id}{suffix}.png")), center))
+    let path = uploaded.map_or_else(
+        || assets.path(format!("foregrounds/{id}{suffix}.png")),
+        |item| item.foreground(state.preferences.wallpaper_gradient),
+    );
+    Some((path, center))
 }
 
 fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
@@ -4182,6 +4193,40 @@ mod tests {
             assert!(style.glass);
             assert!(new.y >= cell.y && new.y + new.h <= cell.y + cell.h + 0.001);
         }
+    }
+
+    #[test]
+    fn uploaded_clock_masks_use_the_catalog_and_follow_the_gradient_toggle() {
+        let assets = assets();
+        let id = format!("custom-{}", "a".repeat(32));
+        let mut state = State::new(Preferences {
+            background: id.clone(),
+            home_layout: HomeLayout::Centered,
+            ..Preferences::default()
+        });
+        state.set_wallpapers(vec![crate::wallpapers::Wallpaper {
+            id,
+            directory: PathBuf::from("/private/wallpapers/fixture"),
+            has_original: true,
+            has_foreground: true,
+            clock_placements: BTreeMap::from([("centered".into(), vec![Some(432.)])]),
+        }]);
+        let cell = home_widget_rect(HomeLayout::Centered, 0);
+        assert!(
+            clock_foreground(&state, &assets, 0, cell)
+                .unwrap()
+                .0
+                .ends_with("/foreground.png")
+        );
+        state.preferences.wallpaper_gradient = false;
+        assert!(
+            clock_foreground(&state, &assets, 0, cell)
+                .unwrap()
+                .0
+                .ends_with("/foreground-plain.png")
+        );
+        state.wallpapers[0].has_foreground = false;
+        assert!(clock_foreground(&state, &assets, 0, cell).is_none());
     }
 
     #[test]

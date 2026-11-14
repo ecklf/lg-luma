@@ -3,10 +3,11 @@
 pub use crate::companion::Session;
 use crate::companion::{
     Request, error_response, listen, local_peer, random_token, read_exact, redirect_to_page,
-    response, session,
+    response_header, session,
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeMap,
     fs,
     io::{BufReader, Cursor, Read, Write},
     net::TcpStream,
@@ -26,6 +27,12 @@ const SESSION_TIME: Duration = Duration::from_secs(600);
 const SESSION_REQUEST_LIMIT: usize = 64;
 const REQUEST_TIME: Duration = Duration::from_secs(20);
 const STOP: u64 = u64::MAX;
+// Only this companion page may fetch the pinned model as data. Executable code
+// and WASM stay local. Other companion pages keep their original stricter CSP.
+const BROWSER_POLICY: &str = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://huggingface.co https://*.xethub.hf.co; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+#[path = "wallpaper-depth.rs"]
+mod depth;
+use depth::{decode_mask, mask_placements, png};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Wallpaper {
@@ -34,9 +41,23 @@ pub struct Wallpaper {
     pub directory: PathBuf,
     #[serde(skip)]
     pub has_original: bool,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub clock_placements: BTreeMap<String, Vec<Option<f32>>>,
+    #[serde(skip)]
+    pub has_foreground: bool,
 }
 
 impl Wallpaper {
+    pub fn foreground(&self, gradient: bool) -> String {
+        self.directory
+            .join(if gradient {
+                "foreground.png"
+            } else {
+                "foreground-plain.png"
+            })
+            .to_string_lossy()
+            .into_owned()
+    }
     pub fn unshaded_image(&self) -> String {
         // Preserve full resolution for older uploads without an unshaded original.
         self.directory
@@ -92,7 +113,8 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn new(preferences: &Path, loopback_only: bool) -> Result<Self, String> {
+    pub fn new(preferences: &Path, loopback_only: bool, assets: &Path) -> Result<Self, String> {
+        let assets = assets.to_owned();
         let directory = preferences
             .parent()
             .unwrap_or(Path::new("."))
@@ -110,6 +132,7 @@ impl Service {
                     &sender,
                     &updates,
                     loopback_only,
+                    &assets,
                 );
             })
             .map_err(|e| format!("Could not start wallpaper worker: {e}"))?;
@@ -207,6 +230,13 @@ fn catalog(directory: &Path) -> Vec<Wallpaper> {
         }
         item.has_original = fs::symlink_metadata(path.join("original.jpg"))
             .is_ok_and(|m| m.is_file() && m.len() > 0 && m.len() <= MAX_BODY as u64);
+        item.has_foreground = item.has_original
+            && ["foreground.png", "foreground-plain.png"]
+                .iter()
+                .all(|file| {
+                    fs::symlink_metadata(path.join(file))
+                        .is_ok_and(|m| m.is_file() && m.len() > 0 && m.len() <= MAX_BODY as u64)
+                });
         item.directory = path;
         result.push(item);
         if result.len() == MAX_WALLPAPERS {
@@ -365,6 +395,15 @@ fn jpeg(image: &image::RgbImage, quality: u8) -> Result<Vec<u8>, String> {
 }
 
 fn store(directory: &Path, bytes: &[u8], valid: impl Fn() -> bool) -> Result<Wallpaper, String> {
+    store_with_mask(directory, bytes, None, valid)
+}
+
+fn store_with_mask(
+    directory: &Path,
+    bytes: &[u8],
+    mask: Option<&[u8]>,
+    valid: impl Fn() -> bool,
+) -> Result<Wallpaper, String> {
     if catalog(directory).len() >= MAX_WALLPAPERS {
         return Err("The wallpaper gallery is full (20 images)".into());
     }
@@ -375,6 +414,8 @@ fn store(directory: &Path, bytes: &[u8], valid: impl Fn() -> bool) -> Result<Wal
     shade(&mut image);
     let image = jpeg(&image, 94)?;
     let thumbnail = jpeg(&thumbnail, 82)?;
+    let mask = mask.map(decode_mask).transpose()?;
+    let clock_placements = mask.as_ref().map(mask_placements).unwrap_or_default();
     if !valid() {
         return Err("Upload session ended".into());
     }
@@ -395,11 +436,36 @@ fn store(directory: &Path, bytes: &[u8], valid: impl Fn() -> bool) -> Result<Wal
         id: id.clone(),
         directory: directory.join(&id),
         has_original: true,
+        has_foreground: mask.is_some(),
+        clock_placements,
     };
     let result = (|| {
         write_new(&staging.join("wallpaper.jpg"), &image)?;
         write_new(&staging.join("original.jpg"), &original)?;
         write_new(&staging.join("thumbnail.jpg"), &thumbnail)?;
+        if let Some(mask) = &mask {
+            write_new(
+                &staging.join("mask.png"),
+                &png(mask.as_raw(), image::ExtendedColorType::L8)?,
+            )?;
+            for (name, photo) in [
+                ("foreground.png", &image),
+                ("foreground-plain.png", &original),
+            ] {
+                if !valid() {
+                    return Err("Upload session ended".into());
+                }
+                let rgb = decode(photo)?;
+                let rgba = image::RgbaImage::from_fn(1920, 1080, |x, y| {
+                    let p = rgb.get_pixel(x, y).0;
+                    image::Rgba([p[0], p[1], p[2], mask.get_pixel(x, y).0[0]])
+                });
+                write_new(
+                    &staging.join(name),
+                    &png(rgba.as_raw(), image::ExtendedColorType::Rgba8)?,
+                )?;
+            }
+        }
         write_new(
             &staging.join("metadata.json"),
             &serde_json::to_vec(&item).map_err(|e| e.to_string())?,
@@ -416,6 +482,9 @@ fn store(directory: &Path, bytes: &[u8], valid: impl Fn() -> bool) -> Result<Wal
             "original.jpg",
             "thumbnail.jpg",
             "metadata.json",
+            "mask.png",
+            "foreground.png",
+            "foreground-plain.png",
         ] {
             let _ = fs::remove_file(staging.join(file));
         }
@@ -430,6 +499,7 @@ fn worker(
     sender: &mpsc::SyncSender<Event>,
     updates: &mpsc::Receiver<Command>,
     loopback_only: bool,
+    assets: &Path,
 ) {
     if sender.send(Event::Catalog(catalog(directory))).is_err() {
         return;
@@ -498,7 +568,14 @@ fn worker(
                     let valid = || {
                         desired.load(Ordering::Acquire) == generation && Instant::now() < deadline
                     };
-                    match serve(&mut stream, &address.to_string(), &token, directory, valid) {
+                    match serve(
+                        &mut stream,
+                        &address.to_string(),
+                        &token,
+                        directory,
+                        assets,
+                        valid,
+                    ) {
                         Ok(true) => {
                             if sender.send(Event::Catalog(catalog(directory))).is_err() {
                                 return;
@@ -532,11 +609,30 @@ fn request(
     crate::companion::request(reader, valid, deadline, MAX_BODY, "Image exceeds 12 MiB")
 }
 
+fn upload_parts(body: &[u8]) -> Result<(&[u8], &[u8]), String> {
+    if body.len() < 16 || &body[..8] != b"LUMAWP01" {
+        return Err("Invalid masked wallpaper upload".into());
+    }
+    let photo = u32::from_be_bytes(body[8..12].try_into().unwrap()) as usize;
+    let mask = u32::from_be_bytes(body[12..16].try_into().unwrap()) as usize;
+    let end = 16usize.checked_add(photo).and_then(|n| n.checked_add(mask));
+    if photo == 0 || mask == 0 || end != Some(body.len()) {
+        return Err("Invalid masked wallpaper lengths".into());
+    }
+    Ok((&body[16..16 + photo], &body[16 + photo..]))
+}
+
+fn response(stream: &mut TcpStream, status: &str, kind: &str, body: &[u8]) -> Result<(), String> {
+    response_header(stream, status, kind, body.len(), BROWSER_POLICY)?;
+    stream.write_all(body).map_err(|e| e.to_string())
+}
+
 fn serve(
     stream: &mut TcpStream,
     host: &str,
     token: &str,
     directory: &Path,
+    assets: &Path,
     valid: impl Fn() -> bool,
 ) -> Result<bool, String> {
     stream
@@ -570,6 +666,37 @@ fn serve(
         return Ok(false);
     };
     if request.method == "GET" && request.length == 0 {
+        if let Some(name) = route.strip_prefix("vendor/") {
+            let kind = match name {
+                "ort.wasm.min.mjs" | "ort-wasm-simd-threaded.mjs" => {
+                    "text/javascript; charset=utf-8"
+                }
+                "ort-wasm-simd-threaded.wasm" => "application/wasm",
+                _ => {
+                    error_response(stream, "404 Not Found", "Not found")?;
+                    return Ok(false);
+                }
+            };
+            let Some(bytes) = small_file(
+                &assets.join("wallpaper-runtime").join(name),
+                32 * 1024 * 1024,
+            ) else {
+                error_response(
+                    stream,
+                    "404 Not Found",
+                    "The browser mask runtime is unavailable. Upload a mask PNG or update Luma.",
+                )?;
+                return Ok(false);
+            };
+            response_header(stream, "200 OK", kind, bytes.len(), BROWSER_POLICY)?;
+            for chunk in bytes.chunks(64 * 1024) {
+                if !valid() || Instant::now() >= deadline {
+                    return Err("Upload session ended".into());
+                }
+                stream.write_all(chunk).map_err(|e| e.to_string())?;
+            }
+            return Ok(false);
+        }
         if route == "info.json" {
             let body = serde_json::json!({"path": directory.to_string_lossy()}).to_string();
             response(
@@ -601,6 +728,18 @@ fn serve(
                 "text/javascript; charset=utf-8",
                 include_bytes!("../assets/wallpaper-upload/storage.js"),
             ),
+            "mask.js" => (
+                "text/javascript; charset=utf-8",
+                include_bytes!("../assets/wallpaper-upload/mask.js"),
+            ),
+            "depth-worker.js" => (
+                "text/javascript; charset=utf-8",
+                include_bytes!("../assets/wallpaper-upload/depth-worker.js"),
+            ),
+            "sha256.js" => (
+                "text/javascript; charset=utf-8",
+                include_bytes!("../assets/wallpaper-upload/sha256.js"),
+            ),
             "luma-mark.svg" => ("image/svg+xml", include_bytes!("../assets/app-icon.svg")),
             _ => {
                 error_response(stream, "404 Not Found", "Not found")?;
@@ -617,10 +756,12 @@ fn serve(
         error_response(stream, "403 Forbidden", "Invalid upload request")?;
         return Ok(false);
     }
-    if !request
-        .headers
-        .get("content-type")
-        .is_some_and(|value| matches!(value.as_str(), "image/jpeg" | "image/png" | "image/webp"))
+    let masked = request.headers.get("content-type").map(String::as_str)
+        == Some("application/x-luma-wallpaper");
+    if !masked
+        && !request.headers.get("content-type").is_some_and(|value| {
+            matches!(value.as_str(), "image/jpeg" | "image/png" | "image/webp")
+        })
     {
         error_response(
             stream,
@@ -632,7 +773,13 @@ fn serve(
     let mut body = vec![0; request.length];
     read_exact(&mut reader, &mut body, &valid, deadline)?;
     drop(reader);
-    match store(directory, &body, valid) {
+    let saved = if masked {
+        upload_parts(&body)
+            .and_then(|(photo, mask)| store_with_mask(directory, photo, Some(mask), &valid))
+    } else {
+        store(directory, &body, &valid)
+    };
+    match saved {
         Ok(item) => {
             // The commit succeeded even if the phone disconnects before receiving its reply.
             let _ = response(

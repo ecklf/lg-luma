@@ -672,8 +672,11 @@ fn run() -> Result<(), String> {
         state.update_status = update::Status::Checking;
     }
     // Scripted desktop captures must never open a server on the real LAN.
-    let mut wallpaper_service =
-        wallpapers::Service::new(&preferences_path, !webos && !options.script.is_empty())?;
+    let mut wallpaper_service = wallpapers::Service::new(
+        &preferences_path,
+        !webos && !options.script.is_empty(),
+        &assets.root,
+    )?;
     let mut tile_editor_service = tile_editor::Service::new(!webos && !options.script.is_empty())?;
     if options.test_extra_apps > 0 {
         eprintln!(

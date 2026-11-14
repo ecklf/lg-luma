@@ -191,8 +191,24 @@ pub fn response(
     kind: &str,
     body: &[u8],
 ) -> Result<(), String> {
-    write!(stream, "HTTP/1.1 {status}\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\r\n\r\n", body.len())
-        .and_then(|_| stream.write_all(body)).map_err(|e| e.to_string())
+    response_header(
+        stream,
+        status,
+        kind,
+        body.len(),
+        "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    )?;
+    stream.write_all(body).map_err(|e| e.to_string())
+}
+
+pub fn response_header(
+    stream: &mut TcpStream,
+    status: &str,
+    kind: &str,
+    length: usize,
+    policy: &str,
+) -> Result<(), String> {
+    write!(stream, "HTTP/1.1 {status}\r\nContent-Type: {kind}\r\nContent-Length: {length}\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: {policy}\r\n\r\n").map_err(|e| e.to_string())
 }
 
 pub fn error_response(stream: &mut TcpStream, status: &str, error: &str) -> Result<(), String> {

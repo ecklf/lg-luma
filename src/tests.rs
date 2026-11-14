@@ -459,6 +459,8 @@ fn gallery_and_grid_navigation_scroll_to_keep_focus_visible() {
         id: "custom-00000000000000000000000000000001".into(),
         directory: PathBuf::from("/preview/wallpapers/custom-00000000000000000000000000000001"),
         has_original: true,
+        has_foreground: false,
+        clock_placements: BTreeMap::new(),
     }]);
     state.open(2);
     state.section = 1;
@@ -2549,6 +2551,8 @@ fn settings_lists_keep_bottom_padding_for_remote_and_wheel_scrolling() {
                         id: format!("custom-{index:032x}"),
                         directory: std::path::PathBuf::from(".build/padding-fixture"),
                         has_original: true,
+                        has_foreground: false,
+                        clock_placements: BTreeMap::new(),
                     })
                     .collect(),
             );

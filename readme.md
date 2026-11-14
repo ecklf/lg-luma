@@ -39,10 +39,19 @@ The favorites dock and input controls stay unchanged.
 The Clock widget supports a **depth effect** on bundled photo backgrounds: foreground scenery
 can cover the lower part of its oversized digits. Masks are generated ahead of time, not on the
 TV. Turn it off in **Settings → Widgets → Clock depth effect**. A normal clock is used for
-uploaded/abstract backgrounds, cells without a readable depth placement, or missing mask assets.
+uploaded backgrounds without a mask, abstract backgrounds, cells without a readable depth placement,
+or missing mask assets.
 **Clock height** cycles from 100% to 300%, stretching the vector digits vertically without
 widening them (capped to the available slot). **Clock appearance** switches between Plain and
 Glass, with cool highlights and wallpaper refraction. Both controls are under **Settings → Widgets**.
+
+For uploaded photos, the phone/computer upload page offers **Generate mask** after cropping.
+It downloads a verified ~26 MiB model from Hugging Face and runs it on that device, not the TV.
+The photo is not sent to an AI service. Preview the centered sample clock, adjust the foreground
+cutoff, then save the photo and mask together. Changing the crop clears its mask. You can also
+use a matching **1920×1080 PNG mask** (white foreground, black background), cancel generation,
+or save without depth. Automatic generation requires a recent browser with WebAssembly and
+OffscreenCanvas support, enough free memory, and internet access for the model download.
 
 Home uses Liquid Glass controls over your wallpaper, a floating favorites dock, and a weather
 block with a condition icon, temperature, condition, and location. The greeting and standalone

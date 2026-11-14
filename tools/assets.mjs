@@ -10,6 +10,19 @@ const root = path.resolve(import.meta.dirname, '..');
 const source = path.join(root, 'assets');
 const out = path.join(root, '.build/assets');
 const highResolution = process.argv.includes('--4k');
+// Browser-only inference code for the owner's phone/computer, never the TV.
+const runtime = path.join(out, 'wallpaper-runtime');
+await fs.mkdir(runtime, { recursive: true });
+for (const file of [
+  'ort.wasm.min.mjs',
+  'ort-wasm-simd-threaded.mjs',
+  'ort-wasm-simd-threaded.wasm',
+]) {
+  await fs.copyFile(
+    path.join(root, 'node_modules/onnxruntime-web/dist', file),
+    path.join(runtime, file),
+  );
+}
 // Original raster artwork stays separate and replaceable, with its licenses/source notice.
 await fs.cp(path.join(source, 'weather'), path.join(out, 'weather'), { recursive: true });
 // Retire generated dumps from older asset caches as well as the source assets.

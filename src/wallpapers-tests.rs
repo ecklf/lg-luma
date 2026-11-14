@@ -42,11 +42,19 @@ fn http(path: &Path, request: impl FnOnce(&str) -> Vec<u8>) -> (String, bool) {
     let path = path.to_owned();
     let worker = thread::spawn(move || {
         let (mut socket, _) = listener.accept().unwrap();
-        serve(&mut socket, &address.to_string(), "secret", &path, || true).unwrap_or(false)
+        serve(
+            &mut socket,
+            &address.to_string(),
+            "secret",
+            &path,
+            Path::new(".build/assets"),
+            || true,
+        )
+        .unwrap_or(false)
     });
     let mut socket = TcpStream::connect(address).unwrap();
     socket
-        .set_read_timeout(Some(Duration::from_secs(10)))
+        .set_read_timeout(Some(Duration::from_secs(45)))
         .unwrap();
     socket.write_all(&request(&address.to_string())).unwrap();
     let mut response = String::new();
@@ -107,6 +115,113 @@ fn uploads_retain_full_resolution_unshaded_images_and_discover_legacy_fallbacks(
     assert_eq!(legacy[0].unshaded_image(), legacy[0].image());
 }
 
+fn mask_bytes() -> Vec<u8> {
+    let mask = image::GrayImage::from_fn(1920, 1080, |_, y| {
+        image::Luma([if y >= 500 { 255 } else { 0 }])
+    });
+    png(mask.as_raw(), image::ExtendedColorType::L8).unwrap()
+}
+
+#[test]
+fn uploaded_masks_are_atomic_persistent_and_match_both_wallpaper_variants() {
+    let fixture = Fixture::new();
+    let item = store_with_mask(
+        &fixture.wallpapers(),
+        &image(1920, 1080),
+        Some(&mask_bytes()),
+        || true,
+    )
+    .unwrap();
+    assert!(item.has_foreground);
+    let loaded = catalog(&fixture.wallpapers()).remove(0);
+    assert!(loaded.has_foreground);
+    assert_eq!(loaded.clock_placements, item.clock_placements);
+    assert!(loaded.clock_placements["centered"][0].is_some());
+    for gradient in [true, false] {
+        let photo = image::open(if gradient {
+            item.image()
+        } else {
+            item.unshaded_image()
+        })
+        .unwrap()
+        .to_rgb8();
+        let foreground = image::open(item.foreground(gradient)).unwrap().to_rgba8();
+        for (x, y, alpha) in [(960, 100, 0), (960, 700, 255)] {
+            assert_eq!(&foreground.get_pixel(x, y).0[..3], &photo.get_pixel(x, y).0);
+            assert_eq!(foreground.get_pixel(x, y).0[3], alpha);
+        }
+    }
+    fs::remove_file(item.directory.join("foreground.png")).unwrap();
+    assert!(!catalog(&fixture.wallpapers())[0].has_foreground);
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(
+            item.directory.join("foreground-plain.png"),
+            item.directory.join("foreground.png"),
+        )
+        .unwrap();
+        assert!(!catalog(&fixture.wallpapers())[0].has_foreground);
+    }
+    assert_eq!(catalog(&fixture.wallpapers()).len(), 1);
+}
+
+#[test]
+fn invalid_masks_and_session_revocation_leave_no_partial_wallpaper() {
+    let fixture = Fixture::new();
+    let photo = image(1920, 1080);
+    let mut wrong_size = Vec::new();
+    image::DynamicImage::new_luma8(1, 1)
+        .write_to(&mut Cursor::new(&mut wrong_size), image::ImageFormat::Png)
+        .unwrap();
+    assert!(decode_mask(&wrong_size).unwrap_err().contains("1920"));
+    assert!(store_with_mask(&fixture.wallpapers(), &photo, Some(b"invalid"), || true).is_err());
+    let flat = png(&vec![255; 1920 * 1080], image::ExtendedColorType::L8).unwrap();
+    assert!(store_with_mask(&fixture.wallpapers(), &photo, Some(&flat), || true).is_err());
+    let calls = AtomicUsize::new(0);
+    assert!(
+        store_with_mask(&fixture.wallpapers(), &photo, Some(&mask_bytes()), || calls
+            .fetch_add(1, Ordering::SeqCst)
+            == 0)
+        .is_err()
+    );
+    assert!(catalog(&fixture.wallpapers()).is_empty());
+    assert_eq!(fs::read_dir(fixture.wallpapers()).unwrap().count(), 0);
+}
+
+#[test]
+fn masked_upload_envelope_rejects_ambiguous_lengths_and_http_keeps_authentication() {
+    for body in [
+        b"".as_slice(),
+        b"LUMAWP01",
+        &[0; 16],
+        b"LUMAWP01\xff\xff\xff\xff\xff\xff\xff\xff",
+    ] {
+        assert!(upload_parts(body).is_err());
+    }
+    let photo = image(1920, 1080);
+    let mask = mask_bytes();
+    let mut body = b"LUMAWP01".to_vec();
+    body.extend_from_slice(&(photo.len() as u32).to_be_bytes());
+    body.extend_from_slice(&(mask.len() as u32).to_be_bytes());
+    body.extend_from_slice(&photo);
+    body.extend_from_slice(&mask);
+    assert_eq!(
+        upload_parts(&body).unwrap(),
+        (photo.as_slice(), mask.as_slice())
+    );
+    let fixture = Fixture::new();
+    let (response, saved) = http(&fixture.wallpapers(), |host| {
+        let mut request=format!("POST /secret/upload HTTP/1.1\r\nHost: {host}\r\nOrigin: http://{host}\r\nX-Luma-Upload: secret\r\nContent-Type: application/x-luma-wallpaper\r\nContent-Length: {}\r\n\r\n",body.len()).into_bytes();
+        request.extend_from_slice(&body);
+        request
+    });
+    assert!(response.starts_with("HTTP/1.1 201"), "{response}");
+    assert!(saved);
+    assert!(catalog(&fixture.wallpapers())[0].has_foreground);
+    body.push(0);
+    assert!(upload_parts(&body).is_err());
+}
+
 #[test]
 fn deletion_protects_selected_and_bundled_backgrounds_and_only_removes_the_requested_upload() {
     let fixture = Fixture::new();
@@ -152,7 +267,12 @@ fn deletion_rejects_symlink_roots_and_entries_and_never_follows_internal_symlink
 fn worker_reports_deletion_before_the_updated_catalog() {
     let fixture = Fixture::new();
     let item = store(&fixture.wallpapers(), &image(1920, 1080), || true).unwrap();
-    let service = Service::new(&fixture.0.join("preferences.json"), true).unwrap();
+    let service = Service::new(
+        &fixture.0.join("preferences.json"),
+        true,
+        Path::new(".build/assets"),
+    )
+    .unwrap();
     assert!(
         matches!(service.receiver.recv_timeout(Duration::from_secs(5)).unwrap(), Event::Catalog(items) if items.len() == 1)
     );
@@ -239,6 +359,8 @@ fn gallery_capacity_is_checked_before_decoding_or_creating_another_upload() {
                 id,
                 directory: directory.clone(),
                 has_original: false,
+                has_foreground: false,
+                clock_placements: BTreeMap::new(),
             })
             .unwrap(),
         )
@@ -340,6 +462,36 @@ fn only_the_session_origin_host_token_and_upload_header_allow_writes() {
     assert!(response.starts_with("HTTP/1.1 403"));
     assert!(!changed);
     assert!(!fixture.wallpapers().exists());
+}
+
+#[test]
+fn paired_uploads_require_authentication_and_runtime_routes_are_allowlisted() {
+    let fixture = Fixture::new();
+    for headers in ["", "X-Luma-Upload: wrong\r\n"] {
+        let (response, changed) = http(&fixture.wallpapers(), |host| {
+            format!("POST /secret/upload HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/x-luma-wallpaper\r\nContent-Length: 0\r\n{headers}\r\n").into_bytes()
+        });
+        assert!(response.starts_with("HTTP/1.1 403"));
+        assert!(!changed);
+    }
+    for route in [
+        "vendor/unknown.mjs",
+        "vendor/../app.js",
+        "vendor/ort.all.min.mjs",
+    ] {
+        let (response, changed) = http(&fixture.wallpapers(), |host| {
+            format!("GET /secret/{route} HTTP/1.1\r\nHost: {host}\r\n\r\n").into_bytes()
+        });
+        assert!(response.starts_with("HTTP/1.1 404"));
+        assert!(!changed);
+    }
+    let (response, _) = http(&fixture.wallpapers(), |host| {
+        format!("GET /secret/depth-worker.js HTTP/1.1\r\nHost: {host}\r\n\r\n").into_bytes()
+    });
+    assert!(response.starts_with("HTTP/1.1 200"));
+    assert!(response.contains("Content-Security-Policy: "));
+    assert!(response.contains("script-src 'self' 'wasm-unsafe-eval'"));
+    assert!(!response.contains("'unsafe-eval'"));
 }
 
 #[test]
@@ -459,7 +611,12 @@ fn qr_generation_is_deterministic_and_has_a_reasonable_size() {
 #[test]
 fn session_closure_revokes_the_socket_and_reopening_rotates_the_capability() {
     let fixture = Fixture::new();
-    let mut service = Service::new(&fixture.0.join("preferences.json"), true).unwrap();
+    let mut service = Service::new(
+        &fixture.0.join("preferences.json"),
+        true,
+        Path::new(".build/assets"),
+    )
+    .unwrap();
     assert!(matches!(
         service
             .receiver
@@ -520,7 +677,12 @@ fn session_closure_revokes_the_socket_and_reopening_rotates_the_capability() {
 #[test]
 fn cancelling_a_slow_request_releases_the_worker_without_waiting_for_the_body() {
     let fixture = Fixture::new();
-    let mut service = Service::new(&fixture.0.join("preferences.json"), true).unwrap();
+    let mut service = Service::new(
+        &fixture.0.join("preferences.json"),
+        true,
+        Path::new(".build/assets"),
+    )
+    .unwrap();
     service
         .receiver
         .recv_timeout(Duration::from_secs(3))
