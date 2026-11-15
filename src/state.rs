@@ -67,8 +67,12 @@ pub enum Target {
     Sidebar(usize),
     Setting(usize),
     Widget(usize),
+    WidgetCell(usize),
+    WidgetAdd,
+    AddWidget(HomeWidget),
+    ConfigureWidget(HomeWidget),
+    RemoveWidget(HomeWidget),
     MoveWidget(HomeWidget),
-    GreetingToggle,
     DateToggle,
     DateFormat,
     ClockFormat,
@@ -94,7 +98,6 @@ pub enum Target {
     CancelDelete,
     Key(usize),
     WeatherConfigure,
-    WeatherToggle,
     WeatherLocation,
     WeatherTemperature,
     WeatherStyle,
@@ -150,6 +153,8 @@ pub enum Overlay {
     TileEditor,
     BackgroundOptions { id: String, restore: Target },
     BackgroundDelete { id: String, restore: Target },
+    WidgetOptions { cell: usize },
+    WidgetCatalog { cell: usize },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -1206,7 +1211,7 @@ impl State {
                     })
                     .unwrap_or(0),
             ),
-            WIDGETS_SECTION => Target::Widget(1),
+            WIDGETS_SECTION => Target::WidgetCell(0),
             APPS_SECTION => self
                 .apps()
                 .first()
@@ -1227,18 +1232,16 @@ impl State {
         self.pointer = false;
         self.focus = match self.subpage.take() {
             Some(Subpage::WidgetPosition(widget)) => {
-                self.subpage = Some(match widget {
-                    HomeWidget::Greeting => Subpage::Greeting,
-                    HomeWidget::Weather => Subpage::Weather,
-                });
-                Target::MoveWidget(widget)
+                Target::WidgetCell(self.preferences.widget_position(widget).cell())
             }
-            Some(Subpage::Greeting) => Target::Widget(0),
+            Some(Subpage::Greeting) => {
+                Target::WidgetCell(self.preferences.greeting_position.cell())
+            }
             Some(Subpage::DateFormat) => {
                 self.subpage = Some(Subpage::Greeting);
                 Target::DateFormat
             }
-            Some(Subpage::Weather) => Target::Widget(1),
+            Some(Subpage::Weather) => Target::WidgetCell(self.preferences.weather_position.cell()),
             Some(Subpage::Shortcuts) => Target::Widget(2),
             Some(Subpage::Inputs) => Target::Widget(3),
             Some(Subpage::Clock) => Target::Setting(1),
@@ -1284,6 +1287,33 @@ impl State {
         self.dirty = true;
         if self.recents_open() {
             return self.recent_direction(direction);
+        }
+        if self.overlay.is_none()
+            && self.page == Page::Settings
+            && self.section == WIDGETS_SECTION
+            && self.subpage.is_none()
+            && let Target::WidgetCell(index) = self.focus
+        {
+            let target = match direction {
+                Direction::Left if index % HOME_GRID_COLUMNS == 0 => {
+                    Target::Sidebar(WIDGETS_SECTION)
+                }
+                Direction::Left => Target::WidgetCell(index - 1),
+                Direction::Right if index % HOME_GRID_COLUMNS + 1 < HOME_GRID_COLUMNS => {
+                    Target::WidgetCell(index + 1)
+                }
+                Direction::Up if index >= HOME_GRID_COLUMNS => {
+                    Target::WidgetCell(index - HOME_GRID_COLUMNS)
+                }
+                Direction::Up => Target::SettingsMenu,
+                Direction::Down if index + HOME_GRID_COLUMNS < HOME_GRID_CELLS => {
+                    Target::WidgetCell(index + HOME_GRID_COLUMNS)
+                }
+                Direction::Down => Target::Widget(2),
+                _ => self.focus.clone(),
+            };
+            self.focus(target, controls);
+            return vec![];
         }
         if self.overlay.is_none()
             && matches!(self.subpage, Some(Subpage::WidgetPosition(_)))
@@ -1504,11 +1534,11 @@ impl State {
                 }
             }
             let setting_rows: Option<&[Target]> = match self.subpage {
-                Some(Subpage::Greeting) => Some(&[
-                    Target::GreetingToggle,
-                    Target::DateToggle,
-                    Target::DateFormat,
-                    Target::MoveWidget(HomeWidget::Greeting),
+                Some(Subpage::Greeting) => Some(&[Target::DateToggle, Target::DateFormat]),
+                Some(Subpage::Weather) => Some(&[
+                    Target::WeatherLocation,
+                    Target::WeatherTemperature,
+                    Target::WeatherStyle,
                 ]),
                 Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
                 _ => None,
@@ -1535,6 +1565,9 @@ impl State {
                             Target::ClockFormat
                                 | Target::ClockTimeFormat
                                 | Target::DateFormat
+                                | Target::WeatherLocation
+                                | Target::WeatherTemperature
+                                | Target::WeatherStyle
                                 | Target::MoveWidget(_)
                         ) =>
                     {
@@ -1645,7 +1678,6 @@ impl State {
                 Target::TileEditor
                     | Target::Tile(_)
                     | Target::InputMode(_)
-                    | Target::WeatherToggle
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
                     | Target::WeatherStyle
@@ -1670,9 +1702,7 @@ impl State {
             {
                 return self.activate();
             }
-            if matches!(self.focus, Target::Setting(_) | Target::WeatherToggle)
-                && matches!(direction, Direction::Right)
-            {
+            if matches!(self.focus, Target::Setting(_)) && matches!(direction, Direction::Right) {
                 return vec![];
             }
             if let Target::InputMode(id) = &self.focus
@@ -1687,10 +1717,6 @@ impl State {
                 return vec![];
             }
             if self.focus == Target::Setting(1) && matches!(direction, Direction::Up) {
-                self.focus(Target::SettingsMenu, controls);
-                return vec![];
-            }
-            if self.focus == Target::WeatherToggle && matches!(direction, Direction::Up) {
                 self.focus(Target::SettingsMenu, controls);
                 return vec![];
             }
@@ -2419,11 +2445,6 @@ impl State {
                 self.open_location();
                 self.open_keyboard(TextField::Location);
             }
-            Target::WeatherToggle => {
-                self.preferences.show_weather = !self.preferences.show_weather;
-                self.weather.invalidate_forecast();
-                return vec![Effect::Save];
-            }
             Target::WeatherLocation => self.open_location(),
             Target::WeatherTemperature => {
                 self.subpage = Some(Subpage::Temperature);
@@ -2443,10 +2464,6 @@ impl State {
                 }
             }
             Target::WeatherQuery => self.open_keyboard(TextField::Location),
-            Target::GreetingToggle => {
-                self.preferences.show_greeting = !self.preferences.show_greeting;
-                return vec![Effect::Save];
-            }
             Target::DateToggle => {
                 self.preferences.show_date = !self.preferences.show_date;
                 return vec![Effect::Save];
@@ -2496,10 +2513,73 @@ impl State {
                 }
             }
             Target::InputRename => self.open_keyboard(TextField::InputName),
+            Target::WidgetCell(cell) if cell < HOME_GRID_CELLS => {
+                self.overlay = Some(Overlay::WidgetOptions { cell });
+                self.focus = WidgetPosition::from_cell(cell)
+                    .and_then(|position| self.preferences.widget_at(position))
+                    .map_or_else(
+                        || {
+                            if HomeWidget::ALL
+                                .into_iter()
+                                .any(|widget| !self.preferences.has_widget(widget))
+                            {
+                                Target::WidgetAdd
+                            } else {
+                                Target::CloseDialog
+                            }
+                        },
+                        Target::ConfigureWidget,
+                    );
+                self.panel_started = (!self.preferences.reduced_motion).then(Instant::now);
+            }
+            Target::WidgetAdd => {
+                if let Some(Overlay::WidgetOptions { cell }) = self.overlay {
+                    self.overlay = Some(Overlay::WidgetCatalog { cell });
+                    self.focus = HomeWidget::ALL
+                        .into_iter()
+                        .find(|widget| !self.preferences.has_widget(*widget))
+                        .map_or(Target::CloseDialog, Target::AddWidget);
+                }
+            }
+            Target::AddWidget(widget) => {
+                if self.preferences.has_widget(widget) {
+                    return vec![];
+                }
+                if let Some(Overlay::WidgetCatalog { cell }) = self.overlay.take() {
+                    self.subpage = Some(Subpage::WidgetPosition(widget));
+                    self.focus = Target::Choice(cell);
+                    self.panel_started = None;
+                    self.scroll = 0.;
+                }
+            }
+            Target::RemoveWidget(widget) => {
+                if let Some(Overlay::WidgetOptions { cell }) = self.overlay.take() {
+                    self.preferences.set_widget_present(widget, false);
+                    if widget == HomeWidget::Weather {
+                        self.weather.invalidate_forecast();
+                    }
+                    self.focus = Target::WidgetCell(cell);
+                    self.panel_started = None;
+                    return vec![Effect::Save];
+                }
+            }
+            Target::ConfigureWidget(widget) => {
+                self.overlay = None;
+                self.subpage = Some(match widget {
+                    HomeWidget::Greeting => Subpage::Greeting,
+                    HomeWidget::Weather => Subpage::Weather,
+                });
+                self.focus = match widget {
+                    HomeWidget::Greeting => Target::DateToggle,
+                    HomeWidget::Weather => Target::WeatherLocation,
+                };
+                self.scroll = 0.;
+                self.panel_started = None;
+            }
             Target::Widget(index) => {
                 let (subpage, focus) = match index {
-                    0 => (Subpage::Greeting, Target::GreetingToggle),
-                    1 => (Subpage::Weather, Target::WeatherToggle),
+                    0 => (Subpage::Greeting, Target::DateToggle),
+                    1 => (Subpage::Weather, Target::WeatherLocation),
                     2 => (Subpage::Shortcuts, Target::TileEditor),
                     3 => (
                         Subpage::Inputs,
@@ -2520,6 +2600,7 @@ impl State {
                 }
             }
             Target::MoveWidget(widget) => {
+                self.overlay = None;
                 let position = self.preferences.widget_position(widget);
                 self.subpage = Some(Subpage::WidgetPosition(widget));
                 self.focus = Target::Choice(position.cell());
@@ -2730,9 +2811,18 @@ impl State {
                         if !self.preferences.can_place_widget(widget, position) {
                             return vec![];
                         }
+                        let added = !self.preferences.has_widget(widget);
                         let changed = self.preferences.place_widget(widget, position);
+                        self.preferences.set_widget_present(widget, true);
+                        if added && widget == HomeWidget::Weather {
+                            self.weather.invalidate_forecast();
+                        }
                         self.close_subpage();
-                        return if changed { vec![Effect::Save] } else { vec![] };
+                        return if changed || added {
+                            vec![Effect::Save]
+                        } else {
+                            vec![]
+                        };
                     }
                     Some(Subpage::WeatherStyle) => {
                         self.preferences.weather_style =
@@ -2957,6 +3047,11 @@ impl State {
         }
         if let Some(overlay) = self.overlay.take() {
             self.panel_started = None;
+            if let Overlay::WidgetOptions { cell } | Overlay::WidgetCatalog { cell } = overlay {
+                self.focus = Target::WidgetCell(cell);
+                self.pressed = None;
+                return vec![];
+            }
             if matches!(overlay, Overlay::Inputs | Overlay::Settings) {
                 self.focus = if matches!(overlay, Overlay::Inputs) {
                     Target::InputsMenu

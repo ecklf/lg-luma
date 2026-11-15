@@ -34,11 +34,14 @@ Home widgets use an invisible **4×4 placement grid** above the unchanged favori
 **Greeting** combines the weekday/date and greeting in **2 columns × 1 row**;
 **Weather** is **1 column × 2 rows**. By default Greeting sits on the first row and
 Weather spans the second/third rows, left-aligned. Empty cells remain transparent.
-Open **Settings → Widgets → Greeting / Weather → Position** to move a widget.
+Open **Settings → Widgets** to see the Home placement grid. Select a widget for an
+app-style **Configure / Move / Remove** menu, or an empty cell to **Add widget**.
+The Add menu only lists widgets not already on Home. Configure opens the existing options,
+without a show/hide switch; removing frees its cells but keeps its configuration for re-adding.
 Use the arrows or point at a cell to choose its top-left anchor, then **OK / click** to save;
 **Back** cancels. Red placements overlap the other widget or exceed the grid and cannot be saved.
-Widget sizes cannot be changed. Hidden widgets retain and reserve their saved positions.
-Greeting settings let you show/hide the time-based greeting. There is no configurable name;
+Widget sizes cannot be changed. Shortcuts and Inputs remain available below the grid.
+There is no configurable greeting name;
 names stored by earlier drafts are ignored and removed on the next preferences save.
 
 Home uses Liquid Glass controls over your wallpaper, a floating favorites dock, and a weather
@@ -56,7 +59,7 @@ include a date visibility toggle and date-format choices; Date is not a separate
   Counts stay local and persist across restarts. Favorites keep their manual order.
 - **Settings → General → UI sounds** enables soft, tvOS-inspired navigation, select, and back
   feedback. Off by default; uses original synthesized sounds, not Apple recordings.
-- **Settings → Widgets → Weather → Widget style** offers **Standard**, **No icon**,
+- **Settings → Widgets → select Weather → Configure → Widget style** offers **Standard**, **No icon**,
   and **Compact**, with a preview of every design before choosing. Compact
   places a small condition icon on the second line beside the condition and location.
 - **OK / click** launches apps directly. Manage favorites, hidden apps, and uninstall actions in

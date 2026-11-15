@@ -336,6 +336,9 @@ pub struct Preferences {
     pub app_launch_counts: BTreeMap<String, u64>,
     pub greeting_position: WidgetPosition,
     pub weather_position: WidgetPosition,
+    /// Read-only marker for migrating the short-lived separate-Date draft.
+    #[serde(rename = "date_position", skip_serializing)]
+    pub legacy_date_position: Option<WidgetPosition>,
     pub favorites: Option<Vec<String>>,
     pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
@@ -381,6 +384,7 @@ impl Default for Preferences {
             app_launch_counts: BTreeMap::new(),
             greeting_position: HomeWidget::Greeting.default_position(),
             weather_position: HomeWidget::Weather.default_position(),
+            legacy_date_position: None,
             favorites: None,
             custom_tiles: vec![],
             hidden: vec![],
@@ -432,11 +436,37 @@ impl Preferences {
         }
     }
 
+    pub fn has_widget(&self, widget: HomeWidget) -> bool {
+        match widget {
+            HomeWidget::Greeting => self.show_greeting,
+            HomeWidget::Weather => self.show_weather,
+        }
+    }
+
+    pub fn set_widget_present(&mut self, widget: HomeWidget, present: bool) {
+        match widget {
+            HomeWidget::Greeting => self.show_greeting = present,
+            HomeWidget::Weather => self.show_weather = present,
+        }
+    }
+
+    pub fn widget_at(&self, position: WidgetPosition) -> Option<HomeWidget> {
+        HomeWidget::ALL.into_iter().find(|widget| {
+            let anchor = self.widget_position(*widget);
+            let (w, h) = widget.span();
+            self.has_widget(*widget)
+                && position.column >= anchor.column
+                && position.row >= anchor.row
+                && u16::from(position.column) < u16::from(anchor.column) + u16::from(w)
+                && u16::from(position.row) < u16::from(anchor.row) + u16::from(h)
+        })
+    }
+
     pub fn can_place_widget(&self, widget: HomeWidget, position: WidgetPosition) -> bool {
         position.fits(widget)
             && HomeWidget::ALL
                 .into_iter()
-                .filter(|other| *other != widget)
+                .filter(|other| *other != widget && self.has_widget(*other))
                 .all(|other| !position.overlaps(widget, self.widget_position(other), other))
     }
 
@@ -570,7 +600,10 @@ impl Preferences {
     pub fn sanitize(&mut self) {
         // Collapse the previous draft's untouched separate-Date arrangement.
         // Custom Greeting/Weather anchors remain unchanged.
-        if self.greeting_position == (WidgetPosition { column: 0, row: 1 })
+        if self.legacy_date_position.take().is_some()
+            && self.show_greeting
+            && self.show_weather
+            && self.greeting_position == (WidgetPosition { column: 0, row: 1 })
             && self.weather_position == (WidgetPosition { column: 0, row: 2 })
         {
             self.greeting_position = HomeWidget::Greeting.default_position();
@@ -578,6 +611,12 @@ impl Preferences {
         }
         let mut placed = Vec::new();
         for widget in HomeWidget::ALL {
+            if !self.has_widget(widget) {
+                if !self.widget_position(widget).fits(widget) {
+                    self.set_widget_position(widget, widget.default_position());
+                }
+                continue;
+            }
             let valid = |position: WidgetPosition| {
                 position.fits(widget)
                     && placed.iter().all(|other| {

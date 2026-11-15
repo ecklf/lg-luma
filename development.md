@@ -145,20 +145,26 @@ Home uses a 4×4 placement grid in logical 1920×1080 space above the unchanged 
 Greeting combines weekday/date and greeting in 2 columns × 1 row; Weather spans 1 column × 2 rows.
 Their anchors persist as `greeting_position` and `weather_position` (`column`, `row`, zero-based).
 Defaults are Greeting (0,0), Weather (0,1). The separate-Date draft's untouched defaults migrate
-to this arrangement; custom Greeting/Weather anchors are preserved. `date_position` is ignored.
+to this arrangement only when a legacy `date_position` field is present; it is omitted on save.
+Custom Greeting/Weather anchors are preserved, including new layouts matching that old arrangement.
 Sanitization repairs out-of-bounds anchors and overlaps deterministically.
-Settings → Widgets → Greeting/Weather → Position opens a scaled Home grid; arrows browse
+Settings → Widgets opens the scaled Home grid by default. Each occupied cell opens an app-style
+Configure/Move/Remove popup; empty cells offer Add widget. The catalog excludes installed widgets.
+Shortcuts and Inputs retain their existing settings links below the preview.
+Move and Add open a placement preview; arrows browse
 all sixteen anchors, OK/click saves a valid placement, and Back cancels without changing preferences.
-Invalid positions are red and cannot be committed. Hidden widgets keep their reserved cells.
-`show_greeting` hides the entire combined widget; `show_date` optionally hides its date line.
-`show_weather` controls Weather visibility; disabled Weather never requests forecasts.
+Invalid positions are red and cannot be committed. Removing a widget frees its cells while keeping
+its settings. Adding is atomic: browsing/cancelling placement does not install or save a widget.
+The legacy `show_greeting` and `show_weather` fields now store whether each widget is installed;
+old hidden widgets start removed. Configuration menus have no widget visibility or position rows.
+`show_date` optionally hides the combined Greeting's date line. Removed Weather never requests forecasts.
 Greeting settings contain the date toggle and format picker, with no separate Date widget or position.
 The date uses the original 18.4px/600/+0.12 tracking at 72% opacity; Greeting uses the original
 90.4px/500/−0.065 tracking and 1.05 leading, fitting shorter for long translations.
 The date band is slightly tighter than the old full-width header so both lines fit within one grid row.
 Greeting has no name editor; legacy `greeting_name` fields are ignored and not serialized.
 All three weather styles reflow inside the same fixed footprint. `pnpm screenshots --widgets`
-captures the default arrangement, an alternate arrangement, and the position editor.
+captures the default arrangement, an alternate arrangement, the grid manager, actions and Add catalog.
 
 | Input                         | Action                                                                       |
 | ----------------------------- | ---------------------------------------------------------------------------- |
@@ -217,7 +223,8 @@ instead of once per minute. Existing saved hour and seconds preferences are reta
 App cards on Home, in the drawer, and in Settings → Apps are artwork-only, with no name captions
 or App names setting. Legacy `show_names`, `show_home_names`, and `show_app_names` preferences
 are ignored and are not written back. App titles remain available in the management popup.
-**Settings → Widgets** groups **Weather**, **Shortcuts**, and **Inputs** as separate subpages.
+**Settings → Widgets** opens the placement manager. Select Weather and choose Configure for its
+settings; **Shortcuts** and **Inputs** keep their separate links below the grid.
 Weather location and temperature choices return to Weather; Back from a widget returns to its row
 in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists

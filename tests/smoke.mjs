@@ -85,7 +85,7 @@ try {
     return state;
   };
   const manageApps = 'settings,down,enter';
-  const home = await scenario('home', 'home');
+  const home = await scenario('home', 'home', ['--time', '2026-10-21T20:41:00+02:00']);
   assert.deepEqual(home.focus, { App: 'netflix' });
   assert.ok(!home.ui_text.includes('Favorites'));
   assert.ok(home.ui_text.some((value) => value.startsWith('Good evening')));
@@ -313,7 +313,7 @@ try {
   assert.equal(clock.focus, 'ClockFormat');
   assert.ok(clock.ui_text.includes('Clock format'));
   assert.ok(clock.ui_text.includes('Time format'));
-  const inputsPage = 'settings,down,down,down,enter,down,down,enter';
+  const inputsPage = 'settings,down,down,down,enter,down,down,down,down,down,enter';
   const inputs = await scenario('inputs-page', inputsPage);
   assert.equal(inputs.subpage, 'Inputs');
   assert.deepEqual(inputs.focus, { InputMode: 'com.webos.app.hdmi1' });
@@ -375,7 +375,7 @@ try {
   assert.ok(profiled.render.profile.cpu_submission.mean_ms >= 0);
   const widgetsPage = 'settings,down,down,down,enter';
   const widgets = await scenario('widgets-settings', widgetsPage);
-  assert.deepEqual(widgets.focus, { Widget: 1 });
+  assert.deepEqual(widgets.focus, { WidgetCell: 0 });
   assert.ok(widgets.ui_text.includes('Widgets'));
   for (const title of ['Weather', 'Shortcuts', 'Inputs'])
     assert.ok(widgets.ui_text.includes(title));
@@ -506,7 +506,7 @@ try {
       favorites: [...beforeShortcut.favorites, 'custom.sandmann'],
     }),
   );
-  const shortcutsPage = `${widgetsPage},down,enter`;
+  const shortcutsPage = `${widgetsPage},down,down,down,down,enter`;
   const shortcut = await scenario('shortcut-settings', shortcutsPage);
   assert.equal(shortcut.focus, 'TileEditor');
   assert.equal(shortcut.subpage, 'Shortcuts');
@@ -628,12 +628,27 @@ try {
     );
   }
   await fs.writeFile(preferences, '{}');
-  const greetingPage = `${widgetsPage},down,down,down,enter`;
+  const greetingPage = `${widgetsPage},enter,enter`;
+  const greetingConfig = await scenario('widget-configure', greetingPage);
+  assert.equal(greetingConfig.subpage, 'Greeting');
+  assert.equal(greetingConfig.focus, 'DateToggle');
+  assert.ok(!greetingConfig.ui_text.includes('Show widget'));
   const positioned = await scenario(
     'widget-position-setting',
-    `${greetingPage},down,down,down,enter,right,enter`,
+    `${widgetsPage},enter,down,enter,right,enter`,
   );
   assert.deepEqual(positioned.preferences.greeting_position, { column: 1, row: 0 });
+  assert.deepEqual(positioned.focus, { WidgetCell: 1 });
+  await fs.writeFile(preferences, '{}');
+  const removedWidget = await scenario('widget-remove', `${widgetsPage},enter,down,down,enter`);
+  assert.equal(removedWidget.preferences.show_greeting, false);
+  assert.deepEqual(removedWidget.focus, { WidgetCell: 0 });
+  const addFlow = `${widgetsPage},enter,enter,enter`;
+  const cancelledAdd = await scenario('widget-add-cancel', `${addFlow},back`);
+  assert.equal(cancelledAdd.preferences.show_greeting, false);
+  const added = await scenario('widget-add-save', `${addFlow},right,enter`);
+  assert.equal(added.preferences.show_greeting, true);
+  assert.deepEqual(added.preferences.greeting_position, { column: 1, row: 0 });
   console.log(
     'Native smoke checks passed: rendering/alpha, navigation, persistence, SDL pointer input, DPI-aware glyphs, 4K capture and presentation profiling.',
   );
