@@ -66,6 +66,16 @@ fn home_styles_share_content_and_keep_the_dock_fixed() {
     for style in WeatherStyle::ALL {
         state.preferences.weather_style = style;
         let rendered = scene(&state);
+        let top_label = if style == WeatherStyle::Compact {
+            "14°C"
+        } else {
+            "Vienna"
+        };
+        assert!(
+            rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::Text(label, rect, ..) if label == top_label && rect.y == 188.)),
+            "Weather content must align with the top of its default grid cell"
+        );
         assert!(
             rendered
                 .draw

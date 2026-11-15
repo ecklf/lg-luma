@@ -143,7 +143,7 @@ and the generic disc input icon from the native desktop renderer using seeded lo
 
 Home uses a 4×4 placement grid in logical 1920×1080 space above the unchanged dock.
 Greeting combines weekday/date and greeting in 3 columns × 1 row; Weather spans 1 column × 2 rows.
-Greeting uses 96px text with 1.05 leading and a 22px date in a tighter 26.4px band,
+Greeting uses 90.4px text with 1.05 leading and an 18.4px date in a 32.8px band,
 keeping both lines inside the 128px-tall row; long translations fit to the available width.
 Their anchors persist as `greeting_position` and `weather_position` (`column`, `row`, zero-based).
 Defaults are Greeting (0,0), Weather (3,0). The separate-Date draft's untouched defaults migrate
@@ -166,9 +166,10 @@ The legacy `show_greeting` and `show_weather` fields now store whether each widg
 old hidden widgets start removed. Configuration menus have no widget visibility or position rows.
 `show_date` optionally hides the combined Greeting's date line. Removed Weather never requests forecasts.
 Greeting settings contain the date toggle and format picker, with no separate Date widget or position.
-The date uses 22px/600/+0.12 tracking at 72% opacity; Greeting uses
-96px/500/−0.065 tracking and 1.05 leading, fitting shorter for long translations.
-The tighter 26.4px date band keeps both larger lines inside one grid row.
+The date uses 18.4px/600/+0.12 tracking at 72% opacity; Greeting uses
+90.4px/500/−0.065 tracking and 1.05 leading, fitting shorter for long translations.
+The 32.8px date band keeps both lines inside one grid row.
+Weather content is top-aligned within its 1×2 footprint in every style.
 Greeting has no name editor; legacy `greeting_name` fields are ignored and not serialized.
 All three weather styles reflow inside the same fixed footprint. `pnpm screenshots --widgets`
 captures the default arrangement, an alternate arrangement, the grid manager, actions and Add catalog.
