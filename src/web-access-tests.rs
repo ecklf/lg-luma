@@ -177,7 +177,7 @@ fn pairs_once_and_then_changes_settings() {
         let mut answer = Some(answer);
         loop {
             if let Event::Preview { known, reply } = next_event(&service) {
-                let mut frame = answer.take().unwrap();
+                let frame = answer.take().unwrap();
                 if frame.image.is_none() {
                     assert_eq!(known, Some(frame.key), "the server offers its cached frame");
                 }
