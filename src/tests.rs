@@ -611,7 +611,7 @@ fn settings_header_moves_between_controls_without_switching_pages() {
 }
 
 #[test]
-fn greeting_settings_offer_combined_date_options_and_shared_position() {
+fn greeting_configuration_only_offers_date_options() {
     let mut state = ready();
     state.open(2);
     state.focus = Target::Widget(0);
@@ -621,31 +621,20 @@ fn greeting_settings_offer_combined_date_options_and_shared_position() {
             .is_empty()
     );
     assert_eq!(state.subpage, Some(crate::state::Subpage::Greeting));
-    assert_eq!(state.focus, Target::GreetingToggle);
-    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::DateToggle);
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::DateFormat);
-    state.direction(Direction::Down, &controls(&state));
-    assert_eq!(
-        state.focus,
-        Target::MoveWidget(crate::model::HomeWidget::Greeting)
-    );
     assert!(!state.text_input_active());
-    assert!(state.activate().is_empty());
-    assert!(!state.text_input_active());
-    state.back();
-    assert_eq!(state.subpage, Some(crate::state::Subpage::Greeting));
     assert_eq!(
         controls(&state)
             .iter()
             .filter(|control| control.scrollable)
             .count(),
-        4
+        2
     );
     assert!(state.back().is_empty());
     assert!(state.subpage.is_none());
-    assert_eq!(state.focus, Target::Widget(0));
+    assert_eq!(state.focus, Target::WidgetCell(0));
 }
 
 #[test]
@@ -704,14 +693,9 @@ fn legacy_greeting_names_are_ignored_and_not_saved() {
     let page = scene(&state);
     assert!(!page.draw.iter().any(|draw|matches!(draw,crate::renderer::Draw::Text(label,..) if label.contains("Ana") || label=="Name" || label=="Clear name")));
     state.direction(Direction::Down, &controls(&state));
-    state.direction(Direction::Down, &controls(&state));
-    state.direction(Direction::Down, &controls(&state));
-    assert_eq!(
-        state.focus,
-        Target::MoveWidget(crate::model::HomeWidget::Greeting)
-    );
+    assert_eq!(state.focus, Target::DateFormat);
     state.direction(Direction::Left, &controls(&state));
-    assert_eq!(state.focus, Target::Widget(0));
+    assert_eq!(state.focus, Target::WidgetCell(0));
     assert!(state.subpage.is_none());
 }
 
@@ -1599,10 +1583,14 @@ fn weather_location_keyboard_back_and_sidebar_routes_restore_focus() {
     state.focus = Target::Sidebar(crate::state::WIDGETS_SECTION);
     state.section = crate::state::WIDGETS_SECTION;
     state.activate();
-    assert_eq!(state.focus, Target::Widget(1));
-    state.activate();
-    assert_eq!(state.focus, Target::WeatherToggle);
+    assert_eq!(state.focus, Target::WidgetCell(0));
     state.direction(Direction::Down, &controls(&state));
+    state.activate();
+    assert_eq!(
+        state.focus,
+        Target::ConfigureWidget(crate::model::HomeWidget::Weather)
+    );
+    state.activate();
     assert_eq!(state.focus, Target::WeatherLocation);
     state.activate();
     assert_eq!(state.focus, Target::WeatherQuery);
@@ -1616,14 +1604,14 @@ fn weather_location_keyboard_back_and_sidebar_routes_restore_focus() {
     assert_eq!(state.focus, Target::WeatherLocation);
     assert_eq!(state.subpage, Some(crate::state::Subpage::Weather));
     state.back();
-    assert_eq!(state.focus, Target::Widget(1));
+    assert_eq!(state.focus, Target::WidgetCell(4));
     assert!(state.subpage.is_none());
     state.back();
     assert_eq!(state.focus, Target::Sidebar(crate::state::WIDGETS_SECTION));
 }
 
 #[test]
-fn weather_units_save_without_replacing_celsius_cache_and_hide_keeps_city() {
+fn weather_units_save_without_replacing_celsius_cache_and_removal_keeps_city() {
     let mut state = ready();
     state.open(2);
     state.focus = Target::Widget(1);
@@ -1659,7 +1647,9 @@ fn weather_units_save_without_replacing_celsius_cache_and_hide_keeps_city() {
         14.2
     );
     assert_eq!(state.focus, Target::WeatherTemperature);
-    state.focus = Target::WeatherToggle;
+    state.back();
+    state.activate();
+    state.focus = Target::RemoveWidget(crate::model::HomeWidget::Weather);
     state.activate();
     assert!(!state.preferences.show_weather);
     assert_eq!(state.preferences.weather_location, Some(place));
@@ -1681,7 +1671,7 @@ fn home_weather_setup_returns_through_the_widgets_weather_parent() {
     assert_eq!(state.focus, Target::WeatherLocation);
     state.back();
     assert!(state.subpage.is_none());
-    assert_eq!(state.focus, Target::Widget(1));
+    assert_eq!(state.focus, Target::WidgetCell(4));
 }
 
 #[test]
@@ -2452,7 +2442,7 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(WIDGETS_SECTION));
     state.direction(Direction::Right, &controls(&state));
-    assert_eq!(state.focus, Target::Widget(1));
+    assert_eq!(state.focus, Target::WidgetCell(0));
     let widget_order: Vec<_> = controls(&state)
         .into_iter()
         .filter_map(|control| match control.target {
@@ -2460,17 +2450,17 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
             _ => None,
         })
         .collect();
-    assert_eq!(widget_order, [1, 2, 3, 0]);
-    for (index, subpage) in [Subpage::Weather, Subpage::Shortcuts, Subpage::Inputs]
+    assert_eq!(widget_order, [2, 3]);
+    for (index, subpage) in [Subpage::Shortcuts, Subpage::Inputs]
         .into_iter()
         .enumerate()
     {
-        state.focus = Target::Widget(index + 1);
+        state.focus = Target::Widget(index + 2);
         state.direction(Direction::Right, &controls(&state));
         assert_eq!(state.subpage, Some(subpage));
         state.back();
         assert!(state.subpage.is_none());
-        assert_eq!(state.focus, Target::Widget(index + 1));
+        assert_eq!(state.focus, Target::Widget(index + 2));
     }
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(WIDGETS_SECTION));
@@ -2537,7 +2527,7 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
                 .iter()
                 .filter(|c| matches!(c.target, Target::Widget(_)))
                 .count(),
-            4
+            2
         );
         for key in ["widgets", "weather", "shortcuts", "inputs", "greeting"] {
             assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t(key))), "{key}/{language:?}");
@@ -2864,42 +2854,23 @@ fn clock_menu_is_aligned_top_right() {
 }
 
 #[test]
-fn greeting_visibility_toggle_persists_and_hides_the_combined_widget() {
-    use crate::{renderer::Draw, state::Subpage};
+fn greeting_removal_persists_and_hides_the_combined_widget() {
+    use crate::{model::HomeWidget, renderer::Draw};
     let legacy: Preferences = serde_json::from_str(r#"{"greeting_name":"Ana"}"#).unwrap();
     assert!(legacy.show_greeting);
     let mut state = ready();
     state.preferences = legacy;
     state.open(2);
-    state.focus = Target::Widget(0);
+    state.section = crate::state::WIDGETS_SECTION;
+    state.focus = Target::WidgetCell(0);
     state.activate();
-    assert_eq!(state.subpage, Some(Subpage::Greeting));
-    assert_eq!(state.focus, Target::GreetingToggle);
-    let rendered = scene(&state);
-    let toggle = rendered
-        .controls
-        .iter()
-        .find(|control| control.target == Target::GreetingToggle)
-        .unwrap();
-    assert_eq!(toggle.rect.y, 164.8);
-    assert!(rendered.draw.iter().any(|draw| matches!(draw,
-        Draw::Text(label, ..) if label == state.preferences.language.t("showWidget")
-    )));
+    state.focus = Target::RemoveWidget(HomeWidget::Greeting);
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert!(!state.preferences.show_greeting);
     let saved = serde_json::to_string(&state.preferences).unwrap();
     let restored: Preferences = serde_json::from_str(&saved).unwrap();
     assert!(!restored.show_greeting);
-    state.direction(Direction::Down, &controls(&state));
-    state.direction(Direction::Down, &controls(&state));
-    state.direction(Direction::Down, &controls(&state));
-    assert_eq!(
-        state.focus,
-        Target::MoveWidget(crate::model::HomeWidget::Greeting)
-    );
-    state.focus = Target::GreetingToggle;
-    state.direction(Direction::Left, &controls(&state));
-    assert_eq!(state.focus, Target::Widget(0));
+    assert_eq!(state.focus, Target::WidgetCell(0));
     state.open(0);
     let hidden = scene(&state);
     let language = state.preferences.language;
@@ -2918,9 +2889,13 @@ fn greeting_visibility_toggle_persists_and_hides_the_combined_widget() {
             .any(|draw| matches!(draw, Draw::Text(label, ..) if label == &language.date(now)))
     );
     state.open(2);
-    state.focus = Target::Widget(0);
+    state.section = crate::state::WIDGETS_SECTION;
+    state.focus = Target::WidgetCell(0);
     state.activate();
-    state.focus = Target::GreetingToggle;
+    state.activate();
+    assert_eq!(state.focus, Target::AddWidget(HomeWidget::Greeting));
+    state.activate();
+    state.focus = Target::Choice(0);
     state.activate();
     assert!(state.preferences.show_greeting);
     state.open(0);
@@ -2943,7 +2918,6 @@ fn greeting_date_settings_persist_and_restore_parent_focus() {
     state.focus = Target::Widget(0);
     state.activate();
     assert_eq!(state.subpage, Some(Subpage::Greeting));
-    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::DateToggle);
     let before = controls(&state);
     assert_eq!(state.activate(), vec![Effect::Save]);
@@ -2977,7 +2951,7 @@ fn greeting_date_settings_persist_and_restore_parent_focus() {
     state.back();
     assert_eq!(state.focus, Target::DateFormat);
     state.back();
-    assert_eq!(state.focus, Target::Widget(0));
+    assert_eq!(state.focus, Target::WidgetCell(0));
     let saved: Preferences =
         serde_json::from_str(&serde_json::to_string(&state.preferences).unwrap()).unwrap();
     assert!(!saved.show_date);

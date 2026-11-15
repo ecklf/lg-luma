@@ -611,6 +611,8 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
         | Overlay::Delete { .. }
         | Overlay::BackgroundOptions { .. }
         | Overlay::BackgroundDelete { .. }
+        | Overlay::WidgetOptions { .. }
+        | Overlay::WidgetCatalog { .. }
         | Overlay::Keyboard
         | Overlay::WallpaperUpload
         | Overlay::TileEditor),
@@ -640,6 +642,8 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             out.fade(start, (opened.elapsed().as_secs_f32() / 0.12).min(1.), 1.);
         }
         match overlay {
+            Overlay::WidgetOptions { cell } => widget_menu(&mut out, state, assets, *cell, false),
+            Overlay::WidgetCatalog { cell } => widget_menu(&mut out, state, assets, *cell, true),
             Overlay::Options { id, .. } | Overlay::BackgroundOptions { id, .. } => {
                 options(&mut out, state, assets, id, anchor)
             }
@@ -1828,25 +1832,6 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
 fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let s = state.scroll;
-    row(
-        out,
-        state,
-        assets,
-        Row {
-            target: Target::WeatherToggle,
-            rect: Rect::new(640., 164.8 - s, 1120., 72.),
-            title: language.t("showWidget"),
-            icon: Some("eye"),
-            value: Some(if state.preferences.show_weather {
-                language.t("stateOn")
-            } else {
-                language.t("stateOff")
-            }),
-            description: None,
-            selected: false,
-            chevron: false,
-        },
-    );
     let city = state
         .preferences
         .weather_location
@@ -1855,7 +1840,7 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let style = text(18.4, 450, 0.).leading(1.4);
     let city_lines = city.map_or(1, |city| assets.lines(city, style, 450.));
     let height = (34. + city_lines as f32 * 25.76).max(72.);
-    let rect = Rect::new(640., 264.8 - s, 1120., height);
+    let rect = Rect::new(640., 164.8 - s, 1120., height);
     row(
         out,
         state,
@@ -1890,7 +1875,6 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
         );
     }
     let y = rect.y + height + 12.;
-    widget_position_row(out, state, assets, HomeWidget::Weather, y + 168.);
     row(
         out,
         state,
@@ -2615,14 +2599,11 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             out.draw.extend(actions);
         }
         WIDGETS_SECTION => {
-            for (index, (widget, key, icon)) in [
-                (1, "weather", "weather-sun"),
-                (2, "shortcuts", "sparkles"),
-                (3, "inputs", "input-hdmi"),
-                (0, "greeting", "type"),
-            ]
-            .into_iter()
-            .enumerate()
+            widget_grid(out, state, assets, None);
+            for (index, (widget, key, icon)) in
+                [(2, "shortcuts", "sparkles"), (3, "inputs", "input-hdmi")]
+                    .into_iter()
+                    .enumerate()
             {
                 row(
                     out,
@@ -2630,7 +2611,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     assets,
                     Row {
                         target: Target::Widget(widget),
-                        rect: Rect::new(640., 164.8 + index as f32 * 84. - s, 1120., 72.),
+                        rect: Rect::new(640., 824. + index as f32 * 84. - s, 1120., 72.),
                         title: language.t(key),
                         icon: Some(icon),
                         value: None,
@@ -2827,36 +2808,22 @@ fn inputs_settings(out: &mut Scene, state: &State, assets: &Assets) {
     );
 }
 
-fn widget_position_row(
-    out: &mut Scene,
-    state: &State,
-    assets: &Assets,
-    widget: HomeWidget,
-    y: f32,
-) {
-    let (w, h) = widget.span();
-    row(
-        out,
-        state,
-        assets,
-        Row {
-            target: Target::MoveWidget(widget),
-            rect: Rect::new(640., y, 1120., 72.),
-            title: state.preferences.language.t("widgetPosition"),
-            icon: Some("grid"),
-            value: Some(&format!("{w} × {h}")),
-            description: None,
-            selected: false,
-            chevron: true,
-        },
+fn widget_position_settings(out: &mut Scene, state: &State, assets: &Assets, widget: HomeWidget) {
+    widget_grid(out, state, assets, Some(widget));
+    out.text(
+        state.preferences.language.t("widgetPlacementHelp"),
+        Rect::new(640., 840., 1120., 100.),
+        text(20., 450, 0.).leading(1.4),
+        c(0xeeeeee, 0.8),
+        false,
     );
 }
 
-fn widget_position_settings(out: &mut Scene, state: &State, assets: &Assets, widget: HomeWidget) {
+fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<HomeWidget>) {
     let language = state.preferences.language;
     // A scaled Home canvas: cell anchors remain separate hit targets even when
     // the preview widget spans two cells. Browsing never changes saved positions.
-    let preview = Rect::new(640., 180., 1120., 630.);
+    let preview = Rect::new(640., 180. - state.scroll, 1120., 630.);
     let background = state
         .wallpapers
         .iter()
@@ -2880,9 +2847,20 @@ fn widget_position_settings(out: &mut Scene, state: &State, assets: &Assets, wid
         let position = WidgetPosition::from_cell(cell).unwrap();
         let rect = map(home_grid_cell_rect(position));
         out.border(rect, 8., 1., c(0xffffff, 0.24));
-        out.control(Target::Choice(cell), rect, false);
+        out.control(
+            if moving.is_some() {
+                Target::Choice(cell)
+            } else {
+                Target::WidgetCell(cell)
+            },
+            rect,
+            false,
+        );
     }
-    for other in HomeWidget::ALL.into_iter().filter(|other| *other != widget) {
+    for other in HomeWidget::ALL
+        .into_iter()
+        .filter(|other| Some(*other) != moving && state.preferences.has_widget(*other))
+    {
         let rect = map(home_widget_rect(
             other,
             state.preferences.widget_position(other),
@@ -2896,13 +2874,60 @@ fn widget_position_settings(out: &mut Scene, state: &State, assets: &Assets, wid
         );
         out.text(label, rect.inset(12.), style, WHITE, true);
     }
+    // Keep the dock visually separate: it is not part of the editable grid.
+    let dock = map(Rect::new(84., 860., 1752., 160.));
+    out.shape(dock, 12., c(0x222831, 0.6));
+    for index in 0..6 {
+        out.shape(
+            Rect::new(
+                dock.x + 16. + index as f32 * (dock.w - 32.) / 6.,
+                dock.y + 12.,
+                (dock.w - 64.) / 6.,
+                dock.h - 24.,
+            ),
+            8.,
+            c(0xffffff, 0.18),
+        );
+    }
+    let Some(widget) = moving else {
+        if let Target::WidgetCell(cell) = state.focus
+            && let Some(position) = WidgetPosition::from_cell(cell)
+        {
+            let rect = state.preferences.widget_at(position).map_or_else(
+                || map(home_grid_cell_rect(position)),
+                |widget| {
+                    map(home_widget_rect(
+                        widget,
+                        state.preferences.widget_position(widget),
+                    ))
+                },
+            );
+            out.ring(rect, 8.);
+            if state.preferences.widget_at(position).is_none()
+                && HomeWidget::ALL
+                    .into_iter()
+                    .any(|widget| !state.preferences.has_widget(widget))
+            {
+                out.text(
+                    "+",
+                    Rect::new(rect.x, rect.y + (rect.h - 32.) / 2., rect.w, 32.),
+                    text(28., 500, 0.),
+                    WHITE,
+                    true,
+                );
+            }
+        }
+        return;
+    };
     let saved = state.preferences.widget_position(widget);
-    out.border(
-        map(home_widget_rect(widget, saved)),
-        8.,
-        2.,
-        c(0xffffff, 0.4),
-    );
+    if state.preferences.has_widget(widget) {
+        out.border(
+            map(home_widget_rect(widget, saved)),
+            8.,
+            2.,
+            c(0xffffff, 0.4),
+        );
+    }
     if let Target::Choice(cell) = state.focus
         && let Some(position) = WidgetPosition::from_cell(cell)
     {
@@ -2931,43 +2956,10 @@ fn widget_position_settings(out: &mut Scene, state: &State, assets: &Assets, wid
         );
         out.text(label, rect.inset(12.), style, WHITE, true);
     }
-    out.text(
-        language.t("widgetPlacementHelp"),
-        Rect::new(640., 840., 1120., 100.),
-        text(20., 450, 0.).leading(1.4),
-        c(0xeeeeee, 0.8),
-        false,
-    );
 }
 
 fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
-    widget_position_row(
-        out,
-        state,
-        assets,
-        HomeWidget::Greeting,
-        416.8 - state.scroll,
-    );
-    row(
-        out,
-        state,
-        assets,
-        Row {
-            target: Target::GreetingToggle,
-            rect: Rect::new(640., 164.8 - state.scroll, 1120., 72.),
-            title: language.t("showWidget"),
-            icon: None,
-            value: Some(language.t(if state.preferences.show_greeting {
-                "stateOn"
-            } else {
-                "stateOff"
-            })),
-            description: None,
-            selected: false,
-            chevron: false,
-        },
-    );
     for (index, (target, title, value, chevron)) in [
         (
             Target::DateToggle,
@@ -2995,7 +2987,7 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
             assets,
             Row {
                 target,
-                rect: Rect::new(640., 248.8 + index as f32 * 84. - state.scroll, 1120., 72.),
+                rect: Rect::new(640., 164.8 + index as f32 * 84. - state.scroll, 1120., 72.),
                 title: language.t(title),
                 icon: None,
                 value: Some(value),
@@ -3366,6 +3358,130 @@ fn empty(out: &mut Scene, state: &State, assets: &Assets, content: EmptyState<'_
             c(0x242424, 1.),
         );
         out.control(target, button, true);
+    }
+}
+
+fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, catalog: bool) {
+    let language = state.preferences.language;
+    let widget =
+        WidgetPosition::from_cell(cell).and_then(|position| state.preferences.widget_at(position));
+    let mut actions = Vec::new();
+    if catalog {
+        for widget in HomeWidget::ALL
+            .into_iter()
+            .filter(|widget| !state.preferences.has_widget(*widget))
+        {
+            actions.push((Target::AddWidget(widget), widget.key(), "grid"));
+        }
+    } else {
+        if let Some(widget) = widget {
+            actions.extend([
+                (Target::ConfigureWidget(widget), "configure", "settings"),
+                (Target::MoveWidget(widget), "move", "left"),
+                (Target::RemoveWidget(widget), "removeWidget", "circle-minus"),
+            ]);
+        }
+        if HomeWidget::ALL
+            .into_iter()
+            .any(|widget| !state.preferences.has_widget(widget))
+        {
+            actions.push((Target::WidgetAdd, "addWidget", "grid"));
+        }
+    }
+    let empty = actions.is_empty();
+    if empty {
+        actions.push((Target::CloseDialog, "close", "left"));
+    }
+    let position = WidgetPosition::from_cell(cell).unwrap_or_default();
+    let logical = widget.map_or_else(
+        || home_grid_cell_rect(position),
+        |widget| home_widget_rect(widget, state.preferences.widget_position(widget)),
+    );
+    let scale = 1120. / 1920.;
+    let card = Rect::new(
+        640. + logical.x * scale,
+        180. - state.scroll + logical.y * scale,
+        logical.w * scale,
+        logical.h * scale,
+    );
+    if !catalog {
+        out.shape(card, 8., c(0x69737c, 1.));
+        out.border(card, 8., 2., WHITE);
+        if let Some(widget) = widget {
+            out.text(
+                language.t(widget.key()),
+                card.inset(12.),
+                text(22., 500, 0.),
+                WHITE,
+                true,
+            );
+        }
+    }
+    let height = 92. + actions.len() as f32 * 76.8;
+    let x = if card.x + card.w + 552. <= 1836. {
+        card.x + card.w + 32.
+    } else {
+        (card.x - 552.).max(84.)
+    };
+    let panel = Rect::new(x, card.y.clamp(164., 974. - height), 520., height);
+    out.modal = Some(panel);
+    out.shadow(panel, 27.2, 120., 25., 0.47);
+    out.modal_surface(panel, 27.2);
+    out.border(panel, 27.2, 1., c(0xffffff, 0.12));
+    let title = language.t(if empty {
+        "allWidgetsAdded"
+    } else if catalog {
+        "addWidget"
+    } else {
+        widget.map_or("widgets", HomeWidget::key)
+    });
+    let (title, title_style) = assets.fit_line(title, text(24., 600, -0.02), panel.w - 48., 16.);
+    out.text(
+        title,
+        Rect::new(panel.x + 24., panel.y + 24., panel.w - 48., 32.),
+        title_style,
+        WHITE,
+        false,
+    );
+    for (index, (target, key, icon)) in actions.into_iter().enumerate() {
+        let rect = Rect::new(
+            panel.x + 16.,
+            panel.y + 76. + index as f32 * 76.8,
+            panel.w - 32.,
+            67.2,
+        );
+        let focused = state.focus == target;
+        let destructive = matches!(target, Target::RemoveWidget(_));
+        let color = if focused && !destructive {
+            c(0x242424, 1.)
+        } else {
+            WHITE
+        };
+        out.shape(
+            rect,
+            12.,
+            if destructive {
+                c(0xd63b35, if focused { 1. } else { 0.25 })
+            } else {
+                c(0xffffff, if focused { 0.96 } else { 0.10 })
+            },
+        );
+        let (label, style) =
+            assets.fit_line(language.t(key), text(20.8, 600, -0.02), rect.w - 88., 16.);
+        out.text(
+            label,
+            Rect::new(rect.x + 24., rect.y + 20., rect.w - 88., 28.),
+            style,
+            color,
+            false,
+        );
+        out.icon(
+            assets,
+            icon,
+            Rect::new(rect.x + rect.w - 45.6, rect.y + 22.8, 21.6, 21.6),
+            color,
+        );
+        out.control(target, rect, false);
     }
 }
 

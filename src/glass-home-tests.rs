@@ -5,6 +5,155 @@ use crate::{
 };
 
 #[test]
+fn widget_manager_grid_opens_context_menu_from_every_occupied_cell() {
+    use crate::model::HomeWidget;
+    let mut state = ready();
+    state.open(2);
+    state.pointer_focus(Target::Sidebar(crate::state::WIDGETS_SECTION));
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::WidgetCell(0));
+    assert!(state.subpage.is_none());
+    let rendered = scene(&state);
+    assert_eq!(
+        rendered
+            .controls
+            .iter()
+            .filter(|control| matches!(control.target, Target::WidgetCell(_)))
+            .count(),
+        16
+    );
+    for (cell, widget) in [
+        (0, HomeWidget::Greeting),
+        (1, HomeWidget::Greeting),
+        (4, HomeWidget::Weather),
+        (8, HomeWidget::Weather),
+    ] {
+        let control = rendered
+            .controls
+            .iter()
+            .find(|control| control.target == Target::WidgetCell(cell))
+            .unwrap();
+        let (x, y) = control.rect.center();
+        assert_eq!(
+            state.hit_test(&rendered.controls, x, y),
+            Some(Target::WidgetCell(cell))
+        );
+        state.pointer_focus(Target::WidgetCell(cell));
+        assert!(state.activate().is_empty());
+        assert_eq!(state.focus, Target::ConfigureWidget(widget));
+        let menu = scene(&state);
+        assert!(menu.controls.iter().all(|control| matches!(
+            control.target,
+            Target::ConfigureWidget(_) | Target::MoveWidget(_) | Target::RemoveWidget(_)
+        )));
+        assert!(
+            menu.controls
+                .iter()
+                .any(|control| control.target == Target::MoveWidget(widget))
+        );
+        state.direction(Direction::Down, &menu.controls);
+        assert_eq!(state.focus, Target::MoveWidget(widget));
+        state.back();
+        assert_eq!(state.focus, Target::WidgetCell(cell));
+    }
+}
+
+#[test]
+fn widget_add_is_atomic_cancellable_and_rejects_invalid_placements() {
+    use crate::model::{HomeWidget, WidgetPosition};
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::WIDGETS_SECTION;
+    state.focus = Target::WidgetCell(4);
+    state.activate();
+    state.focus = Target::RemoveWidget(HomeWidget::Weather);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!state.preferences.has_widget(HomeWidget::Weather));
+    // Removing releases space immediately and after preference sanitization/restart.
+    state.focus = Target::MoveWidget(HomeWidget::Greeting);
+    state.activate();
+    state.focus = Target::Choice(4);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    let mut loaded: Preferences =
+        serde_json::from_value(serde_json::to_value(&state.preferences).unwrap()).unwrap();
+    loaded.sanitize();
+    assert_eq!(
+        loaded.greeting_position,
+        WidgetPosition { column: 0, row: 1 }
+    );
+    assert!(!loaded.show_weather);
+    state.focus = Target::WidgetCell(3);
+    state.activate();
+    state.activate();
+    assert_eq!(state.focus, Target::AddWidget(HomeWidget::Weather));
+    let catalog = scene(&state);
+    assert!(
+        !catalog
+            .controls
+            .iter()
+            .any(|control| control.target == Target::AddWidget(HomeWidget::Greeting))
+    );
+    state.activate();
+    assert!(!state.preferences.show_weather);
+    state.back();
+    assert!(!state.preferences.show_weather);
+    state.focus = Target::WidgetCell(3);
+    state.activate();
+    state.activate();
+    state.activate();
+    for cell in [4, 12, 15] {
+        state.focus = Target::Choice(cell);
+        assert!(state.activate().is_empty());
+        assert!(!state.preferences.show_weather);
+    }
+    state.pointer_focus(Target::Choice(3));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.show_weather);
+    assert_eq!(
+        state.preferences.weather_position,
+        WidgetPosition { column: 3, row: 0 }
+    );
+    assert_eq!(state.focus, Target::WidgetCell(3));
+}
+
+#[test]
+fn widget_configuration_has_no_visibility_or_position_rows() {
+    use crate::model::HomeWidget;
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::WIDGETS_SECTION;
+    for (cell, expected) in [(0, Subpage::Greeting), (4, Subpage::Weather)] {
+        state.focus = Target::WidgetCell(cell);
+        state.activate();
+        state.activate();
+        assert_eq!(state.subpage, Some(expected));
+        let rendered = scene(&state);
+        assert!(!rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, ..) if label == state.preferences.language.t("showWidget"))));
+        assert!(
+            !rendered
+                .controls
+                .iter()
+                .any(|control| matches!(control.target, Target::MoveWidget(_)))
+        );
+        state.back();
+        assert_eq!(state.focus, Target::WidgetCell(cell));
+    }
+    // All-added empty cells still open a dismissible, focused menu.
+    state.focus = Target::WidgetCell(15);
+    state.activate();
+    assert_eq!(state.focus, Target::CloseDialog);
+    assert!(
+        scene(&state)
+            .controls
+            .iter()
+            .any(|control| control.target == state.focus)
+    );
+    state.back();
+    assert_eq!(state.focus, Target::WidgetCell(15));
+    assert!(state.preferences.has_widget(HomeWidget::Greeting));
+}
+
+#[test]
 fn widget_position_browsing_cancels_and_valid_selection_saves() {
     use crate::model::{HomeWidget, WidgetPosition};
     let mut state = ready();
@@ -20,7 +169,8 @@ fn widget_position_browsing_cancels_and_valid_selection_saves() {
         WidgetPosition { column: 0, row: 1 }
     );
     state.back();
-    assert_eq!(state.focus, Target::MoveWidget(HomeWidget::Weather));
+    assert_eq!(state.focus, Target::WidgetCell(4));
+    state.focus = Target::MoveWidget(HomeWidget::Weather);
     state.activate();
     state.direction(Direction::Right, &scene(&state).controls);
     assert_eq!(state.activate(), vec![Effect::Save]);
@@ -177,6 +327,19 @@ fn combined_greeting_upgrades_separate_date_defaults_and_preserves_custom_positi
             .unwrap()
             .get("date_position")
             .is_none()
+    );
+    let mut current: Preferences = serde_json::from_str(
+        r#"{"greeting_position":{"column":0,"row":1},"weather_position":{"column":0,"row":2}}"#,
+    )
+    .unwrap();
+    current.sanitize();
+    assert_eq!(
+        current.greeting_position,
+        WidgetPosition { column: 0, row: 1 }
+    );
+    assert_eq!(
+        current.weather_position,
+        WidgetPosition { column: 0, row: 2 }
     );
 }
 

@@ -44,17 +44,16 @@ const captures = widgetPreviews
   ? [
       ['home-layout-grid', 'home'],
       ['home-layout-moved', 'home'],
-      [
-        'home-layout-settings',
-        'settings,down,down,down,right,down,down,down,enter,down,down,down,enter',
-      ],
+      ['home-layout-settings', 'settings,down,down,down,right'],
+      ['home-widget-actions', 'settings,down,down,down,right,enter'],
+      ['home-widget-add', 'settings,down,down,down,right,enter,enter'],
     ]
   : weatherPreviews
     ? [
         ['weather-style-standard', 'home'],
         ['weather-style-no-icon', 'home'],
         ['weather-style-compact', 'home'],
-        ['weather-style-picker', 'settings,down,down,down,right,enter,down,down,down,enter'],
+        ['weather-style-picker', 'settings,down,down,down,right,down,enter,enter,down,down,enter'],
       ]
     : sortingPreviews
       ? [
@@ -85,6 +84,7 @@ try {
           ? {
               ...configuration,
               reduced_motion: true,
+              show_greeting: name !== 'home-widget-add',
               greeting_position:
                 name === 'home-layout-moved' ? { column: 2, row: 3 } : { column: 0, row: 0 },
               weather_position:
