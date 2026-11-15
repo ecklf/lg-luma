@@ -2212,6 +2212,48 @@ impl State {
 
     /// Applies the tile list edited on a phone or computer. New tiles join
     /// the end of the Home favorites and removed ones leave favorites and hidden apps.
+    /// Favorites in order and hidden apps from a paired phone or computer. Ids the launcher does
+    /// not know are dropped; saved entries for apps that are not installed right now are kept.
+    pub fn apply_web_arrangement(
+        &mut self,
+        favorites: Vec<String>,
+        hidden: Vec<String>,
+    ) -> Vec<Effect> {
+        let known = |id: &String| self.inventory.apps.iter().any(|app| &app.id == id);
+        let mut next_favorites: Vec<String> = Vec::new();
+        for id in favorites.into_iter().filter(known) {
+            if !next_favorites.contains(&id) {
+                next_favorites.push(id);
+            }
+        }
+        let current = self.preferences.favorites(&self.inventory.apps);
+        next_favorites.extend(current.iter().filter(|id| !known(id)).cloned());
+        let mut next_hidden: Vec<String> = Vec::new();
+        for id in hidden.into_iter().filter(known) {
+            if !next_hidden.contains(&id) && !next_favorites.contains(&id) {
+                next_hidden.push(id);
+            }
+        }
+        next_hidden.extend(
+            self.preferences
+                .hidden
+                .iter()
+                .filter(|id| !known(id))
+                .cloned(),
+        );
+        if current == next_favorites && self.preferences.hidden == next_hidden {
+            return vec![];
+        }
+        self.preferences.favorites = Some(next_favorites);
+        self.preferences.hidden = next_hidden;
+        if self.filter == 5 && self.hidden_count() == 0 {
+            self.filter = 0;
+        }
+        self.reconcile_focus();
+        self.dirty = true;
+        vec![Effect::Save]
+    }
+
     /// Shows `id` as the background, fading from the previous one like a choice in Settings.
     fn use_background(&mut self, id: String) {
         if !self.preferences.reduced_motion && self.preferences.background != id {

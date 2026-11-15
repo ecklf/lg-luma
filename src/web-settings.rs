@@ -72,6 +72,29 @@ pub struct Background {
     pub thumbnail: PathBuf,
 }
 
+/// The apps the page can arrange: every app and shortcut in the order the page shows them (and
+/// the tile sheets are drawn in), the Home favorites in their order, and the hidden ones.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct Library {
+    pub apps: Vec<LibraryApp>,
+    pub favorites: Vec<String>,
+    pub hidden: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct LibraryApp {
+    pub id: String,
+    pub title: String,
+}
+
+/// A new arrangement from the page. Unknown ids are dropped by the launcher.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Arrangement {
+    pub favorites: Vec<String>,
+    pub hidden: Vec<String>,
+}
+
 fn choice<T: Serialize>(value: T, label: &str) -> serde_json::Value {
     serde_json::json!({ "value": value, "label": label })
 }
@@ -102,14 +125,28 @@ pub fn strings(language: Language) -> serde_json::Value {
 
 /// The page's whole view of the TV: current values plus every label in the TV's language, so the
 /// page reads like the Settings the owner already knows.
-pub fn listing(settings: &Settings, backgrounds: &[Background]) -> serde_json::Value {
+pub fn listing(
+    settings: &Settings,
+    backgrounds: &[Background],
+    library: &Library,
+) -> serde_json::Value {
     let language = settings.language;
     let t = |key| language.t(key);
     serde_json::json!({
         "settings": settings,
         "strings": strings(language),
         "backgrounds": backgrounds,
+        "library": library,
+        "sheet": { "tiles": crate::view::SHEET_TILES, "columns": crate::view::SHEET_COLUMNS },
         "labels": {
+            "apps": t("apps"),
+            "favorites": t("favorites"),
+            "addFavorite": t("addFavorite"),
+            "removeFavorite": t("removeFavorite"),
+            "hideApp": t("hideApp"),
+            "showApp": t("showApp"),
+            "hidden": t("hiddenLabel"),
+            "makeFavorites": t("makeFavorites"),
             "general": t("interface"),
             "background": t("background"),
             "widgets": t("widgets"),

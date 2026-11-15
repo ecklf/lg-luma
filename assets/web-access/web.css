@@ -282,12 +282,12 @@ select {
 .tabs button {
   flex: 1 1 auto;
   min-height: 40px;
-  padding: 0 clamp(8px, 2.6vw, 16px);
+  padding: 0 clamp(4px, 1.6vw, 16px);
   border: 0;
   border-radius: 999px;
   background: none;
   color: var(--ink-soft);
-  font-size: clamp(13px, 3.7vw, 15px);
+  font-size: clamp(12px, 3.3vw, 15px);
   font-weight: 550;
   cursor: pointer;
   transition:
@@ -533,6 +533,122 @@ select {
   margin: 10px 6px 0;
   color: var(--ink-faint);
   font-size: 13px;
+}
+
+/* Apps: tiles cut from the TV's own tile sheet. */
+.thumb {
+  display: block;
+  flex: none;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06) no-repeat;
+}
+.row.favorite {
+  grid-template-columns: 88px minmax(0, 1fr) auto auto auto;
+  gap: 10px;
+  padding: 8px 10px 8px 8px;
+}
+.row.favorite .thumb {
+  width: 88px;
+}
+.row.favorite .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.icon-button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ink);
+  font-size: 17px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.glyph {
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+.icon-heart {
+  --icon: url('icon/heart.svg');
+}
+.icon-heart-filled {
+  --icon: url('icon/heart-filled.svg');
+}
+.icon-eye {
+  --icon: url('icon/eye.svg');
+}
+.icon-eye-off {
+  --icon: url('icon/eye-off.svg');
+}
+.icon-up,
+.icon-down {
+  --icon: url('icon/left.svg');
+}
+.icon-up .glyph {
+  transform: rotate(90deg);
+}
+.icon-down .glyph {
+  transform: rotate(-90deg);
+}
+.icon-button[aria-pressed='true'] {
+  background: var(--focus);
+  color: var(--focus-ink);
+}
+.icon-button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
+}
+@media (min-width: 640px) {
+  .app-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.app-card {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.app-card .thumb {
+  width: 100%;
+}
+.app-card.is-hidden .thumb {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+.app-name {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-name small {
+  color: var(--ink-faint);
+  font-weight: 500;
+}
+.app-actions {
+  display: flex;
+  gap: 6px;
+}
+.app-actions .icon-button {
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
 }
 
 .foot {

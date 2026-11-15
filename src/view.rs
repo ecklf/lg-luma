@@ -1037,6 +1037,40 @@ fn favorite_badge(out: &mut Scene, assets: &Assets, card: Rect, color: Color) {
 
 /// Shared card artwork for Home, Apps and Recents. Curated vectors always take
 /// precedence over installed artwork, with the same relative logo proportions.
+/// App tiles per companion page sheet, laid out on the authored 1920×1080 surface.
+pub const SHEET_COLUMNS: usize = 5;
+pub const SHEET_TILES: usize = 25;
+pub const SHEET_TILE: (f32, f32) = (360., 202.5);
+const SHEET_ORIGIN: (f32, f32) = (24., 24.);
+const SHEET_PITCH: (f32, f32) = (376., 210.);
+
+pub fn sheet_rect(index: usize) -> Rect {
+    let (column, row) = (index % SHEET_COLUMNS, index / SHEET_COLUMNS);
+    Rect::new(
+        SHEET_ORIGIN.0 + column as f32 * SHEET_PITCH.0,
+        SHEET_ORIGIN.1 + row as f32 * SHEET_PITCH.1,
+        SHEET_TILE.0,
+        SHEET_TILE.1,
+    )
+}
+
+/// App faces exactly as the TV draws them, in one picture the companion page cuts tiles from.
+pub fn app_sheet(state: &State, assets: &Assets, apps: &[&App]) -> Scene {
+    let mut out = Scene::new();
+    out.shape(Rect::new(0., 0., 1920., 1080.), 0., c(0x1c1f22, 1.));
+    for (index, app) in apps.iter().take(SHEET_TILES).enumerate() {
+        app_face(
+            &mut out,
+            assets,
+            app,
+            sheet_rect(index),
+            state.preferences.language,
+            19.2,
+        );
+    }
+    out
+}
+
 fn app_face(
     out: &mut Scene,
     assets: &Assets,

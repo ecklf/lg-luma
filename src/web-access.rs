@@ -13,7 +13,7 @@ use crate::companion::{
     Request, Session, error_response, local_address, local_peer, qr, read_exact, response,
     response_with,
 };
-use crate::web_settings::{Background, Settings, listing, strings};
+use crate::web_settings::{Arrangement, Background, Library, Settings, listing, strings};
 use serde::{Deserialize, Serialize};
 use std::{
     io::BufReader,
@@ -74,6 +74,14 @@ pub enum Event {
         known: Option<u64>,
         reply: mpsc::Sender<Result<Frame, String>>,
     },
+    /// One sheet of app tiles (see `view::app_sheet`), drawn unless `known` is still current.
+    AppSheet {
+        page: usize,
+        known: Option<u64>,
+        reply: mpsc::Sender<Result<Frame, String>>,
+    },
+    /// New favorites, their order and hidden apps.
+    Arrange(Arrangement),
 }
 
 /// A preview answer: the scene's fingerprint and, unless unchanged, its pixels.
@@ -104,6 +112,10 @@ struct Shared {
     backgrounds: Vec<Background>,
     /// The last preview, encoded once and served until the scene changes.
     preview: Option<Picture>,
+    library: Library,
+    /// An arrangement from the page the launcher has not applied yet.
+    arranging: bool,
+    sheets: std::collections::BTreeMap<usize, Picture>,
 }
 
 #[derive(Clone)]
@@ -159,9 +171,13 @@ impl Service {
         pairing: bool,
         settings: &Settings,
         backgrounds: &[Background],
+        library: &Library,
     ) {
         let pairing = enabled && pairing;
         let mut shared = self.shared.lock().unwrap();
+        if !shared.arranging && shared.library != *library {
+            shared.library = library.clone();
+        }
         if shared.backgrounds != backgrounds {
             shared.backgrounds = backgrounds.to_vec();
         }
@@ -195,6 +211,11 @@ impl Service {
     pub fn acknowledge(&self, revision: u64) {
         let mut shared = self.shared.lock().unwrap();
         shared.acknowledged = shared.acknowledged.max(revision.min(shared.revision));
+    }
+
+    /// The launcher applied the page's arrangement; its own state is authoritative again.
+    pub fn arranged(&self) {
+        self.shared.lock().unwrap().arranging = false;
     }
 
     pub fn devices(&self) -> Vec<Device> {
@@ -510,7 +531,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
                 );
             };
             if api == "settings" {
-                let mut body = listing(&shared.settings, &shared.backgrounds);
+                let mut body = listing(&shared.settings, &shared.backgrounds, &shared.library);
                 body["device"] = serde_json::json!(device.name);
                 drop(shared);
                 return json(stream, "200 OK", &body);
@@ -529,6 +550,22 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
                 };
             }
             drop(shared);
+            if api == "apps.jpg" {
+                let query = request
+                    .target
+                    .split_once('?')
+                    .map_or("", |(_, query)| query);
+                let value = |name: &str| {
+                    query
+                        .split('&')
+                        .find_map(|pair| pair.strip_prefix(name)?.strip_prefix('='))
+                };
+                let page = value("page")
+                    .and_then(|page| page.parse().ok())
+                    .unwrap_or(0);
+                let known = value("known").and_then(|key| key.parse().ok());
+                return sheet(stream, context, page, known);
+            }
             if api == "preview.jpg" {
                 let query = request
                     .target
@@ -562,6 +599,27 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
                 include_bytes!("../assets/web-access/app.js"),
             ),
             "/luma-mark.svg" => ("image/svg+xml", include_bytes!("../assets/app-icon.svg")),
+            // Luma's own interface icons for the page's buttons.
+            "/icon/heart.svg" => (
+                "image/svg+xml",
+                include_bytes!("../assets/ui-icons/heart.svg"),
+            ),
+            "/icon/heart-filled.svg" => (
+                "image/svg+xml",
+                include_bytes!("../assets/ui-icons/heart-filled.svg"),
+            ),
+            "/icon/eye.svg" => (
+                "image/svg+xml",
+                include_bytes!("../assets/ui-icons/eye.svg"),
+            ),
+            "/icon/eye-off.svg" => (
+                "image/svg+xml",
+                include_bytes!("../assets/ui-icons/eye-off.svg"),
+            ),
+            "/icon/left.svg" => (
+                "image/svg+xml",
+                include_bytes!("../assets/ui-icons/left.svg"),
+            ),
             _ => return error_response(stream, "404 Not Found", "Not found"),
         };
         return response(stream, "200 OK", kind, body);
@@ -587,6 +645,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
     match route.as_str() {
         "/api/pair" => pair(stream, context, &body),
         "/api/settings" => save(stream, context, &request, &body),
+        "/api/apps" => arrange(stream, context, &request, &body),
         "/api/forget" => forget(stream, context, &request),
         _ => error_response(stream, "404 Not Found", "Not found"),
     }
@@ -639,6 +698,94 @@ fn picture(context: &Context) -> Result<Picture, String> {
     };
     context.shared.lock().unwrap().preview = Some(picture.clone());
     Ok(picture)
+}
+
+/// One sheet of app tiles, cached until the launcher's tiles change (icons load in the
+/// background, so the page asks again a few times with the fingerprint it has).
+fn sheet(
+    stream: &mut TcpStream,
+    context: &Context,
+    page: usize,
+    shown: Option<u64>,
+) -> Result<(), String> {
+    let cached = context.shared.lock().unwrap().sheets.get(&page).cloned();
+    let (reply, answer) = mpsc::channel();
+    let request = Event::AppSheet {
+        page,
+        known: cached.as_ref().map(|picture| picture.key),
+        reply,
+    };
+    if context.sender.send(request).is_err() {
+        return error_response(stream, "503 Service Unavailable", "Launcher stopped");
+    }
+    let frame = match answer.recv_timeout(Duration::from_secs(6)) {
+        Ok(Ok(frame)) => frame,
+        Ok(Err(error)) => return error_response(stream, "503 Service Unavailable", &error),
+        Err(_) => return error_response(stream, "503 Service Unavailable", "The TV is busy"),
+    };
+    let picture = match (frame.image, cached) {
+        (Some(image), _) => Picture {
+            key: frame.key,
+            on_screen: true,
+            jpeg: Arc::new(encode(&image)?),
+            checked: Instant::now(),
+        },
+        (None, Some(picture)) if picture.key == frame.key => picture,
+        (None, _) => return error_response(stream, "503 Service Unavailable", "Try again"),
+    };
+    context
+        .shared
+        .lock()
+        .unwrap()
+        .sheets
+        .insert(page, picture.clone());
+    if shown == Some(picture.key) {
+        return response_with(stream, "204 No Content", "image/jpeg", "", b"");
+    }
+    response_with(
+        stream,
+        "200 OK",
+        "image/jpeg",
+        &format!("X-Luma-Frame: {}\r\n", picture.key),
+        &picture.jpeg,
+    )
+}
+
+fn arrange(
+    stream: &mut TcpStream,
+    context: &Context,
+    request: &Request,
+    body: &[u8],
+) -> Result<(), String> {
+    let mut shared = context.shared.lock().unwrap();
+    let Some(name) = device(request, &shared.devices).map(|device| device.name.clone()) else {
+        drop(shared);
+        return json(
+            stream,
+            "401 Unauthorized",
+            &serde_json::json!({ "error": "This device was removed on the TV. Pair it again.", "pair": true }),
+        );
+    };
+    let Ok(mut next) = serde_json::from_slice::<Arrangement>(body) else {
+        drop(shared);
+        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+    };
+    // Show the page what the launcher will keep: known apps, favorites never hidden.
+    let known = |id: &String| shared.library.apps.iter().any(|app| &app.id == id);
+    next.favorites.retain(known);
+    next.hidden
+        .retain(|id| known(id) && !next.favorites.contains(id));
+    shared.library.favorites = next.favorites.clone();
+    shared.library.hidden = next.hidden.clone();
+    shared.arranging = true;
+    let mut reply = listing(&shared.settings, &shared.backgrounds, &shared.library);
+    drop(shared);
+    reply["device"] = serde_json::json!(name);
+    context
+        .sender
+        .send(Event::Arrange(next))
+        .map_err(|_| "Launcher stopped".to_owned())?;
+    json(stream, "200 OK", &reply)
 }
 
 /// Luma's screen for the page. The page passes the fingerprint it shows; with `wait` the request
@@ -821,7 +968,7 @@ fn save(
         shared.revision += 1;
         Event::Settings(shared.revision, next)
     });
-    let mut reply = listing(&shared.settings, &shared.backgrounds);
+    let mut reply = listing(&shared.settings, &shared.backgrounds, &shared.library);
     drop(shared);
     reply["device"] = serde_json::json!(name);
     // Queue the change before replying; it applies even if the phone misses the reply.

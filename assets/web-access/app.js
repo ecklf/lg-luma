@@ -240,6 +240,149 @@ function wallpapers() {
   return grid;
 }
 
+/* ---------- Apps ---------- */
+
+// Luma draws every app tile in sheets of 25 on a 1920×1080 surface; tiles are cut out with CSS,
+// so they look exactly like on the TV, brand logos included.
+const SHEET = {
+  width: 1920,
+  height: 1080,
+  tile: [360, 202.5],
+  origin: [24, 24],
+  pitch: [376, 210],
+};
+const sheets = new Map();
+
+async function loadSheet(page, again = true) {
+  const known = sheets.get(page)?.frame ?? '';
+  try {
+    const response = await fetch(`api/apps.jpg?page=${page}&known=${known}`, { cache: 'no-store' });
+    if (response.status === 200) {
+      const old = sheets.get(page);
+      const url = URL.createObjectURL(await response.blob());
+      sheets.set(page, { url, frame: response.headers.get('X-Luma-Frame') || '' });
+      if (old) URL.revokeObjectURL(old.url);
+      for (const thumb of document.querySelectorAll(`[data-sheet="${page}"]`)) {
+        thumb.style.backgroundImage = `url("${url}")`;
+      }
+    }
+  } catch {
+    // Tiles stay as plain cards; the next visit asks again.
+  }
+  // Icons decode in the background on the TV; pick up late ones.
+  if (again) setTimeout(() => loadSheet(page, false), 2500);
+}
+
+function thumb(index) {
+  const node = create('span', 'thumb');
+  const page = Math.floor(index / state.sheet.tiles);
+  const slot = index % state.sheet.tiles;
+  const column = slot % state.sheet.columns;
+  const row = Math.floor(slot / state.sheet.columns);
+  const x = SHEET.origin[0] + column * SHEET.pitch[0];
+  const y = SHEET.origin[1] + row * SHEET.pitch[1];
+  node.dataset.sheet = String(page);
+  node.style.backgroundSize = `${(SHEET.width / SHEET.tile[0]) * 100}% auto`;
+  node.style.backgroundPosition = `${(x / (SHEET.width - SHEET.tile[0])) * 100}% ${(y / (SHEET.height - SHEET.tile[1])) * 100}%`;
+  const sheet = sheets.get(page);
+  if (sheet) node.style.backgroundImage = `url("${sheet.url}")`;
+  else loadSheet(page);
+  return node;
+}
+
+function arrange(favorites, hidden) {
+  state.library.favorites = favorites;
+  state.library.hidden = hidden;
+  render();
+  queue = queue.then(async () => {
+    message(strings.saving, false, true);
+    try {
+      apply(await call('api/apps', { favorites, hidden }));
+      message(strings.saved);
+    } catch (error) {
+      if (error instanceof PairingNeeded) return startPairing(error.message);
+      message(error.message, true);
+      load();
+    }
+  });
+}
+
+function iconButton(icon, label, pressed, action) {
+  const button = create('button', `icon-button icon-${icon}`);
+  button.append(create('span', 'glyph'));
+  button.type = 'button';
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  if (pressed !== undefined) button.setAttribute('aria-pressed', String(pressed));
+  button.addEventListener('click', action);
+  return button;
+}
+
+function appsSection() {
+  const l = state.labels;
+  const { apps, favorites, hidden } = state.library;
+  const index = new Map(apps.map((app, position) => [app.id, position]));
+  const title = (id) => apps[index.get(id)]?.title ?? id;
+
+  const dock = create('div', 'rows');
+  const shown = favorites.filter((id) => index.has(id));
+  shown.forEach((id, position) => {
+    const row = create('div', 'row favorite');
+    const move = (offset) => {
+      const next = [...favorites];
+      const from = next.indexOf(id);
+      const to = from + offset;
+      if (to < 0 || to >= next.length) return;
+      [next[from], next[to]] = [next[to], next[from]];
+      arrange(next, hidden);
+    };
+    const up = iconButton('up', `${title(id)} ↑`, undefined, () => move(-1));
+    const down = iconButton('down', `${title(id)} ↓`, undefined, () => move(1));
+    up.disabled = position === 0;
+    down.disabled = position === shown.length - 1;
+    const remove = iconButton('heart-filled', l.removeFavorite, true, () =>
+      arrange(
+        favorites.filter((item) => item !== id),
+        hidden,
+      ),
+    );
+    row.append(thumb(index.get(id)), create('span', 'title', title(id)), up, down, remove);
+    dock.append(row);
+  });
+  if (!shown.length) dock.append(create('p', 'hint', l.makeFavorites));
+
+  const grid = create('div', 'app-grid');
+  for (const app of apps) {
+    const favorite = favorites.includes(app.id);
+    const isHidden = hidden.includes(app.id);
+    const card = create('div', isHidden ? 'app-card is-hidden' : 'app-card');
+    const actions = create('div', 'app-actions');
+    actions.append(
+      iconButton(
+        favorite ? 'heart-filled' : 'heart',
+        favorite ? l.removeFavorite : l.addFavorite,
+        favorite,
+        () =>
+          arrange(
+            favorite ? favorites.filter((id) => id !== app.id) : [...favorites, app.id],
+            hidden.filter((id) => id !== app.id),
+          ),
+      ),
+      iconButton(isHidden ? 'eye-off' : 'eye', isHidden ? l.showApp : l.hideApp, isHidden, () =>
+        arrange(
+          favorites.filter((id) => id !== app.id),
+          isHidden ? hidden.filter((id) => id !== app.id) : [...hidden, app.id],
+        ),
+      ),
+    );
+    const name = create('span', 'app-name', app.title);
+    if (isHidden) name.append(create('small', '', ` · ${l.hidden}`));
+    card.append(thumb(index.get(app.id)), name, actions);
+    grid.append(card);
+  }
+  return [group(l.favorites, dock), group(l.apps, grid)];
+}
+
 function group(heading, ...rows) {
   const section = create('section', 'group');
   if (heading) section.append(create('h2', '', heading));
@@ -262,6 +405,7 @@ function sections() {
         toggleRow('ui_sounds', l.uiSounds),
       ),
     ],
+    apps: appsSection(),
     background: [
       group(null, wallpapers()),
       group(

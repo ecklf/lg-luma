@@ -92,7 +92,7 @@ fn pairs_once_and_then_changes_settings() {
         thumbnail: thumbnail.clone(),
     }];
 
-    service.sync(true, true, &settings, &catalog);
+    service.sync(true, true, &settings, &catalog, &Library::default());
     let first = pairing(&service);
     assert!(first.session.url.ends_with(&format!("/#pin={}", first.pin)));
 
@@ -155,7 +155,7 @@ fn pairs_once_and_then_changes_settings() {
     assert_eq!(status, 409);
 
     // Pairing is done; the page now works with the dialog closed.
-    service.sync(true, false, &settings, &catalog);
+    service.sync(true, false, &settings, &catalog, &Library::default());
     let (status, _, body) = get("/api/settings", &cookie);
     assert_eq!(status, 200);
     assert!(body.contains("\"device\":\"Test phone\""));
@@ -303,7 +303,7 @@ fn pairs_once_and_then_changes_settings() {
     assert_eq!(get("/api/settings", &cookie).0, 401);
 
     // Turning web access off closes the server.
-    service.sync(false, false, &settings, &catalog);
+    service.sync(false, false, &settings, &catalog, &Library::default());
     thread::sleep(Duration::from_millis(400));
     assert!(TcpStream::connect(("127.0.0.1", PORT)).is_err());
     drop(service);

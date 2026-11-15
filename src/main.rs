@@ -472,6 +472,57 @@ fn web_backgrounds(state: &State, assets: &view::Assets) -> Vec<web_settings::Ba
         .collect()
 }
 
+/// Every app and shortcut in the order the companion page lists them and sheets draw them.
+fn library_apps(state: &State) -> Vec<&model::App> {
+    let mut apps: Vec<_> = state.inventory.apps.iter().collect();
+    apps.sort_by(|a, b| state.preferences.compare_apps(a, b));
+    apps
+}
+
+fn web_library(state: &State) -> web_settings::Library {
+    web_settings::Library {
+        apps: library_apps(state)
+            .into_iter()
+            .map(|app| web_settings::LibraryApp {
+                id: app.id.clone(),
+                title: app.title.clone(),
+            })
+            .collect(),
+        favorites: state.preferences.favorites(&state.inventory.apps),
+        hidden: state.preferences.hidden.clone(),
+    }
+}
+
+/// One sheet of app tiles for the companion page, drawn only when its tiles changed.
+fn app_sheet(
+    state: &State,
+    assets: &view::Assets,
+    renderer: &mut renderer::Renderer,
+    page: usize,
+    known: Option<u64>,
+) -> Result<web_access::Frame, String> {
+    let apps: Vec<_> = library_apps(state)
+        .into_iter()
+        .skip(page * view::SHEET_TILES)
+        .take(view::SHEET_TILES)
+        .collect();
+    let scene = view::app_sheet(state, assets, &apps);
+    let key = renderer::fingerprint(&scene.draw);
+    if known == Some(key) {
+        return Ok(web_access::Frame {
+            key,
+            on_screen: true,
+            image: None,
+        });
+    }
+    let image = renderer.capture_rgba(&scene.draw, Size::HD)?;
+    Ok(web_access::Frame {
+        key,
+        on_screen: true,
+        image: Some(image),
+    })
+}
+
 /// What Luma shows right now, as the companion page's live picture. While another app is in
 /// front Luma's own Home stands in: other apps' pictures are never captured.
 fn live_preview(
@@ -1143,6 +1194,7 @@ fn run() -> Result<(), String> {
             focused && visible && matches!(state.overlay, Some(Overlay::WebAccessPair)),
             &web_settings::Settings::of(&state.preferences),
             &web_backgrounds(&state, &assets),
+            &web_library(&state),
         );
         while let Ok(event) = web_access_service.receiver.try_recv() {
             match event {
@@ -1195,6 +1247,24 @@ fn run() -> Result<(), String> {
                         known,
                         visible && (focused || !webos),
                     ));
+                }
+                web_access::Event::AppSheet { page, known, reply } => {
+                    let _ = reply.send(app_sheet(&state, &assets, &mut renderer, page, known));
+                }
+                web_access::Event::Arrange(arrangement) => {
+                    let pending =
+                        state.apply_web_arrangement(arrangement.favorites, arrangement.hidden);
+                    web_access_service.arranged();
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
                 }
                 web_access::Event::Pairing(..) => {}
             }
