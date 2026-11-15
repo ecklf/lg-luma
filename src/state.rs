@@ -2283,6 +2283,31 @@ impl State {
         vec![Effect::Save]
     }
 
+    /// A weather place chosen on a paired phone or computer, or `None` to remove it, with the
+    /// same effects as choosing or removing it in Settings › Widgets › Weather.
+    pub fn apply_web_weather_location(
+        &mut self,
+        place: Option<crate::weather::Location>,
+    ) -> Vec<Effect> {
+        if self.preferences.weather_location == place {
+            return vec![];
+        }
+        self.dirty = true;
+        match place {
+            Some(place) => {
+                self.preferences.weather_location = Some(place);
+                self.weather.invalidate_forecast();
+                self.weather.cancel_search();
+                vec![Effect::Save]
+            }
+            None => {
+                self.preferences.weather_location = None;
+                self.weather.remove_location();
+                vec![Effect::Save, Effect::Weather(weather::Command::ClearCache)]
+            }
+        }
+    }
+
     /// Shows `id` as the background, fading from the previous one like a choice in Settings.
     fn use_background(&mut self, id: String) {
         if !self.preferences.reduced_motion && self.preferences.background != id {

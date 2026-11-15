@@ -82,7 +82,8 @@ fn cookie_must_match_a_stored_key_hash() {
 fn pairs_once_and_then_changes_settings() {
     let path = std::env::temp_dir().join(format!("luma-web-devices-{}.json", std::process::id()));
     let _ = std::fs::remove_file(&path);
-    let mut service = Service::new(path.clone(), true).unwrap();
+    let weather = crate::weather_service::Client::new(None).unwrap();
+    let mut service = Service::new(path.clone(), true, weather).unwrap();
     let settings = Settings::of(&crate::model::Preferences::default());
     let thumbnail = path.with_extension("jpg");
     std::fs::write(&thumbnail, b"jpeg").unwrap();
@@ -326,6 +327,18 @@ fn pairs_once_and_then_changes_settings() {
     assert_eq!(post("/api/inputs", &cookie, unknown).0, 422);
     assert_eq!(get("/icon/input-playstation.svg", "").0, 200);
     assert_eq!(get("/icon/input-..%2Fx.svg", "").0, 404);
+
+    // A place is chosen by position in the last search, never by coordinates from the page.
+    assert_eq!(post("/api/location", &cookie, r#"{"index":0}"#).0, 422);
+    assert_eq!(post("/api/places", &cookie, r#"{"query":"a"}"#).0, 422);
+    let (status, _, _) = post("/api/location", &cookie, r#"{"index":null}"#);
+    assert_eq!(status, 200);
+    loop {
+        if let Event::WeatherLocation(place) = next_event(&service) {
+            assert!(place.is_none());
+            break;
+        }
+    }
 
     // Unknown fields cannot reach other preferences.
     let (status, _, _) = post("/api/settings", &cookie, r#"{"hidden":["x"]}"#);

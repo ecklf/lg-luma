@@ -119,6 +119,7 @@ pub struct Catalog {
     pub backgrounds: Vec<Background>,
     pub library: Library,
     pub inputs: Vec<WebInput>,
+    pub weather_location: Option<crate::weather::Location>,
 }
 
 /// A new arrangement from the page. Unknown ids are dropped by the launcher.
@@ -162,84 +163,94 @@ pub fn strings(language: Language) -> serde_json::Value {
 pub fn listing(settings: &Settings, catalog: &Catalog) -> serde_json::Value {
     let language = settings.language;
     let t = |key| language.t(key);
+    let labels = serde_json::json!({
+        "apps": t("apps"),
+        "favorites": t("favorites"),
+        "addFavorite": t("addFavorite"),
+        "removeFavorite": t("removeFavorite"),
+        "hideApp": t("hideApp"),
+        "showApp": t("showApp"),
+        "hidden": t("hiddenLabel"),
+        "makeFavorites": t("makeFavorites"),
+        "inputs": t("inputs"),
+        "inputName": t("inputName"),
+        "inputNameHint": t("inputNameHint"),
+        "inputIcon": t("inputIcon"),
+        "location": t("location"),
+        "cityPostcode": t("cityPostcode"),
+        "searchLocations": t("searchLocations"),
+        "removeWeatherLocation": t("removeWeatherLocation"),
+        "noLocations": t("noLocations"),
+        "searching": t("searching"),
+        "setWeatherLocation": t("setWeatherLocation"),
+        "general": t("interface"),
+        "background": t("background"),
+        "widgets": t("widgets"),
+        "system": t("system"),
+        "clock": t("clock"),
+        "clockFormat": t("clockFormat"),
+        "timeFormat": t("timeFormat"),
+        "language": t("language"),
+        "appSorting": t("appSorting"),
+        "reducedMotion": t("reducedMotion"),
+        "uiSounds": t("uiSounds"),
+        "greeting": t("greeting"),
+        "greetingName": t("greetingName"),
+        "showWidget": t("showWidget"),
+        "date": t("date"),
+        "dateFormat": t("dateFormat"),
+        "weather": t("weather"),
+        "temperature": t("temperature"),
+        "weatherStyle": t("weatherStyle"),
+        "wallpaperCycle": t("wallpaperCycle"),
+        "wallpaperGradient": t("wallpaperGradient"),
+        "textRendering": t("textRendering"),
+    });
+    let choices = serde_json::json!({
+        "hour_24": [choice(false, t("hour12")), choice(true, t("hour24"))],
+        "show_seconds": [choice(false, "HH:MM"), choice(true, "HH:MM:SS")],
+        "language": Language::ALL
+            .iter()
+            .map(|item| choice(item, item.name()))
+            .collect::<Vec<_>>(),
+        "app_sorting": AppSorting::ALL
+            .iter()
+            .map(|item| choice(item, t(item.label_key())))
+            .collect::<Vec<_>>(),
+        "date_format": DateFormat::ALL
+            .iter()
+            .map(|item| choice(item, item.label(language)))
+            .collect::<Vec<_>>(),
+        "temperature_unit": [
+            choice(Unit::Celsius, t("celsius")),
+            choice(Unit::Fahrenheit, t("fahrenheit")),
+        ],
+        "weather_style": WeatherStyle::ALL
+            .iter()
+            .map(|item| choice(item, t(item.label_key())))
+            .collect::<Vec<_>>(),
+        "input_mode": [
+            serde_json::json!({ "value": InputMode::On, "label": t("stateOn"), "hint": t("inputAlways") }),
+            serde_json::json!({ "value": InputMode::Off, "label": t("stateOff"), "hint": t("inputNever") }),
+            serde_json::json!({ "value": InputMode::Auto, "label": t("stateAuto"), "hint": t("inputWhenConnected") }),
+        ],
+        "input_icon": std::iter::once(choice("", t("inputIconAutomatic")))
+            .chain(INPUT_ICONS.iter().map(|(icon, key)| choice(icon, t(key))))
+            .collect::<Vec<_>>(),
+        "text_rendering": TextRendering::ALL
+            .iter()
+            .map(|item| choice(item, t(item.label_key())))
+            .collect::<Vec<_>>(),
+    });
     serde_json::json!({
         "settings": settings,
         "strings": strings(language),
         "backgrounds": catalog.backgrounds,
         "library": catalog.library,
         "inputs": catalog.inputs,
+        "weatherLocation": catalog.weather_location,
         "sheet": { "tiles": crate::view::SHEET_TILES, "columns": crate::view::SHEET_COLUMNS },
-        "labels": {
-            "apps": t("apps"),
-            "favorites": t("favorites"),
-            "addFavorite": t("addFavorite"),
-            "removeFavorite": t("removeFavorite"),
-            "hideApp": t("hideApp"),
-            "showApp": t("showApp"),
-            "hidden": t("hiddenLabel"),
-            "makeFavorites": t("makeFavorites"),
-            "inputs": t("inputs"),
-            "inputName": t("inputName"),
-            "inputNameHint": t("inputNameHint"),
-            "inputIcon": t("inputIcon"),
-            "general": t("interface"),
-            "background": t("background"),
-            "widgets": t("widgets"),
-            "system": t("system"),
-            "clock": t("clock"),
-            "clockFormat": t("clockFormat"),
-            "timeFormat": t("timeFormat"),
-            "language": t("language"),
-            "appSorting": t("appSorting"),
-            "reducedMotion": t("reducedMotion"),
-            "uiSounds": t("uiSounds"),
-            "greeting": t("greeting"),
-            "greetingName": t("greetingName"),
-            "showWidget": t("showWidget"),
-            "date": t("date"),
-            "dateFormat": t("dateFormat"),
-            "weather": t("weather"),
-            "temperature": t("temperature"),
-            "weatherStyle": t("weatherStyle"),
-            "wallpaperCycle": t("wallpaperCycle"),
-            "wallpaperGradient": t("wallpaperGradient"),
-            "textRendering": t("textRendering"),
-        },
-        "choices": {
-            "hour_24": [choice(false, t("hour12")), choice(true, t("hour24"))],
-            "show_seconds": [choice(false, "HH:MM"), choice(true, "HH:MM:SS")],
-            "language": Language::ALL
-                .iter()
-                .map(|item| choice(item, item.name()))
-                .collect::<Vec<_>>(),
-            "app_sorting": AppSorting::ALL
-                .iter()
-                .map(|item| choice(item, t(item.label_key())))
-                .collect::<Vec<_>>(),
-            "date_format": DateFormat::ALL
-                .iter()
-                .map(|item| choice(item, item.label(language)))
-                .collect::<Vec<_>>(),
-            "temperature_unit": [
-                choice(Unit::Celsius, t("celsius")),
-                choice(Unit::Fahrenheit, t("fahrenheit")),
-            ],
-            "weather_style": WeatherStyle::ALL
-                .iter()
-                .map(|item| choice(item, t(item.label_key())))
-                .collect::<Vec<_>>(),
-            "input_mode": [
-                serde_json::json!({ "value": InputMode::On, "label": t("stateOn"), "hint": t("inputAlways") }),
-                serde_json::json!({ "value": InputMode::Off, "label": t("stateOff"), "hint": t("inputNever") }),
-                serde_json::json!({ "value": InputMode::Auto, "label": t("stateAuto"), "hint": t("inputWhenConnected") }),
-            ],
-            "input_icon": std::iter::once(choice("", t("inputIconAutomatic")))
-                .chain(INPUT_ICONS.iter().map(|(icon, key)| choice(icon, t(key))))
-                .collect::<Vec<_>>(),
-            "text_rendering": TextRendering::ALL
-                .iter()
-                .map(|item| choice(item, t(item.label_key())))
-                .collect::<Vec<_>>(),
-        },
+        "labels": labels,
+        "choices": choices,
     })
 }

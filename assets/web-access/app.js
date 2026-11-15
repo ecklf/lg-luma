@@ -383,6 +383,99 @@ function appsSection() {
   return [group(l.favorites, dock), group(l.apps, grid)];
 }
 
+/* ---------- Weather location ---------- */
+
+let places = [];
+let placeQuery = '';
+let placeNote = '';
+
+function placeLabel(place) {
+  return [place.name, place.region, place.country].filter(Boolean).join(', ');
+}
+
+async function searchPlaces(query) {
+  placeQuery = query;
+  placeNote = state.labels.searching;
+  places = [];
+  render();
+  try {
+    const result = await call('api/places', { query });
+    places = result.places;
+    placeNote = places.length ? '' : state.labels.noLocations;
+  } catch (error) {
+    if (error instanceof PairingNeeded) return startPairing(error.message);
+    placeNote = error.message;
+  }
+  render();
+}
+
+function choosePlace(index) {
+  places = [];
+  placeQuery = '';
+  placeNote = '';
+  queue = queue.then(async () => {
+    message(strings.saving, false, true);
+    try {
+      apply(await call('api/location', { index }));
+      message(strings.saved);
+    } catch (error) {
+      if (error instanceof PairingNeeded) return startPairing(error.message);
+      message(error.message, true);
+      load();
+    }
+  });
+}
+
+function locationRows() {
+  const l = state.labels;
+  const rows = [];
+  const current = create('div', 'row inline');
+  current.append(
+    create(
+      'span',
+      'title',
+      state.weatherLocation ? placeLabel(state.weatherLocation) : l.setWeatherLocation,
+    ),
+  );
+  if (state.weatherLocation) {
+    const remove = create('button', 'pill-button', l.removeWeatherLocation);
+    remove.type = 'button';
+    remove.addEventListener('click', () => choosePlace(null));
+    current.append(remove);
+  }
+  rows.push(current);
+
+  const search = create('form', 'row stacked place-search');
+  const field = create('input', 'text-field');
+  field.type = 'search';
+  field.enterKeyHint = 'search';
+  field.autocomplete = 'off';
+  field.placeholder = l.cityPostcode;
+  field.value = placeQuery;
+  field.setAttribute('aria-label', l.cityPostcode);
+  const go = create('button', 'pill-button strong', l.searchLocations);
+  go.type = 'submit';
+  search.append(field, go);
+  search.addEventListener('submit', (event) => {
+    event.preventDefault();
+    field.blur();
+    searchPlaces(field.value.trim());
+  });
+  rows.push(search);
+  if (placeNote) rows.push(create('p', 'hint', placeNote));
+  places.forEach((place, index) => {
+    const option = create('button', 'row place');
+    option.type = 'button';
+    option.append(
+      create('span', 'title', place.name),
+      create('span', 'muted', [place.region, place.country].filter(Boolean).join(', ')),
+    );
+    option.addEventListener('click', () => choosePlace(index));
+    rows.push(option);
+  });
+  return rows;
+}
+
 /* ---------- Inputs ---------- */
 
 function changeInput(input, changes) {
@@ -510,6 +603,7 @@ function sections() {
       group(
         l.weather,
         toggleRow('show_weather', l.showWidget),
+        ...locationRows(),
         choiceRow('temperature_unit', l.temperature),
         choiceRow('weather_style', l.weatherStyle),
       ),

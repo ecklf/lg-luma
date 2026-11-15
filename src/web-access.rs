@@ -84,6 +84,8 @@ pub enum Event {
     Arrange(Arrangement),
     /// One input's name, visibility and icon.
     Input(InputChange),
+    /// A place from the page's search, or `None` to remove the weather location.
+    WeatherLocation(Option<crate::weather::Location>),
 }
 
 /// A preview answer: the scene's fingerprint and, unless unchanged, its pixels.
@@ -117,6 +119,9 @@ struct Shared {
     /// An arrangement or input change from the page the launcher has not applied yet.
     arranging: bool,
     inputting: bool,
+    locating: bool,
+    /// The page's last place search; the page chooses among these by position.
+    places: Vec<crate::weather::Location>,
     sheets: std::collections::BTreeMap<usize, Picture>,
 }
 
@@ -140,7 +145,13 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn new(path: PathBuf, loopback_only: bool) -> Result<Self, String> {
+    /// `weather` looks up places for the page's weather location search.
+    pub fn new(
+        path: PathBuf,
+        loopback_only: bool,
+        weather: crate::weather_service::Client,
+    ) -> Result<Self, String> {
+        let weather = Arc::new(weather);
         let devices = load_devices(&path);
         let shared = Arc::new(Mutex::new(Shared {
             devices,
@@ -152,7 +163,16 @@ impl Service {
         let (wake, updates) = mpsc::channel();
         thread::Builder::new()
             .name("luma-web-access".into())
-            .spawn(move || worker(worker_shared, worker_path, sender, &updates, loopback_only))
+            .spawn(move || {
+                worker(
+                    worker_shared,
+                    worker_path,
+                    sender,
+                    weather,
+                    &updates,
+                    loopback_only,
+                )
+            })
             .map_err(|e| format!("Could not start web access worker: {e}"))?;
         Ok(Self {
             shared,
@@ -179,6 +199,9 @@ impl Service {
         }
         if !shared.inputting && shared.catalog.inputs != catalog.inputs {
             shared.catalog.inputs = catalog.inputs.clone();
+        }
+        if !shared.locating && shared.catalog.weather_location != catalog.weather_location {
+            shared.catalog.weather_location = catalog.weather_location.clone();
         }
         // A change from the phone stays authoritative until the launcher has applied it.
         if shared.revision == shared.acknowledged && shared.settings != *settings {
@@ -219,6 +242,10 @@ impl Service {
 
     pub fn inputs_applied(&self) {
         self.shared.lock().unwrap().inputting = false;
+    }
+
+    pub fn location_applied(&self) {
+        self.shared.lock().unwrap().locating = false;
     }
 
     pub fn devices(&self) -> Vec<Device> {
@@ -318,6 +345,7 @@ fn worker(
     shared: Arc<Mutex<Shared>>,
     path: PathBuf,
     sender: mpsc::SyncSender<Event>,
+    weather: Arc<crate::weather_service::Client>,
     wake: &mpsc::Receiver<()>,
     loopback_only: bool,
 ) {
@@ -416,6 +444,7 @@ fn worker(
                     shared: shared.clone(),
                     path: path.clone(),
                     sender: sender.clone(),
+                    weather: weather.clone(),
                     address: *address,
                 };
                 let finished = active.clone();
@@ -456,6 +485,7 @@ struct Context {
     shared: Arc<Mutex<Shared>>,
     path: PathBuf,
     sender: mpsc::SyncSender<Event>,
+    weather: Arc<crate::weather_service::Client>,
     address: SocketAddr,
 }
 
@@ -686,6 +716,8 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         "/api/settings" => save(stream, context, &request, &body),
         "/api/apps" => arrange(stream, context, &request, &body),
         "/api/inputs" => change_input(stream, context, &request, &body),
+        "/api/places" => search_places(stream, context, &request, &body),
+        "/api/location" => choose_place(stream, context, &request, &body),
         "/api/forget" => forget(stream, context, &request),
         _ => error_response(stream, "404 Not Found", "Not found"),
     }
@@ -872,6 +904,94 @@ fn change_input(
     context
         .sender
         .send(Event::Input(change))
+        .map_err(|_| "Launcher stopped".to_owned())?;
+    json(stream, "200 OK", &reply)
+}
+
+fn unpaired(stream: &mut TcpStream) -> Result<(), String> {
+    json(
+        stream,
+        "401 Unauthorized",
+        &serde_json::json!({ "error": "This device was removed on the TV. Pair it again.", "pair": true }),
+    )
+}
+
+/// Looks up places for the weather location, on this connection's thread.
+fn search_places(
+    stream: &mut TcpStream,
+    context: &Context,
+    request: &Request,
+    body: &[u8],
+) -> Result<(), String> {
+    #[derive(Deserialize)]
+    struct Search {
+        query: String,
+    }
+    let language = {
+        let shared = context.shared.lock().unwrap();
+        if device(request, &shared.devices).is_none() {
+            drop(shared);
+            return unpaired(stream);
+        }
+        shared.settings.language
+    };
+    let Ok(search) = serde_json::from_slice::<Search>(body) else {
+        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+    };
+    if search.query.trim().chars().count() < 2 {
+        return error_response(stream, "422 Unprocessable Content", language.t("enterCity"));
+    }
+    match context.weather.search(&search.query, language) {
+        Ok(places) => {
+            let body = serde_json::json!({ "places": places });
+            context.shared.lock().unwrap().places = places;
+            json(stream, "200 OK", &body)
+        }
+        Err(error) => {
+            eprintln!("Luma web access: place search failed: {error}");
+            error_response(stream, "502 Bad Gateway", language.t("searchUnavailable"))
+        }
+    }
+}
+
+/// Sets the weather location to one of the last search's places, or removes it.
+fn choose_place(
+    stream: &mut TcpStream,
+    context: &Context,
+    request: &Request,
+    body: &[u8],
+) -> Result<(), String> {
+    #[derive(Deserialize)]
+    struct Choice {
+        index: Option<usize>,
+    }
+    let mut shared = context.shared.lock().unwrap();
+    let Some(name) = device(request, &shared.devices).map(|device| device.name.clone()) else {
+        drop(shared);
+        return unpaired(stream);
+    };
+    let Ok(choice) = serde_json::from_slice::<Choice>(body) else {
+        drop(shared);
+        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+    };
+    let place = match choice.index {
+        Some(index) => match shared.places.get(index) {
+            Some(place) => Some(place.clone()),
+            None => {
+                drop(shared);
+                return error_response(stream, "422 Unprocessable Content", "Search again.");
+            }
+        },
+        None => None,
+    };
+    shared.catalog.weather_location = place.clone();
+    shared.locating = true;
+    let mut reply = listing(&shared.settings, &shared.catalog);
+    drop(shared);
+    reply["device"] = serde_json::json!(name);
+    context
+        .sender
+        .send(Event::WeatherLocation(place))
         .map_err(|_| "Launcher stopped".to_owned())?;
     json(stream, "200 OK", &reply)
 }

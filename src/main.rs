@@ -841,6 +841,7 @@ fn run() -> Result<(), String> {
     let mut web_access_service = web_access::Service::new(
         preferences_path.with_file_name("web-devices.json"),
         !webos && !options.script.is_empty(),
+        weather_service::Client::new(options.weather_test_server.as_deref())?,
     )?;
     state.web_devices = web_access_service.devices();
     if options.test_extra_apps > 0 {
@@ -1221,6 +1222,7 @@ fn run() -> Result<(), String> {
                 backgrounds: web_backgrounds(&state, &assets),
                 library: web_library(&state),
                 inputs: web_inputs(&state),
+                weather_location: state.preferences.weather_location.clone(),
             },
         );
         while let Ok(event) = web_access_service.receiver.try_recv() {
@@ -1296,6 +1298,20 @@ fn run() -> Result<(), String> {
                 web_access::Event::Input(change) => {
                     let pending = state.apply_web_input(change);
                     web_access_service.inputs_applied();
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                web_access::Event::WeatherLocation(place) => {
+                    let pending = state.apply_web_weather_location(place);
+                    web_access_service.location_applied();
                     running &= effects(
                         pending,
                         &mut state,

@@ -652,6 +652,36 @@ select {
   font-size: 15px;
 }
 
+/* Weather location */
+.pill-button {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.pill-button.strong {
+  background: var(--focus);
+  color: var(--focus-ink);
+}
+.place-search {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.row.place {
+  justify-items: start;
+  gap: 2px;
+  text-align: left;
+  cursor: pointer;
+}
+.row.place .muted {
+  font-size: 13px;
+}
+
 /* Inputs */
 .input-card {
   gap: 12px;
