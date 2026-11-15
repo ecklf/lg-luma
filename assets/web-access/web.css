@@ -682,6 +682,69 @@ select {
   font-size: 13px;
 }
 
+/* Shortcuts */
+.tile-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  justify-items: start;
+  text-align: left;
+  cursor: pointer;
+}
+.tile-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.tile-text .muted {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile-editor {
+  gap: 10px;
+}
+.field {
+  display: grid;
+  gap: 6px;
+}
+.field .muted,
+.field-label {
+  font-size: 13px;
+}
+.tile-icons {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.tile-icon {
+  display: grid;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--ink);
+  cursor: pointer;
+}
+.tile-icon[aria-pressed='true'] {
+  background: var(--focus);
+  color: var(--focus-ink);
+}
+.tile-icon .input-mark {
+  background: currentColor;
+}
+.tile-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.pill-button.danger {
+  color: var(--danger);
+}
+.add-tile {
+  justify-self: start;
+}
+
 /* Inputs */
 .input-card {
   gap: 12px;

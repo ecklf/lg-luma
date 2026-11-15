@@ -5183,5 +5183,22 @@
     "sv": "Ditt foto",
     "cs": "Vaše fotka",
     "ca": "La teva foto"
+  },
+  "webSave": {
+    "zh-tw": "儲存到電視",
+    "en": "Save to TV",
+    "de": "Auf dem TV speichern",
+    "zh": "保存到电视",
+    "es": "Guardar en el TV",
+    "pt": "Guardar na TV",
+    "it": "Salva sulla TV",
+    "ru": "Сохранить на телевизоре",
+    "pl": "Zapisz na telewizorze",
+    "fr": "Enregistrer sur la TV",
+    "vi": "Lưu vào TV",
+    "nl": "Opslaan op tv",
+    "sv": "Spara på TV:n",
+    "cs": "Uložit do televizoru",
+    "ca": "Desa al televisor"
   }
 }

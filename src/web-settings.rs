@@ -120,6 +120,7 @@ pub struct Catalog {
     pub library: Library,
     pub inputs: Vec<WebInput>,
     pub weather_location: Option<crate::weather::Location>,
+    pub tiles: Vec<crate::model::CustomTile>,
 }
 
 /// A new arrangement from the page. Unknown ids are dropped by the launcher.
@@ -158,54 +159,78 @@ pub fn strings(language: Language) -> serde_json::Value {
     })
 }
 
+/// Page labels and the message keys the TV uses for the same words.
+const LABELS: &[(&str, &str)] = &[
+    ("apps", "apps"),
+    ("favorites", "favorites"),
+    ("addFavorite", "addFavorite"),
+    ("removeFavorite", "removeFavorite"),
+    ("hideApp", "hideApp"),
+    ("showApp", "showApp"),
+    ("hidden", "hiddenLabel"),
+    ("makeFavorites", "makeFavorites"),
+    ("inputs", "inputs"),
+    ("inputName", "inputName"),
+    ("inputNameHint", "inputNameHint"),
+    ("inputIcon", "inputIcon"),
+    ("location", "location"),
+    ("cityPostcode", "cityPostcode"),
+    ("searchLocations", "searchLocations"),
+    ("removeWeatherLocation", "removeWeatherLocation"),
+    ("noLocations", "noLocations"),
+    ("searching", "searching"),
+    ("setWeatherLocation", "setWeatherLocation"),
+    ("shortcuts", "shortcuts"),
+    ("noTiles", "noTiles"),
+    ("addTile", "addTile"),
+    ("newTile", "newTile"),
+    ("tileName", "tileName"),
+    ("tileNameHint", "tileNameHint"),
+    ("tileUrl", "tileUrl"),
+    ("tileUrlHint", "tileUrlHint"),
+    ("requestMethod", "requestMethod"),
+    ("removeTile", "removeTile"),
+    ("testShortcut", "testShortcut"),
+    ("tileSent", "tileSent"),
+    ("tileFailed", "tileFailed"),
+    ("tileIncomplete", "tileIncomplete"),
+    ("tileLimit", "tileLimit"),
+    ("icon", "icon"),
+    ("save", "webSave"),
+    ("cancel", "cancel"),
+    ("general", "interface"),
+    ("background", "background"),
+    ("widgets", "widgets"),
+    ("system", "system"),
+    ("clock", "clock"),
+    ("clockFormat", "clockFormat"),
+    ("timeFormat", "timeFormat"),
+    ("language", "language"),
+    ("appSorting", "appSorting"),
+    ("reducedMotion", "reducedMotion"),
+    ("uiSounds", "uiSounds"),
+    ("greeting", "greeting"),
+    ("greetingName", "greetingName"),
+    ("showWidget", "showWidget"),
+    ("date", "date"),
+    ("dateFormat", "dateFormat"),
+    ("weather", "weather"),
+    ("temperature", "temperature"),
+    ("weatherStyle", "weatherStyle"),
+    ("wallpaperCycle", "wallpaperCycle"),
+    ("wallpaperGradient", "wallpaperGradient"),
+    ("textRendering", "textRendering"),
+];
+
 /// The page's whole view of the TV: current values plus every label in the TV's language, so the
 /// page reads like the Settings the owner already knows.
 pub fn listing(settings: &Settings, catalog: &Catalog) -> serde_json::Value {
     let language = settings.language;
     let t = |key| language.t(key);
-    let labels = serde_json::json!({
-        "apps": t("apps"),
-        "favorites": t("favorites"),
-        "addFavorite": t("addFavorite"),
-        "removeFavorite": t("removeFavorite"),
-        "hideApp": t("hideApp"),
-        "showApp": t("showApp"),
-        "hidden": t("hiddenLabel"),
-        "makeFavorites": t("makeFavorites"),
-        "inputs": t("inputs"),
-        "inputName": t("inputName"),
-        "inputNameHint": t("inputNameHint"),
-        "inputIcon": t("inputIcon"),
-        "location": t("location"),
-        "cityPostcode": t("cityPostcode"),
-        "searchLocations": t("searchLocations"),
-        "removeWeatherLocation": t("removeWeatherLocation"),
-        "noLocations": t("noLocations"),
-        "searching": t("searching"),
-        "setWeatherLocation": t("setWeatherLocation"),
-        "general": t("interface"),
-        "background": t("background"),
-        "widgets": t("widgets"),
-        "system": t("system"),
-        "clock": t("clock"),
-        "clockFormat": t("clockFormat"),
-        "timeFormat": t("timeFormat"),
-        "language": t("language"),
-        "appSorting": t("appSorting"),
-        "reducedMotion": t("reducedMotion"),
-        "uiSounds": t("uiSounds"),
-        "greeting": t("greeting"),
-        "greetingName": t("greetingName"),
-        "showWidget": t("showWidget"),
-        "date": t("date"),
-        "dateFormat": t("dateFormat"),
-        "weather": t("weather"),
-        "temperature": t("temperature"),
-        "weatherStyle": t("weatherStyle"),
-        "wallpaperCycle": t("wallpaperCycle"),
-        "wallpaperGradient": t("wallpaperGradient"),
-        "textRendering": t("textRendering"),
-    });
+    let labels: serde_json::Map<_, _> = LABELS
+        .iter()
+        .map(|(name, key)| ((*name).to_owned(), serde_json::json!(t(key))))
+        .collect();
     let choices = serde_json::json!({
         "hour_24": [choice(false, t("hour12")), choice(true, t("hour24"))],
         "show_seconds": [choice(false, "HH:MM"), choice(true, "HH:MM:SS")],
@@ -249,6 +274,12 @@ pub fn listing(settings: &Settings, catalog: &Catalog) -> serde_json::Value {
         "library": catalog.library,
         "inputs": catalog.inputs,
         "weatherLocation": catalog.weather_location,
+        "tiles": catalog.tiles,
+        "tileIcons": crate::model::TILE_ICONS
+            .iter()
+            .map(|(icon, name)| serde_json::json!({ "id": icon, "name": t(name) }))
+            .collect::<Vec<_>>(),
+        "tileLimit": crate::model::TILE_LIMIT,
         "sheet": { "tiles": crate::view::SHEET_TILES, "columns": crate::view::SHEET_COLUMNS },
         "labels": labels,
         "choices": choices,

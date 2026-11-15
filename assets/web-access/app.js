@@ -476,6 +476,200 @@ function locationRows() {
   return rows;
 }
 
+/* ---------- Shortcuts ---------- */
+
+// The tile being edited: an existing tile's id, 'new', or none.
+let editingTile = null;
+let tileDraft = null;
+
+function tileGlyph(icon) {
+  const mark = create('span', 'input-mark');
+  mark.style.setProperty('--icon', `url('icon/tile-${icon || state.tileIcons[0].id}.svg')`);
+  return mark;
+}
+
+// An address typed without a scheme defaults to http for local automation.
+function normalizeUrl(text) {
+  const url = text.trim();
+  return url && !url.includes('://') ? `http://${url}` : url;
+}
+
+async function tileRequest(route, body, done) {
+  queue = queue.then(async () => {
+    message(strings.saving, false, true);
+    try {
+      const result = await call(route, body);
+      if (route.endsWith('send')) {
+        message(done);
+        return;
+      }
+      editingTile = null;
+      tileDraft = null;
+      apply(result);
+      message(done);
+    } catch (error) {
+      if (error instanceof PairingNeeded) return startPairing(error.message);
+      message(error.message, true);
+    }
+  });
+}
+
+function tileEditor() {
+  const l = state.labels;
+  const form = create('form', 'row stacked tile-editor');
+  const field = (label, value, attributes) => {
+    const wrap = create('label', 'field');
+    const input = create('input', 'text-field');
+    Object.assign(input, { type: 'text', autocomplete: 'off', value }, attributes);
+    wrap.append(create('span', 'muted', label), input);
+    return [wrap, input];
+  };
+  const [titleField, title] = field(l.tileName, tileDraft.title, {
+    maxLength: 40,
+    placeholder: l.tileNameHint,
+  });
+  const [urlField, url] = field(l.tileUrl, tileDraft.url, {
+    maxLength: 512,
+    inputMode: 'url',
+    autocapitalize: 'off',
+    spellcheck: false,
+    placeholder: l.tileUrlHint,
+  });
+  title.addEventListener('input', () => (tileDraft.title = title.value));
+  url.addEventListener('input', () => (tileDraft.url = url.value));
+
+  const methods = create('div', 'segments');
+  for (const method of ['POST', 'GET']) {
+    const option = create('label');
+    const radio = create('input');
+    radio.type = 'radio';
+    radio.name = 'tile-method';
+    radio.checked = tileDraft.method === method;
+    radio.addEventListener('change', () => (tileDraft.method = method));
+    option.append(radio, create('span', '', method));
+    methods.append(option);
+  }
+
+  const icons = create('div', 'tile-icons');
+  for (const icon of state.tileIcons) {
+    const choice = create('button', 'tile-icon');
+    choice.type = 'button';
+    choice.title = icon.name;
+    choice.setAttribute('aria-label', icon.name);
+    choice.setAttribute(
+      'aria-pressed',
+      String((tileDraft.icon || state.tileIcons[0].id) === icon.id),
+    );
+    choice.append(tileGlyph(icon.id));
+    choice.addEventListener('click', () => {
+      tileDraft.icon = icon.id;
+      for (const other of icons.children)
+        other.setAttribute('aria-pressed', String(other === choice));
+    });
+    icons.append(choice);
+  }
+
+  const draft = () => ({
+    id: editingTile === 'new' ? '' : editingTile,
+    title: title.value.trim(),
+    url: normalizeUrl(url.value),
+    method: tileDraft.method,
+    icon: tileDraft.icon,
+  });
+  const actions = create('div', 'tile-actions');
+  const cancel = create('button', 'pill-button', l.cancel);
+  cancel.type = 'button';
+  cancel.addEventListener('click', () => {
+    editingTile = null;
+    tileDraft = null;
+    render();
+  });
+  const save = create('button', 'pill-button strong', l.save);
+  save.type = 'submit';
+  actions.append(cancel, save);
+
+  const extra = create('div', 'tile-actions');
+  const test = create('button', 'pill-button', l.testShortcut);
+  test.type = 'button';
+  test.addEventListener('click', () => {
+    const tile = draft();
+    if (!tile.title || !tile.url) return message(l.tileIncomplete, true);
+    tileRequest('api/tiles/send', tile, l.tileSent.replace('{tile}', tile.title));
+  });
+  extra.append(test);
+  if (editingTile !== 'new') {
+    const remove = create('button', 'pill-button danger', l.removeTile);
+    remove.type = 'button';
+    let armed = false;
+    remove.addEventListener('click', () => {
+      // A second press confirms, so a stray tap cannot remove a shortcut.
+      if (!armed) {
+        armed = true;
+        remove.textContent = `${l.removeTile}?`;
+        return;
+      }
+      tileRequest('api/tiles/remove', draft(), strings.saved);
+    });
+    extra.append(remove);
+  }
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const tile = draft();
+    if (!tile.title || !tile.url) return message(l.tileIncomplete, true);
+    tileRequest('api/tiles/save', tile, strings.saved);
+  });
+  form.append(
+    titleField,
+    urlField,
+    create('span', 'muted field-label', l.requestMethod),
+    methods,
+    create('span', 'muted field-label', l.icon),
+    icons,
+    actions,
+    extra,
+  );
+  return form;
+}
+
+function tileRows() {
+  const l = state.labels;
+  const rows = [];
+  if (!state.tiles.length && editingTile !== 'new') rows.push(create('p', 'hint', l.noTiles));
+  for (const tile of state.tiles) {
+    if (editingTile === tile.id) {
+      rows.push(tileEditor());
+      continue;
+    }
+    const row = create('button', 'row tile-row');
+    row.type = 'button';
+    const text = create('span', 'tile-text');
+    text.append(
+      create('span', 'title', tile.title),
+      create('span', 'muted', `${tile.method} · ${tile.url}`),
+    );
+    row.append(tileGlyph(tile.icon), text);
+    row.addEventListener('click', () => {
+      editingTile = tile.id;
+      tileDraft = { ...tile, icon: tile.icon || state.tileIcons[0].id };
+      render();
+    });
+    rows.push(row);
+  }
+  if (editingTile === 'new') rows.push(tileEditor());
+  else if (state.tiles.length < state.tileLimit) {
+    const add = create('button', 'pill-button add-tile', l.addTile);
+    add.type = 'button';
+    add.addEventListener('click', () => {
+      editingTile = 'new';
+      tileDraft = { title: '', url: '', method: 'POST', icon: state.tileIcons[0].id };
+      render();
+    });
+    rows.push(add);
+  }
+  return rows;
+}
+
 /* ---------- Inputs ---------- */
 
 function changeInput(input, changes) {
@@ -607,6 +801,7 @@ function sections() {
         choiceRow('temperature_unit', l.temperature),
         choiceRow('weather_style', l.weatherStyle),
       ),
+      group(l.shortcuts, ...tileRows()),
       ...(state.inputs.length ? [group(l.inputs, ...state.inputs.map(inputCard))] : []),
     ],
     system: [group(null, choiceRow('text_rendering', l.textRendering))],

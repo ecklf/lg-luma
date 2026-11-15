@@ -1223,6 +1223,7 @@ fn run() -> Result<(), String> {
                 library: web_library(&state),
                 inputs: web_inputs(&state),
                 weather_location: state.preferences.weather_location.clone(),
+                tiles: state.preferences.custom_tiles.clone(),
             },
         );
         while let Ok(event) = web_access_service.receiver.try_recv() {
@@ -1312,6 +1313,20 @@ fn run() -> Result<(), String> {
                 web_access::Event::WeatherLocation(place) => {
                     let pending = state.apply_web_weather_location(place);
                     web_access_service.location_applied();
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                web_access::Event::Tiles(tiles) => {
+                    let pending = state.replace_tiles(tiles);
+                    web_access_service.tiles_applied();
                     running &= effects(
                         pending,
                         &mut state,

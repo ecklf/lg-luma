@@ -340,6 +340,30 @@ fn pairs_once_and_then_changes_settings() {
         }
     }
 
+    // Shortcut tiles follow the TV tile editor's rules and reach the launcher as a full list.
+    let tile = r#"{"id":"","title":"Lights","url":"http://homeassistant.local:8123/api/webhook/x","method":"POST","icon":"sparkles"}"#;
+    let (status, _, body) = post("/api/tiles/save", &cookie, tile);
+    assert_eq!(status, 200);
+    let tiles = loop {
+        if let Event::Tiles(tiles) = next_event(&service) {
+            break tiles;
+        }
+    };
+    assert_eq!(tiles.len(), 1);
+    assert!(body.contains(&format!("\"id\":\"{}\"", tiles[0].id)));
+    let bad = r#"{"id":"","title":"Bad","url":"ftp://x","method":"POST","icon":""}"#;
+    assert_eq!(post("/api/tiles/save", &cookie, bad).0, 422);
+    let remove = format!(r#"{{"id":"{}"}}"#, tiles[0].id);
+    assert_eq!(post("/api/tiles/remove", &cookie, &remove).0, 200);
+    loop {
+        if let Event::Tiles(tiles) = next_event(&service) {
+            assert!(tiles.is_empty());
+            break;
+        }
+    }
+    assert_eq!(get("/icon/tile-sparkles.svg", "").0, 200);
+    assert_eq!(get("/icon/tile-nope.svg", "").0, 404);
+
     // Unknown fields cannot reach other preferences.
     let (status, _, _) = post("/api/settings", &cookie, r#"{"hidden":["x"]}"#);
     assert_eq!(status, 422);

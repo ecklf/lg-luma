@@ -84,6 +84,8 @@ pub enum Event {
     Arrange(Arrangement),
     /// One input's name, visibility and icon.
     Input(InputChange),
+    /// The complete shortcut tile list after a change from the page.
+    Tiles(Vec<crate::model::CustomTile>),
     /// A place from the page's search, or `None` to remove the weather location.
     WeatherLocation(Option<crate::weather::Location>),
 }
@@ -120,6 +122,7 @@ struct Shared {
     arranging: bool,
     inputting: bool,
     locating: bool,
+    tiling: bool,
     /// The page's last place search; the page chooses among these by position.
     places: Vec<crate::weather::Location>,
     sheets: std::collections::BTreeMap<usize, Picture>,
@@ -203,6 +206,9 @@ impl Service {
         if !shared.locating && shared.catalog.weather_location != catalog.weather_location {
             shared.catalog.weather_location = catalog.weather_location.clone();
         }
+        if !shared.tiling && shared.catalog.tiles != catalog.tiles {
+            shared.catalog.tiles = catalog.tiles.clone();
+        }
         // A change from the phone stays authoritative until the launcher has applied it.
         if shared.revision == shared.acknowledged && shared.settings != *settings {
             shared.settings = settings.clone();
@@ -246,6 +252,10 @@ impl Service {
 
     pub fn location_applied(&self) {
         self.shared.lock().unwrap().locating = false;
+    }
+
+    pub fn tiles_applied(&self) {
+        self.shared.lock().unwrap().tiling = false;
     }
 
     pub fn devices(&self) -> Vec<Device> {
@@ -685,6 +695,16 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
                 "image/svg+xml",
                 include_bytes!("../assets/ui-icons/left.svg"),
             ),
+            route if route.starts_with("/icon/tile-") => {
+                let icon = route
+                    .strip_prefix("/icon/tile-")
+                    .and_then(|icon| icon.strip_suffix(".svg"))
+                    .unwrap_or_default();
+                match crate::tile_editor::icon_svg(icon) {
+                    "" => return error_response(stream, "404 Not Found", "Not found"),
+                    svg => ("image/svg+xml", svg.as_bytes()),
+                }
+            }
             route if route.starts_with("/icon/input-") => match input_icon(route) {
                 Some(svg) => ("image/svg+xml", svg),
                 None => return error_response(stream, "404 Not Found", "Not found"),
@@ -718,6 +738,9 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         "/api/inputs" => change_input(stream, context, &request, &body),
         "/api/places" => search_places(stream, context, &request, &body),
         "/api/location" => choose_place(stream, context, &request, &body),
+        "/api/tiles/save" | "/api/tiles/remove" | "/api/tiles/send" => {
+            edit_tile(stream, context, &request, &route, &body)
+        }
         "/api/forget" => forget(stream, context, &request),
         _ => error_response(stream, "404 Not Found", "Not found"),
     }
@@ -914,6 +937,60 @@ fn unpaired(stream: &mut TcpStream) -> Result<(), String> {
         "401 Unauthorized",
         &serde_json::json!({ "error": "This device was removed on the TV. Pair it again.", "pair": true }),
     )
+}
+
+/// Adds, changes, removes or test-sends a shortcut tile, with the TV tile editor's rules.
+fn edit_tile(
+    stream: &mut TcpStream,
+    context: &Context,
+    request: &Request,
+    route: &str,
+    body: &[u8],
+) -> Result<(), String> {
+    let mut shared = context.shared.lock().unwrap();
+    let Some(name) = device(request, &shared.devices).map(|device| device.name.clone()) else {
+        drop(shared);
+        return unpaired(stream);
+    };
+    let Ok(edit) = serde_json::from_slice::<crate::tile_editor::Edit>(body) else {
+        drop(shared);
+        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+    };
+    if route == "/api/tiles/send" {
+        drop(shared);
+        // Sent from the TV, so the test takes the same network path as a tile press.
+        let result = edit
+            .tile()
+            .and_then(|tile| crate::webhook::send(&crate::webhook::agent(), &tile));
+        return match result {
+            Ok(()) => json(stream, "200 OK", &serde_json::json!({})),
+            Err(error) => error_response(stream, "502 Bad Gateway", &error),
+        };
+    }
+    let mut tiles = shared.catalog.tiles.clone();
+    let result = if route == "/api/tiles/save" {
+        crate::tile_editor::save(&mut tiles, &edit).map(Some)
+    } else {
+        crate::tile_editor::remove(&mut tiles, &edit.id).map(|()| None)
+    };
+    let id = match result {
+        Ok(id) => id,
+        Err(error) => {
+            drop(shared);
+            return error_response(stream, "422 Unprocessable Content", &error);
+        }
+    };
+    shared.catalog.tiles = tiles.clone();
+    shared.tiling = true;
+    let mut reply = listing(&shared.settings, &shared.catalog);
+    drop(shared);
+    reply["device"] = serde_json::json!(name);
+    reply["id"] = serde_json::json!(id);
+    context
+        .sender
+        .send(Event::Tiles(tiles))
+        .map_err(|_| "Launcher stopped".to_owned())?;
+    json(stream, "200 OK", &reply)
 }
 
 /// Looks up places for the weather location, on this connection's thread.
