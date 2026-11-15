@@ -552,6 +552,11 @@ fn app_sheet(
 
 /// What Luma shows right now, as the companion page's live picture. While another app is in
 /// front Luma's own Home stands in: other apps' pictures are never captured.
+/// How long Luma's screen must rest before the companion page's preview is drawn.
+const PREVIEW_QUIET: Duration = Duration::from_millis(300);
+/// The longest a moving screen keeps the preview waiting.
+const PREVIEW_STALE: Duration = Duration::from_secs(3);
+
 fn live_preview(
     state: &mut State,
     assets: &view::Assets,
@@ -1028,6 +1033,7 @@ fn run() -> Result<(), String> {
     let mut prewarm: Vec<state::Page> = Vec::new();
     let mut prewarm_now = false;
     let mut last_present = Instant::now();
+    let mut last_preview = Instant::now();
     let verify_damage = std::env::var("LUMA_DAMAGE_VERIFY").as_deref() == Ok("1");
     // Partial frames: verified, mismatched, worst pixels, largest difference; full frames alike.
     let mut damage_report = (0usize, 0usize, 0usize, 0u8);
@@ -1340,14 +1346,29 @@ fn run() -> Result<(), String> {
                     state.dirty = true;
                 }
                 web_access::Event::Preview { known, reply } => {
-                    let _ = reply.send(live_preview(
-                        &mut state,
-                        &assets,
-                        &mut renderer,
-                        now,
-                        known,
-                        visible && (focused || !webos),
-                    ));
+                    let on_screen = visible && (focused || !webos);
+                    // Drawing the preview takes the render thread tens of milliseconds on a TV,
+                    // which would drop frames mid-animation. While Luma's screen is moving, an
+                    // open page hears "unchanged" and asks again; it catches up once the screen
+                    // rests, or after `PREVIEW_STALE` during a long animation.
+                    let moving =
+                        on_screen && (state.animating() || last_present.elapsed() < PREVIEW_QUIET);
+                    let answer = match known {
+                        Some(key) if moving && last_preview.elapsed() < PREVIEW_STALE => {
+                            Ok(web_access::Frame {
+                                key,
+                                on_screen,
+                                image: None,
+                            })
+                        }
+                        _ => {
+                            live_preview(&mut state, &assets, &mut renderer, now, known, on_screen)
+                        }
+                    };
+                    if matches!(&answer, Ok(frame) if frame.image.is_some()) {
+                        last_preview = Instant::now();
+                    }
+                    let _ = reply.send(answer);
                 }
                 web_access::Event::AppSheet { page, known, reply } => {
                     let _ = reply.send(app_sheet(&state, &assets, &mut renderer, page, known));
