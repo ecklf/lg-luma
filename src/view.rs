@@ -2639,14 +2639,18 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     },
                 );
             }
-            let mut x = 640.;
-            for (target, key, icon) in [
+            let actions = [
                 (Target::WidgetReset, "resetWidgets", "refresh"),
                 (Target::WidgetAdd, "addWidget", "grid"),
-            ] {
+            ]
+            .map(|(target, key, icon)| {
                 let width = (assets.width(language.t(key), text(20.8, 550, -0.02)) + 88.)
                     .ceil()
                     .min(500.);
+                (target, key, icon, width)
+            });
+            let mut x = 1760. - actions.iter().map(|(_, _, _, width)| width).sum::<f32>() - 20.;
+            for (target, key, icon, width) in actions {
                 row(
                     out,
                     state,
@@ -2924,21 +2928,6 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
             16.,
         );
         out.text(label, rect.inset(12.), style, WHITE, true);
-    }
-    // Keep the dock visually separate: it is not part of the editable grid.
-    let dock = map(Rect::new(84., 860., 1752., 160.));
-    out.shape(dock, 12., c(0x222831, 0.6));
-    for index in 0..6 {
-        out.shape(
-            Rect::new(
-                dock.x + 16. + index as f32 * (dock.w - 32.) / 6.,
-                dock.y + 12.,
-                (dock.w - 64.) / 6.,
-                dock.h - 24.,
-            ),
-            8.,
-            c(0xffffff, 0.18),
-        );
     }
     let Some(widget) = moving else {
         if let Target::WidgetCell(cell) = state.focus
@@ -4464,6 +4453,35 @@ mod tests {
                     }
                 );
             }
+        }
+    }
+
+    #[test]
+    fn widget_previews_do_not_draw_a_placeholder_dock() {
+        let assets = assets();
+        let mut state = State::new(Preferences::default());
+        state.open(2);
+        state.section = WIDGETS_SECTION;
+        for moving in [None, Some(HomeWidget::Greeting), Some(HomeWidget::Weather)] {
+            state.subpage = moving.map(Subpage::WidgetPosition);
+            state.focus = moving.map_or(Target::WidgetAdd, |widget| {
+                Target::Choice(widget.default_position().cell())
+            });
+            let mut scene = Scene::new();
+            widget_grid(&mut scene, &state, &assets, moving);
+            let dock_top = widget_preview_top(&state) + 860. * 1120. / 1920.;
+            assert!(
+                !scene
+                    .draw
+                    .iter()
+                    .any(|draw| matches!(draw, Draw::Shape(rect, ..) if rect.y >= dock_top))
+            );
+            assert!(
+                !scene
+                    .controls
+                    .iter()
+                    .any(|control| matches!(control.target, Target::App(_) | Target::DockApp(_)))
+            );
         }
     }
 
