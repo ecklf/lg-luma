@@ -2456,7 +2456,7 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
     assert_eq!(widget_order, [2]);
     for (index, subpage) in [Subpage::Shortcuts].into_iter().enumerate() {
         state.focus = Target::Widget(index + 2);
-        state.direction(Direction::Right, &controls(&state));
+        state.activate();
         assert_eq!(state.subpage, Some(subpage));
         state.back();
         assert!(state.subpage.is_none());

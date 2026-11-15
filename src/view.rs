@@ -1754,7 +1754,11 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
         210.
     } else if matches!(
         row.target,
-        Target::UploadWallpaper | Target::WallpaperCycle | Target::WidgetAdd | Target::WidgetReset
+        Target::UploadWallpaper
+            | Target::WallpaperCycle
+            | Target::WidgetAdd
+            | Target::WidgetReset
+            | Target::Widget(2)
     ) {
         24.2
     } else {
@@ -1834,6 +1838,7 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
             | Target::WallpaperGradient
             | Target::WidgetAdd
             | Target::WidgetReset
+            | Target::Widget(2)
     );
     out.control(row.target, row.rect, scrollable);
 }
@@ -2620,25 +2625,25 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         INPUTS_SECTION => inputs_settings(out, state, assets),
         WIDGETS_SECTION => {
             widget_grid(out, state, assets, None);
-            for (index, (widget, key, icon)) in
-                [(2, "shortcuts", "sparkles")].into_iter().enumerate()
-            {
-                row(
-                    out,
-                    state,
-                    assets,
-                    Row {
-                        target: Target::Widget(widget),
-                        rect: Rect::new(640., 896.8 + index as f32 * 84. - s, 1120., 72.),
-                        title: language.t(key),
-                        icon: Some(icon),
-                        value: None,
-                        description: None,
-                        selected: false,
-                        chevron: true,
-                    },
-                );
-            }
+            let shortcuts_width = (assets.width(language.t("shortcuts"), text(20.8, 550, -0.02))
+                + 88.)
+                .ceil()
+                .min(320.);
+            row(
+                out,
+                state,
+                assets,
+                Row {
+                    target: Target::Widget(2),
+                    rect: Rect::new(640., 164.8, shortcuts_width, 64.),
+                    title: language.t("shortcuts"),
+                    icon: Some("sparkles"),
+                    value: None,
+                    description: None,
+                    selected: false,
+                    chevron: false,
+                },
+            );
             let actions = [
                 (Target::WidgetReset, "resetWidgets", "refresh"),
                 (Target::WidgetAdd, "addWidget", "grid"),

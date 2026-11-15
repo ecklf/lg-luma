@@ -1333,6 +1333,8 @@ impl State {
                 }
                 Direction::Up => {
                     if index % HOME_GRID_COLUMNS == 0 {
+                        Target::Widget(2)
+                    } else if index % HOME_GRID_COLUMNS == 1 {
                         Target::WidgetReset
                     } else {
                         Target::WidgetAdd
@@ -1341,7 +1343,6 @@ impl State {
                 Direction::Down if index + HOME_GRID_COLUMNS < HOME_GRID_CELLS => {
                     Target::WidgetCell(index + HOME_GRID_COLUMNS)
                 }
-                Direction::Down => Target::Widget(2),
                 _ => self.focus.clone(),
             };
             self.focus(target, controls);
@@ -1351,11 +1352,16 @@ impl State {
             && self.page == Page::Settings
             && self.section == WIDGETS_SECTION
             && self.subpage.is_none()
-            && matches!(self.focus, Target::WidgetAdd | Target::WidgetReset)
+            && matches!(
+                self.focus,
+                Target::WidgetAdd | Target::WidgetReset | Target::Widget(2)
+            )
         {
             let target = match direction {
                 Direction::Left if self.focus == Target::WidgetAdd => Target::WidgetReset,
+                Direction::Left if self.focus == Target::WidgetReset => Target::Widget(2),
                 Direction::Left => Target::Sidebar(WIDGETS_SECTION),
+                Direction::Right if self.focus == Target::Widget(2) => Target::WidgetReset,
                 Direction::Right => Target::WidgetAdd,
                 Direction::Up => Target::SettingsMenu,
                 Direction::Down => Target::WidgetCell(0),

@@ -66,6 +66,12 @@ fn widget_toolbar_pills_are_fixed_ordered_and_remote_and_pointer_accessible() {
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::WidgetCell(0));
     state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::Widget(2));
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::Shortcuts));
+    state.back();
+    assert_eq!(state.focus, Target::Widget(2));
+    state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::WidgetReset);
     for language in crate::i18n::Language::ALL {
         state.preferences.language = language;
@@ -80,12 +86,22 @@ fn widget_toolbar_pills_are_fixed_ordered_and_remote_and_pointer_accessible() {
             .iter()
             .find(|control| control.target == Target::WidgetAdd)
             .unwrap();
+        let shortcuts = rendered
+            .controls
+            .iter()
+            .find(|control| control.target == Target::Widget(2))
+            .unwrap();
+        assert_eq!(
+            (shortcuts.rect.x, shortcuts.rect.y, shortcuts.rect.h),
+            (640., 164.8, 64.)
+        );
+        assert!(shortcuts.rect.x + shortcuts.rect.w + 20. <= reset.rect.x);
         assert_eq!((reset.rect.y, reset.rect.h), (164.8, 64.));
         assert!(reset.rect.x >= 640.);
         assert!(reset.rect.x + reset.rect.w + 20. <= add.rect.x);
         assert_eq!(add.rect.x + add.rect.w, 1760.);
-        assert!(!reset.scrollable && !add.scrollable);
-        for control in [reset, add] {
+        assert!(!shortcuts.scrollable && !reset.scrollable && !add.scrollable);
+        for control in [shortcuts, reset, add] {
             let (x, y) = control.rect.center();
             assert_eq!(
                 state.hit_test(&rendered.controls, x, y),
@@ -94,7 +110,7 @@ fn widget_toolbar_pills_are_fixed_ordered_and_remote_and_pointer_accessible() {
         }
         state.scroll = 100.;
         let scrolled = scene(&state);
-        for control in [reset, add] {
+        for control in [shortcuts, reset, add] {
             let next = scrolled
                 .controls
                 .iter()
