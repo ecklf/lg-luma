@@ -1,4 +1,21 @@
 {
+  "resetWidgets": {
+    "en": "Reset to defaults",
+    "de": "Standard wiederherstellen",
+    "es": "Restablecer valores predeterminados",
+    "zh": "恢复默认设置",
+    "zh-tw": "回復預設值",
+    "pt": "Repor predefinições",
+    "it": "Ripristina predefiniti",
+    "ru": "Восстановить по умолчанию",
+    "pl": "Przywróć domyślne",
+    "fr": "Rétablir les valeurs par défaut",
+    "vi": "Khôi phục mặc định",
+    "nl": "Standaard herstellen",
+    "sv": "Återställ standard",
+    "cs": "Obnovit výchozí",
+    "ca": "Restableix els valors per defecte"
+  },
   "addWidget": {
     "en": "Add widget",
     "de": "Widget hinzufügen",

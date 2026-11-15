@@ -443,6 +443,19 @@ impl Preferences {
         }
     }
 
+    /// Restore widget membership and placement without discarding configuration.
+    pub fn reset_widgets(&mut self) -> bool {
+        let changed = HomeWidget::ALL.into_iter().any(|widget| {
+            !self.has_widget(widget) || self.widget_position(widget) != widget.default_position()
+        });
+        for widget in HomeWidget::ALL {
+            self.set_widget_present(widget, true);
+            self.set_widget_position(widget, widget.default_position());
+        }
+        self.legacy_date_position = None;
+        changed
+    }
+
     pub fn set_widget_present(&mut self, widget: HomeWidget, present: bool) {
         match widget {
             HomeWidget::Greeting => self.show_greeting = present,

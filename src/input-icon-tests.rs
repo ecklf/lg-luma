@@ -47,7 +47,7 @@ fn remote_input_icon_picker_saves_resets_and_restores_its_parent() {
             state.preferences.set_input_name(&id, "Custom name");
         }
         state.open(2);
-        state.focus = Target::Widget(3);
+        state.focus = Target::Sidebar(crate::state::INPUTS_SECTION);
         state.activate();
         state.focus = Target::InputMode(id.clone());
         state.activate();
@@ -95,7 +95,7 @@ fn remote_input_icon_picker_saves_resets_and_restores_its_parent() {
         assert_eq!(state.preferences.input_icon(&id), None);
         assert_eq!(state.focus, Target::InputIcon);
         state.back();
-        assert_eq!(state.subpage, Some(Subpage::Inputs));
+        assert_eq!(state.subpage, None);
         assert_eq!(state.focus, Target::InputMode(id));
     }
 }
@@ -118,7 +118,7 @@ fn input_icon_overrides_render_on_home_and_settings_and_automatic_restores_detec
     state.set_inputs(inputs);
     assert!(has_icon(&state, "xbox"));
     state.open(2);
-    state.focus = Target::Widget(3);
+    state.focus = Target::Sidebar(crate::state::INPUTS_SECTION);
     state.activate();
     assert!(has_icon(&state, "xbox"));
     state.preferences.set_input_icon(&id, "");
@@ -149,7 +149,7 @@ fn input_icon_picker_covers_bundled_assets_and_every_language() {
         serde_json::from_str(include_str!("../assets/messages.json")).unwrap();
     let mut state = ready();
     state.open(2);
-    state.focus = Target::Widget(3);
+    state.focus = Target::Sidebar(crate::state::INPUTS_SECTION);
     state.activate();
     state.focus = Target::InputMode(state.inventory.inputs[0].id.clone());
     state.activate();
@@ -179,8 +179,8 @@ fn input_icon_picker_covers_bundled_assets_and_every_language() {
         }
     }
     state.set_inputs(vec![]);
-    assert_eq!(state.subpage, Some(Subpage::Inputs));
-    assert_eq!(state.focus, Target::Sidebar(crate::state::WIDGETS_SECTION));
+    assert_eq!(state.subpage, None);
+    assert_eq!(state.focus, Target::Sidebar(crate::state::INPUTS_SECTION));
 }
 
 #[test]

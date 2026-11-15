@@ -149,8 +149,12 @@ to this arrangement only when a legacy `date_position` field is present; it is o
 Custom Greeting/Weather anchors are preserved, including new layouts matching that old arrangement.
 Sanitization repairs out-of-bounds anchors and overlaps deterministically.
 Settings → Widgets opens the scaled Home grid by default. Each occupied cell opens an app-style
-Configure/Move/Remove popup; empty cells offer Add widget. The catalog excludes installed widgets.
-Shortcuts and Inputs retain their existing settings links below the preview.
+Configure/Move/Remove popup. A fixed toolbar above the preview contains Reset to defaults on the
+left and Add widget on the right, using the Backgrounds pill style. Empty cells also open the
+Add catalog directly; it excludes installed widgets. Reset restores the default membership and
+positions, preserving date/weather configuration and the app dock; an already-default reset does not save.
+Shortcuts keeps its settings link below the preview. Inputs is a separate sidebar section directly
+below Apps, not a widget. Its list and individual input/icon settings retain focus on return.
 Move and Add open a placement preview; arrows browse
 all sixteen anchors, OK/click saves a valid placement, and Back cancels without changing preferences.
 Invalid positions are red and cannot be committed. Removing a widget frees its cells while keeping
@@ -224,15 +228,14 @@ App cards on Home, in the drawer, and in Settings → Apps are artwork-only, wit
 or App names setting. Legacy `show_names`, `show_home_names`, and `show_app_names` preferences
 are ignored and are not written back. App titles remain available in the management popup.
 **Settings → Widgets** opens the placement manager. Select Weather and choose Configure for its
-settings; **Shortcuts** and **Inputs** keep their separate links below the grid.
-Weather location and temperature choices return to Weather; Back from a widget returns to its row
-in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row.
+settings; **Shortcuts** keeps its link below the grid. **Settings → Inputs** is directly below Apps
+in the sidebar. Weather location and temperature choices return to Weather; Back from a widget
+returns to its grid cell. Input visibility/naming choices return to the Inputs list, then its sidebar entry.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
 with a tighter 48-pixel spacing for Languages and Backgrounds.
-The Home greeting and standalone date, along with their widget entries, are removed. Their legacy
-preferences remain readable and are not erased during other edits. Weather occupies the former
-greeting area with a large condition icon, temperature, condition and location. The colored, static
+The weekday/date is part of the combined Greeting, not a standalone widget. Weather uses its
+own fixed footprint with a large condition icon, temperature, condition and location. The colored, static
 icons are original Breezy Weather PNGs, including clear/partly-cloudy night variants, bundled locally
 with their LGPL-3.0 license, attribution and source hashes in `assets/weather/`. No icons are fetched at runtime.
 Disabled weather
@@ -244,7 +247,7 @@ Input connection dots are amber when a connected cable explicitly reports no sig
 other connected inputs, and gray for disconnected or unknown cable states. An unknown signal
 report alone does not imply no signal, and signal reports never override cable-based visibility.
 
-Input icon picker: **Settings → Widgets → Inputs → select input → Icon** opens a
+Input icon picker: **Settings → Inputs → select input → Icon** opens a
 native picker for bundled input SVG icons. Its choices are **Automatic** (default label detection),
 **HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**, **NVIDIA Shield**,
 **Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, **Sony**, **DVD**, **Blu-ray**,

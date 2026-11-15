@@ -40,20 +40,22 @@ const configuration = {
 const sortingPreviews = process.argv.includes('--sorting');
 const widgetPreviews = process.argv.includes('--widgets');
 const weatherPreviews = process.argv.includes('--weather-styles');
+const widgetsPage = 'settings,down,down,down,down,right';
 const captures = widgetPreviews
   ? [
       ['home-layout-grid', 'home'],
       ['home-layout-moved', 'home'],
-      ['home-layout-settings', 'settings,down,down,down,right'],
-      ['home-widget-actions', 'settings,down,down,down,right,enter'],
-      ['home-widget-add', 'settings,down,down,down,right,enter,enter'],
+      ['home-layout-settings', widgetsPage],
+      ['home-widget-actions', `${widgetsPage},down,enter`],
+      ['home-widget-add', `${widgetsPage},enter`],
+      ['input-settings', 'settings,down,down,right'],
     ]
   : weatherPreviews
     ? [
         ['weather-style-standard', 'home'],
         ['weather-style-no-icon', 'home'],
         ['weather-style-compact', 'home'],
-        ['weather-style-picker', 'settings,down,down,down,right,down,enter,enter,down,down,enter'],
+        ['weather-style-picker', `${widgetsPage},down,down,enter,enter,down,down,enter`],
       ]
     : sortingPreviews
       ? [
@@ -68,7 +70,7 @@ const captures = widgetPreviews
           ['weather-setup', 'home,up,down'],
           ['apps', 'apps,down'],
           ['settings', 'settings'],
-          ['update-card', 'settings,down,down,down,down,right'],
+          ['update-card', 'settings,down,down,down,down,down,right'],
           ['inputs', 'home,up'],
           ['clock-menu', 'home,up,right,right,enter'],
           ['manage-apps', 'settings,down,enter'],
