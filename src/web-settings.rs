@@ -291,7 +291,7 @@ const LABELS: &[(&str, &str)] = &[
     ("keyboardHint", "webKeyboardHint"),
     ("undo", "webUndo"),
     ("photoDeleted", "webPhotoDeleted"),
-    ("deviceRemoved", "webDeviceRemoved"),
+    ("deviceRemoved", "webDeviceRemovedUndo"),
     ("favoriteRemoved", "webFavoriteRemoved"),
     ("uploadingCount", "webUploadingCount"),
     ("photosAdded", "webPhotosAdded"),

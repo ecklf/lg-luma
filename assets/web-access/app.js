@@ -38,7 +38,8 @@ async function call(route, body) {
       signal: controller.signal,
     });
     const result = await response.json().catch(() => ({}));
-    if (result.pair) throw new PairingNeeded(result.error);
+    // Only the server's flag; the strings themselves have a "pair" label.
+    if (result.pair === true) throw new PairingNeeded(result.error);
     if (!response.ok) throw new Error(result.error || strings.offline);
     return result;
   } catch (error) {
@@ -721,7 +722,7 @@ async function uploadPhoto(blob) {
     body: blob,
   });
   const result = await response.json().catch(() => ({}));
-  if (result.pair) throw new PairingNeeded(result.error);
+  if (result.pair === true) throw new PairingNeeded(result.error);
   if (!response.ok) throw new Error(result.error || strings.offline);
   return result;
 }

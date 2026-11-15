@@ -5474,21 +5474,21 @@
     "ca": "El televisor està ocupat. Torna-ho a provar d’aquí a un moment."
   },
   "webDeviceRemoved": {
-    "zh-tw": "已移除裝置",
-    "en": "Device removed",
-    "de": "Gerät entfernt",
-    "zh": "已移除设备",
-    "es": "Dispositivo eliminado",
-    "pt": "Dispositivo removido",
-    "it": "Dispositivo rimosso",
-    "ru": "Устройство удалено",
-    "pl": "Usunięto urządzenie",
-    "fr": "Appareil retiré",
-    "vi": "Đã gỡ thiết bị",
-    "nl": "Apparaat verwijderd",
-    "sv": "Enhet borttagen",
-    "cs": "Zařízení odebráno",
-    "ca": "S’ha suprimit el dispositiu"
+    "zh-tw": "此裝置未與電視配對，請重新配對。",
+    "en": "This device is not paired with your TV. Pair it again.",
+    "de": "Dieses Gerät ist nicht mit dem TV gekoppelt. Koppele es erneut.",
+    "zh": "此设备未与电视配对，请重新配对。",
+    "es": "Este dispositivo no está vinculado con tu TV. Vincúlalo de nuevo.",
+    "pt": "Este dispositivo não está emparelhado com a TV. Emparelhe-o de novo.",
+    "it": "Questo dispositivo non è associato alla TV. Associalo di nuovo.",
+    "ru": "Это устройство не сопряжено с телевизором. Выполните сопряжение снова.",
+    "pl": "To urządzenie nie jest sparowane z telewizorem. Sparuj je ponownie.",
+    "fr": "Cet appareil n’est pas associé à votre TV. Associez-le à nouveau.",
+    "vi": "Thiết bị này chưa được ghép nối với TV. Hãy ghép nối lại.",
+    "nl": "Dit apparaat is niet met je tv gekoppeld. Koppel het opnieuw.",
+    "sv": "Den här enheten är inte parkopplad med TV:n. Parkoppla den igen.",
+    "cs": "Toto zařízení není spárováno s televizorem. Spárujte ho znovu.",
+    "ca": "Aquest dispositiu no està vinculat amb el televisor. Torna’l a vincular."
   },
   "webGalleryFull": {
     "zh-tw": "圖庫已滿（20 張照片），請先刪除一張。",
@@ -6084,5 +6084,22 @@
     "sv": "{count} foton tillagda",
     "cs": "Přidáno fotek: {count}",
     "ca": "S’han afegit {count} fotos"
+  },
+  "webDeviceRemovedUndo": {
+    "zh-tw": "已移除裝置",
+    "en": "Device removed",
+    "de": "Gerät entfernt",
+    "zh": "已移除设备",
+    "es": "Dispositivo eliminado",
+    "pt": "Dispositivo removido",
+    "it": "Dispositivo rimosso",
+    "ru": "Устройство удалено",
+    "pl": "Usunięto urządzenie",
+    "fr": "Appareil retiré",
+    "vi": "Đã gỡ thiết bị",
+    "nl": "Apparaat verwijderd",
+    "sv": "Enhet borttagen",
+    "cs": "Zařízení odebráno",
+    "ca": "S’ha suprimit el dispositiu"
   }
 }
