@@ -5285,5 +5285,39 @@
     "sv": "Radera foto",
     "cs": "Smazat fotku",
     "ca": "Elimina la foto"
+  },
+  "webThisDevice": {
+    "zh-tw": "此裝置",
+    "en": "This device",
+    "de": "Dieses Gerät",
+    "zh": "此设备",
+    "es": "Este dispositivo",
+    "pt": "Este dispositivo",
+    "it": "Questo dispositivo",
+    "ru": "Это устройство",
+    "pl": "To urządzenie",
+    "fr": "Cet appareil",
+    "vi": "Thiết bị này",
+    "nl": "Dit apparaat",
+    "sv": "Den här enheten",
+    "cs": "Toto zařízení",
+    "ca": "Aquest dispositiu"
+  },
+  "webRemove": {
+    "zh-tw": "移除",
+    "en": "Remove",
+    "de": "Entfernen",
+    "zh": "移除",
+    "es": "Quitar",
+    "pt": "Remover",
+    "it": "Rimuovi",
+    "ru": "Удалить",
+    "pl": "Usuń",
+    "fr": "Retirer",
+    "vi": "Xóa",
+    "nl": "Verwijderen",
+    "sv": "Ta bort",
+    "cs": "Odebrat",
+    "ca": "Elimina"
   }
 }

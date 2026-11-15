@@ -121,6 +121,19 @@ pub struct Catalog {
     pub inputs: Vec<WebInput>,
     pub weather_location: Option<crate::weather::Location>,
     pub tiles: Vec<crate::model::CustomTile>,
+    pub system: SystemStatus,
+}
+
+/// Settings › System as the TV shows it right now.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct SystemStatus {
+    pub update_title: String,
+    pub update_detail: String,
+    pub update_action: String,
+    /// An update check, download or install is running.
+    pub update_busy: bool,
+    /// Apps and inputs are being read again.
+    pub refreshing: bool,
 }
 
 /// A new arrangement from the page. Unknown ids are dropped by the launcher.
@@ -202,6 +215,12 @@ const LABELS: &[(&str, &str)] = &[
     ("tileLimit", "tileLimit"),
     ("icon", "icon"),
     ("save", "webSave"),
+    ("refreshApps", "refreshApps"),
+    ("refreshNotice", "refreshNotice"),
+    ("resetIconCache", "resetIconCache"),
+    ("webAccess", "webAccess"),
+    ("thisDevice", "webThisDevice"),
+    ("remove", "webRemove"),
     ("cancel", "cancel"),
     ("general", "interface"),
     ("background", "background"),
@@ -285,6 +304,7 @@ pub fn listing(settings: &Settings, catalog: &Catalog) -> serde_json::Value {
             .map(|(icon, name)| serde_json::json!({ "id": icon, "name": t(name) }))
             .collect::<Vec<_>>(),
         "tileLimit": crate::model::TILE_LIMIT,
+        "system": catalog.system,
         "sheet": { "tiles": crate::view::SHEET_TILES, "columns": crate::view::SHEET_COLUMNS },
         "labels": labels,
         "choices": choices,

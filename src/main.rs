@@ -1224,6 +1224,17 @@ fn run() -> Result<(), String> {
                 inputs: web_inputs(&state),
                 weather_location: state.preferences.weather_location.clone(),
                 tiles: state.preferences.custom_tiles.clone(),
+                system: web_settings::SystemStatus {
+                    update_title: state
+                        .preferences
+                        .language
+                        .t(view::update_title(&state))
+                        .to_owned(),
+                    update_detail: view::update_detail(&state, &assets),
+                    update_action: view::update_value(&state),
+                    update_busy: state.update_busy(),
+                    refreshing: state.loading,
+                },
             },
         );
         while let Ok(event) = web_access_service.receiver.try_recv() {
@@ -1341,6 +1352,19 @@ fn run() -> Result<(), String> {
                 web_access::Event::Photo { bytes, reply } => wallpaper_service.store(bytes, reply),
                 web_access::Event::DeletePhoto(id) => {
                     let pending = state.delete_web_photo(&id);
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                web_access::Event::Action(action) => {
+                    let pending = state.web_action(&action);
                     running &= effects(
                         pending,
                         &mut state,

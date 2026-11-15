@@ -402,6 +402,22 @@ fn pairs_once_and_then_changes_settings() {
         422
     );
 
+    // System actions are a fixed set; the page sees the paired devices with itself marked.
+    assert_eq!(post("/api/action", &cookie, r#"{"action":"quit"}"#).0, 422);
+    let (status, _, body) = post("/api/action", &cookie, r#"{"action":"refresh"}"#);
+    assert_eq!(status, 200);
+    assert!(body.contains("\"this\":true"));
+    loop {
+        if let Event::Action(action) = next_event(&service) {
+            assert_eq!(action, "refresh");
+            break;
+        }
+    }
+    assert_eq!(
+        post("/api/devices/remove", &cookie, r#"{"id":"nope"}"#).0,
+        422
+    );
+
     // Unknown fields cannot reach other preferences.
     let (status, _, _) = post("/api/settings", &cookie, r#"{"hidden":["x"]}"#);
     assert_eq!(status, 422);

@@ -94,6 +94,8 @@ pub enum Event {
     },
     /// Removes one of the owner's own photos from the gallery.
     DeletePhoto(String),
+    /// A System action: "refresh", "reset_icons" or "update".
+    Action(String),
     /// The complete shortcut tile list after a change from the page.
     Tiles(Vec<crate::model::CustomTile>),
     /// A place from the page's search, or `None` to remove the weather location.
@@ -218,6 +220,9 @@ impl Service {
         }
         if !shared.tiling && shared.catalog.tiles != catalog.tiles {
             shared.catalog.tiles = catalog.tiles.clone();
+        }
+        if shared.catalog.system != catalog.system {
+            shared.catalog.system = catalog.system.clone();
         }
         // A change from the phone stays authoritative until the launcher has applied it.
         if shared.revision == shared.acknowledged && shared.settings != *settings {
@@ -540,6 +545,24 @@ fn input_icon(route: &str) -> Option<&'static [u8]> {
     )
 }
 
+/// Everything the page shows: the listing plus this device and the paired devices.
+fn page(shared: &Shared, request: &Request) -> serde_json::Value {
+    let mut body = listing(&shared.settings, &shared.catalog);
+    let this = device(request, &shared.devices).map(|device| device.id.clone());
+    body["devices"] = shared
+        .devices
+        .iter()
+        .map(|device| {
+            serde_json::json!({
+                "id": device.id,
+                "name": device.name,
+                "this": this.as_deref() == Some(device.id.as_str()),
+            })
+        })
+        .collect();
+    body
+}
+
 fn json(stream: &mut TcpStream, status: &str, body: &serde_json::Value) -> Result<(), String> {
     response(
         stream,
@@ -615,7 +638,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
                 );
             };
             if api == "settings" {
-                let mut body = listing(&shared.settings, &shared.catalog);
+                let mut body = page(&shared, &request);
                 body["device"] = serde_json::json!(device.name);
                 drop(shared);
                 return json(stream, "200 OK", &body);
@@ -778,6 +801,8 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         "/api/places" => search_places(stream, context, &request, &body),
         "/api/location" => choose_place(stream, context, &request, &body),
         "/api/photo/delete" => delete_photo(stream, context, &request, &body),
+        "/api/action" => system_action(stream, context, &request, &body),
+        "/api/devices/remove" => remove_device(stream, context, &request, &body),
         "/api/tiles/save" | "/api/tiles/remove" | "/api/tiles/send" => {
             edit_tile(stream, context, &request, &route, &body)
         }
@@ -913,7 +938,7 @@ fn arrange(
     shared.catalog.library.favorites = next.favorites.clone();
     shared.catalog.library.hidden = next.hidden.clone();
     shared.arranging = true;
-    let mut reply = listing(&shared.settings, &shared.catalog);
+    let mut reply = page(&shared, request);
     drop(shared);
     reply["device"] = serde_json::json!(name);
     context
@@ -961,7 +986,7 @@ fn change_input(
     input.mode = change.mode;
     input.icon = change.icon.clone();
     shared.inputting = true;
-    let mut reply = listing(&shared.settings, &shared.catalog);
+    let mut reply = page(&shared, request);
     drop(shared);
     reply["device"] = serde_json::json!(name);
     context
@@ -998,11 +1023,84 @@ fn reply_listing(
         drop(shared);
         return unpaired(stream);
     };
-    let mut reply = listing(&shared.settings, &shared.catalog);
+    let mut reply = page(&shared, request);
     drop(shared);
     reply["device"] = serde_json::json!(name);
     if let (Some(reply), serde_json::Value::Object(extra)) = (reply.as_object_mut(), extra) {
         reply.extend(extra);
+    }
+    json(stream, "200 OK", &reply)
+}
+
+/// Runs a System action on the TV, like pressing the same row in Settings › System.
+fn system_action(
+    stream: &mut TcpStream,
+    context: &Context,
+    request: &Request,
+    body: &[u8],
+) -> Result<(), String> {
+    #[derive(Deserialize)]
+    struct Action {
+        action: String,
+    }
+    if device(request, &context.shared.lock().unwrap().devices).is_none() {
+        return unpaired(stream);
+    }
+    let Ok(Action { action }) = serde_json::from_slice::<Action>(body) else {
+        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+    };
+    if !matches!(action.as_str(), "refresh" | "reset_icons" | "update") {
+        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+    }
+    context
+        .sender
+        .send(Event::Action(action))
+        .map_err(|_| "Launcher stopped".to_owned())?;
+    // Give the launcher a moment so the reply already shows the started action.
+    thread::sleep(Duration::from_millis(300));
+    reply_listing(stream, context, request, serde_json::json!({}))
+}
+
+/// Removes a paired device from the page; removing this one also clears its key.
+fn remove_device(
+    stream: &mut TcpStream,
+    context: &Context,
+    request: &Request,
+    body: &[u8],
+) -> Result<(), String> {
+    #[derive(Deserialize)]
+    struct Remove {
+        id: String,
+    }
+    let Ok(Remove { id }) = serde_json::from_slice::<Remove>(body) else {
+        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+    };
+    let mut shared = context.shared.lock().unwrap();
+    let Some(this) = device(request, &shared.devices).map(|device| device.id.clone()) else {
+        drop(shared);
+        return unpaired(stream);
+    };
+    if !shared.devices.iter().any(|device| device.id == id) {
+        drop(shared);
+        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+    }
+    shared.devices.retain(|device| device.id != id);
+    let saved = save_devices(&context.path, &shared.devices);
+    let devices = shared.devices.clone();
+    let reply = page(&shared, request);
+    drop(shared);
+    if let Err(error) = saved {
+        eprintln!("Luma web access: {error}");
+    }
+    let _ = context.sender.send(Event::Devices(devices));
+    if id == this {
+        return response_with(
+            stream,
+            "200 OK",
+            "application/json; charset=utf-8",
+            &format!("Set-Cookie: {COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict\r\n"),
+            serde_json::json!({ "pair": true }).to_string().as_bytes(),
+        );
     }
     json(stream, "200 OK", &reply)
 }
@@ -1108,7 +1206,7 @@ fn edit_tile(
     };
     shared.catalog.tiles = tiles.clone();
     shared.tiling = true;
-    let mut reply = listing(&shared.settings, &shared.catalog);
+    let mut reply = page(&shared, request);
     drop(shared);
     reply["device"] = serde_json::json!(name);
     reply["id"] = serde_json::json!(id);
@@ -1189,7 +1287,7 @@ fn choose_place(
     };
     shared.catalog.weather_location = place.clone();
     shared.locating = true;
-    let mut reply = listing(&shared.settings, &shared.catalog);
+    let mut reply = page(&shared, request);
     drop(shared);
     reply["device"] = serde_json::json!(name);
     context
@@ -1379,7 +1477,7 @@ fn save(
         shared.revision += 1;
         Event::Settings(shared.revision, next)
     });
-    let mut reply = listing(&shared.settings, &shared.catalog);
+    let mut reply = page(&shared, request);
     drop(shared);
     reply["device"] = serde_json::json!(name);
     // Queue the change before replying; it applies even if the phone misses the reply.

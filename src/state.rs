@@ -1168,6 +1168,30 @@ impl State {
         vec![Effect::DeleteWallpaper(id.to_owned())]
     }
 
+    /// A Settings › System action from a paired phone or computer, as pressing its row does.
+    pub fn web_action(&mut self, action: &str) -> Vec<Effect> {
+        match action {
+            "refresh" => vec![Effect::Reload],
+            "reset_icons" => {
+                self.reset_icon_cache = true;
+                vec![]
+            }
+            "update" if !self.update_busy() => {
+                if let Some(version) = self.available_update.clone() {
+                    self.update = crate::update::InstallStatus::Downloading(0);
+                    vec![Effect::UpdateDownload(version)]
+                } else {
+                    self.update = crate::update::InstallStatus::Idle;
+                    self.update_status = crate::update::Status::Checking;
+                    self.update_check_requested = true;
+                    self.dirty = true;
+                    vec![]
+                }
+            }
+            _ => vec![],
+        }
+    }
+
     fn finish_background_delete(&mut self, id: &str) {
         let index = self
             .background_ids()

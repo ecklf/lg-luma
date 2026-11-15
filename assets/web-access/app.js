@@ -275,6 +275,106 @@ function wallpapers() {
   return grid;
 }
 
+/* ---------- System ---------- */
+
+function runAction(action) {
+  queue = queue.then(async () => {
+    try {
+      apply(await call('api/action', { action }));
+    } catch (error) {
+      if (error instanceof PairingNeeded) return startPairing(error.message);
+      message(error.message, true);
+    }
+  });
+}
+
+function confirmButton(label, confirm, action) {
+  const button = create('button', 'pill-button danger', label);
+  button.type = 'button';
+  let armed = false;
+  button.addEventListener('click', () => {
+    // A second press confirms.
+    if (!armed) {
+      armed = true;
+      button.textContent = confirm;
+      return;
+    }
+    action();
+  });
+  return button;
+}
+
+function systemSection() {
+  const l = state.labels;
+  const system = state.system;
+  const update = create('div', 'row stacked update-card');
+  update.append(
+    create('span', 'title', system.update_title),
+    create('span', 'muted', system.update_detail),
+  );
+  const updateButton = create('button', 'pill-button strong', system.update_action);
+  updateButton.type = 'button';
+  updateButton.disabled = system.update_busy;
+  updateButton.addEventListener('click', () => runAction('update'));
+  update.append(updateButton);
+
+  const action = (label, name, busy) => {
+    const row = create('button', 'row action-row', label);
+    row.type = 'button';
+    row.disabled = busy;
+    row.addEventListener('click', () => {
+      row.disabled = true;
+      runAction(name);
+      message(strings.saved);
+    });
+    return row;
+  };
+
+  const devices = state.devices.map((device) => {
+    const row = create('div', 'row inline');
+    const name = create('span', 'title', device.name);
+    if (device.this) name.append(create('small', 'badge', l.thisDevice));
+    row.append(
+      name,
+      confirmButton(l.remove, `${l.remove}?`, () => {
+        queue = queue.then(async () => {
+          try {
+            apply(await call('api/devices/remove', { id: device.id }));
+            message(strings.saved);
+          } catch (error) {
+            if (error instanceof PairingNeeded) {
+              state = undefined;
+              return startPairing(strings.unpaired);
+            }
+            message(error.message, true);
+          }
+        });
+      }),
+    );
+    return row;
+  });
+
+  return [
+    group(null, update),
+    group(
+      null,
+      action(system.refreshing ? l.refreshNotice : l.refreshApps, 'refresh', system.refreshing),
+      action(l.resetIconCache, 'reset_icons', false),
+      choiceRow('text_rendering', l.textRendering),
+    ),
+    group(l.webAccess, ...devices),
+  ];
+}
+
+// While System is open, follow update checks and refreshes as they run on the TV.
+setInterval(() => {
+  if (state && tab === 'system' && document.visibilityState === 'visible') {
+    call('api/settings')
+      .then(apply)
+      .catch(() => {});
+  }
+}, 3000);
+
 /* ---------- Own photos ---------- */
 
 function deletePhoto(id) {
@@ -956,7 +1056,7 @@ function sections() {
       group(l.shortcuts, ...tileRows()),
       ...(state.inputs.length ? [group(l.inputs, ...state.inputs.map(inputCard))] : []),
     ],
-    system: [group(null, choiceRow('text_rendering', l.textRendering))],
+    system: systemSection(),
   };
 }
 

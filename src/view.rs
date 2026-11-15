@@ -1657,7 +1657,37 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
 }
 
 /// The existing System status card owns the only update action.
-fn update_value(state: &State) -> String {
+/// The update card's title key in Settings › System.
+pub fn update_title(state: &State) -> &'static str {
+    if matches!(state.update, crate::update::InstallStatus::Failed(_)) {
+        "updateError"
+    } else if state.available_update.is_some() {
+        "updateAvailable"
+    } else {
+        match state.update_status {
+            crate::update::Status::Unchecked => "checkForUpdates",
+            crate::update::Status::Checking => "checkingUpdates",
+            crate::update::Status::Checked => "latestVersionInstalled",
+            crate::update::Status::Failed => "updateCheckFailed",
+        }
+    }
+}
+
+/// The installed version, and the newest one when an update is available.
+pub fn update_detail(state: &State, assets: &Assets) -> String {
+    let language = state.preferences.language;
+    if let Some(latest) = &state.available_update {
+        language.format(
+            "updateVersions",
+            &[("current", assets.version.trim()), ("latest", latest)],
+        )
+    } else {
+        language.format("currentVersion", &[("current", assets.version.trim())])
+    }
+}
+
+/// The update action's label: check again, install, or the running step.
+pub fn update_value(state: &State) -> String {
     use crate::update::{InstallStatus, Status};
     let language = state.preferences.language;
     match &state.update {
@@ -2640,18 +2670,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         }
         SYSTEM_SECTION => {
             let rect = Rect::new(640., 164.8 - s, 1120., 220.);
-            let title = if matches!(state.update, crate::update::InstallStatus::Failed(_)) {
-                "updateError"
-            } else if state.available_update.is_some() {
-                "updateAvailable"
-            } else {
-                match state.update_status {
-                    crate::update::Status::Unchecked => "checkForUpdates",
-                    crate::update::Status::Checking => "checkingUpdates",
-                    crate::update::Status::Checked => "latestVersionInstalled",
-                    crate::update::Status::Failed => "updateCheckFailed",
-                }
-            };
+            let title = update_title(state);
             settings_surface(out, rect, 20.);
             out.text(
                 language.t(title),
@@ -2661,14 +2680,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 false,
             );
             out.text(
-                if let Some(latest) = &state.available_update {
-                    language.format(
-                        "updateVersions",
-                        &[("current", assets.version.trim()), ("latest", latest)],
-                    )
-                } else {
-                    language.format("currentVersion", &[("current", assets.version.trim())])
-                },
+                update_detail(state, assets),
                 Rect::new(rect.x + 24.2, rect.y + 74., rect.w - 48.4, 32.),
                 text(20.8, 450, -0.02).leading(1.4),
                 c(0xeeeeee, 0.73),
