@@ -1,7 +1,7 @@
 //! Home Top Shelf dwell/reveal and TMDB request scheduling.
 use crate::state::{Effect, Page, State, Target};
 use crate::tmdb::{
-    self, CROSSFADE_STEP, Catalog, Command, REVEAL_MS, ROTATE_MS, Response, VISIBILITY_STEP,
+    self, CROSSFADE_SECS, Catalog, Command, REVEAL_MS, ROTATE_MS, Response, VISIBILITY_SECS,
 };
 use std::path::Path;
 use std::time::Instant;
@@ -134,16 +134,17 @@ impl State {
             self.dirty = true;
         }
 
+        let dt = self.shelf_animation_dt();
         let crossfading = ready && self.shelf.display_app.is_some() && self.shelf.revealed;
         if crossfading {
             // Keep full shelf visibility; blend outgoing→incoming only.
             if self.shelf.visibility < 1. {
-                self.shelf_step_visibility(1.);
+                self.shelf_step_visibility(1., dt);
             }
             if self.preferences.reduced_motion {
                 self.shelf.crossfade = 1.;
             } else if self.shelf.crossfade < 1. {
-                self.shelf.crossfade = (self.shelf.crossfade + CROSSFADE_STEP).min(1.);
+                self.shelf.crossfade = (self.shelf.crossfade + dt / CROSSFADE_SECS).min(1.);
                 self.dirty = true;
             }
             if self.shelf.crossfade >= 0.999 {
@@ -153,7 +154,7 @@ impl State {
             }
         } else if self.shelf.display_app.is_some() && !ready {
             // Cold target: shade outgoing down to wallpaper.
-            self.shelf_step_visibility(0.);
+            self.shelf_step_visibility(0., dt);
             if self.shelf.visibility <= 0.001 {
                 self.shelf.visibility = 0.;
                 self.shelf.display_app = None;
@@ -161,7 +162,7 @@ impl State {
             }
         } else {
             let goal = if self.shelf.revealed && ready { 1. } else { 0. };
-            self.shelf_step_visibility(goal);
+            self.shelf_step_visibility(goal, dt);
         }
         effects
     }
@@ -177,7 +178,8 @@ impl State {
             self.shelf.display_app = self.shelf.focus_app.clone();
         }
         self.shelf.crossfade = 0.;
-        self.shelf_step_visibility(0.);
+        let dt = self.shelf_animation_dt();
+        self.shelf_step_visibility(0., dt);
         if self.shelf.visibility <= 0.001 {
             self.shelf.visibility = 0.;
             if self.shelf.focus_app.is_some()
@@ -194,17 +196,35 @@ impl State {
         vec![]
     }
 
-    fn shelf_step_visibility(&mut self, goal: f32) {
+    fn shelf_animation_dt(&mut self) -> f32 {
+        let now = Instant::now();
+        let measured = self
+            .shelf
+            .updated
+            .map(|previous| now.saturating_duration_since(previous).as_secs_f32())
+            .unwrap_or(0.);
+        self.shelf.updated = Some(now);
+        // Sub-millisecond gaps (unit tests, or a busy loop before VSync) still
+        // advance one nominal 60 Hz frame so fades do not stall.
+        if measured < 1e-4 {
+            1. / 60.
+        } else {
+            measured.min(0.05)
+        }
+    }
+
+    fn shelf_step_visibility(&mut self, goal: f32, dt: f32) {
         if self.preferences.reduced_motion {
             if self.shelf.visibility != goal {
                 self.shelf.visibility = goal;
                 self.dirty = true;
             }
         } else if (self.shelf.visibility - goal).abs() > 0.001 {
+            let step = dt / VISIBILITY_SECS;
             self.shelf.visibility = if goal > self.shelf.visibility {
-                (self.shelf.visibility + VISIBILITY_STEP).min(goal)
+                (self.shelf.visibility + step).min(goal)
             } else {
-                (self.shelf.visibility - VISIBILITY_STEP).max(goal)
+                (self.shelf.visibility - step).max(goal)
             };
             self.dirty = true;
         } else {
@@ -356,6 +376,25 @@ mod tests {
         assert!(state.shelf.focus_app.is_none());
         assert!(state.shelf_current_show().is_none());
         let _ = plain;
+    }
+
+    #[test]
+    fn steady_shelf_reveal_is_not_an_animation() {
+        let mut state = ready();
+        state.shelf.revealed = true;
+        state.shelf.visibility = 1.;
+        state.shelf.crossfade = 1.;
+        state.shelf.display_app = None;
+        assert!(
+            !state.animating(),
+            "a settled Top Shelf must not busy-spin the event loop"
+        );
+        state.shelf.display_app = Some("com.netflix.app".into());
+        state.shelf.crossfade = 0.4;
+        assert!(
+            state.animating(),
+            "an in-flight crossfade still counts as animating"
+        );
     }
 
     #[test]

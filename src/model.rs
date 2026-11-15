@@ -356,7 +356,7 @@ impl Default for Preferences {
             show_channels: true,
             custom_tiles: vec![],
             hidden: vec![],
-            background: "dunes".into(),
+            background: crate::wallpaper_packs::DEFAULT_ID.into(),
             splash_background: None,
             deleted_backgrounds: vec![],
             hour_24: false,
@@ -547,7 +547,7 @@ impl Preferences {
         if !BACKGROUNDS.iter().any(|(id, _)| *id == self.background)
             && !crate::wallpapers::valid_id(&self.background)
         {
-            self.background = "dunes".into();
+            self.background = crate::wallpaper_packs::DEFAULT_ID.into();
         }
         let mut seen = HashSet::new();
         self.deleted_backgrounds.retain(|id| {

@@ -566,7 +566,7 @@ fn upload_discovery_does_not_apply_and_custom_selection_uses_immutable_paths() {
     state.section = 1;
     let item = custom(1);
     state.set_wallpapers(vec![item.clone()]);
-    assert_eq!(state.preferences.background, "dunes");
+    assert_eq!(state.preferences.background, "slate");
     let gallery = scene(&state);
     assert!(
         gallery
@@ -725,7 +725,7 @@ fn every_unselected_bundled_background_can_be_removed_and_stays_removed_after_re
     preferences.sanitize();
     let restored = State::new(preferences);
     assert_eq!(restored.background_count(), 1);
-    assert_eq!(restored.background_id(0), Some("dunes"));
+    assert_eq!(restored.background_id(0), Some("slate"));
 }
 
 #[test]
@@ -760,7 +760,7 @@ fn uploaded_deletion_is_single_flight_handles_failures_and_keeps_unrelated_focus
     state.back();
     state.focus = Target::UseBackground;
     assert!(state.activate().is_empty()); // Cannot apply an image being deleted.
-    assert_eq!(state.preferences.background, "dunes");
+    assert_eq!(state.preferences.background, "slate");
     state.back();
     state.focus = Target::Background(BACKGROUNDS.len() + 1);
     state.wallpaper_deleted(lake.id, Ok(()));

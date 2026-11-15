@@ -223,6 +223,8 @@ pub enum Effect {
     RefreshChannelGuide,
     Uninstall(String),
     DeleteWallpaper(String),
+    /// Fetch a photo wallpaper pack from the upstream GitHub tree.
+    EnsureWallpaper(String),
     Recent {
         generation: u64,
         command: crate::recents::Command,
@@ -283,6 +285,9 @@ pub struct State {
     pub wallpapers: Vec<crate::wallpapers::Wallpaper>,
     pub deleting_wallpaper: Option<String>,
     pub wallpaper_upload: Option<Result<crate::wallpapers::Session, String>>,
+    /// On-disk cache for photo wallpapers downloaded from GitHub.
+    pub wallpaper_pack_cache: std::path::PathBuf,
+    pub wallpaper_pack_status: std::collections::BTreeMap<String, crate::wallpaper_packs::Status>,
     pub tile_editor: Option<Result<crate::companion::Session, String>>,
     /// Luma update (Settings → System), driven by the update worker.
     pub update: crate::update::InstallStatus,
@@ -336,6 +341,8 @@ impl State {
             wallpapers: vec![],
             deleting_wallpaper: None,
             wallpaper_upload: None,
+            wallpaper_pack_cache: std::path::PathBuf::new(),
+            wallpaper_pack_status: std::collections::BTreeMap::new(),
             tile_editor: None,
             update: crate::update::InstallStatus::default(),
             panel_started: None,
@@ -567,8 +574,12 @@ impl State {
                 && (self.channel_switcher.visibility
                     != if self.channel_switcher_open() { 1. } else { 0. }
                     || self.channel_switcher.cards_animating(self.pointer)))
+            // Only while visibility/crossfade is in flight. A steady Top Shelf
+            // reveal must not keep the event loop at timeout 0 (busy-spin).
             || (self.shelf.visibility > 0. && self.shelf.visibility < 1.)
-            || self.shelf.revealed
+            || (self.shelf.revealed
+                && self.shelf.display_app.is_some()
+                && self.shelf.crossfade < 1.)
             || self.previous_background.is_some()
             || self.panel_started.is_some()
             || (!self.preferences.reduced_motion
@@ -3096,6 +3107,23 @@ impl State {
                 }
                 if !self.background_ids().any(|known| known == id) {
                     return self.back();
+                }
+                if crate::wallpaper_packs::remote_builtin(&id)
+                    && !self
+                        .wallpaper_pack_cache
+                        .join(&id)
+                        .join(format!("{id}.jpg"))
+                        .is_file()
+                {
+                    self.wallpaper_pack_status.insert(
+                        id.clone(),
+                        crate::wallpaper_packs::Status::Downloading,
+                    );
+                    self.notify(self.preferences.language.t("downloadingWallpaper"));
+                    self.preferences.background = id.clone();
+                    self.preferences.wallpaper_changed = unix_now();
+                    self.back();
+                    return vec![Effect::Save, Effect::EnsureWallpaper(id)];
                 }
                 if !self.preferences.reduced_motion && self.preferences.background != id {
                     self.previous_background =

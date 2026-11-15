@@ -50,14 +50,19 @@ pub struct Shelf {
     pub selected: usize,
     pub rotate_since: Option<std::time::Instant>,
     pub visibility: f32,
+    /// Last shelf animation sample; drives time-based visibility/crossfade.
+    pub updated: Option<std::time::Instant>,
     pub pending: Option<String>,
     pub generation: u64,
     pub error: Option<String>,
 }
 
-/// Per-frame step for series→series crossfades (~6 frames).
+/// Seconds for a full series→series crossfade (~6 frames at 60 Hz).
+pub const CROSSFADE_SECS: f32 = 0.10;
+/// Seconds for shelf visibility to reach the wallpaper or a backdrop.
+pub const VISIBILITY_SECS: f32 = 0.14;
+/// Legacy per-frame aliases kept for tests that step one tick at a time.
 pub const CROSSFADE_STEP: f32 = 0.18;
-/// Per-frame step for shelf visibility (enter/leave wallpaper).
 pub const VISIBILITY_STEP: f32 = 0.12;
 
 #[derive(Clone, Debug, PartialEq)]

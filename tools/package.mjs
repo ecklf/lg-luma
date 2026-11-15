@@ -79,16 +79,30 @@ await fs.copyFile(binary, path.join(stage, manifest.main));
 await fs.chmod(path.join(stage, manifest.main), 0o755);
 await fs.copyFile(earlyBinary, path.join(stage, 'luma-early'));
 await fs.chmod(path.join(stage, 'luma-early'), 0o755);
+const bundledWallpapers = new Set(['slate', 'midnight', 'prism']);
 await fs.cp(path.join(out, 'assets'), path.join(stage, 'assets'), {
   recursive: true,
-  filter: (source) =>
-    path.basename(source) !== '.DS_Store' &&
+  filter: (source) => {
+    if (path.basename(source) === '.DS_Store') return false;
     // Protect direct packaging calls that reuse an older generated asset cache.
-    !['app-icons', 'icons.json', 'colors.json', 'splash'].includes(path.basename(source)) &&
-    (highResolution || !source.endsWith('@2x.jpg')) &&
-    !(
-      source.endsWith('.png') && ['logos', 'ui-icons'].includes(path.basename(path.dirname(source)))
-    ),
+    if (['app-icons', 'icons.json', 'colors.json', 'splash'].includes(path.basename(source))) {
+      return false;
+    }
+    if (!highResolution && source.endsWith('@2x.jpg')) return false;
+    if (
+      source.endsWith('.png') &&
+      ['logos', 'ui-icons'].includes(path.basename(path.dirname(source)))
+    ) {
+      return false;
+    }
+    // Photo wallpapers download from GitHub on first use; keep only vector packs.
+    if (path.basename(path.dirname(source)) === 'wallpapers') {
+      if (path.basename(source) === 'wallpapers') return true;
+      const stem = path.basename(source).split('.')[0].replace(/-plain$/, '');
+      return bundledWallpapers.has(stem);
+    }
+    return true;
+  },
 });
 await fs.copyFile(path.join(out, 'assets/app-icon.png'), path.join(stage, 'app-icon.png'));
 await fs.copyFile(
@@ -96,11 +110,14 @@ await fs.copyFile(
   path.join(stage, 'app-icon-large.png'),
 );
 await fs.copyFile(path.join(root, 'tv/autostart.sh'), path.join(stage, 'autostart.sh'));
-// Splash images: one per background, plus splash.png (the default background) read by webOS.
+// Splash: bundled wallpapers only, plus splash.png for the default background.
 await fs.mkdir(path.join(stage, 'splash'), { recursive: true });
-for (const file of await fs.readdir(path.join(out, 'assets/splash')))
+for (const file of await fs.readdir(path.join(out, 'assets/splash'))) {
+  const id = path.parse(file).name;
+  if (!bundledWallpapers.has(id)) continue;
   await fs.copyFile(path.join(out, 'assets/splash', file), path.join(stage, 'splash', file));
-await fs.copyFile(path.join(out, 'assets/splash/dunes.png'), path.join(stage, 'splash.png'));
+}
+await fs.copyFile(path.join(out, 'assets/splash/slate.png'), path.join(stage, 'splash.png'));
 await fs.chmod(path.join(stage, 'autostart.sh'), 0o755);
 for (const file of ['home.sh', 'luma-helper', 'home-filter.js']) {
   await fs.copyFile(

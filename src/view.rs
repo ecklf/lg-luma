@@ -75,14 +75,27 @@ impl Assets {
         let id = if BACKGROUNDS.iter().any(|(known, _)| *known == id) {
             id
         } else {
-            "dunes"
+            crate::wallpaper_packs::DEFAULT_ID
         };
-        let suffix = if state.preferences.wallpaper_gradient {
-            ""
-        } else {
-            "-plain"
-        };
-        self.path(format!("wallpapers/{id}{suffix}.jpg"))
+        let plain = !state.preferences.wallpaper_gradient;
+        let path = crate::wallpaper_packs::wallpaper_file(
+            &state.wallpaper_pack_cache,
+            &self.root,
+            id,
+            plain,
+        );
+        if path.is_file() {
+            return path.to_string_lossy().into_owned();
+        }
+        // Remote pack not cached yet: keep the bundled default on screen.
+        crate::wallpaper_packs::wallpaper_file(
+            &state.wallpaper_pack_cache,
+            &self.root,
+            crate::wallpaper_packs::DEFAULT_ID,
+            plain,
+        )
+        .to_string_lossy()
+        .into_owned()
     }
 
     fn width(&self, value: &str, style: TextStyle) -> f32 {
