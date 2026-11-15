@@ -1,5 +1,15 @@
 # lg-luma
 
+## 3.4.0
+
+### Minor Changes
+
+- 9afa3ba: Add a Steam input icon with manual selection and automatic detection for Steam device labels.
+
+### Patch Changes
+
+- 0ec5651: Add Hungarian localization.
+
 ## 3.3.0
 
 ### Minor Changes
