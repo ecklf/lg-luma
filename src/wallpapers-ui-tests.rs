@@ -134,7 +134,10 @@ fn cycling_button_toggles_on_off_without_opening_a_page_or_moving_controls() {
                 (new.rect.x, new.rect.y, new.rect.w, new.rect.h)
             );
         }
-        assert_eq!(state.activate(), vec![Effect::Save]);
+        assert_eq!(
+            state.activate(),
+            vec![Effect::Save, Effect::PruneWallpaperPacks]
+        );
         assert!(!state.preferences.wallpaper_cycle);
     }
 }
@@ -151,10 +154,7 @@ fn gradient_toggle_is_saved_stable_and_switches_bundled_and_uploaded_images() {
     for language in crate::i18n::Language::ALL {
         state.preferences.language = language;
         let before = controls(&state);
-        assert_eq!(
-            state.activate(),
-            vec![Effect::Save, Effect::PruneWallpaperPacks]
-        );
+        assert_eq!(state.activate(), vec![Effect::Save]);
         assert!(!state.preferences.wallpaper_gradient);
         assert_eq!(state.focus, Target::WallpaperGradient);
         assert_eq!(state.scroll, 300.);
@@ -173,10 +173,7 @@ fn gradient_toggle_is_saved_stable_and_switches_bundled_and_uploaded_images() {
         let saved = serde_json::to_string(&state.preferences).unwrap();
         let restored: crate::model::Preferences = serde_json::from_str(&saved).unwrap();
         assert!(!restored.wallpaper_gradient);
-        assert_eq!(
-            state.activate(),
-            vec![Effect::Save, Effect::PruneWallpaperPacks]
-        );
+        assert_eq!(state.activate(), vec![Effect::Save]);
         assert!(
             matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("slate.jpg"))
         );
@@ -608,7 +605,7 @@ fn upload_discovery_does_not_apply_and_custom_selection_uses_immutable_paths() {
     assert_eq!(restored.preferences.background, item.id);
     // Missing uploads fall back without overwriting the saved selection.
     assert!(
-        matches!(&scene(&restored).draw[0], Draw::Image(path, ..) if path.ends_with("wallpapers/dunes.jpg"))
+        matches!(&scene(&restored).draw[0], Draw::Image(path, ..) if path.ends_with("wallpapers/slate.jpg"))
     );
     restored.set_wallpapers(vec![item.clone()]);
     assert!(matches!(&scene(&restored).draw[0], Draw::Image(path, ..) if path == &item.image()));
