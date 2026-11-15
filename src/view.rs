@@ -1236,7 +1236,18 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
                 }
             }
             for (label, style, _, rect) in &mut summary.parts {
-                (*label, *style) = assets.fit_line(label, *style, rect.w, 24.);
+                if state.preferences.weather_location.is_none()
+                    && label == language.t("setWeatherLocation")
+                {
+                    // Setup is an action, not expendable metadata: keep its full
+                    // translated label readable within the fixed widget width.
+                    style.size = style.size.min(28.);
+                    rect.h =
+                        assets.lines(label, *style, rect.w) as f32 * style.size * style.line_height;
+                    summary.height = summary.height.max(rect.y + rect.h);
+                } else {
+                    (*label, *style) = assets.fit_line(label, *style, rect.w, 24.);
+                }
             }
             let controls = out.controls.len();
             let height = summary.height;
@@ -4487,6 +4498,48 @@ mod tests {
                     .iter()
                     .any(|control| matches!(control.target, Target::App(_) | Target::DockApp(_)))
             );
+        }
+    }
+
+    #[test]
+    fn translated_weather_setup_actions_fit_without_truncation_in_every_style() {
+        let assets = assets();
+        for language in Language::ALL {
+            for weather_style in crate::model::WeatherStyle::ALL {
+                let state = State::new(Preferences {
+                    language,
+                    weather_style,
+                    ..Preferences::default()
+                });
+                let mut scene = Scene::new();
+                home_widgets(&mut scene, &state, &assets, OffsetDateTime::UNIX_EPOCH);
+                let label = language.t("setWeatherLocation");
+                let (rect, style) = scene
+                    .draw
+                    .iter()
+                    .find_map(|draw| match draw {
+                        Draw::Text(text, rect, style, ..) if text == label => Some((rect, style)),
+                        _ => None,
+                    })
+                    .expect("The full localized setup action must remain visible");
+                let cell =
+                    home_widget_rect(HomeWidget::Weather, state.preferences.weather_position);
+                assert!(rect.x >= cell.x && rect.y >= cell.y);
+                assert!(rect.x + rect.w <= cell.x + cell.w && rect.y + rect.h <= cell.y + cell.h);
+                assert!(style.size >= 24.);
+                assert!(
+                    rect.h
+                        >= assets.lines(label, *style, rect.w) as f32
+                            * style.size
+                            * style.line_height
+                );
+                assert!(
+                    scene
+                        .controls
+                        .iter()
+                        .any(|control| control.target == Target::WeatherConfigure)
+                );
+            }
         }
     }
 
