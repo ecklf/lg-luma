@@ -1,7 +1,7 @@
 //! Persisted text rendering and startup-only GL configuration. MSAA needs a new SDL window.
 use serde::{Deserialize, Deserializer, Serialize};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TextRendering {
     #[default]

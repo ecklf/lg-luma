@@ -13,7 +13,7 @@ use crate::companion::{
     Request, Session, error_response, local_address, local_peer, qr, read_exact, response,
     response_with,
 };
-use crate::web_settings::{Settings, listing};
+use crate::web_settings::{Background, Settings, listing, strings};
 use serde::{Deserialize, Serialize};
 use std::{
     io::BufReader,
@@ -59,6 +59,8 @@ pub enum Event {
     Settings(u64, Settings),
     Paired(String),
     Devices(Vec<Device>),
+    /// The page asks for a fresh picture of Luma's Home; reply with a JPEG.
+    Preview(mpsc::Sender<Result<Vec<u8>, String>>),
 }
 
 struct Pin {
@@ -78,6 +80,7 @@ struct Shared {
     revision: u64,
     acknowledged: u64,
     devices: Vec<Device>,
+    backgrounds: Vec<Background>,
 }
 
 pub struct Service {
@@ -126,9 +129,18 @@ impl Service {
 
     /// Called every frame: whether web access is on, whether the pairing dialog is showing,
     /// and the TV's current settings for pages that load next.
-    pub fn sync(&mut self, enabled: bool, pairing: bool, settings: &Settings) {
+    pub fn sync(
+        &mut self,
+        enabled: bool,
+        pairing: bool,
+        settings: &Settings,
+        backgrounds: &[Background],
+    ) {
         let pairing = enabled && pairing;
         let mut shared = self.shared.lock().unwrap();
+        if shared.backgrounds != backgrounds {
+            shared.backgrounds = backgrounds.to_vec();
+        }
         // A change from the phone stays authoritative until the launcher has applied it.
         if shared.revision == shared.acknowledged && shared.settings != *settings {
             shared.settings = settings.clone();
@@ -441,9 +453,14 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         .to_owned();
     if request.method == "GET" && request.length == 0 {
         drop(reader);
-        if route == "/api/settings" {
+        if route == "/api/strings" {
+            // The pairing page speaks the TV's language before the device is trusted.
+            let language = context.shared.lock().unwrap().settings.language;
+            return json(stream, "200 OK", &strings(language));
+        }
+        if let Some(api) = route.strip_prefix("/api/") {
             let shared = context.shared.lock().unwrap();
-            let Some(device) = device(&request, &shared.devices) else {
+            let Some(device) = device(&request, &shared.devices).cloned() else {
                 drop(shared);
                 return json(
                     stream,
@@ -451,24 +468,43 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
                     &serde_json::json!({ "error": "Pair this device first.", "pair": true }),
                 );
             };
-            let mut body = listing(&shared.settings);
-            body["device"] = serde_json::json!(device.name);
+            if api == "settings" {
+                let mut body = listing(&shared.settings, &shared.backgrounds);
+                body["device"] = serde_json::json!(device.name);
+                drop(shared);
+                return json(stream, "200 OK", &body);
+            }
+            if let Some(id) = api.strip_prefix("thumbnail/") {
+                // Only files from the catalog; the id is never used as a path.
+                let path = shared
+                    .backgrounds
+                    .iter()
+                    .find(|background| background.id == id)
+                    .map(|background| background.thumbnail.clone());
+                drop(shared);
+                return match path.and_then(|path| std::fs::read(path).ok()) {
+                    Some(bytes) => response(stream, "200 OK", "image/jpeg", &bytes),
+                    None => error_response(stream, "404 Not Found", "Not found"),
+                };
+            }
             drop(shared);
-            return json(stream, "200 OK", &body);
+            if api == "preview.jpg" {
+                return preview(stream, context);
+            }
+            return error_response(stream, "404 Not Found", "Not found");
         }
         let (kind, body): (&str, &[u8]) = match route.as_str() {
             "/" => (
                 "text/html; charset=utf-8",
                 include_bytes!("../assets/web-access/index.html"),
             ),
-            // The tile editor's sheet carries the shared companion look.
-            "/app.css" => (
-                "text/css; charset=utf-8",
-                include_bytes!("../assets/tile-editor/app.css"),
-            ),
             "/web.css" => (
                 "text/css; charset=utf-8",
                 include_bytes!("../assets/web-access/web.css"),
+            ),
+            "/inter.woff2" => (
+                "font/woff2",
+                include_bytes!("../assets/fonts/inter-latin.woff2"),
             ),
             "/app.js" => (
                 "text/javascript; charset=utf-8",
@@ -502,6 +538,19 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         "/api/settings" => save(stream, context, &request, &body),
         "/api/forget" => forget(stream, context, &request),
         _ => error_response(stream, "404 Not Found", "Not found"),
+    }
+}
+
+/// Asks the launcher for a picture of its Home as it looks right now.
+fn preview(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
+    let (reply, answer) = mpsc::channel();
+    if context.sender.send(Event::Preview(reply)).is_err() {
+        return error_response(stream, "503 Service Unavailable", "Launcher stopped");
+    }
+    match answer.recv_timeout(Duration::from_secs(6)) {
+        Ok(Ok(jpeg)) => response(stream, "200 OK", "image/jpeg", &jpeg),
+        Ok(Err(error)) => error_response(stream, "503 Service Unavailable", &error),
+        Err(_) => error_response(stream, "503 Service Unavailable", "The TV is busy"),
     }
 }
 
@@ -633,7 +682,7 @@ fn save(
         shared.revision += 1;
         Event::Settings(shared.revision, next)
     });
-    let mut reply = listing(&shared.settings);
+    let mut reply = listing(&shared.settings, &shared.backgrounds);
     drop(shared);
     reply["device"] = serde_json::json!(name);
     // Queue the change before replying; it applies even if the phone misses the reply.

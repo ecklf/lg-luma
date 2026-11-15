@@ -4,8 +4,9 @@ use std::io::{Read, Write};
 fn http(request: &str) -> (u16, String, String) {
     let mut stream = TcpStream::connect(("127.0.0.1", PORT)).unwrap();
     stream.write_all(request.as_bytes()).unwrap();
-    let mut reply = String::new();
-    stream.read_to_string(&mut reply).unwrap();
+    let mut bytes = Vec::new();
+    stream.read_to_end(&mut bytes).unwrap();
+    let reply = String::from_utf8_lossy(&bytes).into_owned();
     let (head, body) = reply.split_once("\r\n\r\n").unwrap();
     let status = head[9..12].parse().unwrap();
     (status, head.to_owned(), body.to_owned())
@@ -83,8 +84,15 @@ fn pairs_once_and_then_changes_settings() {
     let _ = std::fs::remove_file(&path);
     let mut service = Service::new(path.clone(), true).unwrap();
     let settings = Settings::of(&crate::model::Preferences::default());
+    let thumbnail = path.with_extension("jpg");
+    std::fs::write(&thumbnail, b"jpeg").unwrap();
+    let catalog = vec![Background {
+        id: "dunes".into(),
+        name: "Monument Valley".into(),
+        thumbnail: thumbnail.clone(),
+    }];
 
-    service.sync(true, true, &settings);
+    service.sync(true, true, &settings, &catalog);
     let first = pairing(&service);
     assert!(first.session.url.ends_with(&format!("/#pin={}", first.pin)));
 
@@ -147,10 +155,34 @@ fn pairs_once_and_then_changes_settings() {
     assert_eq!(status, 409);
 
     // Pairing is done; the page now works with the dialog closed.
-    service.sync(true, false, &settings);
+    service.sync(true, false, &settings, &catalog);
     let (status, _, body) = get("/api/settings", &cookie);
     assert_eq!(status, 200);
     assert!(body.contains("\"device\":\"Test phone\""));
+
+    // Pictures need pairing too: a custom wallpaper can be a private photo.
+    assert_eq!(get("/api/thumbnail/dunes", "").0, 401);
+    let (status, head, body) = get("/api/thumbnail/dunes", &cookie);
+    assert_eq!(status, 200);
+    assert!(head.contains("image/jpeg") && body == "jpeg");
+    assert_eq!(get("/api/thumbnail/..%2Fpreferences", &cookie).0, 404);
+    assert_eq!(get("/inter.woff2", "").0, 200);
+    assert!(get("/api/strings", "").2.contains("\"pairTitle\""));
+
+    // The live preview is rendered by the launcher thread on request.
+    let request = {
+        let cookie = cookie.clone();
+        thread::spawn(move || get("/api/preview.jpg", &cookie))
+    };
+    loop {
+        if let Event::Preview(reply) = next_event(&service) {
+            reply.send(Ok(b"frame".to_vec())).unwrap();
+            break;
+        }
+    }
+    let (status, head, body) = request.join().unwrap();
+    assert_eq!(status, 200);
+    assert!(head.contains("image/jpeg") && body == "frame");
 
     let mut changed = settings.clone();
     changed.hour_24 = true;
@@ -180,9 +212,10 @@ fn pairs_once_and_then_changes_settings() {
     assert_eq!(get("/api/settings", &cookie).0, 401);
 
     // Turning web access off closes the server.
-    service.sync(false, false, &settings);
+    service.sync(false, false, &settings, &catalog);
     thread::sleep(Duration::from_millis(400));
     assert!(TcpStream::connect(("127.0.0.1", PORT)).is_err());
     drop(service);
     let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&thumbnail);
 }

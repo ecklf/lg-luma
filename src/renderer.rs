@@ -1663,6 +1663,12 @@ impl Renderer {
     }
 
     pub fn screenshot(&self, path: &Path, width: u32, height: u32) -> Result<(), String> {
+        self.read_image(width, height)?
+            .save(path)
+            .map_err(|e| e.to_string())
+    }
+
+    fn read_image(&self, width: u32, height: u32) -> Result<image::RgbaImage, String> {
         let mut pixels = vec![0; width as usize * height as usize * 4];
         unsafe {
             gl::ReadPixels(
@@ -1678,7 +1684,7 @@ impl Renderer {
         let mut image = image::RgbaImage::from_raw(width, height, pixels)
             .ok_or("Invalid framebuffer dimensions")?;
         image::imageops::flip_vertical_in_place(&mut image);
-        image.save(path).map_err(|e| e.to_string())
+        Ok(image)
     }
 
     /// Capture the authored TV surface, independent of desktop HiDPI/window limits.
@@ -1688,6 +1694,41 @@ impl Renderer {
         path: &Path,
         size: Size,
     ) -> Result<RenderStats, String> {
+        self.offscreen(commands, size, |renderer| {
+            renderer.screenshot(path, size.width, size.height)
+        })
+        .map(|((), stats)| stats)
+    }
+
+    /// The scene as a JPEG in memory, for the companion page's live preview.
+    pub fn capture_jpeg(
+        &mut self,
+        commands: &[Draw],
+        size: Size,
+        quality: u8,
+    ) -> Result<Vec<u8>, String> {
+        let stats = self.stats.clone();
+        let result = self.offscreen(commands, size, |renderer| {
+            let image =
+                image::DynamicImage::ImageRgba8(renderer.read_image(size.width, size.height)?)
+                    .into_rgb8();
+            let mut jpeg = Vec::new();
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, quality)
+                .encode_image(&image)
+                .map_err(|e| e.to_string())?;
+            Ok(jpeg)
+        });
+        // A preview must not replace the statistics of the frames the TV shows.
+        self.stats = stats;
+        result.map(|(jpeg, _)| jpeg)
+    }
+
+    fn offscreen<T>(
+        &mut self,
+        commands: &[Draw],
+        size: Size,
+        read: impl FnOnce(&Self) -> Result<T, String>,
+    ) -> Result<(T, RenderStats), String> {
         if size.width > self.info.max_texture_size
             || size.height > self.info.max_texture_size
             || size.width > self.info.max_viewport[0] as u32
@@ -1718,12 +1759,12 @@ impl Renderer {
         }
         self.render(commands, size.width, size.height, None);
         let stats = self.stats.clone();
-        let result = self.screenshot(path, size.width, size.height);
+        let result = read(self);
         unsafe {
             gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
             gl::DeleteFramebuffers(1, &framebuffer);
         }
-        result.map(|_| stats)
+        result.map(|value| (value, stats))
     }
 
     /// Verification aid (LUMA_DAMAGE_VERIFY=1): compares the window's back buffer after a

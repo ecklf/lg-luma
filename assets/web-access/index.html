@@ -2,48 +2,60 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#101214" />
     <title>Luma</title>
     <link rel="icon" href="luma-mark.svg" />
     <link rel="apple-touch-icon" href="luma-mark.svg" />
-    <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="web.css" />
     <script type="module" src="app.js"></script>
   </head>
   <body>
-    <main>
-      <header>
+    <div id="backdrop" class="backdrop" aria-hidden="true"></div>
+    <div class="shell">
+      <header class="top">
         <div class="brand"><img src="luma-mark.svg" alt="" /><span>luma</span></div>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
       </header>
-      <p id="loading" class="intro">Connecting to your TV…</p>
-      <form id="pair" hidden>
-        <h1>Pair this device</h1>
-        <p class="intro">
-          On your TV, open Settings › System › Phone &amp; computer › Pair a device, then enter the
-          PIN shown there. You only need to do this once.
-        </p>
-        <label class="field"
-          ><span>PIN</span
-          ><input
+
+      <section id="pair" class="pair glass" hidden>
+        <h1 id="pair-title"></h1>
+        <p id="pair-intro" class="muted"></p>
+        <form id="pair-form">
+          <input
             id="pin"
             type="text"
             inputmode="numeric"
             autocomplete="one-time-code"
             maxlength="7"
             placeholder="123 456"
+            aria-label="PIN"
             required
-        /></label>
-        <button id="pair-button" type="submit">Pair</button>
-      </form>
-      <section id="settings" hidden>
-        <div id="groups"></div>
+          />
+          <button id="pair-button" type="submit" class="primary"></button>
+        </form>
       </section>
-      <p id="status" role="status" aria-live="polite"></p>
-      <footer id="footer" hidden>
-        <span id="device"></span>
-        <button id="forget" type="button" class="link">Unpair this device</button>
-      </footer>
-    </main>
+
+      <main id="app" class="layout" hidden>
+        <aside class="stage">
+          <figure class="preview">
+            <div class="screen">
+              <img id="preview" alt="" />
+              <p id="preview-empty" class="preview-empty" hidden></p>
+            </div>
+            <figcaption><span class="live-dot"></span><span id="preview-label"></span></figcaption>
+          </figure>
+        </aside>
+        <div class="panel">
+          <nav id="tabs" class="tabs" role="tablist"></nav>
+          <div id="sections"></div>
+          <footer class="foot">
+            <span id="device" class="muted"></span>
+            <button id="forget" type="button" class="link"></button>
+          </footer>
+        </div>
+      </main>
+    </div>
   </body>
 </html>

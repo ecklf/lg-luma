@@ -1,18 +1,22 @@
 const element = (id) => document.getElementById(id);
 const status = element('status');
 let state;
-let busy = Promise.resolve();
+let strings = {};
+let tab = 'general';
+let queue = Promise.resolve();
+let statusTimer;
 
-function message(text, error = false) {
-  status.textContent = text;
-  status.classList.toggle('error', error);
+try {
+  tab = localStorage.getItem('luma-tab') || tab;
+} catch {
+  // Storage can be unavailable in private windows; the first tab is fine then.
 }
 
-function show(view) {
-  element('loading').hidden = view !== 'loading';
-  element('pair').hidden = view !== 'pair';
-  element('settings').hidden = view !== 'settings';
-  element('footer').hidden = view !== 'settings';
+function message(text, error = false, sticky = false) {
+  clearTimeout(statusTimer);
+  status.textContent = text;
+  status.classList.toggle('error', error);
+  if (text && !error && !sticky) statusTimer = setTimeout(() => (status.textContent = ''), 2200);
 }
 
 class PairingNeeded extends Error {}
@@ -33,14 +37,12 @@ async function call(route, body) {
     });
     const result = await response.json().catch(() => ({}));
     if (result.pair) throw new PairingNeeded(result.error);
-    if (!response.ok) throw new Error(result.error || 'Your TV could not complete this.');
+    if (!response.ok) throw new Error(result.error || strings.offline);
     return result;
   } catch (error) {
     if (error instanceof PairingNeeded) throw error;
-    if (error.name === 'AbortError') throw new Error('Your TV did not respond in time.');
-    if (error instanceof TypeError) {
-      throw new Error('Your TV is not reachable. Is it on, with web access turned on?');
-    }
+    if (error.name === 'AbortError') throw new Error(strings.timeout);
+    if (error instanceof TypeError) throw new Error(strings.offline);
     throw error;
   } finally {
     clearTimeout(timeout);
@@ -75,166 +77,263 @@ function deviceName() {
   return browser ? `${system} · ${browser}` : system;
 }
 
-function toggle(key) {
-  const label = document.createElement('label');
-  label.className = 'switch';
-  const input = document.createElement('input');
+/* ---------- Live preview ---------- */
+
+const screen = document.querySelector('.screen');
+const previewImage = element('preview');
+let previewUrl;
+let previewBusy = false;
+let previewAgain = false;
+let previewTimer;
+
+async function refreshPreview() {
+  if (previewBusy) {
+    previewAgain = true;
+    return;
+  }
+  previewBusy = true;
+  screen.classList.add('updating');
+  try {
+    const response = await fetch(`api/preview.jpg?t=${Date.now()}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error();
+    const url = URL.createObjectURL(await response.blob());
+    await new Promise((resolve) => {
+      previewImage.onload = resolve;
+      previewImage.onerror = resolve;
+      previewImage.src = url;
+    });
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = url;
+    previewImage.classList.add('ready');
+    element('preview-empty').hidden = true;
+  } catch {
+    if (!previewUrl) {
+      element('preview-empty').textContent = strings.previewUnavailable;
+      element('preview-empty').hidden = false;
+    }
+  } finally {
+    screen.classList.remove('updating');
+    previewBusy = false;
+    if (previewAgain) {
+      previewAgain = false;
+      refreshPreview();
+    }
+  }
+}
+
+function schedulePreview(delay = 250) {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(refreshPreview, delay);
+}
+
+// The clock on the TV moves; keep the picture current while the page is in view.
+setInterval(() => {
+  if (state && document.visibilityState === 'visible') refreshPreview();
+}, 30000);
+
+/* ---------- Controls ---------- */
+
+function create(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function title(text) {
+  return create('span', 'title', text);
+}
+
+function toggleRow(key, label) {
+  const row = create('label', 'row inline');
+  const holder = create('span', 'switch');
+  const input = create('input');
   input.type = 'checkbox';
   input.role = 'switch';
   input.checked = state.settings[key];
+  input.setAttribute('aria-label', label);
   input.addEventListener('change', () => change(key, input.checked));
-  label.append(input, document.createElement('span'));
-  return [label, input];
+  holder.append(input, create('span'));
+  row.append(title(label), holder);
+  return row;
 }
 
-function segments(key, title) {
-  const group = document.createElement('div');
-  group.className = 'segments';
+function segmentRow(key, label) {
+  const row = create('div', 'row stacked');
+  const group = create('div', 'segments');
   group.role = 'radiogroup';
-  group.setAttribute('aria-label', title);
+  group.setAttribute('aria-label', label);
   for (const choice of state.choices[key]) {
-    const label = document.createElement('label');
-    const input = document.createElement('input');
+    const option = create('label');
+    const input = create('input');
     input.type = 'radio';
     input.name = key;
     input.checked = choice.value === state.settings[key];
     input.addEventListener('change', () => change(key, choice.value));
-    const text = document.createElement('span');
-    text.textContent = choice.label;
-    label.append(input, text);
-    group.append(label);
+    option.append(input, create('span', '', choice.label));
+    group.append(option);
   }
-  return group;
+  row.append(title(label), group);
+  return row;
 }
 
-function select(key, title) {
-  const field = document.createElement('select');
-  field.setAttribute('aria-label', title);
+function pickerRow(key, label) {
+  const row = create('label', 'row picker');
+  const current = state.choices[key].find((choice) => choice.value === state.settings[key]);
+  const select = create('select');
+  select.setAttribute('aria-label', label);
   for (const choice of state.choices[key]) {
-    const option = document.createElement('option');
+    const option = create('option', '', choice.label);
     option.value = JSON.stringify(choice.value);
-    option.textContent = choice.label;
-    option.selected = choice.value === state.settings[key];
-    field.append(option);
+    option.selected = choice === current;
+    select.append(option);
   }
-  field.addEventListener('change', () => change(key, JSON.parse(field.value)));
-  return field;
+  select.addEventListener('change', () => change(key, JSON.parse(select.value)));
+  row.append(title(label), create('span', 'value', current?.label ?? ''), select);
+  return row;
 }
 
-function text(key, title) {
-  const field = document.createElement('input');
+function choiceRow(key, label) {
+  return state.choices[key].length > 3 ? pickerRow(key, label) : segmentRow(key, label);
+}
+
+function textRow(key, label) {
+  const row = create('label', 'row stacked');
+  const field = create('input', 'text-field');
   field.type = 'text';
   field.maxLength = 40;
   field.autocomplete = 'off';
+  field.enterKeyHint = 'done';
   field.value = state.settings[key];
-  field.setAttribute('aria-label', title);
   field.addEventListener('change', () => change(key, field.value.trim()));
-  return field;
+  field.addEventListener('keydown', (event) => event.key === 'Enter' && field.blur());
+  row.append(title(label), field);
+  return row;
 }
 
-function row(title, control, inline = false) {
-  const item = document.createElement('div');
-  item.className = inline ? 'row inline' : 'row';
-  const name = document.createElement('span');
-  name.textContent = title;
-  if (inline) {
-    const [label, input] = control;
-    input.setAttribute('aria-label', title);
-    item.append(name, label);
-  } else {
-    item.append(name, control);
+function wallpapers() {
+  const grid = create('div', 'wallpapers');
+  for (const background of state.backgrounds) {
+    const button = create('button', 'wallpaper');
+    button.type = 'button';
+    button.setAttribute('aria-pressed', String(background.id === state.settings.background));
+    const image = create('img');
+    image.loading = 'lazy';
+    image.alt = '';
+    image.src = `api/thumbnail/${encodeURIComponent(background.id)}`;
+    button.append(image, create('span', '', background.name || strings.custom));
+    button.addEventListener('click', () => change('background', background.id));
+    grid.append(button);
   }
-  return item;
+  return grid;
+}
+
+function group(heading, ...rows) {
+  const section = create('section', 'group');
+  if (heading) section.append(create('h2', '', heading));
+  const list = create('div', 'rows');
+  list.append(...rows);
+  section.append(list);
+  return section;
+}
+
+function sections() {
+  const l = state.labels;
+  return {
+    general: [
+      group(l.clock, choiceRow('hour_24', l.clockFormat), choiceRow('show_seconds', l.timeFormat)),
+      group(
+        null,
+        choiceRow('language', l.language),
+        choiceRow('app_sorting', l.appSorting),
+        toggleRow('reduced_motion', l.reducedMotion),
+        toggleRow('ui_sounds', l.uiSounds),
+      ),
+    ],
+    background: [
+      group(null, wallpapers()),
+      group(
+        null,
+        toggleRow('wallpaper_gradient', l.wallpaperGradient),
+        toggleRow('wallpaper_cycle', l.wallpaperCycle),
+      ),
+    ],
+    widgets: [
+      group(
+        l.greeting,
+        toggleRow('show_greeting', l.showWidget),
+        textRow('greeting_name', l.greetingName),
+      ),
+      group(l.date, toggleRow('show_date', l.showWidget), choiceRow('date_format', l.dateFormat)),
+      group(
+        l.weather,
+        toggleRow('show_weather', l.showWidget),
+        choiceRow('temperature_unit', l.temperature),
+        choiceRow('weather_style', l.weatherStyle),
+      ),
+    ],
+    system: [group(null, choiceRow('text_rendering', l.textRendering))],
+  };
 }
 
 function render() {
   const l = state.labels;
-  const choice = (key, title) =>
-    state.choices[key].length > 3 ? select(key, title) : segments(key, title);
-  const groups = [
-    [
-      l.clock,
-      [
-        row(l.clockFormat, choice('hour_24', l.clockFormat)),
-        row(l.timeFormat, choice('show_seconds', l.timeFormat)),
-      ],
-    ],
-    [
-      l.greeting,
-      [
-        row(l.showWidget, toggle('show_greeting'), true),
-        row(l.greetingName, text('greeting_name', l.greetingName)),
-      ],
-    ],
-    [
-      l.date,
-      [
-        row(l.showWidget, toggle('show_date'), true),
-        row(l.dateFormat, choice('date_format', l.dateFormat)),
-      ],
-    ],
-    [
-      l.weather,
-      [
-        row(l.showWidget, toggle('show_weather'), true),
-        row(l.temperature, choice('temperature_unit', l.temperature)),
-        row(l.weatherStyle, choice('weather_style', l.weatherStyle)),
-      ],
-    ],
-    [
-      l.background,
-      [
-        row(l.wallpaperCycle, toggle('wallpaper_cycle'), true),
-        row(l.wallpaperGradient, toggle('wallpaper_gradient'), true),
-      ],
-    ],
-    [
-      'Luma',
-      [
-        row(l.language, choice('language', l.language)),
-        row(l.appSorting, choice('app_sorting', l.appSorting)),
-        row(l.reducedMotion, toggle('reduced_motion'), true),
-        row(l.uiSounds, toggle('ui_sounds'), true),
-      ],
-    ],
-  ];
-  element('groups').replaceChildren(
-    ...groups.map(([title, rows]) => {
-      const group = document.createElement('section');
-      group.className = 'group';
-      const heading = document.createElement('h2');
-      heading.textContent = title;
-      const list = document.createElement('div');
-      list.className = 'rows';
-      list.append(...rows);
-      group.append(heading, list);
-      return group;
+  const all = sections();
+  if (!all[tab]) tab = 'general';
+  const tabs = element('tabs');
+  tabs.replaceChildren(
+    ...Object.keys(all).map((key) => {
+      const button = create('button', '', l[key]);
+      button.type = 'button';
+      button.role = 'tab';
+      button.setAttribute('aria-selected', String(key === tab));
+      button.addEventListener('click', () => {
+        tab = key;
+        try {
+          localStorage.setItem('luma-tab', key);
+        } catch {
+          // Remembering the tab is only a convenience.
+        }
+        render();
+      });
+      return button;
     }),
   );
-  element('device').textContent = `Paired as ${state.device}`;
-  show('settings');
+  element('sections').replaceChildren(...all[tab]);
+  element('device').textContent = strings.pairedAs.replace('{device}', state.device);
+  element('forget').textContent = strings.unpair;
+  element('preview-label').textContent = strings.preview;
+  element('backdrop').style.backgroundImage =
+    `url("api/thumbnail/${encodeURIComponent(state.settings.background)}")`;
+  document.documentElement.lang = strings.lang || 'en';
+}
+
+function show(view) {
+  element('pair').hidden = view !== 'pair';
+  element('app').hidden = view !== 'app';
 }
 
 function apply(result) {
-  const focused = document.activeElement;
-  // Rebuilding while someone types would drop their cursor; the reply only matters after.
-  if (focused?.type === 'text' && focused.closest('#groups')) {
-    state = result;
-    return;
-  }
   state = result;
+  strings = result.strings;
+  const focused = document.activeElement;
+  // Rebuilding while someone types would drop their cursor.
+  if (focused?.classList.contains('text-field')) return;
   render();
+  show('app');
 }
 
 function change(key, value) {
   const next = { ...state.settings, [key]: value };
   state.settings = next;
+  if (key === 'background') render();
   // Changes go out one at a time, in order, so the TV ends on the last one.
-  busy = busy.then(async () => {
-    message('Saving…');
+  queue = queue.then(async () => {
+    message(strings.saving, false, true);
     try {
       apply(await call('api/settings', next));
-      message('Saved on your TV.');
+      message(key === 'text_rendering' ? strings.restart : strings.saved);
+      schedulePreview();
     } catch (error) {
       if (error instanceof PairingNeeded) return startPairing(error.message);
       message(error.message, true);
@@ -243,15 +342,20 @@ function change(key, value) {
   });
 }
 
+/* ---------- Pairing ---------- */
+
 function startPairing(note = '') {
+  element('pair-title').textContent = strings.pairTitle;
+  element('pair-intro').textContent = strings.pairIntro;
+  element('pair-button').textContent = strings.pair;
   show('pair');
-  message(note, Boolean(note));
+  if (note) message(note, true);
   element('pin').focus();
 }
 
 async function pair(pin) {
   element('pair-button').disabled = true;
-  message('Pairing…');
+  message(strings.pairing, false, true);
   try {
     await call('api/pair', { pin, name: deviceName() });
     message('');
@@ -266,18 +370,17 @@ async function pair(pin) {
 async function load() {
   try {
     apply(await call('api/settings'));
-    if (status.textContent === 'Connecting to your TV…') message('');
+    refreshPreview();
   } catch (error) {
     if (error instanceof PairingNeeded) {
       startPairing();
       return;
     }
-    show('loading');
     message(error.message, true);
   }
 }
 
-element('pair').addEventListener('submit', (event) => {
+element('pair-form').addEventListener('submit', (event) => {
   event.preventDefault();
   pair(element('pin').value);
 });
@@ -286,7 +389,8 @@ element('forget').addEventListener('click', async () => {
   try {
     await call('api/forget', {});
     state = undefined;
-    startPairing('This device is no longer paired.');
+    startPairing();
+    message(strings.unpaired);
   } catch (error) {
     message(error.message, true);
   }
@@ -297,15 +401,25 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && state) load();
 });
 
-const pin = new URLSearchParams(location.hash.slice(1)).get('pin');
-// Keep the PIN out of bookmarks and history: the saved address is the plain page.
-if (location.hash) history.replaceState(null, '', location.pathname);
-if (pin) {
+async function start() {
+  try {
+    strings = await call('api/strings');
+  } catch (error) {
+    message(error.message, true);
+  }
+  const pin = new URLSearchParams(location.hash.slice(1)).get('pin');
+  // Keep the PIN out of bookmarks and history: the saved address is the plain page.
+  if (location.hash) history.replaceState(null, '', location.pathname);
+  if (!pin) return load();
   element('pin').value = pin;
   // An already paired device just opens its settings.
-  call('api/settings')
-    .then(apply)
-    .catch((error) => (error instanceof PairingNeeded ? pair(pin) : message(error.message, true)));
-} else {
-  load();
+  try {
+    apply(await call('api/settings'));
+    refreshPreview();
+  } catch (error) {
+    if (error instanceof PairingNeeded) pair(pin);
+    else message(error.message, true);
+  }
 }
+
+start();

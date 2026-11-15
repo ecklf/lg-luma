@@ -2212,10 +2212,37 @@ impl State {
 
     /// Applies the tile list edited on a phone or computer. New tiles join
     /// the end of the Home favorites and removed ones leave favorites and hidden apps.
+    /// Shows `id` as the background, fading from the previous one like a choice in Settings.
+    fn use_background(&mut self, id: String) {
+        if !self.preferences.reduced_motion && self.preferences.background != id {
+            self.previous_background = Some((self.preferences.background.clone(), Instant::now()));
+            self.background_fade = BACKGROUND_FADE;
+        }
+        self.preferences.splash_background = Some(if crate::wallpapers::valid_id(&id) {
+            self.preferences.splash_background().to_owned()
+        } else {
+            id.clone()
+        });
+        self.preferences.background = id;
+        self.preferences.wallpaper_changed = unix_now();
+    }
+
     /// A change made on a paired phone or computer, with the same side effects as on the TV.
     pub fn apply_web_settings(&mut self, settings: crate::web_settings::Settings) -> Vec<Effect> {
         if crate::web_settings::Settings::of(&self.preferences) == settings {
             return vec![];
+        }
+        if settings.background != self.preferences.background
+            && self.deleting_wallpaper.as_deref() != Some(settings.background.as_str())
+            && self
+                .background_ids()
+                .any(|known| known == settings.background)
+        {
+            self.use_background(settings.background.clone());
+        }
+        if settings.text_rendering != self.preferences.text_rendering {
+            self.preferences.text_rendering = settings.text_rendering;
+            self.notify(self.preferences.language.t("textRenderingRestart"));
         }
         if self.preferences.show_weather != settings.show_weather {
             self.weather.invalidate_forecast();
@@ -2788,18 +2815,7 @@ impl State {
                 if !self.background_ids().any(|known| known == id) {
                     return self.back();
                 }
-                if !self.preferences.reduced_motion && self.preferences.background != id {
-                    self.previous_background =
-                        Some((self.preferences.background.clone(), Instant::now()));
-                    self.background_fade = BACKGROUND_FADE;
-                }
-                self.preferences.splash_background = Some(if crate::wallpapers::valid_id(&id) {
-                    self.preferences.splash_background().to_owned()
-                } else {
-                    id.clone()
-                });
-                self.preferences.background = id;
-                self.preferences.wallpaper_changed = unix_now();
+                self.use_background(id);
                 self.back();
                 return vec![Effect::Save];
             }

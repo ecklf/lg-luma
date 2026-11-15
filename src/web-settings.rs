@@ -2,8 +2,10 @@
 //! Labels come from the TV's own message catalog, so the page reads like Settings on the TV.
 use crate::i18n::Language;
 use crate::model::{AppSorting, DateFormat, Preferences, WeatherStyle, clean_input_name};
+use crate::text_rendering::TextRendering;
 use crate::weather::Unit;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 /// The preferences a companion page may change. Lists the launcher keeps itself (favorites,
 /// hidden apps, launch counts, tiles, wallpapers) stay out, so a page can never replace them.
@@ -23,8 +25,11 @@ pub struct Settings {
     pub show_weather: bool,
     pub temperature_unit: Unit,
     pub weather_style: WeatherStyle,
+    /// One of the backgrounds in the catalog; the launcher ignores any other id.
+    pub background: String,
     pub wallpaper_cycle: bool,
     pub wallpaper_gradient: bool,
+    pub text_rendering: TextRendering,
 }
 
 impl Settings {
@@ -43,8 +48,10 @@ impl Settings {
             show_weather: preferences.show_weather,
             temperature_unit: preferences.temperature_unit,
             weather_style: preferences.weather_style,
+            background: preferences.background.clone(),
             wallpaper_cycle: preferences.wallpaper_cycle,
             wallpaper_gradient: preferences.wallpaper_gradient,
+            text_rendering: preferences.text_rendering,
         }
     }
 
@@ -55,18 +62,57 @@ impl Settings {
     }
 }
 
+/// A background the page can show and choose, with the TV's own thumbnail.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Background {
+    pub id: String,
+    /// Empty for the owner's own photos.
+    pub name: String,
+    #[serde(skip)]
+    pub thumbnail: PathBuf,
+}
+
 fn choice<T: Serialize>(value: T, label: &str) -> serde_json::Value {
     serde_json::json!({ "value": value, "label": label })
 }
 
+/// Page text that is not a setting, in the TV's language. Needed before pairing too.
+pub fn strings(language: Language) -> serde_json::Value {
+    let t = |key| language.t(key);
+    serde_json::json!({
+        "lang": serde_json::to_value(language).unwrap_or_default(),
+        "preview": t("webPreview"),
+        "previewUnavailable": t("webPreviewUnavailable"),
+        "saving": t("webSaving"),
+        "saved": t("webSaved"),
+        "offline": t("webOffline"),
+        "timeout": t("webTimeout"),
+        "pairTitle": t("webPairTitle"),
+        "pairIntro": t("webPairIntro"),
+        "pair": t("webPair"),
+        "pairing": t("webPairing"),
+        "pairedAs": t("webPairedAs"),
+        "unpair": t("webUnpair"),
+        "unpaired": t("webUnpaired"),
+        "restart": t("textRenderingRestart"),
+        "custom": t("webCustomPhoto"),
+    })
+}
+
 /// The page's whole view of the TV: current values plus every label in the TV's language, so the
 /// page reads like the Settings the owner already knows.
-pub fn listing(settings: &Settings) -> serde_json::Value {
+pub fn listing(settings: &Settings, backgrounds: &[Background]) -> serde_json::Value {
     let language = settings.language;
     let t = |key| language.t(key);
     serde_json::json!({
         "settings": settings,
+        "strings": strings(language),
+        "backgrounds": backgrounds,
         "labels": {
+            "general": t("interface"),
+            "background": t("background"),
+            "widgets": t("widgets"),
+            "system": t("system"),
             "clock": t("clock"),
             "clockFormat": t("clockFormat"),
             "timeFormat": t("timeFormat"),
@@ -82,9 +128,9 @@ pub fn listing(settings: &Settings) -> serde_json::Value {
             "weather": t("weather"),
             "temperature": t("temperature"),
             "weatherStyle": t("weatherStyle"),
-            "background": t("background"),
             "wallpaperCycle": t("wallpaperCycle"),
             "wallpaperGradient": t("wallpaperGradient"),
+            "textRendering": t("textRendering"),
         },
         "choices": {
             "hour_24": [choice(false, t("hour12")), choice(true, t("hour24"))],
@@ -106,6 +152,10 @@ pub fn listing(settings: &Settings) -> serde_json::Value {
                 choice(Unit::Fahrenheit, t("fahrenheit")),
             ],
             "weather_style": WeatherStyle::ALL
+                .iter()
+                .map(|item| choice(item, t(item.label_key())))
+                .collect::<Vec<_>>(),
+            "text_rendering": TextRendering::ALL
                 .iter()
                 .map(|item| choice(item, t(item.label_key())))
                 .collect::<Vec<_>>(),

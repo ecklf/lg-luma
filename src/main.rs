@@ -451,6 +451,56 @@ fn compose(state: &mut State, assets: &view::Assets, now: OffsetDateTime) -> vie
     }
 }
 
+/// Every background Settings offers, with the thumbnail the companion page shows for it.
+fn web_backgrounds(state: &State, assets: &view::Assets) -> Vec<web_settings::Background> {
+    (0..state.background_count())
+        .filter_map(|index| state.background_id(index))
+        .map(|id| {
+            let custom = state.wallpapers.iter().find(|item| item.id == id);
+            web_settings::Background {
+                id: id.to_owned(),
+                name: model::BACKGROUNDS
+                    .iter()
+                    .find(|(known, _)| *known == id)
+                    .map_or_else(String::new, |(_, name)| (*name).to_owned()),
+                thumbnail: custom.map_or_else(
+                    || assets.root.join(format!("thumbnails/{id}.jpg")),
+                    |item| item.thumbnail().into(),
+                ),
+            }
+        })
+        .collect()
+}
+
+/// Luma's Home as it looks right now, whatever page the TV shows, without touching the screen.
+fn home_preview(
+    state: &mut State,
+    assets: &view::Assets,
+    renderer: &mut renderer::Renderer,
+    now: OffsetDateTime,
+) -> Result<Vec<u8>, String> {
+    let page = std::mem::replace(&mut state.page, state::Page::Home);
+    let focus = std::mem::replace(&mut state.focus, state::Target::Nav(0));
+    let overlay = state.overlay.take();
+    let subpage = state.subpage.take();
+    let notice = state.notice.take();
+    let panel = state.panel_started.take();
+    let previous = state.previous_background.take();
+    let hover = state.hover.take();
+    let scroll = std::mem::take(&mut state.scroll);
+    let scene = view::scene(state, assets, now);
+    state.page = page;
+    state.focus = focus;
+    state.overlay = overlay;
+    state.subpage = subpage;
+    state.notice = notice;
+    state.panel_started = panel;
+    state.previous_background = previous;
+    state.hover = hover;
+    state.scroll = scroll;
+    renderer.capture_jpeg(&scene.draw, Size::new(1280, 720), 82)
+}
+
 fn wallpaper_upload_active(state: &State, webos: bool, focused: bool, visible: bool) -> bool {
     // Desktop users need to switch to a browser without invalidating the upload URL.
     visible && (!webos || focused) && matches!(state.overlay, Some(Overlay::WallpaperUpload))
@@ -1064,6 +1114,7 @@ fn run() -> Result<(), String> {
             state.preferences.web_access,
             focused && visible && matches!(state.overlay, Some(Overlay::WebAccessPair)),
             &web_settings::Settings::of(&state.preferences),
+            &web_backgrounds(&state, &assets),
         );
         while let Ok(event) = web_access_service.receiver.try_recv() {
             match event {
@@ -1106,6 +1157,9 @@ fn run() -> Result<(), String> {
                 web_access::Event::Devices(devices) => {
                     state.web_devices = devices;
                     state.dirty = true;
+                }
+                web_access::Event::Preview(reply) => {
+                    let _ = reply.send(home_preview(&mut state, &assets, &mut renderer, now));
                 }
                 web_access::Event::Pairing(..) => {}
             }
