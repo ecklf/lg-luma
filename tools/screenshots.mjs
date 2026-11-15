@@ -56,7 +56,10 @@ const captures = widgetPreviews
         ['weather-style-standard', 'home'],
         ['weather-style-no-icon', 'home'],
         ['weather-style-compact', 'home'],
-        ['weather-style-picker', `${widgetsPage},down,down,enter,enter,down,down,enter`],
+        [
+          'weather-style-picker',
+          `${widgetsPage},down,right,right,right,enter,enter,down,down,enter`,
+        ],
       ]
     : sortingPreviews
       ? [
@@ -91,7 +94,7 @@ try {
               greeting_position:
                 name === 'home-layout-moved' ? { column: 2, row: 3 } : { column: 0, row: 0 },
               weather_position:
-                name === 'home-layout-moved' ? { column: 3, row: 0 } : { column: 0, row: 1 },
+                name === 'home-layout-moved' ? { column: 0, row: 1 } : { column: 3, row: 0 },
             }
           : weatherPreviews
             ? {

@@ -144,7 +144,7 @@ and the generic disc input icon from the native desktop renderer using seeded lo
 Home uses a 4×4 placement grid in logical 1920×1080 space above the unchanged dock.
 Greeting combines weekday/date and greeting in 2 columns × 1 row; Weather spans 1 column × 2 rows.
 Their anchors persist as `greeting_position` and `weather_position` (`column`, `row`, zero-based).
-Defaults are Greeting (0,0), Weather (0,1). The separate-Date draft's untouched defaults migrate
+Defaults are Greeting (0,0), Weather (3,0). The separate-Date draft's untouched defaults migrate
 to this arrangement only when a legacy `date_position` field is present; it is omitted on save.
 Custom Greeting/Weather anchors are preserved, including new layouts matching that old arrangement.
 Sanitization repairs out-of-bounds anchors and overlaps deterministically.

@@ -285,11 +285,11 @@ impl HomeWidget {
 
     pub fn default_position(self) -> WidgetPosition {
         WidgetPosition {
-            column: 0,
-            row: match self {
+            column: match self {
                 Self::Greeting => 0,
-                Self::Weather => 1,
+                Self::Weather => 3,
             },
+            row: 0,
         }
     }
 }

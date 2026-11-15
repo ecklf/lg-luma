@@ -649,7 +649,7 @@ try {
   const resetWidgets = await scenario('widget-reset-defaults', `${widgetsPage},left,enter`);
   assert.equal(resetWidgets.focus, 'WidgetReset');
   assert.deepEqual(resetWidgets.preferences.greeting_position, { column: 0, row: 0 });
-  assert.deepEqual(resetWidgets.preferences.weather_position, { column: 0, row: 1 });
+  assert.deepEqual(resetWidgets.preferences.weather_position, { column: 3, row: 0 });
   assert.equal(resetWidgets.preferences.show_greeting, true);
   assert.equal(resetWidgets.preferences.show_weather, true);
   console.log(
