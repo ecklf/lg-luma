@@ -327,6 +327,7 @@ fn home_methods_reject_unknown_firmware_or_lifecycle() {
     assert!(home::method("release 10.1.0", &stock(home::FULL_HOME), home::FULL_HOME).is_err());
     assert!(home::Home::new(&Fixture::new(), "../other").is_err());
 }
+
 #[test]
 fn only_luma_mounts_are_owned_even_after_package_replacement() {
     for root in [
@@ -685,6 +686,23 @@ fn invalid_ids_and_unrelated_manifests_cannot_select_private_artwork() {
     );
     f.put("/usr/palm/applications/sample/private.png", b"private");
     assert_eq!(files::read_icons(&f, &s).unwrap()["icons"], json!([]));
+}
+
+#[test]
+fn channel_logo_files_under_lg_store_are_readable() {
+    let f = Fixture::new();
+    let dir = "/mnt/lg/cmn_data/channel_logo/major_logo_img";
+    f.put(&format!("{dir}/la1.png"), b"logo");
+    let source = files::IconSource {
+        id: "1_31_1_0_1008_494_8916".into(),
+        directory: Some(dir.into()),
+        large_icon: None,
+        icon: Some("la1.png".into()),
+    };
+    assert_eq!(
+        files::read_icons(&f, &source).unwrap()["icons"],
+        json!(["6c6f676f"])
+    );
 }
 
 #[test]
