@@ -130,7 +130,7 @@ fn widget_reset_only_restores_membership_and_positions_and_saves_once() {
     state.preferences.date_format = crate::model::DateFormat::YearMonthDay;
     state.preferences.weather_style = crate::model::WeatherStyle::Compact;
     state.preferences.temperature_unit = crate::weather::Unit::Fahrenheit;
-    state.preferences.greeting_position = WidgetPosition { column: 2, row: 3 };
+    state.preferences.greeting_position = WidgetPosition { column: 1, row: 3 };
     state.preferences.show_weather = false;
     let mut expected = state.preferences.clone();
     expected.greeting_position = HomeWidget::Greeting.default_position();
@@ -183,6 +183,7 @@ fn widget_manager_grid_opens_context_menu_from_every_occupied_cell() {
     for (cell, widget) in [
         (0, HomeWidget::Greeting),
         (1, HomeWidget::Greeting),
+        (2, HomeWidget::Greeting),
         (3, HomeWidget::Weather),
         (7, HomeWidget::Weather),
     ] {
@@ -318,8 +319,8 @@ fn widget_position_browsing_cancels_and_valid_selection_saves() {
     state.focus = Target::MoveWidget(HomeWidget::Weather);
     state.activate();
     assert_eq!(state.focus, Target::Choice(3));
-    state.direction(Direction::Left, &scene(&state).controls);
-    assert_eq!(state.focus, Target::Choice(2));
+    state.direction(Direction::Down, &scene(&state).controls);
+    assert_eq!(state.focus, Target::Choice(7));
     assert_eq!(
         state.preferences.weather_position,
         WidgetPosition { column: 3, row: 0 }
@@ -328,11 +329,11 @@ fn widget_position_browsing_cancels_and_valid_selection_saves() {
     assert_eq!(state.focus, Target::WidgetCell(3));
     state.focus = Target::MoveWidget(HomeWidget::Weather);
     state.activate();
-    state.direction(Direction::Left, &scene(&state).controls);
+    state.direction(Direction::Down, &scene(&state).controls);
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert_eq!(
         state.preferences.weather_position,
-        WidgetPosition { column: 2, row: 0 }
+        WidgetPosition { column: 3, row: 1 }
     );
     let loaded: Preferences =
         serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
@@ -347,7 +348,7 @@ fn widget_position_picker_blocks_overlaps_and_out_of_bounds_for_remote_and_point
     state.section = crate::state::WIDGETS_SECTION;
     state.focus = Target::MoveWidget(HomeWidget::Greeting);
     state.activate();
-    for cell in [2, 3, 6, 7, 11, 15] {
+    for cell in [1, 2, 3, 5, 6, 7, 11, 15] {
         state.focus = Target::Choice(cell);
         assert!(state.activate().is_empty());
         assert_eq!(
@@ -368,9 +369,9 @@ fn widget_position_picker_blocks_overlaps_and_out_of_bounds_for_remote_and_point
             Some(Target::Choice(cell))
         );
     }
-    state.focus = Target::Choice(1);
+    state.focus = Target::Choice(4);
     assert_eq!(state.activate(), vec![Effect::Save]);
-    assert_eq!(state.preferences.greeting_position.column, 1);
+    assert_eq!(state.preferences.greeting_position.row, 1);
 }
 
 #[test]
@@ -401,10 +402,13 @@ fn four_by_four_widget_navigation_reaches_last_row_and_column_without_wrapping()
     );
     state.direction(Direction::Left, &scene(&state).controls);
     assert_eq!(state.focus, Target::Choice(14));
+    assert!(state.activate().is_empty(), "Greeting spans three columns");
+    state.direction(Direction::Left, &scene(&state).controls);
+    assert_eq!(state.focus, Target::Choice(13));
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert_eq!(
         state.preferences.greeting_position,
-        WidgetPosition { column: 2, row: 3 }
+        WidgetPosition { column: 1, row: 3 }
     );
     state.focus = Target::MoveWidget(HomeWidget::Weather);
     state.activate();
@@ -421,7 +425,7 @@ fn four_by_four_widget_navigation_reaches_last_row_and_column_without_wrapping()
 fn widget_positions_default_to_requested_spans_and_sanitize_safely() {
     use crate::model::{HomeWidget, WidgetPosition};
     let mut preferences: Preferences = serde_json::from_str("{}").unwrap();
-    assert_eq!(HomeWidget::Greeting.span(), (2, 1));
+    assert_eq!(HomeWidget::Greeting.span(), (3, 1));
     assert_eq!(HomeWidget::Weather.span(), (1, 2));
     assert_eq!(
         preferences.greeting_position,
@@ -466,13 +470,13 @@ fn combined_greeting_upgrades_separate_date_defaults_and_preserves_custom_positi
         assert_eq!(old.widget_position(widget), widget.default_position());
     }
     let mut custom: Preferences = serde_json::from_str(
-        r#"{"greeting_position":{"column":2,"row":3},"weather_position":{"column":3,"row":0}}"#,
+        r#"{"greeting_position":{"column":1,"row":3},"weather_position":{"column":3,"row":0}}"#,
     )
     .unwrap();
     custom.sanitize();
     assert_eq!(
         custom.greeting_position,
-        WidgetPosition { column: 2, row: 3 }
+        WidgetPosition { column: 1, row: 3 }
     );
     assert_eq!(
         custom.weather_position,

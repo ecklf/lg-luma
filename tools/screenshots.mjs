@@ -92,7 +92,7 @@ try {
               reduced_motion: true,
               show_greeting: name !== 'home-widget-add',
               greeting_position:
-                name === 'home-layout-moved' ? { column: 2, row: 3 } : { column: 0, row: 0 },
+                name === 'home-layout-moved' ? { column: 1, row: 3 } : { column: 0, row: 0 },
               weather_position:
                 name === 'home-layout-moved' ? { column: 0, row: 1 } : { column: 3, row: 0 },
             }

@@ -629,10 +629,10 @@ try {
   assert.ok(!greetingConfig.ui_text.includes('Show widget'));
   const positioned = await scenario(
     'widget-position-setting',
-    `${widgetsPage},down,enter,down,enter,right,enter`,
+    `${widgetsPage},down,enter,down,enter,down,enter`,
   );
-  assert.deepEqual(positioned.preferences.greeting_position, { column: 1, row: 0 });
-  assert.deepEqual(positioned.focus, { WidgetCell: 1 });
+  assert.deepEqual(positioned.preferences.greeting_position, { column: 0, row: 1 });
+  assert.deepEqual(positioned.focus, { WidgetCell: 4 });
   await fs.writeFile(preferences, '{}');
   const removedWidget = await scenario(
     'widget-remove',
@@ -643,9 +643,9 @@ try {
   const addFlow = `${widgetsPage},enter,enter`;
   const cancelledAdd = await scenario('widget-add-cancel', `${addFlow},back`);
   assert.equal(cancelledAdd.preferences.show_greeting, false);
-  const added = await scenario('widget-add-save', `${addFlow},right,enter`);
+  const added = await scenario('widget-add-save', `${addFlow},down,enter`);
   assert.equal(added.preferences.show_greeting, true);
-  assert.deepEqual(added.preferences.greeting_position, { column: 1, row: 0 });
+  assert.deepEqual(added.preferences.greeting_position, { column: 0, row: 1 });
   const resetWidgets = await scenario('widget-reset-defaults', `${widgetsPage},left,enter`);
   assert.equal(resetWidgets.focus, 'WidgetReset');
   assert.deepEqual(resetWidgets.preferences.greeting_position, { column: 0, row: 0 });
