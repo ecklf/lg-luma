@@ -95,6 +95,39 @@ fn home_styles_share_content_and_keep_the_dock_fixed() {
 }
 
 #[test]
+fn weather_grid_keeps_original_temperature_typography_and_spacing() {
+    let mut state = configured();
+    for weather_style in WeatherStyle::ALL {
+        state.preferences.weather_style = weather_style;
+        let rendered = scene(&state);
+        let (temperature, font) = rendered
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text(label, rect, font, ..) if label == "14°C" => Some((rect, font)),
+                _ => None,
+            })
+            .unwrap();
+        let condition = rendered
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text(label, rect, ..) if label.starts_with("Partly cloudy") => Some(rect),
+                _ => None,
+            })
+            .unwrap();
+        let expected_size = if weather_style == WeatherStyle::Compact {
+            88.
+        } else {
+            112.
+        };
+        assert_eq!(font.size, expected_size);
+        assert_eq!(font.weight, 500);
+        assert!(condition.y - (temperature.y + font.size * font.line_height) <= 12.);
+    }
+}
+
+#[test]
 fn style_picker_previews_every_design_offline_and_only_saves_on_selection() {
     let mut state = ready();
     state.open(2);

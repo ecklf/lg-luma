@@ -1220,10 +1220,12 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
             let mut summary = weather_summary_layout(state, assets);
             // Reflow rather than shrinking the entire widget: text remains legible
             // even when a translated condition or location name is unusually long.
+            // Keep the original temperature size unless width fitting requires
+            // shrinking it; the row offsets are based on that original size.
             summary.width = cell.w;
             let origin_x = summary.icon_rect.x;
             summary.icon_rect.x = cell.x;
-            for (_, style, _, rect) in &mut summary.parts {
+            for (_, _, _, rect) in &mut summary.parts {
                 let inset = if rect.x > origin_x {
                     (rect.x - origin_x).min(168.)
                 } else {
@@ -1231,9 +1233,6 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
                 };
                 rect.x = cell.x + inset;
                 rect.w = cell.w - inset;
-                if style.size > 64. {
-                    style.size = 64.;
-                }
             }
             for (label, style, _, rect) in &mut summary.parts {
                 if state.preferences.weather_location.is_none()
