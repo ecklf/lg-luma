@@ -1120,18 +1120,19 @@ impl State {
     }
 
     fn background_ids(&self) -> impl Iterator<Item = &str> {
+        // Built-in packs always stay listed (download badge / prune handle cache).
+        // deleted_backgrounds only hides custom uploads from the gallery.
         BACKGROUNDS
             .iter()
             .map(|(id, _)| *id)
-            .filter(|id| {
-                *id == self.preferences.background
+            .chain(self.wallpapers.iter().map(|item| item.id.as_str()).filter(|id| {
+                *id == self.preferences.background.as_str()
                     || !self
                         .preferences
                         .deleted_backgrounds
                         .iter()
                         .any(|deleted| deleted == id)
-            })
-            .chain(self.wallpapers.iter().map(|item| item.id.as_str()))
+            }))
     }
 
     /// Bundled vectors and undownloaded photo packs stay in the gallery; only

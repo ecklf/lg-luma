@@ -78,7 +78,10 @@ fn cycling_button_toggles_on_off_without_opening_a_page_or_moving_controls() {
         state.preferences.language = language;
         let before = controls(&state);
         assert!(scene(&state).draw.iter().any(|draw| matches!(draw, Draw::TintedImage(path, ..) if path.ends_with("ui-icons/refresh-off.lvec"))));
-        assert_eq!(state.activate(), vec![Effect::Save]);
+        assert_eq!(
+            state.activate(),
+            vec![Effect::Save, Effect::PruneWallpaperPacks]
+        );
         assert!(state.preferences.wallpaper_cycle);
         assert!(state.preferences.wallpaper_changed > 0);
         assert!(state.subpage.is_none());
@@ -148,14 +151,17 @@ fn gradient_toggle_is_saved_stable_and_switches_bundled_and_uploaded_images() {
     for language in crate::i18n::Language::ALL {
         state.preferences.language = language;
         let before = controls(&state);
-        assert_eq!(state.activate(), vec![Effect::Save]);
+        assert_eq!(
+            state.activate(),
+            vec![Effect::Save, Effect::PruneWallpaperPacks]
+        );
         assert!(!state.preferences.wallpaper_gradient);
         assert_eq!(state.focus, Target::WallpaperGradient);
         assert_eq!(state.scroll, 300.);
         assert!(state.overlay.is_none() && state.subpage.is_none());
         let rendered = scene(&state);
         assert!(
-            matches!(&rendered.draw[0], Draw::Image(path, ..) if path.ends_with("dunes-plain.jpg"))
+            matches!(&rendered.draw[0], Draw::Image(path, ..) if path.ends_with("slate-plain.jpg"))
         );
         for (old, new) in before.iter().zip(&rendered.controls) {
             assert_eq!(old.target, new.target);
@@ -167,9 +173,12 @@ fn gradient_toggle_is_saved_stable_and_switches_bundled_and_uploaded_images() {
         let saved = serde_json::to_string(&state.preferences).unwrap();
         let restored: crate::model::Preferences = serde_json::from_str(&saved).unwrap();
         assert!(!restored.wallpaper_gradient);
-        assert_eq!(state.activate(), vec![Effect::Save]);
+        assert_eq!(
+            state.activate(),
+            vec![Effect::Save, Effect::PruneWallpaperPacks]
+        );
         assert!(
-            matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("dunes.jpg"))
+            matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("slate.jpg"))
         );
     }
     state.direction(Direction::Down, &controls(&state));
@@ -242,7 +251,10 @@ fn automatic_changes_preserve_manual_splash_across_saves_and_restart_and_manual_
     restored.section = 1;
     restored.focus = Target::Background(0);
     restored.activate();
-    assert_eq!(restored.activate(), vec![Effect::Save]);
+    assert_eq!(
+        restored.activate(),
+        vec![Effect::Save, Effect::PruneWallpaperPacks]
+    );
     assert_eq!(restored.preferences.background, "slate");
     assert_eq!(restored.preferences.splash_background(), "slate");
     assert_eq!(restored.background_fade, crate::state::BACKGROUND_FADE);
@@ -576,7 +588,10 @@ fn upload_discovery_does_not_apply_and_custom_selection_uses_immutable_paths() {
     state.focus = Target::Background(BACKGROUNDS.len());
     assert!(state.activate().is_empty());
     assert_eq!(state.focus, Target::UseBackground);
-    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(
+        state.activate(),
+        vec![Effect::Save, Effect::PruneWallpaperPacks]
+    );
     assert_eq!(state.preferences.background, item.id);
     assert!(
         scene(&state)
@@ -827,14 +842,16 @@ fn filtered_bundled_entries_do_not_misidentify_custom_thumbnails_or_popup_parent
     let mut state = ready();
     state.open(2);
     state.section = 1;
+    // Legacy hide lists must not drop built-ins from the gallery.
     state.preferences.deleted_backgrounds = BACKGROUNDS
         .iter()
-        .filter(|(id, _)| *id != "dunes")
+        .filter(|(id, _)| *id != "slate")
         .map(|(id, _)| (*id).into())
         .collect();
     let lake = custom(1);
     state.set_wallpapers(vec![lake.clone()]);
-    state.focus = Target::Background(1);
+    let custom_index = BACKGROUNDS.len();
+    state.focus = Target::Background(custom_index);
     assert!(
         scene(&state)
             .draw
@@ -844,9 +861,12 @@ fn filtered_bundled_entries_do_not_misidentify_custom_thumbnails_or_popup_parent
     state.options();
     state.set_wallpapers(vec![custom(2), lake.clone()]);
     state.back();
-    assert_eq!(state.focus, Target::Background(2));
+    assert_eq!(state.focus, Target::Background(custom_index + 1));
     state.options();
-    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(
+        state.activate(),
+        vec![Effect::Save, Effect::PruneWallpaperPacks]
+    );
     assert_eq!(state.preferences.background, lake.id);
 }
 

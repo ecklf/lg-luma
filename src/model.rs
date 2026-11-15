@@ -655,9 +655,12 @@ impl Preferences {
         {
             self.background = crate::wallpaper_packs::DEFAULT_ID.into();
         }
-        // Built-in wallpapers are always shown; drop legacy hide lists.
-        self.deleted_backgrounds
-            .retain(|id| !BACKGROUNDS.iter().any(|(known, _)| *known == id));
+        // Built-in wallpapers are always shown; drop legacy hide lists and junk.
+        self.deleted_backgrounds.retain(|id| {
+            !BACKGROUNDS.iter().any(|(known, _)| *known == id)
+                && crate::wallpapers::valid_id(id)
+                && id != &self.background
+        });
         fn clean(ids: &mut Vec<String>) {
             let mut seen = HashSet::new();
             ids.retain(|id| valid_app_id(id) && seen.insert(id.clone()));
