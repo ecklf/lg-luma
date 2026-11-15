@@ -549,6 +549,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             false,
         );
     }
+    shelf_backdrop(&mut out, state, assets);
     let content_start = out.draw.len();
     if recents_replaces_page(state) {
         out.shape(
@@ -1216,6 +1217,112 @@ fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language:
     }
 }
 
+fn shelf_backdrop(out: &mut Scene, state: &State, assets: &Assets) {
+    let vis = state.shelf.visibility;
+    if vis <= 0.001 {
+        return;
+    }
+    let rect = Rect::new(0., 0., 1920., 1080.);
+    let crossfading = state.shelf.display_app.is_some() && state.shelf.revealed;
+    let fade = if crossfading {
+        state.shelf.crossfade.clamp(0., 1.)
+    } else {
+        1.
+    };
+    let outgoing = state.shelf_outgoing_show();
+    let incoming = state.shelf_current_show();
+    let out_alpha = if outgoing.is_some() {
+        vis * (1. - fade)
+    } else {
+        0.
+    };
+    let in_alpha = if incoming.is_some() { vis * fade } else { 0. };
+
+    if let Some(show) = outgoing
+        && out_alpha > 0.001
+    {
+        shelf_paint_show(out, state, show, rect, out_alpha, fade < 0.5);
+    }
+    if let Some(show) = incoming
+        && in_alpha > 0.001
+    {
+        shelf_paint_show(out, state, show, rect, in_alpha, fade >= 0.5);
+    } else if incoming.is_none()
+        && outgoing.is_none()
+        && let Some(app) = state.shelf_focus_app()
+    {
+        let (top, bottom) = State::shelf_fallback_colors(app);
+        out.draw
+            .push(Draw::RoundedGradient(rect, 0., c(top, vis), c(bottom, vis)));
+    }
+    let _ = assets;
+}
+
+fn shelf_paint_show(
+    out: &mut Scene,
+    state: &State,
+    show: &crate::tmdb::Show,
+    rect: Rect,
+    alpha: f32,
+    paint_copy: bool,
+) {
+    if let Some(path) = &show.backdrop_path {
+        out.draw.push(Draw::TintedImage(
+            path.clone(),
+            rect,
+            0.,
+            false,
+            [1., 1., 1., alpha],
+        ));
+    }
+    out.shape(rect, 0., c(0x080b12, 0.28 * alpha));
+    if !paint_copy {
+        return;
+    }
+    let language = state.preferences.language;
+    // Keep title + overview clear of the channels label (dock_y - 232) or the
+    // favorites glass top when the strip is hidden.
+    let strip_top = if !state.home_channels().is_empty() {
+        state.dock_y() - 232.
+    } else {
+        state.dock_y() - 24.
+    };
+    let title_h = 56.;
+    let overview_gap = 18.;
+    let overview_h = 68.;
+    let clearance = 40.;
+    let title_y = (strip_top - clearance - title_h - overview_gap - overview_h).max(132.);
+    let text_width = 980.;
+    out.text(
+        &show.name,
+        Rect::new(84., title_y, text_width, title_h),
+        text(40., 600, -0.03).leading(1.1),
+        c(0xffffff, 0.94 * alpha),
+        false,
+    );
+    if !show.overview.is_empty() {
+        out.text(
+            &show.overview,
+            Rect::new(
+                84.,
+                title_y + title_h + overview_gap,
+                text_width,
+                overview_h,
+            ),
+            text(20., 450, -0.01).leading(1.3),
+            c(0xffffff, 0.72 * alpha),
+            false,
+        );
+    }
+    out.text(
+        language.t("tmdbAttribution"),
+        Rect::new(84., 980., 900., 28.),
+        text(14., 400, 0.),
+        c(0xffffff, 0.40 * alpha),
+        false,
+    );
+}
+
 fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     home_widgets(out, state, assets, now);
     if state.drawer_visibility > 0. {
@@ -1334,7 +1441,12 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
             false,
         );
     }
-    out.fade(start, 1. - state.drawer_progress(), 1.);
+    // Widgets yield the left column while Top Shelf copy owns it.
+    out.fade(
+        start,
+        (1. - state.drawer_progress()) * (1. - state.shelf.visibility),
+        1.,
+    );
 }
 
 fn channels_strip(out: &mut Scene, state: &State, assets: &Assets) {
@@ -2297,6 +2409,14 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                         }),
                     ])
                 }
+                Some(Subpage::ShelfRegion | Subpage::ShelfLanguage) => Some(vec![
+                    language.t("topShelf"),
+                    language.t(if state.subpage == Some(Subpage::ShelfRegion) {
+                        "streamingRegion"
+                    } else {
+                        "suggestionLanguage"
+                    }),
+                ]),
                 Some(Subpage::InputIcons(id)) => Some(vec![
                     state
                         .inventory
@@ -2328,6 +2448,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Weather) => language.t("weather"),
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
                 Some(Subpage::Channels) => language.t("channels"),
+                Some(Subpage::Shelf) => language.t("topShelf"),
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::AppSorting) => language.t("appSorting"),
@@ -2409,6 +2530,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::WeatherStyle
                 | Subpage::Shortcuts
                 | Subpage::Channels
+                | Subpage::Shelf
                 | Subpage::Greeting
                 | Subpage::Clock
                 | Subpage::WidgetPosition(_)
@@ -2419,6 +2541,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::WeatherStyle => weather_style_settings(out, state, assets),
                 Subpage::Shortcuts => shortcut_settings(out, state, assets),
                 Subpage::Channels => channels_settings(out, state, assets),
+                Subpage::Shelf => shelf_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
                 Subpage::WidgetPosition(widget) => {
@@ -2497,11 +2620,40 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     state.preferences.temperature_unit == Unit::Fahrenheit,
                 ),
             ],
+            Subpage::ShelfRegion => crate::tmdb::REGIONS
+                .iter()
+                .map(|region| {
+                    (
+                        if region.code == "auto" {
+                            language.t("stateAuto")
+                        } else {
+                            region.name
+                        },
+                        Some(region.code),
+                        region.code == state.preferences.tmdb_region,
+                    )
+                })
+                .collect(),
+            Subpage::ShelfLanguage => crate::tmdb::SUGGEST_LANGUAGES
+                .iter()
+                .map(|option| {
+                    (
+                        if option.code == "auto" {
+                            language.t("stateAuto")
+                        } else {
+                            option.name
+                        },
+                        Some(option.code),
+                        option.code == state.preferences.tmdb_language,
+                    )
+                })
+                .collect(),
             Subpage::WeatherLocation
             | Subpage::Weather
             | Subpage::WeatherStyle
             | Subpage::Shortcuts
             | Subpage::Channels
+            | Subpage::Shelf
             | Subpage::Greeting
             | Subpage::Clock => {
                 unreachable!()
@@ -2769,16 +2921,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             let pills = [
                 (Target::Widget(2), "shortcuts", "sparkles"),
                 (Target::Widget(5), "channels", "tv"),
+                (Target::Widget(6), "topShelf", "eye"),
                 (Target::WidgetReset, "resetWidgets", "refresh"),
                 (Target::WidgetAdd, "addWidget", "grid"),
             ];
-            let widths = std::array::from_fn::<_, 4, _>(|index| {
+            let widths = std::array::from_fn::<_, 5, _>(|index| {
                 assets.width(language.t(pills[index].1), style)
             });
-            // Four pills share one 1120px toolbar: when long translations overflow it,
+            // Five pills share one 1120px toolbar: when long translations overflow it,
             // only the widest labels are ellipsized, down to a common cap. Each pill adds
             // 88px of padding plus up to 1px from rounding its width up.
-            let budget = 1120. - 3. * 20. - 4. * 89.;
+            let budget = 1120. - 4. * 20. - 5. * 89.;
             let mut cap = f32::INFINITY;
             if widths.iter().sum::<f32>() > budget {
                 let mut sorted = widths;
@@ -2793,7 +2946,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     used += width;
                 }
             }
-            let labels = std::array::from_fn::<_, 4, _>(|index| {
+            let labels = std::array::from_fn::<_, 5, _>(|index| {
                 let label = language.t(pills[index].1);
                 if widths[index] > cap {
                     assets.fit_line(label, style, cap + 1., 20.8).0
@@ -2802,13 +2955,14 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 }
             });
             let widths = widths.map(|width| (width.min(cap) + 88.).ceil());
-            let right = widths[2] + 20. + widths[3];
+            let right = widths[3] + 20. + widths[4];
             for (index, (target, _, icon)) in pills.into_iter().enumerate() {
                 let x = match index {
                     0 => 640.,
                     1 => 640. + widths[0] + 20.,
-                    2 => 1760. - right,
-                    _ => 1760. - widths[3],
+                    2 => 640. + widths[0] + 20. + widths[1] + 20.,
+                    3 => 1760. - right,
+                    _ => 1760. - widths[4],
                 };
                 row(
                     out,
@@ -2939,6 +3093,116 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         }
         _ => {}
     }
+}
+
+fn shelf_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let s = state.scroll;
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::ShelfToggle,
+            rect: Rect::new(640., 164.8 - s, 1120., 72.),
+            title: language.t("showWidget"),
+            icon: Some("eye"),
+            value: Some(language.t(if state.preferences.show_shelf {
+                "stateOn"
+            } else {
+                "stateOff"
+            })),
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
+    let key = crate::tmdb::sanitize_key(&state.preferences.tmdb_api_key);
+    let key_label = if state.text_input_active() && state.keyboard_field == TextField::ShelfKey {
+        format!("{}|", state.shelf_key_draft)
+    } else if key.is_empty() {
+        if crate::tmdb::bundled_api_key().len() >= 16 {
+            language.t("tmdbKeyBundled").into()
+        } else {
+            language.t("tmdbKeyMissing").into()
+        }
+    } else {
+        format!("{}…", key.chars().take(4).collect::<String>())
+    };
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::ShelfKey,
+            rect: Rect::new(640., 248.8 - s, 1120., 90.7),
+            title: language.t("tmdbApiKey"),
+            icon: Some("type"),
+            value: None,
+            description: Some(&key_label),
+            selected: false,
+            chevron: true,
+        },
+    );
+    let region = crate::tmdb::REGIONS
+        .get(crate::tmdb::region_index(&state.preferences.tmdb_region))
+        .map(|region| {
+            if region.code == "auto" {
+                language.t("stateAuto")
+            } else {
+                region.name
+            }
+        })
+        .unwrap_or(language.t("stateAuto"));
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::ShelfRegion,
+            rect: Rect::new(640., 351.5 - s, 1120., 72.),
+            title: language.t("streamingRegion"),
+            icon: Some("globe"),
+            value: Some(region),
+            description: None,
+            selected: false,
+            chevron: true,
+        },
+    );
+    let suggest = crate::tmdb::SUGGEST_LANGUAGES
+        .get(crate::tmdb::language_index(
+            &state.preferences.tmdb_language,
+        ))
+        .map(|option| {
+            if option.code == "auto" {
+                language.t("stateAuto")
+            } else {
+                option.name
+            }
+        })
+        .unwrap_or(language.t("stateAuto"));
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::ShelfLanguage,
+            rect: Rect::new(640., 435.5 - s, 1120., 72.),
+            title: language.t("suggestionLanguage"),
+            icon: Some("language"),
+            value: Some(suggest),
+            description: None,
+            selected: false,
+            chevron: true,
+        },
+    );
+    out.text(
+        language.t("tmdbAttribution"),
+        Rect::new(664., 535. - s, 1070., 48.),
+        text(15.2, 400, 0.).leading(1.35),
+        c(0xf5f5f5, 0.55),
+        false,
+    );
 }
 
 fn channels_settings(out: &mut Scene, state: &State, assets: &Assets) {
@@ -4061,6 +4325,7 @@ fn keyboard(out: &mut Scene, state: &State, assets: &Assets) {
         match state.keyboard_field {
             TextField::Location => language.t("cityPostcode"),
             TextField::InputName => language.t("inputName"),
+            TextField::ShelfKey => language.t("tmdbApiKey"),
             TextField::Apps => language.t("findApp"),
         },
         Rect::new(389., 324., 1000., 44.),

@@ -2461,8 +2461,12 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
             _ => None,
         })
         .collect();
-    assert_eq!(widget_order, [2, 5]);
-    for (widget, subpage) in [(2, Subpage::Shortcuts), (5, Subpage::Channels)] {
+    assert_eq!(widget_order, [2, 5, 6]);
+    for (widget, subpage) in [
+        (2, Subpage::Shortcuts),
+        (5, Subpage::Channels),
+        (6, Subpage::Shelf),
+    ] {
         state.focus = Target::Widget(widget);
         state.activate();
         assert_eq!(state.subpage, Some(subpage));
@@ -2470,6 +2474,8 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
         assert!(state.subpage.is_none());
         assert_eq!(state.focus, Target::Widget(widget));
     }
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::Widget(5));
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::Widget(2));
     state.direction(Direction::Left, &controls(&state));
@@ -2537,7 +2543,7 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
                 .iter()
                 .filter(|c| matches!(c.target, Target::Widget(_)))
                 .count(),
-            2
+            3
         );
         for key in [
             "widgets",
@@ -2546,6 +2552,7 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
             "inputs",
             "greeting",
             "channels",
+            "topShelf",
         ] {
             assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t(key))), "{key}/{language:?}");
         }

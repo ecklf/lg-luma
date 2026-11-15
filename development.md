@@ -234,16 +234,24 @@ App cards on Home, in the drawer, and in Settings → Apps are artwork-only, wit
 or App names setting. Legacy `show_names`, `show_home_names`, and `show_app_names` preferences
 are ignored and are not written back. App titles remain available in the management popup.
 **Settings → Widgets** opens the placement manager. Select Weather and choose Configure for its
-settings; **Shortcuts** and **Channels** have pills at the top left. **Settings → Inputs** is directly below Apps
+settings; **Shortcuts**, **Channels** and **Top Shelf** have pills at the top left. **Settings → Inputs** is directly below Apps
 in the sidebar. Weather location and temperature choices return to Weather; Back from a widget
 returns to its grid cell. Input visibility/naming choices return to the Inputs list, then its sidebar entry.
 Channel favorites return to Channels, then its toolbar pill. Channels can be shown or hidden from that
 subpage without clearing favorites; Left from the list or header restores the Channels pill
-instead of jumping to the sidebar. The Home channels strip shows only selected
+instead of jumping to the sidebar. Top Shelf is on by default: packaging may bake in a
+TMDB key via `LUMA_TMDB_API_KEY`, and its subpage can still override it, plus streaming region and
+suggestion language (Automatic follows the UI language); Back returns to the Top Shelf pill.
+After about 1.5s on a cold mapped Home favorite, popular show art fades in; already-cached apps
+crossfade series→series without dipping to the wallpaper. Home widgets yield the left column while
+the shelf is visible (Stremio uses weekly trending with a short provider fallback). Once the shelf
+settles, the event loop stops requesting animation frames until visibility or a crossfade changes
+again. The Home channels strip shows only selected
 tuner channels (logos from `/mnt/lg/cmn_data/channel_logo` when present); OK tunes via
 `apiadapter/tv/openChannel`. Guide titles prefer `getChannelProgramInfo` (now and next) and fall
 back to `getChannelCurrentProgramInfo`. Back (short or long-hold) on a focused Home channel opens a
-Recents-style switcher over Home favorites with logo and now/next text; OK tunes, Back/Up dismiss.
+Recents-style switcher over Home favorites with logo and now/next text; OK dismisses the carousel,
+tunes, and launches Live TV so the channel can take the foreground, Back/Up dismiss.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
 with a tighter 48-pixel spacing for Languages and Backgrounds.
