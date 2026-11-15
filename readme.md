@@ -306,7 +306,14 @@ The page looks like Luma and shows a live picture of what Luma shows on the TV (
 another app is in front; other apps are never captured). It covers **General**, **Apps**
 (favorites, their order, hidden apps), **Background** (including adding and deleting your own
 photos), **Widgets** (clock, date, weather location, shortcut tiles, inputs) and **System**
-(updates, refresh, icon cache, text rendering and the paired devices).
+(updates, refresh, icon cache, text rendering and the paired devices). Widgets and favorites move
+by dragging, and removing a photo, favorite or device can be undone for a few seconds.
+
+**Remote** under the picture works like the TV remote inside Luma: arrows, OK, Back, Home,
+Options, a tap on the picture, the TV's inputs, and the computer keyboard. Turn on **Control the
+whole TV** in System to reach every app: the TV asks "Allow?" once, through its own remote-app
+interface (as LG's phone apps do). Then volume (as a slider), mute, play/pause, typing into the
+focused field, screen off with the sound playing, a sleep timer and power off work too.
 
 Web access is off by default. The server answers only on the TV's home network address
 (port 8787) and only to private addresses, and refuses other sites' requests. Each paired device

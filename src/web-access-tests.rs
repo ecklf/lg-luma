@@ -295,6 +295,42 @@ fn pairs_once_and_then_changes_settings() {
         "held while unchanged"
     );
 
+    // Volume, picture and sleep timer go to the launcher, which answers with the TV's state.
+    assert_eq!(post("/api/tv", &cookie, r#"{"sleep":999}"#).0, 422);
+    assert_eq!(post("/api/tv", &cookie, r#"{"brightness":3}"#).0, 422);
+    assert_eq!(post("/api/tv", "", r#"{"volume":20}"#).0, 401);
+    let request = {
+        let cookie = cookie.clone();
+        thread::spawn(move || post("/api/tv", &cookie, r#"{"volume":20,"sleep":30}"#))
+    };
+    loop {
+        if let Event::Tv(change, reply) = next_event(&service) {
+            assert_eq!(
+                (change.volume, change.screen, change.sleep),
+                (Some(20), None, Some(30))
+            );
+            let (reading, answer) = mpsc::channel();
+            reading
+                .send(crate::tv_remote::Reading {
+                    volume: 20,
+                    max_volume: 100,
+                    muted: false,
+                    screen_off: false,
+                })
+                .unwrap();
+            reply
+                .send(TvAnswer {
+                    sleep_left: Some(Duration::from_secs(1800)),
+                    reading: answer,
+                })
+                .unwrap();
+            break;
+        }
+    }
+    let (status, _, body) = request.join().unwrap();
+    assert_eq!(status, 200);
+    assert!(body.contains("\"volume\":20") && body.contains("\"sleepLeft\":1800"));
+
     let mut changed = settings.clone();
     changed.hour_24 = true;
     let (status, _, _) = post(
@@ -439,4 +475,14 @@ fn pairs_once_and_then_changes_settings() {
     drop(service);
     let _ = std::fs::remove_file(&path);
     let _ = std::fs::remove_file(&thumbnail);
+}
+
+#[test]
+fn every_input_icon_the_tv_offers_reaches_the_page() {
+    for (icon, _) in crate::model::INPUT_ICONS {
+        assert!(
+            input_icon(&format!("/icon/input-{icon}.svg")).is_some(),
+            "the page cannot load the {icon} input icon"
+        );
+    }
 }

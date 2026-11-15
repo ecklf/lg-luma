@@ -607,6 +607,7 @@ fn input_icon(route: &str) -> Option<&'static [u8]> {
         "console",
         "playstation",
         "shield",
+        "steam",
         "streamer",
         "switch",
         "switch2",
