@@ -250,6 +250,18 @@ Choose the interface language in **Settings → General → Language**. Luma sup
 Czech, Dutch, English, French, German, Hungarian, Italian, Polish, Portuguese (Brazil), Russian,
 Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese.
 
+### Favorites
+
+Open **Settings → Widgets**, select **Favorites** in the placement grid, and choose
+**Configure** to select one, two, or three rows. One row is the default. Multi-row layouts
+show pinned favorites, with six visible slots per row and horizontal scrolling for more.
+
+**Move** places Favorites anywhere a full-width block fits in the 6×5 grid. **Remove widget**
+leaves an **Apps** button to open the drawer. **Add widget** restores Favorites.
+
+Use **Up / Down** to move between rows. **Down** from the last occupied row opens the app drawer.
+With two or three rows, Favorites scrolls up with the app grid.
+
 ### Backgrounds
 
 Open **Settings → Background → Upload**, then scan the QR code or open the shown

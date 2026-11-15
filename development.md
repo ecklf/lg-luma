@@ -141,7 +141,7 @@ retain their manual order. The same order fills empty dock slots and the app dra
 `xvfb-run -a pnpm screenshots --sorting` captures the sorting settings, both app orders,
 and the generic disc input icon from the native desktop renderer using seeded local counts.
 
-Home uses a 6×4 placement grid in logical 1920×1080 space above the unchanged six-app dock.
+Home uses a 6×5 placement grid in logical 1920×1080 space.
 Greeting combines weekday/date and greeting in 4 columns × 1 row; Weather spans 2 columns × 2 rows.
 Greeting uses 90.4px text with 1.05 leading and an 18.4px date in a 32.8px band,
 keeping both lines inside the 128px-tall row; long translations fit to the available width.
@@ -154,14 +154,20 @@ Settings → Widgets opens the scaled Home grid by default. Each occupied cell o
 Configure/Move/Remove popup. A fixed, right-aligned toolbar above the preview contains Reset to defaults on the
 left and Add widget on the right, using the Backgrounds pill style. Empty cells also open the
 Add catalog directly; it excludes installed widgets. Reset restores the default membership and
-positions, preserving date/weather configuration and the app dock; an already-default reset does not save.
-The preview shows only widget placements over the wallpaper, without a gray dock placeholder.
-Shortcuts uses a fixed pill at the top left of the preview toolbar. Inputs is a separate sidebar section directly
+positions while preserving date and weather settings, favorite order, and row count. An
+already-default reset does not save.
+
+Select Favorites in the grid preview for Configure, Move, and Remove. Luma persists
+`home_rows` (1 by default, 2, or 3), `show_favorites_dock`, and `favorites_dock_row`. The dock
+spans all six columns and occupies one grid row per configured dock row. Resizing keeps widget
+anchors where they still fit and places displaced widgets in available cells. Removing Favorites
+leaves an Apps button to open the drawer. The Add menu restores the widget.
+Inputs is a separate sidebar section directly
 below Apps, not a widget. Its list and individual input/icon settings retain focus on return.
 The input icon picker includes Steam. Automatic detection recognizes the word Steam in labels such
 as Steam Deck, Steam Link and Steam Machine, ahead of generic computer/streaming-device fallbacks.
 Move and Add open a placement preview; arrows browse
-all twenty-four anchors, OK/click saves a valid placement, and Back cancels without changing preferences.
+all thirty anchors, OK/click saves a valid placement, and Back cancels without changing preferences.
 Invalid positions are red and cannot be committed. Removing a widget frees its cells while keeping
 its settings. Adding is atomic: browsing/cancelling placement does not install or save a widget.
 The legacy `show_greeting` and `show_weather` fields now store whether each widget is installed;
@@ -246,8 +252,11 @@ icons are original Breezy Weather PNGs, including clear/partly-cloudy night vari
 with their LGPL-3.0 license, attribution and source hashes in `assets/weather/`. No icons are fetched at runtime.
 Disabled weather
 is hidden. Enabled weather without a location uses the same large 144px artwork and a prominent setup action.
-Settings lists render behind fixed controls. The drawer grid is clipped below its fixed dock so
-offscreen cards cannot capture pointer events there. Input name removal uses **Clear name**.
+Settings lists render behind fixed controls. The drawer keeps a one-row dock fixed. With multiple
+favorite rows, the dock and app grid share one animated vertical offset and clip beneath the
+header. Scrolling and opening the drawer share 300 ms timing, smoothstep easing, and capped time steps.
+Focus uses the destination, pointer hit testing uses the drawn position, and reduced motion
+applies the new position immediately. Input name removal uses **Clear name**.
 Choice checkmarks identify saved values, while the bright row fill identifies only the current focus.
 Input connection dots are amber when a connected cable explicitly reports no signal, green for
 other connected inputs, and gray for disconnected or unknown cable states. An unknown signal
@@ -265,28 +274,21 @@ is persisted per input across restarts; choosing **Automatic** clears only that 
 icon override and restores label-based detection. Existing inputs without an override continue
 using Automatic. This is a backward-compatible feature and does not change input names or visibility.
 
-Home favorites form one horizontal glass dock, never a second row. Left/Right follows saved order,
-including reorder mode, and reveals complete cards. Up reaches Inputs or the clock/settings control.
-Up from the drawer’s first app row dismisses the drawer immediately while preserving the
-corresponding dock app as the selected Home favorite. Up within later grid rows stays in the drawer.
-Down lifts the dock to the top and reveals a six-column app grid beneath it. Favorites stay in the
-dock instead of appearing twice in the grid. The drawer has no search or category toolbar.
-The Home dock follows saved pinned order, with no Apps button or Move apps label above it.
-Unused slots (up to six cards) backfill with visible apps in alphabetical order without changing
-favorites. These backfilled apps are excluded from the drawer to avoid duplicates and cannot be
-reordered. In Settings → Apps, a visible favorite's action popup includes **Move**, which opens
-the Home dock in reorder mode; Left/Right changes saved favorite order and OK/Back finishes.
-The dock itself is decorative, not a focus/click target. Down opens the drawer; Back closes it.
-Its glass is drawn without the narrower content clip, while scrolling app cards retain their own clipping.
-The drawer leaves 24 logical pixels between the glass dock and its first card row, matching
-the 24px bottom padding when the list is scrolled to its end.
-When scrolled, grid cards continue behind the floating dock and clip at the pinned cards' top edge.
-Remote focus still reveals grid cards below the dock, keeping the selected card unobscured.
-Back closes the drawer and resets focus and horizontal scroll to the first favorite. Wheel movement
-over either favorites dock scrolls horizontally. Pointer hover/down never initiates reveal scrolling.
-Grid Up/Down follows six-column indices, including offscreen rows, with the first row leading to
-the pinned dock (or corner controls if it is empty). Up from the pinned row closes the drawer and
-focuses the inputs or clock. Top-left inputs are direct 48px-high, content-sized pills with vertically
+Favorites fills six columns per page in pinned order. Left and Right scroll horizontally.
+Up and Down move between rows. If the next column lacks a card in the current row, Right
+selects the nearest card above it. Down from the lowest occupied row opens the app drawer.
+Up from the drawer's first app row returns to the corresponding Home favorite. Back closes the
+drawer and resets focus and horizontal scroll to the first favorite.
+
+The one-row layout fills unused visible slots with other apps in the selected app sort order.
+Two- and three-row layouts show pinned apps only. In Settings → Apps, a visible favorite's
+**Move** action opens reorder mode. The arrow keys move the favorite and OK or Back finishes.
+The app grid excludes dock apps and leaves a 24px gap below the dock at the top of the drawer.
+A multi-row dock scrolls with the app grid, while the one-row dock floats above it.
+Wheel events scroll the Favorites rows horizontally on Home. In the multi-row drawer, vertical
+wheel events scroll the entire drawer. Pointer hover and clicks leave the scroll position alone.
+Grid Up/Down follows six-column indices, including offscreen rows. Up from the top dock row
+reaches the inputs or clock. Top-left inputs are direct 48px-high, content-sized pills with vertically
 centered icons, names and connection dots, respecting Auto/On/Off visibility; no input button/dropdown is needed.
 Connection dots appear only while hovering, pressing, or remotely focusing an input. Idle pills
 have 14px right padding; the 18px status slot expands/collapses over 160ms with a smooth fade.

@@ -1,8 +1,8 @@
 use crate::i18n::Language;
 use crate::model::{
     App, BACKGROUNDS, CUSTOM_TILE_PREFIX, CustomTile, HOME_GRID_CELLS, HOME_GRID_COLUMNS,
-    HomeWidget, INPUT_NAME_LIMIT, InputMode, Inventory, Preferences, WidgetPosition,
-    clean_input_name,
+    HOME_GRID_ROWS, HomeWidget, INPUT_NAME_LIMIT, InputMode, Inventory, MAX_HOME_ROWS, Preferences,
+    WidgetPosition, clean_input_name,
 };
 use crate::text_rendering::TextRendering;
 use crate::weather::{self, Unit};
@@ -34,11 +34,100 @@ pub const HOME_STRIP_LEFT: f32 = 84.;
 // the strip ends after the sixth tile, so a focused tile never sits in the fade.
 pub const HOME_STRIP_RIGHT: f32 = 1836.;
 pub const HOME_TILE_WIDTH: f32 = 270.;
+pub const HOME_TILE_HEIGHT: f32 = 154.4;
+pub const HOME_GRID_TOP: f32 = 188.;
+pub const HOME_GRID_PITCH_Y: f32 = 158.;
+pub const DOCK_PADDING: f32 = 24.;
+pub const DRAWER_DOCK_Y: f32 = 164.8;
 pub const HOME_TILE_PITCH: f32 = 296.4;
 pub const HOME_FADE_LEFT: f32 = 8.;
 pub const HOME_FADE_RIGHT: f32 = 1910.;
 pub const BACKGROUND_FADE: f32 = 0.4;
 pub const CYCLE_FADE: f32 = 1.6;
+
+pub struct DockLayout {
+    pub rows: usize,
+    compact: bool,
+}
+
+impl DockLayout {
+    pub fn capacity(&self) -> usize {
+        self.rows * APPS_COLUMNS
+    }
+
+    fn tile_height(&self) -> f32 {
+        if self.compact { 132. } else { HOME_TILE_HEIGHT }
+    }
+
+    pub fn height(&self) -> f32 {
+        self.tile_height() + (self.rows - 1) as f32 * HOME_GRID_PITCH_Y
+    }
+
+    pub fn bounds(&self, y: f32) -> Rect {
+        Rect::new(
+            HOME_STRIP_LEFT - DOCK_PADDING,
+            y - DOCK_PADDING,
+            HOME_STRIP_RIGHT - HOME_STRIP_LEFT + 2. * DOCK_PADDING,
+            self.height() + 2. * DOCK_PADDING,
+        )
+    }
+
+    pub fn card(&self, index: usize, y: f32, scroll: f32) -> Rect {
+        let (column, row) = self.position(index);
+        Rect::new(
+            HOME_STRIP_LEFT + column as f32 * HOME_TILE_PITCH - scroll,
+            y + row as f32 * HOME_GRID_PITCH_Y,
+            HOME_TILE_WIDTH,
+            self.tile_height(),
+        )
+    }
+
+    // Fill each six-column page in reading order, then continue to the right.
+    pub fn position(&self, index: usize) -> (usize, usize) {
+        let page = index / self.capacity();
+        (
+            page * APPS_COLUMNS + index % APPS_COLUMNS,
+            index / APPS_COLUMNS % self.rows,
+        )
+    }
+
+    fn index(&self, column: usize, row: usize) -> usize {
+        column / APPS_COLUMNS * self.capacity() + row * APPS_COLUMNS + column % APPS_COLUMNS
+    }
+
+    fn columns(&self, count: usize) -> usize {
+        count / self.capacity() * APPS_COLUMNS + (count % self.capacity()).min(APPS_COLUMNS)
+    }
+
+    fn bottom_index(&self, column: usize, count: usize) -> Option<usize> {
+        let column = column.min(self.columns(count).saturating_sub(1));
+        (0..self.rows)
+            .rev()
+            .find_map(|row| self.index_in_row(column, row, count))
+    }
+
+    fn index_in_row(&self, column: usize, row: usize, count: usize) -> Option<usize> {
+        let start = self.index(column / APPS_COLUMNS * APPS_COLUMNS, row);
+        (start < count).then(|| self.index(column, row).min(count - 1))
+    }
+
+    fn neighbor(&self, index: usize, count: usize, direction: Direction) -> Option<usize> {
+        let (column, row) = self.position(index);
+        match direction {
+            Direction::Left => column.checked_sub(1).map(|column| self.index(column, row)),
+            Direction::Right => (0..=row)
+                .rev()
+                .map(|row| self.index(column + 1, row))
+                .find(|next| *next < count),
+            Direction::Up => row
+                .checked_sub(1)
+                .and_then(|row| self.index_in_row(column, row, count)),
+            Direction::Down if row + 1 < self.rows => self.index_in_row(column, row + 1, count),
+            Direction::Down => None,
+        }
+        .filter(|next| *next < count)
+    }
+}
 
 pub fn unix_now() -> u64 {
     std::time::SystemTime::now()
@@ -77,6 +166,7 @@ pub enum Target {
     WidgetCell(usize),
     WidgetAdd,
     WidgetReset,
+    OpenDrawer,
     AddWidget(HomeWidget),
     ConfigureWidget(HomeWidget),
     RemoveWidget(HomeWidget),
@@ -145,6 +235,8 @@ impl Rect {
 pub struct Control {
     pub target: Target,
     pub rect: Rect,
+    /// Drawn position for pointer input when the drawer is still in motion.
+    pub presented_y: f32,
     pub scrollable: bool,
 }
 
@@ -172,6 +264,7 @@ pub enum Subpage {
     DateFormat,
     Weather,
     Shortcuts,
+    FavoriteRows,
     Clock,
     ClockFormat,
     TimeFormat,
@@ -227,6 +320,25 @@ pub const KEYS: [&str; 40] = [
     "Delete", "Clear", "Done",
 ];
 
+const DRAWER_TRANSITION_SECONDS: f32 = 0.3;
+
+fn animation_frame_delta(previous: Instant, now: Instant) -> f32 {
+    now.saturating_duration_since(previous)
+        .as_secs_f32()
+        .min(0.05)
+}
+
+struct DrawerScrollMotion {
+    from: f32,
+    presented: f32,
+    progress: f32,
+    updated: Instant,
+}
+
+fn smoothstep(progress: f32) -> f32 {
+    progress * progress * (3. - 2. * progress)
+}
+
 pub struct State {
     pub page: Page,
     pub focus: Target,
@@ -239,6 +351,8 @@ pub struct State {
     pub scroll: f32,
     pub home_scroll: f32,
     pub drawer_visibility: f32,
+    closing_drawer_scroll: f32,
+    drawer_scroll_motion: Option<DrawerScrollMotion>,
     drawer_updated: Instant,
     input_status_visibility: std::collections::BTreeMap<String, f32>,
     pub overlay: Option<Overlay>,
@@ -291,6 +405,8 @@ impl State {
             scroll: 0.,
             home_scroll: 0.,
             drawer_visibility: 0.,
+            closing_drawer_scroll: 0.,
+            drawer_scroll_motion: None,
             drawer_updated: Instant::now(),
             input_status_visibility: std::collections::BTreeMap::new(),
             overlay: None,
@@ -404,17 +520,15 @@ impl State {
     pub fn tick(&mut self) {
         let now = Instant::now();
         let goal = if self.page == Page::Apps { 1. } else { 0. };
-        let dt = now
-            .duration_since(self.drawer_updated)
-            .as_secs_f32()
-            .min(0.05);
+        let dt = animation_frame_delta(self.drawer_updated, now);
         self.drawer_updated = now;
         self.animate_input_status(dt);
+        self.advance_drawer_scroll(now);
         if self.drawer_visibility != goal {
             self.drawer_visibility = if self.preferences.reduced_motion {
                 goal
             } else {
-                let step = dt / 0.3;
+                let step = dt / DRAWER_TRANSITION_SECONDS;
                 if goal > self.drawer_visibility {
                     (self.drawer_visibility + step).min(goal)
                 } else {
@@ -521,7 +635,8 @@ impl State {
     }
 
     pub fn animating(&self) -> bool {
-        (self.drawer_visibility != if self.page == Page::Apps { 1. } else { 0. })
+        self.drawer_scroll_motion.is_some()
+            || (self.drawer_visibility != if self.page == Page::Apps { 1. } else { 0. })
             || (!self.preferences.reduced_motion
                 && self.input_status_visibility.iter().any(|(id, value)| {
                     *value != if self.input_status_active(id) { 1. } else { 0. }
@@ -554,11 +669,24 @@ impl State {
 
     pub fn open(&mut self, index: usize) {
         self.weather.cancel_search();
+        let previous_page = self.page;
+        let previous_drawer_scroll = self.drawer_scroll();
+        self.drawer_scroll_motion = None;
         self.page = match index {
             1 => Page::Apps,
             2 => Page::Settings,
             _ => Page::Home,
         };
+        if self.page != previous_page {
+            self.closing_drawer_scroll = if previous_page == Page::Apps
+                && self.page == Page::Home
+                && self.drawer_scrolls_dock()
+            {
+                previous_drawer_scroll
+            } else {
+                0.
+            };
+        }
         self.focus = Target::Nav(self.page_index());
         self.scroll = 0.;
         if self.page == Page::Home {
@@ -588,13 +716,87 @@ impl State {
     }
 
     pub fn drawer_progress(&self) -> f32 {
-        let t = self.drawer_visibility;
-        t * t * (3. - 2. * t)
+        smoothstep(self.drawer_visibility)
+    }
+
+    pub fn dock_layout(&self) -> DockLayout {
+        let rows = usize::from(self.preferences.home_rows);
+        let row = usize::from(self.preferences.widget_position(HomeWidget::Favorites).row);
+        DockLayout {
+            rows,
+            compact: rows > 1 || row + rows < HOME_GRID_ROWS,
+        }
+    }
+
+    pub fn home_dock_y(&self) -> f32 {
+        HOME_GRID_TOP
+            + f32::from(self.preferences.widget_position(HomeWidget::Favorites).row)
+                * HOME_GRID_PITCH_Y
+    }
+
+    pub fn drawer_scrolls_dock(&self) -> bool {
+        self.preferences.show_favorites_dock && self.preferences.home_rows > 1
+    }
+
+    pub fn drawer_slide(&self) -> f32 {
+        (self.home_dock_y() - DRAWER_DOCK_Y) * (1. - self.drawer_progress())
+    }
+
+    /// Frame-stable presentation offset. The logical scroll can move ahead on a key press.
+    pub fn drawer_scroll(&self) -> f32 {
+        if self.page == Page::Home {
+            self.closing_drawer_scroll * self.drawer_progress()
+        } else if self.page == Page::Apps && !self.preferences.reduced_motion {
+            self.drawer_scroll_motion
+                .as_ref()
+                .map_or(self.scroll, |motion| motion.presented)
+        } else {
+            self.scroll
+        }
+    }
+
+    fn set_scroll(&mut self, scroll: f32) {
+        if self.scroll == scroll {
+            return;
+        }
+        let from = self.drawer_scroll();
+        self.drawer_scroll_motion = (self.page == Page::Apps
+            && self.drawer_scrolls_dock()
+            && !self.preferences.reduced_motion
+            && from != scroll)
+            .then(|| DrawerScrollMotion {
+                from,
+                presented: from,
+                progress: 0.,
+                updated: Instant::now(),
+            });
+        self.scroll = scroll;
+        self.dirty = true;
+    }
+
+    pub(crate) fn advance_drawer_scroll(&mut self, now: Instant) {
+        let Some(motion) = &mut self.drawer_scroll_motion else {
+            return;
+        };
+        let dt = animation_frame_delta(motion.updated, now);
+        motion.updated = now;
+        motion.progress += dt / DRAWER_TRANSITION_SECONDS;
+        if motion.progress >= 1. || self.preferences.reduced_motion {
+            self.drawer_scroll_motion = None;
+        } else {
+            motion.presented =
+                motion.from + (self.scroll - motion.from) * smoothstep(motion.progress);
+        }
+        self.dirty = true;
     }
 
     pub fn dock_y(&self) -> f32 {
-        let home_y = 820.;
-        home_y - (home_y - 164.8) * self.drawer_progress()
+        let scroll = if self.drawer_scrolls_dock() {
+            self.drawer_scroll()
+        } else {
+            0.
+        };
+        DRAWER_DOCK_Y + self.drawer_slide() - scroll
     }
 
     pub fn apps(&self) -> Vec<&App> {
@@ -660,10 +862,13 @@ impl State {
             .collect()
     }
 
-    /// Backfill the six visible dock slots without changing saved favorites.
     pub fn dock_apps(&self) -> Vec<&App> {
+        if !self.preferences.show_favorites_dock {
+            return vec![];
+        }
         let mut apps = self.favorite_apps();
-        if apps.len() < 6 {
+        // Preserve the stock six-slot backfill in the default one-row layout.
+        if self.preferences.home_rows == 1 && apps.len() < APPS_COLUMNS {
             let mut remaining: Vec<_> = self
                 .inventory
                 .apps
@@ -674,7 +879,7 @@ impl State {
                 })
                 .collect();
             remaining.sort_by(|a, b| self.preferences.compare_apps(a, b));
-            apps.extend(remaining.into_iter().take(6 - apps.len()));
+            apps.extend(remaining.into_iter().take(APPS_COLUMNS - apps.len()));
         }
         apps
     }
@@ -714,14 +919,22 @@ impl State {
 
     pub fn apps_viewport(&self) -> Rect {
         let content = self.content_viewport();
-        // Let scrolling cards continue behind the floating dock, up to its card edge.
-        let top = 164.8;
-        Rect::new(content.x, top, content.w, content.y + content.h - top)
+        if self.drawer_scrolls_dock() {
+            content
+        } else {
+            // The single-row dock floats above its app grid.
+            let top = DRAWER_DOCK_Y;
+            Rect::new(content.x, top, content.w, content.y + content.h - top)
+        }
     }
 
     pub fn drawer_grid_top(&self) -> f32 {
         // Pinned artwork height, glass inset, then the matching outer list padding.
-        164.8 + 154.4 + 24. + DRAWER_PADDING
+        if self.preferences.show_favorites_dock {
+            DRAWER_DOCK_Y + self.dock_layout().height() + DOCK_PADDING + DRAWER_PADDING
+        } else {
+            DRAWER_DOCK_Y
+        }
     }
 
     pub fn app_settings_viewport(&self) -> Rect {
@@ -759,12 +972,16 @@ impl State {
                 } else {
                     self.content_viewport()
                 };
-                control.rect.contains(x, y) && (!control.scrollable || viewport.contains(x, y))
+                let rect = Rect {
+                    y: control.presented_y,
+                    ..control.rect
+                };
+                rect.contains(x, y) && (!control.scrollable || viewport.contains(x, y))
             })
             .map(|control| control.target.clone())
     }
 
-    /// Returns whether this wheel event scrolled favorites, so a pending card press is cancelled.
+    /// Returns whether this wheel event should cancel a pending card press.
     pub fn wheel_scroll(
         &mut self,
         controls: &[Control],
@@ -792,8 +1009,10 @@ impl State {
                             && control.rect.contains(x, y)
                     })
             });
-        let favorites =
-            (self.page == Page::Home || self.page == Page::Apps) && (x != 0 || over_favorites);
+        let drawer_scrolls_dock = self.page == Page::Apps && self.drawer_scrolls_dock();
+        let favorites = (self.page == Page::Home || self.page == Page::Apps)
+            && (x != 0 || (over_favorites && !drawer_scrolls_dock));
+        let previous_scroll = self.scroll;
         if favorites {
             self.scroll_favorites((if x != 0 { x } else { -y }) as f32 * HOME_TILE_PITCH);
         } else {
@@ -801,19 +1020,21 @@ impl State {
             let max = controls
                 .iter()
                 .filter(|c| {
-                    c.scrollable && (!backgrounds || matches!(c.target, Target::Background(_)))
+                    c.scrollable
+                        && (!backgrounds || matches!(c.target, Target::Background(_)))
+                        && (!drawer_scrolls_dock || matches!(c.target, Target::App(_)))
                 })
                 .map(|c| c.rect.y + c.rect.h + self.scroll - bottom)
                 .fold(0., f32::max);
-            self.scroll = (self.scroll - y as f32 * 90.).clamp(0., max.max(0.));
+            self.set_scroll((self.scroll - y as f32 * 90.).clamp(0., max.max(0.)));
         }
         self.pointer = true;
         self.dirty = true;
-        favorites
+        favorites || (drawer_scrolls_dock && self.scroll != previous_scroll)
     }
 
     pub fn scroll_favorites(&mut self, delta: f32) {
-        let count = self.dock_apps().len();
+        let count = self.dock_layout().columns(self.dock_apps().len());
         let content = if count == 0 {
             0.
         } else {
@@ -938,9 +1159,10 @@ impl State {
 
     pub fn first_content(&self) -> Target {
         match self.page {
+            Page::Home if !self.preferences.show_favorites_dock => Target::OpenDrawer,
             Page::Home => self
                 .apps()
-                .get(((self.home_scroll - 0.01).max(0.) / HOME_TILE_PITCH).ceil() as usize)
+                .get(self.dock_layout().index(self.first_dock_column(), 0))
                 .map(|app| Target::App(app.id.clone()))
                 .unwrap_or(if self.error.is_some() {
                     Target::Retry
@@ -963,6 +1185,18 @@ impl State {
                 .unwrap_or(Target::SettingsMenu),
             Page::Settings => Target::Sidebar(0),
         }
+    }
+
+    fn above_dock(&self, column: usize) -> Target {
+        if column < 3 {
+            self.first_input_target()
+        } else {
+            Target::SettingsMenu
+        }
+    }
+
+    fn first_dock_column(&self) -> usize {
+        ((self.home_scroll - 0.01).max(0.) / HOME_TILE_PITCH).ceil() as usize
     }
 
     pub fn first_input_target(&self) -> Target {
@@ -1014,8 +1248,11 @@ impl State {
                     | Target::Filter(_)
                     | Target::Search
                     | Target::Sidebar(_)
-            ) {
-                self.scroll = 0.;
+            ) || (self.page == Page::Apps
+                && self.drawer_scrolls_dock()
+                && matches!(self.focus, Target::DockApp(_)))
+            {
+                self.set_scroll(0.);
             } else if control.scrollable
                 && !matches!(self.focus, Target::DockApp(_))
                 && self.page != Page::Home
@@ -1024,19 +1261,23 @@ impl State {
                     self.app_settings_viewport().y + 16.
                 } else if matches!(self.focus, Target::Background(_)) {
                     self.backgrounds_viewport().y + 8.
+                } else if self.page == Page::Apps && self.drawer_scrolls_dock() {
+                    self.apps_viewport().y + 8.
                 } else if self.page == Page::Apps {
-                    // Remote focus stays below the dock even though cards can draw behind it.
+                    // Keep remote focus below the fixed single-row dock.
                     self.drawer_grid_top() - 8.
                 } else {
                     120.8
                 };
-                if control.rect.y < top {
-                    self.scroll = (self.scroll + control.rect.y - top).max(0.);
-                }
                 let bottom = self.scroll_bottom();
-                if control.rect.y + control.rect.h > bottom {
-                    self.scroll += control.rect.y + control.rect.h - bottom;
-                }
+                let next = if control.rect.y < top {
+                    (self.scroll + control.rect.y - top).max(0.)
+                } else if control.rect.y + control.rect.h > bottom {
+                    self.scroll + control.rect.y + control.rect.h - bottom
+                } else {
+                    self.scroll
+                };
+                self.set_scroll(next);
             }
         }
         if self.page == Page::Home || self.page == Page::Apps {
@@ -1270,6 +1511,11 @@ impl State {
             }
             Some(Subpage::Weather) => Target::WidgetCell(self.preferences.weather_position.cell()),
             Some(Subpage::Shortcuts) => Target::Widget(2),
+            Some(Subpage::FavoriteRows) => Target::WidgetCell(
+                self.preferences
+                    .widget_position(HomeWidget::Favorites)
+                    .cell(),
+            ),
             Some(Subpage::Clock) => Target::Setting(1),
             Some(Subpage::ClockFormat) => {
                 self.subpage = Some(Subpage::Clock);
@@ -1370,12 +1616,21 @@ impl State {
             return vec![];
         }
         if self.overlay.is_none()
-            && matches!(self.subpage, Some(Subpage::WidgetPosition(_)))
+            && let Some(Subpage::WidgetPosition(widget)) = self.subpage
             && let Target::Choice(index) = self.focus
         {
             let next = match direction {
-                Direction::Left if index % HOME_GRID_COLUMNS > 0 => index - 1,
-                Direction::Right if index % HOME_GRID_COLUMNS + 1 < HOME_GRID_COLUMNS => index + 1,
+                Direction::Left
+                    if widget != HomeWidget::Favorites && index % HOME_GRID_COLUMNS > 0 =>
+                {
+                    index - 1
+                }
+                Direction::Right
+                    if widget != HomeWidget::Favorites
+                        && index % HOME_GRID_COLUMNS + 1 < HOME_GRID_COLUMNS =>
+                {
+                    index + 1
+                }
                 Direction::Up if index >= HOME_GRID_COLUMNS => index - HOME_GRID_COLUMNS,
                 Direction::Down if index + HOME_GRID_COLUMNS < HOME_GRID_CELLS => {
                     index + HOME_GRID_COLUMNS
@@ -1427,50 +1682,59 @@ impl State {
                     .then_some(index)
                 })
                 .collect();
-            if let Some(index) = slots.iter().position(|slot| ids[*slot] == id) {
-                let next = match direction {
-                    Direction::Left => index.saturating_sub(1),
-                    Direction::Right => (index + 1).min(slots.len() - 1),
-                    _ => index,
-                };
-                if next != index {
-                    ids.swap(slots[index], slots[next]);
-                    self.preferences.favorites = Some(ids);
-                    self.dirty = true;
-                    return vec![Effect::Save];
-                }
+            if let Some(index) = slots.iter().position(|slot| ids[*slot] == id)
+                && let Some(next) = self.dock_layout().neighbor(index, slots.len(), direction)
+            {
+                ids.swap(slots[index], slots[next]);
+                self.preferences.favorites = Some(ids);
+                return vec![Effect::Save];
             }
             return vec![];
         }
         if self.overlay.is_none() {
+            if self.focus == Target::OpenDrawer {
+                match direction {
+                    Direction::Down => return self.activate(),
+                    Direction::Up => self.focus(
+                        if self.preferences.weather_visible()
+                            && self.preferences.weather_location.is_none()
+                        {
+                            Target::WeatherConfigure
+                        } else {
+                            self.first_input_target()
+                        },
+                        controls,
+                    ),
+                    _ => {}
+                }
+                return vec![];
+            }
             if self.page == Page::Apps
                 && let Target::DockApp(id) = &self.focus
             {
                 let apps = self.dock_apps();
                 if let Some(index) = apps.iter().position(|app| &app.id == id) {
-                    let target = match direction {
-                        Direction::Up => {
-                            if index < 3 {
-                                self.first_input_target()
-                            } else {
-                                Target::SettingsMenu
-                            }
-                        }
-                        Direction::Down => self
-                            .apps()
-                            .get(index.min(self.apps().len().saturating_sub(1)))
-                            .map_or_else(|| self.focus.clone(), |app| Target::App(app.id.clone())),
-                        Direction::Left => {
-                            Target::DockApp(apps[index.saturating_sub(1)].id.clone())
-                        }
-                        Direction::Right => {
-                            Target::DockApp(apps[(index + 1).min(apps.len() - 1)].id.clone())
-                        }
-                    };
-                    if matches!(direction, Direction::Up) {
+                    let layout = self.dock_layout();
+                    let column = layout.position(index).0;
+                    if let Some(next) = layout.neighbor(index, apps.len(), direction) {
+                        self.focus(Target::DockApp(apps[next].id.clone()), controls);
+                    } else if matches!(direction, Direction::Up) {
+                        let target = self.above_dock(column);
                         self.open(0);
+                        self.focus(target, controls);
+                    } else if matches!(direction, Direction::Down) {
+                        let apps = self.apps();
+                        let column = if layout.rows == 1 {
+                            column
+                        } else {
+                            column
+                                .saturating_sub(self.first_dock_column())
+                                .min(APPS_COLUMNS - 1)
+                        };
+                        if let Some(app) = apps.get(column.min(apps.len().saturating_sub(1))) {
+                            self.focus(Target::App(app.id.clone()), controls);
+                        }
                     }
-                    self.focus(target, controls);
                     return vec![];
                 }
             }
@@ -1561,28 +1825,27 @@ impl State {
             {
                 let apps = self.apps();
                 if let Some(index) = apps.iter().position(|app| &app.id == id) {
-                    match direction {
-                        Direction::Left | Direction::Right => {
-                            let next = if matches!(direction, Direction::Left) {
-                                index.saturating_sub(1)
-                            } else {
-                                (index + 1).min(apps.len() - 1)
-                            };
-                            let id = apps[next].id.clone();
-                            self.focus(Target::App(id), controls);
-                        }
-                        Direction::Up => self.focus(
-                            if index < 3 {
-                                self.first_input_target()
-                            } else {
-                                Target::SettingsMenu
-                            },
-                            controls,
-                        ),
-                        Direction::Down => {
-                            self.open(1);
-                            self.focus = self.first_content();
-                        }
+                    let layout = self.dock_layout();
+                    if let Some(next) = layout.neighbor(index, apps.len(), direction) {
+                        self.focus(Target::App(apps[next].id.clone()), controls);
+                    } else if matches!(direction, Direction::Up) {
+                        self.focus(self.above_dock(layout.position(index).0), controls);
+                    } else if matches!(direction, Direction::Down) {
+                        let column = layout
+                            .position(index)
+                            .0
+                            .saturating_sub(self.first_dock_column());
+                        self.open(1);
+                        let apps = self.apps();
+                        self.focus = if layout.rows > 1 && !apps.is_empty() {
+                            Target::App(
+                                apps[column.min(APPS_COLUMNS - 1).min(apps.len() - 1)]
+                                    .id
+                                    .clone(),
+                            )
+                        } else {
+                            self.first_content()
+                        };
                     }
                     return vec![];
                 }
@@ -1640,6 +1903,7 @@ impl State {
                         | Subpage::TextRendering
                         | Subpage::AppSorting,
                     ) => 2,
+                    Some(Subpage::FavoriteRows) => usize::from(MAX_HOME_ROWS),
                     Some(Subpage::InputIcons(_)) => crate::model::INPUT_ICONS.len() + 1,
                     Some(Subpage::Language) => Language::ALL.len(),
                     Some(Subpage::DateFormat) => crate::model::DateFormat::ALL.len(),
@@ -1882,20 +2146,29 @@ impl State {
                             apps[(index + 1).min(apps.len() - 1)].id.clone(),
                         )),
                         Direction::Up if index < APPS_COLUMNS => {
-                            let target = self
-                                .dock_apps()
-                                .get(index.min(self.dock_apps().len().saturating_sub(1)))
-                                .map_or(
-                                    if index < 3 {
-                                        self.first_input_target()
+                            let dock = self.dock_apps();
+                            let layout = self.dock_layout();
+                            let scroll = self.home_scroll;
+                            let column = if layout.rows > 1 {
+                                index + self.first_dock_column()
+                            } else {
+                                index
+                            };
+                            let target = layout.bottom_index(column, dock.len()).map_or_else(
+                                || {
+                                    if self.preferences.show_favorites_dock {
+                                        self.above_dock(index)
                                     } else {
-                                        Target::SettingsMenu
-                                    },
-                                    |app| Target::App(app.id.clone()),
-                                );
-                            // Reaching the favorites row returns to Home immediately,
-                            // preserving the selected column instead of requiring another Up.
+                                        Target::OpenDrawer
+                                    }
+                                },
+                                |favorite| Target::App(dock[favorite].id.clone()),
+                            );
+                            // Return to the dock in the same visible column.
                             self.open(0);
+                            if layout.rows > 1 {
+                                self.home_scroll = scroll;
+                            }
                             Some(target)
                         }
                         Direction::Up => Some(Target::App(apps[index - APPS_COLUMNS].id.clone())),
@@ -2208,7 +2481,7 @@ impl State {
                     .filter(|c| !c.is_control())
                     .take(120usize.saturating_sub(self.query.chars().count())),
             );
-            self.scroll = 0.;
+            self.set_scroll(0.);
             self.dirty = true;
         }
     }
@@ -2348,7 +2621,7 @@ impl State {
             self.input_name = query;
         } else {
             self.query = query;
-            self.scroll = 0.;
+            self.set_scroll(0.);
         }
         self.dirty = true;
     }
@@ -2490,7 +2763,7 @@ impl State {
             }
             Target::Filter(index) => {
                 self.filter = if self.filter == index { 0 } else { index };
-                self.scroll = 0.;
+                self.set_scroll(0.);
             }
             Target::Search => {
                 self.open_keyboard(TextField::Apps);
@@ -2583,6 +2856,10 @@ impl State {
             Target::WidgetAdd => {
                 self.open_widget_catalog(0);
             }
+            Target::OpenDrawer => {
+                self.open(1);
+                self.focus = self.first_content();
+            }
             Target::WidgetReset => {
                 if self.preferences.reset_widgets() {
                     return vec![Effect::Save];
@@ -2594,7 +2871,12 @@ impl State {
                 }
                 if let Some(Overlay::WidgetCatalog { cell, .. }) = self.overlay.take() {
                     self.subpage = Some(Subpage::WidgetPosition(widget));
-                    let cell = WidgetPosition::from_cell(cell)
+                    let preferred = if widget == HomeWidget::Favorites {
+                        Some(self.preferences.widget_position(widget))
+                    } else {
+                        WidgetPosition::from_cell(cell)
+                    };
+                    let cell = preferred
                         .filter(|position| self.preferences.can_place_widget(widget, *position))
                         .or_else(|| {
                             (0..HOME_GRID_CELLS)
@@ -2603,7 +2885,16 @@ impl State {
                                     self.preferences.can_place_widget(widget, *position)
                                 })
                         })
-                        .map_or(cell, WidgetPosition::cell);
+                        .map_or_else(
+                            || {
+                                if widget == HomeWidget::Favorites {
+                                    0
+                                } else {
+                                    cell
+                                }
+                            },
+                            WidgetPosition::cell,
+                        );
                     self.focus = Target::Choice(cell);
                     self.panel_started = None;
                     self.scroll = 0.;
@@ -2625,10 +2916,12 @@ impl State {
                 self.subpage = Some(match widget {
                     HomeWidget::Greeting => Subpage::Greeting,
                     HomeWidget::Weather => Subpage::Weather,
+                    HomeWidget::Favorites => Subpage::FavoriteRows,
                 });
                 self.focus = match widget {
                     HomeWidget::Greeting => Target::DateToggle,
                     HomeWidget::Weather => Target::WeatherLocation,
+                    HomeWidget::Favorites => Target::Choice(self.dock_layout().rows - 1),
                 };
                 self.scroll = 0.;
                 self.panel_started = None;
@@ -2873,6 +3166,16 @@ impl State {
                             vec![]
                         };
                     }
+                    Some(Subpage::FavoriteRows) => {
+                        if index >= usize::from(MAX_HOME_ROWS) {
+                            return vec![];
+                        }
+                        let rows = index as u8 + 1;
+                        let changed = self.preferences.set_favorite_rows(rows);
+                        self.home_scroll = 0.;
+                        self.close_subpage();
+                        return if changed { vec![Effect::Save] } else { vec![] };
+                    }
                     Some(Subpage::WeatherStyle) => {
                         self.preferences.weather_style =
                             crate::model::WeatherStyle::ALL[index.min(2)];
@@ -2945,7 +3248,8 @@ impl State {
                     self.open(0);
                     self.focus = Target::App(id.clone());
                     if let Some(index) = self.dock_apps().iter().position(|app| app.id == id) {
-                        self.scroll_favorites(index as f32 * HOME_TILE_PITCH);
+                        let (column, _) = self.dock_layout().position(index);
+                        self.scroll_favorites(column as f32 * HOME_TILE_PITCH);
                     }
                     self.moving = Some(id);
                     self.notice = None;

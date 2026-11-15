@@ -123,6 +123,239 @@ fn widget_toolbar_pills_are_fixed_ordered_and_remote_and_pointer_accessible() {
 }
 
 #[test]
+fn favorite_rows_save_and_keep_remote_navigation_aligned_with_the_drawer() {
+    use crate::model::HomeWidget::Favorites;
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state.inventory.apps.extend(
+        (0..25).map(|index| {
+            crate::model::App::new(&format!("extra.{index}"), &format!("Extra {index}"))
+        }),
+    );
+    let ids: Vec<_> = state
+        .inventory
+        .apps
+        .iter()
+        .take(13)
+        .map(|app| app.id.clone())
+        .collect();
+    state.preferences.favorites = Some(ids.clone());
+    assert_eq!(state.preferences.home_rows, 1);
+    state.open(2);
+    state.pointer_focus(Target::Sidebar(crate::state::WIDGETS_SECTION));
+    state.direction(Direction::Right, &controls(&state));
+    for _ in 0..crate::model::HOME_GRID_ROWS {
+        state.direction(Direction::Down, &controls(&state));
+    }
+    assert_eq!(
+        state.focus,
+        Target::WidgetCell(state.preferences.widget_position(Favorites).cell())
+    );
+    state.activate();
+    assert_eq!(state.focus, Target::ConfigureWidget(Favorites));
+    let menu = controls(&state);
+    for action in [
+        Target::ConfigureWidget(Favorites),
+        Target::MoveWidget(Favorites),
+        Target::RemoveWidget(Favorites),
+    ] {
+        assert!(menu.iter().any(|control| control.target == action));
+    }
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::FavoriteRows));
+    assert_eq!(state.focus, Target::Choice(0));
+    state.direction(Direction::Down, &controls(&state));
+    assert!(matches!(state.activate().as_slice(), [Effect::Save]));
+    assert_eq!(
+        state.focus,
+        Target::WidgetCell(state.preferences.widget_position(Favorites).cell())
+    );
+    assert_eq!(state.preferences.favorites.as_ref(), Some(&ids));
+    assert_eq!(state.preferences.home_rows, 2);
+    let restored: Preferences = serde_json::from_value(json!(state.preferences)).unwrap();
+    assert_eq!(restored.home_rows, 2);
+
+    state.open(0);
+    let home = controls(&state);
+    let card = |index: usize| {
+        home.iter()
+            .find(|control| control.target == Target::App(ids[index].clone()))
+            .unwrap()
+            .rect
+    };
+    assert_eq!(card(0).x, card(6).x);
+    assert!(card(0).y + card(0).h < card(6).y);
+    assert_eq!(card(0).y, card(12).y);
+    assert!(card(5).x < card(12).x);
+    assert_eq!(card(6).y, 820.);
+    let (x, y) = card(6).center();
+    assert_eq!(
+        state.hit_test(&home, x, y),
+        Some(Target::App(ids[6].clone()))
+    );
+
+    state.direction(Direction::Right, &home);
+    state.direction(Direction::Down, &home);
+    assert_eq!(state.focus, Target::App(ids[7].clone()));
+    state.direction(Direction::Down, &home);
+    assert_eq!(state.page, Page::Apps);
+    assert_eq!(state.focus, Target::App(state.drawer_apps()[1].id.clone()));
+    assert!(state.drawer_grid_top() > crate::state::DRAWER_DOCK_Y + state.dock_layout().height());
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.page, Page::Home);
+    assert_eq!(state.focus, Target::App(ids[7].clone()));
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::App(ids[1].clone()));
+
+    state.moving = Some(ids[1].clone());
+    assert!(matches!(
+        state.direction(Direction::Down, &home).as_slice(),
+        [Effect::Save]
+    ));
+    assert_eq!(state.dock_apps()[7].id, ids[1]);
+
+    state.open(0);
+    state.scroll_favorites(10000.);
+    assert!((state.home_scroll - crate::state::HOME_TILE_PITCH).abs() < 0.01);
+    assert_eq!(state.first_content(), Target::App(ids[7].clone()));
+
+    // The next page holds a top-row card but no card in the lower row.
+    state.focus = Target::App(state.dock_apps()[11].id.clone());
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::App(ids[12].clone()));
+
+    state.open(2);
+    state.pointer_focus(Target::Sidebar(crate::state::WIDGETS_SECTION));
+    state.pointer_focus(Target::WidgetCell(
+        state.preferences.widget_position(Favorites).cell(),
+    ));
+    state.activate();
+    state.activate();
+    assert_eq!(state.focus, Target::Choice(1));
+    state.direction(Direction::Down, &controls(&state));
+    assert!(matches!(state.activate().as_slice(), [Effect::Save]));
+    assert_eq!(state.preferences.home_rows, 3);
+    assert_eq!(
+        state.focus,
+        Target::WidgetCell(state.preferences.widget_position(Favorites).cell())
+    );
+
+    state.open(0);
+    let dock = state.dock_apps();
+    assert_eq!(dock.len(), ids.len());
+    assert!(
+        state
+            .drawer_apps()
+            .iter()
+            .any(|app| app.id.starts_with("extra."))
+    );
+    let third_row = Target::App(dock[12].id.clone());
+    state.direction(Direction::Down, &controls(&state));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, third_row);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.page, Page::Apps);
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.page, Page::Home);
+    assert_eq!(state.focus, third_row);
+}
+
+#[test]
+fn favorites_widget_uses_grid_placement_can_be_removed_and_restores_its_position() {
+    use crate::model::{HOME_GRID_COLUMNS, HomeWidget::Favorites, WidgetPosition};
+
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    let favorite_count = state.dock_apps().len();
+    let edit_favorites = |state: &mut State| {
+        state.open(2);
+        state.pointer_focus(Target::Sidebar(crate::state::WIDGETS_SECTION));
+        state.pointer_focus(Target::WidgetCell(
+            state.preferences.widget_position(Favorites).cell(),
+        ));
+        state.activate();
+    };
+
+    edit_favorites(&mut state);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::MoveWidget(Favorites));
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::WidgetPosition(Favorites)));
+    assert_eq!(state.focus, Target::Choice(4 * HOME_GRID_COLUMNS));
+    state.direction(Direction::Up, &controls(&state));
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::Choice(2 * HOME_GRID_COLUMNS));
+    assert!(matches!(state.activate().as_slice(), [Effect::Save]));
+    assert_eq!(
+        state.preferences.widget_position(Favorites),
+        WidgetPosition { column: 0, row: 2 }
+    );
+
+    edit_favorites(&mut state);
+    state.direction(Direction::Down, &controls(&state));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::RemoveWidget(Favorites));
+    assert!(matches!(state.activate().as_slice(), [Effect::Save]));
+    assert!(!state.preferences.show_favorites_dock);
+    assert!(state.dock_apps().is_empty());
+    assert_eq!(state.drawer_apps().len(), state.inventory.apps.len());
+    state.open(0);
+    assert_eq!(state.focus, Target::OpenDrawer);
+    assert!(
+        controls(&state)
+            .iter()
+            .any(|item| item.target == Target::OpenDrawer)
+    );
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.page, Page::Apps);
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::OpenDrawer);
+
+    state.open(2);
+    state.pointer_focus(Target::Sidebar(crate::state::WIDGETS_SECTION));
+    state.direction(Direction::Right, &controls(&state));
+    state.activate();
+    assert_eq!(state.focus, Target::AddWidget(Favorites));
+    state.activate();
+    assert_eq!(state.focus, Target::Choice(2 * HOME_GRID_COLUMNS));
+    assert!(matches!(state.activate().as_slice(), [Effect::Save]));
+    assert!(state.preferences.show_favorites_dock);
+    assert_eq!(state.preferences.favorites_dock_row, Some(2));
+    assert_eq!(state.dock_apps().len(), favorite_count);
+}
+
+#[test]
+fn resizing_favorites_reserves_real_grid_rows_and_repairs_collisions() {
+    use crate::model::{
+        HomeWidget::{Favorites, Greeting, Weather},
+        WidgetPosition,
+    };
+
+    let mut prefs = Preferences::default();
+    let original_greeting = prefs.widget_position(Greeting);
+    let original_weather = prefs.widget_position(Weather);
+    for rows in [1, 2, 3] {
+        prefs.set_favorite_rows(rows);
+        assert_eq!(prefs.widget_position(Favorites).row, 5 - rows);
+        assert_eq!(prefs.widget_span(Favorites), (6, rows));
+        assert_eq!(prefs.widget_position(Greeting), original_greeting);
+        assert_eq!(prefs.widget_position(Weather), original_weather);
+    }
+    prefs.set_favorite_rows(1);
+    assert!(prefs.place_widget(Weather, WidgetPosition { column: 4, row: 2 }));
+    assert!(prefs.place_widget(Favorites, WidgetPosition { column: 0, row: 1 }));
+    prefs.set_favorite_rows(3);
+    for widget in [Greeting, Weather, Favorites] {
+        assert!(prefs.can_place_widget(widget, prefs.widget_position(widget)));
+    }
+    assert_ne!(
+        prefs.widget_position(Favorites).row,
+        1,
+        "two free adjacent rows needed for Weather"
+    );
+}
+
+#[test]
 fn widget_reset_only_restores_membership_and_positions_and_saves_once() {
     use crate::model::{HomeWidget, WidgetPosition};
     let mut state = ready();
@@ -178,7 +411,7 @@ fn widget_manager_grid_opens_context_menu_from_every_occupied_cell() {
             .iter()
             .filter(|control| matches!(control.target, Target::WidgetCell(_)))
             .count(),
-        24
+        crate::model::HOME_GRID_CELLS
     );
     for (cell, widget) in [
         (0, HomeWidget::Greeting),
@@ -189,6 +422,7 @@ fn widget_manager_grid_opens_context_menu_from_every_occupied_cell() {
         (5, HomeWidget::Weather),
         (10, HomeWidget::Weather),
         (11, HomeWidget::Weather),
+        (27, HomeWidget::Favorites),
     ] {
         let control = rendered
             .controls
@@ -378,7 +612,7 @@ fn widget_position_picker_blocks_overlaps_and_out_of_bounds_for_remote_and_point
 }
 
 #[test]
-fn six_by_four_widget_navigation_reaches_last_row_and_column_without_wrapping() {
+fn six_by_five_widget_navigation_reaches_last_row_and_column_without_wrapping() {
     use crate::model::{HomeWidget, WidgetPosition};
     let mut state = ready();
     state.open(2);
@@ -393,25 +627,32 @@ fn six_by_four_widget_navigation_reaches_last_row_and_column_without_wrapping() 
         Direction::Down,
         Direction::Down,
         Direction::Down,
+        Direction::Down,
     ] {
         state.direction(direction, &scene(&state).controls);
     }
-    assert_eq!(state.focus, Target::Choice(23));
+    assert_eq!(state.focus, Target::Choice(29));
     for direction in [Direction::Right, Direction::Down] {
         state.direction(direction, &scene(&state).controls);
-        assert_eq!(state.focus, Target::Choice(23));
+        assert_eq!(state.focus, Target::Choice(29));
     }
     assert!(
         state.activate().is_empty(),
         "Greeting cannot extend past the right edge"
     );
     state.direction(Direction::Left, &scene(&state).controls);
-    assert_eq!(state.focus, Target::Choice(22));
+    assert_eq!(state.focus, Target::Choice(28));
     assert!(state.activate().is_empty(), "Greeting spans four columns");
     state.direction(Direction::Left, &scene(&state).controls);
-    assert_eq!(state.focus, Target::Choice(21));
+    assert_eq!(state.focus, Target::Choice(27));
     assert!(state.activate().is_empty(), "Greeting spans four columns");
     state.direction(Direction::Left, &scene(&state).controls);
+    assert_eq!(state.focus, Target::Choice(26));
+    assert!(
+        state.activate().is_empty(),
+        "Favorites occupies the bottom row"
+    );
+    state.direction(Direction::Up, &scene(&state).controls);
     assert_eq!(state.focus, Target::Choice(20));
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert_eq!(
@@ -426,15 +667,15 @@ fn six_by_four_widget_navigation_reaches_last_row_and_column_without_wrapping() 
         state.preferences.weather_position,
         WidgetPosition { column: 0, row: 1 }
     );
-    assert!(WidgetPosition::from_cell(24).is_none());
+    assert!(WidgetPosition::from_cell(crate::model::HOME_GRID_CELLS).is_none());
 }
 
 #[test]
 fn widget_positions_default_to_requested_spans_and_sanitize_safely() {
     use crate::model::{HomeWidget, WidgetPosition};
     let mut preferences: Preferences = serde_json::from_str("{}").unwrap();
-    assert_eq!(HomeWidget::Greeting.span(), (4, 1));
-    assert_eq!(HomeWidget::Weather.span(), (2, 2));
+    assert_eq!(HomeWidget::Greeting.span(1), (4, 1));
+    assert_eq!(HomeWidget::Weather.span(1), (2, 2));
     assert_eq!(
         preferences.greeting_position,
         WidgetPosition { column: 0, row: 0 }
@@ -648,6 +889,108 @@ fn scrolling_drawer_continues_behind_dock_without_obscuring_remote_focus() {
             .find(|control| control.target == state.focus)
             .unwrap();
         assert!(selected.rect.y >= state.drawer_grid_top() - 8.);
+    }
+}
+
+#[test]
+fn taller_favorites_dock_scrolls_with_the_drawer() {
+    use std::time::{Duration, Instant};
+
+    for rows in [2, 3] {
+        let mut state = ready();
+        state.preferences.set_favorite_rows(rows);
+        state.inventory.apps.extend((0..60).map(|index| {
+            crate::model::App::new(&format!("extra.{index}"), &format!("Extra {index}"))
+        }));
+        state.open(1);
+        state.drawer_visibility = 1.;
+        let rendered = scene(&state);
+        let initial_dock_y = state.dock_y();
+        let dock_card = rendered
+            .controls
+            .iter()
+            .find(|control| matches!(control.target, Target::DockApp(_)))
+            .unwrap();
+        let grid_app = state.first_content();
+        let grid_control = |scene: &crate::view::Scene| {
+            scene
+                .controls
+                .iter()
+                .find(|control| control.target == grid_app)
+                .unwrap()
+                .clone()
+        };
+        let initial_grid_y = grid_control(&rendered).presented_y;
+
+        assert!(state.wheel_scroll(&rendered.controls, Some(dock_card.rect.center()), 0, -2));
+        assert_eq!(state.scroll, 180.);
+        assert_eq!(
+            state.drawer_scroll(),
+            0.,
+            "the first frame should keep its position"
+        );
+        assert!(state.animating());
+        state.advance_drawer_scroll(Instant::now() + Duration::from_millis(100));
+        let midway = state.drawer_scroll();
+        assert!(
+            (13. ..14.).contains(&midway),
+            "a late frame advances by at most one 50 ms animation step"
+        );
+        let scrolled = scene(&state);
+        let card = grid_control(&scrolled);
+        assert!((state.dock_y() - (initial_dock_y - midway)).abs() < 0.01);
+        assert!((initial_grid_y - card.presented_y - midway).abs() < 0.01);
+        assert_eq!(
+            state.hit_test(
+                &scrolled.controls,
+                card.rect.center().0,
+                card.presented_y + card.rect.h / 2.
+            ),
+            Some(grid_app.clone())
+        );
+
+        assert!(state.wheel_scroll(&scrolled.controls, None, 0, -1));
+        assert_eq!(state.scroll, 270.);
+        assert_eq!(
+            state.drawer_scroll(),
+            midway,
+            "a new target should start at the visible position"
+        );
+        let started = Instant::now();
+        for frame in 1..=16 {
+            state.advance_drawer_scroll(started + Duration::from_millis(frame * 20));
+        }
+        assert_eq!(state.drawer_scroll(), 270.);
+
+        state.focus = grid_app;
+        let mut prior_scroll = 270.;
+        for _ in 0..8 {
+            state.direction(Direction::Down, &controls(&state));
+            let selected = scene(&state)
+                .controls
+                .into_iter()
+                .find(|control| control.target == state.focus)
+                .unwrap();
+            assert!(selected.rect.y >= state.apps_viewport().y);
+            assert!(selected.rect.y + selected.rect.h <= 1056.1);
+            assert!(state.scroll >= prior_scroll);
+            prior_scroll = state.scroll;
+        }
+        assert!(state.scroll > 270.);
+        state.advance_drawer_scroll(Instant::now() + Duration::from_millis(100));
+        let scrolled_dock_y = state.dock_y();
+        state.back();
+        assert_eq!(state.page, Page::Home);
+        assert_eq!(state.scroll, 0.);
+        assert_eq!(state.dock_y(), scrolled_dock_y);
+        state.drawer_visibility = 0.;
+        assert_eq!(state.dock_y(), state.home_dock_y());
+
+        state.preferences.reduced_motion = true;
+        state.open(1);
+        assert!(state.wheel_scroll(&controls(&state), None, 0, -2));
+        assert_eq!(state.drawer_scroll(), 180.);
+        assert!(!state.animating());
     }
 }
 

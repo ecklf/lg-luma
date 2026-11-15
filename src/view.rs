@@ -2,14 +2,14 @@
 use crate::{
     i18n::Language,
     model::{
-        App, BACKGROUNDS, HOME_GRID_CELLS, HOME_GRID_COLUMNS, HOME_GRID_ROWS, HomeWidget, Input,
-        InputMode, WidgetPosition,
+        App, BACKGROUNDS, HOME_GRID_CELLS, HOME_GRID_COLUMNS, HomeWidget, Input, InputMode,
+        WidgetPosition,
     },
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, APPS_SECTION, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT,
-        HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH, INPUTS_SECTION, KEYS, Overlay, Page,
-        Rect, SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
+        APPS_COLUMNS, APPS_SECTION, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_GRID_PITCH_Y,
+        HOME_GRID_TOP, HOME_STRIP_LEFT, HOME_STRIP_RIGHT, HOME_TILE_HEIGHT, INPUTS_SECTION, KEYS,
+        Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -20,7 +20,7 @@ use std::{
 use time::OffsetDateTime;
 
 const MAIN_TOP: f32 = 108.8;
-const FACE_HEIGHT: f32 = 154.4;
+const FACE_HEIGHT: f32 = HOME_TILE_HEIGHT;
 const GRID_PITCH: f32 = 296.4;
 const RECENTS_BACKDROP_OPACITY: f32 = 0.86;
 const COMPANION_BACKGROUND: u32 = 0x1b2023;
@@ -250,6 +250,7 @@ impl Scene {
         self.controls.push(Control {
             target,
             rect,
+            presented_y: rect.y,
             scrollable,
         });
     }
@@ -1181,41 +1182,53 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         out.fade(start, state.drawer_progress(), 1.);
         out.controls.truncate(controls);
     }
-    favorites_dock(out, state, assets);
+    if state.preferences.show_favorites_dock {
+        favorites_dock(out, state, assets);
+    } else {
+        let rect = Rect::new(836., 993., 248., 60.);
+        let focused = state.focus == Target::OpenDrawer;
+        out.pill(rect, focused, false);
+        let color = if focused { c(0x242424, 1.) } else { WHITE };
+        let (label, style) = assets.fit_line(
+            state.preferences.language.t("apps"),
+            text(22., 550, 0.),
+            rect.w - 36.,
+            16.,
+        );
+        out.text(label, rect, style, color, true);
+        out.control(Target::OpenDrawer, rect, false);
+    }
 }
 
 fn home_grid_cell_rect(position: WidgetPosition) -> Rect {
     let width = (1752. - (HOME_GRID_COLUMNS - 1) as f32 * 24.) / HOME_GRID_COLUMNS as f32;
-    let height = (584. - (HOME_GRID_ROWS - 1) as f32 * 24.) / HOME_GRID_ROWS as f32;
     Rect::new(
         84. + f32::from(position.column) * (width + 24.),
-        188. + f32::from(position.row) * (height + 24.),
+        HOME_GRID_TOP + f32::from(position.row) * HOME_GRID_PITCH_Y,
         width,
-        height,
+        128.,
     )
 }
 
-fn home_widget_rect(widget: HomeWidget, position: WidgetPosition) -> Rect {
-    let (width, height) = widget.span();
+fn home_widget_rect(state: &State, widget: HomeWidget, position: WidgetPosition) -> Rect {
+    let (width, height) = state.preferences.widget_span(widget);
     let cell = home_grid_cell_rect(position);
     Rect::new(
         cell.x,
         cell.y,
         f32::from(width) * (cell.w + 24.) - 24.,
-        f32::from(height) * (cell.h + 24.) - 24.,
+        cell.h + f32::from(height - 1) * HOME_GRID_PITCH_Y,
     )
 }
 
 fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     let start = out.draw.len();
     let language = state.preferences.language;
-    for widget in HomeWidget::ALL {
-        let cell = home_widget_rect(widget, state.preferences.widget_position(widget));
-        if (widget == HomeWidget::Greeting && !state.preferences.show_greeting)
-            || (widget == HomeWidget::Weather && !state.preferences.show_weather)
-        {
+    for widget in [HomeWidget::Greeting, HomeWidget::Weather] {
+        if !state.preferences.has_widget(widget) {
             continue;
         }
+        let cell = home_widget_rect(state, widget, state.preferences.widget_position(widget));
         if widget == HomeWidget::Weather {
             let mut summary = weather_summary_layout(state, assets);
             // Reflow rather than shrinking the entire widget: text remains legible
@@ -1248,30 +1261,32 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
                     (*label, *style) = assets.fit_line(label, *style, rect.w, 24.);
                 }
             }
-            let controls = out.controls.len();
-            weather_summary(out, state, assets, summary, cell.y);
-            if let Some(control) = out.controls.get_mut(controls) {
-                control.rect.x = cell.x;
-            }
+            weather_summary(out, state, assets, summary, cell);
             continue;
         }
         // Keep the original typography within the wider 4×1 footprint,
         // fitting long translations rather than clipping the widget.
         let label = language.greeting(now.hour(), "");
-        let style = assets.fit_text(&label, text(90.4, 500, -0.065).leading(1.05), cell.w);
+        let scale = (cell.h / 128.).min(1.);
+        let style = assets.fit_text(
+            &label,
+            text(90.4 * scale, 500, -0.065).leading(1.05),
+            cell.w,
+        );
         let height = style.size * style.line_height;
         let date_band = if state.preferences.show_date {
-            32.8
+            32.8 * scale
         } else {
             0.
         };
         let top = cell.y + (cell.h - date_band - height) / 2.;
         if state.preferences.show_date {
             let date = state.preferences.date_format.format(language, now);
-            let (date, date_style) = assets.fit_line(&date, text(18.4, 600, 0.12), cell.w, 14.);
+            let (date, date_style) =
+                assets.fit_line(&date, text(18.4 * scale, 600, 0.12), cell.w, 14. * scale);
             out.text(
                 date,
-                Rect::new(cell.x, top, cell.w, 24.),
+                Rect::new(cell.x, top, cell.w, 24. * scale),
                 date_style,
                 c(0xf5f5f5, 0.72),
                 false,
@@ -1289,22 +1304,30 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
 }
 
 fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
+    if !state.preferences.show_favorites_dock {
+        return;
+    }
     let language = state.preferences.language;
     let dock_y = state.dock_y();
-    let dock_height = FACE_HEIGHT;
-    let dock = Rect::new(60., dock_y - 24., 1800., dock_height + 48.);
-    // The card extends beyond the content viewport; clip only its scrolling contents.
-    out.draw.push(Draw::Clip(None));
+    let layout = state.dock_layout();
+    let dock = layout.bounds(dock_y);
+    let card = |index| layout.card(index, dock_y, state.home_scroll);
+    let clip = if state.drawer_scrolls_dock() && state.drawer_visibility > 0. {
+        let viewport = state.apps_viewport();
+        if dock.y + dock.h <= viewport.y {
+            return;
+        }
+        Some(Rect::new(0., viewport.y, 1920., viewport.h))
+    } else {
+        None
+    };
+    out.draw.push(Draw::Clip(clip));
     out.shadow(dock, 40., 38., 12., 0.22);
     out.glass(dock, 40.);
     let apps = state.dock_apps();
     if state.loading && state.inventory.apps.is_empty() {
-        for index in 0..6 {
-            out.shape(
-                Rect::new(84. + index as f32 * GRID_PITCH, dock_y, 270., FACE_HEIGHT),
-                19.2,
-                c(0xffffff, 0.06),
-            );
+        for index in 0..layout.capacity() {
+            out.shape(card(index), 19.2, c(0xffffff, 0.06));
         }
     } else if apps.is_empty() {
         let error = state.error.is_some() && state.inventory.apps.is_empty();
@@ -1314,7 +1337,12 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
             state,
             assets,
             EmptyState {
-                rect: Rect::new(84., dock_y - 70., 1752., 258.7),
+                rect: Rect::new(
+                    84.,
+                    dock_y + (layout.height() - FACE_HEIGHT) * 0.5 - 70.,
+                    1752.,
+                    258.7,
+                ),
                 icon: if error { "alert" } else { "heart" },
                 title: if error {
                     language.t("aLittleHelp")
@@ -1347,19 +1375,7 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
         HOME_FADE_RIGHT,
     ])));
     for (index, app) in apps.iter().enumerate() {
-        tile(
-            out,
-            state,
-            assets,
-            app,
-            Rect::new(
-                84. + index as f32 * HOME_TILE_PITCH - state.home_scroll,
-                dock_y,
-                HOME_TILE_WIDTH,
-                FACE_HEIGHT,
-            ),
-            true,
-        );
+        tile(out, state, assets, app, card(index), true);
     }
     out.draw.push(Draw::EdgeFadeX(None));
     out.draw.push(Draw::Clip(Some(state.content_viewport())));
@@ -1579,23 +1595,44 @@ fn weather_summary(
     state: &State,
     assets: &Assets,
     summary: WeatherSummary,
-    y: f32,
+    cell: Rect,
 ) {
+    let scale = if state.dock_layout().rows > 1 {
+        let height = summary
+            .parts
+            .iter()
+            .map(|(_, _, _, rect)| rect.y + rect.h)
+            .fold(
+                summary
+                    .height
+                    .max(summary.icon_rect.y + summary.icon_rect.h),
+                f32::max,
+            );
+        (cell.h / height).min(1.)
+    } else {
+        1.
+    };
+    let x = cell.x * (1. - scale);
     let label_focus = summary.parts.last().map(|(_, style, _, rect)| {
         // The label's layout line box includes leading above and below the
         // text. Keep the focus ring snug to the label rather than the whole
         // weather row, which also contains the location icon.
         let leading = style.size * (style.line_height - 1.).max(0.);
         Rect::new(
-            rect.x,
-            y + rect.y + leading / 2.,
-            rect.w,
-            (rect.h - leading).max(style.size),
+            x + rect.x * scale,
+            cell.y + (rect.y + leading / 2.) * scale,
+            rect.w * scale,
+            (rect.h - leading).max(style.size) * scale,
         )
     });
-    paint_weather_summary(out, assets, &summary, 0., y, 1.);
+    paint_weather_summary(out, assets, &summary, x, cell.y, scale);
     if state.preferences.weather_location.is_none() {
-        let rect = Rect::new(84., y, summary.width, summary.height);
+        let rect = Rect::new(
+            cell.x,
+            cell.y,
+            summary.width * scale,
+            summary.height * scale,
+        );
         if state.focus == Target::WeatherConfigure
             && !state.pointer
             && let Some(label) = label_focus
@@ -1615,13 +1652,12 @@ fn library(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime)
     let start = out.draw.len();
     library_grid(out, state, assets);
     out.fade(start, state.drawer_progress(), 1.);
-    // The scrolling grid continues underneath the floating glass and pinned cards.
     favorites_dock(out, state, assets);
 }
 
 fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
-    let s = state.scroll;
+    let s = state.drawer_scroll();
     let apps = state.drawer_apps();
     if apps.is_empty() && state.dock_apps().is_empty() {
         let title = if state.loading {
@@ -1644,7 +1680,7 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
         );
     }
     out.draw.push(Draw::Clip(Some(state.apps_viewport())));
-    let offset = state.dock_y() - 164.8;
+    let offset = state.drawer_slide();
     let mut y = state.drawer_grid_top();
     for row in apps.chunks(APPS_COLUMNS) {
         let row_height = FACE_HEIGHT;
@@ -1662,9 +1698,9 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
                 ),
                 false,
             );
-            // Reveal/scroll against the final layout, not the moving presentation.
+            // Focus and wheel bounds use the destination; pointer input uses the drawn position.
             if let Some(control) = out.controls.last_mut() {
-                control.rect.y = y - s;
+                control.rect.y = y - state.scroll;
             }
         }
         y += row_height + 38.4;
@@ -2200,6 +2236,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Greeting) => language.t("greeting"),
                 Some(Subpage::Weather) => language.t("weather"),
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
+                Some(Subpage::FavoriteRows) => language.t("favorites"),
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::AppSorting) => language.t("appSorting"),
@@ -2311,6 +2348,11 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                         *format == state.preferences.date_format,
                     )
                 })
+                .collect(),
+            Subpage::FavoriteRows => ["oneRow", "twoRows", "threeRows"]
+                .into_iter()
+                .enumerate()
+                .map(|(index, key)| (language.t(key), None, state.dock_layout().rows == index + 1))
                 .collect(),
             Subpage::ClockFormat => vec![
                 (language.t("hour12"), None, !state.preferences.hour_24),
@@ -2918,7 +2960,11 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
         out.border(rect, 8., 1., c(0xffffff, 0.24));
         out.control(
             if moving.is_some() {
-                Target::Choice(cell)
+                Target::Choice(if moving == Some(HomeWidget::Favorites) {
+                    cell - cell % HOME_GRID_COLUMNS
+                } else {
+                    cell
+                })
             } else {
                 Target::WidgetCell(cell)
             },
@@ -2930,18 +2976,44 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
         .into_iter()
         .filter(|other| Some(*other) != moving && state.preferences.has_widget(*other))
     {
-        let rect = map(home_widget_rect(
-            other,
-            state.preferences.widget_position(other),
-        ));
-        out.shape(rect, 8., c(0x69737c, 0.65));
+        let position = state.preferences.widget_position(other);
+        let rect = map(home_widget_rect(state, other, position));
+        if other == HomeWidget::Favorites {
+            let layout = state.dock_layout();
+            let occupied = state.dock_apps().len();
+            out.shape(rect, 8., c(0x1c232b, 0.84));
+            for index in 0..layout.capacity() {
+                let (column, row) = layout.position(index);
+                let tile = map(home_grid_cell_rect(WidgetPosition {
+                    column: column as u8,
+                    row: position.row + row as u8,
+                }))
+                .inset(6.);
+                if index < occupied {
+                    out.shape(tile, 8., c(0xe2e9ef, 0.20));
+                } else {
+                    out.border(tile, 8., 1., c(0xffffff, 0.24));
+                }
+            }
+        } else {
+            out.shape(rect, 8., c(0x69737c, 0.65));
+        }
         let (label, style) = assets.fit_line(
             language.t(other.key()),
-            text(22., 500, 0.),
+            text(22., 550, 0.),
             rect.w - 24.,
             16.,
         );
-        out.text(label, rect.inset(12.), style, WHITE, true);
+        let label_rect = if other == HomeWidget::Favorites {
+            let width = (assets.width(&label, style) + 36.).min(rect.w);
+            let (x, y) = rect.center();
+            let pill = Rect::new(x - width / 2., y - 20., width, 40.);
+            out.shape(pill, 20., c(0x151b21, 0.95));
+            pill
+        } else {
+            rect.inset(12.)
+        };
+        out.text(label, label_rect, style, WHITE, true);
     }
     let Some(widget) = moving else {
         if let Target::WidgetCell(cell) = state.focus
@@ -2951,6 +3023,7 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
                 || map(home_grid_cell_rect(position)),
                 |widget| {
                     map(home_widget_rect(
+                        state,
                         widget,
                         state.preferences.widget_position(widget),
                     ))
@@ -2976,7 +3049,7 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
     let saved = state.preferences.widget_position(widget);
     if state.preferences.has_widget(widget) {
         out.border(
-            map(home_widget_rect(widget, saved)),
+            map(home_widget_rect(state, widget, saved)),
             8.,
             2.,
             c(0xffffff, 0.4),
@@ -2986,8 +3059,8 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
         && let Some(position) = WidgetPosition::from_cell(cell)
     {
         let valid = state.preferences.can_place_widget(widget, position);
-        let rect = if position.fits(widget) {
-            map(home_widget_rect(widget, position))
+        let rect = if position.fits(state.preferences.widget_span(widget)) {
+            map(home_widget_rect(state, widget, position))
         } else {
             map(home_grid_cell_rect(position))
         };
@@ -3001,7 +3074,7 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
             },
         );
         out.border(rect, 8., 3., if valid { WHITE } else { c(0xffa3a3, 1.) });
-        let (w, h) = widget.span();
+        let (w, h) = state.preferences.widget_span(widget);
         let (label, style) = assets.fit_line(
             &format!("{}  {w} × {h}", language.t(widget.key())),
             text(24., 550, 0.),
@@ -3446,7 +3519,7 @@ fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, cat
     let position = WidgetPosition::from_cell(cell).unwrap_or_default();
     let logical = widget.map_or_else(
         || home_grid_cell_rect(position),
-        |widget| home_widget_rect(widget, state.preferences.widget_position(widget)),
+        |widget| home_widget_rect(state, widget, state.preferences.widget_position(widget)),
     );
     let scale = 1120. / 1920.;
     let card = Rect::new(
@@ -4454,8 +4527,11 @@ mod tests {
                             _ => None,
                         })
                         .expect("The full localized widget label should fit without truncation");
-                    let cell =
-                        home_widget_rect(HomeWidget::Greeting, state.preferences.greeting_position);
+                    let cell = home_widget_rect(
+                        &state,
+                        HomeWidget::Greeting,
+                        state.preferences.greeting_position,
+                    );
                     assert!(rect.x >= cell.x && rect.y >= cell.y);
                     assert!(
                         rect.x + rect.w <= cell.x + cell.w && rect.y + rect.h <= cell.y + cell.h
@@ -4480,53 +4556,68 @@ mod tests {
     }
 
     #[test]
-    fn fixed_widget_spans_fit_above_dock_in_every_legal_position() {
-        for widget in HomeWidget::ALL {
-            for cell in 0..HOME_GRID_CELLS {
-                let position = WidgetPosition::from_cell(cell).unwrap();
-                if !position.fits(widget) {
-                    continue;
-                }
-                let rect = home_widget_rect(widget, position);
-                assert!(rect.x >= 84. && rect.x + rect.w <= 1836.);
-                assert!(rect.y >= 164.8 && rect.y + rect.h <= 796.);
-                assert_eq!(
-                    rect.w,
-                    if widget != HomeWidget::Weather {
-                        1160.
-                    } else {
-                        568.
+    fn valid_widget_positions_do_not_overlap_the_dock() {
+        let mut state = State::new(Preferences::default());
+        for rows in 1..=crate::model::MAX_HOME_ROWS {
+            state.preferences.set_favorite_rows(rows);
+            let dock = state.dock_layout().bounds(state.home_dock_y());
+            for widget in [HomeWidget::Greeting, HomeWidget::Weather] {
+                for position in (0..HOME_GRID_CELLS).filter_map(WidgetPosition::from_cell) {
+                    if !state.preferences.can_place_widget(widget, position) {
+                        continue;
                     }
-                );
+                    let rect = home_widget_rect(&state, widget, position);
+                    assert!(rect.x >= 84. && rect.x + rect.w <= 1836.);
+                    assert!(rect.y >= HOME_GRID_TOP && rect.y + rect.h <= dock.y);
+                }
             }
         }
     }
 
     #[test]
-    fn widget_previews_do_not_draw_a_placeholder_dock() {
+    fn favorites_preview_uses_the_same_full_width_grid_cells_as_other_widgets() {
         let assets = assets();
         let mut state = State::new(Preferences::default());
         state.open(2);
         state.section = WIDGETS_SECTION;
-        for moving in [None, Some(HomeWidget::Greeting), Some(HomeWidget::Weather)] {
-            state.subpage = moving.map(Subpage::WidgetPosition);
-            state.focus = moving.map_or(Target::WidgetAdd, |widget| {
-                Target::Choice(widget.default_position().cell())
-            });
+        state.preferences.language = Language::Es;
+        let mut geometry = None;
+        for rows in 1..=crate::model::MAX_HOME_ROWS {
+            state.preferences.set_favorite_rows(rows);
+            let anchor = state.preferences.widget_position(HomeWidget::Favorites);
             let mut scene = Scene::new();
-            widget_grid(&mut scene, &state, &assets, moving);
-            let dock_top = widget_preview_top(&state) + 860. * 1120. / 1920.;
+            widget_grid(&mut scene, &state, &assets, None);
             assert!(
-                !scene
+                scene
                     .draw
                     .iter()
-                    .any(|draw| matches!(draw, Draw::Shape(rect, ..) if rect.y >= dock_top))
+                    .any(|draw| { matches!(draw, Draw::Text(label, ..) if label == "Favoritos") })
             );
-            assert!(
-                !scene
-                    .controls
-                    .iter()
-                    .any(|control| matches!(control.target, Target::App(_) | Target::DockApp(_)))
+            let cells: Vec<_> = scene
+                .controls
+                .iter()
+                .map(|control| {
+                    (
+                        control.rect.x,
+                        control.rect.y,
+                        control.rect.w,
+                        control.rect.h,
+                    )
+                })
+                .collect();
+            assert_eq!(cells.len(), HOME_GRID_CELLS);
+            assert_eq!(geometry.get_or_insert_with(|| cells.clone()), &cells);
+            let (x, y) = scene.controls[anchor.cell() + 5].rect.center();
+            assert_eq!(
+                state.hit_test(&scene.controls, x, y),
+                Some(Target::WidgetCell(anchor.cell() + 5))
+            );
+
+            let mut moving = Scene::new();
+            widget_grid(&mut moving, &state, &assets, Some(HomeWidget::Favorites));
+            assert_eq!(
+                state.hit_test(&moving.controls, x, y),
+                Some(Target::Choice(anchor.cell()))
             );
         }
     }
@@ -4552,8 +4643,11 @@ mod tests {
                         _ => None,
                     })
                     .expect("The full localized setup action must remain visible");
-                let cell =
-                    home_widget_rect(HomeWidget::Weather, state.preferences.weather_position);
+                let cell = home_widget_rect(
+                    &state,
+                    HomeWidget::Weather,
+                    state.preferences.weather_position,
+                );
                 assert!(rect.x >= cell.x && rect.y >= cell.y);
                 assert!(rect.x + rect.w <= cell.x + cell.w && rect.y + rect.h <= cell.y + cell.h);
                 assert!(style.size >= 24.);
@@ -4582,13 +4676,16 @@ mod tests {
             state.preferences.weather_style = style;
             for slot in 0..HOME_GRID_CELLS {
                 let position = WidgetPosition::from_cell(slot).unwrap();
-                if !position.fits(HomeWidget::Weather) {
+                if !state
+                    .preferences
+                    .can_place_widget(HomeWidget::Weather, position)
+                {
                     continue;
                 }
                 state.preferences.weather_position = position;
                 let mut rendered = Scene::new();
                 home(&mut rendered, &state, &assets, OffsetDateTime::UNIX_EPOCH);
-                let cell = home_widget_rect(HomeWidget::Weather, position);
+                let cell = home_widget_rect(&state, HomeWidget::Weather, position);
                 let control = rendered
                     .controls
                     .iter()

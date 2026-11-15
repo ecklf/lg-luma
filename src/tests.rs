@@ -263,6 +263,7 @@ fn widening_favorites_does_not_widen_apps_or_unclip_offscreen_rows() {
     let control = crate::state::Control {
         target: Target::App("sample".into()),
         rect: crate::state::Rect::new(0., 500., 1920., 600.),
+        presented_y: 500.,
         scrollable: true,
     };
     let controls = [control];

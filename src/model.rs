@@ -255,8 +255,9 @@ impl WeatherStyle {
     }
 }
 
+pub const MAX_HOME_ROWS: u8 = 3;
 pub const HOME_GRID_COLUMNS: usize = 6;
-pub const HOME_GRID_ROWS: usize = 4;
+pub const HOME_GRID_ROWS: usize = 5;
 pub const HOME_GRID_CELLS: usize = HOME_GRID_COLUMNS * HOME_GRID_ROWS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -264,15 +265,17 @@ pub const HOME_GRID_CELLS: usize = HOME_GRID_COLUMNS * HOME_GRID_ROWS;
 pub enum HomeWidget {
     Weather,
     Greeting,
+    Favorites,
 }
 
 impl HomeWidget {
-    pub const ALL: [Self; 2] = [Self::Greeting, Self::Weather];
+    pub const ALL: [Self; 3] = [Self::Greeting, Self::Weather, Self::Favorites];
 
-    pub fn span(self) -> (u8, u8) {
+    pub fn span(self, favorite_rows: u8) -> (u8, u8) {
         match self {
             Self::Greeting => (4, 1),
             Self::Weather => (2, 2),
+            Self::Favorites => (HOME_GRID_COLUMNS as u8, favorite_rows),
         }
     }
 
@@ -280,16 +283,21 @@ impl HomeWidget {
         match self {
             Self::Weather => "weather",
             Self::Greeting => "greeting",
+            Self::Favorites => "favorites",
         }
     }
 
     pub fn default_position(self) -> WidgetPosition {
         WidgetPosition {
             column: match self {
-                Self::Greeting => 0,
+                Self::Greeting | Self::Favorites => 0,
                 Self::Weather => 4,
             },
-            row: 0,
+            row: if self == Self::Favorites {
+                HOME_GRID_ROWS as u8 - 1
+            } else {
+                0
+            },
         }
     }
 }
@@ -312,15 +320,12 @@ impl WidgetPosition {
         usize::from(self.row) * HOME_GRID_COLUMNS + usize::from(self.column)
     }
 
-    pub fn fits(self, widget: HomeWidget) -> bool {
-        let (width, height) = widget.span();
+    pub fn fits(self, (width, height): (u8, u8)) -> bool {
         usize::from(self.column) + usize::from(width) <= HOME_GRID_COLUMNS
             && usize::from(self.row) + usize::from(height) <= HOME_GRID_ROWS
     }
 
-    fn overlaps(self, widget: HomeWidget, other: Self, other_widget: HomeWidget) -> bool {
-        let (w, h) = widget.span();
-        let (ow, oh) = other_widget.span();
+    fn overlaps(self, (w, h): (u8, u8), other: Self, (ow, oh): (u8, u8)) -> bool {
         u16::from(self.column) < u16::from(other.column) + u16::from(ow)
             && u16::from(other.column) < u16::from(self.column) + u16::from(w)
             && u16::from(self.row) < u16::from(other.row) + u16::from(oh)
@@ -340,6 +345,11 @@ pub struct Preferences {
     #[serde(rename = "date_position", skip_serializing)]
     pub legacy_date_position: Option<WidgetPosition>,
     pub favorites: Option<Vec<String>>,
+    pub home_rows: u8,
+    pub show_favorites_dock: bool,
+    pub favorites_dock_row: Option<u8>,
+    #[serde(rename = "favorites_dock_top", skip_serializing)]
+    pub legacy_favorites_dock_top: bool,
     pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
     pub background: String,
@@ -386,6 +396,10 @@ impl Default for Preferences {
             weather_position: HomeWidget::Weather.default_position(),
             legacy_date_position: None,
             favorites: None,
+            home_rows: 1,
+            show_favorites_dock: true,
+            favorites_dock_row: None,
+            legacy_favorites_dock_top: false,
             custom_tiles: vec![],
             hidden: vec![],
             background: "dunes".into(),
@@ -429,10 +443,29 @@ impl Preferences {
         self.show_weather
     }
 
+    fn default_widget_position(&self, widget: HomeWidget) -> WidgetPosition {
+        if widget == HomeWidget::Favorites {
+            WidgetPosition {
+                column: 0,
+                row: HOME_GRID_ROWS as u8 - self.home_rows,
+            }
+        } else {
+            widget.default_position()
+        }
+    }
+
+    pub fn widget_span(&self, widget: HomeWidget) -> (u8, u8) {
+        widget.span(self.home_rows)
+    }
+
     pub fn widget_position(&self, widget: HomeWidget) -> WidgetPosition {
         match widget {
             HomeWidget::Greeting => self.greeting_position,
             HomeWidget::Weather => self.weather_position,
+            HomeWidget::Favorites => self.favorites_dock_row.map_or_else(
+                || self.default_widget_position(widget),
+                |row| WidgetPosition { column: 0, row },
+            ),
         }
     }
 
@@ -440,17 +473,19 @@ impl Preferences {
         match widget {
             HomeWidget::Greeting => self.show_greeting,
             HomeWidget::Weather => self.show_weather,
+            HomeWidget::Favorites => self.show_favorites_dock,
         }
     }
 
     /// Restore widget membership and placement without discarding configuration.
     pub fn reset_widgets(&mut self) -> bool {
         let changed = HomeWidget::ALL.into_iter().any(|widget| {
-            !self.has_widget(widget) || self.widget_position(widget) != widget.default_position()
+            !self.has_widget(widget)
+                || self.widget_position(widget) != self.default_widget_position(widget)
         });
         for widget in HomeWidget::ALL {
             self.set_widget_present(widget, true);
-            self.set_widget_position(widget, widget.default_position());
+            self.set_widget_position(widget, self.default_widget_position(widget));
         }
         self.legacy_date_position = None;
         changed
@@ -460,13 +495,14 @@ impl Preferences {
         match widget {
             HomeWidget::Greeting => self.show_greeting = present,
             HomeWidget::Weather => self.show_weather = present,
+            HomeWidget::Favorites => self.show_favorites_dock = present,
         }
     }
 
     pub fn widget_at(&self, position: WidgetPosition) -> Option<HomeWidget> {
         HomeWidget::ALL.into_iter().find(|widget| {
             let anchor = self.widget_position(*widget);
-            let (w, h) = widget.span();
+            let (w, h) = self.widget_span(*widget);
             self.has_widget(*widget)
                 && position.column >= anchor.column
                 && position.row >= anchor.row
@@ -476,11 +512,17 @@ impl Preferences {
     }
 
     pub fn can_place_widget(&self, widget: HomeWidget, position: WidgetPosition) -> bool {
-        position.fits(widget)
+        position.fits(self.widget_span(widget))
             && HomeWidget::ALL
                 .into_iter()
                 .filter(|other| *other != widget && self.has_widget(*other))
-                .all(|other| !position.overlaps(widget, self.widget_position(other), other))
+                .all(|other| {
+                    !position.overlaps(
+                        self.widget_span(widget),
+                        self.widget_position(other),
+                        self.widget_span(other),
+                    )
+                })
     }
 
     pub fn place_widget(&mut self, widget: HomeWidget, position: WidgetPosition) -> bool {
@@ -495,6 +537,10 @@ impl Preferences {
         match widget {
             HomeWidget::Greeting => self.greeting_position = position,
             HomeWidget::Weather => self.weather_position = position,
+            HomeWidget::Favorites => {
+                self.favorites_dock_row =
+                    (position != self.default_widget_position(widget)).then_some(position.row);
+            }
         }
     }
 
@@ -610,7 +656,71 @@ impl Preferences {
         self.input_icons.insert(id.into(), icon.into()) != Some(icon.into())
     }
 
+    pub fn set_favorite_rows(&mut self, rows: u8) -> bool {
+        if self.home_rows == rows || !(1..=MAX_HOME_ROWS).contains(&rows) {
+            return false;
+        }
+        self.home_rows = rows;
+        self.repair_widget_positions();
+        true
+    }
+
+    fn repair_widget_positions(&mut self) {
+        let dock = HomeWidget::Favorites;
+        let last = self.default_widget_position(dock).row;
+        let preferred = self.widget_position(dock).row.min(last);
+        let mut rows: Vec<_> = (0..=last).collect();
+        rows.sort_by_key(|row| row.abs_diff(preferred));
+
+        for row in rows {
+            let dock_position = WidgetPosition { column: 0, row };
+            if let Some((greeting, weather)) = self.arrange_widgets(dock_position) {
+                self.set_widget_position(dock, dock_position);
+                self.greeting_position = greeting;
+                self.weather_position = weather;
+                return;
+            }
+        }
+    }
+
+    fn arrange_widgets(
+        &self,
+        dock_position: WidgetPosition,
+    ) -> Option<(WidgetPosition, WidgetPosition)> {
+        let dock = HomeWidget::Favorites;
+        let (greeting, weather) = (HomeWidget::Greeting, HomeWidget::Weather);
+        let candidates = |widget| {
+            let current = self.widget_position(widget);
+            let size = self.widget_span(widget);
+            std::iter::once(current)
+                .chain(std::iter::once(self.default_widget_position(widget)))
+                .chain((0..HOME_GRID_CELLS).filter_map(WidgetPosition::from_cell))
+                .filter(move |position| {
+                    position.fits(size)
+                        && (!self.has_widget(widget)
+                            || !self.has_widget(dock)
+                            || !position.overlaps(size, dock_position, self.widget_span(dock)))
+                })
+        };
+
+        for greeting_position in candidates(greeting) {
+            if let Some(weather_position) = candidates(weather).find(|position| {
+                !self.has_widget(greeting)
+                    || !self.has_widget(weather)
+                    || !greeting_position.overlaps(
+                        self.widget_span(greeting),
+                        *position,
+                        self.widget_span(weather),
+                    )
+            }) {
+                return Some((greeting_position, weather_position));
+            }
+        }
+        None
+    }
+
     pub fn sanitize(&mut self) {
+        self.home_rows = self.home_rows.clamp(1, MAX_HOME_ROWS);
         // Collapse the previous draft's untouched separate-Date arrangement.
         // Custom Greeting/Weather anchors remain unchanged.
         if self.legacy_date_position.take().is_some()
@@ -622,29 +732,11 @@ impl Preferences {
             self.greeting_position = HomeWidget::Greeting.default_position();
             self.weather_position = HomeWidget::Weather.default_position();
         }
-        let mut placed = Vec::new();
-        for widget in HomeWidget::ALL {
-            if !self.has_widget(widget) {
-                if !self.widget_position(widget).fits(widget) {
-                    self.set_widget_position(widget, widget.default_position());
-                }
-                continue;
-            }
-            let valid = |position: WidgetPosition| {
-                position.fits(widget)
-                    && placed.iter().all(|other| {
-                        !position.overlaps(widget, self.widget_position(*other), *other)
-                    })
-            };
-            if !valid(self.widget_position(widget)) {
-                let position = std::iter::once(widget.default_position())
-                    .chain((0..HOME_GRID_CELLS).filter_map(WidgetPosition::from_cell))
-                    .find(|position| valid(*position))
-                    .unwrap();
-                self.set_widget_position(widget, position);
-            }
-            placed.push(widget);
+        if std::mem::take(&mut self.legacy_favorites_dock_top) && self.favorites_dock_row.is_none()
+        {
+            self.favorites_dock_row = Some(0);
         }
+        self.repair_widget_positions();
         if self.splash_background.as_ref().is_some_and(|id| {
             !BACKGROUNDS.iter().any(|(known, _)| *known == id) && !crate::wallpapers::valid_id(id)
         }) {
