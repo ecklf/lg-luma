@@ -171,6 +171,8 @@ fn pairs_once_and_then_changes_settings() {
 
     // The live preview is drawn by the launcher thread; an unchanged scene is not drawn again.
     let ask = |known: &str, answer: Frame| {
+        // Past the shared check interval, so the server asks the launcher again.
+        thread::sleep(PREVIEW_CHECK);
         let cookie = cookie.clone();
         let route = format!("/api/preview.jpg?known={known}");
         let request = thread::spawn(move || get(&route, &cookie));
@@ -234,6 +236,44 @@ fn pairs_once_and_then_changes_settings() {
     );
     assert!(status == 200 && head.contains("X-Luma-Frame: 8"));
     assert!(head.contains("X-Luma-On-Screen: false"));
+
+    // Long polling: held while the screen is unchanged, answered when it changes.
+    thread::sleep(PREVIEW_CHECK);
+    let started = Instant::now();
+    let request = {
+        let cookie = cookie.clone();
+        thread::spawn(move || get("/api/preview.jpg?known=8&wait=1", &cookie))
+    };
+    let mut answers = 0;
+    loop {
+        if let Event::Preview { reply, .. } = next_event(&service) {
+            answers += 1;
+            // Unchanged twice, then the screen changes.
+            let frame = if answers < 3 {
+                Frame {
+                    key: 8,
+                    on_screen: false,
+                    image: None,
+                }
+            } else {
+                Frame {
+                    key: 9,
+                    on_screen: true,
+                    image: pixels(),
+                }
+            };
+            reply.send(Ok(frame)).unwrap();
+            if answers == 3 {
+                break;
+            }
+        }
+    }
+    let (status, head, _) = request.join().unwrap();
+    assert!(status == 200 && head.contains("X-Luma-Frame: 9"));
+    assert!(
+        started.elapsed() >= PREVIEW_CHECK * 2,
+        "held while unchanged"
+    );
 
     let mut changed = settings.clone();
     changed.hour_24 = true;

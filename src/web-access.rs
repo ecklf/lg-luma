@@ -19,7 +19,11 @@ use std::{
     io::BufReader,
     net::{IpAddr, SocketAddr, TcpListener, TcpStream},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, mpsc},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+        mpsc,
+    },
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -32,6 +36,11 @@ pub const DEVICE_LIMIT: usize = 16;
 const MAX_BODY: usize = 4096;
 const REQUEST_TIME: Duration = Duration::from_secs(10);
 const ADDRESS_CHECK: Duration = Duration::from_secs(30);
+const CONNECTION_LIMIT: usize = 8;
+/// How often a waiting live preview asks the launcher whether its screen changed.
+const PREVIEW_CHECK: Duration = Duration::from_millis(100);
+/// A waiting live preview answers "unchanged" after this long, so connections recycle.
+const PREVIEW_WAIT: Duration = Duration::from_secs(20);
 const COOKIE: &str = "luma_device";
 // Browsers cap cookie lifetimes at about 400 days; removing the device on the TV ends it sooner.
 const COOKIE_AGE: u64 = 400 * 24 * 60 * 60;
@@ -94,7 +103,16 @@ struct Shared {
     devices: Vec<Device>,
     backgrounds: Vec<Background>,
     /// The last preview, encoded once and served until the scene changes.
-    preview: Option<(u64, Arc<Vec<u8>>)>,
+    preview: Option<Picture>,
+}
+
+#[derive(Clone)]
+struct Picture {
+    key: u64,
+    on_screen: bool,
+    jpeg: Arc<Vec<u8>>,
+    /// When the launcher last confirmed this is still the scene.
+    checked: Instant,
 }
 
 pub struct Service {
@@ -120,15 +138,7 @@ impl Service {
         let (wake, updates) = mpsc::channel();
         thread::Builder::new()
             .name("luma-web-access".into())
-            .spawn(move || {
-                worker(
-                    &worker_shared,
-                    &worker_path,
-                    &sender,
-                    &updates,
-                    loopback_only,
-                )
-            })
+            .spawn(move || worker(worker_shared, worker_path, sender, &updates, loopback_only))
             .map_err(|e| format!("Could not start web access worker: {e}"))?;
         Ok(Self {
             shared,
@@ -281,9 +291,9 @@ fn bind(ip: std::net::Ipv4Addr) -> Result<(TcpListener, SocketAddr), String> {
 }
 
 fn worker(
-    shared: &Mutex<Shared>,
-    path: &Path,
-    sender: &mpsc::SyncSender<Event>,
+    shared: Arc<Mutex<Shared>>,
+    path: PathBuf,
+    sender: mpsc::SyncSender<Event>,
     wake: &mpsc::Receiver<()>,
     loopback_only: bool,
 ) {
@@ -292,6 +302,7 @@ fn worker(
     let mut checked: Option<Instant> = None;
     let mut handled_pairing = 0;
     let mut busy_until = Instant::now();
+    let active = Arc::new(AtomicUsize::new(0));
     loop {
         let (stop, enabled, pairing) = {
             let shared = shared.lock().unwrap();
@@ -370,14 +381,30 @@ fn worker(
                     continue;
                 }
                 busy_until = Instant::now() + Duration::from_secs(5);
+                // A waiting live preview must not hold up saving, so each connection gets its
+                // own thread, a few at a time.
+                if active.load(Ordering::Acquire) >= CONNECTION_LIMIT {
+                    let _ = error_response(&mut stream, "503 Service Unavailable", "Busy");
+                    continue;
+                }
+                active.fetch_add(1, Ordering::AcqRel);
                 let context = Context {
-                    shared,
-                    path,
-                    sender,
+                    shared: shared.clone(),
+                    path: path.clone(),
+                    sender: sender.clone(),
                     address: *address,
                 };
-                if let Err(error) = serve(&mut stream, &context) {
-                    eprintln!("Luma web access: {error}");
+                let finished = active.clone();
+                let spawned = thread::Builder::new()
+                    .name("luma-web-request".into())
+                    .spawn(move || {
+                        if let Err(error) = serve(&mut stream, &context) {
+                            eprintln!("Luma web access: {error}");
+                        }
+                        finished.fetch_sub(1, Ordering::AcqRel);
+                    });
+                if spawned.is_err() {
+                    active.fetch_sub(1, Ordering::AcqRel);
                 }
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
@@ -401,10 +428,10 @@ fn worker(
     }
 }
 
-struct Context<'a> {
-    shared: &'a Mutex<Shared>,
-    path: &'a Path,
-    sender: &'a mpsc::SyncSender<Event>,
+struct Context {
+    shared: Arc<Mutex<Shared>>,
+    path: PathBuf,
+    sender: mpsc::SyncSender<Event>,
     address: SocketAddr,
 }
 
@@ -503,11 +530,17 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
             }
             drop(shared);
             if api == "preview.jpg" {
-                let known = request
+                let query = request
                     .target
-                    .split_once("?known=")
-                    .and_then(|(_, key)| key.parse().ok());
-                return preview(stream, context, known);
+                    .split_once('?')
+                    .map_or("", |(_, query)| query);
+                let value = |name: &str| {
+                    query
+                        .split('&')
+                        .find_map(|pair| pair.strip_prefix(name)?.strip_prefix('='))
+                };
+                let known = value("known").and_then(|key| key.parse().ok());
+                return preview(stream, context, known, value("wait") == Some("1"));
             }
             return error_response(stream, "404 Not Found", "Not found");
         }
@@ -559,24 +592,30 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
     }
 }
 
-/// Luma's Home as it looks right now. The page passes the fingerprint it shows; if the scene is
-/// unchanged it gets 204, so polling every second costs the TV almost nothing.
-fn preview(stream: &mut TcpStream, context: &Context, shown: Option<u64>) -> Result<(), String> {
+/// The launcher's current picture, asking it at most every `PREVIEW_CHECK` however many pages
+/// wait. An unchanged scene is confirmed without drawing; a changed one is encoded here, off the
+/// launcher's thread.
+fn picture(context: &Context) -> Result<Picture, String> {
     let cached = context.shared.lock().unwrap().preview.clone();
+    if let Some(picture) = cached
+        .as_ref()
+        .filter(|p| p.checked.elapsed() < PREVIEW_CHECK)
+    {
+        return Ok(picture.clone());
+    }
     let (reply, answer) = mpsc::channel();
     let request = Event::Preview {
-        known: cached.as_ref().map(|(key, _)| *key),
+        known: cached.as_ref().map(|picture| picture.key),
         reply,
     };
-    if context.sender.send(request).is_err() {
-        return error_response(stream, "503 Service Unavailable", "Launcher stopped");
-    }
-    let frame = match answer.recv_timeout(Duration::from_secs(6)) {
-        Ok(Ok(frame)) => frame,
-        Ok(Err(error)) => return error_response(stream, "503 Service Unavailable", &error),
-        Err(_) => return error_response(stream, "503 Service Unavailable", "The TV is busy"),
-    };
-    let jpeg = match (frame.image, cached) {
+    context
+        .sender
+        .send(request)
+        .map_err(|_| "Launcher stopped".to_owned())?;
+    let frame = answer
+        .recv_timeout(Duration::from_secs(6))
+        .map_err(|_| "The TV is busy".to_owned())??;
+    let picture = match (frame.image, cached) {
         (Some(image), _) => {
             let started = Instant::now();
             let jpeg = Arc::new(encode(&image)?);
@@ -585,24 +624,58 @@ fn preview(stream: &mut TcpStream, context: &Context, shown: Option<u64>) -> Res
                 jpeg.len() / 1024,
                 started.elapsed().as_millis()
             );
-            context.shared.lock().unwrap().preview = Some((frame.key, jpeg.clone()));
-            jpeg
+            Picture {
+                key: frame.key,
+                on_screen: frame.on_screen,
+                jpeg,
+                checked: Instant::now(),
+            }
         }
-        (None, Some((key, jpeg))) if key == frame.key => jpeg,
-        (None, _) => return error_response(stream, "503 Service Unavailable", "Try again"),
+        (None, Some(picture)) if picture.key == frame.key => Picture {
+            checked: Instant::now(),
+            ..picture
+        },
+        (None, _) => return Err("Try again".into()),
     };
-    if shown == Some(frame.key) {
-        return response_with(stream, "204 No Content", "image/jpeg", "", b"");
-    }
+    context.shared.lock().unwrap().preview = Some(picture.clone());
+    Ok(picture)
+}
+
+/// Luma's screen for the page. The page passes the fingerprint it shows; with `wait` the request
+/// is held until the screen changes (long polling), so changes arrive as soon as they are drawn.
+fn preview(
+    stream: &mut TcpStream,
+    context: &Context,
+    shown: Option<u64>,
+    wait: bool,
+) -> Result<(), String> {
+    let deadline = Instant::now() + PREVIEW_WAIT;
+    let picture = loop {
+        let picture = match picture(context) {
+            Ok(picture) => picture,
+            Err(error) => return error_response(stream, "503 Service Unavailable", &error),
+        };
+        let enabled = {
+            let shared = context.shared.lock().unwrap();
+            shared.enabled && !shared.stop
+        };
+        if Some(picture.key) != shown {
+            break picture;
+        }
+        if !wait || !enabled || Instant::now() >= deadline {
+            return response_with(stream, "204 No Content", "image/jpeg", "", b"");
+        }
+        thread::sleep(PREVIEW_CHECK);
+    };
     response_with(
         stream,
         "200 OK",
         "image/jpeg",
         &format!(
             "X-Luma-Frame: {}\r\nX-Luma-On-Screen: {}\r\n",
-            frame.key, frame.on_screen
+            picture.key, picture.on_screen
         ),
-        &jpeg,
+        &picture.jpeg,
     )
 }
 
@@ -694,7 +767,7 @@ fn pair(stream: &mut TcpStream, context: &Context, body: &[u8]) -> Result<(), St
     shared.devices.push(device.clone());
     // A PIN pairs one device; the TV closes the dialog.
     shared.pin = None;
-    let saved = save_devices(context.path, &shared.devices);
+    let saved = save_devices(&context.path, &shared.devices);
     let devices = shared.devices.clone();
     drop(shared);
     if let Err(error) = saved {
@@ -763,7 +836,7 @@ fn forget(stream: &mut TcpStream, context: &Context, request: &Request) -> Resul
         return error_response(stream, "401 Unauthorized", "This device is not paired.");
     };
     shared.devices.retain(|device| device.id != id);
-    let saved = save_devices(context.path, &shared.devices);
+    let saved = save_devices(&context.path, &shared.devices);
     let devices = shared.devices.clone();
     drop(shared);
     if let Err(error) = saved {

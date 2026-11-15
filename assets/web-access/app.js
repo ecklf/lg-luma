@@ -79,62 +79,68 @@ function deviceName() {
 
 /* ---------- Live preview ---------- */
 
-// The TV answers 204 while its Home looks the same, so asking every second is cheap and
-// changes made with the remote, the clock and the weather show up almost at once.
+// Long polling: the TV holds each request until its screen changes, so a new picture arrives as
+// soon as Luma has drawn it. One request is open at a time, only while the page is in view.
 const screen = document.querySelector('.screen');
 const previewImage = element('preview');
-const POLL = 1000;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let previewUrl;
 let previewFrame = '';
-let previewBusy = false;
-let previewTimer;
+let previewRunning = false;
 let previewOnScreen = true;
 
-async function refreshPreview() {
-  clearTimeout(previewTimer);
-  if (previewBusy) return;
-  previewBusy = true;
-  try {
-    const response = await fetch(`api/preview.jpg?known=${previewFrame}`, { cache: 'no-store' });
-    if (response.status === 200) {
-      const frame = response.headers.get('X-Luma-Frame') || '';
-      const onScreen = response.headers.get('X-Luma-On-Screen') !== 'false';
-      const url = URL.createObjectURL(await response.blob());
-      await new Promise((resolve) => {
-        previewImage.onload = resolve;
-        previewImage.onerror = resolve;
-        previewImage.src = url;
-      });
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-      previewUrl = url;
-      previewFrame = frame;
-      previewOnScreen = onScreen;
-      element('preview-label').textContent = onScreen ? strings.preview : strings.previewBackground;
-      screen.parentElement.classList.toggle('behind', !onScreen);
-      previewImage.classList.add('ready');
-      element('preview-empty').hidden = true;
-    } else if (response.status !== 204) {
-      throw new Error();
-    }
-    screen.classList.remove('stale');
-  } catch {
-    if (previewUrl) {
-      screen.classList.add('stale');
-    } else {
-      element('preview-empty').textContent = strings.previewUnavailable;
-      element('preview-empty').hidden = false;
-    }
-  } finally {
-    previewBusy = false;
-    if (state && document.visibilityState === 'visible') {
-      previewTimer = setTimeout(refreshPreview, POLL);
-    }
-  }
+async function showFrame(response) {
+  const frame = response.headers.get('X-Luma-Frame') || '';
+  const onScreen = response.headers.get('X-Luma-On-Screen') !== 'false';
+  const url = URL.createObjectURL(await response.blob());
+  await new Promise((resolve) => {
+    previewImage.onload = resolve;
+    previewImage.onerror = resolve;
+    previewImage.src = url;
+  });
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = url;
+  previewFrame = frame;
+  previewOnScreen = onScreen;
+  element('preview-label').textContent = onScreen ? strings.preview : strings.previewBackground;
+  screen.parentElement.classList.toggle('behind', !onScreen);
+  previewImage.classList.add('ready');
+  element('preview-empty').hidden = true;
 }
 
+async function refreshPreview() {
+  if (previewRunning) return;
+  previewRunning = true;
+  while (state && document.visibilityState === 'visible') {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    try {
+      const wait = previewFrame ? '&wait=1' : '';
+      const response = await fetch(`api/preview.jpg?known=${previewFrame}${wait}`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      if (response.status === 200) await showFrame(response);
+      else if (response.status !== 204) throw new Error();
+      screen.classList.remove('stale');
+    } catch {
+      if (previewUrl) {
+        screen.classList.add('stale');
+      } else {
+        element('preview-empty').textContent = strings.previewUnavailable;
+        element('preview-empty').hidden = false;
+      }
+      await sleep(2000);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  previewRunning = false;
+}
+
+// A change made here shows up through the open request; this only restarts a stopped loop.
 function schedulePreview() {
-  clearTimeout(previewTimer);
-  previewTimer = setTimeout(refreshPreview, 120);
+  refreshPreview();
 }
 
 /* ---------- Controls ---------- */
