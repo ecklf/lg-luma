@@ -174,6 +174,13 @@ pub fn strings(language: Language) -> serde_json::Value {
         "cropHint": t("webCropHint"),
         "uploading": t("webUploading"),
         "deletePhoto": t("webDeletePhoto"),
+        "remote": t("webRemote"),
+        "tapHint": t("webTapHint"),
+        "open": t("open"),
+        "back": t("back"),
+        "home": t("home"),
+        "options": t("options"),
+        "select": t("select"),
     })
 }
 
@@ -215,6 +222,7 @@ const LABELS: &[(&str, &str)] = &[
     ("tileLimit", "tileLimit"),
     ("icon", "icon"),
     ("save", "webSave"),
+    ("open", "open"),
     ("refreshApps", "refreshApps"),
     ("refreshNotice", "refreshNotice"),
     ("resetIconCache", "resetIconCache"),

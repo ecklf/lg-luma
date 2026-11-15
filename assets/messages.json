@@ -5472,5 +5472,39 @@
     "sv": "För många fel PIN-koder har angetts. Stäng dialogen och öppna den igen för en ny PIN-kod.",
     "cs": "Bylo zadáno příliš mnoho chybných PIN. Zavřete tento dialog a otevřete ho znovu pro nový PIN.",
     "ca": "S’han introduït massa PIN incorrectes. Tanca aquest diàleg i torna’l a obrir per obtenir un PIN nou."
+  },
+  "webRemote": {
+    "zh-tw": "遙控器",
+    "en": "Remote",
+    "de": "Fernbedienung",
+    "zh": "遥控器",
+    "es": "Mando",
+    "pt": "Comando",
+    "it": "Telecomando",
+    "ru": "Пульт",
+    "pl": "Pilot",
+    "fr": "Télécommande",
+    "vi": "Điều khiển",
+    "nl": "Afstandsbediening",
+    "sv": "Fjärrkontroll",
+    "cs": "Ovladač",
+    "ca": "Comandament"
+  },
+  "webTapHint": {
+    "zh-tw": "點按畫面即可在該處選擇",
+    "en": "Tap the picture to select there",
+    "de": "Tippe aufs Bild, um dort auszuwählen",
+    "zh": "点按画面即可在该处选择",
+    "es": "Toca la imagen para seleccionar ahí",
+    "pt": "Toque na imagem para selecionar aí",
+    "it": "Tocca l’immagine per selezionare lì",
+    "ru": "Нажмите на изображение, чтобы выбрать там",
+    "pl": "Dotknij obrazu, aby tam wybrać",
+    "fr": "Touchez l’image pour sélectionner à cet endroit",
+    "vi": "Chạm vào hình để chọn tại đó",
+    "nl": "Tik op het beeld om daar te kiezen",
+    "sv": "Tryck på bilden för att välja där",
+    "cs": "Klepnutím do obrazu tam vyberete",
+    "ca": "Toca la imatge per seleccionar-hi"
   }
 }

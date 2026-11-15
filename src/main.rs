@@ -216,6 +216,8 @@ struct Press {
 }
 
 const SCRIPT_POINTER: u32 = u32::MAX - 1;
+/// Taps on the companion page's live picture.
+const WEB_POINTER: u32 = u32::MAX - 2;
 // SDL-webOS's Back scancode is outside rust-sdl2's standard Scancode enum.
 // Keycode retains the raw value: SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_WEBOS_BACK).
 const WEBOS_BACK_KEYCODE: i32 = (1 << 30) | 482;
@@ -663,6 +665,17 @@ fn scripted_click(
     if !x.is_finite() || !y.is_finite() {
         return Err("Pointer coordinates must be finite".into());
     }
+    inject_click(sdl, window, *x, *y, SCRIPT_POINTER)
+}
+
+/// A pointer click at TV coordinates, through SDL like the Magic Remote's.
+fn inject_click(
+    sdl: &sdl2::Sdl,
+    window: &sdl2::video::Window,
+    x: f32,
+    y: f32,
+    which: u32,
+) -> Result<(), String> {
     let (w, h) = window.size();
     let scale = (w as f32 / 1920.).min(h as f32 / 1080.);
     let x = (x * scale + (w as f32 - 1920. * scale) / 2.).round() as i32;
@@ -672,7 +685,7 @@ fn scripted_click(
         Event::MouseButtonDown {
             timestamp: 0,
             window_id: window.id(),
-            which: SCRIPT_POINTER,
+            which,
             mouse_btn: MouseButton::Left,
             clicks: 1,
             x,
@@ -681,13 +694,42 @@ fn scripted_click(
         Event::MouseButtonUp {
             timestamp: 0,
             window_id: window.id(),
-            which: SCRIPT_POINTER,
+            which,
             mouse_btn: MouseButton::Left,
             clicks: 1,
             x,
             y,
         },
     ] {
+        events.push_event(event)?;
+    }
+    Ok(())
+}
+
+/// A remote button from the companion page, through SDL like the TV remote's, so presses,
+/// holds, sounds and the TV keyboard behave the same.
+fn inject_key(sdl: &sdl2::Sdl, window: &sdl2::video::Window, key: Keycode) -> Result<(), String> {
+    let events = sdl.event()?;
+    for down in [true, false] {
+        let event = if down {
+            Event::KeyDown {
+                timestamp: 0,
+                window_id: window.id(),
+                keycode: Some(key),
+                scancode: None,
+                keymod: sdl2::keyboard::Mod::NOMOD,
+                repeat: false,
+            }
+        } else {
+            Event::KeyUp {
+                timestamp: 0,
+                window_id: window.id(),
+                keycode: Some(key),
+                scancode: None,
+                keymod: sdl2::keyboard::Mod::NOMOD,
+                repeat: false,
+            }
+        };
         events.push_event(event)?;
     }
     Ok(())
@@ -1376,6 +1418,58 @@ fn run() -> Result<(), String> {
                         &updates,
                     );
                 }
+                // Only while Luma is in front: a key reaching Luma means it is focused.
+                web_access::Event::Key(key) if focused && visible => {
+                    let code = match key {
+                        "up" => Some(Keycode::Up),
+                        "down" => Some(Keycode::Down),
+                        "left" => Some(Keycode::Left),
+                        "right" => Some(Keycode::Right),
+                        "ok" => Some(Keycode::Return),
+                        "back" => Some(Keycode::Escape),
+                        "menu" => Some(Keycode::Menu),
+                        _ => None,
+                    };
+                    match code {
+                        Some(code) => {
+                            if let Err(error) = inject_key(&sdl, &window, code) {
+                                eprintln!("Luma web remote: {error}");
+                            }
+                        }
+                        None => {
+                            let pending = state.return_home();
+                            running &= effects(
+                                pending,
+                                &mut state,
+                                &platform,
+                                &preferences_path,
+                                &weather_service,
+                                &wallpaper_service,
+                                &webhook_service,
+                                &updates,
+                            );
+                        }
+                    }
+                }
+                web_access::Event::Tap(x, y) if focused && visible => {
+                    if let Err(error) = inject_click(&sdl, &window, x, y, WEB_POINTER) {
+                        eprintln!("Luma web remote: {error}");
+                    }
+                }
+                web_access::Event::Launch(id) => {
+                    let pending = state.web_launch(&id);
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                web_access::Event::Key(_) | web_access::Event::Tap(..) => {}
                 web_access::Event::Pairing(..) => {}
             }
         }

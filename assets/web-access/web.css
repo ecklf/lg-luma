@@ -263,6 +263,98 @@ select {
   }
 }
 
+/* Remote: a compact pad under the live picture. */
+.preview figcaption .remote-toggle {
+  min-height: 32px;
+  margin-left: auto;
+  padding: 0 14px;
+  font-size: 13px;
+}
+.remote-toggle[aria-pressed='true'] {
+  background: var(--focus);
+  color: var(--focus-ink);
+}
+.remote {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  margin-top: 12px;
+}
+.dpad {
+  display: grid;
+  grid-template: repeat(3, 46px) / repeat(3, 46px);
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  background: var(--glass-strong);
+}
+.dpad button,
+.remote-side button {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.dpad button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  cursor: pointer;
+  --icon: url('icon/left.svg');
+}
+.dpad button:active:not(:disabled),
+.remote-side button:active:not(:disabled) {
+  background: var(--focus);
+  color: var(--focus-ink);
+}
+.dpad-up {
+  grid-area: 1 / 2;
+}
+.dpad-left {
+  grid-area: 2 / 1;
+}
+.dpad-ok {
+  grid-area: 2 / 2;
+  border-radius: 50% !important;
+  font-size: 14px;
+  font-weight: 650;
+}
+.dpad-right {
+  grid-area: 2 / 3;
+}
+.dpad-down {
+  grid-area: 3 / 2;
+}
+.dpad-up .glyph {
+  transform: rotate(90deg);
+}
+.dpad-right .glyph {
+  transform: rotate(180deg);
+}
+.dpad-down .glyph {
+  transform: rotate(-90deg);
+}
+.dpad button:disabled,
+.remote-side button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.remote-side {
+  display: grid;
+  gap: 8px;
+}
+.remote-side .pill-button {
+  min-width: 112px;
+}
+.screen.tappable img {
+  cursor: pointer;
+}
+
 /* Tabs mirror the TV's settings sidebar. */
 .tabs {
   display: flex;
@@ -633,7 +725,7 @@ select {
   background: rgba(255, 255, 255, 0.06) no-repeat;
 }
 .row.favorite {
-  grid-template-columns: 88px minmax(0, 1fr) auto auto auto;
+  grid-template-columns: 88px minmax(0, 1fr) auto auto auto auto;
   gap: 10px;
   padding: 8px 10px 8px 8px;
 }
@@ -677,6 +769,12 @@ select {
 }
 .icon-eye-off {
   --icon: url('icon/eye-off.svg');
+}
+.icon-open {
+  --icon: url('icon/left.svg');
+}
+.icon-open .glyph {
+  transform: rotate(180deg);
 }
 .icon-up,
 .icon-down {

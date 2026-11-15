@@ -44,8 +44,33 @@
               <img id="preview" alt="" />
               <p id="preview-empty" class="preview-empty" hidden></p>
             </div>
-            <figcaption><span class="live-dot"></span><span id="preview-label"></span></figcaption>
+            <figcaption>
+              <span class="live-dot"></span><span id="preview-label"></span>
+              <button id="remote-toggle" type="button" class="pill-button remote-toggle"></button>
+            </figcaption>
           </figure>
+          <div id="remote" class="remote" hidden>
+            <div class="dpad">
+              <button type="button" data-key="up" class="dpad-up">
+                <span class="glyph"></span>
+              </button>
+              <button type="button" data-key="left" class="dpad-left">
+                <span class="glyph"></span>
+              </button>
+              <button type="button" data-key="ok" class="dpad-ok">OK</button>
+              <button type="button" data-key="right" class="dpad-right">
+                <span class="glyph"></span>
+              </button>
+              <button type="button" data-key="down" class="dpad-down">
+                <span class="glyph"></span>
+              </button>
+            </div>
+            <div class="remote-side">
+              <button type="button" data-key="back" class="pill-button" id="key-back"></button>
+              <button type="button" data-key="home" class="pill-button" id="key-home"></button>
+              <button type="button" data-key="menu" class="pill-button" id="key-menu"></button>
+            </div>
+          </div>
         </aside>
         <div class="panel">
           <nav id="tabs" class="tabs" role="tablist"></nav>

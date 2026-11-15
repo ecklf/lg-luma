@@ -47,6 +47,8 @@ const PREVIEW_WAIT: Duration = Duration::from_secs(20);
 const COOKIE: &str = "luma_device";
 /// The pairing error the TV shows after too many wrong PINs.
 pub const LOCKED: &str = "locked";
+/// The remote buttons the page can press inside Luma.
+pub const KEYS: [&str; 8] = ["up", "down", "left", "right", "ok", "back", "home", "menu"];
 // Browsers cap cookie lifetimes at about 400 days; removing the device on the TV ends it sooner.
 const COOKIE_AGE: u64 = 400 * 24 * 60 * 60;
 
@@ -98,6 +100,12 @@ pub enum Event {
     DeletePhoto(String),
     /// A System action: "refresh", "reset_icons" or "update".
     Action(String),
+    /// A remote button pressed on the page: one of `KEYS`.
+    Key(&'static str),
+    /// A tap on the live picture, in the TV's 1920×1080 coordinates.
+    Tap(f32, f32),
+    /// Opens an app or sends a shortcut tile, like selecting it on Home.
+    Launch(String),
     /// The complete shortcut tile list after a change from the page.
     Tiles(Vec<crate::model::CustomTile>),
     /// A place from the page's search, or `None` to remove the weather location.
@@ -835,6 +843,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         "/api/location" => choose_place(stream, context, &request, &body),
         "/api/photo/delete" => delete_photo(stream, context, &request, &body),
         "/api/action" => system_action(stream, context, &request, &body),
+        "/api/key" | "/api/tap" | "/api/launch" => remote(stream, context, &request, &route, &body),
         "/api/devices/remove" => remove_device(stream, context, &request, &body),
         "/api/tiles/save" | "/api/tiles/remove" | "/api/tiles/send" => {
             edit_tile(stream, context, &request, &route, &body)
@@ -1111,6 +1120,75 @@ fn reply_listing(
         reply.extend(extra);
     }
     json(stream, "200 OK", &reply)
+}
+
+/// Remote control inside Luma: buttons, taps on the live picture and opening apps. Answers
+/// at once; the live picture shows the result.
+fn remote(
+    stream: &mut TcpStream,
+    context: &Context,
+    request: &Request,
+    route: &str,
+    body: &[u8],
+) -> Result<(), String> {
+    #[derive(Deserialize)]
+    struct Remote {
+        key: Option<String>,
+        x: Option<f32>,
+        y: Option<f32>,
+        id: Option<String>,
+    }
+    let known_app = {
+        let shared = context.shared.lock().unwrap();
+        if device(request, &shared.devices).is_none() {
+            drop(shared);
+            return unpaired(stream, context);
+        }
+        let Ok(Remote { id, .. }) = serde_json::from_slice::<Remote>(body) else {
+            drop(shared);
+            return refuse(
+                stream,
+                context,
+                "422 Unprocessable Content",
+                "Reload the page.",
+            );
+        };
+        id.filter(|id| shared.catalog.library.apps.iter().any(|app| &app.id == id))
+    };
+    let Ok(remote) = serde_json::from_slice::<Remote>(body) else {
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
+    };
+    let event = match route {
+        "/api/key" => remote
+            .key
+            .and_then(|key| KEYS.iter().find(|known| **known == key))
+            .map(|key| Event::Key(key)),
+        "/api/tap" => match (remote.x, remote.y) {
+            (Some(x), Some(y)) if (0. ..=1920.).contains(&x) && (0. ..=1080.).contains(&y) => {
+                Some(Event::Tap(x, y))
+            }
+            _ => None,
+        },
+        _ => known_app.map(Event::Launch),
+    };
+    let Some(event) = event else {
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
+    };
+    context
+        .sender
+        .send(event)
+        .map_err(|_| "Launcher stopped".to_owned())?;
+    json(stream, "200 OK", &serde_json::json!({}))
 }
 
 /// Runs a System action on the TV, like pressing the same row in Settings › System.

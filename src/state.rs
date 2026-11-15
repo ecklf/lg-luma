@@ -1168,6 +1168,21 @@ impl State {
         vec![Effect::DeleteWallpaper(id.to_owned())]
     }
 
+    /// Opens an app or sends a shortcut tile chosen on a paired phone or computer, as selecting
+    /// it on Home does.
+    pub fn web_launch(&mut self, id: &str) -> Vec<Effect> {
+        if self.launching {
+            return vec![];
+        }
+        if let Some(tile) = self.preferences.custom_tile(id).cloned() {
+            return self.send_tile(tile);
+        }
+        if self.inventory.apps.iter().any(|app| app.id == id) {
+            return vec![Effect::Launch(id.to_owned())];
+        }
+        vec![]
+    }
+
     /// A Settings › System action from a paired phone or computer, as pressing its row does.
     pub fn web_action(&mut self, action: &str) -> Vec<Effect> {
         match action {

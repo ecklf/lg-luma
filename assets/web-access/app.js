@@ -106,6 +106,7 @@ async function showFrame(response) {
   previewOnScreen = onScreen;
   element('preview-label').textContent = onScreen ? strings.preview : strings.previewBackground;
   screen.parentElement.classList.toggle('behind', !onScreen);
+  showRemote();
   previewImage.classList.add('ready');
   element('preview-empty').hidden = true;
 }
@@ -144,6 +145,82 @@ async function refreshPreview() {
 function schedulePreview() {
   refreshPreview();
 }
+
+/* ---------- Remote ---------- */
+
+// Buttons, taps on the picture and keyboard keys go to Luma like the TV remote's presses.
+let remoteOpen = false;
+try {
+  remoteOpen = localStorage.getItem('luma-remote') === '1';
+} catch {
+  // Remembering the remote is only a convenience.
+}
+
+function press(key) {
+  navigator.vibrate?.(8);
+  call('api/key', { key }).catch((error) => {
+    if (error instanceof PairingNeeded) startPairing(error.message);
+    else message(error.message, true);
+  });
+}
+
+function showRemote() {
+  element('remote').hidden = !remoteOpen;
+  element('remote-toggle').setAttribute('aria-pressed', String(remoteOpen));
+  element('remote-toggle').textContent = strings.remote ?? '';
+  element('key-back').textContent = strings.back ?? '';
+  element('key-home').textContent = strings.home ?? '';
+  element('key-menu').textContent = strings.options ?? '';
+  // Inside Luma only: while another app is in front these would not reach it.
+  for (const button of element('remote').querySelectorAll('button')) {
+    button.disabled = !previewOnScreen;
+  }
+  screen.classList.toggle('tappable', remoteOpen && previewOnScreen);
+  screen.title = remoteOpen ? (strings.tapHint ?? '') : '';
+}
+
+element('remote-toggle').addEventListener('click', () => {
+  remoteOpen = !remoteOpen;
+  try {
+    localStorage.setItem('luma-remote', remoteOpen ? '1' : '0');
+  } catch {
+    // Remembering the remote is only a convenience.
+  }
+  showRemote();
+});
+
+for (const button of element('remote').querySelectorAll('[data-key]')) {
+  button.addEventListener('click', () => press(button.dataset.key));
+}
+
+// A tap on the picture clicks the same spot on the TV, like the Magic Remote's pointer.
+previewImage.addEventListener('click', (event) => {
+  if (!remoteOpen || !previewOnScreen) return;
+  const box = previewImage.getBoundingClientRect();
+  const x = ((event.clientX - box.left) / box.width) * 1920;
+  const y = ((event.clientY - box.top) / box.height) * 1080;
+  navigator.vibrate?.(8);
+  call('api/tap', { x, y }).catch((error) => message(error.message, true));
+});
+
+// On a computer the keyboard works too, unless someone is typing in a field.
+document.addEventListener('keydown', (event) => {
+  if (!state || !remoteOpen || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.target.closest?.('input, select, textarea')) return;
+  const key = {
+    ArrowUp: 'up',
+    ArrowDown: 'down',
+    ArrowLeft: 'left',
+    ArrowRight: 'right',
+    Enter: 'ok',
+    Backspace: 'back',
+    Escape: 'back',
+    Home: 'home',
+  }[event.key];
+  if (!key) return;
+  event.preventDefault();
+  press(key);
+});
 
 /* ---------- Controls ---------- */
 
@@ -542,6 +619,11 @@ function thumb(index) {
   return node;
 }
 
+function launch(id) {
+  navigator.vibrate?.(8);
+  call('api/launch', { id }).catch((error) => message(error.message, true));
+}
+
 function arrange(favorites, hidden) {
   state.library.favorites = favorites;
   state.library.hidden = hidden;
@@ -598,7 +680,8 @@ function appsSection() {
         hidden,
       ),
     );
-    row.append(thumb(index.get(id)), create('span', 'title', title(id)), up, down, remove);
+    const open = iconButton('open', l.open, undefined, () => launch(id));
+    row.append(thumb(index.get(id)), create('span', 'title', title(id)), open, up, down, remove);
     dock.append(row);
   });
   if (!shown.length) dock.append(create('p', 'hint', l.makeFavorites));
@@ -610,6 +693,7 @@ function appsSection() {
     const card = create('div', isHidden ? 'app-card is-hidden' : 'app-card');
     const actions = create('div', 'app-actions');
     actions.append(
+      iconButton('open', l.open, undefined, () => launch(app.id)),
       iconButton(
         favorite ? 'heart-filled' : 'heart',
         favorite ? l.removeFavorite : l.addFavorite,
@@ -1086,6 +1170,7 @@ function render() {
   element('sections').replaceChildren(...all[tab]);
   element('device').textContent = strings.pairedAs.replace('{device}', state.device);
   element('forget').textContent = strings.unpair;
+  showRemote();
   element('preview-label').textContent = previewOnScreen
     ? strings.preview
     : strings.previewBackground;
