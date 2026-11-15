@@ -559,6 +559,65 @@ fn pointer_focus_does_not_scroll_the_clicked_control() {
     assert_eq!(state.scroll, 0.);
 }
 
+fn app_control(id: &str, rect: crate::state::Rect) -> crate::state::Control {
+    crate::state::Control {
+        target: Target::App(id.into()),
+        rect,
+        scrollable: false,
+    }
+}
+
+#[test]
+fn focus_travel_slides_between_app_cards_instead_of_snapping() {
+    use crate::state::Rect;
+    use std::time::{Duration, Instant};
+    let mut state = ready();
+    state.focus = Target::App("netflix".into());
+    let first = Rect::new(84., 700., 270., 152.);
+    let second = Rect::new(380., 700., 270., 152.);
+    assert!(!state.bind_focus_travel(&[app_control("netflix", first)]));
+    assert_eq!(state.focus_travel.as_ref().map(|t| t.rect), Some(first));
+    state.focus = Target::App("youtube.leanback.v4".into());
+    assert!(state.bind_focus_travel(&[app_control("youtube.leanback.v4", second)]));
+    let travel = state.focus_travel.clone().expect("travel");
+    assert_eq!(travel.rect, first);
+    assert_eq!(travel.target_rect, second);
+    assert!(!travel.settled());
+    assert!(state.animating());
+    for _ in 0..12 {
+        // tick() caps dt from drawer_updated; backdate so each step advances.
+        state.drawer_updated = Instant::now() - Duration::from_millis(40);
+        state.tick();
+    }
+    let settled = state.focus_travel.clone().expect("travel");
+    assert!(settled.settled());
+    assert_eq!(settled.rect, second);
+    assert!(!state.animating());
+}
+
+#[test]
+fn focus_travel_moves_with_its_card_and_snaps_with_reduced_motion() {
+    use crate::state::Rect;
+    let mut state = ready();
+    state.focus = Target::App("netflix".into());
+    let first = Rect::new(84., 700., 270., 152.);
+    state.bind_focus_travel(&[app_control("netflix", first)]);
+    let scrolled = Rect::new(-212., 700., 270., 152.);
+    assert!(state.bind_focus_travel(&[app_control("netflix", scrolled)]));
+    let travel = state.focus_travel.clone().expect("travel");
+    assert_eq!(travel.rect, scrolled);
+    assert!(travel.settled());
+
+    state.preferences.reduced_motion = true;
+    state.focus = Target::App("youtube.leanback.v4".into());
+    assert!(!state.bind_focus_travel(&[app_control("youtube.leanback.v4", first)]));
+    assert_eq!(state.focus_travel.as_ref().map(|t| t.rect), Some(first));
+
+    state.focus = Target::Nav(0);
+    assert!(state.bind_focus_travel(&[]));
+    assert!(state.focus_travel.is_none());
+}
+
 #[test]
 fn gallery_right_crosses_rows_in_gallery_order() {
     let mut state = ready();
@@ -3147,6 +3206,10 @@ fn update_status_card_only_claims_latest_after_success_and_allows_single_flight_
     state.activate();
     state.update_response(Ok(Some("9.0.0".into())));
     assert_eq!(state.focus, Target::InstallUpdate);
+    assert!(
+        state.notice.is_none(),
+        "available updates stay on the System card without a Home toast"
+    );
     state.update_response(Err("offline".into()));
     assert_eq!(state.available_update.as_deref(), Some("9.0.0"));
 }

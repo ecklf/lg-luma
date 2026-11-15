@@ -39,6 +39,10 @@ pub const HOME_FADE_LEFT: f32 = 8.;
 pub const HOME_FADE_RIGHT: f32 = 1910.;
 pub const BACKGROUND_FADE: f32 = 0.4;
 pub const CYCLE_FADE: f32 = 1.6;
+/// How quickly the focus chrome eases toward the newly selected card (~180 ms).
+const FOCUS_TRAVEL_SPEED: f32 = 18.;
+/// Corner radius of the app card focus ring.
+pub const FOCUS_TRAVEL_RADIUS: f32 = 19.2;
 
 pub fn unix_now() -> u64 {
     std::time::SystemTime::now()
@@ -119,7 +123,7 @@ pub enum Target {
     TileEditor,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Rect {
     pub x: f32,
     pub y: f32,
@@ -138,6 +142,38 @@ impl Rect {
     }
     pub fn inset(self, n: f32) -> Self {
         Self::new(self.x + n, self.y + n, self.w - 2. * n, self.h - 2. * n)
+    }
+
+    pub fn lerp(self, other: Self, t: f32) -> Self {
+        let t = t.clamp(0., 1.);
+        Self::new(
+            self.x + (other.x - self.x) * t,
+            self.y + (other.y - self.y) * t,
+            self.w + (other.w - self.w) * t,
+            self.h + (other.h - self.h) * t,
+        )
+    }
+
+    pub fn max_delta(self, other: Self) -> f32 {
+        (self.x - other.x)
+            .abs()
+            .max((self.y - other.y).abs())
+            .max((self.w - other.w).abs())
+            .max((self.h - other.h).abs())
+    }
+}
+
+/// Sliding focus ring for app cards (Apple TV–style travel).
+#[derive(Clone, Debug)]
+pub struct FocusTravel {
+    pub rect: Rect,
+    pub target: Target,
+    pub target_rect: Rect,
+}
+
+impl FocusTravel {
+    pub fn settled(&self) -> bool {
+        self.rect.max_delta(self.target_rect) < 0.6
     }
 }
 
@@ -239,7 +275,7 @@ pub struct State {
     pub scroll: f32,
     pub home_scroll: f32,
     pub drawer_visibility: f32,
-    drawer_updated: Instant,
+    pub(crate) drawer_updated: Instant,
     input_status_visibility: std::collections::BTreeMap<String, f32>,
     pub overlay: Option<Overlay>,
     pub moving: Option<String>,
@@ -275,6 +311,8 @@ pub struct State {
     pub keyboard_field: TextField,
     pub input_name: String,
     pub recents: crate::recents::Recents,
+    /// Animated focus ring for app cards; None outside those targets.
+    pub focus_travel: Option<FocusTravel>,
 }
 
 impl State {
@@ -322,7 +360,72 @@ impl State {
             keyboard_field: TextField::Apps,
             input_name: String::new(),
             recents: crate::recents::Recents::default(),
+            focus_travel: None,
         }
+    }
+
+    pub fn focus_travel_eligible(target: &Target) -> bool {
+        matches!(target, Target::App(_) | Target::DockApp(_))
+    }
+
+    /// Follow layout after compose. Retargets without snapping so the ring
+    /// slides from the previous card; first acquisition snaps.
+    pub fn bind_focus_travel(&mut self, controls: &[Control]) -> bool {
+        if self.overlay.is_some()
+            || self.moving.is_some()
+            || !Self::focus_travel_eligible(&self.focus)
+        {
+            return self.focus_travel.take().is_some();
+        }
+        let Some(control) = controls.iter().find(|control| control.target == self.focus) else {
+            return self.focus_travel.take().is_some();
+        };
+        let goal = control.rect;
+        match &mut self.focus_travel {
+            Some(travel) if !self.preferences.reduced_motion && travel.target != self.focus => {
+                travel.target = self.focus.clone();
+                travel.target_rect = goal;
+                true
+            }
+            Some(travel) if !self.preferences.reduced_motion => {
+                // Scrolling and drawer motion move the card itself; carry the
+                // ring along rather than letting it trail behind.
+                let from = travel.target_rect;
+                let moved = from.max_delta(goal) > 0.01;
+                travel.rect = Rect::new(
+                    travel.rect.x + goal.x - from.x,
+                    travel.rect.y + goal.y - from.y,
+                    travel.rect.w + goal.w - from.w,
+                    travel.rect.h + goal.h - from.h,
+                );
+                travel.target_rect = goal;
+                moved
+            }
+            _ => {
+                self.focus_travel = Some(FocusTravel {
+                    rect: goal,
+                    target: self.focus.clone(),
+                    target_rect: goal,
+                });
+                false
+            }
+        }
+    }
+
+    fn step_focus_travel(&mut self, dt: f32) {
+        let Some(travel) = &mut self.focus_travel else {
+            return;
+        };
+        if self.preferences.reduced_motion || travel.settled() {
+            travel.rect = travel.target_rect;
+            return;
+        }
+        let t = 1. - (-FOCUS_TRAVEL_SPEED * dt).exp();
+        travel.rect = travel.rect.lerp(travel.target_rect, t);
+        if travel.settled() {
+            travel.rect = travel.target_rect;
+        }
+        self.dirty = true;
     }
 
     pub fn notify(&mut self, text: impl Into<String>) {
@@ -333,12 +436,10 @@ impl State {
     pub fn update_response(&mut self, result: Result<Option<String>, String>) {
         match result {
             Ok(latest) => {
-                let announce = latest.is_some() && latest != self.available_update;
+                // Availability stays on the System update card; automatic checks
+                // must not toast over Home when it regains focus.
                 self.available_update = latest;
                 self.update_status = crate::update::Status::Checked;
-                if announce {
-                    self.notify(self.preferences.language.t("updateAvailable"));
-                }
             }
             Err(error) => {
                 eprintln!("Luma update check: {error}");
@@ -410,6 +511,7 @@ impl State {
             .min(0.05);
         self.drawer_updated = now;
         self.animate_input_status(dt);
+        self.step_focus_travel(dt);
         if self.drawer_visibility != goal {
             self.drawer_visibility = if self.preferences.reduced_motion {
                 goal
@@ -531,6 +633,10 @@ impl State {
                     || self.recents.cards_animating(self.pointer)))
             || self.previous_background.is_some()
             || self.panel_started.is_some()
+            || self
+                .focus_travel
+                .as_ref()
+                .is_some_and(|travel| !travel.settled())
             || (!self.preferences.reduced_motion
                 && self
                     .notice
@@ -548,6 +654,7 @@ impl State {
         self.wallpaper_upload = None;
         self.pointer = false;
         self.pressed = None;
+        self.focus_travel = None;
         self.open(0);
         pending
     }
@@ -570,6 +677,7 @@ impl State {
         self.moving = None;
         self.subpage = None;
         self.panel_started = None;
+        self.focus_travel = None;
         if self.page == Page::Home {
             self.focus = self.first_content();
         } else if self.page == Page::Settings {
