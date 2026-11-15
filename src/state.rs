@@ -2210,8 +2210,6 @@ impl State {
         }
     }
 
-    /// Applies the tile list edited on a phone or computer. New tiles join
-    /// the end of the Home favorites and removed ones leave favorites and hidden apps.
     /// Favorites in order and hidden apps from a paired phone or computer. Ids the launcher does
     /// not know are dropped; saved entries for apps that are not installed right now are kept.
     pub fn apply_web_arrangement(
@@ -2250,6 +2248,37 @@ impl State {
             self.filter = 0;
         }
         self.reconcile_focus();
+        self.dirty = true;
+        vec![Effect::Save]
+    }
+
+    /// One input's name, visibility and icon from a paired phone or computer, saved like the same
+    /// choices in Settings › Widgets › Inputs.
+    pub fn apply_web_input(&mut self, change: crate::web_settings::InputChange) -> Vec<Effect> {
+        if !self
+            .inventory
+            .inputs
+            .iter()
+            .any(|input| input.id == change.id)
+        {
+            return vec![];
+        }
+        let mut changed = self.preferences.set_input_name(&change.id, &change.name);
+        changed |= self.preferences.set_input_icon(&change.id, &change.icon);
+        if self
+            .preferences
+            .input_modes
+            .get(&change.id)
+            .copied()
+            .unwrap_or_default()
+            != change.mode
+        {
+            self.preferences.input_modes.insert(change.id, change.mode);
+            changed = true;
+        }
+        if !changed {
+            return vec![];
+        }
         self.dirty = true;
         vec![Effect::Save]
     }
@@ -2315,6 +2344,8 @@ impl State {
         vec![Effect::Save]
     }
 
+    /// Applies the tile list edited on a phone or computer. New tiles join
+    /// the end of the Home favorites and removed ones leave favorites and hidden apps.
     pub fn replace_tiles(&mut self, tiles: Vec<CustomTile>) -> Vec<Effect> {
         let removed: Vec<_> = self
             .preferences

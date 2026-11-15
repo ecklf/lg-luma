@@ -13,7 +13,7 @@ use crate::companion::{
     Request, Session, error_response, local_address, local_peer, qr, read_exact, response,
     response_with,
 };
-use crate::web_settings::{Arrangement, Background, Library, Settings, listing, strings};
+use crate::web_settings::{Arrangement, Catalog, InputChange, Settings, listing, strings};
 use serde::{Deserialize, Serialize};
 use std::{
     io::BufReader,
@@ -82,6 +82,8 @@ pub enum Event {
     },
     /// New favorites, their order and hidden apps.
     Arrange(Arrangement),
+    /// One input's name, visibility and icon.
+    Input(InputChange),
 }
 
 /// A preview answer: the scene's fingerprint and, unless unchanged, its pixels.
@@ -109,12 +111,12 @@ struct Shared {
     revision: u64,
     acknowledged: u64,
     devices: Vec<Device>,
-    backgrounds: Vec<Background>,
+    catalog: Catalog,
     /// The last preview, encoded once and served until the scene changes.
     preview: Option<Picture>,
-    library: Library,
-    /// An arrangement from the page the launcher has not applied yet.
+    /// An arrangement or input change from the page the launcher has not applied yet.
     arranging: bool,
+    inputting: bool,
     sheets: std::collections::BTreeMap<usize, Picture>,
 }
 
@@ -165,21 +167,18 @@ impl Service {
 
     /// Called every frame: whether web access is on, whether the pairing dialog is showing,
     /// and the TV's current settings for pages that load next.
-    pub fn sync(
-        &mut self,
-        enabled: bool,
-        pairing: bool,
-        settings: &Settings,
-        backgrounds: &[Background],
-        library: &Library,
-    ) {
+    pub fn sync(&mut self, enabled: bool, pairing: bool, settings: &Settings, catalog: &Catalog) {
         let pairing = enabled && pairing;
         let mut shared = self.shared.lock().unwrap();
-        if !shared.arranging && shared.library != *library {
-            shared.library = library.clone();
+        // A change from the page stays visible until the launcher has applied it.
+        if shared.catalog.backgrounds != catalog.backgrounds {
+            shared.catalog.backgrounds = catalog.backgrounds.clone();
         }
-        if shared.backgrounds != backgrounds {
-            shared.backgrounds = backgrounds.to_vec();
+        if !shared.arranging && shared.catalog.library != catalog.library {
+            shared.catalog.library = catalog.library.clone();
+        }
+        if !shared.inputting && shared.catalog.inputs != catalog.inputs {
+            shared.catalog.inputs = catalog.inputs.clone();
         }
         // A change from the phone stays authoritative until the launcher has applied it.
         if shared.revision == shared.acknowledged && shared.settings != *settings {
@@ -216,6 +215,10 @@ impl Service {
     /// The launcher applied the page's arrangement; its own state is authoritative again.
     pub fn arranged(&self) {
         self.shared.lock().unwrap().arranging = false;
+    }
+
+    pub fn inputs_applied(&self) {
+        self.shared.lock().unwrap().inputting = false;
     }
 
     pub fn devices(&self) -> Vec<Device> {
@@ -456,6 +459,37 @@ struct Context {
     address: SocketAddr,
 }
 
+/// The bundled input icons, by route.
+fn input_icon(route: &str) -> Option<&'static [u8]> {
+    macro_rules! icons {
+        ($($name:literal),*) => {
+            match route {
+                $(concat!("/icon/input-", $name, ".svg") => {
+                    Some(include_bytes!(concat!("../assets/ui-icons/input-", $name, ".svg")))
+                })*
+                _ => None,
+            }
+        };
+    }
+    icons!(
+        "hdmi",
+        "usb",
+        "apple-tv",
+        "computer",
+        "console",
+        "playstation",
+        "shield",
+        "streamer",
+        "switch",
+        "switch2",
+        "sony",
+        "dvd",
+        "blu-ray",
+        "disk",
+        "xbox"
+    )
+}
+
 fn json(stream: &mut TcpStream, status: &str, body: &serde_json::Value) -> Result<(), String> {
     response(
         stream,
@@ -531,7 +565,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
                 );
             };
             if api == "settings" {
-                let mut body = listing(&shared.settings, &shared.backgrounds, &shared.library);
+                let mut body = listing(&shared.settings, &shared.catalog);
                 body["device"] = serde_json::json!(device.name);
                 drop(shared);
                 return json(stream, "200 OK", &body);
@@ -539,6 +573,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
             if let Some(id) = api.strip_prefix("thumbnail/") {
                 // Only files from the catalog; the id is never used as a path.
                 let path = shared
+                    .catalog
                     .backgrounds
                     .iter()
                     .find(|background| background.id == id)
@@ -620,6 +655,10 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
                 "image/svg+xml",
                 include_bytes!("../assets/ui-icons/left.svg"),
             ),
+            route if route.starts_with("/icon/input-") => match input_icon(route) {
+                Some(svg) => ("image/svg+xml", svg),
+                None => return error_response(stream, "404 Not Found", "Not found"),
+            },
             _ => return error_response(stream, "404 Not Found", "Not found"),
         };
         return response(stream, "200 OK", kind, body);
@@ -646,6 +685,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         "/api/pair" => pair(stream, context, &body),
         "/api/settings" => save(stream, context, &request, &body),
         "/api/apps" => arrange(stream, context, &request, &body),
+        "/api/inputs" => change_input(stream, context, &request, &body),
         "/api/forget" => forget(stream, context, &request),
         _ => error_response(stream, "404 Not Found", "Not found"),
     }
@@ -771,19 +811,67 @@ fn arrange(
         return error_response(stream, "422 Unprocessable Content", "Reload the page.");
     };
     // Show the page what the launcher will keep: known apps, favorites never hidden.
-    let known = |id: &String| shared.library.apps.iter().any(|app| &app.id == id);
+    let known = |id: &String| shared.catalog.library.apps.iter().any(|app| &app.id == id);
     next.favorites.retain(known);
     next.hidden
         .retain(|id| known(id) && !next.favorites.contains(id));
-    shared.library.favorites = next.favorites.clone();
-    shared.library.hidden = next.hidden.clone();
+    shared.catalog.library.favorites = next.favorites.clone();
+    shared.catalog.library.hidden = next.hidden.clone();
     shared.arranging = true;
-    let mut reply = listing(&shared.settings, &shared.backgrounds, &shared.library);
+    let mut reply = listing(&shared.settings, &shared.catalog);
     drop(shared);
     reply["device"] = serde_json::json!(name);
     context
         .sender
         .send(Event::Arrange(next))
+        .map_err(|_| "Launcher stopped".to_owned())?;
+    json(stream, "200 OK", &reply)
+}
+
+fn change_input(
+    stream: &mut TcpStream,
+    context: &Context,
+    request: &Request,
+    body: &[u8],
+) -> Result<(), String> {
+    let mut shared = context.shared.lock().unwrap();
+    let Some(name) = device(request, &shared.devices).map(|device| device.name.clone()) else {
+        drop(shared);
+        return json(
+            stream,
+            "401 Unauthorized",
+            &serde_json::json!({ "error": "This device was removed on the TV. Pair it again.", "pair": true }),
+        );
+    };
+    let Ok(mut change) = serde_json::from_slice::<InputChange>(body) else {
+        drop(shared);
+        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+    };
+    change.name = crate::model::clean_input_name(&change.name);
+    let known_icon = change.icon.is_empty()
+        || crate::model::INPUT_ICONS
+            .iter()
+            .any(|(icon, _)| *icon == change.icon);
+    let Some(input) = shared
+        .catalog
+        .inputs
+        .iter_mut()
+        .find(|input| input.id == change.id)
+        .filter(|_| known_icon)
+    else {
+        drop(shared);
+        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+    };
+    input.name = change.name.clone();
+    input.mode = change.mode;
+    input.icon = change.icon.clone();
+    shared.inputting = true;
+    let mut reply = listing(&shared.settings, &shared.catalog);
+    drop(shared);
+    reply["device"] = serde_json::json!(name);
+    context
+        .sender
+        .send(Event::Input(change))
         .map_err(|_| "Launcher stopped".to_owned())?;
     json(stream, "200 OK", &reply)
 }
@@ -968,7 +1056,7 @@ fn save(
         shared.revision += 1;
         Event::Settings(shared.revision, next)
     });
-    let mut reply = listing(&shared.settings, &shared.backgrounds, &shared.library);
+    let mut reply = listing(&shared.settings, &shared.catalog);
     drop(shared);
     reply["device"] = serde_json::json!(name);
     // Queue the change before replying; it applies even if the phone misses the reply.

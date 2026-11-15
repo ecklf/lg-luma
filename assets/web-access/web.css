@@ -177,9 +177,10 @@ select {
   z-index: 2;
   margin: 0 -16px;
   padding: 0 16px 10px;
-  background: linear-gradient(180deg, rgba(14, 16, 20, 0.85) 75%, rgba(14, 16, 20, 0));
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(14, 16, 20, 0.86);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
 }
 @media (min-width: 900px) {
   .layout {
@@ -649,6 +650,43 @@ select {
   width: 34px;
   height: 34px;
   font-size: 15px;
+}
+
+/* Inputs */
+.input-card {
+  gap: 12px;
+}
+.input-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.input-mark {
+  width: 26px;
+  height: 26px;
+  background: var(--ink);
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+.input-head .port {
+  margin-left: auto;
+  font-size: 13px;
+}
+.inline-hint {
+  margin: -4px 4px 0;
+}
+.row.picker.nested {
+  min-height: 48px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.row.picker.nested .title {
+  color: var(--ink-soft);
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .foot {

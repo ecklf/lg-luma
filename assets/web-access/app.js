@@ -383,6 +383,92 @@ function appsSection() {
   return [group(l.favorites, dock), group(l.apps, grid)];
 }
 
+/* ---------- Inputs ---------- */
+
+function changeInput(input, changes) {
+  const next = { ...input, ...changes };
+  Object.assign(input, changes);
+  if ('icon' in changes || 'mode' in changes) render();
+  queue = queue.then(async () => {
+    message(strings.saving, false, true);
+    try {
+      apply(
+        await call('api/inputs', {
+          id: next.id,
+          name: next.name,
+          mode: next.mode,
+          icon: next.icon,
+        }),
+      );
+      message(strings.saved);
+    } catch (error) {
+      if (error instanceof PairingNeeded) return startPairing(error.message);
+      message(error.message, true);
+      load();
+    }
+  });
+}
+
+function inputCard(input) {
+  const l = state.labels;
+  const card = create('div', 'row stacked input-card');
+  const head = create('div', 'input-head');
+  const mark = create('span', 'input-mark');
+  mark.style.setProperty('--icon', `url('icon/input-${input.icon || input.auto_icon}.svg')`);
+  head.append(mark, create('span', 'title', input.name || input.port));
+  if (input.name) head.append(create('span', 'muted port', input.port));
+
+  const name = create('input', 'text-field');
+  name.type = 'text';
+  name.maxLength = 40;
+  name.autocomplete = 'off';
+  name.enterKeyHint = 'done';
+  name.placeholder = input.port;
+  name.value = input.name;
+  name.setAttribute('aria-label', l.inputName);
+  name.addEventListener('change', () => changeInput(input, { name: name.value.trim() }));
+  name.addEventListener('keydown', (event) => event.key === 'Enter' && name.blur());
+
+  const modes = create('div', 'segments');
+  modes.role = 'radiogroup';
+  for (const choice of state.choices.input_mode) {
+    const option = create('label');
+    option.title = choice.hint;
+    const radio = create('input');
+    radio.type = 'radio';
+    radio.name = `mode-${input.id}`;
+    radio.checked = choice.value === input.mode;
+    radio.addEventListener('change', () => changeInput(input, { mode: choice.value }));
+    option.append(radio, create('span', '', choice.label));
+    modes.append(option);
+  }
+  const hint = create(
+    'p',
+    'hint inline-hint',
+    state.choices.input_mode.find((choice) => choice.value === input.mode)?.hint ?? '',
+  );
+
+  const picker = create('label', 'row picker nested');
+  const current = state.choices.input_icon.find((choice) => choice.value === input.icon);
+  const select = create('select');
+  select.setAttribute('aria-label', l.inputIcon);
+  for (const choice of state.choices.input_icon) {
+    const option = create('option', '', choice.label);
+    option.value = choice.value;
+    option.selected = choice === current;
+    select.append(option);
+  }
+  select.addEventListener('change', () => changeInput(input, { icon: select.value }));
+  picker.append(
+    create('span', 'title', l.inputIcon),
+    create('span', 'value', current?.label ?? ''),
+    select,
+  );
+
+  card.append(head, name, modes, hint, picker);
+  return card;
+}
+
 function group(heading, ...rows) {
   const section = create('section', 'group');
   if (heading) section.append(create('h2', '', heading));
@@ -427,6 +513,7 @@ function sections() {
         choiceRow('temperature_unit', l.temperature),
         choiceRow('weather_style', l.weatherStyle),
       ),
+      ...(state.inputs.length ? [group(l.inputs, ...state.inputs.map(inputCard))] : []),
     ],
     system: [group(null, choiceRow('text_rendering', l.textRendering))],
   };

@@ -3208,7 +3208,7 @@ fn shorten(text: &str) -> String {
 }
 
 /// A custom name such as "PS5" can choose the icon; otherwise the TV's label.
-fn input_icon(input: &Input, custom: Option<&str>) -> &'static str {
+pub fn input_icon(input: &Input, custom: Option<&str>) -> &'static str {
     custom
         .map(device_icon)
         .filter(|icon| *icon != "hdmi")

@@ -493,6 +493,30 @@ fn web_library(state: &State) -> web_settings::Library {
     }
 }
 
+fn web_inputs(state: &State) -> Vec<web_settings::WebInput> {
+    let preferences = &state.preferences;
+    state
+        .inventory
+        .inputs
+        .iter()
+        .map(|input| web_settings::WebInput {
+            id: input.id.clone(),
+            port: input.port.clone(),
+            name: preferences.input_name(input).unwrap_or_default().to_owned(),
+            mode: preferences
+                .input_modes
+                .get(&input.id)
+                .copied()
+                .unwrap_or_default(),
+            icon: preferences
+                .input_icon(&input.id)
+                .unwrap_or_default()
+                .to_owned(),
+            auto_icon: view::input_icon(input, preferences.input_name(input)).to_owned(),
+        })
+        .collect()
+}
+
 /// One sheet of app tiles for the companion page, drawn only when its tiles changed.
 fn app_sheet(
     state: &State,
@@ -1193,8 +1217,11 @@ fn run() -> Result<(), String> {
             state.preferences.web_access,
             focused && visible && matches!(state.overlay, Some(Overlay::WebAccessPair)),
             &web_settings::Settings::of(&state.preferences),
-            &web_backgrounds(&state, &assets),
-            &web_library(&state),
+            &web_settings::Catalog {
+                backgrounds: web_backgrounds(&state, &assets),
+                library: web_library(&state),
+                inputs: web_inputs(&state),
+            },
         );
         while let Ok(event) = web_access_service.receiver.try_recv() {
             match event {
@@ -1255,6 +1282,20 @@ fn run() -> Result<(), String> {
                     let pending =
                         state.apply_web_arrangement(arrangement.favorites, arrangement.hidden);
                     web_access_service.arranged();
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                web_access::Event::Input(change) => {
+                    let pending = state.apply_web_input(change);
+                    web_access_service.inputs_applied();
                     running &= effects(
                         pending,
                         &mut state,

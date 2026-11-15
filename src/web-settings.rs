@@ -1,7 +1,9 @@
 //! The launcher settings a paired phone or computer may change, and how the page labels them.
 //! Labels come from the TV's own message catalog, so the page reads like Settings on the TV.
 use crate::i18n::Language;
-use crate::model::{AppSorting, DateFormat, Preferences, WeatherStyle, clean_input_name};
+use crate::model::{
+    AppSorting, DateFormat, INPUT_ICONS, InputMode, Preferences, WeatherStyle, clean_input_name,
+};
 use crate::text_rendering::TextRendering;
 use crate::weather::Unit;
 use serde::{Deserialize, Serialize};
@@ -87,6 +89,38 @@ pub struct LibraryApp {
     pub title: String,
 }
 
+/// A TV input as Settings › Widgets › Inputs shows it.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct WebInput {
+    pub id: String,
+    /// The TV's port name ("HDMI 2"), shown when no custom name is saved.
+    pub port: String,
+    pub name: String,
+    pub mode: InputMode,
+    /// The chosen icon, or empty for automatic.
+    pub icon: String,
+    /// What automatic picks right now.
+    pub auto_icon: String,
+}
+
+/// One input's name, visibility and icon from the page.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InputChange {
+    pub id: String,
+    pub name: String,
+    pub mode: InputMode,
+    pub icon: String,
+}
+
+/// Everything besides plain settings the page lists, kept current by the launcher.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Catalog {
+    pub backgrounds: Vec<Background>,
+    pub library: Library,
+    pub inputs: Vec<WebInput>,
+}
+
 /// A new arrangement from the page. Unknown ids are dropped by the launcher.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -125,18 +159,15 @@ pub fn strings(language: Language) -> serde_json::Value {
 
 /// The page's whole view of the TV: current values plus every label in the TV's language, so the
 /// page reads like the Settings the owner already knows.
-pub fn listing(
-    settings: &Settings,
-    backgrounds: &[Background],
-    library: &Library,
-) -> serde_json::Value {
+pub fn listing(settings: &Settings, catalog: &Catalog) -> serde_json::Value {
     let language = settings.language;
     let t = |key| language.t(key);
     serde_json::json!({
         "settings": settings,
         "strings": strings(language),
-        "backgrounds": backgrounds,
-        "library": library,
+        "backgrounds": catalog.backgrounds,
+        "library": catalog.library,
+        "inputs": catalog.inputs,
         "sheet": { "tiles": crate::view::SHEET_TILES, "columns": crate::view::SHEET_COLUMNS },
         "labels": {
             "apps": t("apps"),
@@ -147,6 +178,10 @@ pub fn listing(
             "showApp": t("showApp"),
             "hidden": t("hiddenLabel"),
             "makeFavorites": t("makeFavorites"),
+            "inputs": t("inputs"),
+            "inputName": t("inputName"),
+            "inputNameHint": t("inputNameHint"),
+            "inputIcon": t("inputIcon"),
             "general": t("interface"),
             "background": t("background"),
             "widgets": t("widgets"),
@@ -192,6 +227,14 @@ pub fn listing(
             "weather_style": WeatherStyle::ALL
                 .iter()
                 .map(|item| choice(item, t(item.label_key())))
+                .collect::<Vec<_>>(),
+            "input_mode": [
+                serde_json::json!({ "value": InputMode::On, "label": t("stateOn"), "hint": t("inputAlways") }),
+                serde_json::json!({ "value": InputMode::Off, "label": t("stateOff"), "hint": t("inputNever") }),
+                serde_json::json!({ "value": InputMode::Auto, "label": t("stateAuto"), "hint": t("inputWhenConnected") }),
+            ],
+            "input_icon": std::iter::once(choice("", t("inputIconAutomatic")))
+                .chain(INPUT_ICONS.iter().map(|(icon, key)| choice(icon, t(key))))
                 .collect::<Vec<_>>(),
             "text_rendering": TextRendering::ALL
                 .iter()

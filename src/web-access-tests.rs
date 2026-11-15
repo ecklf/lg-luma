@@ -86,13 +86,25 @@ fn pairs_once_and_then_changes_settings() {
     let settings = Settings::of(&crate::model::Preferences::default());
     let thumbnail = path.with_extension("jpg");
     std::fs::write(&thumbnail, b"jpeg").unwrap();
-    let catalog = vec![Background {
+    let backgrounds = vec![crate::web_settings::Background {
         id: "dunes".into(),
         name: "Monument Valley".into(),
         thumbnail: thumbnail.clone(),
     }];
+    let catalog = Catalog {
+        backgrounds,
+        inputs: vec![crate::web_settings::WebInput {
+            id: "com.webos.app.hdmi1".into(),
+            port: "HDMI 1".into(),
+            name: String::new(),
+            mode: crate::model::InputMode::Auto,
+            icon: String::new(),
+            auto_icon: "hdmi".into(),
+        }],
+        ..Catalog::default()
+    };
 
-    service.sync(true, true, &settings, &catalog, &Library::default());
+    service.sync(true, true, &settings, &catalog);
     let first = pairing(&service);
     assert!(first.session.url.ends_with(&format!("/#pin={}", first.pin)));
 
@@ -155,7 +167,7 @@ fn pairs_once_and_then_changes_settings() {
     assert_eq!(status, 409);
 
     // Pairing is done; the page now works with the dialog closed.
-    service.sync(true, false, &settings, &catalog, &Library::default());
+    service.sync(true, false, &settings, &catalog);
     let (status, _, body) = get("/api/settings", &cookie);
     assert_eq!(status, 200);
     assert!(body.contains("\"device\":\"Test phone\""));
@@ -293,6 +305,28 @@ fn pairs_once_and_then_changes_settings() {
     assert!(applied.hour_24);
     assert_eq!(applied.greeting_name, "Ana");
 
+    // An input change reaches the launcher cleaned; unknown icons and inputs are refused.
+    let (status, _, body) = post(
+        "/api/inputs",
+        &cookie,
+        r#"{"id":"com.webos.app.hdmi1","name":"  PS5\u0007 ","mode":"On","icon":"playstation"}"#,
+    );
+    assert_eq!(status, 200);
+    assert!(body.contains("\"name\":\"PS5\""));
+    let change = loop {
+        if let Event::Input(change) = next_event(&service) {
+            break change;
+        }
+    };
+    assert_eq!(change.name, "PS5");
+    assert_eq!(change.mode, crate::model::InputMode::On);
+    let bad_icon = r#"{"id":"com.webos.app.hdmi1","name":"","mode":"On","icon":"../x"}"#;
+    assert_eq!(post("/api/inputs", &cookie, bad_icon).0, 422);
+    let unknown = r#"{"id":"com.webos.app.hdmi9","name":"","mode":"On","icon":""}"#;
+    assert_eq!(post("/api/inputs", &cookie, unknown).0, 422);
+    assert_eq!(get("/icon/input-playstation.svg", "").0, 200);
+    assert_eq!(get("/icon/input-..%2Fx.svg", "").0, 404);
+
     // Unknown fields cannot reach other preferences.
     let (status, _, _) = post("/api/settings", &cookie, r#"{"hidden":["x"]}"#);
     assert_eq!(status, 422);
@@ -303,7 +337,7 @@ fn pairs_once_and_then_changes_settings() {
     assert_eq!(get("/api/settings", &cookie).0, 401);
 
     // Turning web access off closes the server.
-    service.sync(false, false, &settings, &catalog, &Library::default());
+    service.sync(false, false, &settings, &catalog);
     thread::sleep(Duration::from_millis(400));
     assert!(TcpStream::connect(("127.0.0.1", PORT)).is_err());
     drop(service);
