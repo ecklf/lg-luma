@@ -72,13 +72,24 @@
               </button>
               <button type="button" data-key="menu" class="pill-button" id="key-menu"></button>
             </div>
-            <div id="tv-keys" class="tv-keys" hidden>
+            <div id="tv-inputs" class="tv-inputs"></div>
+            <div id="tv-volume" class="tv-volume" hidden>
               <button type="button" data-key="volume_down" class="round" aria-label="−">−</button>
+              <input id="volume" class="volume" type="range" min="0" max="100" step="1" />
               <button type="button" data-key="volume_up" class="round" aria-label="+">+</button>
+              <output id="volume-value" class="volume-value" for="volume"></output>
+            </div>
+            <div id="tv-keys" class="tv-keys" hidden>
               <button type="button" data-key="mute" class="pill-button" id="key-mute"></button>
               <button type="button" data-key="play" class="round" aria-label="▶">▶</button>
               <button type="button" data-key="pause" class="round" aria-label="❚❚">❚❚</button>
+              <button type="button" class="pill-button" id="key-screen"></button>
               <button type="button" class="pill-button danger" id="key-power"></button>
+            </div>
+            <div id="tv-sleep" class="tv-sleep" hidden>
+              <span id="sleep-label" class="muted"></span>
+              <div id="sleep-choices" class="segments" role="radiogroup"></div>
+              <p id="sleep-left" class="hint"></p>
             </div>
             <form id="tv-text" class="tv-text" hidden>
               <input
@@ -90,6 +101,7 @@
               />
               <button type="submit" class="pill-button strong" id="tv-text-send"></button>
             </form>
+            <p id="keyboard-hint" class="hint keyboard-hint"></p>
           </div>
         </aside>
         <div class="panel">
@@ -101,6 +113,10 @@
           </footer>
         </div>
       </main>
+      <div id="undo" class="undo" role="status" aria-live="polite" hidden>
+        <span id="undo-text"></span>
+        <button id="undo-button" type="button" class="pill-button strong"></button>
+      </div>
     </div>
   </body>
 </html>

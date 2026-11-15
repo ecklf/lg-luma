@@ -1172,6 +1172,7 @@ fn run() -> Result<(), String> {
         &assets,
         options.time.unwrap_or_else(OffsetDateTime::now_utc),
     );
+    let mut sleep_at: Option<Instant> = None;
     while running {
         let now = options
             .time
@@ -1257,6 +1258,13 @@ fn run() -> Result<(), String> {
             }
         }
         tv_remote_service.set_enabled(state.preferences.web_access && state.preferences.tv_remote);
+        // The page's sleep timer; it needs the remote interface to turn the TV off.
+        if sleep_at.is_some_and(|at| Instant::now() >= at) {
+            sleep_at = None;
+            if state.tv_remote == tv_remote::Status::Ready {
+                tv_remote_service.send(tv_remote::Command::PowerOff);
+            }
+        }
         while let Ok(status) = tv_remote_service.receiver.try_recv() {
             state.tv_remote = status;
             state.dirty = true;
@@ -1516,6 +1524,31 @@ fn run() -> Result<(), String> {
                     }
                 }
                 web_access::Event::Key(_) | web_access::Event::Tap(..) => {}
+                web_access::Event::Tv(change, reply) => {
+                    let (reading, answer) = std::sync::mpsc::channel();
+                    if state.tv_remote == tv_remote::Status::Ready {
+                        if let Some(level) = change.volume {
+                            tv_remote_service.send(tv_remote::Command::Volume(level));
+                        }
+                        if let Some(on) = change.screen {
+                            tv_remote_service.send(tv_remote::Command::Screen(on));
+                        }
+                        match change.sleep {
+                            Some(0) => sleep_at = None,
+                            Some(minutes) => {
+                                sleep_at = Some(
+                                    Instant::now() + Duration::from_secs(u64::from(minutes) * 60),
+                                );
+                            }
+                            None => {}
+                        }
+                        tv_remote_service.send(tv_remote::Command::Read(reading));
+                    }
+                    let _ = reply.send(web_access::TvAnswer {
+                        sleep_left: sleep_at.map(|at| at.saturating_duration_since(Instant::now())),
+                        reading: answer,
+                    });
+                }
                 web_access::Event::Widgets(change) => {
                     let pending = state.apply_web_widget(change);
                     running &= effects(

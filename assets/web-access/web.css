@@ -389,7 +389,7 @@ select {
   gap: 8px;
   margin-top: 12px;
 }
-.tv-keys .round {
+.remote .round {
   width: 44px;
   height: 44px;
   border: 0;
@@ -400,7 +400,7 @@ select {
   font-weight: 600;
   cursor: pointer;
 }
-.tv-keys .round:active {
+.remote .round:active {
   background: var(--focus);
   color: var(--focus-ink);
 }
@@ -414,8 +414,112 @@ select {
   flex-wrap: wrap;
 }
 .remote .tv-keys,
-.remote .tv-text {
+.remote .tv-text,
+.remote .tv-inputs,
+.remote .tv-volume,
+.remote .tv-sleep,
+.remote .keyboard-hint {
   flex: 1 0 100%;
+}
+/* The TV's inputs, one tap each. */
+.tv-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.input-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.input-chip .glyph {
+  width: 20px;
+  height: 20px;
+}
+/* Volume: the TV's own level, set by dragging. */
+.tv-volume {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto 3ch;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+.volume {
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  background: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.volume::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--focus) var(--fill, 0%),
+    rgba(255, 255, 255, 0.16) var(--fill, 0%)
+  );
+}
+.volume::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.volume::-moz-range-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--focus);
+}
+.volume::-webkit-slider-thumb {
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--focus);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.volume::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--focus);
+}
+.volume-value {
+  color: var(--ink);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+}
+/* Sleep timer. */
+.tv-sleep {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+.tv-sleep .muted {
+  font-size: 13px;
+  font-weight: 600;
+}
+.tv-sleep .hint:empty {
+  display: none;
+}
+.keyboard-hint {
+  margin: 4px 0 0;
+  text-align: center;
+}
+/* The keyboard hint is for computers only. */
+@media (hover: none) {
+  .keyboard-hint {
+    display: none;
+  }
 }
 .screen.tappable img {
   cursor: pointer;
@@ -724,11 +828,6 @@ select {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
-.photo-delete.armed {
-  background: var(--danger);
-  color: #2c1410;
-  font-size: 12px;
-}
 .add-photo {
   align-content: start;
 }
@@ -811,19 +910,34 @@ select {
   gap: 10px;
   padding: 8px 10px 8px 8px;
 }
+.row.favorite {
+  /* The whole row drags a favorite into place (buttons excepted). */
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: transform 0.15s;
+}
+.row.favorite button {
+  cursor: pointer;
+}
+.row.favorite.lifted {
+  transform: scale(1.02);
+}
 .row.favorite .thumb {
   width: 88px;
-  /* The tile is the handle for dragging a favorite into place. */
-  cursor: grab;
+  /* The tile drags at once, even by finger. */
   touch-action: none;
 }
 .row.favorite.dragging {
   z-index: 3;
   background: rgb(40, 43, 50);
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+  cursor: grabbing;
+  transition: none;
 }
 @media (max-width: 520px) {
-  /* On a phone the tile drags a favorite into place; the arrows would only squeeze the name. */
+  /* On a phone dragging puts favorites in order; the arrows would only squeeze the name. */
   .row.favorite {
     grid-template-columns: 88px minmax(0, 1fr) auto auto;
   }
@@ -831,9 +945,6 @@ select {
   .row.favorite .icon-down {
     display: none;
   }
-}
-.row.favorite.dragging .thumb {
-  cursor: grabbing;
 }
 .row.favorite.drop-before::before,
 .row.favorite.drop-after::after {
@@ -1228,4 +1339,31 @@ select {
     animation: none !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Undo after removing something. */
+.undo {
+  position: fixed;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 12px 10px 18px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: rgb(36, 39, 46);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  color: var(--ink);
+  font-size: 14px;
+  transform: translateX(-50%);
+}
+.undo[hidden] {
+  display: none;
+}
+.undo .pill-button {
+  min-height: 34px;
+  flex: none;
 }

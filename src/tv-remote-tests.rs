@@ -101,3 +101,31 @@ fn a_connection_the_tv_closed_is_noticed_before_the_next_press() {
     std::thread::sleep(std::time::Duration::from_millis(50));
     assert!(!socket.idle_and_open());
 }
+
+#[test]
+fn readings_understand_nested_and_flat_volume_answers() {
+    let nested = serde_json::json!({
+        "volumeStatus": { "volume": 15, "maxVolume": 100, "muteStatus": false }
+    });
+    let flat = serde_json::json!({ "volume": 7, "mute": true });
+    let screen_off = serde_json::json!({ "state": "Screen Off" });
+    let active = serde_json::json!({ "state": "Active" });
+    assert_eq!(
+        reading(&nested, &screen_off),
+        Reading {
+            volume: 15,
+            max_volume: 100,
+            muted: false,
+            screen_off: true
+        }
+    );
+    assert_eq!(
+        reading(&flat, &active),
+        Reading {
+            volume: 7,
+            max_volume: 100,
+            muted: true,
+            screen_off: false
+        }
+    );
+}

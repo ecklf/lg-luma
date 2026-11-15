@@ -178,7 +178,17 @@ function showRemote() {
   }
   element('tv-keys').hidden = !whole;
   element('tv-text').hidden = !whole;
+  element('tv-volume').hidden = !whole || !tvReading;
+  element('tv-sleep').hidden = !whole;
   element('key-mute').textContent = state?.labels.mute ?? '';
+  element('key-screen').textContent = tvReading?.screen_off
+    ? (state?.labels.screenOn ?? '')
+    : (state?.labels.screenOff ?? '');
+  element('key-screen').title = state?.labels.screenOffHint ?? '';
+  element('keyboard-hint').textContent = state?.labels.keyboardHint ?? '';
+  showInputs();
+  showSleep();
+  if (whole && remoteOpen) watchTv();
   element('key-power').textContent = state?.labels.powerOff ?? '';
   element('tv-text-send').textContent = state?.labels.sendText ?? '';
   element('tv-text-field').placeholder = state?.labels.textPlaceholder ?? '';
@@ -198,6 +208,129 @@ element('remote-toggle').addEventListener('click', () => {
 
 for (const button of element('remote').querySelectorAll('[data-key]')) {
   button.addEventListener('click', () => press(button.dataset.key));
+}
+
+/* ---------- Whole TV: inputs, volume, picture, sleep timer ---------- */
+
+// The TV's inputs open like on Home; that works without the TV's remote interface too.
+function showInputs() {
+  const holder = element('tv-inputs');
+  const inputs = state?.inputs ?? [];
+  holder.hidden = !inputs.length;
+  holder.replaceChildren(
+    ...inputs.map((input) => {
+      const button = create('button', 'pill-button input-chip');
+      button.type = 'button';
+      const mark = create('span', 'glyph');
+      mark.style.setProperty('--icon', `url('icon/input-${input.icon || input.auto_icon}.svg')`);
+      button.append(mark, create('span', '', input.name || input.port));
+      button.addEventListener('click', () => launch(input.id));
+      return button;
+    }),
+  );
+}
+
+// The TV's volume and picture state, read while the remote is open.
+let tvReading = null;
+let sleepLeft = null;
+let tvWatch = null;
+let volumeHeld = false;
+
+async function tv(change = {}) {
+  try {
+    const result = await call('api/tv', change);
+    tvReading = result.reading;
+    sleepLeft = result.sleepLeft ?? null;
+  } catch (error) {
+    if (error instanceof PairingNeeded) return startPairing(error.message);
+    tvReading = null;
+  }
+  if (!volumeHeld && tvReading) {
+    const slider = element('volume');
+    slider.max = String(tvReading.max_volume);
+    slider.value = String(tvReading.volume);
+    showVolume();
+  }
+  showRemote();
+}
+
+// Polls only while someone looks at the open remote of a TV that allows it.
+function watchTv() {
+  if (tvWatch) return;
+  tv();
+  tvWatch = setInterval(() => {
+    const whole = state?.tvRemote === 'ready';
+    if (!whole || !remoteOpen || document.visibilityState !== 'visible') {
+      clearInterval(tvWatch);
+      tvWatch = null;
+      return;
+    }
+    if (!volumeHeld) tv();
+  }, 5000);
+}
+
+function showVolume() {
+  const slider = element('volume');
+  const muted = tvReading?.muted;
+  element('volume-value').textContent = muted ? '🔇' : slider.value;
+  slider.setAttribute('aria-label', state?.labels.volume ?? '');
+  slider.style.setProperty(
+    '--fill',
+    `${(Number(slider.value) / Number(slider.max || 100)) * 100}%`,
+  );
+}
+
+let volumeTimer = null;
+element('volume').addEventListener('input', () => {
+  volumeHeld = true;
+  showVolume();
+  // Follows the finger without sending every step.
+  clearTimeout(volumeTimer);
+  volumeTimer = setTimeout(() => tv({ volume: Number(element('volume').value) }), 120);
+});
+element('volume').addEventListener('change', () => {
+  clearTimeout(volumeTimer);
+  tv({ volume: Number(element('volume').value) }).finally(() => (volumeHeld = false));
+});
+for (const key of ['volume_up', 'volume_down', 'mute']) {
+  element('remote')
+    .querySelector(`[data-key="${key}"]`)
+    .addEventListener('click', () => setTimeout(() => tv(), 350));
+}
+
+element('key-screen').addEventListener('click', () => {
+  navigator.vibrate?.(8);
+  tv({ screen: Boolean(tvReading?.screen_off) });
+});
+
+const SLEEP_CHOICES = [0, 30, 60, 90];
+function showSleep() {
+  const l = state?.labels;
+  if (!l) return;
+  element('sleep-label').textContent = l.sleepTimer;
+  const minutesLeft = sleepLeft === null ? null : Math.max(1, Math.ceil(sleepLeft / 60));
+  // The running timer marks the choice it came from, rounded up to the next one.
+  const current =
+    minutesLeft === null ? 0 : (SLEEP_CHOICES.find((value) => value >= minutesLeft) ?? 90);
+  const choices = element('sleep-choices');
+  choices.setAttribute('aria-label', l.sleepTimer);
+  choices.replaceChildren(
+    ...SLEEP_CHOICES.map((value) => {
+      const option = create('label');
+      const radio = create('input');
+      radio.type = 'radio';
+      radio.name = 'sleep';
+      radio.checked = value === current;
+      radio.addEventListener('change', () => tv({ sleep: value }));
+      option.append(
+        radio,
+        create('span', '', value ? l.minutes.replace('{minutes}', value) : l.sleepOff),
+      );
+      return option;
+    }),
+  );
+  element('sleep-left').textContent =
+    minutesLeft === null ? '' : l.sleepLeft.replace('{minutes}', minutesLeft);
 }
 
 // Turning the TV off from a phone deserves a second tap.
@@ -251,6 +384,7 @@ document.addEventListener('keydown', (event) => {
     Backspace: 'back',
     Escape: 'back',
     Home: 'home',
+    h: 'home',
   }[event.key];
   if (!key) return;
   event.preventDefault();
@@ -326,6 +460,7 @@ function choiceRow(key, label) {
 function wallpapers() {
   const grid = create('div', 'wallpapers');
   for (const background of state.backgrounds) {
+    if (pendingRemoval.has(background.id)) continue;
     const cell = create('div', 'wallpaper-cell');
     const button = create('button', 'wallpaper');
     button.type = 'button';
@@ -344,16 +479,18 @@ function wallpapers() {
       remove.title = strings.deletePhoto;
       remove.setAttribute('aria-label', strings.deletePhoto);
       remove.textContent = '×';
-      let armed = false;
       remove.addEventListener('click', () => {
-        // A second press confirms, so a stray tap cannot delete a photo.
-        if (!armed) {
-          armed = true;
-          remove.classList.add('armed');
-          remove.textContent = strings.deletePhoto;
-          return;
-        }
-        deletePhoto(background.id);
+        const id = background.id;
+        pendingRemoval.add(id);
+        render();
+        undoable(
+          state.labels.photoDeleted,
+          () => deletePhoto(id),
+          () => {
+            pendingRemoval.delete(id);
+            render();
+          },
+        );
       });
       cell.append(remove);
     }
@@ -363,9 +500,13 @@ function wallpapers() {
   const input = create('input');
   input.type = 'file';
   input.accept = 'image/jpeg,image/png,image/webp';
+  input.multiple = true;
   input.addEventListener('change', () => {
-    if (input.files[0]) openCropper(input.files[0]);
+    const files = [...input.files];
     input.value = '';
+    // One photo gets the cropper; several are centred and cropped like the cropper's start.
+    if (files.length === 1) openCropper(files[0]);
+    else if (files.length > 1) uploadMany(files);
   });
   const plus = create('span', 'add-plus', '+');
   add.append(input, plus, create('span', '', strings.addPhoto));
@@ -385,6 +526,54 @@ function runAction(action) {
     }
   });
 }
+
+function pillButton(label, kind, action) {
+  const button = create('button', `pill-button ${kind}`.trim(), label);
+  button.type = 'button';
+  button.addEventListener('click', action);
+  return button;
+}
+
+/* ---------- Undo ---------- */
+
+// Removing something takes effect after a few seconds; until then the toast can bring it back.
+// Items waiting for removal stay out of the lists meanwhile.
+const pendingRemoval = new Set();
+let pendingUndo = null;
+
+function undoable(text, commit, restore) {
+  finishUndo();
+  const timer = setTimeout(finishUndo, 6000);
+  pendingUndo = { commit, restore, timer };
+  element('undo-text').textContent = text;
+  element('undo-button').textContent = state.labels.undo;
+  element('undo').hidden = false;
+}
+
+function finishUndo() {
+  const pending = pendingUndo;
+  if (!pending) return;
+  pendingUndo = null;
+  clearTimeout(pending.timer);
+  element('undo').hidden = true;
+  pending.commit();
+}
+
+element('undo-button').addEventListener('click', () => {
+  const pending = pendingUndo;
+  if (!pending) return;
+  pendingUndo = null;
+  clearTimeout(pending.timer);
+  element('undo').hidden = true;
+  navigator.vibrate?.(8);
+  pending.restore();
+});
+
+// Leaving the page carries out what was removed rather than forgetting it.
+addEventListener('pagehide', finishUndo);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') finishUndo();
+});
 
 function confirmButton(label, confirm, action) {
   const button = create('button', 'pill-button danger', label);
@@ -428,13 +617,13 @@ function systemSection() {
     return row;
   };
 
-  const devices = state.devices.map((device) => {
-    const row = create('div', 'row inline');
-    const name = create('span', 'title', device.name);
-    if (device.this) name.append(create('small', 'badge', l.thisDevice));
-    row.append(
-      name,
-      confirmButton(l.remove, `${l.remove}?`, () => {
+  const devices = state.devices
+    .filter((device) => !pendingRemoval.has(device.id))
+    .map((device) => {
+      const row = create('div', 'row inline');
+      const name = create('span', 'title', device.name);
+      if (device.this) name.append(create('small', 'badge', l.thisDevice));
+      const removeNow = () => {
         queue = queue.then(async () => {
           try {
             apply(await call('api/devices/remove', { id: device.id }));
@@ -447,10 +636,29 @@ function systemSection() {
             message(error.message, true);
           }
         });
-      }),
-    );
-    return row;
-  });
+      };
+      // This device signs itself out, which no undo can bring back; it asks first instead.
+      // Another device goes after a few seconds, with time to undo.
+      const remove = device.this
+        ? confirmButton(l.remove, `${l.remove}?`, removeNow)
+        : pillButton(l.remove, 'danger', () => {
+            pendingRemoval.add(device.id);
+            render();
+            undoable(
+              l.deviceRemoved,
+              () => {
+                removeNow();
+                pendingRemoval.delete(device.id);
+              },
+              () => {
+                pendingRemoval.delete(device.id);
+                render();
+              },
+            );
+          });
+      row.append(name, remove);
+      return row;
+    });
 
   return [
     group(null, update),
@@ -496,6 +704,7 @@ function deletePhoto(id) {
     message(strings.saving, false, true);
     try {
       apply(await call('api/photo/delete', { id }));
+      pendingRemoval.delete(id);
       message(strings.saved);
     } catch (error) {
       if (error instanceof PairingNeeded) return startPairing(error.message);
@@ -515,6 +724,42 @@ async function uploadPhoto(blob) {
   if (result.pair) throw new PairingNeeded(result.error);
   if (!response.ok) throw new Error(result.error || strings.offline);
   return result;
+}
+
+// The 1920×1080 JPEG the TV stores, cut from a photo with the cropper's math.
+async function cropped(bitmap, zoom = 1, horizontal = 0.5, vertical = 0.5) {
+  const output = create('canvas');
+  output.width = 1920;
+  output.height = 1080;
+  const { x, y, w, h } = cropRect(bitmap.width, bitmap.height, zoom, horizontal, vertical);
+  output.getContext('2d').drawImage(bitmap, x, y, w, h, 0, 0, 1920, 1080);
+  return new Promise((resolve) => output.toBlob(resolve, 'image/jpeg', 0.94));
+}
+
+// Several photos at once, one after the other, so the TV is never asked to store two at a time.
+function uploadMany(files) {
+  queue = queue.then(async () => {
+    let added = 0;
+    for (const [index, file] of files.entries()) {
+      message(
+        state.labels.uploadingCount.replace('{n}', index + 1).replace('{total}', files.length),
+        false,
+        true,
+      );
+      try {
+        const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        const blob = await cropped(bitmap);
+        bitmap.close?.();
+        apply(await uploadPhoto(blob));
+        added += 1;
+      } catch (error) {
+        if (error instanceof PairingNeeded) return startPairing(error.message);
+        message(error.message || strings.offline, true);
+        return;
+      }
+    }
+    message(state.labels.photosAdded.replace('{count}', added));
+  });
 }
 
 // Crops to the TV's 1920×1080 like the wallpaper upload, with the same crop math.
@@ -575,12 +820,7 @@ async function openCropper(file) {
   save.addEventListener('click', async () => {
     save.disabled = cancel.disabled = true;
     message(strings.uploading, false, true);
-    const output = create('canvas');
-    output.width = 1920;
-    output.height = 1080;
-    const { x, y, w, h } = cropRect(bitmap.width, bitmap.height, zoom, horizontal, vertical);
-    output.getContext('2d').drawImage(bitmap, x, y, w, h, 0, 0, 1920, 1080);
-    const blob = await new Promise((resolve) => output.toBlob(resolve, 'image/jpeg', 0.94));
+    const blob = await cropped(bitmap, zoom, horizontal, vertical);
     try {
       const result = await uploadPhoto(blob);
       apply(result);
@@ -690,12 +930,13 @@ function iconButton(icon, label, pressed, action) {
 }
 
 // Drags a favorite by its tile; a line shows where it would go, the drop saves the order.
-function dragFavorite(event, id, row, handle, dock) {
+function dragFavorite(event, id, row, dock, hold) {
   let target = null;
   const marks = () => dock.querySelectorAll('.drop-before, .drop-after');
   const unmark = () =>
     marks().forEach((other) => other.classList.remove('drop-before', 'drop-after'));
-  dragAfterPress(event, handle, {
+  dragAfterPress(event, row, {
+    hold,
     move(dx, dy, pointer) {
       row.classList.add('dragging');
       row.style.transform = `translateY(${dy}px)`;
@@ -737,6 +978,21 @@ function shownFavorites() {
   return state.library.favorites.filter((id) => known.has(id));
 }
 
+// Takes an app out of the favorites at once; the toast puts it back in its old place.
+function unfavorite(id, name) {
+  const { favorites, hidden } = state.library;
+  const before = [...favorites];
+  arrange(
+    favorites.filter((item) => item !== id),
+    hidden,
+  );
+  undoable(
+    state.labels.favoriteRemoved.replace('{app}', name),
+    () => {},
+    () => arrange(before, state.library.hidden),
+  );
+}
+
 function appsSection() {
   const l = state.labels;
   const { apps, favorites, hidden } = state.library;
@@ -760,14 +1016,17 @@ function appsSection() {
     up.disabled = position === 0;
     down.disabled = position === shown.length - 1;
     const remove = iconButton('heart-filled', l.removeFavorite, true, () =>
-      arrange(
-        favorites.filter((item) => item !== id),
-        hidden,
-      ),
+      unfavorite(id, title(id)),
     );
     const open = iconButton('open', l.open, undefined, () => launch(id));
     const handle = thumb(index.get(id));
-    handle.addEventListener('pointerdown', (event) => dragFavorite(event, id, row, handle, dock));
+    // The whole row drags, not its buttons. A finger holds briefly first, so a swipe over the
+    // list still scrolls; the tile itself drags at once.
+    row.addEventListener('pointerdown', (event) => {
+      if (event.target.closest('button')) return;
+      const hold = event.pointerType === 'touch' && !event.target.closest('.thumb') ? 280 : 0;
+      dragFavorite(event, id, row, dock, hold);
+    });
     row.append(handle, create('span', 'title', title(id)), open, up, down, remove);
     dock.append(row);
   });
@@ -786,10 +1045,12 @@ function appsSection() {
         favorite ? l.removeFavorite : l.addFavorite,
         favorite,
         () =>
-          arrange(
-            favorite ? favorites.filter((id) => id !== app.id) : [...favorites, app.id],
-            hidden.filter((id) => id !== app.id),
-          ),
+          favorite
+            ? unfavorite(app.id, app.title)
+            : arrange(
+                [...favorites, app.id],
+                hidden.filter((id) => id !== app.id),
+              ),
       ),
       iconButton(isHidden ? 'eye-off' : 'eye', isHidden ? l.showApp : l.hideApp, isHidden, () =>
         arrange(
@@ -1105,14 +1366,38 @@ let swallowClick = false;
 
 // Follows a press until it travels a few pixels, then hands every move and the drop to the
 // callbacks. A press that stays put remains a plain click.
-function dragAfterPress(event, element, { move, drop, cancel }) {
+function dragAfterPress(event, element, { move, drop, cancel, hold = 0 }) {
   if (event.button !== 0) return;
   const start = { x: event.clientX, y: event.clientY };
   let active = false;
-  element.setPointerCapture(event.pointerId);
+  // With `hold`, a finger must rest that long before anything moves; moving sooner scrolls.
+  let ready = hold === 0;
+  let timer = null;
+  const capture = () => {
+    try {
+      element.setPointerCapture(event.pointerId);
+    } catch {
+      // The pointer is already gone; the next up or cancel ends the drag.
+    }
+  };
+  if (ready) capture();
+  else {
+    timer = setTimeout(() => {
+      ready = true;
+      holding = true;
+      navigator.vibrate?.(10);
+      element.classList.add('lifted');
+      capture();
+    }, hold);
+  }
   const onMove = (next) => {
+    const distance = Math.hypot(next.clientX - start.x, next.clientY - start.y);
+    if (!ready) {
+      if (distance > 8) finish(next, false);
+      return;
+    }
     if (!active) {
-      if (Math.hypot(next.clientX - start.x, next.clientY - start.y) < 6) return;
+      if (distance < 6) return;
       active = true;
       dragging = true;
       element.classList.add('dragging');
@@ -1120,6 +1405,9 @@ function dragAfterPress(event, element, { move, drop, cancel }) {
     move(next.clientX - start.x, next.clientY - start.y, next);
   };
   const finish = (end, dropped) => {
+    clearTimeout(timer);
+    holding = false;
+    element.classList.remove('lifted');
     element.removeEventListener('pointermove', onMove);
     element.removeEventListener('pointerup', onUp);
     element.removeEventListener('pointercancel', onCancel);
@@ -1139,6 +1427,16 @@ function dragAfterPress(event, element, { move, drop, cancel }) {
   element.addEventListener('pointerup', onUp);
   element.addEventListener('pointercancel', onCancel);
 }
+
+// Once a finger has picked something up, the page must not scroll under it.
+let holding = false;
+document.addEventListener(
+  'touchmove',
+  (event) => {
+    if (holding || dragging) event.preventDefault();
+  },
+  { passive: false },
+);
 
 // The grid cell a dragged widget's top-left corner lands on, kept inside the grid.
 function cellUnder(board, entry, left, top) {

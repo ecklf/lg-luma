@@ -18,13 +18,15 @@ const ADDRESS: &str = "127.0.0.1:3000";
 const TIMEOUT: Duration = Duration::from_secs(5);
 /// How long the TV's Allow prompt may wait for someone at the TV.
 const PROMPT_TIME: Duration = Duration::from_secs(60);
-/// Only what the companion page uses.
-const PERMISSIONS: [&str; 7] = [
+/// Only what the companion page uses. Changing the list makes the TV ask "Allow?" once more.
+const PERMISSIONS: [&str; 8] = [
     "CONTROL_AUDIO",
     "CONTROL_INPUT_MEDIA_PLAYBACK",
     "CONTROL_INPUT_TEXT",
     "CONTROL_MOUSE_AND_KEYBOARD",
     "CONTROL_POWER",
+    // Screen off with the sound still playing, and back on.
+    "CONTROL_TV_SCREEN",
     "LAUNCH",
     "READ_RUNNING_APPS",
 ];
@@ -69,6 +71,21 @@ pub enum Command {
     Text(String),
     Enter,
     PowerOff,
+    /// Sets the volume, within the TV's own range.
+    Volume(u8),
+    /// Turns only the picture off (`false`) or back on; sound keeps playing.
+    Screen(bool),
+    /// Reads volume and screen state for the page.
+    Read(mpsc::Sender<Reading>),
+}
+
+/// What the page shows next to the volume slider and the screen button.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub struct Reading {
+    pub volume: u8,
+    pub max_volume: u8,
+    pub muted: bool,
+    pub screen_off: bool,
 }
 
 pub struct Service {
@@ -326,8 +343,53 @@ impl Session {
                 .request("ssap://com.webos.service.ime/sendEnterKey", None)
                 .map(drop),
             Command::PowerOff => self.request("ssap://system/turnOff", None).map(drop),
+            Command::Volume(level) => self
+                .request(
+                    "ssap://audio/setVolume",
+                    Some(serde_json::json!({ "volume": level })),
+                )
+                .map(drop),
+            Command::Screen(on) => self
+                .request(
+                    if *on {
+                        "ssap://com.webos.service.tvpower/power/turnOnScreen"
+                    } else {
+                        "ssap://com.webos.service.tvpower/power/turnOffScreen"
+                    },
+                    None,
+                )
+                .map(drop),
+            Command::Read(reply) => {
+                let audio = self.request("ssap://audio/getVolume", None)?;
+                let power =
+                    self.request("ssap://com.webos.service.tvpower/power/getPowerState", None)?;
+                let _ = reply.send(reading(&audio["payload"], &power["payload"]));
+                Ok(())
+            }
             Command::Enable(_) => Ok(()),
         }
+    }
+}
+
+/// Volume and screen state from the TV's answers; webOS 5 nests the volume in `volumeStatus`,
+/// older systems answer flat.
+fn reading(audio: &serde_json::Value, power: &serde_json::Value) -> Reading {
+    let status = if audio["volumeStatus"].is_object() {
+        &audio["volumeStatus"]
+    } else {
+        audio
+    };
+    let number = |value: &serde_json::Value, default: u64| {
+        u8::try_from(value.as_u64().unwrap_or(default).min(255)).unwrap_or(u8::MAX)
+    };
+    Reading {
+        volume: number(&status["volume"], 0),
+        max_volume: number(&status["maxVolume"], 100).max(1),
+        muted: status["muteStatus"]
+            .as_bool()
+            .or_else(|| status["mute"].as_bool())
+            .unwrap_or(false),
+        screen_off: power["state"] == "Screen Off",
     }
 }
 

@@ -1191,7 +1191,9 @@ impl State {
         if let Some(tile) = self.preferences.custom_tile(id).cloned() {
             return self.send_tile(tile);
         }
-        if self.inventory.apps.iter().any(|app| app.id == id) {
+        if self.inventory.apps.iter().any(|app| app.id == id)
+            || self.inventory.inputs.iter().any(|input| input.id == id)
+        {
             return vec![Effect::Launch(id.to_owned())];
         }
         vec![]

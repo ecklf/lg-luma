@@ -122,7 +122,31 @@ pub enum Event {
     Tiles(Vec<crate::model::CustomTile>),
     /// A place from the page's search, or `None` to remove the weather location.
     WeatherLocation(Option<crate::weather::Location>),
+    /// Volume, screen or sleep timer changes from the page, answered with the TV's state.
+    Tv(TvChange, mpsc::Sender<TvAnswer>),
 }
+
+/// What the page changes on the TV through its remote interface; all optional, an empty change
+/// only reads the state.
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TvChange {
+    pub volume: Option<u8>,
+    /// `false` turns only the picture off.
+    pub screen: Option<bool>,
+    /// Minutes until the TV turns off; 0 cancels the timer.
+    pub sleep: Option<u32>,
+}
+
+/// The launcher's answer to a `TvChange`: the sleep timer it keeps, and the TV's reading once the
+/// remote interface has it (the sender is dropped when the interface is not ready).
+pub struct TvAnswer {
+    pub sleep_left: Option<Duration>,
+    pub reading: mpsc::Receiver<crate::tv_remote::Reading>,
+}
+
+/// The longest sleep timer the page offers, in minutes.
+pub const SLEEP_MAX: u32 = 240;
 
 /// A preview answer: the scene's fingerprint and, unless unchanged, its pixels.
 pub struct Frame {
@@ -868,6 +892,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         "/api/widgets" => change_widgets(stream, context, &request, &body),
         "/api/key" | "/api/tap" | "/api/launch" => remote(stream, context, &request, &route, &body),
         "/api/text" => send_text(stream, context, &request, &body),
+        "/api/tv" => tv_state(stream, context, &request, &body),
         "/api/devices/remove" => remove_device(stream, context, &request, &body),
         "/api/tiles/save" | "/api/tiles/remove" | "/api/tiles/send" => {
             edit_tile(stream, context, &request, &route, &body)
@@ -1177,7 +1202,11 @@ fn remote(
                 "Reload the page.",
             );
         };
-        id.filter(|id| shared.catalog.library.apps.iter().any(|app| &app.id == id))
+        // Apps, shortcut tiles and the TV's inputs open like on Home.
+        id.filter(|id| {
+            shared.catalog.library.apps.iter().any(|app| &app.id == id)
+                || shared.catalog.inputs.iter().any(|input| &input.id == id)
+        })
     };
     let Ok(remote) = serde_json::from_slice::<Remote>(body) else {
         return refuse(
@@ -1246,6 +1275,47 @@ fn change_widgets(
         thread::sleep(Duration::from_millis(30));
     }
     reply_listing(stream, context, request, serde_json::json!({}))
+}
+
+/// Volume, picture and sleep timer through the TV's remote interface, and their current state.
+fn tv_state(
+    stream: &mut TcpStream,
+    context: &Context,
+    request: &Request,
+    body: &[u8],
+) -> Result<(), String> {
+    if device(request, &context.shared.lock().unwrap().devices).is_none() {
+        return unpaired(stream, context);
+    }
+    let change = match serde_json::from_slice::<TvChange>(body) {
+        Ok(change) if change.sleep.is_none_or(|minutes| minutes <= SLEEP_MAX) => change,
+        _ => {
+            return refuse(
+                stream,
+                context,
+                "422 Unprocessable Content",
+                "Reload the page.",
+            );
+        }
+    };
+    let (reply, answer) = mpsc::channel();
+    context
+        .sender
+        .send(Event::Tv(change, reply))
+        .map_err(|_| "Launcher stopped".to_owned())?;
+    let Ok(answer) = answer.recv_timeout(Duration::from_secs(3)) else {
+        return json(stream, "200 OK", &serde_json::json!({ "reading": null }));
+    };
+    // The TV answers within a few hundred milliseconds; a missing reading only hides the slider.
+    let reading = answer.reading.recv_timeout(Duration::from_secs(4)).ok();
+    json(
+        stream,
+        "200 OK",
+        &serde_json::json!({
+            "reading": reading,
+            "sleepLeft": answer.sleep_left.map(|left| left.as_secs()),
+        }),
+    )
 }
 
 /// Text typed on the phone for the input field that has focus on the TV.
