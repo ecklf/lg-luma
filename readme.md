@@ -320,7 +320,8 @@ shaded image. This does not change LG's launch splash.
 Open **Settings → Inputs**, select an input, then choose
 **Icon** to open a native picker for bundled SVG icons. Choices are **Automatic** (the default,
 using label detection), **HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**,
-**NVIDIA Shield**, **Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, and **Xbox**.
+**NVIDIA Shield**, **Steam**, **Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**,
+**Sony**, **DVD**, **Blu-ray**, **Disk**, and **Xbox**.
 
 An explicit icon choice is saved separately for each input and persists across restarts.
 Choose **Automatic** to clear that input's override and restore label-based icon detection.

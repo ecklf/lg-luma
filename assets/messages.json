@@ -1461,6 +1461,23 @@
     "cs": "Disk",
     "ca": "Disc"
   },
+  "inputIconSteam": {
+    "zh-tw": "Steam",
+    "en": "Steam",
+    "de": "Steam",
+    "es": "Steam",
+    "zh": "Steam",
+    "pt": "Steam",
+    "it": "Steam",
+    "ru": "Steam",
+    "pl": "Steam",
+    "fr": "Steam",
+    "vi": "Steam",
+    "nl": "Steam",
+    "sv": "Steam",
+    "cs": "Steam",
+    "ca": "Steam"
+  },
   "inputIconXbox": {
     "zh-tw": "Xbox",
     "en": "Xbox",
