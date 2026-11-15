@@ -783,6 +783,10 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
                 "image/svg+xml",
                 include_bytes!("../assets/ui-icons/eye-off.svg"),
             ),
+            "/icon/house.svg" => (
+                "image/svg+xml",
+                include_bytes!("../assets/web-access/house.svg"),
+            ),
             "/icon/left.svg" => (
                 "image/svg+xml",
                 include_bytes!("../assets/ui-icons/left.svg"),

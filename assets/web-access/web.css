@@ -438,16 +438,20 @@ select {
 .tabs::-webkit-scrollbar {
   display: none;
 }
-@media (max-width: 520px) {
-  /* A soft edge shows there are more tabs to swipe to. */
-  .tabs {
-    -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
-    mask-image: linear-gradient(90deg, #000 88%, transparent);
-  }
-  .tabs button {
-    flex: 0 0 auto;
-    padding: 0 12px;
-  }
+/* When the labels do not fit one row (a phone, or long words in some languages), the bar
+   splits into two even rows so every tab stays in sight. */
+.tabs.two-rows {
+  display: grid;
+  grid-template-columns: repeat(var(--tab-columns, 3), minmax(0, 1fr));
+  gap: 4px;
+  border-radius: 24px;
+}
+.tabs.two-rows button {
+  min-height: 38px;
+  padding: 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tabs button {
   flex: 1 1 auto;
@@ -457,8 +461,9 @@ select {
   border-radius: 999px;
   background: none;
   color: var(--ink-soft);
-  font-size: clamp(12px, 3.3vw, 15px);
+  font-size: 14px;
   font-weight: 550;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     background 0.2s,
@@ -808,6 +813,43 @@ select {
 }
 .row.favorite .thumb {
   width: 88px;
+  /* The tile is the handle for dragging a favorite into place. */
+  cursor: grab;
+  touch-action: none;
+}
+.row.favorite.dragging {
+  z-index: 3;
+  background: rgb(40, 43, 50);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+}
+@media (max-width: 520px) {
+  /* On a phone the tile drags a favorite into place; the arrows would only squeeze the name. */
+  .row.favorite {
+    grid-template-columns: 88px minmax(0, 1fr) auto auto;
+  }
+  .row.favorite .icon-up,
+  .row.favorite .icon-down {
+    display: none;
+  }
+}
+.row.favorite.dragging .thumb {
+  cursor: grabbing;
+}
+.row.favorite.drop-before::before,
+.row.favorite.drop-after::after {
+  position: absolute;
+  right: 12px;
+  left: 12px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--focus);
+  content: '';
+}
+.row.favorite.drop-before::before {
+  top: -6px;
+}
+.row.favorite.drop-after::after {
+  bottom: -6px;
 }
 .row.favorite .title {
   overflow: hidden;
@@ -837,6 +879,13 @@ select {
 }
 .icon-heart {
   --icon: url('icon/heart.svg');
+}
+.key-home {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  --icon: url('icon/house.svg');
 }
 .icon-heart-filled {
   --icon: url('icon/heart-filled.svg');
@@ -1022,6 +1071,29 @@ select {
 .grid-widget[aria-pressed='true'] {
   background: var(--focus);
   color: var(--focus-ink);
+}
+/* Dragging: the widget follows the finger, a frame shows where it would land. */
+.grid-widget {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.grid-widget.dragging {
+  z-index: 3;
+  cursor: grabbing;
+  background: rgb(58, 62, 70);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.grid-drop {
+  z-index: 2;
+  border: 2px solid var(--focus);
+  border-radius: 10px;
+  background: rgba(229, 235, 240, 0.12);
+  pointer-events: none;
+}
+.grid-drop.blocked {
+  border-color: rgba(255, 110, 110, 0.85);
+  background: rgba(255, 110, 110, 0.12);
 }
 .widget-actions {
   flex-wrap: wrap;

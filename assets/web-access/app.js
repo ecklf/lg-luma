@@ -689,6 +689,54 @@ function iconButton(icon, label, pressed, action) {
   return button;
 }
 
+// Drags a favorite by its tile; a line shows where it would go, the drop saves the order.
+function dragFavorite(event, id, row, handle, dock) {
+  let target = null;
+  const marks = () => dock.querySelectorAll('.drop-before, .drop-after');
+  const unmark = () =>
+    marks().forEach((other) => other.classList.remove('drop-before', 'drop-after'));
+  dragAfterPress(event, handle, {
+    move(dx, dy, pointer) {
+      row.classList.add('dragging');
+      row.style.transform = `translateY(${dy}px)`;
+      const others = [...dock.querySelectorAll('.row.favorite')].filter((other) => other !== row);
+      // The first row whose middle is below the finger gets the line above it.
+      const below = others.find((other) => {
+        const box = other.getBoundingClientRect();
+        return pointer.clientY < box.top + box.height / 2;
+      });
+      unmark();
+      target = below ?? null;
+      if (below) below.classList.add('drop-before');
+      else others.at(-1)?.classList.add('drop-after');
+    },
+    drop() {
+      unmark();
+      row.classList.remove('dragging');
+      row.style.transform = '';
+      const { favorites, hidden } = state.library;
+      const next = favorites.filter((item) => item !== id);
+      const before = target ? [...dock.children].indexOf(target) : -1;
+      const beforeId = before >= 0 ? shownFavorites()[before] : null;
+      next.splice(beforeId ? next.indexOf(beforeId) : next.length, 0, id);
+      if (next.join() === favorites.join()) return render();
+      navigator.vibrate?.(8);
+      arrange(next, hidden);
+    },
+    cancel() {
+      unmark();
+      row.classList.remove('dragging');
+      row.style.transform = '';
+      render();
+    },
+  });
+}
+
+function shownFavorites() {
+  const known = new Set(state.library.apps.map((app) => app.id));
+  return state.library.favorites.filter((id) => known.has(id));
+}
+
 function appsSection() {
   const l = state.labels;
   const { apps, favorites, hidden } = state.library;
@@ -718,7 +766,9 @@ function appsSection() {
       ),
     );
     const open = iconButton('open', l.open, undefined, () => launch(id));
-    row.append(thumb(index.get(id)), create('span', 'title', title(id)), open, up, down, remove);
+    const handle = thumb(index.get(id));
+    handle.addEventListener('pointerdown', (event) => dragFavorite(event, id, row, handle, dock));
+    row.append(handle, create('span', 'title', title(id)), open, up, down, remove);
     dock.append(row);
   });
   if (!shown.length) dock.append(create('p', 'hint', l.makeFavorites));
@@ -1045,8 +1095,107 @@ function tileRows() {
 
 /* ---------- Widget layout ---------- */
 
-// The Home grid as on the TV: pick a widget, then an empty spot; the TV's placement rules decide.
+// The Home grid as on the TV: drag a widget to a free spot, or pick it and then a spot.
+// The TV's placement rules decide either way.
 let selectedWidget = null;
+// Set while a finger or mouse carries something, so no refresh rebuilds the page under it.
+let dragging = false;
+// A drag ends with a click on the dragged element; that click must not also select it.
+let swallowClick = false;
+
+// Follows a press until it travels a few pixels, then hands every move and the drop to the
+// callbacks. A press that stays put remains a plain click.
+function dragAfterPress(event, element, { move, drop, cancel }) {
+  if (event.button !== 0) return;
+  const start = { x: event.clientX, y: event.clientY };
+  let active = false;
+  element.setPointerCapture(event.pointerId);
+  const onMove = (next) => {
+    if (!active) {
+      if (Math.hypot(next.clientX - start.x, next.clientY - start.y) < 6) return;
+      active = true;
+      dragging = true;
+      element.classList.add('dragging');
+    }
+    move(next.clientX - start.x, next.clientY - start.y, next);
+  };
+  const finish = (end, dropped) => {
+    element.removeEventListener('pointermove', onMove);
+    element.removeEventListener('pointerup', onUp);
+    element.removeEventListener('pointercancel', onCancel);
+    if (!active) return;
+    dragging = false;
+    swallowClick = true;
+    setTimeout(() => {
+      swallowClick = false;
+    });
+    element.classList.remove('dragging');
+    if (dropped) drop(end);
+    else cancel();
+  };
+  const onUp = (end) => finish(end, true);
+  const onCancel = (end) => finish(end, false);
+  element.addEventListener('pointermove', onMove);
+  element.addEventListener('pointerup', onUp);
+  element.addEventListener('pointercancel', onCancel);
+}
+
+// The grid cell a dragged widget's top-left corner lands on, kept inside the grid.
+function cellUnder(board, entry, left, top) {
+  const box = board.getBoundingClientRect();
+  const style = getComputedStyle(board);
+  const pad = parseFloat(style.paddingLeft);
+  const gapX = parseFloat(style.columnGap) || 0;
+  const gapY = parseFloat(style.rowGap) || 0;
+  const { columns, rows } = state.grid;
+  const pitchX = (box.width - 2 * pad + gapX) / columns;
+  const pitchY = (box.height - 2 * pad + gapY) / rows;
+  const clamp = (value, max) => Math.min(Math.max(value, 0), max);
+  return {
+    column: clamp(Math.round((left - box.left - pad) / pitchX), columns - entry.width),
+    row: clamp(Math.round((top - box.top - pad) / pitchY), rows - entry.height),
+  };
+}
+
+function dragWidget(event, entry, block, board) {
+  const origin = block.getBoundingClientRect();
+  const shadow = create('div', 'grid-drop');
+  let target = null;
+  const clear = () => {
+    block.style.transform = '';
+    shadow.remove();
+  };
+  dragAfterPress(event, block, {
+    move(dx, dy) {
+      block.style.transform = `translate(${dx}px, ${dy}px)`;
+      target = cellUnder(board, entry, origin.left + dx, origin.top + dy);
+      const same = target.column === entry.column && target.row === entry.row;
+      const free = same || fits(entry.widget, target.column, target.row);
+      shadow.classList.toggle('blocked', !free);
+      shadow.style.gridArea = `${target.row + 1} / ${target.column + 1} / span ${entry.height} / span ${entry.width}`;
+      if (!shadow.isConnected) board.append(shadow);
+    },
+    drop() {
+      const moved = target && (target.column !== entry.column || target.row !== entry.row);
+      if (moved && fits(entry.widget, target.column, target.row)) {
+        navigator.vibrate?.(8);
+        // Show it where it landed right away; the TV's answer confirms or corrects it.
+        entry.column = target.column;
+        entry.row = target.row;
+        selectedWidget = null;
+        render();
+        changeWidgets({ action: 'move', widget: entry.widget, ...target });
+      } else {
+        clear();
+        render();
+      }
+    },
+    cancel() {
+      clear();
+      render();
+    },
+  });
+}
 
 function widgetName(widget) {
   return widget === 'greeting' ? state.labels.greeting : state.labels.weather;
@@ -1109,7 +1258,9 @@ function widgetGrid() {
     block.type = 'button';
     block.style.gridArea = `${entry.row + 1} / ${entry.column + 1} / span ${entry.height} / span ${entry.width}`;
     block.setAttribute('aria-pressed', String(entry.widget === selectedWidget));
+    block.addEventListener('pointerdown', (event) => dragWidget(event, entry, block, board));
     block.addEventListener('click', () => {
+      if (swallowClick) return;
       selectedWidget = selectedWidget === entry.widget ? null : entry.widget;
       render();
     });
@@ -1281,6 +1432,22 @@ function sections() {
   };
 }
 
+// One row while every label fits, otherwise two even rows; never a bar that hides tabs.
+function fitTabs() {
+  const tabs = element('tabs');
+  tabs.style.setProperty('--tab-columns', String(Math.ceil(tabs.children.length / 2)));
+  tabs.classList.remove('two-rows');
+  if (tabs.scrollWidth > tabs.clientWidth + 1) tabs.classList.add('two-rows');
+}
+
+addEventListener('resize', () => {
+  if (state) fitTabs();
+});
+// The page font arrives after the first layout and is wider than the fallback.
+document.fonts?.ready.then(() => {
+  if (state) fitTabs();
+});
+
 function render() {
   const l = state.labels;
   const all = sections();
@@ -1304,14 +1471,8 @@ function render() {
       return button;
     }),
   );
+  fitTabs();
   element('sections').replaceChildren(...all[tab]);
-  // Six tabs do not fit a phone; keep the chosen one in view.
-  // Only sideways inside the bar, never the page itself.
-  const chosen = tabs.querySelector('[aria-selected="true"]');
-  if (chosen) {
-    const left = chosen.offsetLeft - (tabs.clientWidth - chosen.offsetWidth) / 2;
-    tabs.scrollLeft = Math.max(0, left);
-  }
   element('device').textContent = strings.pairedAs.replace('{device}', state.device);
   element('forget').textContent = strings.unpair;
   showRemote();
@@ -1326,6 +1487,8 @@ function render() {
 function show(view) {
   element('pair').hidden = view !== 'pair';
   element('app').hidden = view !== 'app';
+  // A hidden bar has no width to measure, so check again once it shows.
+  if (view === 'app' && state) fitTabs();
 }
 
 function apply(result) {
@@ -1334,6 +1497,8 @@ function apply(result) {
   const focused = document.activeElement;
   // Rebuilding while someone types would drop their cursor.
   if (focused?.classList.contains('text-field')) return;
+  // Nor may it pull the piece out from under a finger mid-drag; the drop renders.
+  if (dragging) return;
   render();
   show('app');
 }

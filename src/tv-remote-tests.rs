@@ -79,3 +79,25 @@ fn socket_round_trips_text_with_a_server() {
     assert_eq!(socket.read_text().unwrap(), "world");
     server.join().unwrap();
 }
+
+#[test]
+fn a_connection_the_tv_closed_is_noticed_before_the_next_press() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let stream = std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+    let (peer, _) = listener.accept().unwrap();
+    let socket = Socket {
+        reader: std::io::BufReader::new(stream.try_clone().unwrap()),
+        stream,
+    };
+    assert!(socket.idle_and_open());
+
+    // A ping (or anything else) waiting unread also starts a fresh connection.
+    let mut writer = peer.try_clone().unwrap();
+    std::io::Write::write_all(&mut writer, &[0x89, 0]).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    assert!(!socket.idle_and_open());
+
+    drop((writer, peer));
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    assert!(!socket.idle_and_open());
+}

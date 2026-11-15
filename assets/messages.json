@@ -5610,21 +5610,21 @@
     "ca": "Toca la imatge per seleccionar-hi"
   },
   "webWidgetPick": {
-    "zh-tw": "點按小工具即可移動。",
-    "en": "Tap a widget to move it.",
-    "de": "Tippe auf ein Widget, um es zu verschieben.",
-    "zh": "点按小组件即可移动。",
-    "es": "Toca un widget para moverlo.",
-    "pt": "Toque num widget para o mover.",
-    "it": "Tocca un widget per spostarlo.",
-    "ru": "Нажмите на виджет, чтобы переместить его.",
-    "pl": "Dotknij widżetu, aby go przenieść.",
-    "fr": "Touchez un widget pour le déplacer.",
-    "vi": "Chạm vào tiện ích để di chuyển.",
-    "nl": "Tik op een widget om het te verplaatsen.",
-    "sv": "Tryck på en widget för att flytta den.",
-    "cs": "Klepnutím na widget ho přesunete.",
-    "ca": "Toca un giny per moure’l."
+    "zh-tw": "拖曳小工具即可移動，或點按後再選擇位置。",
+    "en": "Drag a widget to move it, or tap it and then a spot.",
+    "de": "Ziehe ein Widget an eine neue Stelle oder tippe es an und dann auf ein Feld.",
+    "zh": "拖动小组件即可移动，或点按后再选择位置。",
+    "es": "Arrastra un widget para moverlo, o tócalo y luego un lugar.",
+    "pt": "Arraste um widget para o mover, ou toque nele e depois num local.",
+    "it": "Trascina un widget per spostarlo, oppure toccalo e poi uno spazio.",
+    "ru": "Перетащите виджет или нажмите на него, а затем на место.",
+    "pl": "Przeciągnij widżet, aby go przenieść, albo dotknij go, a potem miejsca.",
+    "fr": "Faites glisser un widget pour le déplacer, ou touchez-le puis un emplacement.",
+    "vi": "Kéo tiện ích để di chuyển, hoặc chạm vào nó rồi chạm vào một ô.",
+    "nl": "Sleep een widget om het te verplaatsen, of tik erop en dan op een plek.",
+    "sv": "Dra en widget för att flytta den, eller tryck på den och sedan på en plats.",
+    "cs": "Widget přesuňte přetažením, nebo na něj klepněte a pak na místo.",
+    "ca": "Arrossega un giny per moure’l, o toca’l i després un lloc."
   },
   "webWidgetPlace": {
     "zh-tw": "點按醒目位置即可放到那裡。",
@@ -5812,5 +5812,22 @@
     "sv": "Text till fältet på TV:n",
     "cs": "Text pro pole na televizoru",
     "ca": "Text per al camp del televisor"
+  },
+  "webHomeKey": {
+    "zh-tw": "主畫面",
+    "en": "Home",
+    "de": "Home",
+    "es": "Inicio",
+    "zh": "主页",
+    "pt": "Início",
+    "it": "Home",
+    "ru": "Главная",
+    "pl": "Home",
+    "fr": "Accueil",
+    "vi": "Trang chính",
+    "nl": "Home",
+    "sv": "Hem",
+    "cs": "Domů",
+    "ca": "Inici"
   }
 }

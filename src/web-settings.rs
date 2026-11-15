@@ -227,7 +227,8 @@ pub fn strings(language: Language) -> serde_json::Value {
         "tapHint": t("webTapHint"),
         "open": t("open"),
         "back": t("back"),
-        "home": t("home"),
+        // The remote's house button, named as printed on LG remotes where "Start" would not be.
+        "home": t("webHomeKey"),
         "options": t("options"),
         "select": t("select"),
     })

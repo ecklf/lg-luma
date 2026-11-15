@@ -153,7 +153,8 @@ fn worker(
         if !enabled || !available {
             continue;
         }
-        // A dropped connection (TV standby, interface restart) reconnects with the saved key.
+        // A dropped connection (TV standby, interface restart, a quiet connection the TV closed)
+        // reconnects with the saved key.
         for attempt in 0..2 {
             if session.is_none() {
                 match Session::open(key_path, status) {
@@ -305,6 +306,10 @@ impl Session {
     }
 
     fn run(&mut self, command: &Command) -> Result<(), String> {
+        let pointer_open = self.pointer.as_ref().is_some_and(Socket::idle_and_open);
+        if !self.control.idle_and_open() || !pointer_open {
+            return Err("Remote interface connection went stale".into());
+        }
         match command {
             Command::Button(name) => self
                 .pointer
@@ -398,6 +403,21 @@ impl Socket {
 
     fn send_text(&mut self, text: &str) -> Result<(), String> {
         self.send_frame(0x1, text.as_bytes())
+    }
+
+    /// Whether the idle connection is still open with nothing unread. The TV closes a quiet
+    /// connection after a while (it pings, and nobody reads to answer between presses), and a
+    /// write to a closed socket still succeeds once, so the press would vanish. Anything waiting
+    /// (a ping, a close, a late reply) also means starting over is simpler than catching up.
+    fn idle_and_open(&self) -> bool {
+        if !self.reader.buffer().is_empty() || self.stream.set_nonblocking(true).is_err() {
+            return false;
+        }
+        let quiet = matches!(
+            self.stream.peek(&mut [0; 1]),
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock
+        );
+        self.stream.set_nonblocking(false).is_ok() && quiet
     }
 
     fn send_frame(&mut self, opcode: u8, payload: &[u8]) -> Result<(), String> {
