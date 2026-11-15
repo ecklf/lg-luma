@@ -5,6 +5,9 @@ mod app_artwork;
 #[path = "app-subscription.rs"]
 mod app_subscription;
 mod branding;
+#[path = "channel-switcher.rs"]
+mod channel_switcher;
+mod channels;
 mod companion;
 mod damage;
 mod diagnostics;
@@ -84,6 +87,16 @@ struct Options {
 }
 
 impl Options {
+    fn apply_launch_metadata(&mut self, metadata: &serde_json::Value) {
+        // Luma's staged Home passes nid; LG's executable-based Home passes appId.
+        self.webos_home = ["nid", "appId"].iter().any(|key| {
+            metadata
+                .get(key)
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(platform::is_home_id)
+        }) || platform::runs_as_lg_home();
+    }
+
     fn parse() -> Result<Self, String> {
         let mut result = Self::default();
         let mut args = std::env::args().skip(1).peekable();
@@ -99,17 +112,7 @@ impl Options {
             if let Some(argument) = args.next() {
                 let metadata: serde_json::Value =
                     serde_json::from_str(&argument).map_err(|error| error.to_string())?;
-                // Luma's own Home manifest passes "nid"; LG's Home manifest (Luma run in
-                // place of LG's Home executable) passes "appId" with lifecycle v2.
-                result.webos_home = metadata
-                    .get("nid")
-                    .and_then(serde_json::Value::as_str)
-                    .is_some_and(platform::is_home_id)
-                    || metadata
-                        .get("appId")
-                        .and_then(serde_json::Value::as_str)
-                        .is_some_and(platform::is_home_id)
-                    || platform::runs_as_lg_home();
+                result.apply_launch_metadata(&metadata);
             }
             eprintln!("Luma webOS launch parameters accepted");
         }
@@ -348,6 +351,47 @@ fn effects(
                     }
                 }
             }
+            Effect::OpenChannel(id) => {
+                if !state.launching {
+                    if platform.webos {
+                        state.launching = true;
+                        state.notify(state.preferences.language.t("opening"));
+                        // Live TV first so a slow elevated tune cannot leave Home
+                        // in front; guide refresh runs off the launch worker.
+                        platform.send(Request::Launch("com.webos.app.livetv".into()));
+                        platform.send(Request::OpenChannel(id));
+                    } else {
+                        let title = state
+                            .inventory
+                            .channels
+                            .iter()
+                            .find(|channel| channel.id == id)
+                            .map_or(id.as_str(), |channel| channel.name.as_str());
+                        state.notify(
+                            state
+                                .preferences
+                                .language
+                                .format("desktopPreview", &[("app", title)]),
+                        );
+                    }
+                }
+            }
+            Effect::RefreshChannelGuide => {
+                let guide_ids: Vec<_> = if state.preferences.channel_favorites.is_empty() {
+                    state
+                        .inventory
+                        .channels
+                        .iter()
+                        .take(12)
+                        .map(|channel| channel.id.clone())
+                        .collect()
+                } else {
+                    state.preferences.channel_favorites.clone()
+                };
+                if !guide_ids.is_empty() {
+                    platform.send(Request::RefreshChannelGuide(guide_ids));
+                }
+            }
             Effect::FireWebhook(tile) => webhook.send(tile),
             Effect::UpdateDownload(release) => updates.request(update::Request::Download(release)),
             Effect::Quit => return false,
@@ -394,7 +438,8 @@ fn script(
         "right" => state.direction(Direction::Right, controls),
         "enter" => state.activate(),
         "back" => state.back(),
-        "recents" | "hold-back" => state.open_recents(),
+        "recents" => state.open_recents(),
+        "hold-back" => state.open_back_overlay(),
         "menu" => {
             state.options();
             vec![]
@@ -459,6 +504,7 @@ fn input_refresh_active(state: &State, webos: bool, focused: bool, visible: bool
         && state.moving.is_none()
         && state.pressed.is_none()
         && state.recents.visibility == 0.
+        && state.channel_switcher.visibility == 0.
 }
 
 fn weather_tick(state: &mut State, service: &weather_service::Service, visible: bool) {
@@ -556,7 +602,11 @@ fn next_prewarm(
     state: &state::State,
     idle: bool,
 ) -> Option<state::Page> {
-    if !idle || state.dirty || view::recents_replaces_page(state) {
+    if !idle
+        || state.dirty
+        || view::recents_replaces_page(state)
+        || view::channel_switcher_replaces_page(state)
+    {
         return None;
     }
     prewarm.pop()
@@ -1121,6 +1171,27 @@ fn run() -> Result<(), String> {
                             .filter(|app| crate::branding::for_key(&app.brand).is_none())
                             .filter_map(|app| app.icon.clone()),
                     );
+                    assets.artwork.prefetch(
+                        state
+                            .inventory
+                            .channels
+                            .iter()
+                            .filter_map(|channel| channel.icon.clone()),
+                    );
+                    let guide_ids: Vec<_> = if state.preferences.channel_favorites.is_empty() {
+                        state
+                            .inventory
+                            .channels
+                            .iter()
+                            .take(12)
+                            .map(|channel| channel.id.clone())
+                            .collect()
+                    } else {
+                        state.preferences.channel_favorites.clone()
+                    };
+                    if !guide_ids.is_empty() {
+                        platform.send(Request::RefreshChannelGuide(guide_ids));
+                    }
                     if initial_focus
                         && state.focus == Target::Nav(0)
                         && state.page == state::Page::Home
@@ -1128,6 +1199,12 @@ fn run() -> Result<(), String> {
                         state.focus = state.first_content();
                     }
                     initial_focus = false;
+                }
+                Response::ChannelGuide(Ok(programs)) => {
+                    state.set_channel_guide(programs);
+                }
+                Response::ChannelGuide(Err(error)) => {
+                    eprintln!("Luma channel guide: {error}");
                 }
                 Response::Inventory(Err(error)) => {
                     if let Some(delay) = state.inventory_failed(error) {
@@ -1168,6 +1245,22 @@ fn run() -> Result<(), String> {
                                 &webhook_service,
                                 &updates,
                             );
+                            // First successful tune unlocks apiadapter now-playing for the session.
+                            let guide_ids: Vec<_> =
+                                if state.preferences.channel_favorites.is_empty() {
+                                    state
+                                        .inventory
+                                        .channels
+                                        .iter()
+                                        .take(12)
+                                        .map(|channel| channel.id.clone())
+                                        .collect()
+                                } else {
+                                    state.preferences.channel_favorites.clone()
+                                };
+                            if !guide_ids.is_empty() {
+                                platform.send(Request::RefreshChannelGuide(guide_ids));
+                            }
                         }
                     }
                 }
@@ -1424,7 +1517,7 @@ fn run() -> Result<(), String> {
                         _ if native_hold => {
                             if !repeat && back_button.native_hold(Instant::now()) {
                                 press = None;
-                                pending = state.open_recents();
+                                pending = state.open_back_overlay();
                                 cue = Some(Cue::Select);
                             }
                         }
@@ -1435,7 +1528,10 @@ fn run() -> Result<(), String> {
                                 cue = Some(Cue::Back);
                             }
                         }
-                        Keycode::Up if !repeat || !state.recents_open() => {
+                        Keycode::Up
+                            if !repeat
+                                || (!state.recents_open() && !state.channel_switcher_open()) =>
+                        {
                             pending = state.direction(Direction::Up, &scene.controls);
                             cue = Some(Cue::Navigate);
                         }
@@ -1497,7 +1593,7 @@ fn run() -> Result<(), String> {
                 } if is_back(key, webos) => {
                     if let Some(long) = back_button.release(key, Instant::now()) {
                         pending = if long {
-                            state.open_recents()
+                            state.open_back_overlay()
                         } else {
                             state.back()
                         };
@@ -1603,6 +1699,19 @@ fn run() -> Result<(), String> {
                     state.pointer = false;
                     state.dirty = true;
                 }
+                Event::MouseWheel { x, y, .. } if state.channel_switcher_open() => {
+                    press = None;
+                    let delta = if x != 0 { x } else { -y };
+                    if delta != 0 {
+                        pending = state.channel_switcher_direction(if delta > 0 {
+                            Direction::Right
+                        } else {
+                            Direction::Left
+                        });
+                    }
+                    state.pointer = false;
+                    state.dirty = true;
+                }
                 Event::MouseWheel {
                     x,
                     y,
@@ -1664,7 +1773,7 @@ fn run() -> Result<(), String> {
         }
         if back_button.held(Instant::now()) {
             press = None;
-            let pending = state.open_recents();
+            let pending = state.open_back_overlay();
             if state.preferences.ui_sounds && focused && visible && !scripted_input {
                 feedback.play(&sdl, Cue::Select);
             }

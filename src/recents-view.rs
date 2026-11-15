@@ -2,7 +2,7 @@
 use super::*;
 use crate::recents::{Command, DismissalOutcome};
 
-fn card_rect(offset: f32) -> Rect {
+pub(crate) fn card_rect(offset: f32) -> Rect {
     let depth = offset.abs();
     let scale = 1. / (1. + 0.22 * depth);
     let width = 900. * scale;

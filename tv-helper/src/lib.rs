@@ -8,12 +8,14 @@ pub mod uninstall;
 
 pub type Result<T> = std::result::Result<T, String>;
 pub const APP: &str = "com.ecklf.luma";
-pub const ROOTS: [&str; 5] = [
+pub const ROOTS: [&str; 6] = [
     "/media/developer/apps/usr/palm/applications",
     "/media/cryptofs/apps/usr/palm/applications",
     "/usr/palm/applications",
     "/media/system/apps/usr/palm/applications",
     "/mnt/otncabi/usr/palm/applications",
+    // LG tuner channel logos (`imgUrl` from apiadapter getChannelList).
+    "/mnt/lg/cmn_data/channel_logo",
 ];
 pub fn valid_app_id(id: &str) -> bool {
     !id.is_empty()

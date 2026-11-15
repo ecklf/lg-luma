@@ -7,9 +7,10 @@ use crate::{
     },
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, APPS_SECTION, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT,
-        HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH, INPUTS_SECTION, KEYS, Overlay, Page,
-        Rect, SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
+        APPS_COLUMNS, APPS_SECTION, CHANNEL_TILE_PITCH, CHANNEL_TILE_WIDTH, Control,
+        HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT, HOME_STRIP_RIGHT, HOME_TILE_PITCH,
+        HOME_TILE_WIDTH, INPUTS_SECTION, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage,
+        Target, TextField, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -34,6 +35,8 @@ fn input_icon_width(name: &str, size: f32) -> f32 {
     }
 }
 
+#[path = "channel-switcher-view.rs"]
+mod channel_switcher_view;
 #[path = "recents-view.rs"]
 mod recents_view;
 
@@ -516,6 +519,11 @@ pub fn recents_replaces_page(state: &State) -> bool {
     state.recents_open() && state.recents.visibility == 1.
 }
 
+/// Fully shown channel switcher replaces the page like Recents.
+pub fn channel_switcher_replaces_page(state: &State) -> bool {
+    state.channel_switcher_open() && state.channel_switcher.visibility == 1.
+}
+
 pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
     let mut out = Scene::new();
     if let Some((previous, start)) = &state.previous_background {
@@ -549,6 +557,18 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             c(0x080b12, RECENTS_BACKDROP_OPACITY),
         );
         recents_view::render(&mut out, state, assets);
+        if let Some((notice, _)) = &state.notice {
+            toast(&mut out, state, assets, notice);
+        }
+        return out;
+    }
+    if channel_switcher_replaces_page(state) {
+        out.shape(
+            Rect::new(0., 0., 1920., 1080.),
+            0.,
+            c(0x080b12, RECENTS_BACKDROP_OPACITY),
+        );
+        channel_switcher_view::render(&mut out, state, assets);
         if let Some((notice, _)) = &state.notice {
             toast(&mut out, state, assets, notice);
         }
@@ -657,6 +677,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             Overlay::TileEditor => tile_editor(&mut out, state, assets),
             Overlay::SystemKeyboard
             | Overlay::Recents { .. }
+            | Overlay::ChannelSwitcher { .. }
             | Overlay::Inputs
             | Overlay::Settings => {}
         }
@@ -694,6 +715,29 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
         let moved: Vec<_> = out.draw.drain(start..start + fills).collect();
         out.draw.splice(content_start..content_start, moved);
         if !state.recents_open() {
+            out.controls = parent_controls;
+            out.modal = parent_modal;
+        }
+    }
+    if state.channel_switcher_open() || state.channel_switcher.visibility > 0. {
+        let parent_controls = std::mem::take(&mut out.controls);
+        let parent_modal = out.modal;
+        out.fade(content_start, 1. - state.channel_switcher.visibility, 1.);
+        let start = out.draw.len();
+        out.shape(
+            Rect::new(0., 0., 1920., 1080.),
+            0.,
+            c(0x080b12, RECENTS_BACKDROP_OPACITY),
+        );
+        channel_switcher_view::render(&mut out, state, assets);
+        out.fade(start, state.channel_switcher.visibility, 1.);
+        let fills = out.draw[start..]
+            .iter()
+            .take_while(|draw| full_screen_fill(draw))
+            .count();
+        let moved: Vec<_> = out.draw.drain(start..start + fills).collect();
+        out.draw.splice(content_start..content_start, moved);
+        if !state.channel_switcher_open() {
             out.controls = parent_controls;
             out.modal = parent_modal;
         }
@@ -1181,6 +1225,11 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         out.fade(start, state.drawer_progress(), 1.);
         out.controls.truncate(controls);
     }
+    if !state.home_channels().is_empty() {
+        let start = out.draw.len();
+        channels_strip(out, state, assets);
+        out.fade(start, 1. - state.drawer_progress(), 1.);
+    }
     favorites_dock(out, state, assets);
 }
 
@@ -1286,6 +1335,84 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
         );
     }
     out.fade(start, 1. - state.drawer_progress(), 1.);
+}
+
+fn channels_strip(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let channels = state.home_channels();
+    let y = state.dock_y() - 196.;
+    out.text(
+        language.t("channels"),
+        Rect::new(HOME_STRIP_LEFT, y - 36., 600., 28.),
+        text(18., 550, -0.01).leading(1.2),
+        c(0xffffff, 0.72),
+        false,
+    );
+    let tile_h = 120.;
+    out.draw.push(Draw::Clip(Some(Rect::new(
+        HOME_STRIP_LEFT - 8.,
+        y - 4.,
+        HOME_STRIP_RIGHT - HOME_STRIP_LEFT + 16.,
+        tile_h + 8.,
+    ))));
+    for (index, channel) in channels.iter().enumerate() {
+        let x = HOME_STRIP_LEFT + index as f32 * CHANNEL_TILE_PITCH - state.channel_scroll;
+        let rect = Rect::new(x, y, CHANNEL_TILE_WIDTH, tile_h);
+        let target = Target::Channel(channel.id.clone());
+        let focused = state.focus == target;
+        out.control(target.clone(), rect, false);
+        out.shadow(rect, 18., 20., 8., if focused { 0.28 } else { 0.16 });
+        out.glass(rect, 18.);
+        if focused {
+            out.shape(rect.inset(-3.), 20., c(0xffffff, 0.22));
+        }
+        if let Some(source) = &channel.icon
+            && let Some(art) = assets.artwork.get(source)
+        {
+            // Same GPU path as installed app icons: `Draw::Image` only loads filesystem paths.
+            let face = rect.inset(14.);
+            out.draw
+                .push(Draw::AppImage(art, face, 12., [1., 1., 1., 1.]));
+        } else {
+            let number = if channel.number.is_empty() {
+                "·"
+            } else {
+                &channel.number
+            };
+            out.text(
+                number,
+                Rect::new(rect.x + 12., rect.y + 22., rect.w - 24., 44.),
+                text(28., 650, -0.03),
+                WHITE,
+                true,
+            );
+            out.text(
+                &channel.name,
+                Rect::new(rect.x + 10., rect.y + 70., rect.w - 20., 36.),
+                text(13.5, 500, -0.01).leading(1.15),
+                c(0xffffff, 0.78),
+                true,
+            );
+        }
+    }
+    out.draw.push(Draw::Clip(Some(state.content_viewport())));
+    if let Target::Channel(id) = &state.focus
+        && let Some(channel) = channels.iter().find(|channel| &channel.id == id)
+    {
+        let label = channel
+            .program
+            .as_ref()
+            .map(|program| program.title.as_str())
+            .filter(|title| !title.is_empty())
+            .unwrap_or(channel.name.as_str());
+        out.text(
+            label,
+            Rect::new(HOME_STRIP_LEFT, y + tile_h + 10., 1200., 28.),
+            text(16., 500, -0.01).leading(1.2),
+            c(0xffffff, 0.86),
+            false,
+        );
+    }
 }
 
 fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
@@ -1767,7 +1894,7 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
             | Target::WallpaperCycle
             | Target::WidgetAdd
             | Target::WidgetReset
-            | Target::Widget(2)
+            | Target::Widget(2 | 5)
     ) {
         24.2
     } else {
@@ -1847,7 +1974,7 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
             | Target::WallpaperGradient
             | Target::WidgetAdd
             | Target::WidgetReset
-            | Target::Widget(2)
+            | Target::Widget(2 | 5)
     );
     out.control(row.target, row.rect, scrollable);
 }
@@ -2200,6 +2327,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Greeting) => language.t("greeting"),
                 Some(Subpage::Weather) => language.t("weather"),
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
+                Some(Subpage::Channels) => language.t("channels"),
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::AppSorting) => language.t("appSorting"),
@@ -2280,6 +2408,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::Weather
                 | Subpage::WeatherStyle
                 | Subpage::Shortcuts
+                | Subpage::Channels
                 | Subpage::Greeting
                 | Subpage::Clock
                 | Subpage::WidgetPosition(_)
@@ -2289,6 +2418,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::Weather => weather_settings(out, state, assets),
                 Subpage::WeatherStyle => weather_style_settings(out, state, assets),
                 Subpage::Shortcuts => shortcut_settings(out, state, assets),
+                Subpage::Channels => channels_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
                 Subpage::WidgetPosition(widget) => {
@@ -2371,6 +2501,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::Weather
             | Subpage::WeatherStyle
             | Subpage::Shortcuts
+            | Subpage::Channels
             | Subpage::Greeting
             | Subpage::Clock => {
                 unreachable!()
@@ -2634,45 +2765,59 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         INPUTS_SECTION => inputs_settings(out, state, assets),
         WIDGETS_SECTION => {
             widget_grid(out, state, assets, None);
-            let shortcuts_width = (assets.width(language.t("shortcuts"), text(20.8, 550, -0.02))
-                + 88.)
-                .ceil()
-                .min(320.);
-            row(
-                out,
-                state,
-                assets,
-                Row {
-                    target: Target::Widget(2),
-                    rect: Rect::new(640., 164.8, shortcuts_width, 64.),
-                    title: language.t("shortcuts"),
-                    icon: Some("sparkles"),
-                    value: None,
-                    description: None,
-                    selected: false,
-                    chevron: false,
-                },
-            );
-            let actions = [
+            let style = text(20.8, 550, -0.02);
+            let pills = [
+                (Target::Widget(2), "shortcuts", "sparkles"),
+                (Target::Widget(5), "channels", "tv"),
                 (Target::WidgetReset, "resetWidgets", "refresh"),
                 (Target::WidgetAdd, "addWidget", "grid"),
-            ]
-            .map(|(target, key, icon)| {
-                let width = (assets.width(language.t(key), text(20.8, 550, -0.02)) + 88.)
-                    .ceil()
-                    .min(500.);
-                (target, key, icon, width)
+            ];
+            let widths = std::array::from_fn::<_, 4, _>(|index| {
+                assets.width(language.t(pills[index].1), style)
             });
-            let mut x = 1760. - actions.iter().map(|(_, _, _, width)| width).sum::<f32>() - 20.;
-            for (target, key, icon, width) in actions {
+            // Four pills share one 1120px toolbar: when long translations overflow it,
+            // only the widest labels are ellipsized, down to a common cap. Each pill adds
+            // 88px of padding plus up to 1px from rounding its width up.
+            let budget = 1120. - 3. * 20. - 4. * 89.;
+            let mut cap = f32::INFINITY;
+            if widths.iter().sum::<f32>() > budget {
+                let mut sorted = widths;
+                sorted.sort_by(f32::total_cmp);
+                let mut used = 0.;
+                for (index, width) in sorted.iter().enumerate() {
+                    let remaining = (sorted.len() - index) as f32;
+                    if used + width * remaining > budget {
+                        cap = (budget - used) / remaining;
+                        break;
+                    }
+                    used += width;
+                }
+            }
+            let labels = std::array::from_fn::<_, 4, _>(|index| {
+                let label = language.t(pills[index].1);
+                if widths[index] > cap {
+                    assets.fit_line(label, style, cap + 1., 20.8).0
+                } else {
+                    label.to_owned()
+                }
+            });
+            let widths = widths.map(|width| (width.min(cap) + 88.).ceil());
+            let right = widths[2] + 20. + widths[3];
+            for (index, (target, _, icon)) in pills.into_iter().enumerate() {
+                let x = match index {
+                    0 => 640.,
+                    1 => 640. + widths[0] + 20.,
+                    2 => 1760. - right,
+                    _ => 1760. - widths[3],
+                };
                 row(
                     out,
                     state,
                     assets,
                     Row {
                         target,
-                        rect: Rect::new(x, 164.8, width, 64.),
-                        title: language.t(key),
+                        rect: Rect::new(x, 164.8, widths[index], 64.),
+                        title: &labels[index],
                         icon: Some(icon),
                         value: None,
                         description: None,
@@ -2680,7 +2825,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                         chevron: false,
                     },
                 );
-                x += width + 20.;
             }
         }
         SYSTEM_SECTION => {
@@ -2795,6 +2939,87 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         }
         _ => {}
     }
+}
+
+fn channels_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let s = state.scroll;
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::ChannelsToggle,
+            rect: Rect::new(640., 164.8 - s, 1120., 72.),
+            title: language.t("showWidget"),
+            icon: Some("eye"),
+            value: Some(language.t(if state.preferences.show_channels {
+                "stateOn"
+            } else {
+                "stateOff"
+            })),
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
+    let ordered = state.channels_settings_list();
+    for (index, channel) in ordered.iter().enumerate() {
+        let on_home = state.preferences.channel_on_home(&channel.id);
+        let title = if channel.number.is_empty() {
+            channel.name.clone()
+        } else {
+            format!("{} · {}", channel.number, channel.name)
+        };
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::ChannelFavorite(channel.id.clone()),
+                rect: Rect::new(640., 248.8 + index as f32 * 84. - s, 1120., 72.),
+                title: &title,
+                icon: Some(if channel.radio { "generic" } else { "tv" }),
+                value: Some(language.t(if on_home { "stateOn" } else { "stateOff" })),
+                description: channel
+                    .program
+                    .as_ref()
+                    .map(|program| program.title.as_str()),
+                selected: on_home,
+                chevron: false,
+            },
+        );
+    }
+    let mut y = 248.8 + ordered.len() as f32 * 84. + 16. - s;
+    if ordered.is_empty() {
+        out.text(
+            language.t("noChannels"),
+            Rect::new(664., 249. - s, 1000., 26.),
+            text(16.8, 400, 0.).leading(1.5),
+            c(0xf5f5f5, 0.72),
+            false,
+        );
+        y += 36.;
+    }
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::Setting(6),
+            rect: Rect::new(640., y, 1120., 72.),
+            title: if state.loading {
+                language.t("refreshNotice")
+            } else {
+                language.t("refreshChannels")
+            },
+            icon: Some("refresh"),
+            value: None,
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
 }
 
 fn inputs_settings(out: &mut Scene, state: &State, assets: &Assets) {

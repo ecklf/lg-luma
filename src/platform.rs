@@ -3,9 +3,12 @@
 //! process trying to impersonate its application identity.
 use crate::{
     app_artwork,
-    model::{App, Input, Inventory, demo_inventory, valid_app_id},
+    model::{
+        App, ChannelGuideEntry, ChannelProgram, Input, Inventory, demo_inventory, valid_app_id,
+    },
 };
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use std::{collections::HashSet, sync::mpsc, thread};
 
 #[path = "platform-install.rs"]
@@ -175,7 +178,11 @@ pub fn redirect_to_home() -> Result<bool, String> {
 pub enum Request {
     Refresh,
     RefreshInputs,
+    /// Now-playing for selected tuner channels (`getChannelCurrentProgramInfo`).
+    RefreshChannelGuide(Vec<String>),
     Launch(String),
+    /// Tune a channel via `apiadapter/tv/openChannel`.
+    OpenChannel(String),
     Uninstall(String),
     SyncSplash(String),
     Recent {
@@ -186,6 +193,7 @@ pub enum Request {
 pub enum Response {
     Inventory(Result<(Inventory, Option<String>), String>),
     Inputs(Result<Vec<Input>, String>),
+    ChannelGuide(Result<HashMap<String, ChannelGuideEntry>, String>),
     Launched {
         id: String,
         result: Result<(), String>,
@@ -261,6 +269,25 @@ impl Platform {
                     } else {
                         Ok(desktop_inventory.inputs.clone())
                     }),
+                    Request::RefreshChannelGuide(ids) => {
+                        // Guide uses elevated apiadapter calls; keep it off the
+                        // launch worker so tuning is not queued behind now-playing.
+                        let responses = responses.clone();
+                        let demo = desktop_inventory.channels.clone();
+                        thread::spawn(move || {
+                            let result = if webos {
+                                channel_guide(&ids)
+                            } else {
+                                Ok(demo_channel_guide(&demo, &ids))
+                            };
+                            let _ = responses.send(Response::ChannelGuide(result));
+                        });
+                        continue;
+                    }
+                    Request::OpenChannel(id) => {
+                        let result = if webos { open_channel(&id) } else { Ok(()) };
+                        Response::Launched { id, result }
+                    }
                     Request::Uninstall(id) => {
                         // Validate again at the worker boundary, not just in the UI.
                         let result = uninstall_request(&id).and_then(|(_, _)| {
@@ -729,16 +756,31 @@ fn recent_call(command: &crate::recents::Command) -> Result<Value, String> {
     // The native process uses its own authenticated Homebrew connection, as
     // inventory does. Fixed operations only; no app-ID impersonation or retries
     // of mutations after an ambiguous timeout. LG owns close/keep-alive policy.
+    elevated_call(uri, payload)
+}
+
+/// Prefer a direct Luna call when Luma is already root Home; otherwise the same
+/// Homebrew-elevated `luna-send` path used for inventory and recent apps.
+fn elevated_call(uri: &str, payload: Value) -> Result<Value, String> {
+    if runs_as_lg_home()
+        && let Ok(response) = call(uri, payload.clone())
+    {
+        return Ok(response);
+    }
     let quote = |s: &str| format!("'{}'", s.replace('\'', "'\\''"));
     let command = format!(
-        "if [ \"$(id -u)\" = 0 ]; then /usr/bin/luna-send -n 1 -w 4000 {uri} {}; else printf '%s\\n' '{{\"returnValue\":false,\"errorText\":\"Homebrew Channel needs root access\"}}'; fi",
+        "if [ \"$(id -u)\" = 0 ]; then /usr/bin/luna-send -n 1 -w 8000 {uri} {}; else printf '%s\\n' '{{\"returnValue\":false,\"errorText\":\"Homebrew Channel needs root access\"}}'; fi",
         quote(&payload.to_string())
     );
     let envelope = call(
         "luna://org.webosbrew.hbchannel.service/exec",
         json!({"command": command}),
     )?;
-    command_reply(&envelope)
+    command_reply(&envelope).map_err(|error| {
+        let error = format!("{uri}: {error}");
+        eprintln!("Luma TV service: {error}");
+        error
+    })
 }
 
 fn inventory() -> Result<(Inventory, Option<String>), String> {
@@ -747,28 +789,127 @@ fn inventory() -> Result<(Inventory, Option<String>), String> {
         "apps",
     )?)?;
     let inputs = input_inventory();
-    match inputs {
-        Ok(inputs) => {
-            eprintln!(
-                "Luma TV inventory: {} apps, {} inputs",
-                apps.len(),
-                inputs.len()
-            );
-            Ok((Inventory { apps, inputs }, None))
+    let channels = channel_inventory();
+    let mut warnings = Vec::new();
+    let inputs = match inputs {
+        Ok(inputs) => inputs,
+        Err(error) => {
+            warnings.push(format!("Inputs could not be refreshed: {error}"));
+            vec![]
         }
-        Err(error) => Ok((
-            Inventory {
-                apps,
-                inputs: vec![],
-            },
-            Some(format!("Inputs could not be refreshed: {error}")),
-        )),
-    }
+    };
+    let channels = match channels {
+        Ok(channels) => channels,
+        Err(error) => {
+            warnings.push(format!("Channels could not be refreshed: {error}"));
+            vec![]
+        }
+    };
+    eprintln!(
+        "Luma TV inventory: {} apps, {} inputs, {} channels",
+        apps.len(),
+        inputs.len(),
+        channels.len()
+    );
+    Ok((
+        Inventory {
+            apps,
+            inputs,
+            channels,
+        },
+        (!warnings.is_empty()).then(|| warnings.join(" ")),
+    ))
 }
 
 fn input_inventory() -> Result<Vec<Input>, String> {
     inventory_read("luna://com.webos.service.eim/getAllInputStatus", "devices")
         .and_then(|raw| normalize_inputs(&raw))
+}
+
+fn channel_inventory() -> Result<Vec<crate::model::Channel>, String> {
+    inventory_read(
+        "luna://com.webos.service.apiadapter/tv/getChannelList",
+        "channelList",
+    )
+    .and_then(|raw| crate::channels::normalize_channels(&raw))
+}
+
+fn channel_guide(ids: &[String]) -> Result<HashMap<String, ChannelGuideEntry>, String> {
+    let mut out = HashMap::new();
+    for id in ids.iter().take(crate::channels::MAX_FAVORITES) {
+        if !valid_app_id(id) {
+            continue;
+        }
+        // Prefer the schedule list (now + next); fall back to current-only.
+        // apiadapter TV methods need the elevated bus; a jailed app call is refused.
+        let mut entry = match elevated_call(
+            "luna://com.webos.service.apiadapter/tv/getChannelProgramInfo",
+            json!({ "channelId": id }),
+        ) {
+            Ok(reply) => crate::channels::normalize_schedule(&reply),
+            Err(error) => {
+                eprintln!("Luma channel schedule {id}: {error}");
+                ChannelGuideEntry::default()
+            }
+        };
+        if entry.program.is_none() {
+            match elevated_call(
+                "luna://com.webos.service.apiadapter/tv/getChannelCurrentProgramInfo",
+                json!({ "channelId": id }),
+            ) {
+                Ok(reply) => {
+                    entry.program = crate::channels::normalize_program(&reply);
+                }
+                Err(error) => eprintln!("Luma channel guide {id}: {error}"),
+            }
+        }
+        if entry.program.is_some() || entry.next.is_some() {
+            out.insert(id.clone(), entry);
+        }
+    }
+    Ok(out)
+}
+
+fn demo_channel_guide(
+    channels: &[crate::model::Channel],
+    ids: &[String],
+) -> HashMap<String, ChannelGuideEntry> {
+    ids.iter()
+        .filter_map(|id| {
+            channels
+                .iter()
+                .find(|channel| &channel.id == id)
+                .map(|channel| {
+                    (
+                        id.clone(),
+                        ChannelGuideEntry {
+                            program: Some(ChannelProgram {
+                                title: format!("Now on {}", channel.name),
+                                start: None,
+                                end: None,
+                            }),
+                            next: Some(ChannelProgram {
+                                title: format!("Later on {}", channel.name),
+                                start: None,
+                                end: None,
+                            }),
+                        },
+                    )
+                })
+        })
+        .collect()
+}
+
+fn open_channel(id: &str) -> Result<(), String> {
+    if !valid_app_id(id) {
+        return Err("Invalid channel identifier".into());
+    }
+    // Same privilege boundary as channel inventory: jailed apps cannot openChannel.
+    elevated_call(
+        "luna://com.webos.service.apiadapter/tv/openChannel",
+        json!({ "channelId": id }),
+    )
+    .map(|_| ())
 }
 
 fn title(value: Option<&str>, fallback: &str) -> String {

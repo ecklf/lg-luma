@@ -184,9 +184,9 @@ Boot log: `/var/lib/luma-home/boot.log`. See the
 [development guide](development.md#optional-native-home-integration) for implementation details.
 
 <details>
-<summary>Method for webOS 5 / 6 / 24</summary>
+<summary>Method for webOS 5 / 6 / 22 / 24</summary>
 
-On **webOS 5, 6 and 24**, SAM cannot reread a mounted Home manifest, so `home.sh enable` instead
+On **webOS 5, 6, 22 and 24**, `home.sh enable` uses the executable method instead of replacing the manifest. It
 bind-mounts Luma's executable over LG's `/usr/bin/com.webos.app.home`. LG's Home manifest stays
 in place and Luma registers with SAM itself, so the Home key brings the running Luma back instead
 of restarting it. The commands and the cold-boot hook are the same.
@@ -276,6 +276,13 @@ using label detection), **HDMI**, **USB**, **Apple TV**, **Computer**, **Console
 
 An explicit icon choice is saved separately for each input and persists across restarts.
 Choose **Automatic** to clear that input's override and restore label-based icon detection.
+
+### Channels
+
+Open **Settings → Widgets → Channels** and toggle tuner channels On to pin them to the Home
+channels strip (up to 40). Order follows the order you enable them. Focus a tile for the
+now-playing title when the guide has it; **OK** tunes that channel. Logos come from the TV's
+channel logo store when LG provides them.
 
 ### Recent app switching
 
