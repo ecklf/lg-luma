@@ -415,7 +415,6 @@ fn script(
                 state.keyboard_field
             } else {
                 match state.subpage {
-                    Some(state::Subpage::Greeting) => state::TextField::Name,
                     Some(state::Subpage::WeatherLocation) => state::TextField::Location,
                     Some(state::Subpage::Input(_)) => state::TextField::InputName,
                     _ => state::TextField::Apps,
@@ -1277,6 +1276,7 @@ fn run() -> Result<(), String> {
                     update_busy: state.update_busy(),
                     refreshing: state.loading,
                 },
+                widgets: web_settings::WebWidget::all(&state.preferences),
             },
         );
         while let Ok(event) = web_access_service.receiver.try_recv() {
@@ -1470,6 +1470,19 @@ fn run() -> Result<(), String> {
                     );
                 }
                 web_access::Event::Key(_) | web_access::Event::Tap(..) => {}
+                web_access::Event::Widgets(change) => {
+                    let pending = state.apply_web_widget(change);
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
                 web_access::Event::Pairing(..) => {}
             }
         }

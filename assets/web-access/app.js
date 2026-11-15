@@ -288,20 +288,6 @@ function choiceRow(key, label) {
   return state.choices[key].length > 3 ? pickerRow(key, label) : segmentRow(key, label);
 }
 
-function textRow(key, label) {
-  const row = create('label', 'row stacked');
-  const field = create('input', 'text-field');
-  field.type = 'text';
-  field.maxLength = 40;
-  field.autocomplete = 'off';
-  field.enterKeyHint = 'done';
-  field.value = state.settings[key];
-  field.addEventListener('change', () => change(key, field.value.trim()));
-  field.addEventListener('keydown', (event) => event.key === 'Enter' && field.blur());
-  row.append(title(label), field);
-  return row;
-}
-
 function wallpapers() {
   const grid = create('div', 'wallpapers');
   for (const background of state.backgrounds) {
@@ -1006,6 +992,109 @@ function tileRows() {
   return rows;
 }
 
+/* ---------- Widget layout ---------- */
+
+// The Home grid as on the TV: pick a widget, then an empty spot; the TV's placement rules decide.
+let selectedWidget = null;
+
+function widgetName(widget) {
+  return widget === 'greeting' ? state.labels.greeting : state.labels.weather;
+}
+
+function changeWidgets(change) {
+  queue = queue.then(async () => {
+    message(strings.saving, false, true);
+    try {
+      apply(await call('api/widgets', change));
+      message(strings.saved);
+    } catch (error) {
+      if (error instanceof PairingNeeded) return startPairing(error.message);
+      message(error.message, true);
+    }
+  });
+}
+
+function fits(widget, column, row) {
+  const item = state.widgets.find((entry) => entry.widget === widget);
+  if (column + item.width > state.grid.columns || row + item.height > state.grid.rows) return false;
+  return state.widgets
+    .filter((other) => other.widget !== widget && other.present)
+    .every(
+      (other) =>
+        column >= other.column + other.width ||
+        other.column >= column + item.width ||
+        row >= other.row + other.height ||
+        other.row >= row + item.height,
+    );
+}
+
+function widgetGrid() {
+  const l = state.labels;
+  const { columns, rows } = state.grid;
+  const wrap = create('div', 'row stacked widget-editor');
+  const board = create('div', 'widget-grid');
+  board.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
+  board.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+  const selected = state.widgets.find((entry) => entry.widget === selectedWidget);
+  for (let cell = 0; cell < columns * rows; cell++) {
+    const column = cell % columns;
+    const row = Math.floor(cell / columns);
+    const spot = create('button', 'grid-cell');
+    spot.type = 'button';
+    spot.style.gridArea = `${row + 1} / ${column + 1}`;
+    const allowed = selected && fits(selected.widget, column, row);
+    spot.disabled = !selected || !allowed;
+    spot.classList.toggle('allowed', Boolean(allowed));
+    spot.setAttribute('aria-label', `${l.widgetPosition} ${column + 1}, ${row + 1}`);
+    spot.addEventListener('click', () => {
+      const widget = selected.widget;
+      selectedWidget = null;
+      changeWidgets({ action: selected.present ? 'move' : 'add', widget, column, row });
+    });
+    board.append(spot);
+  }
+  for (const entry of state.widgets.filter((item) => item.present)) {
+    const block = create('button', 'grid-widget', widgetName(entry.widget));
+    block.type = 'button';
+    block.style.gridArea = `${entry.row + 1} / ${entry.column + 1} / span ${entry.height} / span ${entry.width}`;
+    block.setAttribute('aria-pressed', String(entry.widget === selectedWidget));
+    block.addEventListener('click', () => {
+      selectedWidget = selectedWidget === entry.widget ? null : entry.widget;
+      render();
+    });
+    board.append(block);
+  }
+  const actions = create('div', 'tile-actions widget-actions');
+  if (selected?.present) {
+    const remove = create('button', 'pill-button danger', l.removeWidget);
+    remove.type = 'button';
+    remove.addEventListener('click', () => {
+      selectedWidget = null;
+      changeWidgets({ action: 'remove', widget: selected.widget });
+    });
+    actions.append(remove);
+  }
+  for (const entry of state.widgets.filter((item) => !item.present)) {
+    const add = create('button', 'pill-button', `${l.addWidget}: ${widgetName(entry.widget)}`);
+    add.type = 'button';
+    add.setAttribute('aria-pressed', String(entry.widget === selectedWidget));
+    add.addEventListener('click', () => {
+      selectedWidget = entry.widget;
+      render();
+    });
+    actions.append(add);
+  }
+  const reset = create('button', 'pill-button', l.resetWidgets);
+  reset.type = 'button';
+  reset.addEventListener('click', () => {
+    selectedWidget = null;
+    changeWidgets({ action: 'reset' });
+  });
+  actions.append(reset);
+  wrap.append(board, create('p', 'hint', selected ? l.widgetPlacementHelp : l.move), actions);
+  return wrap;
+}
+
 /* ---------- Inputs ---------- */
 
 function changeInput(input, changes) {
@@ -1115,6 +1204,9 @@ function sections() {
       ),
     ],
     apps: appsSection(),
+    ...(state.inputs.length
+      ? { inputs: state.inputs.map(inputCard).map((card) => group(null, card)) }
+      : {}),
     background: [
       group(null, wallpapers()),
       group(
@@ -1124,21 +1216,15 @@ function sections() {
       ),
     ],
     widgets: [
-      group(
-        l.greeting,
-        toggleRow('show_greeting', l.showWidget),
-        textRow('greeting_name', l.greetingName),
-      ),
-      group(l.date, toggleRow('show_date', l.showWidget), choiceRow('date_format', l.dateFormat)),
+      group(l.widgetPosition, widgetGrid()),
+      group(l.greeting, toggleRow('show_date', l.date), choiceRow('date_format', l.dateFormat)),
       group(
         l.weather,
-        toggleRow('show_weather', l.showWidget),
         ...locationRows(),
         choiceRow('temperature_unit', l.temperature),
         choiceRow('weather_style', l.weatherStyle),
       ),
       group(l.shortcuts, ...tileRows()),
-      ...(state.inputs.length ? [group(l.inputs, ...state.inputs.map(inputCard))] : []),
     ],
     system: systemSection(),
   };

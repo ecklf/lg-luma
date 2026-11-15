@@ -2,7 +2,7 @@
 //! Labels come from the TV's own message catalog, so the page reads like Settings on the TV.
 use crate::i18n::Language;
 use crate::model::{
-    AppSorting, DateFormat, INPUT_ICONS, InputMode, Preferences, WeatherStyle, clean_input_name,
+    AppSorting, DateFormat, HomeWidget, INPUT_ICONS, InputMode, Preferences, WeatherStyle,
 };
 use crate::text_rendering::TextRendering;
 use crate::weather::Unit;
@@ -20,11 +20,8 @@ pub struct Settings {
     pub app_sorting: AppSorting,
     pub reduced_motion: bool,
     pub ui_sounds: bool,
-    pub show_greeting: bool,
-    pub greeting_name: String,
     pub show_date: bool,
     pub date_format: DateFormat,
-    pub show_weather: bool,
     pub temperature_unit: Unit,
     pub weather_style: WeatherStyle,
     /// One of the backgrounds in the catalog; the launcher ignores any other id.
@@ -43,11 +40,8 @@ impl Settings {
             app_sorting: preferences.app_sorting,
             reduced_motion: preferences.reduced_motion,
             ui_sounds: preferences.ui_sounds,
-            show_greeting: preferences.show_greeting,
-            greeting_name: preferences.greeting_name.clone(),
             show_date: preferences.show_date,
             date_format: preferences.date_format,
-            show_weather: preferences.show_weather,
             temperature_unit: preferences.temperature_unit,
             weather_style: preferences.weather_style,
             background: preferences.background.clone(),
@@ -57,9 +51,8 @@ impl Settings {
         }
     }
 
-    /// The same cleanup the TV keyboard applies to a typed greeting name.
-    pub fn cleaned(mut self) -> Self {
-        self.greeting_name = clean_input_name(&self.greeting_name);
+    /// Kept for the request path; every field is already a closed choice.
+    pub fn cleaned(self) -> Self {
         self
     }
 }
@@ -122,6 +115,58 @@ pub struct Catalog {
     pub weather_location: Option<crate::weather::Location>,
     pub tiles: Vec<crate::model::CustomTile>,
     pub system: SystemStatus,
+    pub widgets: Vec<WebWidget>,
+}
+
+/// A Home widget on the 6×4 grid, or off it.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct WebWidget {
+    pub widget: HomeWidget,
+    pub present: bool,
+    pub column: u8,
+    pub row: u8,
+    pub width: u8,
+    pub height: u8,
+}
+
+impl WebWidget {
+    pub fn all(preferences: &Preferences) -> Vec<Self> {
+        HomeWidget::ALL
+            .into_iter()
+            .map(|widget| {
+                let position = preferences.widget_position(widget);
+                let (width, height) = widget.span();
+                Self {
+                    widget,
+                    present: preferences.has_widget(widget),
+                    column: position.column,
+                    row: position.row,
+                    width,
+                    height,
+                }
+            })
+            .collect()
+    }
+}
+
+/// A layout change from the page, checked by the launcher with the TV's placement rules.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields, tag = "action", rename_all = "snake_case")]
+pub enum WidgetChange {
+    Move {
+        widget: HomeWidget,
+        column: u8,
+        row: u8,
+    },
+    Add {
+        widget: HomeWidget,
+        column: u8,
+        row: u8,
+    },
+    Remove {
+        widget: HomeWidget,
+    },
+    Reset,
 }
 
 /// Settings › System as the TV shows it right now.
@@ -242,7 +287,13 @@ const LABELS: &[(&str, &str)] = &[
     ("reducedMotion", "reducedMotion"),
     ("uiSounds", "uiSounds"),
     ("greeting", "greeting"),
-    ("greetingName", "greetingName"),
+    ("addWidget", "addWidget"),
+    ("removeWidget", "removeWidget"),
+    ("resetWidgets", "resetWidgets"),
+    ("allWidgetsAdded", "allWidgetsAdded"),
+    ("widgetPosition", "widgetPosition"),
+    ("widgetPlacementHelp", "widgetPlacementHelp"),
+    ("move", "move"),
     ("showWidget", "showWidget"),
     ("date", "date"),
     ("dateFormat", "dateFormat"),
@@ -313,6 +364,8 @@ pub fn listing(settings: &Settings, catalog: &Catalog) -> serde_json::Value {
             .collect::<Vec<_>>(),
         "tileLimit": crate::model::TILE_LIMIT,
         "system": catalog.system,
+        "widgets": catalog.widgets,
+        "grid": { "columns": crate::model::HOME_GRID_COLUMNS, "rows": crate::model::HOME_GRID_ROWS },
         "sheet": { "tiles": crate::view::SHEET_TILES, "columns": crate::view::SHEET_COLUMNS },
         "labels": labels,
         "choices": choices,

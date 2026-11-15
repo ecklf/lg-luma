@@ -30,9 +30,27 @@ https://github.com/user-attachments/assets/5b2c6e78-ec77-41f5-a79a-1fcfbe8e524b
 
 ## Home and app drawer
 
+Home widgets use an invisible **6×4 placement grid** above the unchanged six-app favorites dock.
+**Greeting** combines the weekday/date and greeting in **4 columns × 1 row**;
+**Weather** is **2 columns × 2 rows**. By default Greeting sits at the top left and
+Weather at the top right, spanning the first two rows. Empty cells remain transparent.
+Open **Settings → Widgets** to see the Home placement grid. Select a widget for an
+app-style **Configure / Move / Remove** menu. At the top right above the grid, **Reset to defaults** sits to the
+left of **Add widget**, using the same pill controls as Backgrounds. The Add menu only lists
+widgets not already on Home; empty cells also open it directly. Configure opens the existing options,
+without a show/hide switch; removing frees its cells but keeps its configuration for re-adding.
+Use the arrows or point at a cell to choose its top-left anchor, then **OK / click** to save;
+**Back** cancels. Red placements overlap the other widget or exceed the grid and cannot be saved.
+Widget sizes cannot be changed. Reset restores the default widgets and their positions without
+clearing their configuration. A **Shortcuts** pill sits at the top left. Inputs has its own sidebar section,
+directly below Apps, and is not a widget.
+There is no configurable greeting name;
+names stored by earlier drafts are ignored and removed on the next preferences save.
+
 Home uses Liquid Glass controls over your wallpaper, a floating favorites dock, and a weather
-block with a condition icon, temperature, condition, and location. The greeting and standalone
-date have been removed.
+block with a condition icon, temperature, condition, and location. The combined Greeting restores
+the original small, spaced weekday/date above a large, tightly tracked greeting. Greeting settings
+include a date visibility toggle and date-format choices; Date is not a separate widget.
 
 - **Left / Right** browses favorites. Hold **OK** to reorder them.
 - **Down** from favorites opens the animated six-column app drawer.
@@ -44,7 +62,7 @@ date have been removed.
   Counts stay local and persist across restarts. Favorites keep their manual order.
 - **Settings → General → UI sounds** enables soft, tvOS-inspired navigation, select, and back
   feedback. Off by default; uses original synthesized sounds, not Apple recordings.
-- **Settings → Widgets → Weather → Widget style** offers **Standard**, **No icon**,
+- **Settings → Widgets → select Weather → Configure → Widget style** offers **Standard**, **No icon**,
   and **Compact**, with a preview of every design before choosing. Compact
   places a small condition icon on the second line beside the condition and location.
 - **OK / click** launches apps directly. Manage favorites, hidden apps, and uninstall actions in
@@ -161,7 +179,7 @@ to help make Luma available by default.
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_3.2.1_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_3.3.0_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -299,7 +317,7 @@ shaded image. This does not change LG's launch splash.
 
 ### Input icons
 
-Open **Settings → Widgets → Inputs**, select an input, then choose
+Open **Settings → Inputs**, select an input, then choose
 **Icon** to open a native picker for bundled SVG icons. Choices are **Automatic** (the default,
 using label detection), **HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**,
 **NVIDIA Shield**, **Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, and **Xbox**.
@@ -365,7 +383,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_3.2.1_arm.ipk
+dist/com.ecklf.luma_3.3.0_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png

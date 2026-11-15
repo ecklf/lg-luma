@@ -905,6 +905,56 @@ select {
   cursor: default;
 }
 
+/* Widget layout: the Home grid at 16:9 */
+.widget-editor {
+  gap: 10px;
+}
+.widget-grid {
+  display: grid;
+  gap: 5px;
+  aspect-ratio: 16 / 9;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.28);
+}
+.grid-cell {
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: none;
+}
+.grid-cell.allowed {
+  border-color: rgba(229, 235, 240, 0.6);
+  background: rgba(229, 235, 240, 0.1);
+  cursor: pointer;
+}
+.grid-cell:disabled {
+  cursor: default;
+}
+.grid-widget {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.grid-widget[aria-pressed='true'] {
+  background: var(--focus);
+  color: var(--focus-ink);
+}
+.widget-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.widget-actions .pill-button[aria-pressed='true'] {
+  background: var(--focus);
+  color: var(--focus-ink);
+}
+
 /* Shortcuts */
 .tile-row {
   grid-template-columns: auto minmax(0, 1fr);

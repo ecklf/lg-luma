@@ -297,7 +297,6 @@ fn pairs_once_and_then_changes_settings() {
 
     let mut changed = settings.clone();
     changed.hour_24 = true;
-    changed.greeting_name = "  Ana\u{7}  ".into();
     let (status, _, _) = post(
         "/api/settings",
         &cookie,
@@ -311,7 +310,6 @@ fn pairs_once_and_then_changes_settings() {
         }
     };
     assert!(applied.hour_24);
-    assert_eq!(applied.greeting_name, "Ana");
 
     // An input change reaches the launcher cleaned; unknown icons and inputs are refused.
     let (status, _, body) = post(

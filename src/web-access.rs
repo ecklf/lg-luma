@@ -13,7 +13,9 @@ use crate::companion::{
     Request, Session, error_response, local_address, local_peer, qr, read_exact, response,
     response_with,
 };
-use crate::web_settings::{Arrangement, Catalog, InputChange, Settings, listing, strings};
+use crate::web_settings::{
+    Arrangement, Catalog, InputChange, Settings, WidgetChange, listing, strings,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     io::BufReader,
@@ -106,6 +108,8 @@ pub enum Event {
     Tap(f32, f32),
     /// Opens an app or sends a shortcut tile, like selecting it on Home.
     Launch(String),
+    /// Moves, adds, removes or resets Home widgets.
+    Widgets(WidgetChange),
     /// The complete shortcut tile list after a change from the page.
     Tiles(Vec<crate::model::CustomTile>),
     /// A place from the page's search, or `None` to remove the weather location.
@@ -243,6 +247,9 @@ impl Service {
         }
         if shared.catalog.system != catalog.system {
             shared.catalog.system = catalog.system.clone();
+        }
+        if shared.catalog.widgets != catalog.widgets {
+            shared.catalog.widgets = catalog.widgets.clone();
         }
         // A change from the phone stays authoritative until the launcher has applied it.
         if shared.revision == shared.acknowledged && shared.settings != *settings {
@@ -843,6 +850,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         "/api/location" => choose_place(stream, context, &request, &body),
         "/api/photo/delete" => delete_photo(stream, context, &request, &body),
         "/api/action" => system_action(stream, context, &request, &body),
+        "/api/widgets" => change_widgets(stream, context, &request, &body),
         "/api/key" | "/api/tap" | "/api/launch" => remote(stream, context, &request, &route, &body),
         "/api/devices/remove" => remove_device(stream, context, &request, &body),
         "/api/tiles/save" | "/api/tiles/remove" | "/api/tiles/send" => {
@@ -1189,6 +1197,42 @@ fn remote(
         .send(event)
         .map_err(|_| "Launcher stopped".to_owned())?;
     json(stream, "200 OK", &serde_json::json!({}))
+}
+
+/// A Home widget layout change; the launcher applies the TV's placement rules, and the reply
+/// shows the layout it kept.
+fn change_widgets(
+    stream: &mut TcpStream,
+    context: &Context,
+    request: &Request,
+    body: &[u8],
+) -> Result<(), String> {
+    let before = {
+        let shared = context.shared.lock().unwrap();
+        if device(request, &shared.devices).is_none() {
+            drop(shared);
+            return unpaired(stream, context);
+        }
+        shared.catalog.widgets.clone()
+    };
+    let Ok(change) = serde_json::from_slice::<WidgetChange>(body) else {
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
+    };
+    context
+        .sender
+        .send(Event::Widgets(change))
+        .map_err(|_| "Launcher stopped".to_owned())?;
+    // A refused placement leaves the layout as it was; wait only briefly for that case.
+    let deadline = Instant::now() + Duration::from_millis(600);
+    while Instant::now() < deadline && context.shared.lock().unwrap().catalog.widgets == before {
+        thread::sleep(Duration::from_millis(30));
+    }
+    reply_listing(stream, context, request, serde_json::json!({}))
 }
 
 /// Runs a System action on the TV, like pressing the same row in Settings › System.

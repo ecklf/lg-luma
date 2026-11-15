@@ -340,13 +340,13 @@ impl Weather {
             self.invalidate_forecast();
             self.active_key = key.clone();
         }
-        let active = preferences.show_weather && home_visible && key.is_some();
+        let active = preferences.weather_visible() && home_visible && key.is_some();
         if active && !self.active_home {
             self.next_fetch = 0;
         }
         self.active_home = active;
         let mut command = None;
-        if !preferences.show_weather || !home_visible || key.is_none() {
+        if !preferences.weather_visible() || !home_visible || key.is_none() {
             if self.pending.take().is_some() {
                 self.forecast_id += 1;
             }

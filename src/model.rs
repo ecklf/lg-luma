@@ -200,7 +200,6 @@ impl DateFormat {
         }
     }
 
-    #[cfg(test)]
     pub fn format(self, language: Language, now: time::OffsetDateTime) -> String {
         let (year, month, day) = (now.year(), now.month() as u8, now.day());
         match self {
@@ -256,12 +255,90 @@ impl WeatherStyle {
     }
 }
 
+pub const HOME_GRID_COLUMNS: usize = 6;
+pub const HOME_GRID_ROWS: usize = 4;
+pub const HOME_GRID_CELLS: usize = HOME_GRID_COLUMNS * HOME_GRID_ROWS;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HomeWidget {
+    Weather,
+    Greeting,
+}
+
+impl HomeWidget {
+    pub const ALL: [Self; 2] = [Self::Greeting, Self::Weather];
+
+    pub fn span(self) -> (u8, u8) {
+        match self {
+            Self::Greeting => (4, 1),
+            Self::Weather => (2, 2),
+        }
+    }
+
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Weather => "weather",
+            Self::Greeting => "greeting",
+        }
+    }
+
+    pub fn default_position(self) -> WidgetPosition {
+        WidgetPosition {
+            column: match self {
+                Self::Greeting => 0,
+                Self::Weather => 4,
+            },
+            row: 0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub struct WidgetPosition {
+    pub column: u8,
+    pub row: u8,
+}
+
+impl WidgetPosition {
+    pub fn from_cell(cell: usize) -> Option<Self> {
+        (cell < HOME_GRID_CELLS).then_some(Self {
+            column: (cell % HOME_GRID_COLUMNS) as u8,
+            row: (cell / HOME_GRID_COLUMNS) as u8,
+        })
+    }
+
+    pub fn cell(self) -> usize {
+        usize::from(self.row) * HOME_GRID_COLUMNS + usize::from(self.column)
+    }
+
+    pub fn fits(self, widget: HomeWidget) -> bool {
+        let (width, height) = widget.span();
+        usize::from(self.column) + usize::from(width) <= HOME_GRID_COLUMNS
+            && usize::from(self.row) + usize::from(height) <= HOME_GRID_ROWS
+    }
+
+    fn overlaps(self, widget: HomeWidget, other: Self, other_widget: HomeWidget) -> bool {
+        let (w, h) = widget.span();
+        let (ow, oh) = other_widget.span();
+        u16::from(self.column) < u16::from(other.column) + u16::from(ow)
+            && u16::from(other.column) < u16::from(self.column) + u16::from(w)
+            && u16::from(self.row) < u16::from(other.row) + u16::from(oh)
+            && u16::from(other.row) < u16::from(self.row) + u16::from(h)
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
     pub weather_style: WeatherStyle,
     pub app_sorting: AppSorting,
     pub app_launch_counts: BTreeMap<String, u64>,
+    pub greeting_position: WidgetPosition,
+    pub weather_position: WidgetPosition,
+    /// Read-only marker for migrating the short-lived separate-Date draft.
+    #[serde(rename = "date_position", skip_serializing)]
+    pub legacy_date_position: Option<WidgetPosition>,
     pub favorites: Option<Vec<String>>,
     pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
@@ -273,8 +350,6 @@ pub struct Preferences {
     pub reduced_motion: bool,
     pub ui_sounds: bool,
     pub show_seconds: bool,
-    /// Optional name appended to the Home greeting ("Good evening, Ana."). Empty = plain greeting.
-    pub greeting_name: String,
     pub show_greeting: bool,
     pub show_date: bool,
     pub date_format: DateFormat,
@@ -309,6 +384,9 @@ impl Default for Preferences {
             weather_style: WeatherStyle::default(),
             app_sorting: AppSorting::default(),
             app_launch_counts: BTreeMap::new(),
+            greeting_position: HomeWidget::Greeting.default_position(),
+            weather_position: HomeWidget::Weather.default_position(),
+            legacy_date_position: None,
             favorites: None,
             custom_tiles: vec![],
             hidden: vec![],
@@ -319,7 +397,6 @@ impl Default for Preferences {
             reduced_motion: false,
             ui_sounds: false,
             show_seconds: false,
-            greeting_name: String::new(),
             show_greeting: true,
             show_date: true,
             date_format: DateFormat::default(),
@@ -349,6 +426,79 @@ impl Preferences {
         count
             .then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
             .then_with(|| a.id.cmp(&b.id))
+    }
+
+    pub fn weather_visible(&self) -> bool {
+        self.show_weather
+    }
+
+    pub fn widget_position(&self, widget: HomeWidget) -> WidgetPosition {
+        match widget {
+            HomeWidget::Greeting => self.greeting_position,
+            HomeWidget::Weather => self.weather_position,
+        }
+    }
+
+    pub fn has_widget(&self, widget: HomeWidget) -> bool {
+        match widget {
+            HomeWidget::Greeting => self.show_greeting,
+            HomeWidget::Weather => self.show_weather,
+        }
+    }
+
+    /// Restore widget membership and placement without discarding configuration.
+    pub fn reset_widgets(&mut self) -> bool {
+        let changed = HomeWidget::ALL.into_iter().any(|widget| {
+            !self.has_widget(widget) || self.widget_position(widget) != widget.default_position()
+        });
+        for widget in HomeWidget::ALL {
+            self.set_widget_present(widget, true);
+            self.set_widget_position(widget, widget.default_position());
+        }
+        self.legacy_date_position = None;
+        changed
+    }
+
+    pub fn set_widget_present(&mut self, widget: HomeWidget, present: bool) {
+        match widget {
+            HomeWidget::Greeting => self.show_greeting = present,
+            HomeWidget::Weather => self.show_weather = present,
+        }
+    }
+
+    pub fn widget_at(&self, position: WidgetPosition) -> Option<HomeWidget> {
+        HomeWidget::ALL.into_iter().find(|widget| {
+            let anchor = self.widget_position(*widget);
+            let (w, h) = widget.span();
+            self.has_widget(*widget)
+                && position.column >= anchor.column
+                && position.row >= anchor.row
+                && u16::from(position.column) < u16::from(anchor.column) + u16::from(w)
+                && u16::from(position.row) < u16::from(anchor.row) + u16::from(h)
+        })
+    }
+
+    pub fn can_place_widget(&self, widget: HomeWidget, position: WidgetPosition) -> bool {
+        position.fits(widget)
+            && HomeWidget::ALL
+                .into_iter()
+                .filter(|other| *other != widget && self.has_widget(*other))
+                .all(|other| !position.overlaps(widget, self.widget_position(other), other))
+    }
+
+    pub fn place_widget(&mut self, widget: HomeWidget, position: WidgetPosition) -> bool {
+        if !self.can_place_widget(widget, position) || self.widget_position(widget) == position {
+            return false;
+        }
+        self.set_widget_position(widget, position);
+        true
+    }
+
+    fn set_widget_position(&mut self, widget: HomeWidget, position: WidgetPosition) {
+        match widget {
+            HomeWidget::Greeting => self.greeting_position = position,
+            HomeWidget::Weather => self.weather_position = position,
+        }
     }
 
     pub fn splash_background(&self) -> &str {
@@ -464,6 +614,40 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
+        // Collapse the previous draft's untouched separate-Date arrangement.
+        // Custom Greeting/Weather anchors remain unchanged.
+        if self.legacy_date_position.take().is_some()
+            && self.show_greeting
+            && self.show_weather
+            && self.greeting_position == (WidgetPosition { column: 0, row: 1 })
+            && self.weather_position == (WidgetPosition { column: 0, row: 2 })
+        {
+            self.greeting_position = HomeWidget::Greeting.default_position();
+            self.weather_position = HomeWidget::Weather.default_position();
+        }
+        let mut placed = Vec::new();
+        for widget in HomeWidget::ALL {
+            if !self.has_widget(widget) {
+                if !self.widget_position(widget).fits(widget) {
+                    self.set_widget_position(widget, widget.default_position());
+                }
+                continue;
+            }
+            let valid = |position: WidgetPosition| {
+                position.fits(widget)
+                    && placed.iter().all(|other| {
+                        !position.overlaps(widget, self.widget_position(*other), *other)
+                    })
+            };
+            if !valid(self.widget_position(widget)) {
+                let position = std::iter::once(widget.default_position())
+                    .chain((0..HOME_GRID_CELLS).filter_map(WidgetPosition::from_cell))
+                    .find(|position| valid(*position))
+                    .unwrap();
+                self.set_widget_position(widget, position);
+            }
+            placed.push(widget);
+        }
         if self.splash_background.as_ref().is_some_and(|id| {
             !BACKGROUNDS.iter().any(|(known, _)| *known == id) && !crate::wallpapers::valid_id(id)
         }) {
