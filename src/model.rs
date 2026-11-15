@@ -271,7 +271,7 @@ impl HomeWidget {
 
     pub fn span(self) -> (u8, u8) {
         match self {
-            Self::Greeting => (2, 1),
+            Self::Greeting => (3, 1),
             Self::Weather => (1, 2),
         }
     }

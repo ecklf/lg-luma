@@ -1256,23 +1256,23 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
             }
             continue;
         }
-        // Restore the pre-redesign type treatment, fitting the whole heading
-        // into the fixed 2×1 footprint rather than widening or clipping it.
+        // Keep the larger date and greeting inside the fixed 3×1 footprint
+        // by tightening their gap rather than widening or clipping the widget.
         let label = language.greeting(now.hour(), "");
-        let style = assets.fit_text(&label, text(90.4, 500, -0.065).leading(1.05), cell.w);
+        let style = assets.fit_text(&label, text(96., 500, -0.065).leading(1.05), cell.w);
         let height = style.size * style.line_height;
         let date_band = if state.preferences.show_date {
-            32.8
+            26.4
         } else {
             0.
         };
         let top = cell.y + (cell.h - date_band - height) / 2.;
         if state.preferences.show_date {
             let date = state.preferences.date_format.format(language, now);
-            let (date, date_style) = assets.fit_line(&date, text(18.4, 600, 0.12), cell.w, 14.);
+            let (date, date_style) = assets.fit_line(&date, text(22., 600, 0.12), cell.w, 14.);
             out.text(
                 date,
-                Rect::new(cell.x, top, cell.w, 24.),
+                Rect::new(cell.x, top, cell.w, date_band),
                 date_style,
                 c(0xf5f5f5, 0.72),
                 false,
@@ -4396,7 +4396,7 @@ mod tests {
     }
 
     #[test]
-    fn combined_greeting_restores_original_typography_inside_one_footprint() {
+    fn larger_greeting_and_date_fit_inside_one_footprint_in_every_language() {
         let assets = assets();
         for language in Language::ALL {
             for hour in [0, 9, 15, 20] {
@@ -4431,8 +4431,9 @@ mod tests {
                         rect.x + rect.w <= cell.x + cell.w && rect.y + rect.h <= cell.y + cell.h
                     );
                     assert_eq!(assets.lines(&label, style, rect.w), 1);
+                    assert!(rect.h + 0.001 >= style.size * style.line_height);
                     if is_date {
-                        assert_eq!(style.size, 18.4);
+                        assert_eq!(style.size, 22.);
                         assert_eq!(style.weight, 600);
                         assert_eq!(style.tracking, 0.12);
                     } else {
@@ -4440,7 +4441,7 @@ mod tests {
                         assert_eq!(style.tracking, -0.065);
                         assert_eq!(style.line_height, 1.05);
                         if language == Language::En {
-                            assert_eq!(style.size, 90.4);
+                            assert_eq!(style.size, 96.);
                         }
                     }
                 }
@@ -4462,7 +4463,7 @@ mod tests {
                 assert_eq!(
                     rect.w,
                     if widget != HomeWidget::Weather {
-                        864.
+                        1308.
                     } else {
                         420.
                     }
