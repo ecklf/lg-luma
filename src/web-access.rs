@@ -34,6 +34,9 @@ const PIN_TIME: Duration = Duration::from_secs(300);
 const PIN_ATTEMPTS: u32 = 5;
 pub const DEVICE_LIMIT: usize = 16;
 const MAX_BODY: usize = 4096;
+/// A cropped 1920×1080 photo, the same bound as the wallpaper upload.
+const PHOTO_BODY: usize = 12 * 1024 * 1024;
+const PHOTO_TIME: Duration = Duration::from_secs(60);
 const REQUEST_TIME: Duration = Duration::from_secs(10);
 const ADDRESS_CHECK: Duration = Duration::from_secs(30);
 const CONNECTION_LIMIT: usize = 8;
@@ -84,6 +87,13 @@ pub enum Event {
     Arrange(Arrangement),
     /// One input's name, visibility and icon.
     Input(InputChange),
+    /// A cropped photo for the wallpaper gallery; replies with its id.
+    Photo {
+        bytes: Vec<u8>,
+        reply: mpsc::Sender<Result<String, String>>,
+    },
+    /// Removes one of the owner's own photos from the gallery.
+    DeletePhoto(String),
     /// The complete shortcut tile list after a change from the page.
     Tiles(Vec<crate::model::CustomTile>),
     /// A place from the page's search, or `None` to remove the weather location.
@@ -567,8 +577,8 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         &mut reader,
         &valid,
         deadline,
-        MAX_BODY,
-        "Request too large",
+        PHOTO_BODY,
+        "Image exceeds 12 MiB",
     ) {
         Ok(request) => request,
         Err(error) => {
@@ -665,6 +675,11 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
                 "text/css; charset=utf-8",
                 include_bytes!("../assets/web-access/web.css"),
             ),
+            // The wallpaper upload's crop math, shared with the page's own cropper.
+            "/crop.js" => (
+                "text/javascript; charset=utf-8",
+                include_bytes!("../assets/wallpaper-upload/crop.js"),
+            ),
             "/inter.woff2" => (
                 "font/woff2",
                 include_bytes!("../assets/fonts/inter-latin.woff2"),
@@ -720,11 +735,35 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         drop(reader);
         return error_response(stream, "403 Forbidden", "Invalid request");
     }
-    if request
-        .headers
-        .get("content-type")
-        .is_none_or(|value| value.split(';').next() != Some("application/json"))
-    {
+    let kind = request.headers.get("content-type").map(|value| {
+        value
+            .split(';')
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_owned()
+    });
+    if route == "/api/photo" {
+        // Only a paired device may send a large body; check before reading it.
+        let paired = device(&request, &context.shared.lock().unwrap().devices).is_some();
+        if !paired {
+            drop(reader);
+            return unpaired(stream);
+        }
+        if kind.as_deref() != Some("image/jpeg") {
+            drop(reader);
+            return error_response(stream, "415 Unsupported Media Type", "Send a JPEG");
+        }
+        let mut body = vec![0; request.length];
+        read_exact(&mut reader, &mut body, &valid, Instant::now() + PHOTO_TIME)?;
+        drop(reader);
+        return add_photo(stream, context, &request, body);
+    }
+    if request.length > MAX_BODY {
+        drop(reader);
+        return error_response(stream, "413 Content Too Large", "Request too large");
+    }
+    if kind.as_deref() != Some("application/json") {
         drop(reader);
         return error_response(stream, "415 Unsupported Media Type", "Send JSON");
     }
@@ -738,6 +777,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         "/api/inputs" => change_input(stream, context, &request, &body),
         "/api/places" => search_places(stream, context, &request, &body),
         "/api/location" => choose_place(stream, context, &request, &body),
+        "/api/photo/delete" => delete_photo(stream, context, &request, &body),
         "/api/tiles/save" | "/api/tiles/remove" | "/api/tiles/send" => {
             edit_tile(stream, context, &request, &route, &body)
         }
@@ -937,6 +977,92 @@ fn unpaired(stream: &mut TcpStream) -> Result<(), String> {
         "401 Unauthorized",
         &serde_json::json!({ "error": "This device was removed on the TV. Pair it again.", "pair": true }),
     )
+}
+
+/// Waits briefly until the launcher's catalog reflects a gallery change, so the reply lists it.
+fn await_backgrounds(context: &Context, done: impl Fn(&Catalog) -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline && !done(&context.shared.lock().unwrap().catalog) {
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+fn reply_listing(
+    stream: &mut TcpStream,
+    context: &Context,
+    request: &Request,
+    extra: serde_json::Value,
+) -> Result<(), String> {
+    let shared = context.shared.lock().unwrap();
+    let Some(name) = device(request, &shared.devices).map(|device| device.name.clone()) else {
+        drop(shared);
+        return unpaired(stream);
+    };
+    let mut reply = listing(&shared.settings, &shared.catalog);
+    drop(shared);
+    reply["device"] = serde_json::json!(name);
+    if let (Some(reply), serde_json::Value::Object(extra)) = (reply.as_object_mut(), extra) {
+        reply.extend(extra);
+    }
+    json(stream, "200 OK", &reply)
+}
+
+/// Stores a photo the page cropped to 1920×1080, through the wallpaper worker like an upload.
+fn add_photo(
+    stream: &mut TcpStream,
+    context: &Context,
+    request: &Request,
+    bytes: Vec<u8>,
+) -> Result<(), String> {
+    let (reply, answer) = mpsc::channel();
+    if context.sender.send(Event::Photo { bytes, reply }).is_err() {
+        return error_response(stream, "503 Service Unavailable", "Launcher stopped");
+    }
+    let id = match answer.recv_timeout(PHOTO_TIME) {
+        Ok(Ok(id)) => id,
+        Ok(Err(error)) => return error_response(stream, "422 Unprocessable Content", &error),
+        Err(_) => return error_response(stream, "503 Service Unavailable", "The TV is busy"),
+    };
+    await_backgrounds(context, |catalog| {
+        catalog.backgrounds.iter().any(|item| item.id == id)
+    });
+    reply_listing(stream, context, request, serde_json::json!({ "id": id }))
+}
+
+fn delete_photo(
+    stream: &mut TcpStream,
+    context: &Context,
+    request: &Request,
+    body: &[u8],
+) -> Result<(), String> {
+    #[derive(Deserialize)]
+    struct Delete {
+        id: String,
+    }
+    let Ok(Delete { id }) = serde_json::from_slice::<Delete>(body) else {
+        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+    };
+    {
+        let shared = context.shared.lock().unwrap();
+        if device(request, &shared.devices).is_none() {
+            drop(shared);
+            return unpaired(stream);
+        }
+        // Only the owner's own photos; packaged backgrounds and the current one stay.
+        let known = shared.catalog.backgrounds.iter().any(|item| item.id == id);
+        if !crate::wallpapers::valid_id(&id) || !known || shared.settings.background == id {
+            drop(shared);
+            return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+        }
+    }
+    context
+        .sender
+        .send(Event::DeletePhoto(id.clone()))
+        .map_err(|_| "Launcher stopped".to_owned())?;
+    await_backgrounds(context, |catalog| {
+        !catalog.backgrounds.iter().any(|item| item.id == id)
+    });
+    reply_listing(stream, context, request, serde_json::json!({}))
 }
 
 /// Adds, changes, removes or test-sends a shortcut tile, with the TV tile editor's rules.

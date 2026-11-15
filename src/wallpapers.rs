@@ -80,7 +80,15 @@ pub enum Event {
 
 enum Command {
     Wake,
-    Delete { id: String, selected: String },
+    Delete {
+        id: String,
+        selected: String,
+    },
+    /// A 1920×1080 image from the companion page; replies with the new wallpaper's id.
+    Store {
+        bytes: Vec<u8>,
+        reply: mpsc::Sender<Result<String, String>>,
+    },
 }
 
 pub struct Service {
@@ -138,6 +146,15 @@ impl Service {
 
     pub fn delete(&self, id: String, selected: String) {
         let _ = self.wake.send(Command::Delete { id, selected });
+    }
+
+    /// Adds a cropped image to the gallery off the SDL thread, like an upload session does.
+    pub fn store(&self, bytes: Vec<u8>, reply: mpsc::Sender<Result<String, String>>) {
+        if let Err(mpsc::SendError(Command::Store { reply, .. })) =
+            self.wake.send(Command::Store { bytes, reply })
+        {
+            let _ = reply.send(Err("Wallpapers are unavailable".into()));
+        }
     }
 }
 
@@ -459,6 +476,12 @@ fn worker(
             let result = delete_wallpaper(directory, &id, &selected);
             sender.send(Event::Deleted(id, result)).is_ok()
                 && sender.send(Event::Catalog(catalog(directory))).is_ok()
+        }
+        Command::Store { bytes, reply } => {
+            let result = store(directory, &bytes, || true).map(|item| item.id);
+            let stored = result.is_ok();
+            let _ = reply.send(result);
+            !stored || sender.send(Event::Catalog(catalog(directory))).is_ok()
         }
     };
     let mut handled = 0;

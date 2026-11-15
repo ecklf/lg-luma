@@ -530,6 +530,94 @@ select {
 .wallpaper:focus-visible img {
   outline-color: var(--focus);
 }
+.wallpaper-cell {
+  position: relative;
+}
+.photo-delete {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(16, 18, 20, 0.72);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.photo-delete.armed {
+  background: var(--danger);
+  color: #2c1410;
+  font-size: 12px;
+}
+.add-photo {
+  align-content: start;
+}
+.add-photo input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.add-plus {
+  display: grid;
+  aspect-ratio: 16 / 9;
+  place-items: center;
+  border: 1.5px dashed rgba(255, 255, 255, 0.28);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink-soft);
+  font-size: 34px;
+  font-weight: 300;
+}
+.add-photo:focus-within .add-plus {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.cropper {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(8, 11, 18, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.cropper-sheet {
+  display: grid;
+  gap: 14px;
+  width: min(720px, 100%);
+  padding: 22px;
+  border: 1px solid var(--hairline);
+  border-radius: 24px;
+  background: #1b2023;
+}
+.crop-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+.crop-canvas {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 14px;
+  cursor: grab;
+  touch-action: none;
+}
+.zoom {
+  width: 100%;
+  accent-color: var(--focus);
+}
+.cropper .hint {
+  margin: 0;
+}
 .hint {
   margin: 10px 6px 0;
   color: var(--ink-faint);

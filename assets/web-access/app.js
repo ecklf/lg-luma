@@ -1,3 +1,5 @@
+import { cropRect, panPosition } from './crop.js';
+
 const element = (id) => document.getElementById(id);
 const status = element('status');
 let state;
@@ -226,6 +228,7 @@ function textRow(key, label) {
 function wallpapers() {
   const grid = create('div', 'wallpapers');
   for (const background of state.backgrounds) {
+    const cell = create('div', 'wallpaper-cell');
     const button = create('button', 'wallpaper');
     button.type = 'button';
     button.setAttribute('aria-pressed', String(background.id === state.settings.background));
@@ -235,9 +238,158 @@ function wallpapers() {
     image.src = `api/thumbnail/${encodeURIComponent(background.id)}`;
     button.append(image, create('span', '', background.name || strings.custom));
     button.addEventListener('click', () => change('background', background.id));
-    grid.append(button);
+    cell.append(button);
+    // The owner's own photos can be deleted, except the one showing.
+    if (!background.name && background.id !== state.settings.background) {
+      const remove = create('button', 'photo-delete');
+      remove.type = 'button';
+      remove.title = strings.deletePhoto;
+      remove.setAttribute('aria-label', strings.deletePhoto);
+      remove.textContent = '×';
+      let armed = false;
+      remove.addEventListener('click', () => {
+        // A second press confirms, so a stray tap cannot delete a photo.
+        if (!armed) {
+          armed = true;
+          remove.classList.add('armed');
+          remove.textContent = strings.deletePhoto;
+          return;
+        }
+        deletePhoto(background.id);
+      });
+      cell.append(remove);
+    }
+    grid.append(cell);
   }
+  const add = create('label', 'wallpaper add-photo');
+  const input = create('input');
+  input.type = 'file';
+  input.accept = 'image/jpeg,image/png,image/webp';
+  input.addEventListener('change', () => {
+    if (input.files[0]) openCropper(input.files[0]);
+    input.value = '';
+  });
+  const plus = create('span', 'add-plus', '+');
+  add.append(input, plus, create('span', '', strings.addPhoto));
+  grid.append(add);
   return grid;
+}
+
+/* ---------- Own photos ---------- */
+
+function deletePhoto(id) {
+  queue = queue.then(async () => {
+    message(strings.saving, false, true);
+    try {
+      apply(await call('api/photo/delete', { id }));
+      message(strings.saved);
+    } catch (error) {
+      if (error instanceof PairingNeeded) return startPairing(error.message);
+      message(error.message, true);
+    }
+  });
+}
+
+async function uploadPhoto(blob) {
+  const response = await fetch('api/photo', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'image/jpeg', 'X-Luma-Request': '1' },
+    body: blob,
+  });
+  const result = await response.json().catch(() => ({}));
+  if (result.pair) throw new PairingNeeded(result.error);
+  if (!response.ok) throw new Error(result.error || strings.offline);
+  return result;
+}
+
+// Crops to the TV's 1920×1080 like the wallpaper upload, with the same crop math.
+async function openCropper(file) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    message(strings.offline, true);
+    return;
+  }
+  let zoom = 1;
+  let horizontal = 0.5;
+  let vertical = 0.5;
+  const overlay = create('div', 'cropper');
+  const sheet = create('div', 'cropper-sheet');
+  const canvas = create('canvas', 'crop-canvas');
+  canvas.width = 960;
+  canvas.height = 540;
+  const context = canvas.getContext('2d');
+  const draw = () => {
+    const { x, y, w, h } = cropRect(bitmap.width, bitmap.height, zoom, horizontal, vertical);
+    context.drawImage(bitmap, x, y, w, h, 0, 0, canvas.width, canvas.height);
+  };
+  let drag = null;
+  canvas.addEventListener('pointerdown', (event) => {
+    drag = { x: event.clientX, y: event.clientY };
+    canvas.setPointerCapture(event.pointerId);
+  });
+  canvas.addEventListener('pointermove', (event) => {
+    if (!drag) return;
+    const crop = cropRect(bitmap.width, bitmap.height, zoom, horizontal, vertical);
+    const box = canvas.getBoundingClientRect();
+    horizontal = panPosition(horizontal, event.clientX - drag.x, bitmap.width, crop.w, box.width);
+    vertical = panPosition(vertical, event.clientY - drag.y, bitmap.height, crop.h, box.height);
+    drag = { x: event.clientX, y: event.clientY };
+    draw();
+  });
+  for (const end of ['pointerup', 'pointercancel'])
+    canvas.addEventListener(end, () => (drag = null));
+  const slider = create('input', 'zoom');
+  Object.assign(slider, { type: 'range', min: '1', max: '3', step: '0.01', value: '1' });
+  slider.setAttribute('aria-label', strings.cropHint);
+  slider.addEventListener('input', () => {
+    zoom = Number(slider.value);
+    draw();
+  });
+  const close = () => {
+    overlay.remove();
+    bitmap.close?.();
+  };
+  const actions = create('div', 'tile-actions');
+  const cancel = create('button', 'pill-button', state.labels.cancel);
+  cancel.type = 'button';
+  cancel.addEventListener('click', close);
+  const save = create('button', 'pill-button strong', state.labels.save);
+  save.type = 'button';
+  save.addEventListener('click', async () => {
+    save.disabled = cancel.disabled = true;
+    message(strings.uploading, false, true);
+    const output = create('canvas');
+    output.width = 1920;
+    output.height = 1080;
+    const { x, y, w, h } = cropRect(bitmap.width, bitmap.height, zoom, horizontal, vertical);
+    output.getContext('2d').drawImage(bitmap, x, y, w, h, 0, 0, 1920, 1080);
+    const blob = await new Promise((resolve) => output.toBlob(resolve, 'image/jpeg', 0.94));
+    try {
+      const result = await uploadPhoto(blob);
+      apply(result);
+      close();
+      // Show the new photo right away, like choosing it in the gallery.
+      change('background', result.id);
+    } catch (error) {
+      if (error instanceof PairingNeeded) return startPairing(error.message);
+      message(error.message, true);
+      save.disabled = cancel.disabled = false;
+    }
+  });
+  actions.append(cancel, save);
+  sheet.append(
+    create('h2', 'crop-title', strings.cropTitle),
+    canvas,
+    slider,
+    create('p', 'hint', strings.cropHint),
+    actions,
+  );
+  overlay.append(sheet);
+  document.body.append(overlay);
+  draw();
 }
 
 /* ---------- Apps ---------- */

@@ -1338,6 +1338,20 @@ fn run() -> Result<(), String> {
                         &updates,
                     );
                 }
+                web_access::Event::Photo { bytes, reply } => wallpaper_service.store(bytes, reply),
+                web_access::Event::DeletePhoto(id) => {
+                    let pending = state.delete_web_photo(&id);
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
                 web_access::Event::Pairing(..) => {}
             }
         }

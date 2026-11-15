@@ -364,6 +364,44 @@ fn pairs_once_and_then_changes_settings() {
     assert_eq!(get("/icon/tile-sparkles.svg", "").0, 200);
     assert_eq!(get("/icon/tile-nope.svg", "").0, 404);
 
+    // Photos: only paired devices, only JPEG; stored by the wallpaper worker, then listed.
+    let upload = |cookie: &str, kind: &str| {
+        http(&format!(
+            "POST /api/photo HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nCookie: {cookie}\r\nX-Luma-Request: 1\r\nContent-Type: {kind}\r\nContent-Length: 4\r\n\r\njpeg"
+        ))
+    };
+    assert_eq!(upload("", "image/jpeg").0, 401);
+    assert_eq!(upload(&cookie, "image/png").0, 415);
+    let photo = {
+        let cookie = cookie.clone();
+        thread::spawn(move || upload(&cookie, "image/jpeg"))
+    };
+    let id = "custom-0123456789abcdef0123456789abcdef".to_owned();
+    loop {
+        if let Event::Photo { bytes, reply } = next_event(&service) {
+            assert_eq!(bytes, b"jpeg");
+            reply.send(Ok(id.clone())).unwrap();
+            break;
+        }
+    }
+    let mut with_photo = catalog.clone();
+    with_photo
+        .backgrounds
+        .push(crate::web_settings::Background {
+            id: id.clone(),
+            name: String::new(),
+            thumbnail: thumbnail.clone(),
+        });
+    service.sync(true, false, &settings, &with_photo);
+    let (status, _, body) = photo.join().unwrap();
+    assert_eq!(status, 200);
+    assert!(body.contains(&format!("\"id\":\"{id}\"")));
+    // Packaged backgrounds cannot be deleted from the page.
+    assert_eq!(
+        post("/api/photo/delete", &cookie, r#"{"id":"dunes"}"#).0,
+        422
+    );
+
     // Unknown fields cannot reach other preferences.
     let (status, _, _) = post("/api/settings", &cookie, r#"{"hidden":["x"]}"#);
     assert_eq!(status, 422);

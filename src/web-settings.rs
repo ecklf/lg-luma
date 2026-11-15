@@ -156,6 +156,11 @@ pub fn strings(language: Language) -> serde_json::Value {
         "unpaired": t("webUnpaired"),
         "restart": t("textRenderingRestart"),
         "custom": t("webCustomPhoto"),
+        "addPhoto": t("webAddPhoto"),
+        "cropTitle": t("webCropTitle"),
+        "cropHint": t("webCropHint"),
+        "uploading": t("webUploading"),
+        "deletePhoto": t("webDeletePhoto"),
     })
 }
 

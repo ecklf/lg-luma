@@ -1155,6 +1155,19 @@ impl State {
         self.finish_background_delete(&id);
     }
 
+    /// Deletes one of the owner's own photos for a paired phone or computer, like confirming
+    /// Delete in the TV's background options.
+    pub fn delete_web_photo(&mut self, id: &str) -> Vec<Effect> {
+        if !crate::wallpapers::valid_id(id)
+            || !self.can_delete_background(id)
+            || self.deleting_wallpaper.is_some()
+        {
+            return vec![];
+        }
+        self.deleting_wallpaper = Some(id.to_owned());
+        vec![Effect::DeleteWallpaper(id.to_owned())]
+    }
+
     fn finish_background_delete(&mut self, id: &str) {
         let index = self
             .background_ids()
