@@ -125,7 +125,8 @@ fn pairs_once_and_then_changes_settings() {
     ));
     assert_eq!(status, 403);
 
-    // Guessing is capped: the fifth wrong PIN replaces the PIN shown on the TV.
+    // Guessing is capped: after the fifth wrong PIN pairing locks, even for the right PIN, until
+    // someone at the TV reopens the dialog.
     let wrong = if first.pin == "000000" {
         "111111"
     } else {
@@ -135,11 +136,17 @@ fn pairs_once_and_then_changes_settings() {
         let (status, _, _) = post("/api/pair", "", &format!(r#"{{"pin":"{wrong}"}}"#));
         assert_eq!(status, 403);
     }
-    let replaced = pairing(&service);
+    loop {
+        if let Event::Pairing(_, result) = next_event(&service) {
+            assert_eq!(result.err().as_deref(), Some(LOCKED));
+            break;
+        }
+    }
     let (status, _, _) = post("/api/pair", "", &format!(r#"{{"pin":"{}"}}"#, first.pin));
-    assert_eq!(status, if replaced.pin == first.pin { 200 } else { 403 });
-    assert_ne!(replaced.pin, first.pin, "a new PIN is drawn");
-    let first = replaced;
+    assert_eq!(status, 409, "locked until the dialog is reopened");
+    service.sync(true, false, &settings, &catalog);
+    service.sync(true, true, &settings, &catalog);
+    let first = pairing(&service);
 
     let (status, head, _) = post(
         "/api/pair",

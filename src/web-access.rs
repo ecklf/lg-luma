@@ -45,6 +45,8 @@ const PREVIEW_CHECK: Duration = Duration::from_millis(100);
 /// A waiting live preview answers "unchanged" after this long, so connections recycle.
 const PREVIEW_WAIT: Duration = Duration::from_secs(20);
 const COOKIE: &str = "luma_device";
+/// The pairing error the TV shows after too many wrong PINs.
+pub const LOCKED: &str = "locked";
 // Browsers cap cookie lifetimes at about 400 days; removing the device on the TV ends it sooner.
 const COOKIE_AGE: u64 = 400 * 24 * 60 * 60;
 
@@ -123,6 +125,8 @@ struct Shared {
     /// Nonzero while the TV shows the pairing dialog; changes for every dialog opened.
     pairing: u64,
     pin: Option<Pin>,
+    /// Too many wrong PINs: pairing waits until the dialog is opened again on the TV.
+    locked: bool,
     settings: Settings,
     revision: u64,
     acknowledged: u64,
@@ -151,6 +155,8 @@ struct Picture {
 
 pub struct Service {
     shared: Arc<Mutex<Shared>>,
+    /// The TV's language for messages, readable while `shared` is locked.
+    language: Arc<AtomicUsize>,
     path: PathBuf,
     wake: mpsc::Sender<()>,
     pub receiver: mpsc::Receiver<Event>,
@@ -167,6 +173,8 @@ impl Service {
         weather: crate::weather_service::Client,
     ) -> Result<Self, String> {
         let weather = Arc::new(weather);
+        let language = Arc::new(AtomicUsize::new(0));
+        let worker_language = language.clone();
         let devices = load_devices(&path);
         let shared = Arc::new(Mutex::new(Shared {
             devices,
@@ -184,6 +192,7 @@ impl Service {
                     worker_path,
                     sender,
                     weather,
+                    worker_language,
                     &updates,
                     loopback_only,
                 )
@@ -191,6 +200,7 @@ impl Service {
             .map_err(|e| format!("Could not start web access worker: {e}"))?;
         Ok(Self {
             shared,
+            language,
             path,
             wake,
             receiver,
@@ -204,6 +214,8 @@ impl Service {
     /// and the TV's current settings for pages that load next.
     pub fn sync(&mut self, enabled: bool, pairing: bool, settings: &Settings, catalog: &Catalog) {
         let pairing = enabled && pairing;
+        self.language
+            .store(settings.language.index(), Ordering::Relaxed);
         let mut shared = self.shared.lock().unwrap();
         // A change from the page stays visible until the launcher has applied it.
         if shared.catalog.backgrounds != catalog.backgrounds {
@@ -371,6 +383,7 @@ fn worker(
     path: PathBuf,
     sender: mpsc::SyncSender<Event>,
     weather: Arc<crate::weather_service::Client>,
+    language: Arc<AtomicUsize>,
     wake: &mpsc::Receiver<()>,
     loopback_only: bool,
 ) {
@@ -435,6 +448,7 @@ fn worker(
             let result = match &listener {
                 Some((_, address)) => {
                     let mut current = shared.lock().unwrap();
+                    current.locked = false;
                     issue_pin(&mut current).and_then(|pin| pairing_for(*address, &pin))
                 }
                 None => Err(bind_error
@@ -470,6 +484,7 @@ fn worker(
                     path: path.clone(),
                     sender: sender.clone(),
                     weather: weather.clone(),
+                    language: language.clone(),
                     address: *address,
                 };
                 let finished = active.clone();
@@ -511,7 +526,15 @@ struct Context {
     path: PathBuf,
     sender: mpsc::SyncSender<Event>,
     weather: Arc<crate::weather_service::Client>,
+    language: Arc<AtomicUsize>,
     address: SocketAddr,
+}
+
+impl Context {
+    fn language(&self) -> crate::i18n::Language {
+        let index = self.language.load(Ordering::Relaxed);
+        crate::i18n::Language::ALL[index.min(crate::i18n::Language::ALL.len() - 1)]
+    }
 }
 
 /// The bundled input icons, by route.
@@ -606,13 +629,18 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         Ok(request) => request,
         Err(error) => {
             drop(reader);
-            return error_response(stream, "400 Bad Request", &error);
+            return refuse(stream, context, "400 Bad Request", &error);
         }
     };
     // Only the TV's own address: a rebinding domain or another site is turned away.
     if request.foreign(&context.address.to_string()) {
         drop(reader);
-        return error_response(stream, "403 Forbidden", "Open the address shown on your TV");
+        return refuse(
+            stream,
+            context,
+            "403 Forbidden",
+            "Open the address shown on your TV",
+        );
     }
     let route = request
         .target
@@ -654,7 +682,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
                 drop(shared);
                 return match path.and_then(|path| std::fs::read(path).ok()) {
                     Some(bytes) => response(stream, "200 OK", "image/jpeg", &bytes),
-                    None => error_response(stream, "404 Not Found", "Not found"),
+                    None => refuse(stream, context, "404 Not Found", "Not found"),
                 };
             }
             drop(shared);
@@ -687,7 +715,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
                 let known = value("known").and_then(|key| key.parse().ok());
                 return preview(stream, context, known, value("wait") == Some("1"));
             }
-            return error_response(stream, "404 Not Found", "Not found");
+            return refuse(stream, context, "404 Not Found", "Not found");
         }
         let (kind, body): (&str, &[u8]) = match route.as_str() {
             "/" => (
@@ -739,15 +767,15 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
                     .and_then(|icon| icon.strip_suffix(".svg"))
                     .unwrap_or_default();
                 match crate::tile_editor::icon_svg(icon) {
-                    "" => return error_response(stream, "404 Not Found", "Not found"),
+                    "" => return refuse(stream, context, "404 Not Found", "Not found"),
                     svg => ("image/svg+xml", svg.as_bytes()),
                 }
             }
             route if route.starts_with("/icon/input-") => match input_icon(route) {
                 Some(svg) => ("image/svg+xml", svg),
-                None => return error_response(stream, "404 Not Found", "Not found"),
+                None => return refuse(stream, context, "404 Not Found", "Not found"),
             },
-            _ => return error_response(stream, "404 Not Found", "Not found"),
+            _ => return refuse(stream, context, "404 Not Found", "Not found"),
         };
         return response(stream, "200 OK", kind, body);
     }
@@ -756,7 +784,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         || request.headers.get("x-luma-request").map(String::as_str) != Some("1")
     {
         drop(reader);
-        return error_response(stream, "403 Forbidden", "Invalid request");
+        return refuse(stream, context, "403 Forbidden", "Invalid request");
     }
     let kind = request.headers.get("content-type").map(|value| {
         value
@@ -771,11 +799,11 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         let paired = device(&request, &context.shared.lock().unwrap().devices).is_some();
         if !paired {
             drop(reader);
-            return unpaired(stream);
+            return unpaired(stream, context);
         }
         if kind.as_deref() != Some("image/jpeg") {
             drop(reader);
-            return error_response(stream, "415 Unsupported Media Type", "Send a JPEG");
+            return refuse(stream, context, "415 Unsupported Media Type", "Send a JPEG");
         }
         let mut body = vec![0; request.length];
         read_exact(&mut reader, &mut body, &valid, Instant::now() + PHOTO_TIME)?;
@@ -784,11 +812,16 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
     }
     if request.length > MAX_BODY {
         drop(reader);
-        return error_response(stream, "413 Content Too Large", "Request too large");
+        return refuse(
+            stream,
+            context,
+            "413 Content Too Large",
+            "Request too large",
+        );
     }
     if kind.as_deref() != Some("application/json") {
         drop(reader);
-        return error_response(stream, "415 Unsupported Media Type", "Send JSON");
+        return refuse(stream, context, "415 Unsupported Media Type", "Send JSON");
     }
     let mut body = vec![0; request.length];
     read_exact(&mut reader, &mut body, &valid, deadline)?;
@@ -807,7 +840,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
             edit_tile(stream, context, &request, &route, &body)
         }
         "/api/forget" => forget(stream, context, &request),
-        _ => error_response(stream, "404 Not Found", "Not found"),
+        _ => refuse(stream, context, "404 Not Found", "Not found"),
     }
 }
 
@@ -876,12 +909,17 @@ fn sheet(
         reply,
     };
     if context.sender.send(request).is_err() {
-        return error_response(stream, "503 Service Unavailable", "Launcher stopped");
+        return refuse(
+            stream,
+            context,
+            "503 Service Unavailable",
+            "Launcher stopped",
+        );
     }
     let frame = match answer.recv_timeout(Duration::from_secs(6)) {
         Ok(Ok(frame)) => frame,
-        Ok(Err(error)) => return error_response(stream, "503 Service Unavailable", &error),
-        Err(_) => return error_response(stream, "503 Service Unavailable", "The TV is busy"),
+        Ok(Err(error)) => return refuse(stream, context, "503 Service Unavailable", &error),
+        Err(_) => return refuse(stream, context, "503 Service Unavailable", "The TV is busy"),
     };
     let picture = match (frame.image, cached) {
         (Some(image), _) => Picture {
@@ -891,7 +929,7 @@ fn sheet(
             checked: Instant::now(),
         },
         (None, Some(picture)) if picture.key == frame.key => picture,
-        (None, _) => return error_response(stream, "503 Service Unavailable", "Try again"),
+        (None, _) => return refuse(stream, context, "503 Service Unavailable", "Try again"),
     };
     context
         .shared
@@ -928,7 +966,12 @@ fn arrange(
     };
     let Ok(mut next) = serde_json::from_slice::<Arrangement>(body) else {
         drop(shared);
-        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
     };
     // Show the page what the launcher will keep: known apps, favorites never hidden.
     let known = |id: &String| shared.catalog.library.apps.iter().any(|app| &app.id == id);
@@ -965,7 +1008,12 @@ fn change_input(
     };
     let Ok(mut change) = serde_json::from_slice::<InputChange>(body) else {
         drop(shared);
-        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
     };
     change.name = crate::model::clean_input_name(&change.name);
     let known_icon = change.icon.is_empty()
@@ -980,7 +1028,12 @@ fn change_input(
         .filter(|_| known_icon)
     else {
         drop(shared);
-        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
     };
     input.name = change.name.clone();
     input.mode = change.mode;
@@ -996,12 +1049,40 @@ fn change_input(
     json(stream, "200 OK", &reply)
 }
 
-fn unpaired(stream: &mut TcpStream) -> Result<(), String> {
+fn unpaired(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
     json(
         stream,
         "401 Unauthorized",
-        &serde_json::json!({ "error": "This device was removed on the TV. Pair it again.", "pair": true }),
+        &serde_json::json!({ "error": context.language().t("webDeviceRemoved"), "pair": true }),
     )
+}
+
+/// The TV's own words for messages a person can act on; technical ones stay as they are.
+fn translate(language: crate::i18n::Language, message: &str) -> String {
+    let key = match message {
+        "Reload the page." | "Search again." | "Choose one of the icons shown." => "webReload",
+        "The TV is busy" | "Try again" | "Launcher stopped" | "Busy" => "webBusy",
+        "Pair this device first." | "This device is not paired." => "webDeviceRemoved",
+        "Add a name for this shortcut." => "tileIncomplete",
+        "Enter a valid http:// or https:// address with a host name." => "tileUrlInvalid",
+        "No more shortcuts can be added." => "tileLimit",
+        "This shortcut was removed. Reload the page." | "This shortcut was already removed." => {
+            "webReload"
+        }
+        message if message.starts_with("The wallpaper gallery is full") => "webGalleryFull",
+        _ => return message.to_owned(),
+    };
+    language.t(key).to_owned()
+}
+
+/// An error response in the TV's language where the page can show it to a person.
+fn refuse(
+    stream: &mut TcpStream,
+    context: &Context,
+    status: &str,
+    message: &str,
+) -> Result<(), String> {
+    error_response(stream, status, &translate(context.language(), message))
 }
 
 /// Waits briefly until the launcher's catalog reflects a gallery change, so the reply lists it.
@@ -1021,7 +1102,7 @@ fn reply_listing(
     let shared = context.shared.lock().unwrap();
     let Some(name) = device(request, &shared.devices).map(|device| device.name.clone()) else {
         drop(shared);
-        return unpaired(stream);
+        return unpaired(stream, context);
     };
     let mut reply = page(&shared, request);
     drop(shared);
@@ -1044,13 +1125,23 @@ fn system_action(
         action: String,
     }
     if device(request, &context.shared.lock().unwrap().devices).is_none() {
-        return unpaired(stream);
+        return unpaired(stream, context);
     }
     let Ok(Action { action }) = serde_json::from_slice::<Action>(body) else {
-        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
     };
     if !matches!(action.as_str(), "refresh" | "reset_icons" | "update") {
-        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
     }
     context
         .sender
@@ -1073,16 +1164,26 @@ fn remove_device(
         id: String,
     }
     let Ok(Remove { id }) = serde_json::from_slice::<Remove>(body) else {
-        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
     };
     let mut shared = context.shared.lock().unwrap();
     let Some(this) = device(request, &shared.devices).map(|device| device.id.clone()) else {
         drop(shared);
-        return unpaired(stream);
+        return unpaired(stream, context);
     };
     if !shared.devices.iter().any(|device| device.id == id) {
         drop(shared);
-        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
     }
     shared.devices.retain(|device| device.id != id);
     let saved = save_devices(&context.path, &shared.devices);
@@ -1114,12 +1215,17 @@ fn add_photo(
 ) -> Result<(), String> {
     let (reply, answer) = mpsc::channel();
     if context.sender.send(Event::Photo { bytes, reply }).is_err() {
-        return error_response(stream, "503 Service Unavailable", "Launcher stopped");
+        return refuse(
+            stream,
+            context,
+            "503 Service Unavailable",
+            "Launcher stopped",
+        );
     }
     let id = match answer.recv_timeout(PHOTO_TIME) {
         Ok(Ok(id)) => id,
-        Ok(Err(error)) => return error_response(stream, "422 Unprocessable Content", &error),
-        Err(_) => return error_response(stream, "503 Service Unavailable", "The TV is busy"),
+        Ok(Err(error)) => return refuse(stream, context, "422 Unprocessable Content", &error),
+        Err(_) => return refuse(stream, context, "503 Service Unavailable", "The TV is busy"),
     };
     await_backgrounds(context, |catalog| {
         catalog.backgrounds.iter().any(|item| item.id == id)
@@ -1138,19 +1244,29 @@ fn delete_photo(
         id: String,
     }
     let Ok(Delete { id }) = serde_json::from_slice::<Delete>(body) else {
-        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
     };
     {
         let shared = context.shared.lock().unwrap();
         if device(request, &shared.devices).is_none() {
             drop(shared);
-            return unpaired(stream);
+            return unpaired(stream, context);
         }
         // Only the owner's own photos; packaged backgrounds and the current one stay.
         let known = shared.catalog.backgrounds.iter().any(|item| item.id == id);
         if !crate::wallpapers::valid_id(&id) || !known || shared.settings.background == id {
             drop(shared);
-            return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+            return refuse(
+                stream,
+                context,
+                "422 Unprocessable Content",
+                "Reload the page.",
+            );
         }
     }
     context
@@ -1174,11 +1290,16 @@ fn edit_tile(
     let mut shared = context.shared.lock().unwrap();
     let Some(name) = device(request, &shared.devices).map(|device| device.name.clone()) else {
         drop(shared);
-        return unpaired(stream);
+        return unpaired(stream, context);
     };
     let Ok(edit) = serde_json::from_slice::<crate::tile_editor::Edit>(body) else {
         drop(shared);
-        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
     };
     if route == "/api/tiles/send" {
         drop(shared);
@@ -1188,7 +1309,7 @@ fn edit_tile(
             .and_then(|tile| crate::webhook::send(&crate::webhook::agent(), &tile));
         return match result {
             Ok(()) => json(stream, "200 OK", &serde_json::json!({})),
-            Err(error) => error_response(stream, "502 Bad Gateway", &error),
+            Err(error) => refuse(stream, context, "502 Bad Gateway", &error),
         };
     }
     let mut tiles = shared.catalog.tiles.clone();
@@ -1201,7 +1322,7 @@ fn edit_tile(
         Ok(id) => id,
         Err(error) => {
             drop(shared);
-            return error_response(stream, "422 Unprocessable Content", &error);
+            return refuse(stream, context, "422 Unprocessable Content", &error);
         }
     };
     shared.catalog.tiles = tiles.clone();
@@ -1232,15 +1353,25 @@ fn search_places(
         let shared = context.shared.lock().unwrap();
         if device(request, &shared.devices).is_none() {
             drop(shared);
-            return unpaired(stream);
+            return unpaired(stream, context);
         }
         shared.settings.language
     };
     let Ok(search) = serde_json::from_slice::<Search>(body) else {
-        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
     };
     if search.query.trim().chars().count() < 2 {
-        return error_response(stream, "422 Unprocessable Content", language.t("enterCity"));
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            language.t("enterCity"),
+        );
     }
     match context.weather.search(&search.query, language) {
         Ok(places) => {
@@ -1250,7 +1381,12 @@ fn search_places(
         }
         Err(error) => {
             eprintln!("Luma web access: place search failed: {error}");
-            error_response(stream, "502 Bad Gateway", language.t("searchUnavailable"))
+            refuse(
+                stream,
+                context,
+                "502 Bad Gateway",
+                language.t("searchUnavailable"),
+            )
         }
     }
 }
@@ -1269,18 +1405,28 @@ fn choose_place(
     let mut shared = context.shared.lock().unwrap();
     let Some(name) = device(request, &shared.devices).map(|device| device.name.clone()) else {
         drop(shared);
-        return unpaired(stream);
+        return unpaired(stream, context);
     };
     let Ok(choice) = serde_json::from_slice::<Choice>(body) else {
         drop(shared);
-        return error_response(stream, "422 Unprocessable Content", "Reload the page.");
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
     };
     let place = match choice.index {
         Some(index) => match shared.places.get(index) {
             Some(place) => Some(place.clone()),
             None => {
                 drop(shared);
-                return error_response(stream, "422 Unprocessable Content", "Search again.");
+                return refuse(
+                    stream,
+                    context,
+                    "422 Unprocessable Content",
+                    "Search again.",
+                );
             }
         },
         None => None,
@@ -1309,7 +1455,7 @@ fn preview(
     let picture = loop {
         let picture = match picture(context) {
             Ok(picture) => picture,
-            Err(error) => return error_response(stream, "503 Service Unavailable", &error),
+            Err(error) => return refuse(stream, context, "503 Service Unavailable", &error),
         };
         let enabled = {
             let shared = context.shared.lock().unwrap();
@@ -1335,6 +1481,7 @@ fn preview(
     )
 }
 
+#[cfg(feature = "fast-preview")]
 fn encode(image: &image::RgbaImage) -> Result<Vec<u8>, String> {
     let (width, height) = image.dimensions();
     let mut jpeg = Vec::new();
@@ -1349,6 +1496,17 @@ fn encode(image: &image::RgbaImage) -> Result<Vec<u8>, String> {
     Ok(jpeg)
 }
 
+/// Without the extra crate: image's own encoder, slower on the TV but no new dependency.
+#[cfg(not(feature = "fast-preview"))]
+fn encode(image: &image::RgbaImage) -> Result<Vec<u8>, String> {
+    let rgb = image::DynamicImage::ImageRgba8(image.clone()).into_rgb8();
+    let mut jpeg = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 75)
+        .encode_image(&rgb)
+        .map_err(|e| e.to_string())?;
+    Ok(jpeg)
+}
+
 #[derive(Deserialize)]
 struct PairRequest {
     pin: String,
@@ -1358,18 +1516,19 @@ struct PairRequest {
 
 fn pair(stream: &mut TcpStream, context: &Context, body: &[u8]) -> Result<(), String> {
     let Ok(request) = serde_json::from_slice::<PairRequest>(body) else {
-        return error_response(stream, "400 Bad Request", "Invalid request");
+        return refuse(stream, context, "400 Bad Request", "Invalid request");
     };
     let guess: String = request.pin.chars().filter(char::is_ascii_digit).collect();
     let mut shared = context.shared.lock().unwrap();
     let pairing = shared.pairing;
     let Some(pin) = shared.pin.as_mut().filter(|_| pairing != 0) else {
+        let key = if shared.locked {
+            "webPinLocked"
+        } else {
+            "webPairIntro"
+        };
         drop(shared);
-        return error_response(
-            stream,
-            "409 Conflict",
-            "On your TV, open Settings › System › Phone & computer › Pair a device.",
-        );
+        return error_response(stream, "409 Conflict", context.language().t(key));
     };
     if Instant::now() >= pin.expires {
         let replaced = issue_pin(&mut shared)
@@ -1380,26 +1539,26 @@ fn pair(stream: &mut TcpStream, context: &Context, body: &[u8]) -> Result<(), St
         return error_response(
             stream,
             "409 Conflict",
-            "This PIN expired. Enter the new PIN shown on your TV.",
+            context.language().t("webPinExpired"),
         );
     }
     if !same(pin.code.as_bytes(), guess.as_bytes()) {
         pin.attempts += 1;
         if pin.attempts < PIN_ATTEMPTS {
             drop(shared);
-            return error_response(
-                stream,
-                "403 Forbidden",
-                "Wrong PIN. Check the PIN on your TV.",
-            );
+            return error_response(stream, "403 Forbidden", context.language().t("webWrongPin"));
         }
-        let replaced = issue_pin(&mut shared).and_then(|pin| pairing_for(context.address, &pin));
+        // No new PIN until someone at the TV reopens the dialog, so guessing cannot go on.
+        shared.pin = None;
+        shared.locked = true;
         drop(shared);
-        let _ = context.sender.send(Event::Pairing(pairing, replaced));
+        let _ = context
+            .sender
+            .send(Event::Pairing(pairing, Err(LOCKED.into())));
         return error_response(
             stream,
             "403 Forbidden",
-            "Too many wrong PINs. Your TV now shows a new PIN.",
+            context.language().t("webPinLocked"),
         );
     }
     if shared.devices.len() >= DEVICE_LIMIT {
@@ -1407,7 +1566,7 @@ fn pair(stream: &mut TcpStream, context: &Context, body: &[u8]) -> Result<(), St
         return error_response(
             stream,
             "409 Conflict",
-            "Too many devices are paired. Remove one on your TV first.",
+            context.language().t("webTooManyDevices"),
         );
     }
     let id = crate::companion::random_token()?;
@@ -1466,8 +1625,9 @@ fn save(
     };
     let Ok(next) = serde_json::from_slice::<Settings>(body).map(Settings::cleaned) else {
         drop(shared);
-        return error_response(
+        return refuse(
             stream,
+            context,
             "422 Unprocessable Content",
             "These settings are not valid. Reload the page.",
         );
@@ -1494,7 +1654,12 @@ fn forget(stream: &mut TcpStream, context: &Context, request: &Request) -> Resul
     let mut shared = context.shared.lock().unwrap();
     let Some(id) = device(request, &shared.devices).map(|device| device.id.clone()) else {
         drop(shared);
-        return error_response(stream, "401 Unauthorized", "This device is not paired.");
+        return refuse(
+            stream,
+            context,
+            "401 Unauthorized",
+            "This device is not paired.",
+        );
     };
     shared.devices.retain(|device| device.id != id);
     let saved = save_devices(&context.path, &shared.devices);

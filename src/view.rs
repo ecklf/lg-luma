@@ -356,7 +356,12 @@ fn web_access_pair(out: &mut Scene, state: &State, assets: &Assets) {
             title: "webAccessPairTitle",
             keep_open: "webAccessPin",
             private: "webAccessPrivate",
-            error: "webAccessError",
+            error: if matches!(&state.web_access_pairing, Some(Err(error)) if error == crate::web_access::LOCKED)
+            {
+                "webAccessLocked"
+            } else {
+                "webAccessError"
+            },
             starting: "webAccessStarting",
         },
     );

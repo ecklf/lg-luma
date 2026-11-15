@@ -325,6 +325,25 @@ Shortcut tiles sit on Home like apps but send a web request when selected, for e
 Assistant webhook. Open **Settings → Widgets → Shortcuts → Configure** and scan
 the QR code.
 
+### Phone and computer (web access)
+
+Change Luma from a phone or computer browser instead of the remote. Open
+**Settings → System → Phone & computer → Pair a device**, then scan the QR code, or open the
+shown address and enter the PIN. A device pairs once; afterwards it opens the page from a bookmark
+whenever Luma runs, also while another app is in front.
+
+The page looks like Luma and shows a live picture of what Luma shows on the TV (its Home while
+another app is in front; other apps are never captured). It covers **General**, **Apps**
+(favorites, their order, hidden apps), **Background** (including adding and deleting your own
+photos), **Widgets** (clock, date, weather location, shortcut tiles, inputs) and **System**
+(updates, refresh, icon cache, text rendering and the paired devices).
+
+Web access is off by default. The server answers only on the TV's home network address (port 8787) and only to private addresses, and refuses other sites' requests. Each paired device keeps
+a key in an HttpOnly cookie; the TV stores only its SHA-256 hash and lists the devices so any of
+them can be removed. A PIN exists only while the pairing dialog is open, pairs one device, and
+locks after five wrong tries until the dialog is opened again. Turn web access off in the same
+place to stop the server.
+
 ## Development
 
 ### Setup & Building
