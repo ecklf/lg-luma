@@ -42,7 +42,7 @@ without a show/hide switch; removing frees its cells but keeps its configuration
 Use the arrows or point at a cell to choose its top-left anchor, then **OK / click** to save;
 **Back** cancels. Red placements overlap the other widget or exceed the grid and cannot be saved.
 Widget sizes cannot be changed. Reset restores the default widgets and their positions without
-clearing their configuration. Shortcuts remains below the grid. Inputs has its own sidebar section,
+clearing their configuration. A **Shortcuts** pill sits at the top left. Inputs has its own sidebar section,
 directly below Apps, and is not a widget.
 There is no configurable greeting name;
 names stored by earlier drafts are ignored and removed on the next preferences save.

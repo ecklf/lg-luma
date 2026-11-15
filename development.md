@@ -154,7 +154,7 @@ left and Add widget on the right, using the Backgrounds pill style. Empty cells 
 Add catalog directly; it excludes installed widgets. Reset restores the default membership and
 positions, preserving date/weather configuration and the app dock; an already-default reset does not save.
 The preview shows only widget placements over the wallpaper, without a gray dock placeholder.
-Shortcuts keeps its settings link below the preview. Inputs is a separate sidebar section directly
+Shortcuts uses a fixed pill at the top left of the preview toolbar. Inputs is a separate sidebar section directly
 below Apps, not a widget. Its list and individual input/icon settings retain focus on return.
 Move and Add open a placement preview; arrows browse
 all sixteen anchors, OK/click saves a valid placement, and Back cancels without changing preferences.
@@ -229,7 +229,7 @@ App cards on Home, in the drawer, and in Settings → Apps are artwork-only, wit
 or App names setting. Legacy `show_names`, `show_home_names`, and `show_app_names` preferences
 are ignored and are not written back. App titles remain available in the management popup.
 **Settings → Widgets** opens the placement manager. Select Weather and choose Configure for its
-settings; **Shortcuts** keeps its link below the grid. **Settings → Inputs** is directly below Apps
+settings; **Shortcuts** has a pill at the top left. **Settings → Inputs** is directly below Apps
 in the sidebar. Weather location and temperature choices return to Weather; Back from a widget
 returns to its grid cell. Input visibility/naming choices return to the Inputs list, then its sidebar entry.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
