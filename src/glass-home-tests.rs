@@ -80,12 +80,10 @@ fn widget_toolbar_pills_are_fixed_ordered_and_remote_and_pointer_accessible() {
             .iter()
             .find(|control| control.target == Target::WidgetAdd)
             .unwrap();
-        assert_eq!(
-            (reset.rect.x, reset.rect.y, reset.rect.h),
-            (640., 164.8, 64.)
-        );
+        assert_eq!((reset.rect.y, reset.rect.h), (164.8, 64.));
+        assert!(reset.rect.x >= 640.);
         assert!(reset.rect.x + reset.rect.w + 20. <= add.rect.x);
-        assert!(add.rect.x + add.rect.w <= 1760.);
+        assert_eq!(add.rect.x + add.rect.w, 1760.);
         assert!(!reset.scrollable && !add.scrollable);
         for control in [reset, add] {
             let (x, y) = control.rect.center();

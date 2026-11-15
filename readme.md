@@ -35,7 +35,7 @@ Home widgets use an invisible **4×4 placement grid** above the unchanged favori
 **Weather** is **1 column × 2 rows**. By default Greeting sits on the first row and
 Weather spans the second/third rows, left-aligned. Empty cells remain transparent.
 Open **Settings → Widgets** to see the Home placement grid. Select a widget for an
-app-style **Configure / Move / Remove** menu. Above the grid, **Reset to defaults** sits to the
+app-style **Configure / Move / Remove** menu. At the top right above the grid, **Reset to defaults** sits to the
 left of **Add widget**, using the same pill controls as Backgrounds. The Add menu only lists
 widgets not already on Home; empty cells also open it directly. Configure opens the existing options,
 without a show/hide switch; removing frees its cells but keeps its configuration for re-adding.

@@ -149,10 +149,11 @@ to this arrangement only when a legacy `date_position` field is present; it is o
 Custom Greeting/Weather anchors are preserved, including new layouts matching that old arrangement.
 Sanitization repairs out-of-bounds anchors and overlaps deterministically.
 Settings → Widgets opens the scaled Home grid by default. Each occupied cell opens an app-style
-Configure/Move/Remove popup. A fixed toolbar above the preview contains Reset to defaults on the
+Configure/Move/Remove popup. A fixed, right-aligned toolbar above the preview contains Reset to defaults on the
 left and Add widget on the right, using the Backgrounds pill style. Empty cells also open the
 Add catalog directly; it excludes installed widgets. Reset restores the default membership and
 positions, preserving date/weather configuration and the app dock; an already-default reset does not save.
+The preview shows only widget placements over the wallpaper, without a gray dock placeholder.
 Shortcuts keeps its settings link below the preview. Inputs is a separate sidebar section directly
 below Apps, not a widget. Its list and individual input/icon settings retain focus on return.
 Move and Add open a placement preview; arrows browse
