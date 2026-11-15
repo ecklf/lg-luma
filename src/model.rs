@@ -299,6 +299,8 @@ pub struct Preferences {
     pub wallpaper_gradient: bool,
     /// Unix seconds of the last automatic or chosen wallpaper change, for the timed modes.
     pub wallpaper_changed: u64,
+    /// Settings › System › Phone & computer: paired devices may change settings.
+    pub web_access: bool,
 }
 
 impl Default for Preferences {
@@ -332,6 +334,7 @@ impl Default for Preferences {
             wallpaper_cycle: false,
             wallpaper_gradient: true,
             wallpaper_changed: 0,
+            web_access: false,
         }
     }
 }

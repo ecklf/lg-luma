@@ -985,6 +985,11 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
         preferences
     );
     state.direction(Direction::Down, &controls(&state));
+    assert_eq!(
+        state.focus,
+        Target::Setting(crate::state::WEB_ACCESS_SETTING)
+    );
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(5));
     assert_eq!(state.activate(), vec![Effect::Quit]);
     state.back();
@@ -3393,4 +3398,74 @@ fn hovering_corner_controls_keeps_their_geometry_and_does_not_change_pages() {
     assert_eq!(state.page, Page::Home);
     state.hover = None;
     assert_eq!(tab(&state), idle);
+}
+
+#[test]
+fn web_access_settings_pair_list_and_remove_devices() {
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::SYSTEM_SECTION;
+    state.focus = Target::Setting(crate::state::WEB_ACCESS_SETTING);
+    assert!(state.activate().is_empty());
+    assert_eq!(state.subpage, Some(crate::state::Subpage::WebAccess));
+    assert_eq!(state.focus, Target::WebAccessToggle);
+    assert!(!state.preferences.web_access, "web access is opt-in");
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.web_access);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!state.preferences.web_access);
+
+    // Asking to pair turns web access on and opens the dialog.
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::WebAccessPair);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.web_access);
+    assert!(matches!(state.overlay, Some(Overlay::WebAccessPair)));
+    assert_eq!(state.focus, Target::CloseDialog);
+    state.back();
+    assert!(state.overlay.is_none());
+    assert_eq!(state.focus, Target::WebAccessPair);
+
+    let device: crate::web_access::Device = serde_json::from_value(serde_json::json!({
+        "id": "abc", "name": "iPhone · Safari", "hash": "00", "paired": 0
+    }))
+    .unwrap();
+    state.web_devices = vec![device];
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::WebAccessDevice("abc".into()));
+    assert!(state.activate().is_empty());
+    assert!(state.web_devices.is_empty());
+    assert_eq!(state.forget_web_devices, vec!["abc".to_owned()]);
+    assert_eq!(state.focus, Target::WebAccessPair);
+
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.subpage, None);
+    assert_eq!(
+        state.focus,
+        Target::Setting(crate::state::WEB_ACCESS_SETTING)
+    );
+}
+
+#[test]
+fn web_settings_apply_like_the_same_choices_on_the_tv() {
+    let mut state = ready();
+    let mut settings = crate::web_settings::Settings::of(&state.preferences);
+    assert!(state.apply_web_settings(settings.clone()).is_empty());
+    settings.hour_24 = true;
+    settings.language = crate::i18n::Language::De;
+    settings.wallpaper_cycle = !state.preferences.wallpaper_cycle;
+    settings.greeting_name = "Ana".into();
+    assert_eq!(
+        state.apply_web_settings(settings.clone()),
+        vec![Effect::Save]
+    );
+    assert!(state.preferences.hour_24);
+    assert_eq!(state.preferences.language, crate::i18n::Language::De);
+    assert_eq!(state.preferences.greeting_name, "Ana");
+    // Turning rotation on starts its timer, as the TV toggle does.
+    assert!(state.preferences.wallpaper_changed > 0);
+    assert_eq!(
+        crate::web_settings::Settings::of(&state.preferences),
+        settings
+    );
 }

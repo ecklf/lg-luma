@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Luma</title>
+    <link rel="icon" href="luma-mark.svg" />
+    <link rel="apple-touch-icon" href="luma-mark.svg" />
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="web.css" />
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand"><img src="luma-mark.svg" alt="" /><span>luma</span></div>
+      </header>
+      <p id="loading" class="intro">Connecting to your TV…</p>
+      <form id="pair" hidden>
+        <h1>Pair this device</h1>
+        <p class="intro">
+          On your TV, open Settings › System › Phone &amp; computer › Pair a device, then enter the
+          PIN shown there. You only need to do this once.
+        </p>
+        <label class="field"
+          ><span>PIN</span
+          ><input
+            id="pin"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="7"
+            placeholder="123 456"
+            required
+        /></label>
+        <button id="pair-button" type="submit">Pair</button>
+      </form>
+      <section id="settings" hidden>
+        <div id="groups"></div>
+      </section>
+      <p id="status" role="status" aria-live="polite"></p>
+      <footer id="footer" hidden>
+        <span id="device"></span>
+        <button id="forget" type="button" class="link">Unpair this device</button>
+      </footer>
+    </main>
+  </body>
+</html>

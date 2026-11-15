@@ -10,6 +10,8 @@ use std::time::{Duration, Instant};
 
 pub const WIDGETS_SECTION: usize = 2;
 pub const SYSTEM_SECTION: usize = 3;
+/// Settings › System › Phone & computer.
+pub const WEB_ACCESS_SETTING: usize = 16;
 pub const APPS_SECTION: usize = 4;
 pub const SECTION_COUNT: usize = 5;
 pub const SETTINGS_ORDER: [usize; SECTION_COUNT] =
@@ -106,6 +108,9 @@ pub enum Target {
     TileTest(String),
     TileRemove(String),
     TileEditor,
+    WebAccessToggle,
+    WebAccessPair,
+    WebAccessDevice(String),
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -148,6 +153,7 @@ pub enum Overlay {
     SystemKeyboard,
     WallpaperUpload,
     TileEditor,
+    WebAccessPair,
     BackgroundOptions { id: String, restore: Target },
     BackgroundDelete { id: String, restore: Target },
 }
@@ -171,6 +177,7 @@ pub enum Subpage {
     Language,
     AppSorting,
     TextRendering,
+    WebAccess,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -257,6 +264,11 @@ pub struct State {
     pub deleting_wallpaper: Option<String>,
     pub wallpaper_upload: Option<Result<crate::wallpapers::Session, String>>,
     pub tile_editor: Option<Result<crate::companion::Session, String>>,
+    pub web_access_pairing: Option<Result<crate::web_access::Pairing, String>>,
+    /// Paired phones and computers, as the web access worker last reported them.
+    pub web_devices: Vec<crate::web_access::Device>,
+    /// Devices removed in Settings, for the main loop to revoke.
+    pub forget_web_devices: Vec<String>,
     /// Luma update (Settings → System), driven by the update worker.
     pub update: crate::update::InstallStatus,
     pub panel_started: Option<Instant>,
@@ -306,6 +318,9 @@ impl State {
             deleting_wallpaper: None,
             wallpaper_upload: None,
             tile_editor: None,
+            web_access_pairing: None,
+            web_devices: vec![],
+            forget_web_devices: vec![],
             update: crate::update::InstallStatus::default(),
             panel_started: None,
             weather: weather::Weather::default(),
@@ -1270,6 +1285,7 @@ impl State {
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
             Some(Subpage::AppSorting) => Target::Setting(10),
+            Some(Subpage::WebAccess) => Target::Setting(WEB_ACCESS_SETTING),
             None => Target::Sidebar(self.section),
         };
         self.scroll = 0.;
@@ -1309,7 +1325,7 @@ impl State {
         }
         if matches!(
             self.overlay,
-            Some(Overlay::WallpaperUpload | Overlay::TileEditor)
+            Some(Overlay::WallpaperUpload | Overlay::TileEditor | Overlay::WebAccessPair)
         ) {
             return vec![];
         }
@@ -1625,6 +1641,9 @@ impl State {
                 self.focus,
                 Target::TileEditor
                     | Target::Tile(_)
+                    | Target::WebAccessToggle
+                    | Target::WebAccessPair
+                    | Target::WebAccessDevice(_)
                     | Target::InputMode(_)
                     | Target::WeatherToggle
                     | Target::WeatherLocation
@@ -1639,7 +1658,7 @@ impl State {
             }
             if matches!(
                 self.focus,
-                Target::Setting(0 | 1 | 4 | 7 | 10)
+                Target::Setting(0 | 1 | 4 | 7 | 10 | WEB_ACCESS_SETTING)
                     | Target::Widget(_)
                     | Target::InputMode(_)
                     | Target::WeatherLocation
@@ -1666,6 +1685,10 @@ impl State {
                 return vec![];
             }
             if self.focus == Target::Setting(1) && matches!(direction, Direction::Up) {
+                self.focus(Target::SettingsMenu, controls);
+                return vec![];
+            }
+            if self.focus == Target::WebAccessToggle && matches!(direction, Direction::Up) {
                 self.focus(Target::SettingsMenu, controls);
                 return vec![];
             }
@@ -2189,6 +2212,40 @@ impl State {
 
     /// Applies the tile list edited on a phone or computer. New tiles join
     /// the end of the Home favorites and removed ones leave favorites and hidden apps.
+    /// A change made on a paired phone or computer, with the same side effects as on the TV.
+    pub fn apply_web_settings(&mut self, settings: crate::web_settings::Settings) -> Vec<Effect> {
+        if crate::web_settings::Settings::of(&self.preferences) == settings {
+            return vec![];
+        }
+        if self.preferences.show_weather != settings.show_weather {
+            self.weather.invalidate_forecast();
+        }
+        if self.preferences.language != settings.language {
+            self.weather.cancel_search();
+        }
+        if self.preferences.wallpaper_cycle != settings.wallpaper_cycle {
+            self.preferences.wallpaper_changed = unix_now();
+        }
+        let preferences = &mut self.preferences;
+        preferences.hour_24 = settings.hour_24;
+        preferences.show_seconds = settings.show_seconds;
+        preferences.language = settings.language;
+        preferences.app_sorting = settings.app_sorting;
+        preferences.reduced_motion = settings.reduced_motion;
+        preferences.ui_sounds = settings.ui_sounds;
+        preferences.show_greeting = settings.show_greeting;
+        preferences.greeting_name = settings.greeting_name;
+        preferences.show_date = settings.show_date;
+        preferences.date_format = settings.date_format;
+        preferences.show_weather = settings.show_weather;
+        preferences.temperature_unit = settings.temperature_unit;
+        preferences.weather_style = settings.weather_style;
+        preferences.wallpaper_cycle = settings.wallpaper_cycle;
+        preferences.wallpaper_gradient = settings.wallpaper_gradient;
+        self.dirty = true;
+        vec![Effect::Save]
+    }
+
     pub fn replace_tiles(&mut self, tiles: Vec<CustomTile>) -> Vec<Effect> {
         let removed: Vec<_> = self
             .preferences
@@ -2390,6 +2447,41 @@ impl State {
                 self.overlay = Some(Overlay::TileEditor);
                 self.focus = Target::CloseDialog;
                 self.pressed = None;
+            }
+            Target::WebAccessToggle => {
+                self.preferences.web_access = !self.preferences.web_access;
+                return vec![Effect::Save];
+            }
+            Target::WebAccessPair => {
+                // Pairing is the way in, so asking to pair turns web access on.
+                let effects = if self.preferences.web_access {
+                    vec![]
+                } else {
+                    self.preferences.web_access = true;
+                    vec![Effect::Save]
+                };
+                self.web_access_pairing = None;
+                self.overlay = Some(Overlay::WebAccessPair);
+                self.focus = Target::CloseDialog;
+                self.pressed = None;
+                return effects;
+            }
+            Target::WebAccessDevice(id) => {
+                if let Some(index) = self.web_devices.iter().position(|device| device.id == id) {
+                    let device = self.web_devices.remove(index);
+                    self.forget_web_devices.push(device.id);
+                    self.notify(
+                        self.preferences
+                            .language
+                            .format("webAccessRemoved", &[("device", &device.name)]),
+                    );
+                    self.focus = self
+                        .web_devices
+                        .get(index.min(self.web_devices.len().saturating_sub(1)))
+                        .map_or(Target::WebAccessPair, |device| {
+                            Target::WebAccessDevice(device.id.clone())
+                        });
+                }
             }
             Target::TvSettings => {
                 if matches!(self.overlay, Some(Overlay::Settings)) {
@@ -2617,6 +2709,15 @@ impl State {
             }
             Target::Setting(index) => {
                 match index {
+                    WEB_ACCESS_SETTING => {
+                        self.subpage = Some(Subpage::WebAccess);
+                        self.focus = Target::WebAccessToggle;
+                        self.scroll = 0.;
+                        if !self.preferences.reduced_motion {
+                            self.panel_started = Some(Instant::now());
+                        }
+                        return vec![];
+                    }
                     10 => {
                         self.subpage = Some(Subpage::AppSorting);
                         self.focus = Target::Choice(usize::from(
@@ -2789,7 +2890,8 @@ impl State {
                         | Subpage::Clock
                         | Subpage::Weather
                         | Subpage::Shortcuts
-                        | Subpage::Inputs,
+                        | Subpage::Inputs
+                        | Subpage::WebAccess,
                     ) => {
                         return vec![];
                     }
@@ -2987,6 +3089,12 @@ impl State {
             if matches!(overlay, Overlay::TileEditor) {
                 self.tile_editor = None;
                 self.focus = Target::TileEditor;
+                self.pressed = None;
+                return vec![];
+            }
+            if matches!(overlay, Overlay::WebAccessPair) {
+                self.web_access_pairing = None;
+                self.focus = Target::WebAccessPair;
                 self.pressed = None;
                 return vec![];
             }

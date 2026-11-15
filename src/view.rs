@@ -324,6 +324,7 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
         state,
         assets,
         state.wallpaper_upload.as_ref(),
+        None,
         Companion {
             title: "uploadWallpaper",
             keep_open: "wallpaperUploadKeepOpen",
@@ -334,12 +335,40 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
     );
 }
 
+fn web_access_pair(out: &mut Scene, state: &State, assets: &Assets) {
+    let session = state.web_access_pairing.as_ref().map(|result| {
+        result
+            .as_ref()
+            .map(|pairing| pairing.session.clone())
+            .map_err(Clone::clone)
+    });
+    let pin = match &state.web_access_pairing {
+        Some(Ok(pairing)) => Some(format!("{} {}", &pairing.pin[..3], &pairing.pin[3..])),
+        _ => None,
+    };
+    companion(
+        out,
+        state,
+        assets,
+        session.as_ref(),
+        pin.as_deref(),
+        Companion {
+            title: "webAccessPairTitle",
+            keep_open: "webAccessPin",
+            private: "webAccessPrivate",
+            error: "webAccessError",
+            starting: "webAccessStarting",
+        },
+    );
+}
+
 fn tile_editor(out: &mut Scene, state: &State, assets: &Assets) {
     companion(
         out,
         state,
         assets,
         state.tile_editor.as_ref(),
+        None,
         Companion {
             title: "editTilesElsewhere",
             keep_open: "tileEditorKeepOpen",
@@ -356,6 +385,7 @@ fn companion(
     state: &State,
     assets: &Assets,
     session: Option<&Result<crate::companion::Session, String>>,
+    pin: Option<&str>,
     strings: Companion,
 ) {
     let language = state.preferences.language;
@@ -446,7 +476,9 @@ fn companion(
                 c(0xffffff, 0.65),
                 true,
             );
-            let display_url = session.url.trim_end_matches('/');
+            // A fragment (the pairing PIN) is for the QR code only.
+            let display_url = session.url.split('#').next().unwrap_or_default();
+            let display_url = display_url.trim_end_matches('/');
             out.text(
                 display_url,
                 Rect::new(568., 716., 784., 36.),
@@ -454,13 +486,24 @@ fn companion(
                 WHITE,
                 true,
             );
-            out.text(
-                language.t(strings.keep_open),
-                Rect::new(604., 766., 712., 52.),
-                text(16., 400, 0.).leading(1.4),
-                c(0xffffff, 0.75),
-                true,
-            );
+            if let Some(pin) = pin {
+                let line = language.format(strings.keep_open, &[("pin", pin)]);
+                out.text(
+                    &line,
+                    Rect::new(604., 762., 712., 48.),
+                    text(34., 650, 0.08),
+                    WHITE,
+                    true,
+                );
+            } else {
+                out.text(
+                    language.t(strings.keep_open),
+                    Rect::new(604., 766., 712., 52.),
+                    text(16., 400, 0.).leading(1.4),
+                    c(0xffffff, 0.75),
+                    true,
+                );
+            }
             out.text(
                 language.t(strings.private),
                 Rect::new(604., 820., 712., 22.),
@@ -610,7 +653,8 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
         | Overlay::BackgroundDelete { .. }
         | Overlay::Keyboard
         | Overlay::WallpaperUpload
-        | Overlay::TileEditor),
+        | Overlay::TileEditor
+        | Overlay::WebAccessPair),
     ) = &state.overlay
     {
         let anchor = match overlay {
@@ -646,6 +690,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             Overlay::Keyboard => keyboard(&mut out, state, assets),
             Overlay::WallpaperUpload => wallpaper_upload(&mut out, state, assets),
             Overlay::TileEditor => tile_editor(&mut out, state, assets),
+            Overlay::WebAccessPair => web_access_pair(&mut out, state, assets),
             Overlay::SystemKeyboard
             | Overlay::Recents { .. }
             | Overlay::Inputs
@@ -2101,6 +2146,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::AppSorting) => language.t("appSorting"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
+                Some(Subpage::WebAccess) => language.t("webAccess"),
                 _ => "",
             };
             let mut path = vec![label];
@@ -2181,6 +2227,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::Greeting
                 | Subpage::Date
                 | Subpage::Clock
+                | Subpage::WebAccess
         ) {
             match subpage {
                 Subpage::WeatherLocation => location_settings(out, state, assets),
@@ -2191,6 +2238,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::Date => date_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
+                Subpage::WebAccess => web_access_settings(out, state, assets),
                 _ => unreachable!(),
             }
             if let Some(opened) = state.panel_started {
@@ -2271,7 +2319,8 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::Inputs
             | Subpage::Greeting
             | Subpage::Date
-            | Subpage::Clock => {
+            | Subpage::Clock
+            | Subpage::WebAccess => {
                 unreachable!()
             }
             Subpage::Language => Language::ALL
@@ -2634,6 +2683,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     false,
                 ),
                 (9, language.t("resetIconCache"), "refresh", None, false),
+                (
+                    crate::state::WEB_ACCESS_SETTING,
+                    language.t("webAccess"),
+                    "globe",
+                    Some(language.t(if state.preferences.web_access {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
+                    true,
+                ),
                 (5, language.t("quitApp"), "power", None, false),
             ]
             .into_iter()
@@ -2971,6 +3031,72 @@ fn input_name_rows(out: &mut Scene, state: &State, assets: &Assets, id: &str, y:
 
 fn settings_surface(out: &mut Scene, rect: Rect, radius: f32) {
     out.glass(rect, radius);
+}
+
+fn web_access_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let s = state.scroll;
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::WebAccessToggle,
+            rect: Rect::new(640., 164.8 - s, 1120., 90.7),
+            title: language.t("webAccessToggle"),
+            icon: Some("globe"),
+            value: Some(language.t(if state.preferences.web_access {
+                "stateOn"
+            } else {
+                "stateOff"
+            })),
+            description: Some(language.t("webAccessToggleHint")),
+            selected: false,
+            chevron: false,
+        },
+    );
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::WebAccessPair,
+            rect: Rect::new(640., 267.5 - s, 1120., 72.),
+            title: language.t("webAccessPair"),
+            icon: Some("arrow"),
+            value: None,
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
+    let remove = language.t("webAccessRemoveHint");
+    for (index, device) in state.web_devices.iter().enumerate() {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::WebAccessDevice(device.id.clone()),
+                rect: Rect::new(640., 371.5 + index as f32 * 102.7 - s, 1120., 90.7),
+                title: &device.name,
+                icon: Some("circle-minus"),
+                value: None,
+                description: Some(remove),
+                selected: false,
+                chevron: false,
+            },
+        );
+    }
+    if state.web_devices.is_empty() {
+        out.text(
+            language.t("webAccessNoDevices"),
+            Rect::new(640., 383.5 - s, 1120., 32.),
+            text(19., 400, 0.),
+            c(0xffffff, 0.6),
+            true,
+        );
+    }
 }
 
 fn shortcut_settings(out: &mut Scene, state: &State, assets: &Assets) {

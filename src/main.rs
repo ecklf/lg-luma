@@ -38,6 +38,10 @@ mod wallpapers;
 mod weather;
 #[path = "weather-service.rs"]
 mod weather_service;
+#[path = "web-access.rs"]
+mod web_access;
+#[path = "web-settings.rs"]
+mod web_settings;
 mod webhook;
 #[cfg(all(feature = "webos", any(target_os = "linux", test)))]
 #[path = "webos-compat.rs"]
@@ -426,6 +430,7 @@ fn script(
         "await-recents" => vec![],
         "await-upload" => vec![],
         "await-tile-editor" => vec![],
+        "await-web-pairing" => vec![],
         _ => return Err(format!("Unknown scripted action: {action}")),
     })
 }
@@ -680,6 +685,11 @@ fn run() -> Result<(), String> {
     let mut wallpaper_service =
         wallpapers::Service::new(&preferences_path, !webos && !options.script.is_empty())?;
     let mut tile_editor_service = tile_editor::Service::new(!webos && !options.script.is_empty())?;
+    let mut web_access_service = web_access::Service::new(
+        preferences_path.with_file_name("web-devices.json"),
+        !webos && !options.script.is_empty(),
+    )?;
+    state.web_devices = web_access_service.devices();
     if options.test_extra_apps > 0 {
         eprintln!(
             "Luma scroll preview: explicit {}-app expansion; preferences {}",
@@ -1047,6 +1057,59 @@ fn run() -> Result<(), String> {
                 _ => {}
             }
         }
+        for id in state.forget_web_devices.drain(..) {
+            web_access_service.forget(&id);
+        }
+        web_access_service.sync(
+            state.preferences.web_access,
+            focused && visible && matches!(state.overlay, Some(Overlay::WebAccessPair)),
+            &web_settings::Settings::of(&state.preferences),
+        );
+        while let Ok(event) = web_access_service.receiver.try_recv() {
+            match event {
+                // Applied even when Luma is in the background: that is what web access is for.
+                web_access::Event::Settings(revision, settings) => {
+                    let pending = state.apply_web_settings(settings);
+                    web_access_service.acknowledge(revision);
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                web_access::Event::Pairing(generation, result)
+                    if generation == web_access_service.generation()
+                        && matches!(state.overlay, Some(Overlay::WebAccessPair)) =>
+                {
+                    if let Err(error) = &result {
+                        eprintln!("Luma web access: {error}");
+                    }
+                    state.web_access_pairing = Some(result);
+                    state.dirty = true;
+                }
+                web_access::Event::Paired(name) => {
+                    if matches!(state.overlay, Some(Overlay::WebAccessPair)) {
+                        state.back();
+                    }
+                    state.notify(
+                        state
+                            .preferences
+                            .language
+                            .format("webAccessPaired", &[("device", &name)]),
+                    );
+                }
+                web_access::Event::Devices(devices) => {
+                    state.web_devices = devices;
+                    state.dirty = true;
+                }
+                web_access::Event::Pairing(..) => {}
+            }
+        }
         state.dirty |= assets.artwork.poll();
         let unix = state::unix_now();
         let startup_cycle = wallpaper_cycle::startup_due(
@@ -1341,7 +1404,11 @@ fn run() -> Result<(), String> {
                     WindowEvent::Hidden | WindowEvent::Minimized => {
                         if matches!(
                             state.overlay,
-                            Some(Overlay::WallpaperUpload | Overlay::TileEditor)
+                            Some(
+                                Overlay::WallpaperUpload
+                                    | Overlay::TileEditor
+                                    | Overlay::WebAccessPair
+                            )
                         ) {
                             state.back();
                         }
@@ -1364,7 +1431,11 @@ fn run() -> Result<(), String> {
                         if webos {
                             if matches!(
                                 state.overlay,
-                                Some(Overlay::WallpaperUpload | Overlay::TileEditor)
+                                Some(
+                                    Overlay::WallpaperUpload
+                                        | Overlay::TileEditor
+                                        | Overlay::WebAccessPair
+                                )
                             ) {
                                 state.back();
                             }
@@ -1711,6 +1782,9 @@ fn run() -> Result<(), String> {
                     || (action == "await-tile-editor"
                         && matches!(state.overlay, Some(Overlay::TileEditor))
                         && state.tile_editor.is_none())
+                    || (action == "await-web-pairing"
+                        && matches!(state.overlay, Some(Overlay::WebAccessPair))
+                        && state.web_access_pairing.is_none())
             })
             && let Some(action) = options.script.pop_front()
         {

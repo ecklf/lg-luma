@@ -1,0 +1,146 @@
+#pin {
+  font-size: 24px;
+  letter-spacing: 6px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+#pair button[type='submit'] {
+  width: 100%;
+}
+.group {
+  margin: 0 0 26px;
+}
+.group h2 {
+  margin: 0 0 8px;
+  color: #969e9a;
+  font-size: 12px;
+  font-weight: 560;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.rows {
+  border: 1px solid #2a302d;
+  border-radius: 12px;
+  background: #171a1a;
+}
+.row {
+  display: grid;
+  gap: 10px;
+  padding: 13px 14px;
+}
+.row + .row {
+  border-top: 1px solid #232826;
+}
+.row.inline {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+.row > span {
+  color: #e8ebe7;
+  font-size: 14px;
+}
+.segments {
+  display: flex;
+  gap: 6px;
+}
+.segments label {
+  flex: 1;
+  min-width: 0;
+}
+.segments span {
+  display: grid;
+  min-height: 38px;
+  padding: 0 6px;
+  place-items: center;
+  border: 1px solid #353b38;
+  border-radius: 9px;
+  background: #121514;
+  color: #c4c9c5;
+  font-size: 13px;
+  font-weight: 560;
+  text-align: center;
+  cursor: pointer;
+}
+.segments input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.segments input:checked + span {
+  border-color: #b9d1bf;
+  background: #202c24;
+  color: #eef4ee;
+}
+.segments input:focus-visible + span {
+  outline: 2px solid #b9d1bf;
+  outline-offset: 2px;
+}
+select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid #353b38;
+  border-radius: 9px;
+  background: #121514;
+  color: #f3f4f2;
+  font: inherit;
+  font-size: 16px;
+}
+.switch {
+  position: relative;
+  width: 46px;
+  height: 28px;
+}
+.switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.switch span {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: #353b38;
+  transition: background 0.15s;
+  pointer-events: none;
+}
+.switch span::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f3f4f2;
+  content: '';
+  transition: transform 0.15s;
+}
+.switch input:checked + span {
+  background: #8fb89a;
+}
+.switch input:checked + span::after {
+  transform: translateX(18px);
+}
+.switch input:focus-visible + span {
+  outline: 2px solid #b9d1bf;
+  outline-offset: 2px;
+}
+#footer {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+button.link {
+  min-height: 0;
+  padding: 4px;
+  border: 0;
+  background: none;
+  color: #929a98;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: underline;
+}
