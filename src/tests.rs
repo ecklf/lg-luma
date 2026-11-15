@@ -1586,7 +1586,7 @@ fn weather_location_keyboard_back_and_sidebar_routes_restore_focus() {
     assert_eq!(state.focus, Target::WidgetAdd);
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::WidgetCell(0));
-    for _ in 0..3 {
+    for _ in 0..4 {
         state.direction(Direction::Right, &controls(&state));
     }
     state.activate();
@@ -1608,7 +1608,7 @@ fn weather_location_keyboard_back_and_sidebar_routes_restore_focus() {
     assert_eq!(state.focus, Target::WeatherLocation);
     assert_eq!(state.subpage, Some(crate::state::Subpage::Weather));
     state.back();
-    assert_eq!(state.focus, Target::WidgetCell(3));
+    assert_eq!(state.focus, Target::WidgetCell(4));
     assert!(state.subpage.is_none());
     state.back();
     assert_eq!(state.focus, Target::Sidebar(crate::state::WIDGETS_SECTION));
@@ -1675,7 +1675,7 @@ fn home_weather_setup_returns_through_the_widgets_weather_parent() {
     assert_eq!(state.focus, Target::WeatherLocation);
     state.back();
     assert!(state.subpage.is_none());
-    assert_eq!(state.focus, Target::WidgetCell(3));
+    assert_eq!(state.focus, Target::WidgetCell(4));
 }
 
 #[test]

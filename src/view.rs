@@ -1255,7 +1255,7 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
             }
             continue;
         }
-        // Keep the original typography within the wider 3×1 footprint,
+        // Keep the original typography within the wider 4×1 footprint,
         // fitting long translations rather than clipping the widget.
         let label = language.greeting(now.hour(), "");
         let style = assets.fit_text(&label, text(90.4, 500, -0.065).leading(1.05), cell.w);
@@ -2891,7 +2891,7 @@ fn widget_preview_top(state: &State) -> f32 {
 fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<HomeWidget>) {
     let language = state.preferences.language;
     // A scaled Home canvas: cell anchors remain separate hit targets even when
-    // the preview widget spans two cells. Browsing never changes saved positions.
+    // the preview widget spans multiple cells. Browsing never changes saved positions.
     let preview = Rect::new(640., widget_preview_top(state) - state.scroll, 1120., 630.);
     let background = state
         .wallpapers
@@ -4395,7 +4395,7 @@ mod tests {
     }
 
     #[test]
-    fn original_greeting_and_date_typography_fit_inside_three_column_footprint_in_every_language() {
+    fn original_greeting_and_date_typography_fit_inside_four_column_footprint_in_every_language() {
         let assets = assets();
         for language in Language::ALL {
             for hour in [0, 9, 15, 20] {
@@ -4462,9 +4462,9 @@ mod tests {
                 assert_eq!(
                     rect.w,
                     if widget != HomeWidget::Weather {
-                        1308.
+                        1160.
                     } else {
-                        420.
+                        568.
                     }
                 );
             }
@@ -4549,8 +4549,11 @@ mod tests {
         state.set_inventory(demo_inventory(), None);
         for style in crate::model::WeatherStyle::ALL {
             state.preferences.weather_style = style;
-            for slot in 0..12 {
+            for slot in 0..HOME_GRID_CELLS {
                 let position = WidgetPosition::from_cell(slot).unwrap();
+                if !position.fits(HomeWidget::Weather) {
+                    continue;
+                }
                 state.preferences.weather_position = position;
                 let mut rendered = Scene::new();
                 home(&mut rendered, &state, &assets, OffsetDateTime::UNIX_EPOCH);

@@ -605,7 +605,7 @@ try {
   );
   assert.equal(cycleDisabled.preferences.wallpaper_cycle, false);
   assert.ok(cycleDisabled.ui_text.includes('Rotation'));
-  for (const column of [0, 1, 2, 3]) {
+  for (const column of [0, 1, 2, 3, 4]) {
     await fs.writeFile(
       preferences,
       JSON.stringify({
@@ -632,7 +632,7 @@ try {
     `${widgetsPage},down,enter,down,enter,down,enter`,
   );
   assert.deepEqual(positioned.preferences.greeting_position, { column: 0, row: 1 });
-  assert.deepEqual(positioned.focus, { WidgetCell: 4 });
+  assert.deepEqual(positioned.focus, { WidgetCell: 6 });
   await fs.writeFile(preferences, '{}');
   const removedWidget = await scenario(
     'widget-remove',
@@ -649,7 +649,7 @@ try {
   const resetWidgets = await scenario('widget-reset-defaults', `${widgetsPage},left,enter`);
   assert.equal(resetWidgets.focus, 'WidgetReset');
   assert.deepEqual(resetWidgets.preferences.greeting_position, { column: 0, row: 0 });
-  assert.deepEqual(resetWidgets.preferences.weather_position, { column: 3, row: 0 });
+  assert.deepEqual(resetWidgets.preferences.weather_position, { column: 4, row: 0 });
   assert.equal(resetWidgets.preferences.show_greeting, true);
   assert.equal(resetWidgets.preferences.show_weather, true);
   console.log(

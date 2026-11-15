@@ -103,7 +103,7 @@ function contains(state, key, language) {
 }
 const picker = 'settings,enter,down,enter';
 const widgetsPage = 'settings,down,down,down,down,enter';
-const weatherPage = `${widgetsPage},down,right,right,right,enter,enter`;
+const weatherPage = `${widgetsPage},down,right,right,right,right,enter,enter`;
 const inputsPage = 'settings,down,down,enter';
 const backgroundsPage = 'settings,down,down,down,enter';
 const manageApps = 'settings,down,enter,enter';

@@ -141,12 +141,12 @@ retain their manual order. The same order fills empty dock slots and the app dra
 `xvfb-run -a pnpm screenshots --sorting` captures the sorting settings, both app orders,
 and the generic disc input icon from the native desktop renderer using seeded local counts.
 
-Home uses a 4×4 placement grid in logical 1920×1080 space above the unchanged dock.
-Greeting combines weekday/date and greeting in 3 columns × 1 row; Weather spans 1 column × 2 rows.
+Home uses a 6×4 placement grid in logical 1920×1080 space above the unchanged six-app dock.
+Greeting combines weekday/date and greeting in 4 columns × 1 row; Weather spans 2 columns × 2 rows.
 Greeting uses 90.4px text with 1.05 leading and an 18.4px date in a 32.8px band,
 keeping both lines inside the 128px-tall row; long translations fit to the available width.
 Their anchors persist as `greeting_position` and `weather_position` (`column`, `row`, zero-based).
-Defaults are Greeting (0,0), Weather (3,0). The separate-Date draft's untouched defaults migrate
+Defaults are Greeting (0,0), Weather (4,0). The separate-Date draft's untouched defaults migrate
 to this arrangement only when a legacy `date_position` field is present; it is omitted on save.
 Custom Greeting/Weather anchors are preserved, including new layouts matching that old arrangement.
 Sanitization repairs out-of-bounds anchors and overlaps deterministically.
@@ -159,7 +159,7 @@ The preview shows only widget placements over the wallpaper, without a gray dock
 Shortcuts uses a fixed pill at the top left of the preview toolbar. Inputs is a separate sidebar section directly
 below Apps, not a widget. Its list and individual input/icon settings retain focus on return.
 Move and Add open a placement preview; arrows browse
-all sixteen anchors, OK/click saves a valid placement, and Back cancels without changing preferences.
+all twenty-four anchors, OK/click saves a valid placement, and Back cancels without changing preferences.
 Invalid positions are red and cannot be committed. Removing a widget frees its cells while keeping
 its settings. Adding is atomic: browsing/cancelling placement does not install or save a widget.
 The legacy `show_greeting` and `show_weather` fields now store whether each widget is installed;
@@ -169,7 +169,7 @@ Greeting settings contain the date toggle and format picker, with no separate Da
 The date uses 18.4px/600/+0.12 tracking at 72% opacity; Greeting uses
 90.4px/500/−0.065 tracking and 1.05 leading, fitting shorter for long translations.
 The 32.8px date band keeps both lines inside one grid row.
-Weather content is top-aligned within its 1×2 footprint in every style.
+Weather content is top-aligned within its 2×2 footprint in every style.
 Greeting has no name editor; legacy `greeting_name` fields are ignored and not serialized.
 All three weather styles reflow inside the same fixed footprint. `pnpm screenshots --widgets`
 captures the default arrangement, an alternate arrangement, the grid manager, actions and Add catalog.

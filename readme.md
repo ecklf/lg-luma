@@ -30,9 +30,9 @@ https://github.com/user-attachments/assets/5b2c6e78-ec77-41f5-a79a-1fcfbe8e524b
 
 ## Home and app drawer
 
-Home widgets use an invisible **4×4 placement grid** above the unchanged favorites dock.
-**Greeting** combines the weekday/date and greeting in **3 columns × 1 row**;
-**Weather** is **1 column × 2 rows**. By default Greeting sits at the top left and
+Home widgets use an invisible **6×4 placement grid** above the unchanged six-app favorites dock.
+**Greeting** combines the weekday/date and greeting in **4 columns × 1 row**;
+**Weather** is **2 columns × 2 rows**. By default Greeting sits at the top left and
 Weather at the top right, spanning the first two rows. Empty cells remain transparent.
 Open **Settings → Widgets** to see the Home placement grid. Select a widget for an
 app-style **Configure / Move / Remove** menu. At the top right above the grid, **Reset to defaults** sits to the
