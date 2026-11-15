@@ -255,7 +255,7 @@ impl WeatherStyle {
     }
 }
 
-pub const HOME_GRID_COLUMNS: usize = 4;
+pub const HOME_GRID_COLUMNS: usize = 6;
 pub const HOME_GRID_ROWS: usize = 4;
 pub const HOME_GRID_CELLS: usize = HOME_GRID_COLUMNS * HOME_GRID_ROWS;
 
@@ -271,8 +271,8 @@ impl HomeWidget {
 
     pub fn span(self) -> (u8, u8) {
         match self {
-            Self::Greeting => (3, 1),
-            Self::Weather => (1, 2),
+            Self::Greeting => (4, 1),
+            Self::Weather => (2, 2),
         }
     }
 
@@ -287,7 +287,7 @@ impl HomeWidget {
         WidgetPosition {
             column: match self {
                 Self::Greeting => 0,
-                Self::Weather => 3,
+                Self::Weather => 4,
             },
             row: 0,
         }
