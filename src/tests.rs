@@ -3410,6 +3410,15 @@ fn web_access_settings_pair_list_and_remove_devices() {
     assert_eq!(state.activate(), vec![Effect::Save]);
     assert!(!state.preferences.web_access);
 
+    // Whole-TV control is a separate opt-in below web access.
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::TvRemoteToggle);
+    assert!(!state.preferences.tv_remote, "whole-TV control is opt-in");
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.tv_remote);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!state.preferences.tv_remote);
+
     // Asking to pair turns web access on and opens the dialog.
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::WebAccessPair);

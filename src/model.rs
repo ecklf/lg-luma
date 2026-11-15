@@ -376,6 +376,8 @@ pub struct Preferences {
     pub wallpaper_changed: u64,
     /// Settings › System › Phone & computer: paired devices may change settings.
     pub web_access: bool,
+    /// Phone & computer › Control the whole TV, through the TV's remote-app interface.
+    pub tv_remote: bool,
 }
 
 impl Default for Preferences {
@@ -412,6 +414,7 @@ impl Default for Preferences {
             wallpaper_gradient: true,
             wallpaper_changed: 0,
             web_access: false,
+            tv_remote: false,
         }
     }
 }

@@ -49,8 +49,14 @@ const PREVIEW_WAIT: Duration = Duration::from_secs(20);
 const COOKIE: &str = "luma_device";
 /// The pairing error the TV shows after too many wrong PINs.
 pub const LOCKED: &str = "locked";
-/// The remote buttons the page can press inside Luma.
-pub const KEYS: [&str; 8] = ["up", "down", "left", "right", "ok", "back", "home", "menu"];
+/// A remote button name the page may press: the TV remote's buttons, plus power off.
+fn known_key(key: &str) -> Option<&'static str> {
+    crate::tv_remote::BUTTONS
+        .iter()
+        .map(|(page, _)| *page)
+        .chain(["power"])
+        .find(|known| *known == key)
+}
 // Browsers cap cookie lifetimes at about 400 days; removing the device on the TV ends it sooner.
 const COOKIE_AGE: u64 = 400 * 24 * 60 * 60;
 
@@ -102,8 +108,10 @@ pub enum Event {
     DeletePhoto(String),
     /// A System action: "refresh", "reset_icons" or "update".
     Action(String),
-    /// A remote button pressed on the page: one of `KEYS`.
+    /// A remote button pressed on the page (see `known_key`).
     Key(&'static str),
+    /// Text for the TV's focused input field, optionally followed by Enter.
+    Text(String, bool),
     /// A tap on the live picture, in the TV's 1920×1080 coordinates.
     Tap(f32, f32),
     /// Opens an app or sends a shortcut tile, like selecting it on Home.
@@ -247,6 +255,9 @@ impl Service {
         }
         if shared.catalog.system != catalog.system {
             shared.catalog.system = catalog.system.clone();
+        }
+        if shared.catalog.tv_remote != catalog.tv_remote {
+            shared.catalog.tv_remote = catalog.tv_remote;
         }
         if shared.catalog.widgets != catalog.widgets {
             shared.catalog.widgets = catalog.widgets.clone();
@@ -852,6 +863,7 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
         "/api/action" => system_action(stream, context, &request, &body),
         "/api/widgets" => change_widgets(stream, context, &request, &body),
         "/api/key" | "/api/tap" | "/api/launch" => remote(stream, context, &request, &route, &body),
+        "/api/text" => send_text(stream, context, &request, &body),
         "/api/devices/remove" => remove_device(stream, context, &request, &body),
         "/api/tiles/save" | "/api/tiles/remove" | "/api/tiles/send" => {
             edit_tile(stream, context, &request, &route, &body)
@@ -1172,10 +1184,7 @@ fn remote(
         );
     };
     let event = match route {
-        "/api/key" => remote
-            .key
-            .and_then(|key| KEYS.iter().find(|known| **known == key))
-            .map(|key| Event::Key(key)),
+        "/api/key" => remote.key.and_then(|key| known_key(&key)).map(Event::Key),
         "/api/tap" => match (remote.x, remote.y) {
             (Some(x), Some(y)) if (0. ..=1920.).contains(&x) && (0. ..=1080.).contains(&y) => {
                 Some(Event::Tap(x, y))
@@ -1233,6 +1242,38 @@ fn change_widgets(
         thread::sleep(Duration::from_millis(30));
     }
     reply_listing(stream, context, request, serde_json::json!({}))
+}
+
+/// Text typed on the phone for the input field that has focus on the TV.
+fn send_text(
+    stream: &mut TcpStream,
+    context: &Context,
+    request: &Request,
+    body: &[u8],
+) -> Result<(), String> {
+    #[derive(Deserialize)]
+    struct Text {
+        text: String,
+        #[serde(default)]
+        enter: bool,
+    }
+    if device(request, &context.shared.lock().unwrap().devices).is_none() {
+        return unpaired(stream, context);
+    }
+    let Ok(Text { text, enter }) = serde_json::from_slice::<Text>(body) else {
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Reload the page.",
+        );
+    };
+    let text: String = text.chars().filter(|c| !c.is_control()).take(500).collect();
+    context
+        .sender
+        .send(Event::Text(text, enter))
+        .map_err(|_| "Launcher stopped".to_owned())?;
+    json(stream, "200 OK", &serde_json::json!({}))
 }
 
 /// Runs a System action on the TV, like pressing the same row in Settings › System.

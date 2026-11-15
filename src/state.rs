@@ -120,6 +120,7 @@ pub enum Target {
     TileRemove(String),
     TileEditor,
     WebAccessToggle,
+    TvRemoteToggle,
     WebAccessPair,
     WebAccessDevice(String),
 }
@@ -278,6 +279,8 @@ pub struct State {
     pub web_access_pairing: Option<Result<crate::web_access::Pairing, String>>,
     /// Paired phones and computers, as the web access worker last reported them.
     pub web_devices: Vec<crate::web_access::Device>,
+    /// The whole-TV remote's connection, as the worker last reported it.
+    pub tv_remote: crate::tv_remote::Status,
     /// Devices removed in Settings, for the main loop to revoke.
     pub forget_web_devices: Vec<String>,
     /// Luma update (Settings → System), driven by the update worker.
@@ -331,6 +334,7 @@ impl State {
             web_access_pairing: None,
             web_devices: vec![],
             forget_web_devices: vec![],
+            tv_remote: crate::tv_remote::Status::default(),
             update: crate::update::InstallStatus::default(),
             panel_started: None,
             weather: weather::Weather::default(),
@@ -1800,6 +1804,7 @@ impl State {
                 Target::TileEditor
                     | Target::Tile(_)
                     | Target::WebAccessToggle
+                    | Target::TvRemoteToggle
                     | Target::WebAccessPair
                     | Target::WebAccessDevice(_)
                     | Target::InputMode(_)
@@ -2517,6 +2522,7 @@ impl State {
         {
             self.use_background(settings.background.clone());
         }
+        self.preferences.tv_remote = settings.tv_remote;
         if settings.text_rendering != self.preferences.text_rendering {
             self.preferences.text_rendering = settings.text_rendering;
             self.notify(self.preferences.language.t("textRenderingRestart"));
@@ -2738,6 +2744,10 @@ impl State {
                 self.overlay = Some(Overlay::TileEditor);
                 self.focus = Target::CloseDialog;
                 self.pressed = None;
+            }
+            Target::TvRemoteToggle => {
+                self.preferences.tv_remote = !self.preferences.tv_remote;
+                return vec![Effect::Save];
             }
             Target::WebAccessToggle => {
                 self.preferences.web_access = !self.preferences.web_access;

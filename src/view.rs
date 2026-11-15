@@ -3321,8 +3321,32 @@ fn web_access_settings(out: &mut Scene, state: &State, assets: &Assets) {
         state,
         assets,
         Row {
+            target: Target::TvRemoteToggle,
+            rect: Rect::new(640., 267.5 - s, 1120., 90.7),
+            title: language.t("webTvRemote"),
+            icon: Some("tv"),
+            value: Some(language.t(if state.preferences.tv_remote {
+                match state.tv_remote {
+                    crate::tv_remote::Status::Confirm => "webTvRemoteConfirm",
+                    crate::tv_remote::Status::Denied => "webTvRemoteDenied",
+                    crate::tv_remote::Status::Unavailable => "webTvRemoteUnavailable",
+                    _ => "stateOn",
+                }
+            } else {
+                "stateOff"
+            })),
+            description: Some(language.t("webTvRemoteHint")),
+            selected: false,
+            chevron: false,
+        },
+    );
+    row(
+        out,
+        state,
+        assets,
+        Row {
             target: Target::WebAccessPair,
-            rect: Rect::new(640., 267.5 - s, 1120., 72.),
+            rect: Rect::new(640., 370.2 - s, 1120., 72.),
             title: language.t("webAccessPair"),
             icon: Some("arrow"),
             value: None,
@@ -3339,7 +3363,7 @@ fn web_access_settings(out: &mut Scene, state: &State, assets: &Assets) {
             assets,
             Row {
                 target: Target::WebAccessDevice(device.id.clone()),
-                rect: Rect::new(640., 371.5 + index as f32 * 102.7 - s, 1120., 90.7),
+                rect: Rect::new(640., 474.2 + index as f32 * 102.7 - s, 1120., 90.7),
                 title: &device.name,
                 icon: Some("circle-minus"),
                 value: None,
@@ -3352,7 +3376,7 @@ fn web_access_settings(out: &mut Scene, state: &State, assets: &Assets) {
     if state.web_devices.is_empty() {
         out.text(
             language.t("webAccessNoDevices"),
-            Rect::new(640., 383.5 - s, 1120., 32.),
+            Rect::new(640., 486.2 - s, 1120., 32.),
             text(19., 400, 0.),
             c(0xffffff, 0.6),
             true,

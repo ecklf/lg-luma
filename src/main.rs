@@ -30,6 +30,8 @@ mod storage;
 mod text_rendering;
 #[path = "tile-editor.rs"]
 mod tile_editor;
+#[path = "tv-remote.rs"]
+mod tv_remote;
 mod update;
 mod vector;
 mod view;
@@ -885,6 +887,8 @@ fn run() -> Result<(), String> {
         weather_service::Client::new(options.weather_test_server.as_deref())?,
     )?;
     state.web_devices = web_access_service.devices();
+    // Only the TV has the remote-app interface; desktop previews report it unavailable.
+    let mut tv_remote_service = tv_remote::Service::new(&preferences_path, webos);
     if options.test_extra_apps > 0 {
         eprintln!(
             "Luma scroll preview: explicit {}-app expansion; preferences {}",
@@ -1252,6 +1256,11 @@ fn run() -> Result<(), String> {
                 _ => {}
             }
         }
+        tv_remote_service.set_enabled(state.preferences.web_access && state.preferences.tv_remote);
+        while let Ok(status) = tv_remote_service.receiver.try_recv() {
+            state.tv_remote = status;
+            state.dirty = true;
+        }
         for id in state.forget_web_devices.drain(..) {
             web_access_service.forget(&id);
         }
@@ -1277,6 +1286,7 @@ fn run() -> Result<(), String> {
                     refreshing: state.loading,
                 },
                 widgets: web_settings::WebWidget::all(&state.preferences),
+                tv_remote: state.tv_remote,
             },
         );
         while let Ok(event) = web_access_service.receiver.try_recv() {
@@ -1418,6 +1428,16 @@ fn run() -> Result<(), String> {
                         &updates,
                     );
                 }
+                // The whole TV when its remote interface is ready; otherwise Luma only.
+                web_access::Event::Key(key) if state.tv_remote == tv_remote::Status::Ready => {
+                    match tv_remote::button(key) {
+                        Some(button) => tv_remote_service.send(tv_remote::Command::Button(button)),
+                        None if key == "power" => {
+                            tv_remote_service.send(tv_remote::Command::PowerOff)
+                        }
+                        None => {}
+                    }
+                }
                 // Only while Luma is in front: a key reaching Luma means it is focused.
                 web_access::Event::Key(key) if focused && visible => {
                     let code = match key {
@@ -1436,7 +1456,7 @@ fn run() -> Result<(), String> {
                                 eprintln!("Luma web remote: {error}");
                             }
                         }
-                        None => {
+                        None if key == "home" => {
                             let pending = state.return_home();
                             running &= effects(
                                 pending,
@@ -1449,6 +1469,8 @@ fn run() -> Result<(), String> {
                                 &updates,
                             );
                         }
+                        // Volume, power and media keys need the TV's remote interface.
+                        None => {}
                     }
                 }
                 web_access::Event::Tap(x, y) if focused && visible => {
@@ -1468,6 +1490,30 @@ fn run() -> Result<(), String> {
                         &webhook_service,
                         &updates,
                     );
+                }
+                web_access::Event::Text(text, enter) => {
+                    if state.tv_remote == tv_remote::Status::Ready {
+                        tv_remote_service.send(tv_remote::Command::Text(text));
+                        if enter {
+                            tv_remote_service.send(tv_remote::Command::Enter);
+                        }
+                    } else if focused && visible && state.text_input_active() {
+                        // Without the TV interface, type into Luma's own field.
+                        state.text(&text);
+                        if enter {
+                            let pending = state.finish_text_input();
+                            running &= effects(
+                                pending,
+                                &mut state,
+                                &platform,
+                                &preferences_path,
+                                &weather_service,
+                                &wallpaper_service,
+                                &webhook_service,
+                                &updates,
+                            );
+                        }
+                    }
                 }
                 web_access::Event::Key(_) | web_access::Event::Tap(..) => {}
                 web_access::Event::Widgets(change) => {

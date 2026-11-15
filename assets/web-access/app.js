@@ -171,10 +171,17 @@ function showRemote() {
   element('key-back').textContent = strings.back ?? '';
   element('key-home').textContent = strings.home ?? '';
   element('key-menu').textContent = strings.options ?? '';
-  // Inside Luma only: while another app is in front these would not reach it.
-  for (const button of element('remote').querySelectorAll('button')) {
-    button.disabled = !previewOnScreen;
+  // With the TV's remote interface every button works in any app; otherwise inside Luma only.
+  const whole = state?.tvRemote === 'ready';
+  for (const button of element('remote').querySelectorAll('.dpad button, .remote-side button')) {
+    button.disabled = !previewOnScreen && !whole;
   }
+  element('tv-keys').hidden = !whole;
+  element('tv-text').hidden = !whole;
+  element('key-mute').textContent = state?.labels.mute ?? '';
+  element('key-power').textContent = state?.labels.powerOff ?? '';
+  element('tv-text-send').textContent = state?.labels.sendText ?? '';
+  element('tv-text-field').placeholder = state?.labels.textPlaceholder ?? '';
   screen.classList.toggle('tappable', remoteOpen && previewOnScreen);
   screen.title = remoteOpen ? (strings.tapHint ?? '') : '';
 }
@@ -192,6 +199,34 @@ element('remote-toggle').addEventListener('click', () => {
 for (const button of element('remote').querySelectorAll('[data-key]')) {
   button.addEventListener('click', () => press(button.dataset.key));
 }
+
+// Turning the TV off from a phone deserves a second tap.
+let powerArmed = false;
+element('key-power').addEventListener('click', () => {
+  if (!powerArmed) {
+    powerArmed = true;
+    element('key-power').textContent = `${state.labels.powerOff}?`;
+    setTimeout(() => {
+      powerArmed = false;
+      showRemote();
+    }, 4000);
+    return;
+  }
+  powerArmed = false;
+  press('power');
+});
+
+element('tv-text').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const field = element('tv-text-field');
+  if (!field.value) return;
+  call('api/text', { text: field.value, enter: true })
+    .then(() => {
+      field.value = '';
+      message(strings.saved);
+    })
+    .catch((error) => message(error.message, true));
+});
 
 // A tap on the picture clicks the same spot on the TV, like the Magic Remote's pointer.
 previewImage.addEventListener('click', (event) => {
@@ -425,7 +460,23 @@ function systemSection() {
       action(l.resetIconCache, 'reset_icons', false),
       choiceRow('text_rendering', l.textRendering),
     ),
-    group(l.webAccess, ...devices),
+    group(
+      l.webAccess,
+      toggleRow('tv_remote', l.tvRemote),
+      create(
+        'p',
+        'hint',
+        state.settings.tv_remote
+          ? ({
+              confirm: l.tvRemoteConfirm,
+              ready: l.tvRemoteReady,
+              denied: l.tvRemoteDenied,
+              unavailable: l.tvRemoteUnavailable,
+            }[state.tvRemote] ?? l.tvRemoteHint)
+          : l.tvRemoteHint,
+      ),
+      ...devices,
+    ),
   ];
 }
 

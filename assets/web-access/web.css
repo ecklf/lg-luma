@@ -236,37 +236,55 @@ select {
 .preview figcaption {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-height: 36px;
   margin-top: 9px;
   color: var(--ink-soft);
   font-size: 13px;
   font-weight: 500;
 }
+#preview-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The pulse is a separate ring that only scales and fades: an animated box-shadow
+   rendered as a dark disc over the blurred backdrop in some browsers. */
 .live-dot {
+  position: relative;
+  flex: none;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: #5ee08a;
-  box-shadow: 0 0 0 0 rgba(94, 224, 138, 0.6);
-  animation: pulse 2.4s infinite;
 }
-.behind .live-dot {
-  background: var(--ink-faint);
-  animation: none;
+.live-dot::after {
+  position: absolute;
+  inset: -1px;
+  border: 1.5px solid #5ee08a;
+  border-radius: 50%;
+  content: '';
+  animation: pulse 2.4s ease-out infinite;
 }
 @keyframes pulse {
-  70% {
-    box-shadow: 0 0 0 8px rgba(94, 224, 138, 0);
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
   }
+  70%,
   100% {
-    box-shadow: 0 0 0 0 rgba(94, 224, 138, 0);
+    opacity: 0;
+    transform: scale(2.6);
   }
 }
 
 /* Remote: a compact pad under the live picture. */
 .preview figcaption .remote-toggle {
+  flex: none;
   min-height: 32px;
   margin-left: auto;
+  white-space: nowrap;
   padding: 0 14px;
   font-size: 13px;
 }
@@ -350,6 +368,41 @@ select {
 }
 .remote-side .pill-button {
   min-width: 112px;
+}
+.tv-keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.tv-keys .round {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tv-keys .round:active {
+  background: var(--focus);
+  color: var(--focus-ink);
+}
+.tv-text {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 10px;
+}
+.remote {
+  flex-wrap: wrap;
+}
+.remote .tv-keys,
+.remote .tv-text {
+  flex: 1 0 100%;
 }
 .screen.tappable img {
   cursor: pointer;

@@ -29,6 +29,8 @@ pub struct Settings {
     pub wallpaper_cycle: bool,
     pub wallpaper_gradient: bool,
     pub text_rendering: TextRendering,
+    /// Remote control for the whole TV; the TV itself asks for permission once.
+    pub tv_remote: bool,
 }
 
 impl Settings {
@@ -48,6 +50,7 @@ impl Settings {
             wallpaper_cycle: preferences.wallpaper_cycle,
             wallpaper_gradient: preferences.wallpaper_gradient,
             text_rendering: preferences.text_rendering,
+            tv_remote: preferences.tv_remote,
         }
     }
 
@@ -116,6 +119,7 @@ pub struct Catalog {
     pub tiles: Vec<crate::model::CustomTile>,
     pub system: SystemStatus,
     pub widgets: Vec<WebWidget>,
+    pub tv_remote: crate::tv_remote::Status,
 }
 
 /// A Home widget on the 6×4 grid, or off it.
@@ -268,6 +272,16 @@ const LABELS: &[(&str, &str)] = &[
     ("icon", "icon"),
     ("save", "webSave"),
     ("open", "open"),
+    ("tvRemote", "webTvRemote"),
+    ("tvRemoteHint", "webTvRemoteHint"),
+    ("tvRemoteConfirm", "webTvRemoteConfirm"),
+    ("tvRemoteDenied", "webTvRemoteDenied"),
+    ("tvRemoteUnavailable", "webTvRemoteUnavailable"),
+    ("tvRemoteReady", "webTvRemoteReady"),
+    ("powerOff", "webPowerOff"),
+    ("mute", "webMute"),
+    ("sendText", "webSendText"),
+    ("textPlaceholder", "webTextPlaceholder"),
     ("refreshApps", "refreshApps"),
     ("refreshNotice", "refreshNotice"),
     ("resetIconCache", "resetIconCache"),
@@ -366,6 +380,7 @@ pub fn listing(settings: &Settings, catalog: &Catalog) -> serde_json::Value {
         "tileLimit": crate::model::TILE_LIMIT,
         "system": catalog.system,
         "widgets": catalog.widgets,
+        "tvRemote": catalog.tv_remote,
         "grid": { "columns": crate::model::HOME_GRID_COLUMNS, "rows": crate::model::HOME_GRID_ROWS },
         "sheet": { "tiles": crate::view::SHEET_TILES, "columns": crate::view::SHEET_COLUMNS },
         "labels": labels,

@@ -70,6 +70,24 @@
               <button type="button" data-key="home" class="pill-button" id="key-home"></button>
               <button type="button" data-key="menu" class="pill-button" id="key-menu"></button>
             </div>
+            <div id="tv-keys" class="tv-keys" hidden>
+              <button type="button" data-key="volume_down" class="round" aria-label="−">−</button>
+              <button type="button" data-key="volume_up" class="round" aria-label="+">+</button>
+              <button type="button" data-key="mute" class="pill-button" id="key-mute"></button>
+              <button type="button" data-key="play" class="round" aria-label="▶">▶</button>
+              <button type="button" data-key="pause" class="round" aria-label="❚❚">❚❚</button>
+              <button type="button" class="pill-button danger" id="key-power"></button>
+            </div>
+            <form id="tv-text" class="tv-text" hidden>
+              <input
+                id="tv-text-field"
+                class="text-field"
+                type="text"
+                autocomplete="off"
+                enterkeyhint="send"
+              />
+              <button type="submit" class="pill-button strong" id="tv-text-send"></button>
+            </form>
           </div>
         </aside>
         <div class="panel">
