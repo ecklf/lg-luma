@@ -144,7 +144,7 @@ async function scenario(name, script, frames = 210) {
 const forecastCount = () => requests.filter((request) => request.path === '/v1/forecast').length;
 const searchCount = () => requests.filter((request) => request.path === '/v1/search').length;
 const widgetsPage = 'settings,down,down,down,down,enter';
-const weatherActions = `${widgetsPage},down,down,enter`;
+const weatherActions = `${widgetsPage},down,right,right,right,enter`;
 const weatherPage = `${weatherActions},enter`;
 const locationPage = `${weatherPage},enter`;
 try {

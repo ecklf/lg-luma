@@ -32,8 +32,8 @@ https://github.com/user-attachments/assets/5b2c6e78-ec77-41f5-a79a-1fcfbe8e524b
 
 Home widgets use an invisible **4×4 placement grid** above the unchanged favorites dock.
 **Greeting** combines the weekday/date and greeting in **2 columns × 1 row**;
-**Weather** is **1 column × 2 rows**. By default Greeting sits on the first row and
-Weather spans the second/third rows, left-aligned. Empty cells remain transparent.
+**Weather** is **1 column × 2 rows**. By default Greeting sits at the top left and
+Weather at the top right, spanning the first two rows. Empty cells remain transparent.
 Open **Settings → Widgets** to see the Home placement grid. Select a widget for an
 app-style **Configure / Move / Remove** menu. At the top right above the grid, **Reset to defaults** sits to the
 left of **Add widget**, using the same pill controls as Backgrounds. The Add menu only lists
