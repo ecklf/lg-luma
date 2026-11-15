@@ -2086,7 +2086,7 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
             | Target::WallpaperGradient
             | Target::WidgetAdd
             | Target::WidgetReset
-            | Target::Widget(2 | 5)
+            | Target::Widget(2 | 5 | 6)
     );
     out.control(row.target, row.rect, scrollable);
 }

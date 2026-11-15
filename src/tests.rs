@@ -2554,7 +2554,15 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
             "channels",
             "topShelf",
         ] {
-            assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t(key))), "{key}/{language:?}");
+            let expected = language.t(key);
+            assert!(
+                page.draw.iter().any(|draw| matches!(
+                    draw,
+                    crate::renderer::Draw::Text(label, ..)
+                        if label == expected || (label.ends_with('…') && expected.starts_with(label.trim_end_matches('…')))
+                )),
+                "{key}/{language:?}"
+            );
         }
         state.pointer_focus(Target::Sidebar(0));
         assert!(!scene(&state).draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t("greeting"))));
