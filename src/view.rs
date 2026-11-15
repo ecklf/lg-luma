@@ -75,14 +75,27 @@ impl Assets {
         let id = if BACKGROUNDS.iter().any(|(known, _)| *known == id) {
             id
         } else {
-            "dunes"
+            crate::wallpaper_packs::DEFAULT_ID
         };
-        let suffix = if state.preferences.wallpaper_gradient {
-            ""
-        } else {
-            "-plain"
-        };
-        self.path(format!("wallpapers/{id}{suffix}.jpg"))
+        let plain = !state.preferences.wallpaper_gradient;
+        let path = crate::wallpaper_packs::wallpaper_file(
+            &state.wallpaper_pack_cache,
+            &self.root,
+            id,
+            plain,
+        );
+        if path.is_file() {
+            return path.to_string_lossy().into_owned();
+        }
+        // Remote pack not cached yet: keep the bundled default on screen.
+        crate::wallpaper_packs::wallpaper_file(
+            &state.wallpaper_pack_cache,
+            &self.root,
+            crate::wallpaper_packs::DEFAULT_ID,
+            plain,
+        )
+        .to_string_lossy()
+        .into_owned()
     }
 
     fn width(&self, value: &str, style: TextStyle) -> f32 {
@@ -2606,6 +2619,11 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     360.,
                     202.5,
                 );
+                let downloading = matches!(
+                    state.wallpaper_pack_status.get(id),
+                    Some(crate::wallpaper_packs::Status::Downloading)
+                );
+                let downloaded = state.wallpaper_downloaded(id);
                 out.shadow(rect, 16., 15., 3., 0.13);
                 out.image(
                     custom.map_or_else(
@@ -2617,6 +2635,21 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     false,
                 );
                 out.border(rect, 16., 1., c(0xffffff, 0.086));
+                if !downloaded || downloading {
+                    out.shape(
+                        rect,
+                        16.,
+                        c(0x000000, if downloading { 0.42 } else { 0.34 }),
+                    );
+                    let badge = Rect::new(rect.x + rect.w - 40., rect.y + 12., 28., 28.);
+                    out.shape(badge, 14., c(0xf3f3f3, 0.92));
+                    out.icon(
+                        assets,
+                        if downloading { "refresh" } else { "globe" },
+                        badge.inset(5.),
+                        c(0x333333, 1.),
+                    );
+                }
                 if state.preferences.background == id {
                     out.border(rect.inset(-2.), 18., 2., c(0xdedede, 1.));
                     out.border(rect.inset(-7.), 23., 3., c(0xdedede, 0.10));

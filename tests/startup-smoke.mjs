@@ -32,15 +32,15 @@ try {
   }
   await fs.mkdir(path.join(assets, 'wallpapers'));
   await fs.copyFile(
-    path.join(source, 'wallpapers/dunes.jpg'),
-    path.join(assets, 'wallpapers/dunes.jpg'),
+    path.join(source, 'wallpapers/slate.jpg'),
+    path.join(assets, 'wallpapers/slate.jpg'),
   );
-  const atlas = path.join(assets, 'wallpapers/dunes.glass.png');
-  const prepared = await fs.readFile(path.join(source, 'wallpapers/dunes.glass.png'));
+  const atlas = path.join(assets, 'wallpapers/slate.glass.png');
+  const prepared = await fs.readFile(path.join(source, 'wallpapers/slate.glass.png'));
   const preferences = path.join(scratch, 'preferences.json');
   await fs.writeFile(
     preferences,
-    JSON.stringify({ show_weather: false, reduced_motion: true, background: 'dunes' }),
+    JSON.stringify({ show_weather: false, reduced_motion: true, background: 'slate' }),
   );
   for (const gles of [false, true]) {
     let reference;

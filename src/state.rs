@@ -210,6 +210,10 @@ pub enum Effect {
     Launch(String),
     Uninstall(String),
     DeleteWallpaper(String),
+    /// Fetch a photo wallpaper pack from the upstream GitHub tree.
+    EnsureWallpaper(String),
+    /// Drop inactive photo packs to thumbnails (or keep all while cycling).
+    PruneWallpaperPacks,
     Recent {
         generation: u64,
         command: crate::recents::Command,
@@ -267,6 +271,9 @@ pub struct State {
     pub wallpapers: Vec<crate::wallpapers::Wallpaper>,
     pub deleting_wallpaper: Option<String>,
     pub wallpaper_upload: Option<Result<crate::wallpapers::Session, String>>,
+    /// On-disk cache for photo wallpapers downloaded from GitHub.
+    pub wallpaper_pack_cache: std::path::PathBuf,
+    pub wallpaper_pack_status: std::collections::BTreeMap<String, crate::wallpaper_packs::Status>,
     pub tile_editor: Option<Result<crate::companion::Session, String>>,
     /// Luma update (Settings → System), driven by the update worker.
     pub update: crate::update::InstallStatus,
@@ -315,6 +322,8 @@ impl State {
             wallpapers: vec![],
             deleting_wallpaper: None,
             wallpaper_upload: None,
+            wallpaper_pack_cache: std::path::PathBuf::new(),
+            wallpaper_pack_status: std::collections::BTreeMap::new(),
             tile_editor: None,
             update: crate::update::InstallStatus::default(),
             panel_started: None,
@@ -1125,8 +1134,49 @@ impl State {
             .chain(self.wallpapers.iter().map(|item| item.id.as_str()))
     }
 
+    /// Bundled vectors and undownloaded photo packs stay in the gallery; only
+    /// uploaded images and cached photo packs can be removed from disk.
     pub fn can_delete_background(&self, id: &str) -> bool {
-        id != self.preferences.background && self.background_ids().any(|known| known == id)
+        if id == self.preferences.background || !self.background_ids().any(|known| known == id) {
+            return false;
+        }
+        if crate::wallpaper_packs::bundled(id) {
+            return false;
+        }
+        if crate::wallpaper_packs::remote_builtin(id) {
+            return self.wallpaper_downloaded(id)
+                && !matches!(
+                    self.wallpaper_pack_status.get(id),
+                    Some(crate::wallpaper_packs::Status::Downloading)
+                );
+        }
+        true
+    }
+
+    pub fn wallpaper_downloaded(&self, id: &str) -> bool {
+        if crate::wallpapers::valid_id(id) || crate::wallpaper_packs::bundled(id) {
+            return true;
+        }
+        if !crate::wallpaper_packs::remote_builtin(id) {
+            return false;
+        }
+        crate::wallpaper_packs::installed(&self.wallpaper_pack_cache, std::path::Path::new(""), id)
+    }
+
+    /// Remote packs to keep at full resolution. Cycling keeps every gallery
+    /// photo pack; otherwise only the active desktop background stays full.
+    pub fn wallpaper_pack_keep(&self) -> Vec<String> {
+        if self.preferences.wallpaper_cycle {
+            return self
+                .background_ids()
+                .filter(|id| crate::wallpaper_packs::remote_builtin(id))
+                .map(str::to_owned)
+                .collect();
+        }
+        crate::wallpaper_packs::remote_builtin(&self.preferences.background)
+            .then(|| self.preferences.background.clone())
+            .into_iter()
+            .collect()
     }
 
     fn background_target(&self, id: &str) -> Target {
@@ -1137,17 +1187,18 @@ impl State {
         )
     }
 
-    pub fn wallpaper_deleted(&mut self, id: String, result: Result<(), String>) {
+    pub fn wallpaper_deleted(&mut self, id: String, result: Result<(), String>) -> Vec<Effect> {
         if self.deleting_wallpaper.as_deref() != Some(&id) {
-            return;
+            return vec![];
         }
         self.deleting_wallpaper = None;
         if let Err(error) = result {
             eprintln!("Luma background deletion: {error}");
             self.notify(self.preferences.language.t("deleteBackgroundError"));
-            return;
+            return vec![];
         }
         self.finish_background_delete(&id);
+        vec![Effect::Save, Effect::PruneWallpaperPacks]
     }
 
     fn finish_background_delete(&mut self, id: &str) {
@@ -1160,9 +1211,7 @@ impl State {
             _ => None,
         };
         self.wallpapers.retain(|item| item.id != id);
-        if BACKGROUNDS.iter().any(|(known, _)| *known == id) {
-            self.preferences.deleted_backgrounds.push(id.to_owned());
-        }
+        self.wallpaper_pack_status.remove(id);
         if matches!(&self.overlay, Some(Overlay::BackgroundOptions { id: current, .. } | Overlay::BackgroundDelete { id: current, .. }) if current == id)
         {
             self.overlay = None;
@@ -2791,7 +2840,7 @@ impl State {
             Target::WallpaperCycle => {
                 self.preferences.wallpaper_cycle = !self.preferences.wallpaper_cycle;
                 self.preferences.wallpaper_changed = unix_now();
-                return vec![Effect::Save];
+                return vec![Effect::Save, Effect::PruneWallpaperPacks];
             }
             Target::WallpaperGradient => {
                 self.preferences.wallpaper_gradient = !self.preferences.wallpaper_gradient;
@@ -2807,6 +2856,25 @@ impl State {
                 if !self.background_ids().any(|known| known == id) {
                     return self.back();
                 }
+                if crate::wallpaper_packs::remote_builtin(&id)
+                    && !self
+                        .wallpaper_pack_cache
+                        .join(&id)
+                        .join(format!("{id}.jpg"))
+                        .is_file()
+                {
+                    self.wallpaper_pack_status
+                        .insert(id.clone(), crate::wallpaper_packs::Status::Downloading);
+                    self.notify(self.preferences.language.t("downloadingWallpaper"));
+                    self.preferences.background = id.clone();
+                    self.preferences.wallpaper_changed = unix_now();
+                    self.back();
+                    return vec![
+                        Effect::Save,
+                        Effect::EnsureWallpaper(id),
+                        Effect::PruneWallpaperPacks,
+                    ];
+                }
                 if !self.preferences.reduced_motion && self.preferences.background != id {
                     self.previous_background =
                         Some((self.preferences.background.clone(), Instant::now()));
@@ -2820,7 +2888,7 @@ impl State {
                 self.preferences.background = id;
                 self.preferences.wallpaper_changed = unix_now();
                 self.back();
-                return vec![Effect::Save];
+                return vec![Effect::Save, Effect::PruneWallpaperPacks];
             }
             Target::DeleteBackground => {
                 if let Some(Overlay::BackgroundOptions { id, restore }) = self.overlay.clone()
@@ -3050,9 +3118,10 @@ impl State {
                             self.focus = Target::CancelDelete;
                             return vec![Effect::DeleteWallpaper(id)];
                         }
-                        // Packaged assets remain intact; persist removal from the gallery.
+                        // Downloaded photo packs keep a thumbnail so the gallery
+                        // can fetch them again later.
                         self.finish_background_delete(&id);
-                        return vec![Effect::Save];
+                        return vec![Effect::Save, Effect::PruneWallpaperPacks];
                     }
                     return vec![];
                 }

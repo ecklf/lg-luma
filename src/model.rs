@@ -388,7 +388,7 @@ impl Default for Preferences {
             favorites: None,
             custom_tiles: vec![],
             hidden: vec![],
-            background: "dunes".into(),
+            background: crate::wallpaper_packs::DEFAULT_ID.into(),
             splash_background: None,
             deleted_backgrounds: vec![],
             hour_24: false,
@@ -653,14 +653,11 @@ impl Preferences {
         if !BACKGROUNDS.iter().any(|(id, _)| *id == self.background)
             && !crate::wallpapers::valid_id(&self.background)
         {
-            self.background = "dunes".into();
+            self.background = crate::wallpaper_packs::DEFAULT_ID.into();
         }
-        let mut seen = HashSet::new();
-        self.deleted_backgrounds.retain(|id| {
-            id != &self.background
-                && BACKGROUNDS.iter().any(|(known, _)| *known == id)
-                && seen.insert(id.clone())
-        });
+        // Built-in wallpapers are always shown; drop legacy hide lists.
+        self.deleted_backgrounds
+            .retain(|id| !BACKGROUNDS.iter().any(|(known, _)| *known == id));
         fn clean(ids: &mut Vec<String>) {
             let mut seen = HashSet::new();
             ids.retain(|id| valid_app_id(id) && seen.insert(id.clone()));

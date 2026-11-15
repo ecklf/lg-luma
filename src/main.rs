@@ -34,6 +34,7 @@ mod update;
 mod vector;
 mod view;
 mod wallpaper_cycle;
+mod wallpaper_packs;
 mod wallpapers;
 mod weather;
 #[path = "weather-service.rs"]
@@ -301,6 +302,7 @@ fn effects(
     preferences: &std::path::Path,
     weather: &weather_service::Service,
     wallpapers: &wallpapers::Service,
+    wallpaper_packs: &wallpaper_packs::Service,
     webhook: &webhook::Service,
     updates: &update::Worker,
 ) -> bool {
@@ -355,6 +357,8 @@ fn effects(
             Effect::DeleteWallpaper(id) => {
                 wallpapers.delete(id, state.preferences.background.clone())
             }
+            Effect::EnsureWallpaper(id) => wallpaper_packs.ensure(&id),
+            Effect::PruneWallpaperPacks => wallpaper_packs.prune(state.wallpaper_pack_keep()),
             Effect::Recent {
                 generation,
                 command,
@@ -678,6 +682,22 @@ fn run() -> Result<(), String> {
     // Scripted desktop captures must never open a server on the real LAN.
     let mut wallpaper_service =
         wallpapers::Service::new(&preferences_path, !webos && !options.script.is_empty())?;
+    let wallpaper_pack_cache = preferences_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .join("wallpaper-packs");
+    state.wallpaper_pack_cache = wallpaper_pack_cache.clone();
+    let wallpaper_packs_service = wallpaper_packs::Service::new(wallpaper_pack_cache)?;
+    if wallpaper_packs::remote_builtin(&state.preferences.background)
+        && !state
+            .wallpaper_pack_cache
+            .join(&state.preferences.background)
+            .join(format!("{}.jpg", state.preferences.background))
+            .is_file()
+    {
+        wallpaper_packs_service.ensure(&state.preferences.background);
+    }
+    wallpaper_packs_service.prune(state.wallpaper_pack_keep());
     let mut tile_editor_service = tile_editor::Service::new(!webos && !options.script.is_empty())?;
     if options.test_extra_apps > 0 {
         eprintln!(
@@ -709,6 +729,7 @@ fn run() -> Result<(), String> {
         &preferences_path,
         &weather_service,
         &wallpaper_service,
+        &wallpaper_packs_service,
         &webhook_service,
         &updates,
     );
@@ -984,7 +1005,20 @@ fn run() -> Result<(), String> {
                     wallpapers_scanned = true;
                     state.set_wallpapers(items);
                 }
-                wallpapers::Event::Deleted(id, result) => state.wallpaper_deleted(id, result),
+                wallpapers::Event::Deleted(id, result) => {
+                    let pending = state.wallpaper_deleted(id, result);
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &wallpaper_packs_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
                 wallpapers::Event::Session(generation, result)
                     if generation == wallpaper_service.generation()
                         && matches!(state.overlay, Some(Overlay::WallpaperUpload)) =>
@@ -1005,6 +1039,38 @@ fn run() -> Result<(), String> {
                 _ => {}
             }
         }
+        while let Ok(event) = wallpaper_packs_service.receiver.try_recv() {
+            match event {
+                wallpaper_packs::Event::Progress(id, status) => {
+                    if let wallpaper_packs::Status::Failed(_) = &status {
+                        state.notify(state.preferences.language.t("wallpaperDownloadFailed"));
+                        if state.preferences.background == id {
+                            state.preferences.background = wallpaper_packs::DEFAULT_ID.into();
+                        }
+                    }
+                    state.wallpaper_pack_status.insert(id, status);
+                    state.dirty = true;
+                }
+                wallpaper_packs::Event::Installed(id) => {
+                    state
+                        .wallpaper_pack_status
+                        .insert(id.clone(), wallpaper_packs::Status::Ready);
+                    if state.preferences.background == id {
+                        state.preferences.splash_background = Some(id.clone());
+                        if !state.preferences.reduced_motion {
+                            state.previous_background =
+                                Some((wallpaper_packs::DEFAULT_ID.into(), Instant::now()));
+                            state.background_fade = state::BACKGROUND_FADE;
+                        }
+                        state.notify(state.preferences.language.t("wallpaperReady"));
+                        let _ = storage::save(&preferences_path, &state.preferences);
+                        platform.sync_splash(state.preferences.splash_background());
+                    }
+                    wallpaper_packs_service.prune(state.wallpaper_pack_keep());
+                    state.dirty = true;
+                }
+            }
+        }
         tile_editor_service.set_active(
             focused && visible && matches!(state.overlay, Some(Overlay::TileEditor)),
             &state.preferences.custom_tiles,
@@ -1022,6 +1088,7 @@ fn run() -> Result<(), String> {
                         &preferences_path,
                         &weather_service,
                         &wallpaper_service,
+                        &wallpaper_packs_service,
                         &webhook_service,
                         &updates,
                     );
@@ -1071,8 +1138,14 @@ fn run() -> Result<(), String> {
             if startup_cycle {
                 startup_cycle_pending = false;
             }
-            if cycled && let Err(error) = storage::save(&preferences_path, &state.preferences) {
-                eprintln!("{error}");
+            if cycled {
+                if wallpaper_packs::remote_builtin(&state.preferences.background) {
+                    wallpaper_packs_service.ensure(&state.preferences.background);
+                }
+                wallpaper_packs_service.prune(state.wallpaper_pack_keep());
+                if let Err(error) = storage::save(&preferences_path, &state.preferences) {
+                    eprintln!("{error}");
+                }
             }
         }
         while let Ok(response) = updates.receiver.try_recv() {
@@ -1165,6 +1238,7 @@ fn run() -> Result<(), String> {
                                 &preferences_path,
                                 &weather_service,
                                 &wallpaper_service,
+                                &wallpaper_packs_service,
                                 &webhook_service,
                                 &updates,
                             );
@@ -1180,6 +1254,7 @@ fn run() -> Result<(), String> {
                         &preferences_path,
                         &weather_service,
                         &wallpaper_service,
+                        &wallpaper_packs_service,
                         &webhook_service,
                         &updates,
                     );
@@ -1201,6 +1276,7 @@ fn run() -> Result<(), String> {
                             &preferences_path,
                             &weather_service,
                             &wallpaper_service,
+                            &wallpaper_packs_service,
                             &webhook_service,
                             &updates,
                         );
@@ -1221,6 +1297,7 @@ fn run() -> Result<(), String> {
                         &preferences_path,
                         &weather_service,
                         &wallpaper_service,
+                        &wallpaper_packs_service,
                         &webhook_service,
                         &updates,
                     );
@@ -1637,6 +1714,7 @@ fn run() -> Result<(), String> {
                 &preferences_path,
                 &weather_service,
                 &wallpaper_service,
+                &wallpaper_packs_service,
                 &webhook_service,
                 &updates,
             );
@@ -1675,6 +1753,7 @@ fn run() -> Result<(), String> {
                 &preferences_path,
                 &weather_service,
                 &wallpaper_service,
+                &wallpaper_packs_service,
                 &webhook_service,
                 &updates,
             );
@@ -1726,6 +1805,7 @@ fn run() -> Result<(), String> {
                     &preferences_path,
                     &weather_service,
                     &wallpaper_service,
+                    &wallpaper_packs_service,
                     &webhook_service,
                     &updates,
                 );
@@ -1768,6 +1848,7 @@ fn run() -> Result<(), String> {
                 &preferences_path,
                 &weather_service,
                 &wallpaper_service,
+                &wallpaper_packs_service,
                 &webhook_service,
                 &updates,
             );

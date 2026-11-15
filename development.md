@@ -521,22 +521,31 @@ Verify scanning, editing and a test request against a real webhook on TV hardwar
 ## Splash images
 
 `pnpm assets` renders one 1920×1080 PNG per background into `.build/assets/splash/` from the shaded
-wallpapers. `tools/package.mjs` ships them under `splash/` plus `splash.png` (the default background),
-which `appinfo.json` names as `splashBackground`, with `bgColor` set to the UI base colour so the
-frame between the splash and the first draw is not black. On a normal TV launch and after successful
-preference saves, the native platform worker passes the loaded background to the native
-`luma-helper sync-splash` command through Homebrew Channel's elevated `exec` service. It atomically updates
-the installed `splash.png` and the matching enabled Home stage, skipping identical images. Desktop
-and isolated `--preferences` / `--test-extra-apps` runs do not update launch splashes. The first launch
-after installation or a package update can still show the packaged default until this sync completes;
-later launches use the saved selection. Already-root Home processes use the Rust file operation directly, avoiding a Homebrew/child-process round trip. With Home takeover enabled, the native Home helper
-copies the selected background's splash into the staged Home app on every apply, reading the saved
-preferences from the TV storage candidates in `storage.rs`. Production installations prefer internal
-storage; developer installations prefer developer storage, with existing files taking precedence over
-the legacy installation-local preferences. Reapplying an active Home mount also refreshes the splash.
-`pnpm test:home` checks splash selection, runtime updates and mounted refreshes with a mocked filesystem
-and no TV calls. Verify the system-rendered splash on a real TV by changing Background, quitting Luma,
-and relaunching its normal tile; desktop checks cannot establish SAM/compositor image caching behavior.
+wallpapers. `tools/package.mjs` ships splash images only for the bundled vector wallpapers (`slate`,
+`midnight`, `prism`) plus `splash.png` (default `slate`), which `appinfo.json` names as
+`splashBackground`, with `bgColor` set to the UI base colour so the frame between the splash and the
+first draw is not black. Photo wallpapers (Monument Valley, Yosemite, and the other camera packs)
+are not packaged: selecting one downloads the source JPEG from the upstream GitHub tree, prepares
+gradient/plain/glass assets on a worker thread, and caches them under `wallpaper-packs/` next to
+preferences. Only the active desktop background keeps the full pack on disk; inactive downloads are
+reduced to a small thumbnail so they can be fetched again from GitHub. With wallpaper cycling
+enabled, every photo pack still in the gallery keeps its full download. Packaged gallery
+thumbnails remain in the IPK so undownloaded packs still preview.
+On a normal TV launch and after successful preference saves, the native platform worker passes the
+loaded background to the native `luma-helper sync-splash` command through Homebrew Channel's elevated
+`exec` service. It atomically updates the installed `splash.png` and the matching enabled Home stage,
+skipping identical images. Desktop and isolated `--preferences` / `--test-extra-apps` runs do not
+update launch splashes. The first launch after installation or a package update can still show the
+packaged default until this sync completes; later launches use the saved selection. Already-root Home
+processes use the Rust file operation directly, avoiding a Homebrew/child-process round trip. With Home
+takeover enabled, the native Home helper copies the selected background's splash into the staged Home
+app on every apply, reading the saved preferences from the TV storage candidates in `storage.rs`.
+Production installations prefer internal storage; developer installations prefer developer storage, with
+existing files taking precedence over the legacy installation-local preferences. Reapplying an active
+Home mount also refreshes the splash. `pnpm test:home` checks splash selection, runtime updates and
+mounted refreshes with a mocked filesystem and no TV calls. Verify the system-rendered splash on a real
+TV by changing Background, quitting Luma, and relaunching its normal tile; desktop checks cannot
+establish SAM/compositor image caching behavior.
 
 ## Vector rendering
 

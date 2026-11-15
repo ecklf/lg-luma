@@ -102,6 +102,12 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     'assets/font-cjk-500.ttf',
     'assets/font-kr-400.ttf',
     'assets/font-kr-500.ttf',
+    // Full wallpaper packs for vector defaults only; photo packs download on demand.
+    ...['slate', 'midnight', 'prism'].flatMap((name) => [
+      `assets/wallpapers/${name}.jpg`,
+      `splash/${name}.png`,
+    ]),
+    // Thumbnails stay packaged so the gallery can show undownloaded photo packs.
     ...[
       'dunes',
       'midnight',
@@ -112,11 +118,7 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
       'prism',
       'yosemite',
       'northern-lights',
-    ].flatMap((name) => [
-      `assets/wallpapers/${name}.jpg`,
-      `assets/thumbnails/${name}.jpg`,
-      `splash/${name}.png`,
-    ]),
+    ].map((name) => `assets/thumbnails/${name}.jpg`),
     ...vectorAssets.assets.map((name) => {
       if (typeof name !== 'string' || !/^(logos|ui-icons)\/[a-z0-9-]+\.lvec$/.test(name))
         throw new Error('Invalid packaged vector asset path.');
