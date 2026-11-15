@@ -4963,6 +4963,23 @@
     "cs": "Náhled teď není k dispozici",
     "ca": "Previsualització no disponible ara"
   },
+  "webPreviewBackground": {
+    "zh-tw": "Luma 在背景 · 顯示主畫面",
+    "en": "Luma is in the background · showing Home",
+    "de": "Luma ist im Hintergrund · Startseite",
+    "zh": "Luma 在后台 · 显示主页",
+    "es": "Luma está en segundo plano · Inicio",
+    "pt": "O Luma está em segundo plano · Início",
+    "it": "Luma è in background · Home",
+    "ru": "Luma в фоне · главный экран",
+    "pl": "Luma działa w tle · ekran główny",
+    "fr": "Luma est en arrière-plan · Accueil",
+    "vi": "Luma đang chạy nền · Màn hình chính",
+    "nl": "Luma staat op de achtergrond · startscherm",
+    "sv": "Luma körs i bakgrunden · startsida",
+    "cs": "Luma běží na pozadí · domovská obrazovka",
+    "ca": "Luma és en segon pla · Inici"
+  },
   "webSaving": {
     "zh-tw": "正在儲存…",
     "en": "Saving…",

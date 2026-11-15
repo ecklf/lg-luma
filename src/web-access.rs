@@ -59,8 +59,20 @@ pub enum Event {
     Settings(u64, Settings),
     Paired(String),
     Devices(Vec<Device>),
-    /// The page asks for a fresh picture of Luma's Home; reply with a JPEG.
-    Preview(mpsc::Sender<Result<Vec<u8>, String>>),
+    /// The page asks for Luma's Home as it looks now. `known` is the fingerprint of the
+    /// picture the server already has; an unchanged scene is answered without drawing.
+    Preview {
+        known: Option<u64>,
+        reply: mpsc::Sender<Result<Frame, String>>,
+    },
+}
+
+/// A preview answer: the scene's fingerprint and, unless unchanged, its pixels.
+pub struct Frame {
+    pub key: u64,
+    /// Whether Luma is what the TV shows; otherwise the picture is Luma's Home behind an app.
+    pub on_screen: bool,
+    pub image: Option<image::RgbaImage>,
 }
 
 struct Pin {
@@ -81,6 +93,8 @@ struct Shared {
     acknowledged: u64,
     devices: Vec<Device>,
     backgrounds: Vec<Background>,
+    /// The last preview, encoded once and served until the scene changes.
+    preview: Option<(u64, Arc<Vec<u8>>)>,
 }
 
 pub struct Service {
@@ -489,7 +503,11 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
             }
             drop(shared);
             if api == "preview.jpg" {
-                return preview(stream, context);
+                let known = request
+                    .target
+                    .split_once("?known=")
+                    .and_then(|(_, key)| key.parse().ok());
+                return preview(stream, context, known);
             }
             return error_response(stream, "404 Not Found", "Not found");
         }
@@ -541,17 +559,60 @@ fn serve(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
     }
 }
 
-/// Asks the launcher for a picture of its Home as it looks right now.
-fn preview(stream: &mut TcpStream, context: &Context) -> Result<(), String> {
+/// Luma's Home as it looks right now. The page passes the fingerprint it shows; if the scene is
+/// unchanged it gets 204, so polling every second costs the TV almost nothing.
+fn preview(stream: &mut TcpStream, context: &Context, shown: Option<u64>) -> Result<(), String> {
+    let cached = context.shared.lock().unwrap().preview.clone();
     let (reply, answer) = mpsc::channel();
-    if context.sender.send(Event::Preview(reply)).is_err() {
+    let request = Event::Preview {
+        known: cached.as_ref().map(|(key, _)| *key),
+        reply,
+    };
+    if context.sender.send(request).is_err() {
         return error_response(stream, "503 Service Unavailable", "Launcher stopped");
     }
-    match answer.recv_timeout(Duration::from_secs(6)) {
-        Ok(Ok(jpeg)) => response(stream, "200 OK", "image/jpeg", &jpeg),
-        Ok(Err(error)) => error_response(stream, "503 Service Unavailable", &error),
-        Err(_) => error_response(stream, "503 Service Unavailable", "The TV is busy"),
+    let frame = match answer.recv_timeout(Duration::from_secs(6)) {
+        Ok(Ok(frame)) => frame,
+        Ok(Err(error)) => return error_response(stream, "503 Service Unavailable", &error),
+        Err(_) => return error_response(stream, "503 Service Unavailable", "The TV is busy"),
+    };
+    let jpeg = match (frame.image, cached) {
+        (Some(image), _) => {
+            let started = Instant::now();
+            let jpeg = Arc::new(encode(&image)?);
+            eprintln!(
+                "Luma web preview: encoded {} KiB in {} ms",
+                jpeg.len() / 1024,
+                started.elapsed().as_millis()
+            );
+            context.shared.lock().unwrap().preview = Some((frame.key, jpeg.clone()));
+            jpeg
+        }
+        (None, Some((key, jpeg))) if key == frame.key => jpeg,
+        (None, _) => return error_response(stream, "503 Service Unavailable", "Try again"),
+    };
+    if shown == Some(frame.key) {
+        return response_with(stream, "204 No Content", "image/jpeg", "", b"");
     }
+    response_with(
+        stream,
+        "200 OK",
+        "image/jpeg",
+        &format!(
+            "X-Luma-Frame: {}\r\nX-Luma-On-Screen: {}\r\n",
+            frame.key, frame.on_screen
+        ),
+        &jpeg,
+    )
+}
+
+fn encode(image: &image::RgbaImage) -> Result<Vec<u8>, String> {
+    let rgb = image::DynamicImage::ImageRgba8(image.clone()).into_rgb8();
+    let mut jpeg = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 80)
+        .encode_image(&rgb)
+        .map_err(|e| e.to_string())?;
+    Ok(jpeg)
 }
 
 #[derive(Deserialize)]

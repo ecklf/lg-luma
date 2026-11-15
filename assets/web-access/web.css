@@ -219,8 +219,9 @@ select {
 .screen img.ready {
   opacity: 1;
 }
-.screen.updating img {
-  opacity: 0.55;
+.screen.stale img {
+  opacity: 0.45;
+  filter: grayscale(0.6);
 }
 .preview-empty {
   position: absolute;
@@ -247,6 +248,10 @@ select {
   background: #5ee08a;
   box-shadow: 0 0 0 0 rgba(94, 224, 138, 0.6);
   animation: pulse 2.4s infinite;
+}
+.behind .live-dot {
+  background: var(--ink-faint);
+  animation: none;
 }
 @keyframes pulse {
   70% {

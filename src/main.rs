@@ -472,33 +472,61 @@ fn web_backgrounds(state: &State, assets: &view::Assets) -> Vec<web_settings::Ba
         .collect()
 }
 
-/// Luma's Home as it looks right now, whatever page the TV shows, without touching the screen.
-fn home_preview(
+/// What Luma shows right now, as the companion page's live picture. While another app is in
+/// front Luma's own Home stands in: other apps' pictures are never captured.
+fn live_preview(
     state: &mut State,
     assets: &view::Assets,
     renderer: &mut renderer::Renderer,
     now: OffsetDateTime,
-) -> Result<Vec<u8>, String> {
-    let page = std::mem::replace(&mut state.page, state::Page::Home);
-    let focus = std::mem::replace(&mut state.focus, state::Target::Nav(0));
-    let overlay = state.overlay.take();
-    let subpage = state.subpage.take();
-    let notice = state.notice.take();
-    let panel = state.panel_started.take();
-    let previous = state.previous_background.take();
-    let hover = state.hover.take();
-    let scroll = std::mem::take(&mut state.scroll);
-    let scene = view::scene(state, assets, now);
-    state.page = page;
-    state.focus = focus;
-    state.overlay = overlay;
-    state.subpage = subpage;
-    state.notice = notice;
-    state.panel_started = panel;
-    state.previous_background = previous;
-    state.hover = hover;
-    state.scroll = scroll;
-    renderer.capture_jpeg(&scene.draw, Size::new(1280, 720), 82)
+    known: Option<u64>,
+    on_screen: bool,
+) -> Result<web_access::Frame, String> {
+    let scene = if on_screen {
+        view::scene(state, assets, now)
+    } else {
+        let page = std::mem::replace(&mut state.page, state::Page::Home);
+        let focus = std::mem::replace(&mut state.focus, state::Target::Nav(0));
+        let overlay = state.overlay.take();
+        let subpage = state.subpage.take();
+        let notice = state.notice.take();
+        let panel = state.panel_started.take();
+        let previous = state.previous_background.take();
+        let hover = state.hover.take();
+        let scroll = std::mem::take(&mut state.scroll);
+        let scene = view::scene(state, assets, now);
+        state.page = page;
+        state.focus = focus;
+        state.overlay = overlay;
+        state.subpage = subpage;
+        state.notice = notice;
+        state.panel_started = panel;
+        state.previous_background = previous;
+        state.hover = hover;
+        state.scroll = scroll;
+        scene
+    };
+    // The same scene behind another app is a different picture for the page.
+    let key = renderer::fingerprint(&scene.draw) ^ u64::from(on_screen);
+    if known == Some(key) {
+        return Ok(web_access::Frame {
+            key,
+            on_screen,
+            image: None,
+        });
+    }
+    let started = Instant::now();
+    let image = renderer.capture_rgba(&scene.draw, Size::new(1024, 576))?;
+    eprintln!(
+        "Luma web preview: drew {} in {} ms",
+        if on_screen { "the screen" } else { "Home" },
+        started.elapsed().as_millis()
+    );
+    Ok(web_access::Frame {
+        key,
+        on_screen,
+        image: Some(image),
+    })
 }
 
 fn wallpaper_upload_active(state: &State, webos: bool, focused: bool, visible: bool) -> bool {
@@ -1158,8 +1186,15 @@ fn run() -> Result<(), String> {
                     state.web_devices = devices;
                     state.dirty = true;
                 }
-                web_access::Event::Preview(reply) => {
-                    let _ = reply.send(home_preview(&mut state, &assets, &mut renderer, now));
+                web_access::Event::Preview { known, reply } => {
+                    let _ = reply.send(live_preview(
+                        &mut state,
+                        &assets,
+                        &mut renderer,
+                        now,
+                        known,
+                        visible && (focused || !webos),
+                    ));
                 }
                 web_access::Event::Pairing(..) => {}
             }

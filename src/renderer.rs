@@ -59,6 +59,38 @@ impl TextStyle {
     }
 }
 
+/// Identifies what a scene would look like, so an unchanged scene need not be drawn again.
+/// App artwork counts by identity: a changed icon is a new shared image.
+pub fn fingerprint(commands: &[Draw]) -> u64 {
+    use std::hash::{DefaultHasher, Hasher};
+    let mut hasher = DefaultHasher::new();
+    for command in commands {
+        let text = match command {
+            Draw::Glass(rect, radius, color) => format!("g{rect:?}{radius}{color:?}"),
+            Draw::Shape(rect, radius, blur, color) => format!("s{rect:?}{radius}{blur}{color:?}"),
+            Draw::RoundedGradient(rect, radius, top, bottom) => {
+                format!("r{rect:?}{radius}{top:?}{bottom:?}")
+            }
+            Draw::Shadow(rect, radius, blur, color) => format!("h{rect:?}{radius}{blur}{color:?}"),
+            Draw::Text(text, rect, style, color, centered) => {
+                format!("t{text}{rect:?}{style:?}{color:?}{centered}")
+            }
+            Draw::Image(path, rect, radius, contain) => format!("i{path}{rect:?}{radius}{contain}"),
+            Draw::TintedImage(path, rect, radius, contain, tint) => {
+                format!("n{path}{rect:?}{radius}{contain}{tint:?}")
+            }
+            Draw::AppImage(image, rect, radius, tint) => {
+                format!("a{:p}{rect:?}{radius}{tint:?}", Arc::as_ptr(image))
+            }
+            Draw::Clip(clip) => format!("c{clip:?}"),
+            Draw::EdgeFade(fade) => format!("e{fade:?}"),
+            Draw::EdgeFadeX(fade) => format!("x{fade:?}"),
+        };
+        hasher.write(text.as_bytes());
+    }
+    hasher.finish()
+}
+
 #[derive(Clone)]
 pub enum Draw {
     /// Shared, downsampled wallpaper backdrop; text/artwork remain separate sharp draws.
@@ -1700,27 +1732,20 @@ impl Renderer {
         .map(|((), stats)| stats)
     }
 
-    /// The scene as a JPEG in memory, for the companion page's live preview.
-    pub fn capture_jpeg(
+    /// The scene's pixels, upright, for the companion page's live preview. Encoding happens
+    /// elsewhere so the SDL thread only pays for drawing and reading back.
+    pub fn capture_rgba(
         &mut self,
         commands: &[Draw],
         size: Size,
-        quality: u8,
-    ) -> Result<Vec<u8>, String> {
+    ) -> Result<image::RgbaImage, String> {
         let stats = self.stats.clone();
         let result = self.offscreen(commands, size, |renderer| {
-            let image =
-                image::DynamicImage::ImageRgba8(renderer.read_image(size.width, size.height)?)
-                    .into_rgb8();
-            let mut jpeg = Vec::new();
-            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, quality)
-                .encode_image(&image)
-                .map_err(|e| e.to_string())?;
-            Ok(jpeg)
+            renderer.read_image(size.width, size.height)
         });
         // A preview must not replace the statistics of the frames the TV shows.
         self.stats = stats;
-        result.map(|(jpeg, _)| jpeg)
+        result.map(|(image, _)| image)
     }
 
     fn offscreen<T>(

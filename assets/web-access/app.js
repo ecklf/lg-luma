@@ -79,57 +79,63 @@ function deviceName() {
 
 /* ---------- Live preview ---------- */
 
+// The TV answers 204 while its Home looks the same, so asking every second is cheap and
+// changes made with the remote, the clock and the weather show up almost at once.
 const screen = document.querySelector('.screen');
 const previewImage = element('preview');
+const POLL = 1000;
 let previewUrl;
+let previewFrame = '';
 let previewBusy = false;
-let previewAgain = false;
 let previewTimer;
+let previewOnScreen = true;
 
 async function refreshPreview() {
-  if (previewBusy) {
-    previewAgain = true;
-    return;
-  }
+  clearTimeout(previewTimer);
+  if (previewBusy) return;
   previewBusy = true;
-  screen.classList.add('updating');
   try {
-    const response = await fetch(`api/preview.jpg?t=${Date.now()}`, { cache: 'no-store' });
-    if (!response.ok) throw new Error();
-    const url = URL.createObjectURL(await response.blob());
-    await new Promise((resolve) => {
-      previewImage.onload = resolve;
-      previewImage.onerror = resolve;
-      previewImage.src = url;
-    });
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    previewUrl = url;
-    previewImage.classList.add('ready');
-    element('preview-empty').hidden = true;
+    const response = await fetch(`api/preview.jpg?known=${previewFrame}`, { cache: 'no-store' });
+    if (response.status === 200) {
+      const frame = response.headers.get('X-Luma-Frame') || '';
+      const onScreen = response.headers.get('X-Luma-On-Screen') !== 'false';
+      const url = URL.createObjectURL(await response.blob());
+      await new Promise((resolve) => {
+        previewImage.onload = resolve;
+        previewImage.onerror = resolve;
+        previewImage.src = url;
+      });
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = url;
+      previewFrame = frame;
+      previewOnScreen = onScreen;
+      element('preview-label').textContent = onScreen ? strings.preview : strings.previewBackground;
+      screen.parentElement.classList.toggle('behind', !onScreen);
+      previewImage.classList.add('ready');
+      element('preview-empty').hidden = true;
+    } else if (response.status !== 204) {
+      throw new Error();
+    }
+    screen.classList.remove('stale');
   } catch {
-    if (!previewUrl) {
+    if (previewUrl) {
+      screen.classList.add('stale');
+    } else {
       element('preview-empty').textContent = strings.previewUnavailable;
       element('preview-empty').hidden = false;
     }
   } finally {
-    screen.classList.remove('updating');
     previewBusy = false;
-    if (previewAgain) {
-      previewAgain = false;
-      refreshPreview();
+    if (state && document.visibilityState === 'visible') {
+      previewTimer = setTimeout(refreshPreview, POLL);
     }
   }
 }
 
-function schedulePreview(delay = 250) {
+function schedulePreview() {
   clearTimeout(previewTimer);
-  previewTimer = setTimeout(refreshPreview, delay);
+  previewTimer = setTimeout(refreshPreview, 120);
 }
-
-// The clock on the TV moves; keep the picture current while the page is in view.
-setInterval(() => {
-  if (state && document.visibilityState === 'visible') refreshPreview();
-}, 30000);
 
 /* ---------- Controls ---------- */
 
@@ -302,7 +308,9 @@ function render() {
   element('sections').replaceChildren(...all[tab]);
   element('device').textContent = strings.pairedAs.replace('{device}', state.device);
   element('forget').textContent = strings.unpair;
-  element('preview-label').textContent = strings.preview;
+  element('preview-label').textContent = previewOnScreen
+    ? strings.preview
+    : strings.previewBackground;
   element('backdrop').style.backgroundImage =
     `url("api/thumbnail/${encodeURIComponent(state.settings.background)}")`;
   document.documentElement.lang = strings.lang || 'en';

@@ -169,20 +169,71 @@ fn pairs_once_and_then_changes_settings() {
     assert_eq!(get("/inter.woff2", "").0, 200);
     assert!(get("/api/strings", "").2.contains("\"pairTitle\""));
 
-    // The live preview is rendered by the launcher thread on request.
-    let request = {
+    // The live preview is drawn by the launcher thread; an unchanged scene is not drawn again.
+    let ask = |known: &str, answer: Frame| {
         let cookie = cookie.clone();
-        thread::spawn(move || get("/api/preview.jpg", &cookie))
-    };
-    loop {
-        if let Event::Preview(reply) = next_event(&service) {
-            reply.send(Ok(b"frame".to_vec())).unwrap();
-            break;
+        let route = format!("/api/preview.jpg?known={known}");
+        let request = thread::spawn(move || get(&route, &cookie));
+        let mut answer = Some(answer);
+        loop {
+            if let Event::Preview { known, reply } = next_event(&service) {
+                let mut frame = answer.take().unwrap();
+                if frame.image.is_none() {
+                    assert_eq!(known, Some(frame.key), "the server offers its cached frame");
+                }
+                reply.send(Ok(frame)).unwrap();
+                break;
+            }
         }
-    }
-    let (status, head, body) = request.join().unwrap();
+        request.join().unwrap()
+    };
+    let pixels = || {
+        Some(image::RgbaImage::from_pixel(
+            4,
+            4,
+            image::Rgba([200, 30, 30, 255]),
+        ))
+    };
+    let (status, head, body) = ask(
+        "",
+        Frame {
+            key: 7,
+            on_screen: true,
+            image: pixels(),
+        },
+    );
     assert_eq!(status, 200);
-    assert!(head.contains("image/jpeg") && body == "frame");
+    assert!(head.contains("X-Luma-Frame: 7") && body.len() > 100);
+    // The page already shows frame 7 and nothing changed: nothing to send.
+    let (status, _, body) = ask(
+        "7",
+        Frame {
+            key: 7,
+            on_screen: true,
+            image: None,
+        },
+    );
+    assert_eq!((status, body.len()), (204, 0));
+    // Another device without the frame gets the cached picture without a new drawing.
+    let (status, head, _) = ask(
+        "",
+        Frame {
+            key: 7,
+            on_screen: true,
+            image: None,
+        },
+    );
+    assert!(status == 200 && head.contains("X-Luma-Frame: 7"));
+    let (status, head, _) = ask(
+        "7",
+        Frame {
+            key: 8,
+            on_screen: false,
+            image: pixels(),
+        },
+    );
+    assert!(status == 200 && head.contains("X-Luma-Frame: 8"));
+    assert!(head.contains("X-Luma-On-Screen: false"));
 
     let mut changed = settings.clone();
     changed.hour_24 = true;

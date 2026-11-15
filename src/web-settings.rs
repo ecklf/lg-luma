@@ -83,6 +83,7 @@ pub fn strings(language: Language) -> serde_json::Value {
         "lang": serde_json::to_value(language).unwrap_or_default(),
         "preview": t("webPreview"),
         "previewUnavailable": t("webPreviewUnavailable"),
+        "previewBackground": t("webPreviewBackground"),
         "saving": t("webSaving"),
         "saved": t("webSaved"),
         "offline": t("webOffline"),
