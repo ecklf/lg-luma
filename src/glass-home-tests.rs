@@ -72,6 +72,10 @@ fn widget_toolbar_pills_are_fixed_ordered_and_remote_and_pointer_accessible() {
     state.back();
     assert_eq!(state.focus, Target::Widget(2));
     state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::Widget(5));
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.focus, Target::Widget(6));
+    state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::WidgetReset);
     for language in crate::i18n::Language::ALL {
         state.preferences.language = language;
@@ -91,17 +95,44 @@ fn widget_toolbar_pills_are_fixed_ordered_and_remote_and_pointer_accessible() {
             .iter()
             .find(|control| control.target == Target::Widget(2))
             .unwrap();
+        let channels = rendered
+            .controls
+            .iter()
+            .find(|control| control.target == Target::Widget(5))
+            .unwrap();
+        let shelf = rendered
+            .controls
+            .iter()
+            .find(|control| control.target == Target::Widget(6))
+            .unwrap();
         assert_eq!(
             (shortcuts.rect.x, shortcuts.rect.y, shortcuts.rect.h),
             (640., 164.8, 64.)
         );
-        assert!(shortcuts.rect.x + shortcuts.rect.w + 20. <= reset.rect.x);
+        assert_eq!(
+            (channels.rect.x, channels.rect.y, channels.rect.h),
+            (shortcuts.rect.x + shortcuts.rect.w + 20., 164.8, 64.)
+        );
+        assert_eq!(
+            (shelf.rect.x, shelf.rect.y, shelf.rect.h),
+            (channels.rect.x + channels.rect.w + 20., 164.8, 64.)
+        );
+        assert!(
+            shelf.rect.x + shelf.rect.w + 20. <= reset.rect.x,
+            "{language:?}"
+        );
         assert_eq!((reset.rect.y, reset.rect.h), (164.8, 64.));
         assert!(reset.rect.x >= 640.);
         assert!(reset.rect.x + reset.rect.w + 20. <= add.rect.x);
         assert_eq!(add.rect.x + add.rect.w, 1760.);
-        assert!(!shortcuts.scrollable && !reset.scrollable && !add.scrollable);
-        for control in [shortcuts, reset, add] {
+        assert!(
+            !shortcuts.scrollable
+                && !channels.scrollable
+                && !shelf.scrollable
+                && !reset.scrollable
+                && !add.scrollable
+        );
+        for control in [shortcuts, channels, shelf, reset, add] {
             let (x, y) = control.rect.center();
             assert_eq!(
                 state.hit_test(&rendered.controls, x, y),
