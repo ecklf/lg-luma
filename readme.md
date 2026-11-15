@@ -28,55 +28,6 @@ https://github.com/user-attachments/assets/5b2c6e78-ec77-41f5-a79a-1fcfbe8e524b
 
 </details>
 
-## Home and app drawer
-
-Home widgets use an invisible **6×4 placement grid** above the unchanged six-app favorites dock.
-**Greeting** combines the weekday/date and greeting in **4 columns × 1 row**;
-**Weather** is **2 columns × 2 rows**. By default Greeting sits at the top left and
-Weather at the top right, spanning the first two rows. Empty cells remain transparent.
-Open **Settings → Widgets** to see the Home placement grid. Select a widget for an
-app-style **Configure / Move / Remove** menu. At the top right above the grid, **Reset to defaults** sits to the
-left of **Add widget**, using the same pill controls as Backgrounds. The Add menu only lists
-widgets not already on Home; empty cells also open it directly. Configure opens the existing options,
-without a show/hide switch; removing frees its cells but keeps its configuration for re-adding.
-Use the arrows or point at a cell to choose its top-left anchor, then **OK / click** to save;
-**Back** cancels. Red placements overlap the other widget or exceed the grid and cannot be saved.
-Widget sizes cannot be changed. Reset restores the default widgets and their positions without
-clearing their configuration. A **Shortcuts** pill sits at the top left. Inputs has its own sidebar section,
-directly below Apps, and is not a widget.
-There is no configurable greeting name;
-names stored by earlier drafts are ignored and removed on the next preferences save.
-
-Home uses Liquid Glass controls over your wallpaper, a floating favorites dock, and a weather
-block with a condition icon, temperature, condition, and location. The combined Greeting restores
-the original small, spaced weekday/date above a large, tightly tracked greeting. Greeting settings
-include a date visibility toggle and date-format choices; Date is not a separate widget.
-
-- **Left / Right** browses favorites. Hold **OK** to reorder them.
-- **Down** from favorites opens the animated six-column app drawer.
-- **Up** from the drawer’s first app row returns Home with the corresponding favorite selected.
-- **Up** from favorites reaches the corner controls.
-- **Back** closes the drawer and focuses the first favorite.
-- **Settings → General → App sorting** chooses **Alphabetically** (default) or **Usage count**.
-  Usage sorts by successful launches from Luma, most used first, with alphabetical ties.
-  Counts stay local and persist across restarts. Favorites keep their manual order.
-- **Settings → General → UI sounds** enables soft, tvOS-inspired navigation, select, and back
-  feedback. Off by default; uses original synthesized sounds, not Apple recordings.
-- **Settings → Widgets → select Weather → Configure → Widget style** offers **Standard**, **No icon**,
-  and **Compact**, with a preview of every design before choosing. Compact
-  places a small condition icon on the second line beside the condition and location.
-- **OK / click** launches apps directly. Manage favorites, hidden apps, and uninstall actions in
-  **Luma Settings → Apps**. Hidden apps remain listed there.
-- Direct **input pills** at the top left show names, icons, and connection dots, respecting
-  each input's Auto / On / Off visibility setting.
-- The **clock** opens floating Control Center-style actions for **Luma Settings** or LG's native
-  **TV settings**. LG's native settings UI is unchanged.
-
-Screenshots are native desktop previews, not hardware performance claims.
-
-If installed app icons look stale, use **Settings → System → Reset icon cache** to
-clear cached artwork and reload it without changing your preferences.
-
 ## Compatibility
 
 > [!NOTE]
