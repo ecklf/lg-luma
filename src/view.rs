@@ -8,8 +8,8 @@ use crate::{
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
         APPS_COLUMNS, APPS_SECTION, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT,
-        HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH, KEYS, Overlay, Page, Rect,
-        SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
+        HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH, INPUTS_SECTION, KEYS, Overlay, Page,
+        Rect, SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -643,7 +643,9 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
         }
         match overlay {
             Overlay::WidgetOptions { cell } => widget_menu(&mut out, state, assets, *cell, false),
-            Overlay::WidgetCatalog { cell } => widget_menu(&mut out, state, assets, *cell, true),
+            Overlay::WidgetCatalog { cell, .. } => {
+                widget_menu(&mut out, state, assets, *cell, true)
+            }
             Overlay::Options { id, .. } | Overlay::BackgroundOptions { id, .. } => {
                 options(&mut out, state, assets, id, anchor)
             }
@@ -1750,7 +1752,10 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
         width + 24.2 + 24.
     } else if row.value.is_some() {
         210.
-    } else if matches!(row.target, Target::UploadWallpaper | Target::WallpaperCycle) {
+    } else if matches!(
+        row.target,
+        Target::UploadWallpaper | Target::WallpaperCycle | Target::WidgetAdd | Target::WidgetReset
+    ) {
         24.2
     } else {
         64.
@@ -1824,7 +1829,11 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
     }
     let scrollable = !matches!(
         row.target,
-        Target::UploadWallpaper | Target::WallpaperCycle | Target::WallpaperGradient
+        Target::UploadWallpaper
+            | Target::WallpaperCycle
+            | Target::WallpaperGradient
+            | Target::WidgetAdd
+            | Target::WidgetReset
     );
     out.control(row.target, row.rect, scrollable);
 }
@@ -2105,7 +2114,14 @@ fn settings(out: &mut Scene, state: &State, assets: &Assets) {
 fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     for (position, index) in crate::state::SETTINGS_ORDER.into_iter().enumerate() {
-        let key = ["interface", "background", "widgets", "system", "apps"][index];
+        let key = [
+            "interface",
+            "background",
+            "widgets",
+            "system",
+            "apps",
+            "inputs",
+        ][index];
         let label = language.t(key);
         let rect = Rect::new(160., 164.8 + position as f32 * 84., 403.2, 72.);
         let focused = state.focus == Target::Sidebar(index);
@@ -2140,14 +2156,21 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                         }),
                     ])
                 }
-                Some(Subpage::InputIcons(_)) => {
-                    Some(vec![language.t("inputs"), language.t("inputIcon")])
-                }
+                Some(Subpage::InputIcons(id)) => Some(vec![
+                    state
+                        .inventory
+                        .inputs
+                        .iter()
+                        .find(|input| &input.id == id)
+                        .map_or(language.t("inputs"), |input| {
+                            state.preferences.input_title(input)
+                        }),
+                    language.t("inputIcon"),
+                ]),
                 Some(Subpage::WidgetPosition(widget)) => {
                     Some(vec![language.t(widget.key()), language.t("widgetPosition")])
                 }
                 Some(Subpage::Input(id)) => Some(vec![
-                    language.t("inputs"),
                     state
                         .inventory
                         .inputs
@@ -2163,7 +2186,6 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Greeting) => language.t("greeting"),
                 Some(Subpage::Weather) => language.t("weather"),
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
-                Some(Subpage::Inputs) => language.t("inputs"),
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::AppSorting) => language.t("appSorting"),
@@ -2244,7 +2266,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::Weather
                 | Subpage::WeatherStyle
                 | Subpage::Shortcuts
-                | Subpage::Inputs
                 | Subpage::Greeting
                 | Subpage::Clock
                 | Subpage::WidgetPosition(_)
@@ -2254,7 +2275,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::Weather => weather_settings(out, state, assets),
                 Subpage::WeatherStyle => weather_style_settings(out, state, assets),
                 Subpage::Shortcuts => shortcut_settings(out, state, assets),
-                Subpage::Inputs => inputs_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
                 Subpage::WidgetPosition(widget) => {
@@ -2337,7 +2357,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::Weather
             | Subpage::WeatherStyle
             | Subpage::Shortcuts
-            | Subpage::Inputs
             | Subpage::Greeting
             | Subpage::Clock => {
                 unreachable!()
@@ -2598,12 +2617,11 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             }
             out.draw.extend(actions);
         }
+        INPUTS_SECTION => inputs_settings(out, state, assets),
         WIDGETS_SECTION => {
             widget_grid(out, state, assets, None);
             for (index, (widget, key, icon)) in
-                [(2, "shortcuts", "sparkles"), (3, "inputs", "input-hdmi")]
-                    .into_iter()
-                    .enumerate()
+                [(2, "shortcuts", "sparkles")].into_iter().enumerate()
             {
                 row(
                     out,
@@ -2611,7 +2629,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     assets,
                     Row {
                         target: Target::Widget(widget),
-                        rect: Rect::new(640., 824. + index as f32 * 84. - s, 1120., 72.),
+                        rect: Rect::new(640., 896.8 + index as f32 * 84. - s, 1120., 72.),
                         title: language.t(key),
                         icon: Some(icon),
                         value: None,
@@ -2620,6 +2638,31 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                         chevron: true,
                     },
                 );
+            }
+            let mut x = 640.;
+            for (target, key, icon) in [
+                (Target::WidgetReset, "resetWidgets", "refresh"),
+                (Target::WidgetAdd, "addWidget", "grid"),
+            ] {
+                let width = (assets.width(language.t(key), text(20.8, 550, -0.02)) + 88.)
+                    .ceil()
+                    .min(500.);
+                row(
+                    out,
+                    state,
+                    assets,
+                    Row {
+                        target,
+                        rect: Rect::new(x, 164.8, width, 64.),
+                        title: language.t(key),
+                        icon: Some(icon),
+                        value: None,
+                        description: None,
+                        selected: false,
+                        chevron: false,
+                    },
+                );
+                x += width + 20.;
             }
         }
         SYSTEM_SECTION => {
@@ -2819,11 +2862,19 @@ fn widget_position_settings(out: &mut Scene, state: &State, assets: &Assets, wid
     );
 }
 
+fn widget_preview_top(state: &State) -> f32 {
+    if matches!(state.subpage, Some(Subpage::WidgetPosition(_))) {
+        180.
+    } else {
+        252.8
+    }
+}
+
 fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<HomeWidget>) {
     let language = state.preferences.language;
     // A scaled Home canvas: cell anchors remain separate hit targets even when
     // the preview widget spans two cells. Browsing never changes saved positions.
-    let preview = Rect::new(640., 180. - state.scroll, 1120., 630.);
+    let preview = Rect::new(640., widget_preview_top(state) - state.scroll, 1120., 630.);
     let background = state
         .wallpapers
         .iter()
@@ -3373,20 +3424,12 @@ fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, cat
         {
             actions.push((Target::AddWidget(widget), widget.key(), "grid"));
         }
-    } else {
-        if let Some(widget) = widget {
-            actions.extend([
-                (Target::ConfigureWidget(widget), "configure", "settings"),
-                (Target::MoveWidget(widget), "move", "left"),
-                (Target::RemoveWidget(widget), "removeWidget", "circle-minus"),
-            ]);
-        }
-        if HomeWidget::ALL
-            .into_iter()
-            .any(|widget| !state.preferences.has_widget(widget))
-        {
-            actions.push((Target::WidgetAdd, "addWidget", "grid"));
-        }
+    } else if let Some(widget) = widget {
+        actions.extend([
+            (Target::ConfigureWidget(widget), "configure", "settings"),
+            (Target::MoveWidget(widget), "move", "left"),
+            (Target::RemoveWidget(widget), "removeWidget", "circle-minus"),
+        ]);
     }
     let empty = actions.is_empty();
     if empty {
@@ -3400,7 +3443,7 @@ fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, cat
     let scale = 1120. / 1920.;
     let card = Rect::new(
         640. + logical.x * scale,
-        180. - state.scroll + logical.y * scale,
+        widget_preview_top(state) - state.scroll + logical.y * scale,
         logical.w * scale,
         logical.h * scale,
     );
@@ -4082,7 +4125,7 @@ mod tests {
                     .iter()
                     .filter_map(|draw| match draw {
                         Draw::Text(label, rect, style, color, _)
-                            if (rect.y - 440.3).abs() < 0.001 =>
+                            if (rect.y - 524.3).abs() < 0.001 =>
                         {
                             Some((label, rect, style, color))
                         }
@@ -4100,7 +4143,7 @@ mod tests {
                     .iter()
                     .filter_map(|draw| match draw {
                         Draw::TintedImage(_, rect, _, _, color)
-                            if (rect.y - 443.8).abs() < 0.001 =>
+                            if (rect.y - 527.8).abs() < 0.001 =>
                         {
                             assert_eq!(color, parts[0].3);
                             Some(rect)

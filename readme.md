@@ -35,12 +35,15 @@ Home widgets use an invisible **4×4 placement grid** above the unchanged favori
 **Weather** is **1 column × 2 rows**. By default Greeting sits on the first row and
 Weather spans the second/third rows, left-aligned. Empty cells remain transparent.
 Open **Settings → Widgets** to see the Home placement grid. Select a widget for an
-app-style **Configure / Move / Remove** menu, or an empty cell to **Add widget**.
-The Add menu only lists widgets not already on Home. Configure opens the existing options,
+app-style **Configure / Move / Remove** menu. Above the grid, **Reset to defaults** sits to the
+left of **Add widget**, using the same pill controls as Backgrounds. The Add menu only lists
+widgets not already on Home; empty cells also open it directly. Configure opens the existing options,
 without a show/hide switch; removing frees its cells but keeps its configuration for re-adding.
 Use the arrows or point at a cell to choose its top-left anchor, then **OK / click** to save;
 **Back** cancels. Red placements overlap the other widget or exceed the grid and cannot be saved.
-Widget sizes cannot be changed. Shortcuts and Inputs remain available below the grid.
+Widget sizes cannot be changed. Reset restores the default widgets and their positions without
+clearing their configuration. Shortcuts remains below the grid. Inputs has its own sidebar section,
+directly below Apps, and is not a widget.
 There is no configurable greeting name;
 names stored by earlier drafts are ignored and removed on the next preferences save.
 
@@ -314,7 +317,7 @@ shaded image. This does not change LG's launch splash.
 
 ### Input icons
 
-Open **Settings → Widgets → Inputs**, select an input, then choose
+Open **Settings → Inputs**, select an input, then choose
 **Icon** to open a native picker for bundled SVG icons. Choices are **Automatic** (the default,
 using label detection), **HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**,
 **NVIDIA Shield**, **Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, and **Xbox**.

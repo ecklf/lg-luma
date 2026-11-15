@@ -768,7 +768,7 @@ fn input_name_actions_only_highlight_the_focused_row_and_keep_the_saved_mode() {
         .preferences
         .set_input_name("com.webos.app.hdmi1", "Console");
     state.open(2);
-    state.focus = Target::Widget(3);
+    state.focus = Target::Sidebar(crate::state::INPUTS_SECTION);
     state.activate();
     state.focus = Target::InputMode("com.webos.app.hdmi1".into());
     state.activate();
@@ -1085,7 +1085,7 @@ fn text_rendering_choices_persist_and_back_restores_the_system_row() {
 fn input_visibility_has_explicit_choices_and_returns_to_the_same_input() {
     let mut state = ready();
     state.open(2);
-    state.focus = Target::Widget(3);
+    state.focus = Target::Sidebar(crate::state::INPUTS_SECTION);
     state.activate();
     let id = "com.webos.app.hdmi1".to_string();
     state.focus = Target::InputMode(id.clone());
@@ -1099,9 +1099,9 @@ fn input_visibility_has_explicit_choices_and_returns_to_the_same_input() {
     state.activate();
     state.back();
     assert_eq!(state.focus, Target::InputMode(id));
-    assert_eq!(state.subpage, Some(crate::state::Subpage::Inputs));
+    assert_eq!(state.subpage, None);
     state.back();
-    assert_eq!(state.focus, Target::Widget(3));
+    assert_eq!(state.focus, Target::Sidebar(crate::state::INPUTS_SECTION));
 }
 
 #[test]
@@ -1583,6 +1583,8 @@ fn weather_location_keyboard_back_and_sidebar_routes_restore_focus() {
     state.focus = Target::Sidebar(crate::state::WIDGETS_SECTION);
     state.section = crate::state::WIDGETS_SECTION;
     state.activate();
+    assert_eq!(state.focus, Target::WidgetAdd);
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::WidgetCell(0));
     state.direction(Direction::Down, &controls(&state));
     state.activate();
@@ -2009,7 +2011,7 @@ fn custom_input_names_keep_the_label_port_and_status_as_detail() {
 fn remote_renames_and_resets_an_input_from_its_settings_page() {
     let mut state = ready();
     state.open(2);
-    state.focus = Target::Widget(3);
+    state.focus = Target::Sidebar(crate::state::INPUTS_SECTION);
     state.activate();
     let id = "com.webos.app.hdmi2".to_string();
     state.focus = Target::InputMode(id.clone());
@@ -2047,14 +2049,14 @@ fn remote_renames_and_resets_an_input_from_its_settings_page() {
     state.focus = Target::InputRename;
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::InputMode(id));
-    assert_eq!(state.subpage, Some(crate::state::Subpage::Inputs));
+    assert_eq!(state.subpage, None);
 }
 
 #[test]
 fn keyboard_done_saves_a_typed_input_name() {
     let mut state = ready();
     state.open(2);
-    state.focus = Target::Widget(3);
+    state.focus = Target::Sidebar(crate::state::INPUTS_SECTION);
     state.activate();
     state.focus = Target::InputMode("com.webos.app.hdmi1".into());
     state.activate();
@@ -2431,7 +2433,7 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
     }]);
     let saved = serde_json::to_value(&state.preferences).unwrap();
     state.open(2);
-    assert_eq!(SECTION_COUNT, 5);
+    assert_eq!(SECTION_COUNT, 6);
     assert!(
         !controls(&state)
             .iter()
@@ -2440,9 +2442,10 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
     state.direction(Direction::Down, &controls(&state));
     state.direction(Direction::Down, &controls(&state));
     state.direction(Direction::Down, &controls(&state));
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Sidebar(WIDGETS_SECTION));
     state.direction(Direction::Right, &controls(&state));
-    assert_eq!(state.focus, Target::WidgetCell(0));
+    assert_eq!(state.focus, Target::WidgetAdd);
     let widget_order: Vec<_> = controls(&state)
         .into_iter()
         .filter_map(|control| match control.target {
@@ -2450,11 +2453,8 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
             _ => None,
         })
         .collect();
-    assert_eq!(widget_order, [2, 3]);
-    for (index, subpage) in [Subpage::Shortcuts, Subpage::Inputs]
-        .into_iter()
-        .enumerate()
-    {
+    assert_eq!(widget_order, [2]);
+    for (index, subpage) in [Subpage::Shortcuts].into_iter().enumerate() {
         state.focus = Target::Widget(index + 2);
         state.direction(Direction::Right, &controls(&state));
         assert_eq!(state.subpage, Some(subpage));
@@ -2466,13 +2466,13 @@ fn widgets_group_existing_settings_and_restore_each_parent_without_changing_pref
     assert_eq!(state.focus, Target::Sidebar(WIDGETS_SECTION));
     assert_eq!(serde_json::to_value(&state.preferences).unwrap(), saved);
     state.inventory.inputs.clear();
-    state.focus = Target::Widget(3);
+    state.focus = Target::Sidebar(crate::state::INPUTS_SECTION);
     state.activate();
-    assert_eq!(state.subpage, Some(Subpage::Inputs));
+    assert_eq!(state.subpage, None);
     assert_eq!(state.focus, Target::Setting(3));
     assert_eq!(state.activate(), vec![Effect::Reload]);
     state.direction(Direction::Left, &controls(&state));
-    assert_eq!(state.focus, Target::Widget(3));
+    assert_eq!(state.focus, Target::Sidebar(crate::state::INPUTS_SECTION));
 }
 
 #[test]
@@ -2520,14 +2520,14 @@ fn widgets_are_localized_without_legacy_sidebar_entries() {
                 .iter()
                 .filter(|c| matches!(c.target, Target::Sidebar(_)))
                 .count(),
-            5
+            6
         );
         assert_eq!(
             page.controls
                 .iter()
                 .filter(|c| matches!(c.target, Target::Widget(_)))
                 .count(),
-            2
+            1
         );
         for key in ["widgets", "weather", "shortcuts", "inputs", "greeting"] {
             assert!(page.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == language.t(key))), "{key}/{language:?}");
@@ -2891,7 +2891,6 @@ fn greeting_removal_persists_and_hides_the_combined_widget() {
     state.open(2);
     state.section = crate::state::WIDGETS_SECTION;
     state.focus = Target::WidgetCell(0);
-    state.activate();
     state.activate();
     assert_eq!(state.focus, Target::AddWidget(HomeWidget::Greeting));
     state.activate();

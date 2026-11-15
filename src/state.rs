@@ -12,9 +12,16 @@ use std::time::{Duration, Instant};
 pub const WIDGETS_SECTION: usize = 2;
 pub const SYSTEM_SECTION: usize = 3;
 pub const APPS_SECTION: usize = 4;
-pub const SECTION_COUNT: usize = 5;
-pub const SETTINGS_ORDER: [usize; SECTION_COUNT] =
-    [0, APPS_SECTION, 1, WIDGETS_SECTION, SYSTEM_SECTION];
+pub const INPUTS_SECTION: usize = 5;
+pub const SECTION_COUNT: usize = 6;
+pub const SETTINGS_ORDER: [usize; SECTION_COUNT] = [
+    0,
+    APPS_SECTION,
+    INPUTS_SECTION,
+    1,
+    WIDGETS_SECTION,
+    SYSTEM_SECTION,
+];
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
 pub const APPS_COLUMNS: usize = 6;
@@ -69,6 +76,7 @@ pub enum Target {
     Widget(usize),
     WidgetCell(usize),
     WidgetAdd,
+    WidgetReset,
     AddWidget(HomeWidget),
     ConfigureWidget(HomeWidget),
     RemoveWidget(HomeWidget),
@@ -154,7 +162,7 @@ pub enum Overlay {
     BackgroundOptions { id: String, restore: Target },
     BackgroundDelete { id: String, restore: Target },
     WidgetOptions { cell: usize },
-    WidgetCatalog { cell: usize },
+    WidgetCatalog { cell: usize, restore: Target },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -164,7 +172,6 @@ pub enum Subpage {
     DateFormat,
     Weather,
     Shortcuts,
-    Inputs,
     Clock,
     ClockFormat,
     TimeFormat,
@@ -848,13 +855,14 @@ impl State {
             && (matches!(&self.subpage, Some(Subpage::Input(id) | Subpage::InputIcons(id)) if missing(id))
                 || matches!(&self.focus, Target::InputMode(id) if missing(id)))
         {
-            self.subpage = Some(Subpage::Inputs);
+            self.section = INPUTS_SECTION;
+            self.subpage = None;
             self.scroll = 0.;
             self.focus = self
                 .inventory
                 .inputs
                 .first()
-                .map_or(Target::Sidebar(WIDGETS_SECTION), |input| {
+                .map_or(Target::Sidebar(INPUTS_SECTION), |input| {
                     Target::InputMode(input.id.clone())
                 });
         }
@@ -1202,6 +1210,18 @@ impl State {
         self.dirty = true;
     }
 
+    fn open_widget_catalog(&mut self, cell: usize) {
+        self.overlay = Some(Overlay::WidgetCatalog {
+            cell,
+            restore: self.focus.clone(),
+        });
+        self.focus = HomeWidget::ALL
+            .into_iter()
+            .find(|widget| !self.preferences.has_widget(*widget))
+            .map_or(Target::CloseDialog, Target::AddWidget);
+        self.panel_started = (!self.preferences.reduced_motion).then(Instant::now);
+    }
+
     fn section_entry(&self) -> Target {
         match self.section {
             1 => Target::Background(
@@ -1211,7 +1231,14 @@ impl State {
                     })
                     .unwrap_or(0),
             ),
-            WIDGETS_SECTION => Target::WidgetCell(0),
+            WIDGETS_SECTION => Target::WidgetAdd,
+            INPUTS_SECTION => self
+                .inventory
+                .inputs
+                .first()
+                .map_or(Target::Setting(3), |input| {
+                    Target::InputMode(input.id.clone())
+                }),
             APPS_SECTION => self
                 .apps()
                 .first()
@@ -1243,7 +1270,6 @@ impl State {
             }
             Some(Subpage::Weather) => Target::WidgetCell(self.preferences.weather_position.cell()),
             Some(Subpage::Shortcuts) => Target::Widget(2),
-            Some(Subpage::Inputs) => Target::Widget(3),
             Some(Subpage::Clock) => Target::Setting(1),
             Some(Subpage::ClockFormat) => {
                 self.subpage = Some(Subpage::Clock);
@@ -1258,7 +1284,7 @@ impl State {
                 Target::InputIcon
             }
             Some(Subpage::Input(id)) => {
-                self.subpage = Some(Subpage::Inputs);
+                self.section = INPUTS_SECTION;
                 Target::InputMode(id)
             }
             Some(Subpage::WeatherLocation) => {
@@ -1305,12 +1331,34 @@ impl State {
                 Direction::Up if index >= HOME_GRID_COLUMNS => {
                     Target::WidgetCell(index - HOME_GRID_COLUMNS)
                 }
-                Direction::Up => Target::SettingsMenu,
+                Direction::Up => {
+                    if index % HOME_GRID_COLUMNS == 0 {
+                        Target::WidgetReset
+                    } else {
+                        Target::WidgetAdd
+                    }
+                }
                 Direction::Down if index + HOME_GRID_COLUMNS < HOME_GRID_CELLS => {
                     Target::WidgetCell(index + HOME_GRID_COLUMNS)
                 }
                 Direction::Down => Target::Widget(2),
                 _ => self.focus.clone(),
+            };
+            self.focus(target, controls);
+            return vec![];
+        }
+        if self.overlay.is_none()
+            && self.page == Page::Settings
+            && self.section == WIDGETS_SECTION
+            && self.subpage.is_none()
+            && matches!(self.focus, Target::WidgetAdd | Target::WidgetReset)
+        {
+            let target = match direction {
+                Direction::Left if self.focus == Target::WidgetAdd => Target::WidgetReset,
+                Direction::Left => Target::Sidebar(WIDGETS_SECTION),
+                Direction::Right => Target::WidgetAdd,
+                Direction::Up => Target::SettingsMenu,
+                Direction::Down => Target::WidgetCell(0),
             };
             self.focus(target, controls);
             return vec![];
@@ -1683,7 +1731,9 @@ impl State {
                     | Target::WeatherStyle
                     | Target::Widget(_)
                     | Target::MoveWidget(_)
-            ) || (self.focus == Target::Setting(3) && self.subpage == Some(Subpage::Inputs)))
+            ) || (self.focus == Target::Setting(3)
+                && self.section == INPUTS_SECTION
+                && self.subpage.is_none()))
                 && matches!(direction, Direction::Left)
             {
                 self.close_subpage();
@@ -2514,39 +2564,40 @@ impl State {
             }
             Target::InputRename => self.open_keyboard(TextField::InputName),
             Target::WidgetCell(cell) if cell < HOME_GRID_CELLS => {
-                self.overlay = Some(Overlay::WidgetOptions { cell });
-                self.focus = WidgetPosition::from_cell(cell)
+                if let Some(widget) = WidgetPosition::from_cell(cell)
                     .and_then(|position| self.preferences.widget_at(position))
-                    .map_or_else(
-                        || {
-                            if HomeWidget::ALL
-                                .into_iter()
-                                .any(|widget| !self.preferences.has_widget(widget))
-                            {
-                                Target::WidgetAdd
-                            } else {
-                                Target::CloseDialog
-                            }
-                        },
-                        Target::ConfigureWidget,
-                    );
+                {
+                    self.overlay = Some(Overlay::WidgetOptions { cell });
+                    self.focus = Target::ConfigureWidget(widget);
+                } else {
+                    self.open_widget_catalog(cell);
+                }
                 self.panel_started = (!self.preferences.reduced_motion).then(Instant::now);
             }
             Target::WidgetAdd => {
-                if let Some(Overlay::WidgetOptions { cell }) = self.overlay {
-                    self.overlay = Some(Overlay::WidgetCatalog { cell });
-                    self.focus = HomeWidget::ALL
-                        .into_iter()
-                        .find(|widget| !self.preferences.has_widget(*widget))
-                        .map_or(Target::CloseDialog, Target::AddWidget);
+                self.open_widget_catalog(0);
+            }
+            Target::WidgetReset => {
+                if self.preferences.reset_widgets() {
+                    return vec![Effect::Save];
                 }
             }
             Target::AddWidget(widget) => {
                 if self.preferences.has_widget(widget) {
                     return vec![];
                 }
-                if let Some(Overlay::WidgetCatalog { cell }) = self.overlay.take() {
+                if let Some(Overlay::WidgetCatalog { cell, .. }) = self.overlay.take() {
                     self.subpage = Some(Subpage::WidgetPosition(widget));
+                    let cell = WidgetPosition::from_cell(cell)
+                        .filter(|position| self.preferences.can_place_widget(widget, *position))
+                        .or_else(|| {
+                            (0..HOME_GRID_CELLS)
+                                .filter_map(WidgetPosition::from_cell)
+                                .find(|position| {
+                                    self.preferences.can_place_widget(widget, *position)
+                                })
+                        })
+                        .map_or(cell, WidgetPosition::cell);
                     self.focus = Target::Choice(cell);
                     self.panel_started = None;
                     self.scroll = 0.;
@@ -2581,14 +2632,6 @@ impl State {
                     0 => (Subpage::Greeting, Target::DateToggle),
                     1 => (Subpage::Weather, Target::WeatherLocation),
                     2 => (Subpage::Shortcuts, Target::TileEditor),
-                    3 => (
-                        Subpage::Inputs,
-                        self.inventory
-                            .inputs
-                            .first()
-                            .map(|input| Target::InputMode(input.id.clone()))
-                            .unwrap_or(Target::Setting(3)),
-                    ),
                     _ => return vec![],
                 };
                 self.section = WIDGETS_SECTION;
@@ -2878,8 +2921,7 @@ impl State {
                         | Subpage::Greeting
                         | Subpage::Clock
                         | Subpage::Weather
-                        | Subpage::Shortcuts
-                        | Subpage::Inputs,
+                        | Subpage::Shortcuts,
                     ) => {
                         return vec![];
                     }
@@ -3047,7 +3089,12 @@ impl State {
         }
         if let Some(overlay) = self.overlay.take() {
             self.panel_started = None;
-            if let Overlay::WidgetOptions { cell } | Overlay::WidgetCatalog { cell } = overlay {
+            if let Overlay::WidgetCatalog { restore, .. } = overlay {
+                self.focus = restore;
+                self.pressed = None;
+                return vec![];
+            }
+            if let Overlay::WidgetOptions { cell } = overlay {
                 self.focus = Target::WidgetCell(cell);
                 self.pressed = None;
                 return vec![];
