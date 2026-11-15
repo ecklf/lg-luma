@@ -709,7 +709,7 @@ impl Preferences {
 }
 
 /// Every bundled device SVG offered by the native input icon picker.
-pub const INPUT_ICONS: [(&str, &str); 15] = [
+pub const INPUT_ICONS: [(&str, &str); 16] = [
     ("hdmi", "inputIconHdmi"),
     ("usb", "inputIconUsb"),
     ("apple-tv", "inputIconAppleTv"),
@@ -717,6 +717,7 @@ pub const INPUT_ICONS: [(&str, &str); 15] = [
     ("console", "inputIconConsole"),
     ("playstation", "inputIconPlaystation"),
     ("shield", "inputIconShield"),
+    ("steam", "inputIconSteam"),
     ("streamer", "inputIconStreamer"),
     ("switch", "inputIconSwitch"),
     ("switch2", "inputIconSwitch2"),

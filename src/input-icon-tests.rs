@@ -211,6 +211,52 @@ fn media_input_icons_detect_names_and_allow_manual_overrides() {
 }
 
 #[test]
+fn steam_input_icon_detects_device_labels_and_supports_picker_overrides() {
+    let mut state = ready();
+    let id = state.inventory.inputs[0].id.clone();
+    let has_steam = |state: &crate::state::State| {
+        scene(state).draw.iter().any(|draw| {
+            matches!(draw,
+            Draw::TintedImage(path, ..) if path.ends_with("ui-icons/input-steam.lvec"))
+        })
+    };
+    for name in ["Steam", "STEAM Deck", "Steam Link", "Steam Machine PC"] {
+        state.preferences.set_input_name(&id, name);
+        assert!(has_steam(&state), "{name}");
+    }
+    for name in ["Steamboat", "Steamroller", "Streaming device"] {
+        state.preferences.set_input_name(&id, name);
+        assert!(!has_steam(&state), "{name}");
+    }
+    state.open(2);
+    state.focus = Target::Sidebar(crate::state::INPUTS_SECTION);
+    state.activate();
+    state.focus = Target::InputMode(id.clone());
+    state.activate();
+    state.focus = Target::InputIcon;
+    state.activate();
+    let index = INPUT_ICONS
+        .iter()
+        .position(|(icon, _)| *icon == "steam")
+        .unwrap()
+        + 1;
+    state.pointer_focus(Target::Choice(index));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.input_icon(&id), Some("steam"));
+    assert!(has_steam(&state));
+    state.activate();
+    assert_eq!(state.focus, Target::Choice(index));
+    state.pointer_focus(Target::Choice(0));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!has_steam(&state));
+    state.preferences.set_input_name(&id, "");
+    let mut inputs = state.inventory.inputs.clone();
+    inputs[0].title = "Steam Deck".into();
+    state.set_inputs(inputs);
+    assert!(has_steam(&state));
+}
+
+#[test]
 fn input_icon_optical_sizes_preserve_centering_label_gap_and_pill_padding() {
     let mut state = ready();
     let id = state.inventory.inputs[0].id.clone();
