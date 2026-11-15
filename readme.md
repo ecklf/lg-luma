@@ -338,9 +338,9 @@ another app is in front; other apps are never captured). It covers **General**, 
 photos), **Widgets** (clock, date, weather location, shortcut tiles, inputs) and **System**
 (updates, refresh, icon cache, text rendering and the paired devices).
 
-Web access is off by default. The server answers only on the TV's home network address (port
-8787) and only to private addresses, and refuses other sites' requests. Each paired device keeps
-a key in an HttpOnly cookie; the TV stores only its SHA-256 hash and lists the devices so any of
+Web access is off by default. The server answers only on the TV's home network address
+(port 8787) and only to private addresses, and refuses other sites' requests. Each paired device
+keeps a key in an HttpOnly cookie; the TV stores only its SHA-256 hash and lists the devices so any of
 them can be removed. A PIN exists only while the pairing dialog is open, pairs one device, and
 locks after five wrong tries until the dialog is opened again. Turn web access off in the same
 place to stop the server.
