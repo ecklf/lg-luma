@@ -680,10 +680,15 @@ fn preview(
 }
 
 fn encode(image: &image::RgbaImage) -> Result<Vec<u8>, String> {
-    let rgb = image::DynamicImage::ImageRgba8(image.clone()).into_rgb8();
+    let (width, height) = image.dimensions();
     let mut jpeg = Vec::new();
-    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 80)
-        .encode_image(&rgb)
+    jpeg_encoder::Encoder::new(&mut jpeg, 75)
+        .encode(
+            image.as_raw(),
+            u16::try_from(width).map_err(|e| e.to_string())?,
+            u16::try_from(height).map_err(|e| e.to_string())?,
+            jpeg_encoder::ColorType::Rgba,
+        )
         .map_err(|e| e.to_string())?;
     Ok(jpeg)
 }

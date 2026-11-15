@@ -21,6 +21,8 @@ luma-tv-helper = { path = "tv-helper" }
 getrandom = "0.2"
 gl = "0.14"
 if-addrs = "0.14"
+# Live preview encoding: about twice as fast as image's encoder, straight from RGBA.
+jpeg-encoder = "0.6"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 libc = { version = "0.2", optional = true }
 luma-vector-geometry = { path = "vector-geometry" }
