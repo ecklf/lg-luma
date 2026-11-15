@@ -372,6 +372,17 @@ select {
 .tabs::-webkit-scrollbar {
   display: none;
 }
+@media (max-width: 520px) {
+  /* A soft edge shows there are more tabs to swipe to. */
+  .tabs {
+    -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
+    mask-image: linear-gradient(90deg, #000 88%, transparent);
+  }
+  .tabs button {
+    flex: 0 0 auto;
+    padding: 0 12px;
+  }
+}
 .tabs button {
   flex: 1 1 auto;
   min-height: 40px;

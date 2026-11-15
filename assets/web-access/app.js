@@ -1091,7 +1091,7 @@ function widgetGrid() {
     changeWidgets({ action: 'reset' });
   });
   actions.append(reset);
-  wrap.append(board, create('p', 'hint', selected ? l.widgetPlacementHelp : l.move), actions);
+  wrap.append(board, create('p', 'hint', selected ? l.widgetPlace : l.widgetPick), actions);
   return wrap;
 }
 
@@ -1254,6 +1254,13 @@ function render() {
     }),
   );
   element('sections').replaceChildren(...all[tab]);
+  // Six tabs do not fit a phone; keep the chosen one in view.
+  // Only sideways inside the bar, never the page itself.
+  const chosen = tabs.querySelector('[aria-selected="true"]');
+  if (chosen) {
+    const left = chosen.offsetLeft - (tabs.clientWidth - chosen.offsetWidth) / 2;
+    tabs.scrollLeft = Math.max(0, left);
+  }
   element('device').textContent = strings.pairedAs.replace('{device}', state.device);
   element('forget').textContent = strings.unpair;
   showRemote();

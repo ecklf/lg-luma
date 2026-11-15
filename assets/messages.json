@@ -5608,5 +5608,39 @@
     "sv": "Tryck på bilden för att välja där",
     "cs": "Klepnutím do obrazu tam vyberete",
     "ca": "Toca la imatge per seleccionar-hi"
+  },
+  "webWidgetPick": {
+    "zh-tw": "點按小工具即可移動。",
+    "en": "Tap a widget to move it.",
+    "de": "Tippe auf ein Widget, um es zu verschieben.",
+    "zh": "点按小组件即可移动。",
+    "es": "Toca un widget para moverlo.",
+    "pt": "Toque num widget para o mover.",
+    "it": "Tocca un widget per spostarlo.",
+    "ru": "Нажмите на виджет, чтобы переместить его.",
+    "pl": "Dotknij widżetu, aby go przenieść.",
+    "fr": "Touchez un widget pour le déplacer.",
+    "vi": "Chạm vào tiện ích để di chuyển.",
+    "nl": "Tik op een widget om het te verplaatsen.",
+    "sv": "Tryck på en widget för att flytta den.",
+    "cs": "Klepnutím na widget ho přesunete.",
+    "ca": "Toca un giny per moure’l."
+  },
+  "webWidgetPlace": {
+    "zh-tw": "點按醒目位置即可放到那裡。",
+    "en": "Tap a highlighted spot to place it there.",
+    "de": "Tippe auf ein hervorgehobenes Feld, um es dorthin zu setzen.",
+    "zh": "点按高亮位置即可放到那里。",
+    "es": "Toca un lugar resaltado para colocarlo ahí.",
+    "pt": "Toque num local destacado para o colocar aí.",
+    "it": "Tocca uno spazio evidenziato per posizionarlo lì.",
+    "ru": "Нажмите на выделенное место, чтобы поставить его туда.",
+    "pl": "Dotknij podświetlonego miejsca, aby go tam umieścić.",
+    "fr": "Touchez un emplacement en surbrillance pour l’y placer.",
+    "vi": "Chạm vào ô được tô sáng để đặt vào đó.",
+    "nl": "Tik op een gemarkeerde plek om het daar te plaatsen.",
+    "sv": "Tryck på en markerad plats för att placera den där.",
+    "cs": "Klepnutím na zvýrazněné místo ho tam umístíte.",
+    "ca": "Toca un lloc ressaltat per col·locar-lo allà."
   }
 }
