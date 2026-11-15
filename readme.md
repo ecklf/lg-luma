@@ -247,7 +247,7 @@ Test on a spare button first. Disable the mapping in Input Hook to restore norma
 ## Features
 
 Choose the interface language in **Settings → General → Language**. Luma supports Catalan,
-Czech, Dutch, English, French, German, Italian, Polish, Portuguese (Brazil), Russian,
+Czech, Dutch, English, French, German, Hungarian, Italian, Polish, Portuguese (Brazil), Russian,
 Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese.
 
 ### Backgrounds

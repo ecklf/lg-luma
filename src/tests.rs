@@ -1721,6 +1721,43 @@ fn language_selection_restores_its_parent_and_is_saved_with_preferences() {
 }
 
 #[test]
+fn language_picker_round_trip_and_scroll_boundary_after_hungarian() {
+    use crate::i18n::Language;
+    let mut state = ready();
+    state.preferences.language = Language::Zh;
+    state.preferences.reduced_motion = true;
+    state.open(2);
+    state.focus = Target::Setting(4);
+    state.activate();
+    assert_eq!(state.focus, Target::Choice(14));
+    for _ in 0..13 {
+        state.direction(Direction::Up, &controls(&state));
+    }
+    assert_eq!(state.focus, Target::Choice(Language::De.index()));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.language, Language::De);
+
+    let mut state = ready();
+    state.preferences.reduced_motion = true;
+    state.open(2);
+    state.focus = Target::Setting(4);
+    state.activate();
+    for _ in 0..7 {
+        state.direction(Direction::Down, &controls(&state));
+    }
+    assert_eq!(state.focus, Target::Choice(Language::Pt.index()));
+    assert_eq!(state.scroll, 0.);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Choice(Language::Sv.index()));
+    assert!(state.scroll > 0.);
+    let selected = controls(&state)
+        .into_iter()
+        .find(|control| control.target == state.focus)
+        .unwrap();
+    assert!(selected.rect.y + selected.rect.h <= 1032.1);
+}
+
+#[test]
 fn remote_can_select_and_restore_every_language() {
     for (index, language) in crate::i18n::Language::ALL.into_iter().enumerate() {
         let mut state = ready();
