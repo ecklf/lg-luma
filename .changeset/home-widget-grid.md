@@ -7,3 +7,5 @@ Add a grid-first Home widget manager with app-style Configure, Move and Remove m
 Keep the full weather-setup action readable in every language by wrapping long translations inside the fixed-size widget instead of truncating them.
 
 Preserve the original weather temperature typography and tight spacing instead of shrinking the temperature independently of its layout.
+
+Show the city before the weather status in Compact style, after the weather icon.

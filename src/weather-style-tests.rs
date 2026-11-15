@@ -85,7 +85,7 @@ fn home_styles_share_content_and_keep_the_dock_fixed() {
             WeatherStyle::Compact => {
                 assert_eq!(icons[0].w, 32.);
                 assert!(rendered.draw.iter().any(|draw| matches!(draw,
-                    Draw::Text(label, rect, ..) if label.contains(" · Vienna") && rect.y == icons[0].y)));
+                    Draw::Text(label, rect, ..) if label == "Vienna · Partly cloudy" && rect.y == icons[0].y && rect.x > icons[0].x)));
             }
         }
         assert_eq!(state.dock_y(), dock_y);
@@ -112,7 +112,7 @@ fn weather_grid_keeps_original_temperature_typography_and_spacing() {
             .draw
             .iter()
             .find_map(|draw| match draw {
-                Draw::Text(label, rect, ..) if label.starts_with("Partly cloudy") => Some(rect),
+                Draw::Text(label, rect, ..) if label.contains("Partly cloudy") => Some(rect),
                 _ => None,
             })
             .unwrap();
@@ -140,6 +140,8 @@ fn style_picker_previews_every_design_offline_and_only_saves_on_selection() {
     let rendered = scene(&state);
     assert!(rendered.draw.iter().any(|draw| matches!(draw,
         Draw::Text(label, ..) if label == "Compact")));
+    assert!(rendered.draw.iter().any(|draw| matches!(draw,
+        Draw::Text(label, ..) if label == "Vienna · Partly cloudy")));
     assert!(!rendered.draw.iter().any(|draw| matches!(draw,
         Draw::Text(label, ..) if label == "Compact inline")));
     assert!(!rendered.draw.iter().any(|draw| matches!(draw,
