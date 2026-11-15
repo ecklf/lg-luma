@@ -31,6 +31,8 @@
 body {
   min-height: 100vh;
   margin: 0;
+  /* The full-width preview bar must not cause sideways scrolling. */
+  overflow-x: clip;
 }
 [hidden] {
   display: none !important;
@@ -171,16 +173,24 @@ select {
 .layout > * {
   min-width: 0;
 }
+/* The pinned preview spans the whole width and fades out at the bottom, like an app's top
+   bar, so it never shows as a box with edges over the blurred wallpaper. */
 .stage {
   position: sticky;
   top: 0;
   z-index: 2;
-  margin: 0 -16px;
-  padding: 0 16px 10px;
-  background: rgba(14, 16, 20, 0.86);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
+  margin: 0 calc(50% - 50vw);
+  padding: 0 calc(50vw - 50%) 36px;
+  background: linear-gradient(
+    180deg,
+    rgba(14, 16, 20, 0.9),
+    rgba(14, 16, 20, 0.9) calc(100% - 28px),
+    rgba(14, 16, 20, 0)
+  );
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 28px), transparent);
 }
 @media (min-width: 900px) {
   .layout {
@@ -193,8 +203,11 @@ select {
     margin: 0;
     padding: 0;
     background: none;
+    box-shadow: none;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    -webkit-mask-image: none;
+    mask-image: none;
   }
 }
 .preview {
