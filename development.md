@@ -158,6 +158,8 @@ positions, preserving date/weather configuration and the app dock; an already-de
 The preview shows only widget placements over the wallpaper, without a gray dock placeholder.
 Shortcuts uses a fixed pill at the top left of the preview toolbar. Inputs is a separate sidebar section directly
 below Apps, not a widget. Its list and individual input/icon settings retain focus on return.
+The input icon picker includes Steam. Automatic detection recognizes the word Steam in labels such
+as Steam Deck, Steam Link and Steam Machine, ahead of generic computer/streaming-device fallbacks.
 Move and Add open a placement preview; arrows browse
 all twenty-four anchors, OK/click saves a valid placement, and Back cancels without changing preferences.
 Invalid positions are red and cannot be committed. Removing a widget frees its cells while keeping

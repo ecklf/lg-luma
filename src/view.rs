@@ -3273,12 +3273,17 @@ fn device_icon(name: &str) -> &'static str {
             .iter()
             .any(|alias| word.eq_ignore_ascii_case(alias))
     });
+    let steam_alias = name
+        .split(|ch: char| !ch.is_alphanumeric())
+        .any(|word| word.eq_ignore_ascii_case("steam"));
     let name = name.to_lowercase().replace(' ', "");
     if playstation_alias
         || name.contains("playstation")
         || ["ps1", "ps2", "ps3", "ps4", "ps5"].contains(&name.as_str())
     {
         "playstation"
+    } else if steam_alias {
+        "steam"
     } else if name.contains("appletv") {
         "apple-tv"
     } else if name.contains("usb") {
