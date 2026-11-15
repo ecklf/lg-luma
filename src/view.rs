@@ -1513,7 +1513,7 @@ fn weather_summary_layout_for(
                 106.,
             );
             let condition = &mut parts[1];
-            let label = format!("{} · {city}", condition.0);
+            let label = format!("{city} · {}", condition.0);
             let (label, font) = assets.fit_line(&label, text(26., 450, -0.02), 800., 24.);
             condition.0 = label;
             condition.1 = font;
