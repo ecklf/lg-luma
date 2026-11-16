@@ -2,4 +2,4 @@
 'lg-luma': minor
 ---
 
-Add System › Luma as Home screen: turning it on runs the README's takeover (`home.sh enable`, after disabling the autostart method) through Homebrew Channel's root service, so the remote's Home button opens Luma; turning it off restores LG Home.
+Add System › webOS override: replace LG Home or restore it through Homebrew Channel's root service. Run the operation independently, verify completion before reporting success, and preserve existing autostart when takeover fails.

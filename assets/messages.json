@@ -1261,7 +1261,7 @@
   },
   "homeTakeover": {
     "zh-tw": "將 Luma 設為主畫面",
-    "en": "Luma as Home screen",
+    "en": "webOS override",
     "de": "Luma als Startbildschirm",
     "zh": "将 Luma 设为主屏幕",
     "es": "Luma como pantalla de inicio",
@@ -1336,7 +1336,7 @@
   },
   "homeTakeoverError": {
     "zh-tw": "無法變更主畫面。Luma 需要透過 Homebrew Channel 取得 root 權限。",
-    "en": "The Home screen couldn't be changed. Luma needs root access through Homebrew Channel.",
+    "en": "Could not verify the webOS override. Root access through Homebrew Channel is required. See /var/lib/luma-home-toggle/toggle.log.",
     "de": "Der Startbildschirm konnte nicht geändert werden. Luma benötigt Root-Zugriff über Homebrew Channel.",
     "zh": "无法更改主屏幕。Luma 需要通过 Homebrew Channel 获取 root 权限。",
     "es": "No se pudo cambiar la pantalla de inicio. Luma necesita acceso root mediante Homebrew Channel.",

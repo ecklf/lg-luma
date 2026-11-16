@@ -1138,11 +1138,13 @@ fn run() -> Result<(), String> {
                     }
                 }
                 Response::HomeTakeover(Err(error)) => {
+                    state.home_takeover_pending = false;
                     eprintln!("Luma Home takeover: {error}");
                     state.notify(state.preferences.language.t("homeTakeoverError"));
                 }
-                // The script closes this instance next; until then the row shows the new state.
+                // Only a completed, verified operation can change the displayed state.
                 Response::HomeTakeover(Ok(enabled)) => {
+                    state.home_takeover_pending = false;
                     state.home_takeover = enabled;
                     state.dirty = true;
                 }

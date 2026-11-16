@@ -3237,11 +3237,28 @@ fn home_takeover_is_chosen_in_system_and_only_changes_on_a_new_choice() {
         Target::Setting(crate::state::HOME_TAKEOVER_ROW)
     );
     // Running as Home, the page offers to turn it off.
+    state.home_takeover_pending = false;
     state.home_takeover = true;
     state.activate();
     assert_eq!(state.focus, Target::Choice(0));
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.activate(), vec![Effect::HomeTakeover(false)]);
+}
+
+#[test]
+fn home_takeover_does_not_change_state_or_repeat_while_pending() {
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::SYSTEM_SECTION;
+    state.focus = Target::Setting(crate::state::HOME_TAKEOVER_ROW);
+    state.activate();
+    state.focus = Target::Choice(0);
+    assert_eq!(state.activate(), vec![Effect::HomeTakeover(true)]);
+    assert!(state.home_takeover_pending);
+    assert!(!state.home_takeover);
+    state.activate();
+    state.focus = Target::Choice(0);
+    assert!(state.activate().is_empty());
 }
 
 #[test]

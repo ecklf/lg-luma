@@ -650,6 +650,15 @@ failures preserve the last valid inputs. No failed inventory read substitutes de
 
 ### Optional native Home integration
 
+The **System → webOS override** setting wraps the existing enable/disable commands in
+`tv/home-toggle.sh`, embedded in a separate systemd unit so Homebrew's exec scope and the
+requesting Luma process can exit without killing the operation. The platform worker waits for
+an attempt-specific atomic result in `/var/lib/luma-home-toggle`; it never treats unit startup as
+successful takeover. The script verifies `enabled`, `mounted`, and `bootHook` through the helper
+before retiring the old autostart hook. Failures leave autostart untouched. Logs are root-owned
+at `/var/lib/luma-home-toggle/toggle.log`. Desktop tests mock commands and do not establish TV
+compatibility; the handoff, physical Home key, and restoration still need hardware verification.
+
 `tv/home.sh` and the native Rust `luma-helper` executable are packaged beside `luma`. They are a root-only, explicit integration
 for webOS 10/25 and 11/26 (and webOS 5/6, see below). `enable` stages a native manifest with ID `com.webos.app.home` and
 symlinks to the installed executable, libraries and assets under `/var/lib/luma-home/app`, then

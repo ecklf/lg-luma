@@ -192,7 +192,7 @@ pub enum Response {
         id: String,
         result: Result<(), String>,
     },
-    /// The takeover script started (with the requested state), or why it could not.
+    /// The takeover completed and was verified, or why it could not.
     HomeTakeover(Result<bool, String>),
     Recent {
         generation: u64,
@@ -556,26 +556,74 @@ pub fn inventory_confirms_removal(apps: &Value, id: &str) -> Result<bool, String
     Ok(!present)
 }
 
-/// Runs the README's takeover commands through Homebrew Channel's root service: `home.sh enable`
-/// (after disabling the autostart method, answering its prompt) or `disable`. The script closes
-/// this instance and starts the new Home, so it runs detached and the reply only says whether it
-/// started; its output goes to /tmp/luma-home-toggle.log.
+/// Run independently of both Homebrew's exec scope and the Luma instance being replaced.
+/// Starting the unit is not success: wait for its atomic, verified completion result.
 fn home_takeover(enable: bool) -> Result<(), String> {
-    let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
-    let script = if enable {
-        let app = quote(&install_dir()?.to_string_lossy());
-        format!("sh {app}/autostart.sh disable; printf 'y\\n' | sh {app}/home.sh enable")
-    } else {
-        "sh /var/lib/luma-home/home.sh disable".into()
-    };
-    let command = format!(
-        "if [ \"$(id -u)\" != 0 ]; then printf '%s\\n' '{{\"returnValue\":false,\"errorText\":\"Homebrew Channel needs root access\"}}'; exit 0; fi; ( {script} ) </dev/null >/tmp/luma-home-toggle.log 2>&1 & printf '%s\\n' '{{\"returnValue\":true}}'"
-    );
-    let envelope = call(
+    let mut random = [0u8; 16];
+    getrandom::getrandom(&mut random).map_err(|_| "No secure randomness")?;
+    let attempt: String = random.iter().map(|b| format!("{b:02x}")).collect();
+    let command = home_takeover_command(&install_dir()?.to_string_lossy(), enable, &attempt);
+    // A transport error is ambiguous: observe this attempt, never retry the mutation.
+    let started = call(
         "luna://org.webosbrew.hbchannel.service/exec",
         json!({"command": command}),
-    )?;
-    command_reply(&envelope).map(|_| ())
+    );
+    if let Ok(envelope) = &started {
+        for key in ["returnCode", "exitCode"] {
+            if let Some(code) = envelope.get(key)
+                && code != 0
+                && code != "0"
+            {
+                return Err(format!(
+                    "Cannot start webOS override: {}",
+                    output_excerpt(
+                        envelope
+                            .get("stderrString")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                    )
+                ));
+            }
+        }
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    while std::time::Instant::now() < deadline {
+        if let Ok(envelope) = call(
+            "luna://org.webosbrew.hbchannel.service/exec",
+            json!({"command": format!("cat /var/lib/luma-home-toggle/result.{attempt}.json 2>/dev/null || true")}),
+        ) {
+            let output = envelope
+                .get("stdoutString")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if !output.trim().is_empty() {
+                return home_takeover_result(output);
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    Err(started.err().unwrap_or_else(|| {
+        "webOS override timed out; check /var/lib/luma-home-toggle/toggle.log before retrying"
+            .into()
+    }))
+}
+
+fn home_takeover_command(app: &str, enable: bool, attempt: &str) -> String {
+    format!(
+        "systemd-run --unit=luma-home-toggle-{attempt} --collect /bin/sh -c {} home-toggle {} {enable} {}",
+        update_argument(include_str!("../tv/home-toggle.sh")),
+        update_argument(app),
+        update_argument(attempt),
+    )
+}
+
+fn home_takeover_result(output: &str) -> Result<(), String> {
+    let result: Value = serde_json::from_str(output).map_err(|error| error.to_string())?;
+    if result.get("returnValue").and_then(Value::as_bool) == Some(true) {
+        Ok(())
+    } else {
+        Err("webOS override failed; check /var/lib/luma-home-toggle/toggle.log".into())
+    }
 }
 
 fn raw_call(uri: &str, payload: &Value) -> Result<Value, String> {
@@ -911,6 +959,18 @@ mod update_argument_tests {
     use super::*;
 
     #[test]
+    fn home_override_runs_in_an_independent_unit_and_only_accepts_verified_success() {
+        let command = home_takeover_command("/app with 'quotes'", true, &"a".repeat(32));
+        assert!(command.starts_with("systemd-run --unit=luma-home-toggle-"));
+        assert!(command.contains("--collect /bin/sh -c"));
+        assert!(command.contains("$$APP"));
+        assert!(home_takeover_result(r#"{"returnValue":true}"#).is_ok());
+        for output in [r#"{"returnValue":false}"#, "{}", "", "invalid"] {
+            assert!(home_takeover_result(output).is_err());
+        }
+    }
+
+    #[test]
     fn installer_variables_are_escaped_and_printf_formats_are_preserved() {
         let script = include_str!("../tv/self-update.sh");
         let argument = update_argument(script);
@@ -925,6 +985,7 @@ mod update_argument_tests {
     fn exec_shell_preserves_systemd_escapes_and_argument_boundaries() {
         for value in [
             include_str!("../tv/self-update.sh"),
+            include_str!("../tv/home-toggle.sh"),
             "path with 'quotes' and $VARIABLE ${BRACES} $(command) %n %% \\slashes",
         ] {
             let output = std::process::Command::new("/bin/sh")

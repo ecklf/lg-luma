@@ -135,6 +135,12 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 
 ### Takeover Method
 
+**Settings → System → webOS override** enables or disables takeover through Homebrew Channel's
+root service. Disable other Home-button mappings and Home replacements first. Enabling restarts
+Luma; the existing autostart hook is removed only after takeover succeeds and its status is verified.
+If an operation fails, check `/var/lib/luma-home-toggle/toggle.log`. The SSH commands below remain
+available for status checks and recovery.
+
 > [!NOTE]
 > Takeover is supported on **webOS 5, 6, 25 and 26**.\
 > The takeover does not delete LG Home: it remains underneath a temporary mount, which is cleared by

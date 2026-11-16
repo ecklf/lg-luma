@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 pub const WIDGETS_SECTION: usize = 2;
 pub const SYSTEM_SECTION: usize = 3;
-/// System › Luma as Home screen.
+/// System › webOS override.
 pub const HOME_TAKEOVER_ROW: usize = 9;
 pub const SECTION_COUNT: usize = 4;
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
@@ -256,6 +256,7 @@ pub struct State {
     pub recents: crate::recents::Recents,
     /// Whether this instance runs as the TV's Home (the takeover is enabled).
     pub home_takeover: bool,
+    pub home_takeover_pending: bool,
 }
 
 impl State {
@@ -300,6 +301,7 @@ impl State {
             input_name: String::new(),
             recents: crate::recents::Recents::default(),
             home_takeover: false,
+            home_takeover_pending: false,
         }
     }
 
@@ -2311,9 +2313,10 @@ impl State {
                     Some(Subpage::HomeTakeover) => {
                         let enable = index == 0;
                         self.close_subpage();
-                        return if enable == self.home_takeover {
+                        return if enable == self.home_takeover || self.home_takeover_pending {
                             vec![]
                         } else {
+                            self.home_takeover_pending = true;
                             vec![Effect::HomeTakeover(enable)]
                         };
                     }
