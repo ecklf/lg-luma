@@ -66,6 +66,16 @@ fn home_styles_share_content_and_keep_the_dock_fixed() {
     for style in WeatherStyle::ALL {
         state.preferences.weather_style = style;
         let rendered = scene(&state);
+        let top_label = if style == WeatherStyle::Compact {
+            "14°C"
+        } else {
+            "Vienna"
+        };
+        assert!(
+            rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::Text(label, rect, ..) if label == top_label && rect.y == 188.)),
+            "Weather content must align with the top of its default grid cell"
+        );
         assert!(
             rendered
                 .draw
@@ -85,13 +95,46 @@ fn home_styles_share_content_and_keep_the_dock_fixed() {
             WeatherStyle::Compact => {
                 assert_eq!(icons[0].w, 32.);
                 assert!(rendered.draw.iter().any(|draw| matches!(draw,
-                    Draw::Text(label, rect, ..) if label.contains(" · Vienna") && rect.y == icons[0].y)));
+                    Draw::Text(label, rect, ..) if label == "Vienna · Partly cloudy" && rect.y == icons[0].y && rect.x > icons[0].x)));
             }
         }
         assert_eq!(state.dock_y(), dock_y);
     }
     state.preferences.show_weather = false;
     assert!(weather_icons(&state).is_empty());
+}
+
+#[test]
+fn weather_grid_keeps_original_temperature_typography_and_spacing() {
+    let mut state = configured();
+    for weather_style in WeatherStyle::ALL {
+        state.preferences.weather_style = weather_style;
+        let rendered = scene(&state);
+        let (temperature, font) = rendered
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text(label, rect, font, ..) if label == "14°C" => Some((rect, font)),
+                _ => None,
+            })
+            .unwrap();
+        let condition = rendered
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text(label, rect, ..) if label.contains("Partly cloudy") => Some(rect),
+                _ => None,
+            })
+            .unwrap();
+        let expected_size = if weather_style == WeatherStyle::Compact {
+            88.
+        } else {
+            112.
+        };
+        assert_eq!(font.size, expected_size);
+        assert_eq!(font.weight, 500);
+        assert!(condition.y - (temperature.y + font.size * font.line_height) <= 12.);
+    }
 }
 
 #[test]
@@ -107,6 +150,8 @@ fn style_picker_previews_every_design_offline_and_only_saves_on_selection() {
     let rendered = scene(&state);
     assert!(rendered.draw.iter().any(|draw| matches!(draw,
         Draw::Text(label, ..) if label == "Compact")));
+    assert!(rendered.draw.iter().any(|draw| matches!(draw,
+        Draw::Text(label, ..) if label == "Vienna · Partly cloudy")));
     assert!(!rendered.draw.iter().any(|draw| matches!(draw,
         Draw::Text(label, ..) if label == "Compact inline")));
     assert!(!rendered.draw.iter().any(|draw| matches!(draw,

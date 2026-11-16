@@ -26,7 +26,9 @@
   bundled at `assets/licenses/lucide.txt`. The Luma upload icon and the small `luma-mark.svg` reuse
   original project artwork under MIT. PlayStation/Apple TV input paths were supplied by the user;
   the brand marks belong to Sony/Apple. The Shield and Xbox input icons are the NVIDIA eye and Xbox logo from Simple
-  Icons (CC0); the marks belong to NVIDIA and Microsoft. The Switch and Switch 2 input icons are the
+  Icons (CC0); the marks belong to NVIDIA and Microsoft. The Steam input icon is from
+  [Simple Icons](https://github.com/simple-icons/simple-icons/blob/develop/icons/steam.svg)
+  (CC0); the mark belongs to Valve. The Switch and Switch 2 input icons are the
   Wikimedia Commons logo files `Nintendo_Switch_Logo.svg` and
   `Nintendo_Switch_2_logo_transparent_black.svg`, recoloured to `currentColor`; the marks belong to
   Nintendo. Spotify/Kodi symbol treatments use the original native
