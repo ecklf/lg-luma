@@ -101,6 +101,73 @@ fn back_distinguishes_taps_holds_delayed_releases_and_cancelled_presses() {
     assert_eq!(button.release(webos, start + Duration::from_secs(1)), None);
 }
 
+#[test]
+fn recent_apps_behavior_persists_and_routes_back_without_breaking_navigation() {
+    use crate::model::{Preferences, RecentAppsBehavior};
+    assert_eq!(
+        Preferences::default().recent_apps_behavior,
+        RecentAppsBehavior::LongPress
+    );
+    for behavior in [
+        RecentAppsBehavior::ShortPress,
+        RecentAppsBehavior::LongPress,
+        RecentAppsBehavior::Off,
+    ] {
+        let mut state = ready();
+        state.preferences.recent_apps_behavior = behavior;
+        let saved = serde_json::to_string(&state.preferences).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Preferences>(&saved)
+                .unwrap()
+                .recent_apps_behavior,
+            behavior
+        );
+        state.back_press(false);
+        assert_eq!(
+            state.recents_open(),
+            behavior == RecentAppsBehavior::ShortPress
+        );
+        if state.recents_open() {
+            state.back();
+        }
+        state.back_press(true);
+        assert_eq!(
+            state.recents_open(),
+            behavior == RecentAppsBehavior::LongPress
+        );
+        if state.recents_open() {
+            state.back();
+        }
+        state.open(2);
+        state.back_press(false);
+        assert!(!state.recents_open());
+        if behavior == RecentAppsBehavior::Off {
+            assert!(state.open_recents().is_empty());
+            assert!(!state.recents_open());
+        }
+    }
+}
+
+#[test]
+fn recent_apps_setting_cycles_and_saves() {
+    use crate::model::RecentAppsBehavior;
+    let mut state = ready();
+    state.focus = Target::Setting(12);
+    for expected in [
+        RecentAppsBehavior::Off,
+        RecentAppsBehavior::ShortPress,
+        RecentAppsBehavior::LongPress,
+    ] {
+        assert!(
+            state
+                .activate()
+                .iter()
+                .any(|effect| matches!(effect, Effect::Save))
+        );
+        assert_eq!(state.preferences.recent_apps_behavior, expected);
+    }
+}
+
 fn native_key(scancode: u32, keycode: i32, down: bool) -> sdl2::event::Event {
     use sdl2::sys;
     // SAFETY: a zeroed SDL event has initialized scalar keyboard fields. Write

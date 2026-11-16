@@ -256,6 +256,33 @@ impl WeatherStyle {
 }
 
 pub const HOME_GRID_COLUMNS: usize = 6;
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RecentAppsBehavior {
+    ShortPress,
+    #[default]
+    LongPress,
+    Off,
+}
+
+impl RecentAppsBehavior {
+    pub fn label_key(self) -> &'static str {
+        match self {
+            Self::ShortPress => "shortPress",
+            Self::LongPress => "longPress",
+            Self::Off => "stateOff",
+        }
+    }
+
+    pub fn next(self) -> Self {
+        match self {
+            Self::ShortPress => Self::LongPress,
+            Self::LongPress => Self::Off,
+            Self::Off => Self::ShortPress,
+        }
+    }
+}
+
 pub const HOME_GRID_ROWS: usize = 4;
 pub const HOME_GRID_CELLS: usize = HOME_GRID_COLUMNS * HOME_GRID_ROWS;
 
@@ -331,6 +358,7 @@ impl WidgetPosition {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
+    pub recent_apps_behavior: RecentAppsBehavior,
     pub weather_style: WeatherStyle,
     pub app_sorting: AppSorting,
     pub app_launch_counts: BTreeMap<String, u64>,
@@ -380,6 +408,7 @@ impl Default for Preferences {
     fn default() -> Self {
         Self {
             weather_style: WeatherStyle::default(),
+            recent_apps_behavior: RecentAppsBehavior::default(),
             app_sorting: AppSorting::default(),
             app_launch_counts: BTreeMap::new(),
             greeting_position: HomeWidget::Greeting.default_position(),

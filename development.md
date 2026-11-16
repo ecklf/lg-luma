@@ -72,6 +72,11 @@ backend. Avoid copying the whole SDK library directory or the TV's graphics driv
 
 ## Controls and navigation
 
+`recent_apps_behavior` persists `long_press` (default), `short_press`, or `off`.
+Short press applies on Home only so Back still navigates settings. Timer-based holds,
+delayed releases, and native webOS Exit notifications use the same preference-aware routing.
+An overlay dismissal consumes the entire press and never reopens Recent apps on release.
+
 ### Startup profiling
 
 See [startup measurements](docs/startup.md) for the Liquid Glass startup regression and

@@ -279,7 +279,10 @@ Choose **Automatic** to clear that input's override and restore label-based icon
 
 ### Recent app switching
 
-Hold **Back** for 0.6 seconds from any page to open Recent apps. A short press never opens it,
+Choose **Settings → General → Recent apps** to cycle between **Long press** (default),
+**Off**, and **Short press**. Long press opens Recent apps after holding **Back** for 0.6 seconds
+from any page. Short press opens it with a tap on Home while preserving Back navigation elsewhere.
+Off disables the switcher. With the default long press setting, a short press never opens it,
 including on Home.
 
 - **Left / Right**, the pointer, or the scroll wheel browses recent apps and inputs.
