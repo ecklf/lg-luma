@@ -595,6 +595,29 @@ mod tests {
         }
     }
     #[test]
+    fn webos_override_name_and_diagnostics_are_present_in_every_language() {
+        for language in Language::ALL {
+            assert!(
+                language.t("homeTakeover").contains("webOS"),
+                "{}",
+                language.code()
+            );
+            let error = language.t("homeTakeoverError");
+            for required in [
+                "webOS",
+                "Homebrew Channel",
+                "/var/lib/luma-home-toggle/toggle.log",
+            ] {
+                assert!(
+                    error.contains(required),
+                    "Missing {required} / {}",
+                    language.code()
+                );
+            }
+        }
+    }
+
+    #[test]
     fn every_translation_preserves_the_english_message_placeholders() {
         fn placeholders(message: &str) -> std::collections::BTreeSet<&str> {
             message

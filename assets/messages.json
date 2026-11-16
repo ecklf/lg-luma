@@ -1260,19 +1260,19 @@
     "sv": "Avsluta appen"
   },
   "homeTakeover": {
-    "zh-tw": "將 Luma 設為主畫面",
+    "zh-tw": "webOS 主畫面覆寫",
     "en": "webOS override",
-    "de": "Luma als Startbildschirm",
-    "zh": "将 Luma 设为主屏幕",
-    "es": "Luma como pantalla de inicio",
-    "pt": "Luma como tela inicial",
-    "it": "Luma come schermata Home",
-    "ru": "Luma как главный экран",
-    "pl": "Luma jako ekran główny",
-    "fr": "Luma comme écran d'accueil",
-    "vi": "Luma làm màn hình chính",
-    "nl": "Luma als startscherm",
-    "sv": "Luma som hemskärm"
+    "de": "webOS-Überschreibung",
+    "zh": "webOS 主屏幕覆盖",
+    "es": "Sustitución de inicio de webOS",
+    "pt": "Substituição da tela inicial do webOS",
+    "it": "Sostituzione Home di webOS",
+    "ru": "Замена главного экрана webOS",
+    "pl": "Zastąpienie ekranu głównego webOS",
+    "fr": "Remplacement de l’accueil webOS",
+    "vi": "Ghi đè màn hình chính webOS",
+    "nl": "webOS-overschrijving",
+    "sv": "Åsidosätt webOS"
   },
   "homeTakeoverOnHint": {
     "zh-tw": "遙控器的主畫面鍵會開啟 Luma。需要透過 Homebrew Channel 取得 root 權限。",
@@ -1335,19 +1335,19 @@
     "sv": "LG:s hemskärm återställs…"
   },
   "homeTakeoverError": {
-    "zh-tw": "無法變更主畫面。Luma 需要透過 Homebrew Channel 取得 root 權限。",
+    "zh-tw": "無法驗證 webOS 主畫面覆寫。需要透過 Homebrew Channel 取得 root 權限。請參閱 /var/lib/luma-home-toggle/toggle.log。",
     "en": "Could not verify the webOS override. Root access through Homebrew Channel is required. See /var/lib/luma-home-toggle/toggle.log.",
-    "de": "Der Startbildschirm konnte nicht geändert werden. Luma benötigt Root-Zugriff über Homebrew Channel.",
-    "zh": "无法更改主屏幕。Luma 需要通过 Homebrew Channel 获取 root 权限。",
-    "es": "No se pudo cambiar la pantalla de inicio. Luma necesita acceso root mediante Homebrew Channel.",
-    "pt": "Não foi possível mudar a tela inicial. O Luma precisa de acesso root pelo Homebrew Channel.",
-    "it": "Impossibile cambiare la schermata Home. Luma richiede l’accesso root tramite Homebrew Channel.",
-    "ru": "Не удалось сменить главный экран. Luma нужен root-доступ через Homebrew Channel.",
-    "pl": "Nie udało się zmienić ekranu głównego. Luma wymaga dostępu root przez Homebrew Channel.",
-    "fr": "Impossible de changer l'écran d'accueil. Luma nécessite un accès root via Homebrew Channel.",
-    "vi": "Không thể thay đổi màn hình chính. Luma cần quyền root qua Homebrew Channel.",
-    "nl": "Het startscherm kon niet worden gewijzigd. Luma heeft root-toegang via Homebrew Channel nodig.",
-    "sv": "Hemskärmen kunde inte ändras. Luma behöver root-åtkomst via Homebrew Channel."
+    "de": "Die webOS-Überschreibung konnte nicht überprüft werden. Root-Zugriff über Homebrew Channel ist erforderlich. Siehe /var/lib/luma-home-toggle/toggle.log.",
+    "zh": "无法验证 webOS 主屏幕覆盖。需要通过 Homebrew Channel 获取 root 权限。请参阅 /var/lib/luma-home-toggle/toggle.log。",
+    "es": "No se pudo verificar la sustitución de inicio de webOS. Se requiere acceso root mediante Homebrew Channel. Consulta /var/lib/luma-home-toggle/toggle.log.",
+    "pt": "Não foi possível verificar a substituição da tela inicial do webOS. É necessário acesso root pelo Homebrew Channel. Consulte /var/lib/luma-home-toggle/toggle.log.",
+    "it": "Impossibile verificare la sostituzione Home di webOS. È necessario l’accesso root tramite Homebrew Channel. Consulta /var/lib/luma-home-toggle/toggle.log.",
+    "ru": "Не удалось проверить замену главного экрана webOS. Требуется root-доступ через Homebrew Channel. См. /var/lib/luma-home-toggle/toggle.log.",
+    "pl": "Nie udało się zweryfikować zastąpienia ekranu głównego webOS. Wymagany jest dostęp root przez Homebrew Channel. Zobacz /var/lib/luma-home-toggle/toggle.log.",
+    "fr": "Impossible de vérifier le remplacement de l’accueil webOS. Un accès root via Homebrew Channel est requis. Consultez /var/lib/luma-home-toggle/toggle.log.",
+    "vi": "Không thể xác minh việc ghi đè màn hình chính webOS. Cần quyền root qua Homebrew Channel. Xem /var/lib/luma-home-toggle/toggle.log.",
+    "nl": "De webOS-overschrijving kon niet worden geverifieerd. Root-toegang via Homebrew Channel is vereist. Zie /var/lib/luma-home-toggle/toggle.log.",
+    "sv": "Det gick inte att verifiera åsidosättningen av webOS. Root-åtkomst via Homebrew Channel krävs. Se /var/lib/luma-home-toggle/toggle.log."
   },
   "language": {
     "zh-tw": "顯示語言",
