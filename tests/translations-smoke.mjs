@@ -14,6 +14,7 @@ const binary = path.resolve(root, process.env.CARGO_TARGET_DIR ?? 'target', 'deb
 const requests = [];
 const places = {
   ca: { name: 'Viena', region: 'Viena', country: 'Àustria' },
+  hu: { name: 'Bécs', region: 'Bécs', country: 'Ausztria' },
   en: { name: 'Vienna', region: 'Vienna', country: 'Austria' },
   de: { name: 'Wien', region: 'Wien', country: 'Österreich' },
   zh: { name: '维也纳', region: '维也纳', country: '奥地利' },
@@ -102,10 +103,12 @@ function contains(state, key, language) {
   assert.ok(state.ui_text.includes(messages[key][language]), `Missing rendered ${key}/${language}`);
 }
 const picker = 'settings,enter,down,enter';
-const weatherPage = 'settings,down,down,down,enter,enter';
-const inputsPage = 'settings,down,down,down,enter,down,down,enter';
+const widgetsPage = 'settings,down,down,down,down,enter';
+const weatherPage = `${widgetsPage},down,right,right,right,right,enter,enter`;
+const inputsPage = 'settings,down,down,enter';
+const backgroundsPage = 'settings,down,down,down,enter';
 const manageApps = 'settings,down,enter,enter';
-const location = `${weatherPage},down,enter`;
+const location = `${weatherPage},enter`;
 try {
   if (process.env.LUMA_SMOKE_SKIP_BUILD !== '1')
     await run('cargo', ['build', '--locked', '--package', 'luma']);
@@ -128,12 +131,12 @@ try {
 
   const chinese = await scenario(
     'zh-home',
-    `${picker},${Array(12).fill('down').join(',')},enter,home`,
+    `${picker},${Array(13).fill('down').join(',')},enter,home`,
   );
   assert.equal(chinese.preferences.language, 'zh');
   contains(chinese, 'setWeatherLocation', 'zh');
   assert.ok(!chinese.ui_text.includes('Netflix'));
-  assert.ok(!chinese.ui_text.includes('10月21日星期三'));
+  assert.ok(chinese.ui_text.includes('10月21日星期三'));
   const chineseSettings = await scenario('zh-settings', 'settings');
   contains(chineseSettings, 'language', 'zh');
 
@@ -147,7 +150,7 @@ try {
   const forecasts = requests.filter((request) => request.path === '/v1/forecast').length;
   const changed = await scenario(
     'de-weather',
-    `${picker},${Array(12).fill('up').join(',')},enter,home,await-weather`,
+    `${picker},${Array(13).fill('up').join(',')},enter,home,await-weather`,
   );
   assert.equal(changed.preferences.language, 'de');
   contains(changed, 'partlyCloudy', 'de');
@@ -178,21 +181,28 @@ try {
   const input = await scenario('zh-input-options', `${inputsPage},enter`);
   for (const key of ['stateOn', 'stateOff', 'stateAuto', 'inputWhenConnected'])
     contains(input, key, 'zh');
-  const background = await scenario('zh-background', 'settings,down,down,enter');
+  const background = await scenario('zh-background', backgroundsPage);
   for (const key of ['background', 'uploadWallpaper']) contains(background, key, 'zh');
   assert.deepEqual(background.focus, { Background: 3 });
   // Background thumbnails have no captions; their actions are translated in the popup.
   const backgroundOptions = await scenario(
     'zh-background-options',
-    'settings,down,down,enter,down,enter',
+    `${backgroundsPage},down,enter`,
   );
   assert.equal(backgroundOptions.modal, true);
   assert.equal(backgroundOptions.focus, 'UseBackground');
   for (const key of ['useBackground', 'deleteBackground']) contains(backgroundOptions, key, 'zh');
   const keyboard = await scenario('zh-keyboard', 'apps,type:Netflix');
   for (const key of ['findApp', 'space', 'delete', 'clear', 'done']) contains(keyboard, key, 'zh');
+  const widgetSettings = await scenario('zh-widget-manager', widgetsPage);
+  assert.equal(widgetSettings.focus, 'WidgetAdd');
+  for (const key of ['widgets', 'addWidget', 'resetWidgets', 'shortcuts'])
+    contains(widgetSettings, key, 'zh');
   const weatherSettings = await scenario('zh-weather-settings', weatherPage);
-  for (const key of ['widgets', 'showWidget', 'location', 'temperature'])
+  assert.equal(weatherSettings.subpage, 'Weather');
+  assert.equal(weatherSettings.focus, 'WeatherLocation');
+  assert.ok(!weatherSettings.ui_text.includes(messages.showWidget.zh));
+  for (const key of ['widgets', 'location', 'temperature', 'weatherStyle'])
     contains(weatherSettings, key, 'zh');
   assert.ok(
     !weatherSettings.ui_text.some((label) => label.includes('Open-Meteo')),
@@ -206,11 +216,11 @@ try {
   );
   const portuguese = await scenario(
     'pt-home',
-    `${picker},${Array(6).fill('down').join(',')},enter,home`,
+    `${picker},${Array(7).fill('down').join(',')},enter,home`,
   );
   assert.equal(portuguese.preferences.language, 'pt');
   contains(portuguese, 'setWeatherLocation', 'pt');
-  assert.ok(!portuguese.ui_text.includes('QUARTA-FEIRA, 21 DE OUTUBRO'));
+  assert.ok(portuguese.ui_text.includes('QUARTA-FEIRA, 21 DE OUTUBRO'));
   assert.ok(!portuguese.ui_text.includes('Netflix'), 'Home remains artwork-only in Portuguese');
   const portugueseSettings = await scenario('pt-settings', 'settings');
   assert.equal(
@@ -249,22 +259,26 @@ try {
     preferences,
     JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
   );
-  const swedishPicker = `${picker},${Array(7).fill('down').join(',')}`;
+  const portuguesePicker = `${picker},${Array(7).fill('down').join(',')}`;
+  const portugueseFocused = await scenario('pt-picker', portuguesePicker);
+  assert.deepEqual(portugueseFocused.focus, { Choice: 9 });
+  assert.equal(portugueseFocused.scroll, 0, 'The first ten language rows fit without scrolling');
+  const swedishPicker = `${portuguesePicker},down`;
   const swedishFocused = await scenario('sv-picker', swedishPicker);
-  assert.deepEqual(swedishFocused.focus, { Choice: 9 });
-  assert.equal(swedishFocused.scroll, 0, 'The first ten language rows fit without scrolling');
+  assert.deepEqual(swedishFocused.focus, { Choice: 10 });
+  assert.ok(swedishFocused.scroll > 0, 'Swedish must scroll fully into view');
   const vietnamesePicker = `${swedishPicker},down`;
   const vietnameseFocused = await scenario('vi-picker', vietnamesePicker);
-  assert.deepEqual(vietnameseFocused.focus, { Choice: 10 });
+  assert.deepEqual(vietnameseFocused.focus, { Choice: 11 });
   assert.ok(vietnameseFocused.ui_text.includes('Tiếng Việt'));
   const chineseFocused = await scenario('zh-picker-last', `${vietnamesePicker},down,down,down`);
-  assert.deepEqual(chineseFocused.focus, { Choice: 13 });
+  assert.deepEqual(chineseFocused.focus, { Choice: 14 });
   assert.ok(chineseFocused.scroll > 0, 'Simplified Chinese must scroll fully into view');
   assert.ok(chineseFocused.ui_text.includes('简体中文'));
   const vietnamese = await scenario('vi-home', `${vietnamesePicker},enter,home`);
   assert.equal(vietnamese.preferences.language, 'vi');
   contains(vietnamese, 'setWeatherLocation', 'vi');
-  assert.ok(!vietnamese.ui_text.includes('THỨ TƯ, 21 THÁNG 10'));
+  assert.ok(vietnamese.ui_text.includes('THỨ TƯ, 21 THÁNG 10'));
   assert.ok(!vietnamese.ui_text.includes('Netflix'), 'Home remains artwork-only');
   assert.equal(JSON.parse(await fs.readFile(preferences, 'utf8')).language, 'vi');
 
@@ -306,15 +320,15 @@ try {
     preferences,
     JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
   );
-  const traditionalPicker = `${picker},${Array(12).fill('down').join(',')}`;
+  const traditionalPicker = `${picker},${Array(13).fill('down').join(',')}`;
   const traditionalFocused = await scenario('zh-tw-picker', traditionalPicker);
-  assert.deepEqual(traditionalFocused.focus, { Choice: 14 });
+  assert.deepEqual(traditionalFocused.focus, { Choice: 15 });
   assert.ok(traditionalFocused.scroll > 0);
   assert.ok(traditionalFocused.ui_text.includes('繁體中文'));
   const traditional = await scenario('zh-tw-home', `${traditionalPicker},enter,home`);
   assert.equal(traditional.preferences.language, 'zh-tw');
   contains(traditional, 'setWeatherLocation', 'zh-tw');
-  assert.ok(!traditional.ui_text.includes('10月21日星期三'));
+  assert.ok(traditional.ui_text.includes('10月21日星期三'));
   assert.ok(!traditional.ui_text.includes('Netflix'));
   const traditionalSettings = await scenario('zh-tw-settings', 'settings');
   assert.equal(traditionalSettings.preferences.language, 'zh-tw');
@@ -337,7 +351,7 @@ try {
   const catalan = await scenario('ca-home', `${picker},up,up,enter,home`);
   assert.equal(catalan.preferences.language, 'ca');
   contains(catalan, 'setWeatherLocation', 'ca');
-  assert.ok(!catalan.ui_text.includes('DIMECRES, 21 D’OCTUBRE'));
+  assert.ok(catalan.ui_text.includes('DIMECRES, 21 D’OCTUBRE'));
   assert.ok(!catalan.ui_text.includes('Netflix'));
 
   const catalanSettings = await scenario('ca-settings', 'settings');
@@ -358,6 +372,38 @@ try {
   assert.equal(
     requests.filter((request) => request.path === '/v1/search').at(-1).query.language,
     'ca',
+  );
+
+  await fs.writeFile(
+    preferences,
+    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
+  );
+  const hungarianPicker = `${picker},${Array(4).fill('down').join(',')}`;
+  const hungarianFocused = await scenario('hu-picker', hungarianPicker);
+  assert.deepEqual(hungarianFocused.focus, { Choice: 6 });
+  assert.equal(hungarianFocused.scroll, 0);
+  assert.ok(hungarianFocused.ui_text.includes('Magyar'));
+  const hungarian = await scenario('hu-home', `${hungarianPicker},enter,home`);
+  assert.equal(hungarian.preferences.language, 'hu');
+  contains(hungarian, 'setWeatherLocation', 'hu');
+  assert.ok(hungarian.ui_text.includes('2026. OKTÓBER 21., SZERDA'));
+  const hungarianSettings = await scenario('hu-settings', 'settings');
+  assert.ok(hungarianSettings.ui_text.includes('Magyar'));
+  contains(hungarianSettings, 'language', 'hu');
+  const hungarianWidgets = await scenario('hu-widget-manager', widgetsPage);
+  assert.equal(hungarianWidgets.focus, 'WidgetAdd');
+  for (const key of ['widgets', 'addWidget', 'resetWidgets', 'shortcuts'])
+    contains(hungarianWidgets, key, 'hu');
+  const hungarianWeather = await scenario(
+    'hu-weather',
+    `${location},type:Bécs,back,enter,await-search,down,enter,home,await-weather`,
+  );
+  assert.equal(hungarianWeather.preferences.weather_location.name, 'Bécs');
+  assert.equal(hungarianWeather.preferences.weather_location.country, 'Ausztria');
+  contains(hungarianWeather, 'partlyCloudy', 'hu');
+  assert.equal(
+    requests.filter((request) => request.path === '/v1/search').at(-1).query.language,
+    'hu',
   );
 
   console.log(
