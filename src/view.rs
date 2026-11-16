@@ -4143,6 +4143,32 @@ mod tests {
     use crate::model::{Input, InputMode, Preferences, demo_inventory};
 
     #[test]
+    fn hungarian_home_renders_localized_date_and_honors_date_toggle() {
+        let assets = assets();
+        let mut state = State::new(Preferences {
+            language: Language::Hu,
+            ..Default::default()
+        });
+        state.set_inventory(demo_inventory(), None);
+        let now = OffsetDateTime::parse(
+            "2026-10-21T20:41:00+02:00",
+            &time::format_description::well_known::Rfc3339,
+        )
+        .unwrap();
+        assert!(state.preferences.show_date);
+        for visible in [true, false] {
+            state.preferences.show_date = visible;
+            let rendered = scene(&state, &assets, now);
+            assert_eq!(
+                rendered.draw.iter().any(|draw| matches!(draw,
+                    Draw::Text(label, ..) if label == "2026. OKTÓBER 21., SZERDA"
+                )),
+                visible
+            );
+        }
+    }
+
+    #[test]
     fn header_clock_keeps_every_digit_on_one_line() {
         let assets = assets();
         let mut state = State::new(Preferences::default());

@@ -14,6 +14,7 @@ const binary = path.resolve(root, process.env.CARGO_TARGET_DIR ?? 'target', 'deb
 const requests = [];
 const places = {
   ca: { name: 'Viena', region: 'Viena', country: 'Àustria' },
+  hu: { name: 'Bécs', region: 'Bécs', country: 'Ausztria' },
   en: { name: 'Vienna', region: 'Vienna', country: 'Austria' },
   de: { name: 'Wien', region: 'Wien', country: 'Österreich' },
   zh: { name: '维也纳', region: '维也纳', country: '奥地利' },
@@ -130,7 +131,7 @@ try {
 
   const chinese = await scenario(
     'zh-home',
-    `${picker},${Array(12).fill('down').join(',')},enter,home`,
+    `${picker},${Array(13).fill('down').join(',')},enter,home`,
   );
   assert.equal(chinese.preferences.language, 'zh');
   contains(chinese, 'setWeatherLocation', 'zh');
@@ -149,7 +150,7 @@ try {
   const forecasts = requests.filter((request) => request.path === '/v1/forecast').length;
   const changed = await scenario(
     'de-weather',
-    `${picker},${Array(12).fill('up').join(',')},enter,home,await-weather`,
+    `${picker},${Array(13).fill('up').join(',')},enter,home,await-weather`,
   );
   assert.equal(changed.preferences.language, 'de');
   contains(changed, 'partlyCloudy', 'de');
@@ -215,7 +216,7 @@ try {
   );
   const portuguese = await scenario(
     'pt-home',
-    `${picker},${Array(6).fill('down').join(',')},enter,home`,
+    `${picker},${Array(7).fill('down').join(',')},enter,home`,
   );
   assert.equal(portuguese.preferences.language, 'pt');
   contains(portuguese, 'setWeatherLocation', 'pt');
@@ -258,16 +259,20 @@ try {
     preferences,
     JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
   );
-  const swedishPicker = `${picker},${Array(7).fill('down').join(',')}`;
+  const portuguesePicker = `${picker},${Array(7).fill('down').join(',')}`;
+  const portugueseFocused = await scenario('pt-picker', portuguesePicker);
+  assert.deepEqual(portugueseFocused.focus, { Choice: 9 });
+  assert.equal(portugueseFocused.scroll, 0, 'The first ten language rows fit without scrolling');
+  const swedishPicker = `${portuguesePicker},down`;
   const swedishFocused = await scenario('sv-picker', swedishPicker);
-  assert.deepEqual(swedishFocused.focus, { Choice: 9 });
-  assert.equal(swedishFocused.scroll, 0, 'The first ten language rows fit without scrolling');
+  assert.deepEqual(swedishFocused.focus, { Choice: 10 });
+  assert.ok(swedishFocused.scroll > 0, 'Swedish must scroll fully into view');
   const vietnamesePicker = `${swedishPicker},down`;
   const vietnameseFocused = await scenario('vi-picker', vietnamesePicker);
-  assert.deepEqual(vietnameseFocused.focus, { Choice: 10 });
+  assert.deepEqual(vietnameseFocused.focus, { Choice: 11 });
   assert.ok(vietnameseFocused.ui_text.includes('Tiếng Việt'));
   const chineseFocused = await scenario('zh-picker-last', `${vietnamesePicker},down,down,down`);
-  assert.deepEqual(chineseFocused.focus, { Choice: 13 });
+  assert.deepEqual(chineseFocused.focus, { Choice: 14 });
   assert.ok(chineseFocused.scroll > 0, 'Simplified Chinese must scroll fully into view');
   assert.ok(chineseFocused.ui_text.includes('简体中文'));
   const vietnamese = await scenario('vi-home', `${vietnamesePicker},enter,home`);
@@ -315,9 +320,9 @@ try {
     preferences,
     JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
   );
-  const traditionalPicker = `${picker},${Array(12).fill('down').join(',')}`;
+  const traditionalPicker = `${picker},${Array(13).fill('down').join(',')}`;
   const traditionalFocused = await scenario('zh-tw-picker', traditionalPicker);
-  assert.deepEqual(traditionalFocused.focus, { Choice: 14 });
+  assert.deepEqual(traditionalFocused.focus, { Choice: 15 });
   assert.ok(traditionalFocused.scroll > 0);
   assert.ok(traditionalFocused.ui_text.includes('繁體中文'));
   const traditional = await scenario('zh-tw-home', `${traditionalPicker},enter,home`);
@@ -367,6 +372,38 @@ try {
   assert.equal(
     requests.filter((request) => request.path === '/v1/search').at(-1).query.language,
     'ca',
+  );
+
+  await fs.writeFile(
+    preferences,
+    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
+  );
+  const hungarianPicker = `${picker},${Array(4).fill('down').join(',')}`;
+  const hungarianFocused = await scenario('hu-picker', hungarianPicker);
+  assert.deepEqual(hungarianFocused.focus, { Choice: 6 });
+  assert.equal(hungarianFocused.scroll, 0);
+  assert.ok(hungarianFocused.ui_text.includes('Magyar'));
+  const hungarian = await scenario('hu-home', `${hungarianPicker},enter,home`);
+  assert.equal(hungarian.preferences.language, 'hu');
+  contains(hungarian, 'setWeatherLocation', 'hu');
+  assert.ok(hungarian.ui_text.includes('2026. OKTÓBER 21., SZERDA'));
+  const hungarianSettings = await scenario('hu-settings', 'settings');
+  assert.ok(hungarianSettings.ui_text.includes('Magyar'));
+  contains(hungarianSettings, 'language', 'hu');
+  const hungarianWidgets = await scenario('hu-widget-manager', widgetsPage);
+  assert.equal(hungarianWidgets.focus, 'WidgetAdd');
+  for (const key of ['widgets', 'addWidget', 'resetWidgets', 'shortcuts'])
+    contains(hungarianWidgets, key, 'hu');
+  const hungarianWeather = await scenario(
+    'hu-weather',
+    `${location},type:Bécs,back,enter,await-search,down,enter,home,await-weather`,
+  );
+  assert.equal(hungarianWeather.preferences.weather_location.name, 'Bécs');
+  assert.equal(hungarianWeather.preferences.weather_location.country, 'Ausztria');
+  contains(hungarianWeather, 'partlyCloudy', 'hu');
+  assert.equal(
+    requests.filter((request) => request.path === '/v1/search').at(-1).query.language,
+    'hu',
   );
 
   console.log(

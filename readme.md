@@ -130,7 +130,7 @@ to help make Luma available by default.
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_3.3.0_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_3.4.0_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -247,7 +247,7 @@ Test on a spare button first. Disable the mapping in Input Hook to restore norma
 ## Features
 
 Choose the interface language in **Settings → General → Language**. Luma supports Catalan,
-Czech, Dutch, English, French, German, Italian, Polish, Portuguese (Brazil), Russian,
+Czech, Dutch, English, French, German, Hungarian, Italian, Polish, Portuguese (Brazil), Russian,
 Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese.
 
 ### Backgrounds
@@ -342,7 +342,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_3.3.0_arm.ipk
+dist/com.ecklf.luma_3.4.0_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png

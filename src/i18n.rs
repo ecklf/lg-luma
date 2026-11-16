@@ -32,15 +32,17 @@ pub enum Language {
     Sv,
     Cs,
     Ca,
+    Hu,
 }
 impl Language {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::Ca,
         Self::De,
         Self::En,
         Self::Es,
         Self::Fr,
         Self::It,
+        Self::Hu,
         Self::Nl,
         Self::Pl,
         Self::Pt,
@@ -68,6 +70,7 @@ impl Language {
             Self::Sv => "sv",
             Self::Cs => "cs",
             Self::Ca => "ca",
+            Self::Hu => "hu",
         }
     }
     pub fn name(self) -> &'static str {
@@ -87,6 +90,7 @@ impl Language {
             Self::Sv => "Svenska",
             Self::Cs => "Čeština",
             Self::Ca => "Català",
+            Self::Hu => "Magyar",
         }
     }
     pub fn index(self) -> usize {
@@ -161,6 +165,35 @@ impl Language {
                     "December"
                 ][month],
                 now.day()
+            )
+            .to_uppercase(),
+            Self::Hu => format!(
+                "{}. {} {}., {}",
+                now.year(),
+                [
+                    "január",
+                    "február",
+                    "március",
+                    "április",
+                    "május",
+                    "június",
+                    "július",
+                    "augusztus",
+                    "szeptember",
+                    "október",
+                    "november",
+                    "december"
+                ][month],
+                now.day(),
+                [
+                    "hétfő",
+                    "kedd",
+                    "szerda",
+                    "csütörtök",
+                    "péntek",
+                    "szombat",
+                    "vasárnap"
+                ][weekday]
             )
             .to_uppercase(),
             Self::De => format!(
@@ -531,6 +564,8 @@ impl Language {
             let period = match (self, now.hour() >= 12) {
                 (Self::Ca, false) => "a. m.",
                 (Self::Ca, true) => "p. m.",
+                (Self::Hu, false) => "de.",
+                (Self::Hu, true) => "du.",
                 (_, false) => "AM",
                 (_, true) => "PM",
             };
@@ -557,6 +592,7 @@ pub fn deserialize_language<'de, D: Deserializer<'de>>(
             Some("sv") => Language::Sv,
             Some("cs") => Language::Cs,
             Some("ca") => Language::Ca,
+            Some("hu") => Language::Hu,
             _ => Language::En,
         },
     )
@@ -634,6 +670,7 @@ mod tests {
                 super::Language::Sv => "Swedish",
                 super::Language::Cs => "Czech",
                 super::Language::Ca => "Catalan",
+                super::Language::Hu => "Hungarian",
             };
             assert!(
                 description.contains(name),
@@ -771,6 +808,9 @@ mod tests {
         assert_eq!(Language::En.clock(now, true, false), "20:41");
         assert_eq!(Language::En.clock(now, true, true), "20:41:00");
         assert_eq!(Language::En.clock(now, false, true), "8:41:00 PM");
+        assert_eq!(Language::Hu.date(now), "2026. OKTÓBER 21., SZERDA");
+        assert_eq!(Language::Hu.clock(now, true, false), "20:41");
+        assert_eq!(Language::Hu.clock(now, false, true), "8:41:00 du.");
     }
     #[test]
     fn portuguese_dates_include_accented_names_and_handle_leap_days() {
