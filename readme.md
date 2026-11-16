@@ -28,37 +28,6 @@ https://github.com/user-attachments/assets/5b2c6e78-ec77-41f5-a79a-1fcfbe8e524b
 
 </details>
 
-## Home and app drawer
-
-Home uses Liquid Glass controls over your wallpaper, a floating favorites dock, and a weather
-block with a condition icon, temperature, condition, and location. The greeting and standalone
-date have been removed.
-
-- **Left / Right** browses favorites. Hold **OK** to reorder them.
-- **Down** from favorites opens the animated six-column app drawer.
-- **Up** from the drawer’s first app row returns Home with the corresponding favorite selected.
-- **Up** from favorites reaches the corner controls.
-- **Back** closes the drawer and focuses the first favorite.
-- **Settings → General → App sorting** chooses **Alphabetically** (default) or **Usage count**.
-  Usage sorts by successful launches from Luma, most used first, with alphabetical ties.
-  Counts stay local and persist across restarts. Favorites keep their manual order.
-- **Settings → General → UI sounds** enables soft, tvOS-inspired navigation, select, and back
-  feedback. Off by default; uses original synthesized sounds, not Apple recordings.
-- **Settings → Widgets → Weather → Widget style** offers **Standard**, **No icon**,
-  and **Compact**, with a preview of every design before choosing. Compact
-  places a small condition icon on the second line beside the condition and location.
-- **OK / click** launches apps directly. Manage favorites, hidden apps, and uninstall actions in
-  **Luma Settings → Apps**. Hidden apps remain listed there.
-- Direct **input pills** at the top left show names, icons, and connection dots, respecting
-  each input's Auto / On / Off visibility setting.
-- The **clock** opens floating Control Center-style actions for **Luma Settings** or LG's native
-  **TV settings**. LG's native settings UI is unchanged.
-
-Screenshots are native desktop previews, not hardware performance claims.
-
-If installed app icons look stale, use **Settings → System → Reset icon cache** to
-clear cached artwork and reload it without changing your preferences.
-
 ## Compatibility
 
 > [!NOTE]
@@ -161,7 +130,7 @@ to help make Luma available by default.
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_3.2.1_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_3.4.0_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -284,7 +253,7 @@ Test on a spare button first. Disable the mapping in Input Hook to restore norma
 ## Features
 
 Choose the interface language in **Settings → General → Language**. Luma supports Catalan,
-Czech, Dutch, English, French, German, Italian, Polish, Portuguese (Brazil), Russian,
+Czech, Dutch, English, French, German, Hungarian, Italian, Polish, Portuguese (Brazil), Russian,
 Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese.
 
 ### Backgrounds
@@ -305,10 +274,11 @@ shaded image. This does not change LG's launch splash.
 
 ### Input icons
 
-Open **Settings → Widgets → Inputs**, select an input, then choose
+Open **Settings → Inputs**, select an input, then choose
 **Icon** to open a native picker for bundled SVG icons. Choices are **Automatic** (the default,
 using label detection), **HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**,
-**NVIDIA Shield**, **Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, and **Xbox**.
+**NVIDIA Shield**, **Steam**, **Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**,
+**Sony**, **DVD**, **Blu-ray**, **Disk**, and **Xbox**.
 
 An explicit icon choice is saved separately for each input and persists across restarts.
 Choose **Automatic** to clear that input's override and restore label-based icon detection.
@@ -351,7 +321,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_3.2.1_arm.ipk
+dist/com.ecklf.luma_3.4.0_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png
