@@ -82,6 +82,8 @@ pub enum Target {
     RemoveWidget(HomeWidget),
     MoveWidget(HomeWidget),
     DateToggle,
+    GreetingName,
+    GreetingNameReset,
     DateFormat,
     ClockFormat,
     ClockTimeFormat,
@@ -191,6 +193,7 @@ pub enum TextField {
     Apps,
     Location,
     InputName,
+    GreetingName,
 }
 
 #[derive(Clone, Copy)]
@@ -275,6 +278,7 @@ pub struct State {
     pub weather: weather::Weather,
     pub keyboard_field: TextField,
     pub input_name: String,
+    pub greeting_name: String,
     pub recents: crate::recents::Recents,
 }
 
@@ -322,6 +326,7 @@ impl State {
             weather: weather::Weather::default(),
             keyboard_field: TextField::Apps,
             input_name: String::new(),
+            greeting_name: String::new(),
             recents: crate::recents::Recents::default(),
         }
     }
@@ -1589,7 +1594,12 @@ impl State {
                 }
             }
             let setting_rows: Option<&[Target]> = match self.subpage {
-                Some(Subpage::Greeting) => Some(&[Target::DateToggle, Target::DateFormat]),
+                Some(Subpage::Greeting) => Some(&[
+                    Target::DateToggle,
+                    Target::DateFormat,
+                    Target::GreetingName,
+                    Target::GreetingNameReset,
+                ]),
                 Some(Subpage::Weather) => Some(&[
                     Target::WeatherLocation,
                     Target::WeatherTemperature,
@@ -1621,6 +1631,7 @@ impl State {
                             Target::ClockFormat
                                 | Target::ClockTimeFormat
                                 | Target::DateFormat
+                                | Target::GreetingName
                                 | Target::WeatherLocation
                                 | Target::WeatherTemperature
                                 | Target::WeatherStyle
@@ -2205,6 +2216,16 @@ impl State {
                 self.dirty = true;
                 return;
             }
+            if self.keyboard_field == TextField::GreetingName {
+                let length = self.greeting_name.chars().count();
+                self.greeting_name.extend(
+                    text.chars()
+                        .filter(|c| !c.is_control())
+                        .take(INPUT_NAME_LIMIT.saturating_sub(length)),
+                );
+                self.dirty = true;
+                return;
+            }
             self.query.extend(
                 text.chars()
                     .filter(|c| !c.is_control())
@@ -2223,6 +2244,8 @@ impl State {
                 self.weather.edit(query);
             } else if self.keyboard_field == TextField::InputName {
                 self.input_name.pop();
+            } else if self.keyboard_field == TextField::GreetingName {
+                self.greeting_name.pop();
             } else {
                 self.query.pop();
             }
@@ -2250,6 +2273,14 @@ impl State {
     }
 
     fn commit_text_input(&mut self) -> Vec<Effect> {
+        if self.keyboard_field == TextField::GreetingName {
+            let name = clean_input_name(&std::mem::take(&mut self.greeting_name));
+            if !name.is_empty() && self.preferences.greeting_name != name {
+                self.preferences.greeting_name = name;
+                return vec![Effect::Save];
+            }
+            return vec![];
+        }
         self.commit_input_name()
     }
 
@@ -2348,6 +2379,8 @@ impl State {
             self.weather.edit(query);
         } else if self.keyboard_field == TextField::InputName {
             self.input_name = query;
+        } else if self.keyboard_field == TextField::GreetingName {
+            self.greeting_name = query;
         } else {
             self.query = query;
             self.scroll = 0.;
@@ -2359,6 +2392,7 @@ impl State {
         match self.keyboard_field {
             TextField::Location => &self.weather.query,
             TextField::InputName => &self.input_name,
+            TextField::GreetingName => &self.greeting_name,
             TextField::Apps => &self.query,
         }
     }
@@ -2367,6 +2401,9 @@ impl State {
         if field == TextField::InputName {
             // The TV keyboard starts empty, so a new name replaces the old one.
             self.input_name.clear();
+        }
+        if field == TextField::GreetingName {
+            self.greeting_name.clear();
         }
         if cfg!(all(
             feature = "webos",
@@ -2377,6 +2414,7 @@ impl State {
             self.focus = match field {
                 TextField::Location => Target::WeatherQuery,
                 TextField::InputName => Target::InputRename,
+                TextField::GreetingName => Target::GreetingName,
                 TextField::Apps => Target::Search,
             };
             self.panel_started = None;
@@ -2404,6 +2442,7 @@ impl State {
         match self.keyboard_field {
             TextField::Location => Target::WeatherSearch,
             TextField::InputName => Target::InputRename,
+            TextField::GreetingName => Target::GreetingName,
             TextField::Apps => Target::Search,
         }
     }
@@ -2575,6 +2614,14 @@ impl State {
                 }
             }
             Target::InputRename => self.open_keyboard(TextField::InputName),
+            Target::GreetingName => self.open_keyboard(TextField::GreetingName),
+            Target::GreetingNameReset => {
+                self.focus = Target::GreetingName;
+                if !self.preferences.greeting_name.is_empty() {
+                    self.preferences.greeting_name.clear();
+                    return vec![Effect::Save];
+                }
+            }
             Target::WidgetCell(cell) if cell < HOME_GRID_CELLS => {
                 if let Some(widget) = WidgetPosition::from_cell(cell)
                     .and_then(|position| self.preferences.widget_at(position))
@@ -3082,6 +3129,7 @@ impl State {
                 "Clear" => match self.keyboard_field {
                     TextField::Location => self.weather.edit(String::new()),
                     TextField::InputName => self.input_name.clear(),
+                    TextField::GreetingName => self.greeting_name.clear(),
                     TextField::Apps => self.query.clear(),
                 },
                 "Done" => {

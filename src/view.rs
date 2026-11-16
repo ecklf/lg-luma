@@ -1269,7 +1269,7 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
         }
         // Keep the original typography within the wider 4×1 footprint,
         // fitting long translations rather than clipping the widget.
-        let label = language.greeting(now.hour(), "");
+        let label = language.greeting(now.hour(), &state.preferences.greeting_name);
         let style = assets.fit_text(&label, text(90.4, 500, -0.065).leading(1.05), cell.w);
         let height = style.size * style.line_height;
         let date_band = if state.preferences.show_date {
@@ -3126,6 +3126,12 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
 
 fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
+    let (name, _) = assets.fit_line(
+        &state.preferences.greeting_name,
+        text(18.4, 450, 0.),
+        170.,
+        18.4,
+    );
     for (index, (target, title, value, chevron)) in [
         (
             Target::DateToggle,
@@ -3143,6 +3149,8 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
             state.preferences.date_format.label(language),
             true,
         ),
+        (Target::GreetingName, "name", name.as_str(), true),
+        (Target::GreetingNameReset, "clearName", "", false),
     ]
     .into_iter()
     .enumerate()
@@ -3948,6 +3956,7 @@ fn keyboard(out: &mut Scene, state: &State, assets: &Assets) {
         match state.keyboard_field {
             TextField::Location => language.t("cityPostcode"),
             TextField::InputName => language.t("inputName"),
+            TextField::GreetingName => language.t("name"),
             TextField::Apps => language.t("findApp"),
         },
         Rect::new(389., 324., 1000., 44.),
@@ -4389,7 +4398,7 @@ mod tests {
     }
 
     #[test]
-    fn greeting_widget_ignores_legacy_names_on_home() {
+    fn greeting_widget_restores_legacy_names_on_home() {
         let assets = assets();
         for name in ["", "Ana"] {
             let preferences = serde_json::from_value(
@@ -4399,7 +4408,7 @@ mod tests {
             let state = State::new(preferences);
             let mut scene = Scene::new();
             home(&mut scene, &state, &assets, OffsetDateTime::UNIX_EPOCH);
-            let greeting = state.preferences.language.greeting(0, "");
+            let greeting = state.preferences.language.greeting(0, name);
             assert!(
                 scene
                     .draw

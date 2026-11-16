@@ -72,6 +72,12 @@ backend. Avoid copying the whole SDK library directory or the TV's graphics driv
 
 ## Controls and navigation
 
+`greeting_name` is a locally saved, trimmed, control-free name limited to 40 characters.
+Greeting settings reuse the native/desktop keyboard paths and commit typed replacements on
+Done, Back, or keyboard dismissal. An empty edit preserves the old name, and Clear name
+explicitly removes it. Existing saved native names are restored. The unnamed midnight-to-5am
+translation is a greeting, not a loading message.
+
 `weather_small` defaults to false. When enabled, Weather uses a true 1×1 footprint
 for rendering, placement, collision checks and sanitization. The size toggle preserves
 the city, unit, cache and saved large-widget style. Expanding relocates Weather only

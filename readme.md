@@ -250,12 +250,18 @@ Choose the interface language in **Settings → General → Language**. Luma sup
 Czech, Dutch, English, French, German, Hungarian, Italian, Polish, Portuguese (Brazil), Russian,
 Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese.
 
-### Backgrounds
+### Widgets
+
+Personalize the greeting in **Settings → Widgets → Greeting → Name**, or use **Clear name**
+to return to an unnamed greeting. Names are saved locally and used at every time of day.
+The overnight greeting says “Still up?” rather than a loading message.
 
 Weather supports a **1×1** size in **Settings → Widgets → Weather → Size** for a compact
 condition icon, temperature and city. The existing **2×2** layouts remain the default.
 Move either size in the widget grid. Expanding a widget at an edge or beside Greeting
 automatically finds a free position without moving other widgets.
+
+### Backgrounds
 
 Open **Settings → Background → Upload**, then scan the QR code or open the shown
 address on a phone or computer on the same network. Choose a JPEG, PNG or WebP and adjust

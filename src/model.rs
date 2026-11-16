@@ -378,6 +378,7 @@ pub struct Preferences {
     pub ui_sounds: bool,
     pub show_seconds: bool,
     pub show_greeting: bool,
+    pub greeting_name: String,
     pub show_date: bool,
     pub date_format: DateFormat,
     pub input_modes: BTreeMap<String, InputMode>,
@@ -425,6 +426,7 @@ impl Default for Preferences {
             ui_sounds: false,
             show_seconds: false,
             show_greeting: true,
+            greeting_name: String::new(),
             show_date: true,
             date_format: DateFormat::default(),
             input_modes: BTreeMap::new(),
@@ -675,6 +677,7 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
+        self.greeting_name = clean_input_name(&self.greeting_name);
         // Collapse the previous draft's untouched separate-Date arrangement.
         // Custom Greeting/Weather anchors remain unchanged.
         if self.legacy_date_position.take().is_some()
