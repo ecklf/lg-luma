@@ -141,6 +141,41 @@ retain their manual order. The same order fills empty dock slots and the app dra
 `xvfb-run -a pnpm screenshots --sorting` captures the sorting settings, both app orders,
 and the generic disc input icon from the native desktop renderer using seeded local counts.
 
+Home uses a 6×4 placement grid in logical 1920×1080 space above the unchanged six-app dock.
+Greeting combines weekday/date and greeting in 4 columns × 1 row; Weather spans 2 columns × 2 rows.
+Greeting uses 90.4px text with 1.05 leading and an 18.4px date in a 32.8px band,
+keeping both lines inside the 128px-tall row; long translations fit to the available width.
+Their anchors persist as `greeting_position` and `weather_position` (`column`, `row`, zero-based).
+Defaults are Greeting (0,0), Weather (4,0). The separate-Date draft's untouched defaults migrate
+to this arrangement only when a legacy `date_position` field is present; it is omitted on save.
+Custom Greeting/Weather anchors are preserved, including new layouts matching that old arrangement.
+Sanitization repairs out-of-bounds anchors and overlaps deterministically.
+Settings → Widgets opens the scaled Home grid by default. Each occupied cell opens an app-style
+Configure/Move/Remove popup. A fixed, right-aligned toolbar above the preview contains Reset to defaults on the
+left and Add widget on the right, using the Backgrounds pill style. Empty cells also open the
+Add catalog directly; it excludes installed widgets. Reset restores the default membership and
+positions, preserving date/weather configuration and the app dock; an already-default reset does not save.
+The preview shows only widget placements over the wallpaper, without a gray dock placeholder.
+Shortcuts uses a fixed pill at the top left of the preview toolbar. Inputs is a separate sidebar section directly
+below Apps, not a widget. Its list and individual input/icon settings retain focus on return.
+The input icon picker includes Steam. Automatic detection recognizes the word Steam in labels such
+as Steam Deck, Steam Link and Steam Machine, ahead of generic computer/streaming-device fallbacks.
+Move and Add open a placement preview; arrows browse
+all twenty-four anchors, OK/click saves a valid placement, and Back cancels without changing preferences.
+Invalid positions are red and cannot be committed. Removing a widget frees its cells while keeping
+its settings. Adding is atomic: browsing/cancelling placement does not install or save a widget.
+The legacy `show_greeting` and `show_weather` fields now store whether each widget is installed;
+old hidden widgets start removed. Configuration menus have no widget visibility or position rows.
+`show_date` optionally hides the combined Greeting's date line. Removed Weather never requests forecasts.
+Greeting settings contain the date toggle and format picker, with no separate Date widget or position.
+The date uses 18.4px/600/+0.12 tracking at 72% opacity; Greeting uses
+90.4px/500/−0.065 tracking and 1.05 leading, fitting shorter for long translations.
+The 32.8px date band keeps both lines inside one grid row.
+Weather content is top-aligned within its 2×2 footprint in every style.
+Greeting has no name editor; legacy `greeting_name` fields are ignored and not serialized.
+All three weather styles reflow inside the same fixed footprint. `pnpm screenshots --widgets`
+captures the default arrangement, an alternate arrangement, the grid manager, actions and Add catalog.
+
 | Input                         | Action                                                                       |
 | ----------------------------- | ---------------------------------------------------------------------------- |
 | Arrows                        | Move focus. Down from favorites opens the drawer, Up reaches corner controls |
@@ -198,15 +233,15 @@ instead of once per minute. Existing saved hour and seconds preferences are reta
 App cards on Home, in the drawer, and in Settings → Apps are artwork-only, with no name captions
 or App names setting. Legacy `show_names`, `show_home_names`, and `show_app_names` preferences
 are ignored and are not written back. App titles remain available in the management popup.
-**Settings → Widgets** groups **Weather**, **Shortcuts**, and **Inputs** as separate subpages.
-Weather location and temperature choices return to Weather; Back from a widget returns to its row
-in Widgets. Input visibility/naming choices return to Inputs, then its Widgets row.
+**Settings → Widgets** opens the placement manager. Select Weather and choose Configure for its
+settings; **Shortcuts** has a pill at the top left. **Settings → Inputs** is directly below Apps
+in the sidebar. Weather location and temperature choices return to Weather; Back from a widget
+returns to its grid cell. Input visibility/naming choices return to the Inputs list, then its sidebar entry.
 Existing greeting, weather, shortcut and input preferences are unchanged. Scrollable Settings lists
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
 with a tighter 48-pixel spacing for Languages and Backgrounds.
-The Home greeting and standalone date, along with their widget entries, are removed. Their legacy
-preferences remain readable and are not erased during other edits. Weather occupies the former
-greeting area with a large condition icon, temperature, condition and location. The colored, static
+The weekday/date is part of the combined Greeting, not a standalone widget. Weather uses its
+own fixed footprint with a large condition icon, temperature, condition and location. The colored, static
 icons are original Breezy Weather PNGs, including clear/partly-cloudy night variants, bundled locally
 with their LGPL-3.0 license, attribution and source hashes in `assets/weather/`. No icons are fetched at runtime.
 Disabled weather
@@ -218,7 +253,7 @@ Input connection dots are amber when a connected cable explicitly reports no sig
 other connected inputs, and gray for disconnected or unknown cable states. An unknown signal
 report alone does not imply no signal, and signal reports never override cable-based visibility.
 
-Input icon picker: **Settings → Widgets → Inputs → select input → Icon** opens a
+Input icon picker: **Settings → Inputs → select input → Icon** opens a
 native picker for bundled input SVG icons. Its choices are **Automatic** (default label detection),
 **HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**, **NVIDIA Shield**,
 **Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**, **Sony**, **DVD**, **Blu-ray**,
@@ -963,8 +998,8 @@ failure retries after five minutes. Unit changes convert unrounded cached Celsiu
 Removing a city clears its cache. The `.weather.json` sidecar uses Unix-seconds timestamps.
 Mock servers accept only literal loopback HTTP origins and are refused in TV builds.
 
-`assets/messages.json` supplies Catalan, Czech, Dutch, English, French, German, Italian, Polish,
-Portuguese (Brazil), Russian, Simplified Chinese, Spanish, Swedish, Traditional Chinese and
+`assets/messages.json` supplies Catalan, Czech, Dutch, English, French, German, Hungarian, Italian,
+Polish, Portuguese (Brazil), Russian, Simplified Chinese, Spanish, Swedish, Traditional Chinese and
 Vietnamese, including locale formatting and weather labels. App/device names and saved city
 names remain real data. No geolocation,
 runtime font/translation services or telemetry are used. Weather attribution: Open-Meteo,

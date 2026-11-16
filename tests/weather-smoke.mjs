@@ -143,8 +143,10 @@ async function scenario(name, script, frames = 210) {
 }
 const forecastCount = () => requests.filter((request) => request.path === '/v1/forecast').length;
 const searchCount = () => requests.filter((request) => request.path === '/v1/search').length;
-const weatherPage = 'settings,down,down,down,enter,enter';
-const locationPage = `${weatherPage},down,enter`;
+const widgetsPage = 'settings,down,down,down,down,enter';
+const weatherActions = `${widgetsPage},down,right,right,right,right,enter`;
+const weatherPage = `${weatherActions},enter`;
+const locationPage = `${weatherPage},enter`;
 try {
   if (process.env.LUMA_SMOKE_SKIP_BUILD !== '1')
     await run('cargo', ['build', '--locked', '--package', 'luma']);
@@ -152,6 +154,8 @@ try {
   await scenario('unconfigured', 'home,down');
   assert.equal(requests.length, 0, 'No geolocation or automatic city discovery');
   const short = await scenario('short-query', `${locationPage},enter,back,enter`);
+  assert.equal(short.subpage, 'WeatherLocation');
+  assert.equal(short.focus, 'WeatherSearch');
   assert.equal(short.weather.searching, false);
   assert.ok(short.weather.message);
   assert.equal(searchCount(), 0);
@@ -175,18 +179,18 @@ try {
   assert.equal(forecastCount(), 1);
   const fahrenheit = await scenario(
     'fahrenheit',
-    `${weatherPage},down,down,enter,down,enter,home,await-weather`,
+    `${weatherPage},down,enter,down,enter,home,await-weather`,
   );
   assert.equal(fahrenheit.preferences.temperature_unit, 'fahrenheit');
   assert.equal(fahrenheit.weather.cache.reading.temperature, 14.2);
   assert.equal(forecastCount(), 1);
-  const hidden = await scenario('widget-off', `${weatherPage},enter,home`);
-  assert.equal(hidden.preferences.show_weather, false);
-  assert.equal(hidden.preferences.weather_location.name, 'Vienna');
+  const removedWidget = await scenario('widget-removed', `${weatherActions},down,down,enter,home`);
+  assert.equal(removedWidget.preferences.show_weather, false);
+  assert.equal(removedWidget.preferences.weather_location.name, 'Vienna');
   assert.equal(forecastCount(), 1);
   await writeCache(20 * 60);
-  await scenario('disabled-stale-cache', 'home');
-  assert.equal(forecastCount(), 1, 'A disabled widget must not refresh even stale weather');
+  await scenario('removed-widget-stale-cache', 'home');
+  assert.equal(forecastCount(), 1, 'A removed widget must not refresh even stale weather');
 
   await writePreferences({ weather_location: vienna });
   await writeCache(20 * 60);
@@ -237,7 +241,7 @@ try {
   assert.equal(latest.preferences.weather_location.name, 'Paris');
   assert.ok(latest.weather.results.length === 0);
   console.log(
-    'Native weather smoke checks passed: explicit search, request encoding, cached restart, units, visibility, offline/expired data, removal races, response limits and stale-search suppression.',
+    'Native weather smoke checks passed: explicit search, request encoding, cached restart, units, widget removal, offline/expired data, removal races, response limits and stale-search suppression.',
   );
 } finally {
   server.closeAllConnections();

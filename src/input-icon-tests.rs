@@ -47,7 +47,7 @@ fn remote_input_icon_picker_saves_resets_and_restores_its_parent() {
             state.preferences.set_input_name(&id, "Custom name");
         }
         state.open(2);
-        state.focus = Target::Widget(3);
+        state.focus = Target::Sidebar(crate::state::INPUTS_SECTION);
         state.activate();
         state.focus = Target::InputMode(id.clone());
         state.activate();
@@ -95,7 +95,7 @@ fn remote_input_icon_picker_saves_resets_and_restores_its_parent() {
         assert_eq!(state.preferences.input_icon(&id), None);
         assert_eq!(state.focus, Target::InputIcon);
         state.back();
-        assert_eq!(state.subpage, Some(Subpage::Inputs));
+        assert_eq!(state.subpage, None);
         assert_eq!(state.focus, Target::InputMode(id));
     }
 }
@@ -118,7 +118,7 @@ fn input_icon_overrides_render_on_home_and_settings_and_automatic_restores_detec
     state.set_inputs(inputs);
     assert!(has_icon(&state, "xbox"));
     state.open(2);
-    state.focus = Target::Widget(3);
+    state.focus = Target::Sidebar(crate::state::INPUTS_SECTION);
     state.activate();
     assert!(has_icon(&state, "xbox"));
     state.preferences.set_input_icon(&id, "");
@@ -149,7 +149,7 @@ fn input_icon_picker_covers_bundled_assets_and_every_language() {
         serde_json::from_str(include_str!("../assets/messages.json")).unwrap();
     let mut state = ready();
     state.open(2);
-    state.focus = Target::Widget(3);
+    state.focus = Target::Sidebar(crate::state::INPUTS_SECTION);
     state.activate();
     state.focus = Target::InputMode(state.inventory.inputs[0].id.clone());
     state.activate();
@@ -179,8 +179,8 @@ fn input_icon_picker_covers_bundled_assets_and_every_language() {
         }
     }
     state.set_inputs(vec![]);
-    assert_eq!(state.subpage, Some(Subpage::Inputs));
-    assert_eq!(state.focus, Target::Sidebar(crate::state::WIDGETS_SECTION));
+    assert_eq!(state.subpage, None);
+    assert_eq!(state.focus, Target::Sidebar(crate::state::INPUTS_SECTION));
 }
 
 #[test]
@@ -208,6 +208,52 @@ fn media_input_icons_detect_names_and_allow_manual_overrides() {
             Draw::TintedImage(path, ..) if path.ends_with(&format!("ui-icons/input-{icon}.lvec"))))
         );
     }
+}
+
+#[test]
+fn steam_input_icon_detects_device_labels_and_supports_picker_overrides() {
+    let mut state = ready();
+    let id = state.inventory.inputs[0].id.clone();
+    let has_steam = |state: &crate::state::State| {
+        scene(state).draw.iter().any(|draw| {
+            matches!(draw,
+            Draw::TintedImage(path, ..) if path.ends_with("ui-icons/input-steam.lvec"))
+        })
+    };
+    for name in ["Steam", "STEAM Deck", "Steam Link", "Steam Machine PC"] {
+        state.preferences.set_input_name(&id, name);
+        assert!(has_steam(&state), "{name}");
+    }
+    for name in ["Steamboat", "Steamroller", "Streaming device"] {
+        state.preferences.set_input_name(&id, name);
+        assert!(!has_steam(&state), "{name}");
+    }
+    state.open(2);
+    state.focus = Target::Sidebar(crate::state::INPUTS_SECTION);
+    state.activate();
+    state.focus = Target::InputMode(id.clone());
+    state.activate();
+    state.focus = Target::InputIcon;
+    state.activate();
+    let index = INPUT_ICONS
+        .iter()
+        .position(|(icon, _)| *icon == "steam")
+        .unwrap()
+        + 1;
+    state.pointer_focus(Target::Choice(index));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert_eq!(state.preferences.input_icon(&id), Some("steam"));
+    assert!(has_steam(&state));
+    state.activate();
+    assert_eq!(state.focus, Target::Choice(index));
+    state.pointer_focus(Target::Choice(0));
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!has_steam(&state));
+    state.preferences.set_input_name(&id, "");
+    let mut inputs = state.inventory.inputs.clone();
+    inputs[0].title = "Steam Deck".into();
+    state.set_inputs(inputs);
+    assert!(has_steam(&state));
 }
 
 #[test]
