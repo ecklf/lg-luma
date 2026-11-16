@@ -345,9 +345,7 @@ impl WidgetPosition {
             && usize::from(self.row) + usize::from(height) <= HOME_GRID_ROWS
     }
 
-    fn overlaps(self, widget: HomeWidget, other: Self, other_widget: HomeWidget) -> bool {
-        let (w, h) = widget.span();
-        let (ow, oh) = other_widget.span();
+    fn overlaps(self, (w, h): (u8, u8), other: Self, (ow, oh): (u8, u8)) -> bool {
         u16::from(self.column) < u16::from(other.column) + u16::from(ow)
             && u16::from(other.column) < u16::from(self.column) + u16::from(w)
             && u16::from(self.row) < u16::from(other.row) + u16::from(oh)
@@ -358,6 +356,7 @@ impl WidgetPosition {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
+    pub weather_small: bool,
     pub recent_apps_behavior: RecentAppsBehavior,
     pub weather_style: WeatherStyle,
     pub app_sorting: AppSorting,
@@ -408,6 +407,7 @@ impl Default for Preferences {
     fn default() -> Self {
         Self {
             weather_style: WeatherStyle::default(),
+            weather_small: false,
             recent_apps_behavior: RecentAppsBehavior::default(),
             app_sorting: AppSorting::default(),
             app_launch_counts: BTreeMap::new(),
@@ -443,6 +443,35 @@ impl Default for Preferences {
 }
 
 impl Preferences {
+    pub fn widget_span(&self, widget: HomeWidget) -> (u8, u8) {
+        if widget == HomeWidget::Weather && self.weather_small {
+            (1, 1)
+        } else {
+            widget.span()
+        }
+    }
+
+    pub fn widget_fits(&self, widget: HomeWidget, position: WidgetPosition) -> bool {
+        if widget != HomeWidget::Weather || !self.weather_small {
+            return position.fits(widget);
+        }
+        let (w, h) = self.widget_span(widget);
+        usize::from(position.column) + usize::from(w) <= HOME_GRID_COLUMNS
+            && usize::from(position.row) + usize::from(h) <= HOME_GRID_ROWS
+    }
+
+    pub fn toggle_weather_size(&mut self) {
+        self.weather_small = !self.weather_small;
+        // Expanding at an edge or beside Greeting needs a new valid anchor.
+        if !self.can_place_widget(HomeWidget::Weather, self.weather_position)
+            && let Some(position) = (0..HOME_GRID_CELLS)
+                .filter_map(WidgetPosition::from_cell)
+                .find(|position| self.can_place_widget(HomeWidget::Weather, *position))
+        {
+            self.weather_position = position;
+        }
+    }
+
     pub fn compare_apps(&self, a: &App, b: &App) -> std::cmp::Ordering {
         let usage = |app: &App| self.app_launch_counts.get(&app.id).copied().unwrap_or(0);
         let count = match self.app_sorting {
@@ -495,7 +524,7 @@ impl Preferences {
     pub fn widget_at(&self, position: WidgetPosition) -> Option<HomeWidget> {
         HomeWidget::ALL.into_iter().find(|widget| {
             let anchor = self.widget_position(*widget);
-            let (w, h) = widget.span();
+            let (w, h) = self.widget_span(*widget);
             self.has_widget(*widget)
                 && position.column >= anchor.column
                 && position.row >= anchor.row
@@ -505,11 +534,17 @@ impl Preferences {
     }
 
     pub fn can_place_widget(&self, widget: HomeWidget, position: WidgetPosition) -> bool {
-        position.fits(widget)
+        self.widget_fits(widget, position)
             && HomeWidget::ALL
                 .into_iter()
                 .filter(|other| *other != widget && self.has_widget(*other))
-                .all(|other| !position.overlaps(widget, self.widget_position(other), other))
+                .all(|other| {
+                    !position.overlaps(
+                        self.widget_span(widget),
+                        self.widget_position(other),
+                        self.widget_span(other),
+                    )
+                })
     }
 
     pub fn place_widget(&mut self, widget: HomeWidget, position: WidgetPosition) -> bool {
@@ -654,15 +689,19 @@ impl Preferences {
         let mut placed = Vec::new();
         for widget in HomeWidget::ALL {
             if !self.has_widget(widget) {
-                if !self.widget_position(widget).fits(widget) {
+                if !self.widget_fits(widget, self.widget_position(widget)) {
                     self.set_widget_position(widget, widget.default_position());
                 }
                 continue;
             }
             let valid = |position: WidgetPosition| {
-                position.fits(widget)
+                self.widget_fits(widget, position)
                     && placed.iter().all(|other| {
-                        !position.overlaps(widget, self.widget_position(*other), *other)
+                        !position.overlaps(
+                            self.widget_span(widget),
+                            self.widget_position(*other),
+                            self.widget_span(*other),
+                        )
                     })
             };
             if !valid(self.widget_position(widget)) {

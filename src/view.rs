@@ -1206,17 +1206,29 @@ fn home_widget_rect(widget: HomeWidget, position: WidgetPosition) -> Rect {
     )
 }
 
+fn configured_widget_rect(state: &State, widget: HomeWidget, position: WidgetPosition) -> Rect {
+    if widget == HomeWidget::Weather && state.preferences.weather_small {
+        home_grid_cell_rect(position)
+    } else {
+        home_widget_rect(widget, position)
+    }
+}
+
 fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     let start = out.draw.len();
     let language = state.preferences.language;
     for widget in HomeWidget::ALL {
-        let cell = home_widget_rect(widget, state.preferences.widget_position(widget));
+        let cell = configured_widget_rect(state, widget, state.preferences.widget_position(widget));
         if (widget == HomeWidget::Greeting && !state.preferences.show_greeting)
             || (widget == HomeWidget::Weather && !state.preferences.show_weather)
         {
             continue;
         }
         if widget == HomeWidget::Weather {
+            if state.preferences.weather_small {
+                small_weather(out, state, assets, cell);
+                continue;
+            }
             let mut summary = weather_summary_layout(state, assets);
             // Reflow rather than shrinking the entire widget: text remains legible
             // even when a translated condition or location name is unusually long.
@@ -1363,6 +1375,78 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
     }
     out.draw.push(Draw::EdgeFadeX(None));
     out.draw.push(Draw::Clip(Some(state.content_viewport())));
+}
+
+fn small_weather(out: &mut Scene, state: &State, assets: &Assets, cell: Rect) {
+    let language = state.preferences.language;
+    let place = state.preferences.weather_location.as_ref();
+    let reading = place.and_then(|place| state.weather.reading(place));
+    let label = reading.map_or_else(
+        || {
+            language
+                .t(if place.is_none() {
+                    "setWeatherLocation"
+                } else if state.weather.loading {
+                    "loadingWeather"
+                } else {
+                    "weatherUnavailable"
+                })
+                .to_owned()
+        },
+        |reading| {
+            weather::format_temperature(reading.temperature, state.preferences.temperature_unit)
+        },
+    );
+    let icon = reading.map_or("partly-cloudy", |reading| weather::condition(reading).icon);
+    out.image(
+        assets.path(format!("weather/{icon}.png")),
+        Rect::new(cell.x, cell.y, 48., 48.),
+        0.,
+        true,
+    );
+    let (label, style) = if reading.is_some() {
+        assets.fit_line(&label, text(48., 500, -0.025), cell.w - 60., 16.)
+    } else {
+        // Keep the complete setup/loading/error action, wrapping within its cell.
+        let mut style = text(20., 500, -0.025).leading(1.2);
+        while assets.lines(&label, style, cell.w - 60.) > 2 && style.size > 14. {
+            style.size -= 1.;
+        }
+        (label, style)
+    };
+    out.text(
+        label,
+        Rect::new(cell.x + 60., cell.y, cell.w - 60., 58.),
+        style,
+        WHITE,
+        false,
+    );
+    let detail = place.map_or(language.t("weather"), |place| place.name.as_str());
+    let (detail, style) = assets.fit_line(detail, text(18., 450, 0.), cell.w, 14.);
+    out.text(
+        detail,
+        Rect::new(cell.x, cell.y + 66., cell.w, 26.),
+        style,
+        c(0xf5f5f5, 0.78),
+        false,
+    );
+    if state.weather.failed && reading.is_some() {
+        let (label, style) =
+            assets.fit_line(language.t("lastReading"), text(16., 400, 0.), cell.w, 14.);
+        out.text(
+            label,
+            Rect::new(cell.x, cell.y + 96., cell.w, 24.),
+            style,
+            c(0xf5f5f5, 0.65),
+            false,
+        );
+    }
+    if place.is_none() {
+        if state.focus == Target::WeatherConfigure && !state.pointer {
+            out.border(cell.inset(-5.), 8.6, 2., WHITE);
+        }
+        out.control(Target::WeatherConfigure, cell, true);
+    }
 }
 
 struct WeatherSummary {
@@ -1926,6 +2010,25 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
             description: None,
             selected: false,
             chevron: true,
+        },
+    );
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::WeatherSize,
+            rect: Rect::new(640., y + 168., 1120., 72.),
+            title: language.t("widgetSize"),
+            icon: Some("grid"),
+            value: Some(if state.preferences.weather_small {
+                "1 × 1"
+            } else {
+                "2 × 2"
+            }),
+            description: None,
+            selected: false,
+            chevron: false,
         },
     );
 }
@@ -2937,7 +3040,8 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
         .into_iter()
         .filter(|other| Some(*other) != moving && state.preferences.has_widget(*other))
     {
-        let rect = map(home_widget_rect(
+        let rect = map(configured_widget_rect(
+            state,
             other,
             state.preferences.widget_position(other),
         ));
@@ -2957,7 +3061,8 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
             let rect = state.preferences.widget_at(position).map_or_else(
                 || map(home_grid_cell_rect(position)),
                 |widget| {
-                    map(home_widget_rect(
+                    map(configured_widget_rect(
+                        state,
                         widget,
                         state.preferences.widget_position(widget),
                     ))
@@ -2983,7 +3088,7 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
     let saved = state.preferences.widget_position(widget);
     if state.preferences.has_widget(widget) {
         out.border(
-            map(home_widget_rect(widget, saved)),
+            map(configured_widget_rect(state, widget, saved)),
             8.,
             2.,
             c(0xffffff, 0.4),
@@ -2993,8 +3098,8 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
         && let Some(position) = WidgetPosition::from_cell(cell)
     {
         let valid = state.preferences.can_place_widget(widget, position);
-        let rect = if position.fits(widget) {
-            map(home_widget_rect(widget, position))
+        let rect = if state.preferences.widget_fits(widget, position) {
+            map(configured_widget_rect(state, widget, position))
         } else {
             map(home_grid_cell_rect(position))
         };
@@ -3008,7 +3113,7 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
             },
         );
         out.border(rect, 8., 3., if valid { WHITE } else { c(0xffa3a3, 1.) });
-        let (w, h) = widget.span();
+        let (w, h) = state.preferences.widget_span(widget);
         let (label, style) = assets.fit_line(
             &format!("{}  {w} × {h}", language.t(widget.key())),
             text(24., 550, 0.),
@@ -3453,7 +3558,7 @@ fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, cat
     let position = WidgetPosition::from_cell(cell).unwrap_or_default();
     let logical = widget.map_or_else(
         || home_grid_cell_rect(position),
-        |widget| home_widget_rect(widget, state.preferences.widget_position(widget)),
+        |widget| configured_widget_rect(state, widget, state.preferences.widget_position(widget)),
     );
     let scale = 1120. / 1920.;
     let card = Rect::new(

@@ -1,4 +1,22 @@
 {
+  "widgetSize": {
+    "en": "Size",
+    "de": "Größe",
+    "es": "Tamaño",
+    "zh": "尺寸",
+    "zh-tw": "大小",
+    "pt": "Tamanho",
+    "it": "Dimensioni",
+    "ru": "Размер",
+    "pl": "Rozmiar",
+    "fr": "Taille",
+    "vi": "Kích thước",
+    "nl": "Grootte",
+    "sv": "Storlek",
+    "cs": "Velikost",
+    "ca": "Mida",
+    "hu": "Méret"
+  },
   "recentApps": {
     "en": "Recent apps",
     "de": "Letzte Apps",

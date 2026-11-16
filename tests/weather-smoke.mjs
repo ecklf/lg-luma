@@ -240,6 +240,15 @@ try {
   );
   assert.equal(latest.preferences.weather_location.name, 'Paris');
   assert.ok(latest.weather.results.length === 0);
+  forecastMode = 'ok';
+  await writePreferences({ weather_location: vienna });
+  await writeCache();
+  const small = await scenario('small', `${weatherPage},down,down,down,enter,home,await-weather`);
+  assert.equal(small.preferences.weather_small, true);
+  assert.equal(small.weather.cache.reading.temperature, 14.2);
+  const smallRestart = await scenario('small-restart', 'home,await-weather');
+  assert.equal(smallRestart.preferences.weather_small, true);
+  assert.equal(smallRestart.preferences.weather_location.name, 'Vienna');
   console.log(
     'Native weather smoke checks passed: explicit search, request encoding, cached restart, units, widget removal, offline/expired data, removal races, response limits and stale-search suppression.',
   );

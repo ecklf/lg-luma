@@ -252,6 +252,11 @@ Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese.
 
 ### Backgrounds
 
+Weather supports a **1×1** size in **Settings → Widgets → Weather → Size** for a compact
+condition icon, temperature and city. The existing **2×2** layouts remain the default.
+Move either size in the widget grid. Expanding a widget at an edge or beside Greeting
+automatically finds a free position without moving other widgets.
+
 Open **Settings → Background → Upload**, then scan the QR code or open the shown
 address on a phone or computer on the same network. Choose a JPEG, PNG or WebP and adjust
 its 16:9 crop before choosing **Save to TV**.
