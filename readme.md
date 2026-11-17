@@ -210,8 +210,9 @@ helper to mount Luma and then opens Home. If this fails, the cold-boot hook moun
 Keys pass through the filter unchanged, and `home.sh disable` removes both. The early-boot timing
 has not been verified on webOS 24.
 
-Home takeover preserves the TV's input policy. To open Luma instead of the last input at power-on
-and after leaving apps, opt into the [power-on and Back/Exit policy](#optional-power-on-and-backexit-policy-webos-56).
+On webOS 5/6, Home takeover preserves the TV's input policy. An experimental
+[power-on and Back/Exit policy](#optional-power-on-and-backexit-policy-webos-56) can open Luma
+instead of the last input; tested on webOS 5.6.2 only, not verified on webOS 24.
 
 </details>
 
@@ -245,6 +246,11 @@ sh /media/developer/apps/usr/palm/applications/com.ecklf.luma/autostart.sh disab
 ```
 
 ### Optional power-on and Back/Exit policy (webOS 5/6)
+
+Requires executable Home takeover; this command is not supported on webOS 25/26's manifest method.
+On webOS 25, LG provides **Settings → General → System → Additional Settings → Home Settings →
+Power On Screen → Home** for startup selection ([LG guide](https://www.lg.com/us/support/help-library/lg-tv-choosing-your-power-on-screen--20154629491064)).
+That setting does not configure Back/Exit behavior or guarantee Luma launches after takeover.
 
 Home takeover alone preserves the TV's input policy. After enabling Home takeover, owners who
 want Luma instead of the last TV input at power-on and after leaving apps can explicitly run:
