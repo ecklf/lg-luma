@@ -70,6 +70,23 @@ Desktop pkg-config paths are isolated from the ARM build. `WEBOS_NATIVE_LIBS` ca
 explicitly selected ARM webOS shared libraries; SDL overrides must have a real webOS/Wayland
 backend. Avoid copying the whole SDK library directory or the TV's graphics drivers/libc.
 
+### Release binary size
+
+Release builds use full link-time optimization, one codegen unit and stripped symbols.
+The default speed-oriented optimization level is retained for rendering, image processing
+and on-demand glyph tessellation. Full LTO can increase release link time and memory use.
+Panic unwinding is retained because Luna subscription callbacks recover from handler panics.
+
+The runtime font parser enables only `std` and `variable-fonts`. Character maps, metrics,
+legacy `kern` tables and glyph outlines remain available, including variable-font outlines.
+The renderer does not use glyph names or the optional OpenType/Apple shaping tables.
+
+Compare sizes using the same pinned toolchain, target, features and build environment on
+both revisions. For TV measurements, run `pnpm build` with `WEBOS_NDK` set, then measure
+`target/armv7-unknown-linux-gnueabi/release/luma` and its siblings `luma-helper` and `luma-early` in bytes.
+Desktop measurements use `cargo build --locked --release --package luma --package luma-tv-helper`
+and `target/release/`. Desktop results do not establish TV size or performance.
+
 ## Controls and navigation
 
 ### Market price widgets
