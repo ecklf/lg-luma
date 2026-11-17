@@ -72,6 +72,29 @@ backend. Avoid copying the whole SDK library directory or the TV's graphics driv
 
 ## Controls and navigation
 
+### Market price widgets
+
+`crypto` and `stocks` preferences hold `enabled`, `symbol`, `currency`, and `position`.
+Both default off and occupy 1×1 cells. The existing add/configure/move/remove workflow
+supports them, and Reset restores the original Greeting/Weather membership without
+discarding configured symbols. Crypto quote currency is selectable; Stocks uses the
+provider's listing currency, preserving minor-unit currency codes such as `GBp`.
+
+`src/markets.rs` owns a bounded HTTP worker and per-widget request generations. Prices
+come from Coinbase's unauthenticated spot-price endpoint and Yahoo Finance's unofficial
+public chart endpoint. No API credentials are used. Requests use fixed HTTPS origins,
+no proxy or redirects, an eight-second deadline, and a 64 KiB reply limit. Symbols are
+strictly validated before URL construction, and quote identity, units, finite positive
+prices, and timestamps are validated before rendering. Refresh is five minutes while
+Home is visible. Failed refreshes show the last in-memory quote with its timestamp and
+an explicit warning. There is no persistent price cache or trading capability.
+
+Scripts, fixed-time captures, and frame-limited previews disable public market requests.
+`--market-test-server http://127.0.0.1:PORT` enables loopback-only mock requests on desktop
+and is rejected on TV. `xvfb-run -a pnpm test:markets` checks both widgets, editing,
+currency, persistence, delayed timestamps, failures, bounded replies and redirect refusal.
+CI runs this as its own isolated smoke suite. Tests never call public market feeds.
+
 Greeting is time-based only. Legacy `greeting_name` preferences are ignored and not
 saved, and Greeting settings offer date options only. The midnight-to-5am translation
 is a greeting, not a loading message.

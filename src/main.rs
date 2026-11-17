@@ -17,6 +17,7 @@ mod i18n;
 mod input_refresh;
 #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
 mod luna;
+mod markets;
 mod model;
 mod platform;
 mod raster;
@@ -65,6 +66,7 @@ use time::OffsetDateTime;
 
 #[derive(Default)]
 struct Options {
+    market_test_server: Option<String>,
     webos_home: bool,
     assets: Option<PathBuf>,
     preferences: Option<PathBuf>,
@@ -151,6 +153,7 @@ impl Options {
                 }
                 "--diagnostics" => result.diagnostics = Some(value.into()),
                 "--weather-test-server" => result.weather_test_server = Some(value),
+                "--market-test-server" => result.market_test_server = Some(value),
                 "--test-update-version" => result.test_update_version = Some(value),
                 "--test-extra-apps" => {
                     result.test_extra_apps = value
@@ -696,6 +699,16 @@ fn run() -> Result<(), String> {
         weather_cache,
     );
     let updates = update::Worker::new(webos && public_update_checks);
+    if webos && options.market_test_server.is_some() {
+        return Err("Market test servers are only available in desktop builds".into());
+    }
+    let market_service = markets::Service::new(
+        options.market_test_server.as_deref(),
+        options.script.is_empty()
+            && options.time.is_none()
+            && options.frames.is_none()
+            && options.screenshot.is_none(),
+    )?;
     let platform = Platform::new(
         webos,
         options.preferences.is_none() && options.test_extra_apps == 0,
@@ -1240,6 +1253,13 @@ fn run() -> Result<(), String> {
             state.notify(state.preferences.language.format(key, &[("tile", &title)]));
         }
         weather_tick(&mut state, &weather_service, visible);
+        state.dirty |= state.markets.tick(
+            &market_service,
+            &state.preferences,
+            state.page,
+            visible,
+            OffsetDateTime::now_utc().unix_timestamp(),
+        );
         if std::mem::take(&mut state.update_check_requested) {
             if let Some(version) = &options.test_update_version {
                 state.update_response(Ok(
@@ -1749,6 +1769,13 @@ fn run() -> Result<(), String> {
             platform.send(Request::RefreshInputs);
         }
         weather_tick(&mut state, &weather_service, visible);
+        state.dirty |= state.markets.tick(
+            &market_service,
+            &state.preferences,
+            state.page,
+            visible,
+            OffsetDateTime::now_utc().unix_timestamp(),
+        );
         // SDL-webOS disables text input when its own panel is dismissed, even
         // if it did not forward a Back/Return key to the application.
         if text_active

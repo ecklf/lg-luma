@@ -25,6 +25,8 @@ mod glass_home_tests;
 #[path = "app-sorting-tests.rs"]
 mod app_sorting_tests;
 
+#[path = "markets-ui-tests.rs"]
+mod markets_ui_tests;
 #[path = "weather-style-tests.rs"]
 mod weather_style_tests;
 

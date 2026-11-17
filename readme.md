@@ -262,6 +262,26 @@ The popup shows the current size and stays open as you switch between 1×1 and 2
 Move either size in the widget grid. Expanding a widget at an edge or beside Greeting
 automatically finds a free position without moving other widgets.
 
+### Crypto and stock prices
+
+Choose **Settings → Widgets → Add widget → Crypto** or **Stocks**, then place the
+1×1 widget in a free cell. Open its popup and select **Configure** to enter a symbol.
+Crypto accepts Coinbase symbols such as `BTC` or `ETH` and a quote currency
+(`USD`, `EUR`, `GBP`, `JPY`, `CAD`, `AUD`, or `CHF`). Stocks accepts Yahoo Finance
+equity/ETF tickers such as `AAPL`, `BRK-B`, or `SAP.DE`, using the listing's currency.
+
+Both widgets are optional and off by default. They refresh every five minutes only
+while Home is visible. No account or API key is required. Quotes show their source
+and UTC timestamp. Crypto timestamps are the price-check time, while stock timestamps
+are the provider's quote time. Stock quotes are labeled delayed and can be older
+outside market hours. Failed updates retain the session's last reading with an
+explicit warning. Price readings are not saved across restarts.
+
+Coinbase and Yahoo Finance receive the configured symbol and the TV's IP address.
+Yahoo's public chart endpoint is unofficial and may change or become unavailable.
+No cookies, authentication tokens, trading actions, or financial advice are involved.
+These widgets are for personal informational use, not trading decisions.
+
 ### Backgrounds
 
 Open **Settings → Background → Upload**, then scan the QR code or open the shown

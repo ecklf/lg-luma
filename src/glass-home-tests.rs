@@ -58,8 +58,8 @@ fn widget_toolbar_pills_are_fixed_ordered_and_remote_and_pointer_accessible() {
     state.activate();
     assert_eq!(
         state.focus,
-        Target::CloseDialog,
-        "all default widgets are already installed"
+        Target::AddWidget(crate::model::HomeWidget::Crypto),
+        "optional price widgets can be added without changing existing defaults"
     );
     state.back();
     assert_eq!(state.focus, Target::WidgetAdd);
@@ -151,7 +151,10 @@ fn widget_reset_only_restores_membership_and_positions_and_saves_once() {
         serde_json::from_value(serde_json::to_value(&state.preferences).unwrap()).unwrap();
     loaded.sanitize();
     for widget in HomeWidget::ALL {
-        assert!(loaded.has_widget(widget));
+        assert_eq!(
+            loaded.has_widget(widget),
+            matches!(widget, HomeWidget::Greeting | HomeWidget::Weather)
+        );
         assert_eq!(loaded.widget_position(widget), widget.default_position());
     }
     state.preferences.show_greeting = false;
@@ -302,6 +305,8 @@ fn widget_configuration_has_no_visibility_or_position_rows() {
         assert_eq!(state.focus, Target::WidgetCell(cell));
     }
     // All-added empty cells still open a dismissible, focused menu.
+    state.preferences.crypto.enabled = true;
+    state.preferences.stocks.enabled = true;
     state.focus = Target::WidgetCell(15);
     state.activate();
     assert_eq!(state.focus, Target::CloseDialog);
@@ -452,7 +457,10 @@ fn widget_positions_default_to_requested_spans_and_sanitize_safely() {
             preferences.greeting_position = WidgetPosition::from_cell(greeting).unwrap();
             preferences.weather_position = WidgetPosition::from_cell(weather).unwrap();
             preferences.sanitize();
-            for widget in HomeWidget::ALL {
+            for widget in HomeWidget::ALL
+                .into_iter()
+                .filter(|widget| preferences.has_widget(*widget))
+            {
                 assert!(preferences.can_place_widget(widget, preferences.widget_position(widget)));
             }
         }

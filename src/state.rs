@@ -56,6 +56,8 @@ pub enum Page {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum Target {
+    MarketSymbol(HomeWidget),
+    MarketCurrency,
     Nav(usize),
     InputsMenu,
     SettingsMenu,
@@ -168,6 +170,7 @@ pub enum Overlay {
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Subpage {
+    Market(HomeWidget),
     WidgetPosition(HomeWidget),
     Greeting,
     DateFormat,
@@ -188,6 +191,7 @@ pub enum Subpage {
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum TextField {
+    Market(HomeWidget),
     Apps,
     Location,
     InputName,
@@ -229,6 +233,7 @@ pub const KEYS: [&str; 40] = [
 ];
 
 pub struct State {
+    pub markets: crate::markets::Markets,
     pub page: Page,
     pub focus: Target,
     pub inventory: Inventory,
@@ -320,6 +325,7 @@ impl State {
             update: crate::update::InstallStatus::default(),
             panel_started: None,
             weather: weather::Weather::default(),
+            markets: crate::markets::Markets::default(),
             keyboard_field: TextField::Apps,
             input_name: String::new(),
             recents: crate::recents::Recents::default(),
@@ -1259,6 +1265,9 @@ impl State {
         self.panel_started = None;
         self.pointer = false;
         self.focus = match self.subpage.take() {
+            Some(Subpage::Market(kind)) => {
+                Target::WidgetCell(self.preferences.widget_position(kind).cell())
+            }
             Some(Subpage::WidgetPosition(widget)) => {
                 Target::WidgetCell(self.preferences.widget_position(widget).cell())
             }
@@ -1589,6 +1598,13 @@ impl State {
                 }
             }
             let setting_rows: Option<&[Target]> = match self.subpage {
+                Some(Subpage::Market(HomeWidget::Crypto)) => Some(&[
+                    Target::MarketSymbol(HomeWidget::Crypto),
+                    Target::MarketCurrency,
+                ]),
+                Some(Subpage::Market(HomeWidget::Stocks)) => {
+                    Some(&[Target::MarketSymbol(HomeWidget::Stocks)])
+                }
                 Some(Subpage::Greeting) => Some(&[Target::DateToggle, Target::DateFormat]),
                 Some(Subpage::Weather) => Some(&[
                     Target::WeatherLocation,
@@ -1624,6 +1640,7 @@ impl State {
                                 | Target::WeatherLocation
                                 | Target::WeatherTemperature
                                 | Target::WeatherStyle
+                                | Target::MarketSymbol(_)
                                 | Target::MoveWidget(_)
                         ) =>
                     {
@@ -2195,7 +2212,10 @@ impl State {
                 self.dirty = true;
                 return;
             }
-            if self.keyboard_field == TextField::InputName {
+            if matches!(
+                self.keyboard_field,
+                TextField::InputName | TextField::Market(_)
+            ) {
                 let length = self.input_name.chars().count();
                 self.input_name.extend(
                     text.chars()
@@ -2221,7 +2241,10 @@ impl State {
                 let mut query = self.weather.query.clone();
                 query.pop();
                 self.weather.edit(query);
-            } else if self.keyboard_field == TextField::InputName {
+            } else if matches!(
+                self.keyboard_field,
+                TextField::InputName | TextField::Market(_)
+            ) {
                 self.input_name.pop();
             } else {
                 self.query.pop();
@@ -2250,6 +2273,22 @@ impl State {
     }
 
     fn commit_text_input(&mut self) -> Vec<Effect> {
+        if let TextField::Market(kind) = self.keyboard_field {
+            let draft = std::mem::take(&mut self.input_name);
+            if draft.trim().is_empty() {
+                return vec![];
+            }
+            if let Some(symbol) = crate::markets::normalize_symbol(kind, &draft) {
+                let config = crate::markets::settings_mut(&mut self.preferences, kind);
+                if config.symbol != symbol {
+                    config.symbol = symbol;
+                    return vec![Effect::Save];
+                }
+            } else {
+                self.notify(self.preferences.language.t("invalidMarketSymbol"));
+            }
+            return vec![];
+        }
         self.commit_input_name()
     }
 
@@ -2346,7 +2385,10 @@ impl State {
         query.replace_range(start..end, "");
         if self.keyboard_field == TextField::Location {
             self.weather.edit(query);
-        } else if self.keyboard_field == TextField::InputName {
+        } else if matches!(
+            self.keyboard_field,
+            TextField::InputName | TextField::Market(_)
+        ) {
             self.input_name = query;
         } else {
             self.query = query;
@@ -2359,12 +2401,13 @@ impl State {
         match self.keyboard_field {
             TextField::Location => &self.weather.query,
             TextField::InputName => &self.input_name,
+            TextField::Market(_) => &self.input_name,
             TextField::Apps => &self.query,
         }
     }
     pub fn open_keyboard(&mut self, field: TextField) {
         self.keyboard_field = field;
-        if field == TextField::InputName {
+        if matches!(field, TextField::InputName | TextField::Market(_)) {
             // The TV keyboard starts empty, so a new name replaces the old one.
             self.input_name.clear();
         }
@@ -2377,6 +2420,7 @@ impl State {
             self.focus = match field {
                 TextField::Location => Target::WeatherQuery,
                 TextField::InputName => Target::InputRename,
+                TextField::Market(kind) => Target::MarketSymbol(kind),
                 TextField::Apps => Target::Search,
             };
             self.panel_started = None;
@@ -2404,6 +2448,7 @@ impl State {
         match self.keyboard_field {
             TextField::Location => Target::WeatherSearch,
             TextField::InputName => Target::InputRename,
+            TextField::Market(kind) => Target::MarketSymbol(kind),
             TextField::Apps => Target::Search,
         }
     }
@@ -2496,6 +2541,17 @@ impl State {
             }
             Target::Search => {
                 self.open_keyboard(TextField::Apps);
+            }
+            Target::MarketSymbol(kind) => self.open_keyboard(TextField::Market(kind)),
+            Target::MarketCurrency => {
+                let currencies = crate::markets::CURRENCIES;
+                let current = currencies
+                    .iter()
+                    .position(|currency| *currency == self.preferences.crypto.currency)
+                    .unwrap_or(0);
+                self.preferences.crypto.currency =
+                    currencies[(current + 1) % currencies.len()].into();
+                return vec![Effect::Save];
             }
             Target::WeatherConfigure => {
                 self.open(2);
@@ -2638,10 +2694,12 @@ impl State {
                 self.subpage = Some(match widget {
                     HomeWidget::Greeting => Subpage::Greeting,
                     HomeWidget::Weather => Subpage::Weather,
+                    HomeWidget::Crypto | HomeWidget::Stocks => Subpage::Market(widget),
                 });
                 self.focus = match widget {
                     HomeWidget::Greeting => Target::DateToggle,
                     HomeWidget::Weather => Target::WeatherLocation,
+                    HomeWidget::Crypto | HomeWidget::Stocks => Target::MarketSymbol(widget),
                 };
                 self.scroll = 0.;
                 self.panel_started = None;
@@ -2941,6 +2999,7 @@ impl State {
                     }
                     Some(
                         Subpage::WeatherLocation
+                        | Subpage::Market(_)
                         | Subpage::Greeting
                         | Subpage::Clock
                         | Subpage::Weather
@@ -3089,6 +3148,7 @@ impl State {
                 "Clear" => match self.keyboard_field {
                     TextField::Location => self.weather.edit(String::new()),
                     TextField::InputName => self.input_name.clear(),
+                    TextField::Market(_) => self.input_name.clear(),
                     TextField::Apps => self.query.clear(),
                 },
                 "Done" => {
