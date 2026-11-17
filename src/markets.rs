@@ -57,10 +57,19 @@ pub fn normalize_symbol(kind: HomeWidget, value: &str) -> Option<String> {
     let kind = kind.kind();
     let value = value.trim().to_ascii_uppercase();
     let limit = if kind == HomeWidget::Crypto { 12 } else { 32 };
+    // Yahoo index tickers have one leading caret (for example, ^GSPC).
+    let ticker = if kind == HomeWidget::Stocks {
+        value.strip_prefix('^').unwrap_or(&value)
+    } else {
+        &value
+    };
     (!value.is_empty()
         && value.len() <= limit
-        && value.as_bytes()[0].is_ascii_alphanumeric()
-        && value.bytes().all(|c| {
+        && ticker
+            .as_bytes()
+            .first()
+            .is_some_and(u8::is_ascii_alphanumeric)
+        && ticker.bytes().all(|c| {
             c.is_ascii_alphanumeric() || (kind == HomeWidget::Stocks && matches!(c, b'.' | b'-'))
         }))
     .then_some(value)
@@ -179,7 +188,7 @@ pub fn parse_quote(
         }
         let meta = &value["chart"]["result"].as_array()?.first()?["meta"];
         if meta["symbol"].as_str()? != symbol
-            || !matches!(meta["instrumentType"].as_str()?, "EQUITY" | "ETF")
+            || !matches!(meta["instrumentType"].as_str()?, "EQUITY" | "ETF" | "INDEX")
         {
             return None;
         }
@@ -329,7 +338,7 @@ fn fetch(agent: &ureq::Agent, origin: Option<&str>, key: &Key) -> Option<Quote> 
         format!(
             "{}/v8/finance/chart/{}?interval=1d&range=1d",
             origin.unwrap_or("https://query1.finance.yahoo.com"),
-            key.symbol
+            key.symbol.replace('^', "%5E")
         )
     };
     let now = time::OffsetDateTime::now_utc().unix_timestamp();
@@ -585,6 +594,30 @@ mod tests {
             assert!(parse_quote(HomeWidget::Stocks, "AAPL", "", &value, 1000).is_none());
         }
     }
+    #[test]
+    fn index_symbols_are_validated_and_index_quotes_are_accepted() {
+        for kind in [HomeWidget::Stocks, HomeWidget::ExtraStocks(0)] {
+            assert_eq!(normalize_symbol(kind, " ^gspc ").as_deref(), Some("^GSPC"));
+            for invalid in ["^", "^^GSPC", "GS^PC", "^../GSPC", "^GSPC?x=1"] {
+                assert!(normalize_symbol(kind, invalid).is_none());
+            }
+        }
+        assert!(normalize_symbol(HomeWidget::Crypto, "^GSPC").is_none());
+        let mut config = Settings {
+            symbol: "^gspc".into(),
+            ..Default::default()
+        };
+        config.sanitize(HomeWidget::Stocks);
+        assert_eq!(config.symbol, "^GSPC");
+        let mut value = json!({"chart":{"error":null,"result":[{"meta":{"symbol":"^GSPC","instrumentType":"INDEX","currency":"USD","regularMarketPrice":5100.,"regularMarketTime":900,"chartPreviousClose":5000.}}]}});
+        let quote = parse_quote(HomeWidget::Stocks, "^GSPC", "", &value, 1000).unwrap();
+        assert_eq!(quote.price, 5100.);
+        assert!((quote.change_percent.unwrap() - 2.).abs() < 1e-10);
+        assert!(parse_quote(HomeWidget::Stocks, "^DJI", "", &value, 1000).is_none());
+        value["chart"]["result"][0]["meta"]["instrumentType"] = json!("FUTURE");
+        assert!(parse_quote(HomeWidget::Stocks, "^GSPC", "", &value, 1000).is_none());
+    }
+
     #[test]
     fn symbols_cannot_change_the_request_path_or_origin() {
         for symbol in [
