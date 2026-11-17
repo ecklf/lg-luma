@@ -1,5 +1,24 @@
 # lg-luma
 
+## 3.5.0
+
+### Minor Changes
+
+- 82e72bb: Add optional 1×1 Crypto and Stocks widgets with configurable symbols, crypto quote currency, key-free background price updates, daily percentage changes with colored arrows and relative quote ages. Provider attribution and stock-delay guidance remain in documentation rather than widget labels.
+- 0526c11: Optionally open Luma instead of the last TV input at power-on and after Back/Exit on webOS 5 and 6. Ordinary Home takeover preserves the TV input policy; `home.sh startup-home on` explicitly enables the read-only last-input override and Back/Exit filter. `startup-home off` or disabling takeover restores the saved HDMI/Live TV input. Restoration parses JSON independently of key order and reloads the live filter before returning control to LG.
+- 0eadcab: Add a Recent apps setting for short press on Home, long press, or Off, preserving long press as the default.
+- 0f7d2e3: Add a small 1×1 weather widget size with temperature, condition icon and location, including placement at grid edges and safe resizing.
+  Change the size directly from Weather's widget popup or its settings page.
+- e041e17: Support multiple independently configured Weather, Crypto and Stocks widgets. Keep the move preview stationary with compact arrow, OK and Cancel controls, clarify unconfigured market widgets, simplify market guidance into an info card, and use a nested Recent apps picker.
+- c8935b5: Add a saved General → App drawer setting with default tvOS styling and a non-interactive app-row peek, or a Minimal layout with a lower dock and no peek. Both styles keep the same drawer navigation.
+
+### Patch Changes
+
+- 0f7d2e3: Remove the Live TV icon's stand and ground shadow, and center the display while preserving its colors, play symbol and live indicator.
+- 0f7d2e3: Replace the misleading nighttime “One more moment.” message with a real greeting in every language. Greetings remain time-based only, without name customization.
+- a3e4234: Reduce native release binary size with full link-time optimization and only the font-parser features used by the renderer, retaining variable-font support and panic recovery.
+- d7972d1: Replace widget move buttons with non-interactive remote instructions for Move, Confirm and Cancel.
+
 ## 3.4.0
 
 ### Minor Changes
