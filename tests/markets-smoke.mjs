@@ -29,12 +29,18 @@ const server = http.createServer((request, response) => {
   const crypto = url.pathname.match(/^\/v2\/prices\/([A-Z0-9]+)-([A-Z]+)\/spot$/);
   if (crypto) {
     const [, base, currency] = crypto;
+    const current = currency === 'EUR' ? 60000.12 : base === 'ETH' ? 2100.5 : 65000.25;
+    const history = url.searchParams.get('date');
+    if (history) {
+      assert.match(history, /^\d{4}-\d{2}-\d{2}$/);
+      if (mode === 'history-fail') return response.end('{}');
+    }
     response.end(
       JSON.stringify({
         data: {
           base,
           currency,
-          amount: currency === 'EUR' ? '60000.12' : base === 'ETH' ? '2100.50' : '65000.25',
+          amount: (history ? current / (mode === 'flat' ? 1 : 1.04) : current).toFixed(8),
         },
       }),
     );
@@ -55,6 +61,7 @@ const server = http.createServer((request, response) => {
               instrumentType: 'EQUITY',
               currency: 'USD',
               regularMarketPrice: stock[1] === 'MSFT' ? 476.55 : 123.45,
+              chartPreviousClose: mode === 'flat' ? (stock[1] === 'MSFT' ? 476.55 : 123.45) : 125,
               regularMarketTime: Math.floor(Date.now() / 1000) - 900,
             },
           },
@@ -117,6 +124,7 @@ async function scenario(name, script = 'home', mock = true) {
   const render = JSON.parse(await fs.readFile(diagnostics, 'utf8'));
   assert.equal(render.capture.missing_glyphs, 0);
   assert.equal(render.capture.glyph_failures, 0);
+  assert.equal(render.capture.missing_images, 0);
   assert.equal((await sharp(screenshot).stats()).channels[3].min, 255);
   return state;
 }
@@ -141,8 +149,15 @@ try {
     'Yahoo Finance · Delayed quote',
   ])
     assert.ok(quotes.ui_text.includes(label), label);
-  assert.ok(quotes.ui_text.some((label) => label.includes('UTC')));
-  assert.equal(requests.length, 2, 'Do not poll every frame');
+  assert.ok(quotes.ui_text.includes('+4.00%'));
+  assert.ok(quotes.ui_text.includes('-1.24%'));
+  assert.ok(quotes.ui_text.includes('15m ago'));
+  assert.ok(quotes.ui_text.includes('Just now'));
+  assert.equal(
+    requests.length,
+    3,
+    'One current and one historic crypto quote, plus one stock quote, not polling every frame',
+  );
   const changed = await scenario(
     'edit-coin',
     `${grid},click:720:560,enter,enter,type:eth,back,home`,
@@ -161,6 +176,13 @@ try {
   const restarted = await scenario('restart');
   assert.equal(restarted.preferences.crypto.symbol, 'ETH');
   assert.equal(restarted.preferences.stocks.symbol, 'MSFT');
+  mode = 'history-fail';
+  const noHistory = await scenario('history-unavailable');
+  assert.ok(noHistory.ui_text.includes('60000.12 EUR'));
+  assert.ok(noHistory.ui_text.includes('Change unavailable'));
+  mode = 'flat';
+  const flat = await scenario('flat');
+  assert.ok(flat.ui_text.includes('0.00%'));
   for (const failure of ['fail', 'oversized', 'redirect', 'wrong-symbol']) {
     mode = failure;
     await seed();

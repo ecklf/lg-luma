@@ -272,9 +272,13 @@ equity/ETF tickers such as `AAPL`, `BRK-B`, or `SAP.DE`, using the listing's cur
 
 Both widgets are optional and off by default. They refresh every five minutes only
 while Home is visible. No account or API key is required. Quotes show their source
-and UTC timestamp. Crypto timestamps are the price-check time, while stock timestamps
-are the provider's quote time. Stock quotes are labeled delayed and can be older
-outside market hours. Failed updates retain the session's last reading with an
+and compact quote age, such as **1m ago**. Crypto age measures time since its price
+check, while stock age measures time since the provider's quote, not the last refresh.
+Daily changes show green up arrows or red down arrows. Crypto compares against the
+previous UTC day's historic price, while stocks compare against the previous close.
+Zero changes are neutral, and missing comparison data is explicitly unavailable.
+Stock quotes are labeled delayed and can be older outside market hours.
+Failed updates retain the session's last reading with an
 explicit warning. Price readings are not saved across restarts.
 
 Coinbase and Yahoo Finance receive the configured symbol and the TV's IP address.

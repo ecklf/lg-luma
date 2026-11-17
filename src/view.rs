@@ -1326,18 +1326,14 @@ fn market_widget(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWidg
                 })
                 .to_owned()
         });
-    let timestamp = slot
+    let age = slot
         .quote
         .as_ref()
-        .and_then(|quote| OffsetDateTime::from_unix_timestamp(quote.timestamp).ok())
-        .map(|time| {
-            format!(
-                "{:04}-{:02}-{:02} {:02}:{:02} UTC",
-                time.year(),
-                u8::from(time.month()),
-                time.day(),
-                time.hour(),
-                time.minute()
+        .map(|quote| {
+            crate::markets::relative_age(
+                language,
+                quote.timestamp,
+                OffsetDateTime::now_utc().unix_timestamp(),
             )
         })
         .unwrap_or_default();
@@ -1353,10 +1349,9 @@ fn market_widget(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWidg
     };
     for (label, y, size, height) in [
         (symbol, 0., 20., 24.),
-        (value.as_str(), 28., 34., 42.),
-        (timestamp.as_str(), 72., 14., 18.),
-        (provider.as_str(), 91., 14., 18.),
-        (status, 110., 12., 16.),
+        (value.as_str(), 26., 34., 42.),
+        (provider.as_str(), 96., 12., 16.),
+        (status, 114., 10., 14.),
     ] {
         let (label, style) = assets.fit_line(label, text(size, 500, -0.02), cell.w, 10.);
         out.text(
@@ -1367,6 +1362,57 @@ fn market_widget(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWidg
             false,
         );
     }
+    let change = slot
+        .quote
+        .as_ref()
+        .and_then(|quote| quote.change_percent)
+        .filter(|change| change.is_finite());
+    let (label, color, icon) = if let Some(change) = change {
+        // Values rounding to zero are neutral, not misleading green/red zeroes.
+        let change = if change.abs() < 0.005 { 0. } else { change };
+        if change > 0. {
+            (format!("+{change:.2}%"), c(0x32d583, 1.), Some("market-up"))
+        } else if change < 0. {
+            (
+                format!("{change:.2}%"),
+                c(0xf97066, 1.),
+                Some("market-down"),
+            )
+        } else {
+            ("0.00%".into(), WHITE, None)
+        }
+    } else {
+        (
+            language.t("marketChangeUnavailable").to_owned(),
+            c(0xf5f5f5, 0.65),
+            None,
+        )
+    };
+    let inset = if icon.is_some() { 23. } else { 0. };
+    if let Some(icon) = icon {
+        out.icon(
+            assets,
+            icon,
+            Rect::new(cell.x, cell.y + 73., 18., 18.),
+            color,
+        );
+    }
+    let (label, style) = assets.fit_line(&label, text(18., 550, 0.), 152. - inset, 12.);
+    out.text(
+        label,
+        Rect::new(cell.x + inset, cell.y + 70., 152. - inset, 24.),
+        style,
+        color,
+        false,
+    );
+    let (age, style) = assets.fit_line(&age, text(14., 450, 0.).right(), cell.w - 158., 10.);
+    out.text(
+        age,
+        Rect::new(cell.x + 158., cell.y + 73., cell.w - 158., 20.),
+        style,
+        c(0xf5f5f5, 0.78),
+        false,
+    );
 }
 
 fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
@@ -3234,11 +3280,16 @@ fn market_settings(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWi
         );
     }
     let help = format!(
-        "{}\n{}",
+        "{}\n{}\n{}",
         language.t(if kind == HomeWidget::Crypto {
             "cryptoHelp"
         } else {
             "stocksHelp"
+        }),
+        language.t(if kind == HomeWidget::Crypto {
+            "cryptoDailyBasis"
+        } else {
+            "stocksDailyBasis"
         }),
         if kind == HomeWidget::Crypto {
             "Coinbase"

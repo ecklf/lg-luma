@@ -114,7 +114,7 @@ fn market_defaults_and_corrupt_settings_preserve_existing_preferences() {
 }
 
 #[test]
-fn both_market_widgets_render_readable_price_source_timestamp_and_delay_without_changing_dock() {
+fn both_market_widgets_render_readable_price_source_age_and_delay_without_changing_dock() {
     for language in crate::i18n::Language::ALL {
         let mut state = ready();
         let dock = state.dock_y();
@@ -125,9 +125,10 @@ fn both_market_widgets_render_readable_price_source_timestamp_and_delay_without_
         state.preferences.stocks.symbol = "AAPL".into();
         for slot in &mut state.markets.slots {
             slot.quote = Some(markets::Quote {
+                change_percent: Some(4.),
                 price: 123.45,
                 currency: "USD".into(),
-                timestamp: 1794862801,
+                timestamp: time::OffsetDateTime::now_utc().unix_timestamp() - 60,
             });
         }
         let rendered = scene(&state);
@@ -144,8 +145,48 @@ fn both_market_widgets_render_readable_price_source_timestamp_and_delay_without_
             rendered
                 .draw
                 .iter()
-                .any(|draw| matches!(draw, Draw::Text(label, ..) if label.contains("UTC")))
+                .any(|draw| matches!(draw, Draw::Text(label, ..) if label == &language.format("marketMinutesAgo", &[("count", "1")])))
         );
         assert_eq!(state.dock_y(), dock);
+    }
+}
+
+#[test]
+fn market_trends_have_matching_colored_arrows_and_neutral_zeroes_have_no_arrow() {
+    let mut state = ready();
+    state.preferences.crypto.enabled = true;
+    state.preferences.crypto.symbol = "BTC".into();
+    state.preferences.stocks.enabled = true;
+    state.preferences.stocks.symbol = "AAPL".into();
+    for (index, change) in [3.25, -2.5].into_iter().enumerate() {
+        state.markets.slots[index].quote = Some(markets::Quote {
+            price: 100.,
+            currency: "USD".into(),
+            timestamp: time::OffsetDateTime::now_utc().unix_timestamp() - 60,
+            change_percent: Some(change),
+        });
+    }
+    let rendered = scene(&state);
+    assert!(rendered.draw.iter().any(|draw| matches!(draw, Draw::TintedImage(path, _, _, _, color) if path.ends_with("market-up.lvec") && color[1] > color[0])));
+    assert!(rendered.draw.iter().any(|draw| matches!(draw, Draw::TintedImage(path, _, _, _, color) if path.ends_with("market-down.lvec") && color[0] > color[1])));
+    assert!(rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, _, _, color, _) if label == "+3.25%" && color[1] > color[0])));
+    assert!(rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, _, _, color, _) if label == "-2.50%" && color[0] > color[1])));
+    for change in [Some(0.), Some(-0.0001), None] {
+        for slot in &mut state.markets.slots {
+            slot.quote.as_mut().unwrap().change_percent = change;
+        }
+        let rendered = scene(&state);
+        assert!(!rendered.draw.iter().any(|draw| matches!(draw, Draw::TintedImage(path, ..) if path.ends_with("market-up.lvec") || path.ends_with("market-down.lvec"))));
+        let expected = if change.is_some() {
+            "0.00%"
+        } else {
+            "Change unavailable"
+        };
+        assert!(
+            rendered
+                .draw
+                .iter()
+                .any(|draw| matches!(draw, Draw::Text(label, ..) if label == expected))
+        );
     }
 }

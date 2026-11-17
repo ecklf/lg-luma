@@ -1,5 +1,6 @@
 //! Optional, key-free price widgets. All HTTP stays on a bounded worker queue.
 use crate::{
+    i18n::Language,
     model::{HomeWidget, Preferences},
     state::Page,
 };
@@ -14,7 +15,7 @@ use std::{
         mpsc,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 pub const CURRENCIES: [&str; 7] = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF"];
@@ -108,6 +109,24 @@ pub struct Quote {
     pub price: f64,
     pub currency: String,
     pub timestamp: i64,
+    pub change_percent: Option<f64>,
+}
+pub fn daily_change(current: f64, previous: f64) -> Option<f64> {
+    if !price(current) || !price(previous) {
+        return None;
+    }
+    let change = (current / previous - 1.) * 100.;
+    change.is_finite().then_some(change)
+}
+pub fn relative_age(language: Language, timestamp: i64, now: i64) -> String {
+    let seconds = now.saturating_sub(timestamp).max(0);
+    let (key, count) = match seconds {
+        0..60 => return language.t("marketJustNow").into(),
+        60..3600 => ("marketMinutesAgo", seconds / 60),
+        3600..86400 => ("marketHoursAgo", seconds / 3600),
+        _ => ("marketDaysAgo", seconds / 86400),
+    };
+    language.format(key, &[("count", &count.to_string())])
 }
 fn price(value: f64) -> bool {
     value.is_finite() && value > 0. && value <= 1e12
@@ -164,6 +183,15 @@ pub fn parse_quote(
         price: amount,
         currency,
         timestamp,
+        change_percent: if kind == HomeWidget::Stocks {
+            let meta = &value["chart"]["result"][0]["meta"];
+            meta["chartPreviousClose"]
+                .as_f64()
+                .or_else(|| meta["previousClose"].as_f64())
+                .and_then(|previous| daily_change(amount, previous))
+        } else {
+            None
+        },
     })
 }
 pub fn format_price(quote: &Quote) -> String {
@@ -265,6 +293,7 @@ impl Service {
     }
 }
 fn fetch(agent: &ureq::Agent, origin: Option<&str>, key: &Key) -> Option<Quote> {
+    let started = Instant::now();
     let endpoint = if key.kind == HomeWidget::Crypto {
         format!(
             "{}/v2/prices/{}-{}/spot",
@@ -279,10 +308,38 @@ fn fetch(agent: &ureq::Agent, origin: Option<&str>, key: &Key) -> Option<Quote> 
             key.symbol
         )
     };
+    let now = time::OffsetDateTime::now_utc().unix_timestamp();
+    let mut quote = parse_quote(
+        key.kind,
+        &key.symbol,
+        &key.currency,
+        &request_json(agent, &endpoint, Duration::from_secs(8))?,
+        now,
+    )?;
+    if key.kind == HomeWidget::Crypto
+        && let Some(previous_day) = time::OffsetDateTime::from_unix_timestamp(now)
+            .ok()?
+            .date()
+            .previous_day()
+        && let Some(remaining) = Duration::from_secs(8)
+            .checked_sub(started.elapsed())
+            .filter(|remaining| !remaining.is_zero())
+        && let Some(history) =
+            request_json(agent, &format!("{endpoint}?date={previous_day}"), remaining)
+        && let Some(previous) = parse_quote(key.kind, &key.symbol, &key.currency, &history, now)
+    {
+        quote.change_percent = daily_change(quote.price, previous.price);
+    }
+    Some(quote)
+}
+fn request_json(agent: &ureq::Agent, endpoint: &str, timeout: Duration) -> Option<Value> {
     let mut response = agent
-        .get(&endpoint)
+        .get(endpoint)
         .header("User-Agent", "LumaNative")
         .header("Accept", "application/json")
+        .config()
+        .timeout_global(Some(timeout))
+        .build()
         .call()
         .ok()?;
     if !response.status().is_success() {
@@ -298,13 +355,7 @@ fn fetch(agent: &ureq::Agent, origin: Option<&str>, key: &Key) -> Option<Quote> 
     if bytes.len() > LIMIT {
         return None;
     }
-    parse_quote(
-        key.kind,
-        &key.symbol,
-        &key.currency,
-        &serde_json::from_slice::<Value>(&bytes).ok()?,
-        time::OffsetDateTime::now_utc().unix_timestamp(),
-    )
+    serde_json::from_slice::<Value>(&bytes).ok()
 }
 impl Markets {
     pub fn tick(
@@ -369,6 +420,55 @@ mod tests {
     use super::*;
     use serde_json::json;
     #[test]
+    fn relative_ages_use_compact_units_and_clamp_clock_skew() {
+        for (seconds, expected) in [
+            (0, "Just now"),
+            (59, "Just now"),
+            (60, "1m ago"),
+            (3599, "59m ago"),
+            (3600, "1h ago"),
+            (86399, "23h ago"),
+            (86400, "1d ago"),
+            (172800, "2d ago"),
+        ] {
+            assert_eq!(relative_age(Language::En, 1000, 1000 + seconds), expected);
+        }
+        assert_eq!(relative_age(Language::En, 1100, 1000), "Just now");
+        for language in Language::ALL {
+            assert_eq!(
+                relative_age(language, 1000, 1060),
+                language.format("marketMinutesAgo", &[("count", "1")])
+            );
+        }
+    }
+
+    #[test]
+    fn daily_changes_use_a_valid_baseline_and_missing_baselines_stay_unknown() {
+        assert!((daily_change(104., 100.).unwrap() - 4.).abs() < 1e-10);
+        assert!((daily_change(98., 100.).unwrap() + 2.).abs() < 1e-10);
+        assert_eq!(daily_change(100., 100.), Some(0.));
+        for baseline in [0., -1., f64::NAN, f64::INFINITY] {
+            assert!(daily_change(100., baseline).is_none());
+        }
+        let mut stock = json!({"chart":{"error":null,"result":[{"meta":{"symbol":"AAPL","instrumentType":"EQUITY","currency":"USD","regularMarketPrice":104.,"regularMarketTime":900,"chartPreviousClose":100.}}]}});
+        assert!(
+            (parse_quote(HomeWidget::Stocks, "AAPL", "", &stock, 1000)
+                .unwrap()
+                .change_percent
+                .unwrap()
+                - 4.)
+                .abs()
+                < 1e-10
+        );
+        stock["chart"]["result"][0]["meta"]["chartPreviousClose"] = json!(0);
+        assert!(
+            parse_quote(HomeWidget::Stocks, "AAPL", "", &stock, 1000)
+                .unwrap()
+                .change_percent
+                .is_none()
+        );
+    }
+    #[test]
     fn scheduling_is_optional_visible_only_throttled_and_rejects_stale_results() {
         let (sender, jobs) = mpsc::sync_channel(2);
         let (results, receiver) = mpsc::sync_channel(2);
@@ -400,6 +500,7 @@ mod tests {
             .send(Reply {
                 job: old,
                 quote: Some(Quote {
+                    change_percent: None,
                     price: 999.,
                     currency: "USD".into(),
                     timestamp: 1000,
@@ -412,6 +513,7 @@ mod tests {
             .send(Reply {
                 job: current,
                 quote: Some(Quote {
+                    change_percent: None,
                     price: 123.,
                     currency: "USD".into(),
                     timestamp: 1002,
@@ -443,6 +545,7 @@ mod tests {
     fn tiny_prices_do_not_round_to_zero_and_stock_time_and_units_are_validated() {
         assert!(
             format_price(&Quote {
+                change_percent: None,
                 price: 0.00000001,
                 currency: "USD".into(),
                 timestamp: 1000

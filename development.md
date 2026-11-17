@@ -85,8 +85,14 @@ come from Coinbase's unauthenticated spot-price endpoint and Yahoo Finance's uno
 public chart endpoint. No API credentials are used. Requests use fixed HTTPS origins,
 no proxy or redirects, an eight-second deadline, and a 64 KiB reply limit. Symbols are
 strictly validated before URL construction, and quote identity, units, finite positive
-prices, and timestamps are validated before rendering. Refresh is five minutes while
-Home is visible. Failed refreshes show the last in-memory quote with its timestamp and
+prices, and timestamps are validated before rendering. Crypto fetches the previous UTC
+day's historic spot price within the same eight-second job budget for daily comparison.
+Stocks use `chartPreviousClose` with `previousClose` as a fallback. Invalid/missing
+baselines never produce fabricated zero changes. Direction arrows and signed percentages
+use green/red, with rounded zeroes remaining neutral.
+Refresh is five minutes while Home is visible. Relative ages use the original quote time
+and advance through minutes, hours and days, rather than resetting when stock data refreshes.
+Failed refreshes show the last in-memory quote with its age and
 an explicit warning. There is no persistent price cache or trading capability.
 
 Scripts, fixed-time captures, and frame-limited previews disable public market requests.
