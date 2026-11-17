@@ -10,7 +10,6 @@ uniform float u_embolden;
 varying PAINT_PRECISION vec4 v_color;
 varying PAINT_PRECISION float v_coverage;
 varying PAINT_PRECISION float v_logical_y;
-varying PAINT_PRECISION float v_logical_x;
 void main() {
     // Snap each glyph's insertion origin/baseline, not individual outline
     // vertices. Curves retain their shape while scrolling and changing density.
@@ -26,5 +25,4 @@ void main() {
     v_color = u_tint;
     v_coverage = mix(1.0, a_coverage, step(0.001, u_fringe));
     v_logical_y = position.y;
-    v_logical_x = position.x;
 }

@@ -1,7 +1,6 @@
 uniform sampler2D u_texture;
 uniform float u_aa;
 uniform vec4 u_edge_fade;
-uniform vec4 u_edge_fade_x;
 uniform vec3 u_app_top;
 uniform vec3 u_app_bottom;
 uniform bool u_app;
@@ -20,10 +19,6 @@ float edge_coverage() {
     if (u_edge_fade.y > u_edge_fade.x)
         edge = smoothstep(u_edge_fade.x, u_edge_fade.y, v_logical_y) *
             (1.0 - smoothstep(u_edge_fade.z, u_edge_fade.w, v_logical_y));
-    if (u_edge_fade_x.y > u_edge_fade_x.x)
-        edge *= smoothstep(u_edge_fade_x.x, u_edge_fade_x.y, v_logical_x);
-    if (u_edge_fade_x.w > u_edge_fade_x.z)
-        edge *= 1.0 - smoothstep(u_edge_fade_x.z, u_edge_fade_x.w, v_logical_x);
     return edge;
 }
 vec3 glass_sample(vec2 uv, float scattering) {

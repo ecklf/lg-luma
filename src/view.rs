@@ -7,9 +7,9 @@ use crate::{
     },
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, APPS_SECTION, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT,
-        HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH, INPUTS_SECTION, KEYS, Overlay, Page,
-        Rect, SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
+        APPS_COLUMNS, APPS_SECTION, Control, HOME_TILE_PITCH, HOME_TILE_WIDTH, INPUTS_SECTION,
+        KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage, Target, TextField,
+        WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -306,7 +306,7 @@ impl Scene {
                         [brightness, brightness, brightness, alpha],
                     );
                 }
-                Draw::Clip(_) | Draw::EdgeFade(_) | Draw::EdgeFadeX(_) => {}
+                Draw::Clip(_) | Draw::EdgeFade(_) => {}
             }
         }
     }
@@ -1434,7 +1434,8 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let dock_y = state.dock_y();
     let dock_height = FACE_HEIGHT;
-    let dock = Rect::new(60., dock_y - 24., 1800., dock_height + 48.);
+    let card = state.favorites_viewport();
+    let dock = Rect::new(card.x, dock_y - 24., card.w, dock_height + 48.);
     // The card extends beyond the content viewport; clip only its scrolling contents.
     out.draw.push(Draw::Clip(None));
     out.shadow(dock, 40., 38., 12., 0.22);
@@ -1472,22 +1473,8 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
             },
         );
     }
-    // Like Apple TV's rows, the favourites run to the screen edge: the next tile shows cut off
-    // at the right (and a scrolled-away one at the left), so it is clear the row continues.
+    // The favourites scroll inside their glass card and slide under its edges.
     out.draw.push(Draw::Clip(Some(state.favorites_viewport())));
-    // Soft edges: out to the right from the end of the sixth tile, and in from the left once
-    // the row has scrolled.
-    let left = if state.home_scroll > 0. {
-        [HOME_FADE_LEFT, HOME_STRIP_LEFT]
-    } else {
-        [0., 0.]
-    };
-    out.draw.push(Draw::EdgeFadeX(Some([
-        left[0],
-        left[1],
-        HOME_STRIP_RIGHT,
-        HOME_FADE_RIGHT,
-    ])));
     for (index, app) in apps.iter().enumerate() {
         tile(
             out,
@@ -1503,7 +1490,6 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
             true,
         );
     }
-    out.draw.push(Draw::EdgeFadeX(None));
     out.draw.push(Draw::Clip(Some(state.content_viewport())));
 }
 

@@ -542,7 +542,7 @@ try {
   const tileEditorClosed = await scenario('tile-editor-closed', `${tileEditorOpen},back`);
   assert.equal(tileEditorClosed.modal, false);
   assert.equal(tileEditorClosed.focus, 'TileEditor');
-  // The exposed card fragments are real pointer targets, including after remote scrolling.
+  // Favourites stay inside their glass card: the space beside it is no pointer target.
   const edgeFavorites = [
     'netflix',
     'youtube.leanback.v4',
@@ -559,16 +559,16 @@ try {
     JSON.stringify({ favorites: edgeFavorites, show_weather: false }),
   );
   const edgeRight = await scenario('favorites-edge-right', 'home,click:1880:880');
-  assert.deepEqual(edgeRight.focus, { App: edgeFavorites[6] });
-  assert.equal(edgeRight.home_scroll, 0, 'Clicking the fragment must not move it');
+  assert.notDeepEqual(edgeRight.focus, { App: edgeFavorites[6] });
+  assert.equal(edgeRight.home_scroll, 0, 'Clicking beside the card must not scroll it');
   const edgeLeft = await scenario(
     'favorites-edge-left',
     `home,${Array(6).fill('right').join(',')},click:40:880`,
   );
-  assert.deepEqual(edgeLeft.focus, { App: edgeFavorites[0] });
+  assert.deepEqual(edgeLeft.focus, { App: edgeFavorites[6] });
   assert.ok(
     Math.abs(edgeLeft.home_scroll - 296.4) < 0.01,
-    'Pointer focus preserves strip position',
+    'Clicking beside the card keeps the strip position',
   );
   await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
   const gradientDisabled = await scenario(
