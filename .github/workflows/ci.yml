@@ -111,6 +111,9 @@ jobs:
           - suite: Mock weather
             script: tests/weather-smoke.mjs
             artifact: weather
+          - suite: Mock market quotes
+            script: tests/markets-smoke.mjs
+            artifact: markets
           - suite: Translations
             script: tests/translations-smoke.mjs
             artifact: translations
