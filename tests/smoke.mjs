@@ -661,6 +661,23 @@ try {
   assert.deepEqual(resetWidgets.preferences.weather_position, { column: 4, row: 0 });
   assert.equal(resetWidgets.preferences.show_greeting, true);
   assert.equal(resetWidgets.preferences.show_weather, true);
+  await fs.writeFile(preferences, JSON.stringify({ show_weather: false, greeting_name: 'Ana' }));
+  const overnight = await scenario('greeting-overnight', 'home', [
+    '--time',
+    '2026-10-22T02:00:00+02:00',
+  ]);
+  assert.ok(overnight.ui_text.includes('Still up?'));
+  assert.ok(!overnight.ui_text.includes('One more moment.'));
+  assert.ok(!overnight.ui_text.some((label) => label.includes('Ana')));
+  assert.ok(!Object.hasOwn(overnight.preferences, 'greeting_name'));
+  const greetingRestart = await scenario('greeting-restart', 'home', [
+    '--time',
+    '2026-10-22T09:00:00+02:00',
+  ]);
+  assert.ok(greetingRestart.ui_text.includes('Good morning.'));
+  const greetingOptions = await scenario('greeting-no-name-options', greetingPage);
+  assert.ok(!greetingOptions.ui_text.includes('Name'));
+  assert.ok(!greetingOptions.ui_text.includes('Clear name'));
   console.log(
     'Native smoke checks passed: rendering/alpha, navigation, persistence, SDL pointer input, DPI-aware glyphs, 4K capture and presentation profiling.',
   );

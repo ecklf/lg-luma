@@ -163,14 +163,18 @@ impl Queue {
     }
 }
 pub struct Service {
+    client: Client,
+    path: PathBuf,
     search: Arc<Queue>,
     forecast: Arc<Queue>,
     pub receiver: mpsc::Receiver<Response>,
-    cache: Option<mpsc::Sender<Option<Cache>>>,
+    cache: Option<mpsc::Sender<(Option<u8>, Option<Cache>)>>,
     cache_worker: Option<JoinHandle<()>>,
 }
 impl Service {
     pub fn new(client: Client, path: PathBuf) -> Self {
+        let instance_client = client.clone();
+        let instance_path = path.clone();
         let (sender, receiver) = mpsc::channel();
         let spawn = |client: Client, sender: mpsc::Sender<Response>| {
             let queue = Arc::new(Queue::default());
@@ -221,9 +225,13 @@ impl Service {
         };
         let search = spawn(client.clone(), sender.clone());
         let forecast = spawn(client, sender);
-        let (cache, writes) = mpsc::channel::<Option<Cache>>();
+        let (cache, writes) = mpsc::channel::<(Option<u8>, Option<Cache>)>();
         let cache_worker = thread::spawn(move || {
-            for cache in writes {
+            for (index, cache) in writes {
+                let path = index.map_or_else(
+                    || path.clone(),
+                    |index| path.with_extension(format!("widget-{index}.json")),
+                );
                 if let Some(cache) = cache {
                     let _ = save_cache(&path, &cache);
                 } else {
@@ -232,12 +240,23 @@ impl Service {
             }
         });
         Self {
+            client: instance_client,
+            path: instance_path,
             search,
             forecast,
             receiver,
             cache: Some(cache),
             cache_worker: Some(cache_worker),
         }
+    }
+    pub fn instance(&self, index: usize) -> Self {
+        Self::new(
+            self.client.clone(),
+            self.path.with_extension(format!("widget-{index}.json")),
+        )
+    }
+    pub fn cached(&self) -> Option<Cache> {
+        load_cache(&self.path)
     }
     pub fn generations(&self, (search, forecast): (u64, u64)) {
         self.search.generation.store(search, Ordering::SeqCst);
@@ -249,12 +268,17 @@ impl Service {
             job @ Command::Forecast { id, .. } => self.forecast.submit(id, job),
             Command::Persist(cache) => {
                 if let Some(sender) = &self.cache {
-                    let _ = sender.send(Some(cache));
+                    let _ = sender.send((None, Some(cache)));
                 }
             }
             Command::ClearCache => {
                 if let Some(sender) = &self.cache {
-                    let _ = sender.send(None);
+                    let _ = sender.send((None, None));
+                }
+            }
+            Command::ClearWidgetCache(index) => {
+                if let Some(sender) = &self.cache {
+                    let _ = sender.send((Some(index), None));
                 }
             }
         }

@@ -25,6 +25,11 @@ mod glass_home_tests;
 #[path = "app-sorting-tests.rs"]
 mod app_sorting_tests;
 
+#[path = "app-drawer-tests.rs"]
+mod app_drawer_tests;
+
+#[path = "markets-ui-tests.rs"]
+mod markets_ui_tests;
 #[path = "weather-style-tests.rs"]
 mod weather_style_tests;
 
@@ -44,7 +49,7 @@ fn ui_sounds_default_off_and_toggle_without_moving_controls() {
         let mut state = ready();
         state.open(2);
         state.direction(Direction::Right, &controls(&state));
-        for _ in 0..4 {
+        for _ in 0..5 {
             state.direction(Direction::Down, &controls(&state));
         }
         assert_eq!(state.focus, Target::Setting(11));

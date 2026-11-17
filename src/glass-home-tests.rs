@@ -58,8 +58,8 @@ fn widget_toolbar_pills_are_fixed_ordered_and_remote_and_pointer_accessible() {
     state.activate();
     assert_eq!(
         state.focus,
-        Target::CloseDialog,
-        "all default widgets are already installed"
+        Target::AddWidget(crate::model::HomeWidget::ExtraWeather(0)),
+        "additional widgets can be added without changing existing defaults"
     );
     state.back();
     assert_eq!(state.focus, Target::WidgetAdd);
@@ -151,7 +151,10 @@ fn widget_reset_only_restores_membership_and_positions_and_saves_once() {
         serde_json::from_value(serde_json::to_value(&state.preferences).unwrap()).unwrap();
     loaded.sanitize();
     for widget in HomeWidget::ALL {
-        assert!(loaded.has_widget(widget));
+        assert_eq!(
+            loaded.has_widget(widget),
+            matches!(widget, HomeWidget::Greeting | HomeWidget::Weather)
+        );
         assert_eq!(loaded.widget_position(widget), widget.default_position());
     }
     state.preferences.show_greeting = false;
@@ -206,7 +209,10 @@ fn widget_manager_grid_opens_context_menu_from_every_occupied_cell() {
         let menu = scene(&state);
         assert!(menu.controls.iter().all(|control| matches!(
             control.target,
-            Target::ConfigureWidget(_) | Target::MoveWidget(_) | Target::RemoveWidget(_)
+            Target::ConfigureWidget(_)
+                | Target::MoveWidget(_)
+                | Target::RemoveWidget(_)
+                | Target::WeatherSize
         )));
         assert!(
             menu.controls
@@ -298,10 +304,12 @@ fn widget_configuration_has_no_visibility_or_position_rows() {
         state.back();
         assert_eq!(state.focus, Target::WidgetCell(cell));
     }
-    // All-added empty cells still open a dismissible, focused menu.
+    // Existing widget types remain available for additional instances.
+    state.preferences.crypto.enabled = true;
+    state.preferences.stocks.enabled = true;
     state.focus = Target::WidgetCell(15);
     state.activate();
-    assert_eq!(state.focus, Target::CloseDialog);
+    assert_eq!(state.focus, Target::AddWidget(HomeWidget::ExtraWeather(0)));
     assert!(
         scene(&state)
             .controls
@@ -449,7 +457,10 @@ fn widget_positions_default_to_requested_spans_and_sanitize_safely() {
             preferences.greeting_position = WidgetPosition::from_cell(greeting).unwrap();
             preferences.weather_position = WidgetPosition::from_cell(weather).unwrap();
             preferences.sanitize();
-            for widget in HomeWidget::ALL {
+            for widget in HomeWidget::ALL
+                .into_iter()
+                .filter(|widget| preferences.has_widget(*widget))
+            {
                 assert!(preferences.can_place_widget(widget, preferences.widget_position(widget)));
             }
         }
@@ -546,6 +557,59 @@ fn dock_is_not_a_control_and_its_glass_is_not_clipped_to_the_content_area() {
         }
     }
     assert!(dock);
+}
+
+#[test]
+fn home_dock_leaves_a_48_pixel_bottom_gap_and_keeps_cards_clickable() {
+    let mut state = ready();
+    state.preferences.app_drawer_style = crate::model::AppDrawerStyle::Minimal;
+    let rendered = scene(&state);
+    let glass = rendered
+        .draw
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Glass(rect, ..) if rect.x == 60. => Some(*rect),
+            _ => None,
+        })
+        .unwrap();
+    assert!((1080. - glass.y - glass.h - 48.).abs() < 0.001);
+    let cards: Vec<_> = rendered
+        .controls
+        .iter()
+        .filter(|control| matches!(control.target, Target::App(_)))
+        .collect();
+    assert!(!cards.is_empty());
+    for card in cards {
+        assert!((card.rect.y - glass.y - 24.).abs() < 0.001);
+        assert!((glass.y + glass.h - card.rect.y - card.rect.h - 24.).abs() < 0.001);
+        let (x, y) = card.rect.center();
+        assert_eq!(
+            state.hit_test(&rendered.controls, x, y),
+            Some(card.target.clone())
+        );
+    }
+}
+
+#[test]
+fn lowered_home_dock_keeps_the_drawer_endpoint_and_transition_monotonic() {
+    let mut state = ready();
+    state.preferences.app_drawer_style = crate::model::AppDrawerStyle::Minimal;
+    assert!((state.dock_y() - 853.6).abs() < 0.001);
+    state.open(1);
+    let mut previous_y = state.dock_y();
+    for step in 1..=20 {
+        state.drawer_visibility = step as f32 / 20.;
+        let y = state.dock_y();
+        assert!(y < previous_y);
+        assert!((164.8 - 0.001..853.6).contains(&y));
+        previous_y = y;
+    }
+    assert!((state.dock_y() - 164.8).abs() < 0.001);
+    state.preferences.reduced_motion = true;
+    state.open(0);
+    assert!((state.dock_y() - 853.6).abs() < 0.001);
+    state.open(1);
+    assert!((state.dock_y() - 164.8).abs() < 0.001);
 }
 
 #[test]
