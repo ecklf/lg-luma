@@ -245,12 +245,30 @@ impl Recents {
 }
 
 impl State {
+    /// Short Back remains navigation everywhere except the Home surface.
+    pub fn back_press(&mut self, long: bool) -> Vec<Effect> {
+        use crate::{model::RecentAppsBehavior, state::Page};
+        match (self.preferences.recent_apps_behavior, long) {
+            (RecentAppsBehavior::LongPress, true) => self.open_recents(),
+            (RecentAppsBehavior::ShortPress, false)
+                if self.page == Page::Home && self.overlay.is_none() && self.moving.is_none() =>
+            {
+                self.open_recents()
+            }
+            (_, false) => self.back(),
+            _ => vec![],
+        }
+    }
+
     pub fn recents_open(&self) -> bool {
         matches!(self.overlay, Some(Overlay::Recents { .. }))
     }
 
     pub fn open_recents(&mut self) -> Vec<Effect> {
-        if self.overlay.is_some() || self.moving.is_some() {
+        if self.preferences.recent_apps_behavior == crate::model::RecentAppsBehavior::Off
+            || self.overlay.is_some()
+            || self.moving.is_some()
+        {
             return vec![];
         }
         self.overlay = Some(Overlay::Recents {

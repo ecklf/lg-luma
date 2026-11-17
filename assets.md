@@ -41,6 +41,7 @@
 - `assets/ui-icons/upload.svg`, `assets/ui-icons/input-disk.svg` and `assets/wallpaper-upload/`: original Luma artwork/UI, MIT.
 - `assets/ui-icons/volume.svg` and the synthesized UI cues in `src/feedback.rs`: original Luma
   artwork/audio, MIT. No Apple/tvOS sound recordings are included.
+- `assets/ui-icons/market-up.svg` and `market-down.svg`: original Luma direction arrows, MIT.
 
 The bundled icon/logo SVG sources are compiled into derived `.lvec` triangles with the same
 source licenses. Apple TV, Disney+, Prime Video and Das Erste retain the white display treatment.
@@ -114,8 +115,8 @@ to compiled `.lvec` derivatives.
 ### Live TV and browser cards
 
 `live-tv.svg` and `browser.svg` are original Luma artwork, MIT. Both share a blue/cyan material
-with a light rim and white details. Live TV uses a rounded display, play symbol and live
-indicator. Browser uses a globe with a navigation pointer. The gradients and highlights are vector
+with a light rim and white details. Live TV uses a centered rounded display without a stand,
+with a play symbol and live indicator. Browser uses a globe with a navigation pointer. The gradients and highlights are vector
 geometry, with no embedded images, runtime fonts, filters or raster effects. Each utility card
 uses its native app's exact ID.
 

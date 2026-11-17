@@ -17,6 +17,7 @@ mod i18n;
 mod input_refresh;
 #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
 mod luna;
+mod markets;
 mod model;
 mod platform;
 mod raster;
@@ -65,6 +66,7 @@ use time::OffsetDateTime;
 
 #[derive(Default)]
 struct Options {
+    market_test_server: Option<String>,
     webos_home: bool,
     assets: Option<PathBuf>,
     preferences: Option<PathBuf>,
@@ -151,6 +153,7 @@ impl Options {
                 }
                 "--diagnostics" => result.diagnostics = Some(value.into()),
                 "--weather-test-server" => result.weather_test_server = Some(value),
+                "--market-test-server" => result.market_test_server = Some(value),
                 "--test-update-version" => result.test_update_version = Some(value),
                 "--test-extra-apps" => {
                     result.test_extra_apps = value
@@ -461,7 +464,12 @@ fn input_refresh_active(state: &State, webos: bool, focused: bool, visible: bool
         && state.recents.visibility == 0.
 }
 
-fn weather_tick(state: &mut State, service: &weather_service::Service, visible: bool) {
+fn weather_tick(
+    state: &mut State,
+    service: &weather_service::Service,
+    extra: &mut Vec<Option<weather_service::Service>>,
+    visible: bool,
+) {
     let now = OffsetDateTime::now_utc().unix_timestamp();
     let (command, changed) = state.weather.sync(
         &state.preferences,
@@ -480,6 +488,41 @@ fn weather_tick(state: &mut State, service: &weather_service::Service, visible: 
             }
             weather_service::Response::Forecast { id, key, result } => {
                 let (changed, command) = state.weather.accept_forecast(id, &key, result, now);
+                state.dirty |= changed;
+                if let Some(command) = command {
+                    service.send(command);
+                }
+            }
+        }
+    }
+    for (index, config) in state.preferences.extra_weather.iter().enumerate() {
+        if index == extra.len() {
+            extra.push(None);
+        }
+        if extra[index].is_none()
+            && config.enabled
+            && config.location.is_some()
+            && visible
+            && state.page == state::Page::Home
+        {
+            let instance = service.instance(index);
+            state.extra_weather[index].cache = instance.cached();
+            extra[index] = Some(instance);
+        }
+        let Some(service) = &extra[index] else {
+            continue;
+        };
+        let weather = &mut state.extra_weather[index];
+        let (command, changed) =
+            weather.sync_widget(config, visible && state.page == state::Page::Home, now);
+        state.dirty |= changed;
+        service.generations(weather.generations());
+        if let Some(command) = command {
+            service.send(command);
+        }
+        while let Ok(response) = service.receiver.try_recv() {
+            if let weather_service::Response::Forecast { id, key, result } = response {
+                let (changed, command) = weather.accept_forecast(id, &key, result, now);
                 state.dirty |= changed;
                 if let Some(command) = command {
                     service.send(command);
@@ -691,11 +734,22 @@ fn run() -> Result<(), String> {
     }
     let weather_cache = weather_service::cache_path(&preferences_path);
     state.weather.cache = weather_service::load_cache(&weather_cache);
+    let mut extra_weather_services = Vec::new();
     let weather_service = weather_service::Service::new(
         weather_service::Client::new(options.weather_test_server.as_deref())?,
         weather_cache,
     );
     let updates = update::Worker::new(webos && public_update_checks);
+    if webos && options.market_test_server.is_some() {
+        return Err("Market test servers are only available in desktop builds".into());
+    }
+    let market_service = markets::Service::new(
+        options.market_test_server.as_deref(),
+        options.script.is_empty()
+            && options.time.is_none()
+            && options.frames.is_none()
+            && options.screenshot.is_none(),
+    )?;
     let platform = Platform::new(
         webos,
         options.preferences.is_none() && options.test_extra_apps == 0,
@@ -1239,7 +1293,19 @@ fn run() -> Result<(), String> {
             };
             state.notify(state.preferences.language.format(key, &[("tile", &title)]));
         }
-        weather_tick(&mut state, &weather_service, visible);
+        weather_tick(
+            &mut state,
+            &weather_service,
+            &mut extra_weather_services,
+            visible,
+        );
+        state.dirty |= state.markets.tick(
+            &market_service,
+            &state.preferences,
+            state.page,
+            visible,
+            OffsetDateTime::now_utc().unix_timestamp(),
+        );
         if std::mem::take(&mut state.update_check_requested) {
             if let Some(version) = &options.test_update_version {
                 state.update_response(Ok(
@@ -1424,7 +1490,7 @@ fn run() -> Result<(), String> {
                         _ if native_hold => {
                             if !repeat && back_button.native_hold(Instant::now()) {
                                 press = None;
-                                pending = state.open_recents();
+                                pending = state.back_press(true);
                                 cue = Some(Cue::Select);
                             }
                         }
@@ -1496,11 +1562,7 @@ fn run() -> Result<(), String> {
                     keycode: Some(key), ..
                 } if is_back(key, webos) => {
                     if let Some(long) = back_button.release(key, Instant::now()) {
-                        pending = if long {
-                            state.open_recents()
-                        } else {
-                            state.back()
-                        };
+                        pending = state.back_press(long);
                         cue = Some(if long { Cue::Select } else { Cue::Back });
                     }
                 }
@@ -1664,7 +1726,7 @@ fn run() -> Result<(), String> {
         }
         if back_button.held(Instant::now()) {
             press = None;
-            let pending = state.open_recents();
+            let pending = state.back_press(true);
             if state.preferences.ui_sounds && focused && visible && !scripted_input {
                 feedback.play(&sdl, Cue::Select);
             }
@@ -1702,7 +1764,9 @@ fn run() -> Result<(), String> {
             && frame.is_multiple_of(3)
             && !options.script.front().is_some_and(|action| {
                 (action == "await-search" && state.weather.searching)
-                    || (action == "await-weather" && state.weather.fetching())
+                    || (action == "await-weather"
+                        && (state.weather.fetching()
+                            || state.extra_weather.iter().any(weather::Weather::fetching)))
                     || (action == "await-recents" && state.recents.pending.is_some())
                     || (action == "await-upload"
                         && matches!(state.overlay, Some(Overlay::WallpaperUpload))
@@ -1752,7 +1816,19 @@ fn run() -> Result<(), String> {
         if input_refresh.due(Instant::now(), inputs_active) {
             platform.send(Request::RefreshInputs);
         }
-        weather_tick(&mut state, &weather_service, visible);
+        weather_tick(
+            &mut state,
+            &weather_service,
+            &mut extra_weather_services,
+            visible,
+        );
+        state.dirty |= state.markets.tick(
+            &market_service,
+            &state.preferences,
+            state.page,
+            visible,
+            OffsetDateTime::now_utc().unix_timestamp(),
+        );
         // SDL-webOS disables text input when its own panel is dismissed, even
         // if it did not forward a Back/Return key to the application.
         if text_active
