@@ -136,7 +136,9 @@ try {
   await scenario('default-disabled');
   assert.equal(requests.length, 0);
   await seed({ crypto: { enabled: true }, stocks: { enabled: true } });
-  await scenario('unconfigured');
+  const unconfigured = await scenario('unconfigured');
+  assert.equal(unconfigured.ui_text.filter((label) => label === 'Not set').length, 2);
+  assert.equal(unconfigured.ui_text.filter((label) => label === 'Configure in Settings').length, 2);
   assert.equal(requests.length, 0, 'Unconfigured widgets must never request prices');
   await seed();
   const quotes = await scenario('home');
@@ -155,6 +157,30 @@ try {
     3,
     'One current and one historic crypto quote, plus one stock quote, not polling every frame',
   );
+  await seed({
+    ...configured,
+    extra_crypto: [
+      { enabled: true, symbol: 'ETH', currency: 'USD', position: { column: 2, row: 2 } },
+    ],
+    extra_stocks: [{ enabled: true, symbol: 'MSFT', position: { column: 3, row: 2 } }],
+  });
+  const multiple = await scenario('multiple');
+  for (const label of [
+    'BTC',
+    'ETH',
+    'AAPL',
+    'MSFT',
+    '65000.25 USD',
+    '2100.50 USD',
+    '123.45 USD',
+    '476.55 USD',
+  ])
+    assert.ok(multiple.ui_text.includes(label), label);
+  const info = await scenario('info-card', `${grid},click:720:560,enter`);
+  assert.ok(info.ui_text.includes('Coinbase · BTC, ETH'));
+  assert.ok(info.ui_text.includes('Updates every 5 minutes on Home. Quotes may be delayed.'));
+  await scenario('move-toolbar', `${grid},click:720:560,down,enter`);
+  await seed();
   const changed = await scenario(
     'edit-coin',
     `${grid},click:720:560,enter,enter,type:eth,back,home`,

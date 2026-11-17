@@ -83,6 +83,9 @@ pub enum Target {
     ConfigureWidget(HomeWidget),
     RemoveWidget(HomeWidget),
     MoveWidget(HomeWidget),
+    WidgetStep(u8),
+    WidgetCommit,
+    WidgetCancel,
     DateToggle,
     DateFormat,
     ClockFormat,
@@ -186,6 +189,7 @@ pub enum Subpage {
     WeatherStyle,
     Language,
     AppSorting,
+    RecentApps,
     TextRendering,
 }
 
@@ -233,6 +237,9 @@ pub const KEYS: [&str; 40] = [
 ];
 
 pub struct State {
+    pub widget_position_cell: usize,
+    pub active_weather: HomeWidget,
+    pub extra_weather: Vec<weather::Weather>,
     pub markets: crate::markets::Markets,
     pub page: Page,
     pub focus: Target,
@@ -284,6 +291,18 @@ pub struct State {
 }
 
 impl State {
+    pub fn widget_weather(&self, widget: HomeWidget) -> &weather::Weather {
+        match widget {
+            HomeWidget::ExtraWeather(i) => &self.extra_weather[usize::from(i)],
+            _ => &self.weather,
+        }
+    }
+    pub fn widget_weather_mut(&mut self, widget: HomeWidget) -> &mut weather::Weather {
+        match widget {
+            HomeWidget::ExtraWeather(i) => &mut self.extra_weather[usize::from(i)],
+            _ => &mut self.weather,
+        }
+    }
     pub fn new(preferences: Preferences) -> Self {
         Self {
             page: Page::Home,
@@ -326,6 +345,11 @@ impl State {
             panel_started: None,
             weather: weather::Weather::default(),
             markets: crate::markets::Markets::default(),
+            active_weather: HomeWidget::Weather,
+            widget_position_cell: 0,
+            extra_weather: (0..HOME_GRID_CELLS)
+                .map(|_| weather::Weather::default())
+                .collect(),
             keyboard_field: TextField::Apps,
             input_name: String::new(),
             recents: crate::recents::Recents::default(),
@@ -983,6 +1007,11 @@ impl State {
     }
 
     pub fn focus(&mut self, target: Target, controls: &[Control]) {
+        if matches!(self.subpage, Some(Subpage::WidgetPosition(_)))
+            && let Target::Choice(cell) = target
+        {
+            self.widget_position_cell = cell;
+        }
         self.pointer = false;
         self.focus = target;
         self.reveal_focus(controls);
@@ -1057,6 +1086,11 @@ impl State {
 
     /// Hover and pointer-down must not move the control before pointer-up.
     pub fn pointer_focus(&mut self, target: Target) {
+        if matches!(self.subpage, Some(Subpage::WidgetPosition(_)))
+            && let Target::Choice(cell) = target
+        {
+            self.widget_position_cell = cell;
+        }
         if !self.pointer {
             self.dirty = true;
         }
@@ -1224,7 +1258,7 @@ impl State {
         });
         self.focus = HomeWidget::ALL
             .into_iter()
-            .find(|widget| !self.preferences.has_widget(*widget))
+            .find_map(|kind| self.preferences.available_widget(kind))
             .map_or(Target::CloseDialog, Target::AddWidget);
         self.panel_started = (!self.preferences.reduced_motion).then(Instant::now);
     }
@@ -1278,7 +1312,9 @@ impl State {
                 self.subpage = Some(Subpage::Greeting);
                 Target::DateFormat
             }
-            Some(Subpage::Weather) => Target::WidgetCell(self.preferences.weather_position.cell()),
+            Some(Subpage::Weather) => {
+                Target::WidgetCell(self.preferences.widget_position(self.active_weather).cell())
+            }
             Some(Subpage::Shortcuts) => Target::Widget(2),
             Some(Subpage::Clock) => Target::Setting(1),
             Some(Subpage::ClockFormat) => {
@@ -1312,6 +1348,7 @@ impl State {
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
             Some(Subpage::AppSorting) => Target::Setting(10),
+            Some(Subpage::RecentApps) => Target::Setting(12),
             None => Target::Sidebar(self.section),
         };
         self.scroll = 0.;
@@ -1393,6 +1430,7 @@ impl State {
                 _ => index,
             };
             self.focus(Target::Choice(next), controls);
+            self.widget_position_cell = next;
             return vec![];
         }
         if matches!(self.overlay, Some(Overlay::Inputs | Overlay::Settings)) {
@@ -1598,13 +1636,10 @@ impl State {
                 }
             }
             let setting_rows: Option<&[Target]> = match self.subpage {
-                Some(Subpage::Market(HomeWidget::Crypto)) => Some(&[
-                    Target::MarketSymbol(HomeWidget::Crypto),
-                    Target::MarketCurrency,
-                ]),
-                Some(Subpage::Market(HomeWidget::Stocks)) => {
-                    Some(&[Target::MarketSymbol(HomeWidget::Stocks)])
+                Some(Subpage::Market(kind)) if kind.kind() == HomeWidget::Crypto => {
+                    Some(&[Target::MarketSymbol(kind), Target::MarketCurrency])
                 }
+                Some(Subpage::Market(kind)) => Some(&[Target::MarketSymbol(kind)]),
                 Some(Subpage::Greeting) => Some(&[Target::DateToggle, Target::DateFormat]),
                 Some(Subpage::Weather) => Some(&[
                     Target::WeatherLocation,
@@ -1659,6 +1694,7 @@ impl State {
                         | Subpage::TextRendering
                         | Subpage::AppSorting,
                     ) => 2,
+                    Some(Subpage::RecentApps) => crate::model::RecentAppsBehavior::ALL.len(),
                     Some(Subpage::InputIcons(_)) => crate::model::INPUT_ICONS.len() + 1,
                     Some(Subpage::Language) => Language::ALL.len(),
                     Some(Subpage::DateFormat) => crate::model::DateFormat::ALL.len(),
@@ -1806,7 +1842,11 @@ impl State {
                     }
                     Direction::Up => {
                         self.focus(
-                            if self.preferences.weather_location.is_some()
+                            if self
+                                .preferences
+                                .weather_settings(self.active_weather)
+                                .location
+                                .is_some()
                                 && self.focus != Target::WeatherClear
                             {
                                 Target::WeatherClear
@@ -2544,16 +2584,24 @@ impl State {
             }
             Target::MarketSymbol(kind) => self.open_keyboard(TextField::Market(kind)),
             Target::MarketCurrency => {
+                let kind = if let Some(Subpage::Market(kind)) = self.subpage {
+                    kind
+                } else {
+                    HomeWidget::Crypto
+                };
                 let currencies = crate::markets::CURRENCIES;
                 let current = currencies
                     .iter()
-                    .position(|currency| *currency == self.preferences.crypto.currency)
+                    .position(|currency| {
+                        *currency == crate::markets::settings(&self.preferences, kind).currency
+                    })
                     .unwrap_or(0);
-                self.preferences.crypto.currency =
+                crate::markets::settings_mut(&mut self.preferences, kind).currency =
                     currencies[(current + 1) % currencies.len()].into();
                 return vec![Effect::Save];
             }
             Target::WeatherConfigure => {
+                self.active_weather = HomeWidget::Weather;
                 self.open(2);
                 self.section = WIDGETS_SECTION;
                 self.open_location();
@@ -2563,26 +2611,38 @@ impl State {
             Target::WeatherTemperature => {
                 self.subpage = Some(Subpage::Temperature);
                 self.focus = Target::Choice(usize::from(
-                    self.preferences.temperature_unit == Unit::Fahrenheit,
+                    self.preferences.weather_settings(self.active_weather).unit == Unit::Fahrenheit,
                 ));
                 if !self.preferences.reduced_motion {
                     self.panel_started = Some(Instant::now());
                 }
             }
             Target::WeatherSize => {
-                self.preferences.toggle_weather_size();
+                if let Some(Overlay::WidgetOptions { cell }) = self.overlay
+                    && let Some(widget) =
+                        WidgetPosition::from_cell(cell).and_then(|p| self.preferences.widget_at(p))
+                {
+                    self.active_weather = widget;
+                }
+                self.preferences
+                    .toggle_weather_widget_size(self.active_weather);
                 if matches!(self.overlay, Some(Overlay::WidgetOptions { .. })) {
                     // A non-anchor cell may disappear on shrink, and expanding
                     // at an edge may relocate Weather. Keep its popup attached.
                     self.overlay = Some(Overlay::WidgetOptions {
-                        cell: self.preferences.weather_position.cell(),
+                        cell: self.preferences.widget_position(self.active_weather).cell(),
                     });
                 }
                 return vec![Effect::Save];
             }
             Target::WeatherStyle => {
                 self.subpage = Some(Subpage::WeatherStyle);
-                self.focus = Target::Choice(self.preferences.weather_style.index());
+                self.focus = Target::Choice(
+                    self.preferences
+                        .weather_settings(self.active_weather)
+                        .style
+                        .index(),
+                );
                 self.scroll = 0.;
                 if !self.preferences.reduced_motion {
                     self.panel_started = Some(Instant::now());
@@ -2662,6 +2722,7 @@ impl State {
                     return vec![];
                 }
                 if let Some(Overlay::WidgetCatalog { cell, .. }) = self.overlay.take() {
+                    self.preferences.prepare_widget(widget);
                     self.subpage = Some(Subpage::WidgetPosition(widget));
                     let cell = WidgetPosition::from_cell(cell)
                         .filter(|position| self.preferences.can_place_widget(widget, *position))
@@ -2674,6 +2735,7 @@ impl State {
                         })
                         .map_or(cell, WidgetPosition::cell);
                     self.focus = Target::Choice(cell);
+                    self.widget_position_cell = cell;
                     self.panel_started = None;
                     self.scroll = 0.;
                 }
@@ -2681,8 +2743,8 @@ impl State {
             Target::RemoveWidget(widget) => {
                 if let Some(Overlay::WidgetOptions { cell }) = self.overlay.take() {
                     self.preferences.set_widget_present(widget, false);
-                    if widget == HomeWidget::Weather {
-                        self.weather.invalidate_forecast();
+                    if widget.kind() == HomeWidget::Weather {
+                        self.widget_weather_mut(widget).invalidate_forecast();
                     }
                     self.focus = Target::WidgetCell(cell);
                     self.panel_started = None;
@@ -2690,21 +2752,31 @@ impl State {
                 }
             }
             Target::ConfigureWidget(widget) => {
+                if self.page != Page::Settings {
+                    self.open(2);
+                }
+                self.section = WIDGETS_SECTION;
                 self.overlay = None;
-                self.subpage = Some(match widget {
+                if widget.kind() == HomeWidget::Weather {
+                    self.active_weather = widget;
+                }
+                self.subpage = Some(match widget.kind() {
                     HomeWidget::Greeting => Subpage::Greeting,
                     HomeWidget::Weather => Subpage::Weather,
                     HomeWidget::Crypto | HomeWidget::Stocks => Subpage::Market(widget),
+                    _ => unreachable!(),
                 });
-                self.focus = match widget {
+                self.focus = match widget.kind() {
                     HomeWidget::Greeting => Target::DateToggle,
                     HomeWidget::Weather => Target::WeatherLocation,
                     HomeWidget::Crypto | HomeWidget::Stocks => Target::MarketSymbol(widget),
+                    _ => unreachable!(),
                 };
                 self.scroll = 0.;
                 self.panel_started = None;
             }
             Target::Widget(index) => {
+                self.active_weather = HomeWidget::Weather;
                 let (subpage, focus) = match index {
                     0 => (Subpage::Greeting, Target::DateToggle),
                     1 => (Subpage::Weather, Target::WeatherLocation),
@@ -2724,8 +2796,34 @@ impl State {
                 let position = self.preferences.widget_position(widget);
                 self.subpage = Some(Subpage::WidgetPosition(widget));
                 self.focus = Target::Choice(position.cell());
+                self.widget_position_cell = position.cell();
                 self.scroll = 0.;
                 self.panel_started = None;
+            }
+            Target::WidgetStep(step) => {
+                if matches!(self.subpage, Some(Subpage::WidgetPosition(_))) {
+                    self.focus = Target::Choice(self.widget_position_cell);
+                    return self.direction(
+                        match step {
+                            0 => Direction::Left,
+                            1 => Direction::Up,
+                            2 => Direction::Down,
+                            _ => Direction::Right,
+                        },
+                        &[],
+                    );
+                }
+            }
+            Target::WidgetCommit => {
+                if matches!(self.subpage, Some(Subpage::WidgetPosition(_))) {
+                    self.focus = Target::Choice(self.widget_position_cell);
+                    return self.activate();
+                }
+            }
+            Target::WidgetCancel => {
+                if matches!(self.subpage, Some(Subpage::WidgetPosition(_))) {
+                    self.close_subpage();
+                }
             }
             Target::InstallUpdate => {
                 if !self.update_busy()
@@ -2786,15 +2884,28 @@ impl State {
                     .unwrap_or_default();
             }
             Target::WeatherClear => {
-                self.preferences.weather_location = None;
-                self.weather.remove_location();
+                self.preferences
+                    .edit_weather(self.active_weather, |config| config.location = None);
+                self.widget_weather_mut(self.active_weather)
+                    .remove_location();
+                self.weather.cancel_search();
                 self.focus = Target::WeatherSearch;
-                return vec![Effect::Save, Effect::Weather(weather::Command::ClearCache)];
+                return vec![
+                    Effect::Save,
+                    Effect::Weather(match self.active_weather {
+                        HomeWidget::ExtraWeather(index) => {
+                            weather::Command::ClearWidgetCache(index)
+                        }
+                        _ => weather::Command::ClearCache,
+                    }),
+                ];
             }
             Target::WeatherResult(index) => {
                 if let Some(place) = self.weather.results.get(index).cloned() {
-                    self.preferences.weather_location = Some(place);
-                    self.weather.invalidate_forecast();
+                    self.preferences
+                        .edit_weather(self.active_weather, |config| config.location = Some(place));
+                    self.widget_weather_mut(self.active_weather)
+                        .invalidate_forecast();
                     self.weather.cancel_search();
                     self.focus = Target::WeatherSearch;
                     return vec![Effect::Save];
@@ -2831,8 +2942,16 @@ impl State {
                     2 => self.preferences.reduced_motion = !self.preferences.reduced_motion,
                     11 => self.preferences.ui_sounds = !self.preferences.ui_sounds,
                     12 => {
-                        self.preferences.recent_apps_behavior =
-                            self.preferences.recent_apps_behavior.next()
+                        self.subpage = Some(Subpage::RecentApps);
+                        self.focus = Target::Choice(
+                            crate::model::RecentAppsBehavior::ALL
+                                .iter()
+                                .position(|mode| *mode == self.preferences.recent_apps_behavior)
+                                .unwrap_or(1),
+                        );
+                        self.scroll = 0.;
+                        self.panel_started = (!self.preferences.reduced_motion).then(Instant::now);
+                        return vec![];
                     }
                     4 => {
                         self.subpage = Some(Subpage::Language);
@@ -2938,8 +3057,8 @@ impl State {
                         let added = !self.preferences.has_widget(widget);
                         let changed = self.preferences.place_widget(widget, position);
                         self.preferences.set_widget_present(widget, true);
-                        if added && widget == HomeWidget::Weather {
-                            self.weather.invalidate_forecast();
+                        if added && widget.kind() == HomeWidget::Weather {
+                            self.widget_weather_mut(widget).invalidate_forecast();
                         }
                         self.close_subpage();
                         return if changed || added {
@@ -2949,11 +3068,17 @@ impl State {
                         };
                     }
                     Some(Subpage::WeatherStyle) => {
-                        self.preferences.weather_style =
-                            crate::model::WeatherStyle::ALL[index.min(2)];
+                        self.preferences
+                            .edit_weather(self.active_weather, |config| {
+                                config.style = crate::model::WeatherStyle::ALL[index.min(2)]
+                            });
                     }
                     Some(Subpage::AppSorting) => {
                         self.preferences.app_sorting = crate::model::AppSorting::ALL[index.min(1)];
+                    }
+                    Some(Subpage::RecentApps) => {
+                        self.preferences.recent_apps_behavior =
+                            crate::model::RecentAppsBehavior::ALL[index.min(2)];
                     }
                     Some(Subpage::ClockFormat) => self.preferences.hour_24 = index == 1,
                     Some(Subpage::TimeFormat) => self.preferences.show_seconds = index == 1,
@@ -2979,11 +3104,14 @@ impl State {
                         );
                     }
                     Some(Subpage::Temperature) => {
-                        self.preferences.temperature_unit = if index == 1 {
-                            Unit::Fahrenheit
-                        } else {
-                            Unit::Celsius
-                        }
+                        self.preferences
+                            .edit_weather(self.active_weather, |config| {
+                                config.unit = if index == 1 {
+                                    Unit::Fahrenheit
+                                } else {
+                                    Unit::Celsius
+                                }
+                            });
                     }
                     Some(Subpage::Language) => {
                         self.preferences.language =

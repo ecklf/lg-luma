@@ -464,7 +464,12 @@ fn input_refresh_active(state: &State, webos: bool, focused: bool, visible: bool
         && state.recents.visibility == 0.
 }
 
-fn weather_tick(state: &mut State, service: &weather_service::Service, visible: bool) {
+fn weather_tick(
+    state: &mut State,
+    service: &weather_service::Service,
+    extra: &mut Vec<Option<weather_service::Service>>,
+    visible: bool,
+) {
     let now = OffsetDateTime::now_utc().unix_timestamp();
     let (command, changed) = state.weather.sync(
         &state.preferences,
@@ -483,6 +488,41 @@ fn weather_tick(state: &mut State, service: &weather_service::Service, visible: 
             }
             weather_service::Response::Forecast { id, key, result } => {
                 let (changed, command) = state.weather.accept_forecast(id, &key, result, now);
+                state.dirty |= changed;
+                if let Some(command) = command {
+                    service.send(command);
+                }
+            }
+        }
+    }
+    for (index, config) in state.preferences.extra_weather.iter().enumerate() {
+        if index == extra.len() {
+            extra.push(None);
+        }
+        if extra[index].is_none()
+            && config.enabled
+            && config.location.is_some()
+            && visible
+            && state.page == state::Page::Home
+        {
+            let instance = service.instance(index);
+            state.extra_weather[index].cache = instance.cached();
+            extra[index] = Some(instance);
+        }
+        let Some(service) = &extra[index] else {
+            continue;
+        };
+        let weather = &mut state.extra_weather[index];
+        let (command, changed) =
+            weather.sync_widget(config, visible && state.page == state::Page::Home, now);
+        state.dirty |= changed;
+        service.generations(weather.generations());
+        if let Some(command) = command {
+            service.send(command);
+        }
+        while let Ok(response) = service.receiver.try_recv() {
+            if let weather_service::Response::Forecast { id, key, result } = response {
+                let (changed, command) = weather.accept_forecast(id, &key, result, now);
                 state.dirty |= changed;
                 if let Some(command) = command {
                     service.send(command);
@@ -694,6 +734,7 @@ fn run() -> Result<(), String> {
     }
     let weather_cache = weather_service::cache_path(&preferences_path);
     state.weather.cache = weather_service::load_cache(&weather_cache);
+    let mut extra_weather_services = Vec::new();
     let weather_service = weather_service::Service::new(
         weather_service::Client::new(options.weather_test_server.as_deref())?,
         weather_cache,
@@ -1252,7 +1293,12 @@ fn run() -> Result<(), String> {
             };
             state.notify(state.preferences.language.format(key, &[("tile", &title)]));
         }
-        weather_tick(&mut state, &weather_service, visible);
+        weather_tick(
+            &mut state,
+            &weather_service,
+            &mut extra_weather_services,
+            visible,
+        );
         state.dirty |= state.markets.tick(
             &market_service,
             &state.preferences,
@@ -1718,7 +1764,9 @@ fn run() -> Result<(), String> {
             && frame.is_multiple_of(3)
             && !options.script.front().is_some_and(|action| {
                 (action == "await-search" && state.weather.searching)
-                    || (action == "await-weather" && state.weather.fetching())
+                    || (action == "await-weather"
+                        && (state.weather.fetching()
+                            || state.extra_weather.iter().any(weather::Weather::fetching)))
                     || (action == "await-recents" && state.recents.pending.is_some())
                     || (action == "await-upload"
                         && matches!(state.overlay, Some(Overlay::WallpaperUpload))
@@ -1768,7 +1816,12 @@ fn run() -> Result<(), String> {
         if input_refresh.due(Instant::now(), inputs_active) {
             platform.send(Request::RefreshInputs);
         }
-        weather_tick(&mut state, &weather_service, visible);
+        weather_tick(
+            &mut state,
+            &weather_service,
+            &mut extra_weather_services,
+            visible,
+        );
         state.dirty |= state.markets.tick(
             &market_service,
             &state.preferences,

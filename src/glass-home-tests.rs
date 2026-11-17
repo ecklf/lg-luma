@@ -58,8 +58,8 @@ fn widget_toolbar_pills_are_fixed_ordered_and_remote_and_pointer_accessible() {
     state.activate();
     assert_eq!(
         state.focus,
-        Target::AddWidget(crate::model::HomeWidget::Crypto),
-        "optional price widgets can be added without changing existing defaults"
+        Target::AddWidget(crate::model::HomeWidget::ExtraWeather(0)),
+        "additional widgets can be added without changing existing defaults"
     );
     state.back();
     assert_eq!(state.focus, Target::WidgetAdd);
@@ -304,12 +304,12 @@ fn widget_configuration_has_no_visibility_or_position_rows() {
         state.back();
         assert_eq!(state.focus, Target::WidgetCell(cell));
     }
-    // All-added empty cells still open a dismissible, focused menu.
+    // Existing widget types remain available for additional instances.
     state.preferences.crypto.enabled = true;
     state.preferences.stocks.enabled = true;
     state.focus = Target::WidgetCell(15);
     state.activate();
-    assert_eq!(state.focus, Target::CloseDialog);
+    assert_eq!(state.focus, Target::AddWidget(HomeWidget::ExtraWeather(0)));
     assert!(
         scene(&state)
             .controls

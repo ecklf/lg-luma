@@ -54,6 +54,7 @@ pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(
     Ok(serde_json::from_value(Value::deserialize(deserializer)?).unwrap_or_default())
 }
 pub fn normalize_symbol(kind: HomeWidget, value: &str) -> Option<String> {
+    let kind = kind.kind();
     let value = value.trim().to_ascii_uppercase();
     let limit = if kind == HomeWidget::Crypto { 12 } else { 32 };
     (!value.is_empty()
@@ -65,9 +66,19 @@ pub fn normalize_symbol(kind: HomeWidget, value: &str) -> Option<String> {
     .then_some(value)
 }
 pub fn index(kind: HomeWidget) -> usize {
-    usize::from(kind == HomeWidget::Stocks)
+    match kind {
+        HomeWidget::ExtraCrypto(i) => 2 + usize::from(i) * 2,
+        HomeWidget::ExtraStocks(i) => 3 + usize::from(i) * 2,
+        _ => usize::from(kind == HomeWidget::Stocks),
+    }
 }
 pub fn settings(preferences: &Preferences, kind: HomeWidget) -> &Settings {
+    if let HomeWidget::ExtraCrypto(i) = kind {
+        return &preferences.extra_crypto[usize::from(i)];
+    }
+    if let HomeWidget::ExtraStocks(i) = kind {
+        return &preferences.extra_stocks[usize::from(i)];
+    }
     if kind == HomeWidget::Crypto {
         &preferences.crypto
     } else {
@@ -75,6 +86,12 @@ pub fn settings(preferences: &Preferences, kind: HomeWidget) -> &Settings {
     }
 }
 pub fn settings_mut(preferences: &mut Preferences, kind: HomeWidget) -> &mut Settings {
+    if let HomeWidget::ExtraCrypto(i) = kind {
+        return &mut preferences.extra_crypto[usize::from(i)];
+    }
+    if let HomeWidget::ExtraStocks(i) = kind {
+        return &mut preferences.extra_stocks[usize::from(i)];
+    }
     if kind == HomeWidget::Crypto {
         &mut preferences.crypto
     } else {
@@ -90,13 +107,13 @@ struct Key {
 }
 impl Key {
     fn new(kind: HomeWidget, config: &Settings) -> Option<Self> {
-        if kind == HomeWidget::Crypto && !CURRENCIES.contains(&config.currency.as_str()) {
+        if kind.kind() == HomeWidget::Crypto && !CURRENCIES.contains(&config.currency.as_str()) {
             return None;
         }
         Some(Self {
             kind,
             symbol: normalize_symbol(kind, &config.symbol)?,
-            currency: if kind == HomeWidget::Crypto {
+            currency: if kind.kind() == HomeWidget::Crypto {
                 config.currency.clone()
             } else {
                 String::new()
@@ -138,6 +155,7 @@ pub fn parse_quote(
     value: &Value,
     now: i64,
 ) -> Option<Quote> {
+    let kind = kind.kind();
     let (amount, currency, timestamp) = if kind == HomeWidget::Crypto {
         let data = &value["data"];
         if data["currency"].as_str()? != currency {
@@ -213,9 +231,15 @@ pub struct Slot {
     pub quote: Option<Quote>,
     pub failed: bool,
 }
-#[derive(Default)]
 pub struct Markets {
-    pub slots: [Slot; 2],
+    pub slots: Vec<Slot>,
+}
+impl Default for Markets {
+    fn default() -> Self {
+        Self {
+            slots: (0..50).map(|_| Slot::default()).collect(),
+        }
+    }
 }
 struct Job {
     key: Key,
@@ -226,7 +250,7 @@ struct Reply {
     quote: Option<Quote>,
 }
 pub struct Service {
-    generations: Arc<[AtomicU64; 2]>,
+    generations: Arc<Vec<AtomicU64>>,
     sender: Option<mpsc::SyncSender<Job>>,
     receiver: mpsc::Receiver<Reply>,
 }
@@ -253,9 +277,9 @@ impl Service {
         } else {
             None
         };
-        let (sender, jobs) = mpsc::sync_channel::<Job>(2);
-        let (results, receiver) = mpsc::sync_channel(2);
-        let generations = Arc::new([AtomicU64::new(0), AtomicU64::new(0)]);
+        let (sender, jobs) = mpsc::sync_channel::<Job>(50);
+        let (results, receiver) = mpsc::sync_channel(50);
+        let generations = Arc::new((0..50).map(|_| AtomicU64::new(0)).collect::<Vec<_>>());
         if enabled || origin.is_some() {
             let active = generations.clone();
             thread::Builder::new()
@@ -294,7 +318,7 @@ impl Service {
 }
 fn fetch(agent: &ureq::Agent, origin: Option<&str>, key: &Key) -> Option<Quote> {
     let started = Instant::now();
-    let endpoint = if key.kind == HomeWidget::Crypto {
+    let endpoint = if key.kind.kind() == HomeWidget::Crypto {
         format!(
             "{}/v2/prices/{}-{}/spot",
             origin.unwrap_or("https://api.coinbase.com"),
@@ -316,7 +340,7 @@ fn fetch(agent: &ureq::Agent, origin: Option<&str>, key: &Key) -> Option<Quote> 
         &request_json(agent, &endpoint, Duration::from_secs(8))?,
         now,
     )?;
-    if key.kind == HomeWidget::Crypto
+    if key.kind.kind() == HomeWidget::Crypto
         && let Some(previous_day) = time::OffsetDateTime::from_unix_timestamp(now)
             .ok()?
             .date()
@@ -367,7 +391,11 @@ impl Markets {
         now: i64,
     ) -> bool {
         let mut changed = false;
-        for kind in [HomeWidget::Crypto, HomeWidget::Stocks] {
+        for kind in preferences
+            .widgets()
+            .into_iter()
+            .filter(|kind| matches!(kind.kind(), HomeWidget::Crypto | HomeWidget::Stocks))
+        {
             let config = settings(preferences, kind);
             let key = config.enabled.then(|| Key::new(kind, config)).flatten();
             let slot = &mut self.slots[index(kind)];
@@ -475,7 +503,7 @@ mod tests {
         let service = Service {
             sender: Some(sender),
             receiver,
-            generations: Arc::new([AtomicU64::new(0), AtomicU64::new(0)]),
+            generations: Arc::new((0..50).map(|_| AtomicU64::new(0)).collect()),
         };
         let mut preferences = Preferences::default();
         let mut markets = Markets::default();
