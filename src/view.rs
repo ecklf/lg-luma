@@ -1392,6 +1392,7 @@ fn market_widget(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWidg
         );
     }
     let (label, style) = assets.fit_line(&label, text(18., 550, 0.), 152. - inset, 12.);
+    let change_width = assets.width(&label, style);
     out.text(
         label,
         Rect::new(cell.x + inset, cell.y + 70., 152. - inset, 24.),
@@ -1399,10 +1400,11 @@ fn market_widget(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWidg
         color,
         false,
     );
-    let (age, style) = assets.fit_line(&age, text(14., 450, 0.).right(), cell.w - 158., 10.);
+    let age_offset = inset + change_width + 16.;
+    let (age, style) = assets.fit_line(&age, text(14., 450, 0.), cell.w - age_offset, 10.);
     out.text(
         age,
-        Rect::new(cell.x + 158., cell.y + 73., cell.w - 158., 20.),
+        Rect::new(cell.x + age_offset, cell.y + 73., cell.w - age_offset, 20.),
         style,
         c(0xf5f5f5, 0.78),
         false,

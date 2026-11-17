@@ -168,6 +168,28 @@ fn market_trends_have_matching_colored_arrows_and_neutral_zeroes_have_no_arrow()
         });
     }
     let rendered = scene(&state);
+    let percentage_rect = rendered
+        .draw
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Text(label, rect, ..) if label == "+3.25%" => Some(*rect),
+            _ => None,
+        })
+        .unwrap();
+    let age_rect = rendered
+        .draw
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Text(label, rect, ..) if label == "1m ago" => Some(*rect),
+            _ => None,
+        })
+        .unwrap();
+    assert!(age_rect.x > percentage_rect.x + 16.);
+    assert!(
+        age_rect.x < percentage_rect.x + 130.,
+        "Age should follow the percentage, not the widget's right edge"
+    );
+    assert!((age_rect.y - percentage_rect.y).abs() <= 3.);
     assert!(rendered.draw.iter().any(|draw| matches!(draw, Draw::TintedImage(path, _, _, _, color) if path.ends_with("market-up.lvec") && color[1] > color[0])));
     assert!(rendered.draw.iter().any(|draw| matches!(draw, Draw::TintedImage(path, _, _, _, color) if path.ends_with("market-down.lvec") && color[0] > color[1])));
     assert!(rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, _, _, color, _) if label == "+3.25%" && color[1] > color[0])));
