@@ -118,7 +118,7 @@ fn repeated_widgets_have_independent_configuration_placement_and_removal() {
 }
 
 #[test]
-fn move_toolbar_keeps_the_canvas_in_place_and_supports_commit_and_cancel() {
+fn move_instructions_are_not_controls_and_remote_can_confirm_and_cancel() {
     let mut state = ready();
     state.open(2);
     state.section = WIDGETS_SECTION;
@@ -140,30 +140,30 @@ fn move_toolbar_keeps_the_canvas_in_place_and_supports_commit_and_cancel() {
     state.focus = Target::MoveWidget(widget);
     state.activate();
     assert_eq!(canvas(&state), original_canvas);
-    for target in [
-        Target::WidgetStep(0),
-        Target::WidgetStep(1),
-        Target::WidgetStep(2),
-        Target::WidgetStep(3),
-        Target::WidgetCommit,
-        Target::WidgetCancel,
-    ] {
-        let control = controls(&state)
-            .into_iter()
-            .find(|control| control.target == target)
+    let rendered = scene(&state);
+    for label in ["← ↑ → ↓", "— Move", "OK", "— Confirm", "— Cancel"] {
+        let rect = rendered
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text(value, rect, ..) if value == label => Some(*rect),
+                _ => None,
+            })
             .unwrap();
-        assert!(control.rect.y + control.rect.h < original_canvas.1);
+        assert!(rect.y + rect.h < original_canvas.1);
+        let (x, y) = rect.center();
+        assert_eq!(state.hit_test(&rendered.controls, x, y), None);
     }
-    state.pointer_focus(Target::WidgetStep(2));
-    assert!(state.activate().is_empty());
+    assert!(rendered.draw.iter().any(|draw| matches!(
+        draw, Draw::TintedImage(path, ..) if path.ends_with("ui-icons/backspace.lvec")
+    )));
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.preferences.widget_position(widget), saved);
-    state.pointer_focus(Target::WidgetCancel);
-    assert!(state.activate().is_empty());
+    state.back();
     assert_eq!(state.preferences.widget_position(widget), saved);
     state.focus = Target::MoveWidget(widget);
     state.activate();
     state.direction(Direction::Down, &controls(&state));
-    state.pointer_focus(Target::WidgetCommit);
     assert_eq!(state.activate(), [Effect::Save]);
     assert_eq!(state.preferences.widget_position(widget).row, saved.row + 1);
     assert_eq!(canvas(&state), original_canvas);

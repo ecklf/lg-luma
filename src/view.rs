@@ -3151,31 +3151,28 @@ fn inputs_settings(out: &mut Scene, state: &State, assets: &Assets) {
 
 fn widget_position_settings(out: &mut Scene, state: &State, assets: &Assets, widget: HomeWidget) {
     widget_grid(out, state, assets, Some(widget));
+    let language = state.preferences.language;
+    let style = text(20.8, 500, -0.02);
     let mut x = 640.;
-    for (target, label, width) in [
-        (Target::WidgetStep(0), "←", 64.),
-        (Target::WidgetStep(1), "↑", 64.),
-        (Target::WidgetStep(2), "↓", 64.),
-        (Target::WidgetStep(3), "→", 64.),
-        (Target::WidgetCommit, "OK", 96.),
-        (
-            Target::WidgetCancel,
-            state.preferences.language.t("cancel"),
-            176.,
-        ),
-    ] {
-        let rect = Rect::new(x, 164.8, width, 64.);
-        let focused = state.focus == target;
-        out.shape(rect, 32., c(0xffffff, if focused { 0.96 } else { 0.10 }));
+    for (key, action) in [("← ↑ → ↓", "move"), ("OK", "confirm"), ("", "cancel")] {
+        let key_width = if key.is_empty() {
+            out.icon(assets, "backspace", Rect::new(x, 184., 28., 28.), WHITE);
+            28.
+        } else {
+            let width = assets.width(key, style);
+            out.text(key, Rect::new(x, 184., width, 28.), style, WHITE, false);
+            width
+        };
+        let label = format!("— {}", language.t(action));
+        let width = assets.width(&label, style);
         out.text(
-            label,
-            Rect::new(x, 184., width, 28.),
-            text(20.8, 550, -0.02),
-            if focused { c(0x242424, 1.) } else { WHITE },
-            true,
+            &label,
+            Rect::new(x + key_width + 10., 184., width, 28.),
+            style,
+            c(0xf5f5f5, 0.72),
+            false,
         );
-        out.control(target, rect, false);
-        x += width + 12.;
+        x += key_width + 10. + width + 40.;
     }
 }
 
