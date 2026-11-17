@@ -140,15 +140,12 @@ try {
   assert.equal(requests.length, 0, 'Unconfigured widgets must never request prices');
   await seed();
   const quotes = await scenario('home');
-  for (const label of [
-    'BTC',
-    'AAPL',
-    '65000.25 USD',
-    '123.45 USD',
-    'Coinbase',
-    'Yahoo Finance · Delayed quote',
-  ])
+  for (const label of ['BTC', 'AAPL', '65000.25 USD', '123.45 USD'])
     assert.ok(quotes.ui_text.includes(label), label);
+  assert.ok(
+    !quotes.ui_text.some((label) => label.includes('Coinbase') || label.includes('Yahoo Finance')),
+  );
+  assert.ok(!quotes.ui_text.includes('Delayed quote'));
   assert.ok(quotes.ui_text.includes('+4.00%'));
   assert.ok(quotes.ui_text.includes('-1.24%'));
   assert.ok(quotes.ui_text.includes('15m ago'));
@@ -199,7 +196,7 @@ try {
     'Scripted previews without an explicit mock origin stay offline',
   );
   console.log(
-    'Market smoke checks passed: both widgets, symbol editing, currency, restart, timestamps, delay labels, bounded replies, HTTP failures, redirect refusal and offline previews.',
+    'Market smoke checks passed: both widgets, symbol editing, currency, restart, relative ages, clean labels, bounded replies, HTTP failures, redirect refusal and offline previews.',
   );
 } finally {
   server.closeAllConnections();

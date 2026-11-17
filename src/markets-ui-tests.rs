@@ -114,7 +114,7 @@ fn market_defaults_and_corrupt_settings_preserve_existing_preferences() {
 }
 
 #[test]
-fn both_market_widgets_render_readable_price_source_age_and_delay_without_changing_dock() {
+fn both_market_widgets_render_readable_price_and_age_without_provider_or_delay_labels() {
     for language in crate::i18n::Language::ALL {
         let mut state = ready();
         let dock = state.dock_y();
@@ -132,7 +132,7 @@ fn both_market_widgets_render_readable_price_source_age_and_delay_without_changi
             });
         }
         let rendered = scene(&state);
-        for expected in ["BTC", "AAPL", "123.45 USD", "Coinbase"] {
+        for expected in ["BTC", "AAPL", "123.45 USD"] {
             assert!(
                 rendered
                     .draw
@@ -140,13 +140,14 @@ fn both_market_widgets_render_readable_price_source_age_and_delay_without_changi
                     .any(|draw| matches!(draw, Draw::Text(label, ..) if label == expected))
             );
         }
-        assert!(rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, ..) if label.contains(language.t("marketDelayed")))));
+        assert!(!rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, ..) if label.contains(language.t("marketDelayed")))));
         assert!(
             rendered
                 .draw
                 .iter()
                 .any(|draw| matches!(draw, Draw::Text(label, ..) if label == &language.format("marketMinutesAgo", &[("count", "1")])))
         );
+        assert!(!rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, ..) if label.contains("Coinbase") || label.contains("Yahoo Finance"))));
         assert_eq!(state.dock_y(), dock);
     }
 }

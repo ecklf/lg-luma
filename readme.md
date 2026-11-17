@@ -271,13 +271,13 @@ Crypto accepts Coinbase symbols such as `BTC` or `ETH` and a quote currency
 equity/ETF tickers such as `AAPL`, `BRK-B`, or `SAP.DE`, using the listing's currency.
 
 Both widgets are optional and off by default. They refresh every five minutes only
-while Home is visible. No account or API key is required. Quotes show their source
-and compact quote age, such as **1m ago**. Crypto age measures time since its price
+while Home is visible. No account or API key is required. Quotes show a compact
+quote age, such as **1m ago**. Crypto age measures time since its price
 check, while stock age measures time since the provider's quote, not the last refresh.
 Daily changes show green up arrows or red down arrows. Crypto compares against the
 previous UTC day's historic price, while stocks compare against the previous close.
 Zero changes are neutral, and missing comparison data is explicitly unavailable.
-Stock quotes are labeled delayed and can be older outside market hours.
+Stock quotes may be delayed and can be older outside market hours; configuration includes this guidance.
 Failed updates retain the session's last reading with an
 explicit warning. Price readings are not saved across restarts.
 

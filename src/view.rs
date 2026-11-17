@@ -1337,11 +1337,6 @@ fn market_widget(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWidg
             )
         })
         .unwrap_or_default();
-    let provider = if kind == HomeWidget::Crypto {
-        "Coinbase".to_owned()
-    } else {
-        format!("Yahoo Finance · {}", language.t("marketDelayed"))
-    };
     let status = if slot.failed && slot.quote.is_some() {
         language.t("lastReading")
     } else {
@@ -1350,8 +1345,7 @@ fn market_widget(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWidg
     for (label, y, size, height) in [
         (symbol, 0., 20., 24.),
         (value.as_str(), 26., 34., 42.),
-        (provider.as_str(), 96., 12., 16.),
-        (status, 114., 10., 14.),
+        (status, 96., 10., 14.),
     ] {
         let (label, style) = assets.fit_line(label, text(size, 500, -0.02), cell.w, 10.);
         out.text(
@@ -3280,7 +3274,7 @@ fn market_settings(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWi
         );
     }
     let help = format!(
-        "{}\n{}\n{}",
+        "{}\n{}",
         language.t(if kind == HomeWidget::Crypto {
             "cryptoHelp"
         } else {
@@ -3290,12 +3284,7 @@ fn market_settings(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWi
             "cryptoDailyBasis"
         } else {
             "stocksDailyBasis"
-        }),
-        if kind == HomeWidget::Crypto {
-            "Coinbase"
-        } else {
-            "Yahoo Finance"
-        }
+        })
     );
     out.text(
         help,
