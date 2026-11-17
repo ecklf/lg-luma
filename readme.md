@@ -2,7 +2,7 @@
 
 A native launcher for rooted LG webOS TVs, inspired by Apple TV.
 
-https://github.com/user-attachments/assets/5b2c6e78-ec77-41f5-a79a-1fcfbe8e524b
+https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 
 <details>
 <summary>Screenshots</summary>
@@ -27,6 +27,29 @@ https://github.com/user-attachments/assets/5b2c6e78-ec77-41f5-a79a-1fcfbe8e524b
 </table>
 
 </details>
+
+## Features
+
+- App drawer styles: tvOS (default) with a 24 px peek, or Minimal with a lower dock and no peek.
+  Choose in **Settings → General → App drawer**. Both use the same drawer navigation.
+- Movable greeting, weather, stock and crypto widgets, with multiple cities or symbols.
+  Weather supports compact 1×1 and larger 2×2 layouts.
+- Stock and crypto prices with daily changes and quote age, without an account or API key.
+  Quotes may be delayed and are informational, not for trading. Coinbase and Yahoo Finance
+  receive the configured symbol and TV IP address. Yahoo's unofficial endpoint may change.
+- Built-in backgrounds and QR-based uploads from a phone or computer on the same network,
+  with JPEG, PNG and WebP support and a 16:9 crop. Upload links work only while the TV dialog
+  is open and focused. Optional rotation and gradient shading leave the LG launch splash unchanged.
+- Saved input icons, with automatic label detection or a choice of bundled device icons.
+- Recent app switching and closing while Luma is focused: hold **Back** for 0.6 seconds,
+  browse with **Left / Right**, open with **OK**, close with **Up**, and dismiss with **Back**.
+  Short-press and Off modes are available in **Settings → General → Recent apps**.
+- QR-managed webhook shortcut tiles, such as Home Assistant actions.
+- Optional web access: change Luma from a phone or computer browser, with a live picture and a
+  remote. See [Phone and computer](#phone-and-computer-web-access).
+- 16 interface languages: Catalan, Czech, Dutch, English, French, German, Hungarian, Italian,
+  Polish, Portuguese (Brazil), Russian, Simplified Chinese, Spanish, Swedish, Traditional Chinese
+  and Vietnamese. Choose in **Settings → General → Language**.
 
 ## Compatibility
 
@@ -130,7 +153,7 @@ to help make Luma available by default.
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_3.4.0_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_3.5.0_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -203,6 +226,12 @@ helper to mount Luma and then opens Home. If this fails, the cold-boot hook moun
 Keys pass through the filter unchanged, and `home.sh disable` removes both. The early-boot timing
 has not been verified on webOS 24.
 
+At every power-on LG opens the last input from `/var/lib/eim/lastinput`, so Live TV showed before
+Luma. The integration pins that entry to Home: a read-only copy is mounted over it, and the file
+underneath names Home too, because LG reads it before any hook runs in a cold boot. The key filter
+also points Back/Exit from an app at Home instead of Live TV. Inputs you choose work as before;
+`home.sh disable` restores the recorded input.
+
 </details>
 
 <details>
@@ -244,58 +273,7 @@ You can use [LG Input Hook](https://repo.webosbrew.org/apps/org.webosbrew.inputh
 
 Test on a spare button first. Disable the mapping in Input Hook to restore normal Home behavior.
 
-## Features
-
-Choose the interface language in **Settings → General → Language**. Luma supports Catalan,
-Czech, Dutch, English, French, German, Hungarian, Italian, Polish, Portuguese (Brazil), Russian,
-Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese.
-
-### Backgrounds
-
-Open **Settings → Background → Upload**, then scan the QR code or open the shown
-address on a phone or computer on the same network. Choose a JPEG, PNG or WebP and adjust
-its 16:9 crop before choosing **Save to TV**.
-
-The upload link works only while its TV dialog is open and focused.
-
-Enable **Rotation** beside **Upload** to cycle through backgrounds on each Luma restart and every
-15 minutes with a slow cross-fade. Rotation is off by default and leaves your manually chosen
-LG splash unchanged.
-
-Toggle **Gradient** beside **Rotation** to turn background shading on or off. It defaults to On
-and remembers your choice. Older uploads without an unshaded copy keep their full-resolution
-shaded image. This does not change LG's launch splash.
-
-### Input icons
-
-Open **Settings → Inputs**, select an input, then choose
-**Icon** to open a native picker for bundled SVG icons. Choices are **Automatic** (the default,
-using label detection), **HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**,
-**NVIDIA Shield**, **Steam**, **Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**,
-**Sony**, **DVD**, **Blu-ray**, **Disk**, and **Xbox**.
-
-An explicit icon choice is saved separately for each input and persists across restarts.
-Choose **Automatic** to clear that input's override and restore label-based icon detection.
-
-### Recent app switching
-
-Hold **Back** for 0.6 seconds from any page to open Recent apps. A short press never opens it,
-including on Home.
-
-- **Left / Right**, the pointer, or the scroll wheel browses recent apps and inputs.
-- **OK** or a pointer click opens the selected app or input.
-- **Up** closes the selected app and removes its card.
-- **Back** dismisses the switcher and restores the previous page and focus.
-
-These shortcuts work while Luma is focused. From another app, return to Luma first.
-
-### Shortcut tiles
-
-Shortcut tiles sit on Home like apps but send a web request when selected, for example to a Home
-Assistant webhook. Open **Settings → Widgets → Shortcuts → Configure** and scan
-the QR code.
-
-### Phone and computer (web access)
+## Phone and computer (web access)
 
 Change Luma from a phone or computer browser instead of the remote. Open
 **Settings → System → Phone & computer → Pair a device**, then scan the QR code, or open the
@@ -342,7 +320,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_3.4.0_arm.ipk
+dist/com.ecklf.luma_3.5.0_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png
@@ -387,3 +365,19 @@ See [Releases](development.md#releases) for the workflow and repository setup.
 Luma's code is licensed under MIT. Bundled [Breezy Weather icons](assets/weather/README.md)
 are separately licensed under LGPL-3.0.\
 Luma is not affiliated with LG, Apple, or any other brands shown in its UI.
+
+### Optional power-on and Back/Exit policy (webOS 5/6)
+
+Home takeover alone preserves the TV's input policy. After enabling Home takeover, owners who
+want Luma instead of the last TV input at power-on and after leaving apps can explicitly run:
+
+```sh
+sh /var/lib/luma-home/home.sh startup-home on
+# Restore the saved power-on and Back/Exit input while keeping Home takeover:
+sh /var/lib/luma-home/home.sh startup-home off
+```
+
+Select the desired fallback TV input before opting in. This experimental policy pins EIM's
+last-input file read-only; tested on webOS 5.6.2 only. Disabling takeover also restores the saved
+input. Existing draft installations without a saved prior setting use the input recorded in
+EIM's `appId` as their migration fallback.

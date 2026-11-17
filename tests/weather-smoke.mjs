@@ -184,7 +184,10 @@ try {
   assert.equal(fahrenheit.preferences.temperature_unit, 'fahrenheit');
   assert.equal(fahrenheit.weather.cache.reading.temperature, 14.2);
   assert.equal(forecastCount(), 1);
-  const removedWidget = await scenario('widget-removed', `${weatherActions},down,down,enter,home`);
+  const removedWidget = await scenario(
+    'widget-removed',
+    `${weatherActions},down,down,down,enter,home`,
+  );
   assert.equal(removedWidget.preferences.show_weather, false);
   assert.equal(removedWidget.preferences.weather_location.name, 'Vienna');
   assert.equal(forecastCount(), 1);
@@ -240,6 +243,42 @@ try {
   );
   assert.equal(latest.preferences.weather_location.name, 'Paris');
   assert.ok(latest.weather.results.length === 0);
+  forecastMode = 'ok';
+  await writePreferences({ weather_location: vienna });
+  await writeCache();
+  const small = await scenario('small', `${weatherActions},down,down,enter,home,await-weather`);
+  assert.equal(small.preferences.weather_small, true);
+  assert.equal(small.weather.cache.reading.temperature, 14.2);
+  const sizePopup = await scenario('size-popup', `${weatherActions},down,down`);
+  assert.equal(sizePopup.focus, 'WeatherSize');
+  assert.ok(sizePopup.ui_text.includes('Size · 1 × 1'));
+  const smallRestart = await scenario('small-restart', 'home,await-weather');
+  assert.equal(smallRestart.preferences.weather_small, true);
+  assert.equal(smallRestart.preferences.weather_location.name, 'Vienna');
+  const beforeMultiple = forecastCount();
+  await writePreferences({
+    weather_location: vienna,
+    extra_weather: [
+      {
+        enabled: true,
+        location: paris,
+        unit: 'fahrenheit',
+        small: true,
+        position: { column: 0, row: 1 },
+      },
+    ],
+  });
+  const multiple = await scenario('multiple', 'home,await-weather');
+  assert.ok(multiple.ui_text.includes('Vienna'));
+  assert.ok(multiple.ui_text.includes('Paris'));
+  assert.equal(multiple.preferences.temperature_unit, 'celsius');
+  assert.equal(multiple.preferences.extra_weather[0].unit, 'fahrenheit');
+  assert.equal(forecastCount(), beforeMultiple + 1);
+  const extraCache = path.join(temporary, 'preferences.weather.widget-0.json');
+  assert.equal(JSON.parse(await fs.readFile(extraCache, 'utf8')).key, '48.8534,2.3488');
+  assert.equal(JSON.parse(await fs.readFile(cache, 'utf8')).key, '48.2085,16.3721');
+  await scenario('multiple-restart', 'home,await-weather');
+  assert.equal(forecastCount(), beforeMultiple + 1, 'Each weather instance reuses its own cache');
   console.log(
     'Native weather smoke checks passed: explicit search, request encoding, cached restart, units, widget removal, offline/expired data, removal races, response limits and stale-search suppression.',
   );

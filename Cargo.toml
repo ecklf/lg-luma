@@ -1,6 +1,6 @@
 [package]
 name = "luma"
-version = "3.4.0"
+version = "3.5.0"
 edition = "2024"
 rust-version = "1.88"
 publish = false
@@ -28,7 +28,12 @@ jpeg-encoder = { version = "0.6", optional = true }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 libc = { version = "0.2", optional = true }
 luma-vector-geometry = { path = "vector-geometry" }
-owned_ttf_parser = "0.25"
+# We read character maps, metrics, legacy kerning and outlines, not shaping tables
+# or glyph names. Keep variable-font support for the bundled Noto fonts.
+owned_ttf_parser = { version = "0.25", default-features = false, features = [
+  "std",
+  "variable-fonts",
+] }
 qrcodegen = "1.8"
 ring = "0.17"
 sdl2 = { version = "0.38", features = ["use-pkgconfig"] }
@@ -38,7 +43,9 @@ time = { version = "0.3", features = ["local-offset", "formatting", "parsing"] }
 ureq = { version = "3.4", default-features = false, features = ["rustls"] }
 
 [profile.release]
-lto = "thin"
+# Whole-program optimization reduces shipped code without using size-first
+# optimization on the renderer, image processing or glyph tessellation.
+lto = "fat"
 strip = true
 codegen-units = 1
 

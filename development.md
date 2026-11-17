@@ -70,7 +70,81 @@ Desktop pkg-config paths are isolated from the ARM build. `WEBOS_NATIVE_LIBS` ca
 explicitly selected ARM webOS shared libraries; SDL overrides must have a real webOS/Wayland
 backend. Avoid copying the whole SDK library directory or the TV's graphics drivers/libc.
 
+### Release binary size
+
+Release builds use full link-time optimization, one codegen unit and stripped symbols.
+The default speed-oriented optimization level is retained for rendering, image processing
+and on-demand glyph tessellation. Full LTO can increase release link time and memory use.
+Panic unwinding is retained because Luna subscription callbacks recover from handler panics.
+
+The runtime font parser enables only `std` and `variable-fonts`. Character maps, metrics,
+legacy `kern` tables and glyph outlines remain available, including variable-font outlines.
+The renderer does not use glyph names or the optional OpenType/Apple shaping tables.
+
+Compare sizes using the same pinned toolchain, target, features and build environment on
+both revisions. For TV measurements, run `pnpm build` with `WEBOS_NDK` set, then measure
+`target/armv7-unknown-linux-gnueabi/release/luma` and its siblings `luma-helper` and `luma-early` in bytes.
+Desktop measurements use `cargo build --locked --release --package luma --package luma-tv-helper`
+and `target/release/`. Desktop results do not establish TV size or performance.
+
 ## Controls and navigation
+
+### Market price widgets
+
+`crypto` and `stocks` preferences hold `enabled`, `symbol`, `currency`, and `position`.
+Both default off and occupy 1×1 cells. The existing add/configure/move/remove workflow
+supports them, and Reset restores the original Greeting/Weather membership without
+discarding configured symbols. Crypto quote currency is selectable; Stocks uses the
+provider's listing currency, preserving minor-unit currency codes such as `GBp`.
+
+Additional instances persist in `extra_crypto`, `extra_stocks`, and `extra_weather`,
+with stable per-type indices and independent settings, positions and request generations.
+Legacy primary preferences remain compatible. Weather instances have separate workers and
+cache files; market instances share one bounded worker. Reset disables extra instances
+without discarding their configuration. Placement and resizing account for every instance.
+Move mode uses the same preview geometry as browsing, with non-interactive instructions above:
+arrows to move, OK to confirm and a backspace icon for Back to cancel.
+Unconfigured prices show “Not set” and “Configure in Settings”; market settings use a compact
+provider info card instead of an unstructured description block.
+
+`src/markets.rs` owns a bounded HTTP worker and per-widget request generations. Prices
+come from Coinbase's unauthenticated spot-price endpoint and Yahoo Finance's unofficial
+public chart endpoint. No API credentials are used. Requests use fixed HTTPS origins,
+no proxy or redirects, an eight-second deadline, and a 64 KiB reply limit. Symbols are
+strictly validated before URL construction, and quote identity, units, finite positive
+prices, and timestamps are validated before rendering. Crypto fetches the previous UTC
+day's historic spot price within the same eight-second job budget for daily comparison.
+Stocks use `chartPreviousClose` with `previousClose` as a fallback. Invalid/missing
+baselines never produce fabricated zero changes. Direction arrows and signed percentages
+use green/red, with rounded zeroes remaining neutral.
+Refresh is five minutes while Home is visible. Relative ages use the original quote time
+and advance through minutes, hours and days, rather than resetting when stock data refreshes.
+Failed refreshes show the last in-memory quote with its age and
+an explicit warning. There is no persistent price cache or trading capability.
+
+Scripts, fixed-time captures, and frame-limited previews disable public market requests.
+`--market-test-server http://127.0.0.1:PORT` enables loopback-only mock requests on desktop
+and is rejected on TV. `xvfb-run -a pnpm test:markets` checks both widgets, editing,
+currency, persistence, delayed timestamps, failures, bounded replies and redirect refusal.
+CI runs this as its own isolated smoke suite. Tests never call public market feeds.
+
+Greeting is time-based only. Legacy `greeting_name` preferences are ignored and not
+saved, and Greeting settings offer date options only. The midnight-to-5am translation
+is a greeting, not a loading message.
+
+`weather_small` defaults to false. When enabled, Weather uses a true 1×1 footprint
+for rendering, placement, collision checks and sanitization. The size toggle preserves
+the city, unit, cache and saved large-widget style. Expanding relocates Weather only
+when its current anchor cannot fit the 2×2 footprint.
+Weather's widget popup also exposes Size with the current dimensions. Resizing keeps
+the popup attached to the saved anchor, including when shrinking from a non-anchor
+cell or relocating an expanded widget at a grid edge. Greeting has no size action.
+
+`recent_apps_behavior` persists `long_press` (default), `short_press`, or `off`.
+Short press applies on Home only so Back still navigates settings. Timer-based holds,
+delayed releases, and native webOS Exit notifications use the same preference-aware routing.
+An overlay dismissal consumes the entire press and never reopens Recent apps on release.
+General → Recent apps opens a nested picker; browsing or cancelling does not change the setting.
 
 ### Startup profiling
 
@@ -265,8 +339,12 @@ is persisted per input across restarts; choosing **Automatic** clears only that 
 icon override and restores label-based detection. Existing inputs without an override continue
 using Automatic. This is a backward-compatible feature and does not change input names or visibility.
 
-Home favorites form one horizontal glass dock, never a second row. Left/Right follows saved order,
-including reorder mode, and reveals complete cards. Up reaches Inputs or the clock/settings control.
+Home favorites form one horizontal glass dock. General → App drawer selects `tvos` (default) or
+`minimal`, persisted as `app_drawer_style`. tvOS leaves 57.6 logical pixels below the glass and shows
+a clipped, non-interactive 24-logical-pixel peek of the next app row. Minimal lowers the dock to leave 48 logical pixels below
+its glass at the 1920×1080 layout size, without the peek. Both styles share the same open drawer
+position and navigation. Left/Right follows saved order, including reorder mode, and reveals complete
+cards. Up reaches Inputs or the clock/settings control.
 Up from the drawer’s first app row dismisses the drawer immediately while preserving the
 corresponding dock app as the selected Home favorite. Up within later grid rows stays in the drawer.
 Down lifts the dock to the top and reveals a six-column app grid beneath it. Favorites stay in the
@@ -1227,9 +1305,11 @@ its Settings integration is still tracked by that separate PR and requires `supp
 
 On webOS 5/6 the helper also installs the early cold-boot start: `enable` copies `luma-early`,
 writes its four LS2 definitions, rescans, and appends `home-filter.js` (with the selected Home
-target written into the copy) to LG's key-filter chain, all best effort. The `early` path stays in
-`home.sh`, so it runs before the helper during a cold boot. `disable` removes the early start even
-when single cleanup steps fail.
+target and the input policy written into the copy) to LG's key-filter chain, all best effort.
+`startup-home on|off` and `unpin` save, pin and restore EIM's `lastinput` and `lastInputApp` for
+the selected target. The `early` and `pin` paths stay in `home.sh`, so they run before the helper
+during a cold boot. `disable` removes the early start and restores the inputs even when single
+cleanup steps fail.
 
 The former VM tests for interpreter code are replaced by filesystem and service fixtures in
 `tv-helper/src/tests.rs`. They do not call a TV, real LS2 service or network. Host helper executables
