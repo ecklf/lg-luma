@@ -255,6 +255,10 @@ Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese.
 The greeting changes with the time of day and does not accept a name.
 The overnight greeting says “Still up?” rather than a loading message.
 
+Add multiple Weather, Crypto or Stocks widgets for different cities and symbols. Each has
+its own configuration and position. Move mode keeps the preview in place, with arrow,
+**OK** and **Cancel** pills above it; remote arrows, OK and Back work too.
+
 Weather supports a **1×1** size in **Settings → Widgets → Weather → Size** for a compact
 condition icon, temperature and city. The existing **2×2** layouts remain the default.
 You can also select Weather in the widget grid and choose **Size** directly in its popup.
@@ -315,8 +319,8 @@ Choose **Automatic** to clear that input's override and restore label-based icon
 
 ### Recent app switching
 
-Choose **Settings → General → Recent apps** to cycle between **Long press** (default),
-**Off**, and **Short press**. Long press opens Recent apps after holding **Back** for 0.6 seconds
+Choose **Settings → General → Recent apps** to select **Long press** (default),
+**Off**, or **Short press** in a nested picker. Long press opens Recent apps after holding **Back** for 0.6 seconds
 from any page. Short press opens it with a tap on Home while preserving Back navigation elsewhere.
 Off disables the switcher. With the default long press setting, a short press never opens it,
 including on Home.

@@ -7,6 +7,214 @@ use crate::{
 };
 
 #[test]
+fn repeated_widgets_have_independent_configuration_placement_and_removal() {
+    let mut state = ready();
+    state.open(2);
+    state.section = WIDGETS_SECTION;
+    for kind in [HomeWidget::Weather, HomeWidget::Crypto, HomeWidget::Stocks] {
+        for _ in 0..2 {
+            let widget = state.preferences.available_widget(kind).unwrap();
+            state.focus = Target::WidgetAdd;
+            state.activate();
+            assert!(
+                controls(&state)
+                    .iter()
+                    .any(|control| control.target == Target::AddWidget(widget))
+            );
+            state.pointer_focus(Target::AddWidget(widget));
+            assert!(state.activate().is_empty());
+            assert!(!state.preferences.has_widget(widget));
+            assert_eq!(state.activate(), [Effect::Save]);
+            assert!(state.preferences.has_widget(widget));
+            state.focus = Target::ConfigureWidget(widget);
+            state.activate();
+            if kind == HomeWidget::Weather {
+                let name = format!("City {}", state.preferences.widget_position(widget).cell());
+                state.weather.results = vec![crate::weather::Location {
+                    name: name.clone(),
+                    region: String::new(),
+                    country: String::new(),
+                    latitude: 48.,
+                    longitude: 16.,
+                }];
+                state.focus = Target::WeatherResult(0);
+                assert_eq!(state.activate(), [Effect::Save]);
+                assert_eq!(
+                    state
+                        .preferences
+                        .weather_settings(widget)
+                        .location
+                        .unwrap()
+                        .name,
+                    name
+                );
+                state.focus = Target::WeatherTemperature;
+                state.activate();
+                state.focus = Target::Choice(1);
+                state.activate();
+                assert_eq!(
+                    state.preferences.weather_settings(widget).unit,
+                    crate::weather::Unit::Fahrenheit
+                );
+            } else {
+                state.focus = Target::MarketSymbol(widget);
+                state.activate();
+                state.text(if kind == HomeWidget::Crypto {
+                    "ETH"
+                } else {
+                    "MSFT"
+                });
+                assert_eq!(state.back(), [Effect::Save]);
+                if kind == HomeWidget::Crypto {
+                    state.direction(Direction::Down, &controls(&state));
+                    assert_eq!(state.focus, Target::MarketCurrency);
+                    state.activate();
+                    assert_eq!(
+                        markets::settings(&state.preferences, widget).currency,
+                        "EUR"
+                    );
+                }
+            }
+            state.back();
+            assert_eq!(
+                state.focus,
+                Target::WidgetCell(state.preferences.widget_position(widget).cell())
+            );
+        }
+    }
+    assert_eq!(state.preferences.weather_location, None);
+    assert_eq!(
+        state.preferences.temperature_unit,
+        crate::weather::Unit::Celsius
+    );
+    let mut loaded: Preferences =
+        serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
+    loaded.sanitize();
+    for widget in loaded
+        .widgets()
+        .into_iter()
+        .filter(|widget| loaded.has_widget(*widget))
+    {
+        assert!(loaded.can_place_widget(widget, loaded.widget_position(widget)));
+    }
+    let removed = HomeWidget::ExtraCrypto(0);
+    state.focus = Target::WidgetCell(state.preferences.widget_position(removed).cell());
+    state.activate();
+    state.focus = Target::RemoveWidget(removed);
+    assert_eq!(state.activate(), [Effect::Save]);
+    assert!(!state.preferences.has_widget(removed));
+    assert!(state.preferences.has_widget(HomeWidget::Crypto));
+    assert!(state.preferences.reset_widgets());
+    assert_eq!(
+        state
+            .preferences
+            .widgets()
+            .into_iter()
+            .filter(|widget| state.preferences.has_widget(*widget))
+            .collect::<Vec<_>>(),
+        [HomeWidget::Greeting, HomeWidget::Weather]
+    );
+    assert_eq!(markets::settings(&state.preferences, removed).symbol, "ETH");
+}
+
+#[test]
+fn move_toolbar_keeps_the_canvas_in_place_and_supports_commit_and_cancel() {
+    let mut state = ready();
+    state.open(2);
+    state.section = WIDGETS_SECTION;
+    let canvas = |state: &State| {
+        scene(state)
+            .draw
+            .into_iter()
+            .find_map(|draw| match draw {
+                Draw::Image(_, rect, ..) if rect.w == 1120. && rect.h == 630. => {
+                    Some((rect.x, rect.y, rect.w, rect.h))
+                }
+                _ => None,
+            })
+            .unwrap()
+    };
+    let original_canvas = canvas(&state);
+    let widget = HomeWidget::Weather;
+    let saved = state.preferences.widget_position(widget);
+    state.focus = Target::MoveWidget(widget);
+    state.activate();
+    assert_eq!(canvas(&state), original_canvas);
+    for target in [
+        Target::WidgetStep(0),
+        Target::WidgetStep(1),
+        Target::WidgetStep(2),
+        Target::WidgetStep(3),
+        Target::WidgetCommit,
+        Target::WidgetCancel,
+    ] {
+        let control = controls(&state)
+            .into_iter()
+            .find(|control| control.target == target)
+            .unwrap();
+        assert!(control.rect.y + control.rect.h < original_canvas.1);
+    }
+    state.pointer_focus(Target::WidgetStep(2));
+    assert!(state.activate().is_empty());
+    assert_eq!(state.preferences.widget_position(widget), saved);
+    state.pointer_focus(Target::WidgetCancel);
+    assert!(state.activate().is_empty());
+    assert_eq!(state.preferences.widget_position(widget), saved);
+    state.focus = Target::MoveWidget(widget);
+    state.activate();
+    state.direction(Direction::Down, &controls(&state));
+    state.pointer_focus(Target::WidgetCommit);
+    assert_eq!(state.activate(), [Effect::Save]);
+    assert_eq!(state.preferences.widget_position(widget).row, saved.row + 1);
+    assert_eq!(canvas(&state), original_canvas);
+}
+
+#[test]
+fn unconfigured_markets_show_not_set_and_settings_hint_and_help_is_in_a_card() {
+    let mut state = ready();
+    state.preferences.crypto.enabled = true;
+    state.preferences.stocks.enabled = true;
+    let rendered = scene(&state);
+    for label in ["Not set", "Configure in Settings"] {
+        assert_eq!(
+            rendered
+                .draw
+                .iter()
+                .filter(|draw| matches!(draw, Draw::Text(value, ..) if value == label))
+                .count(),
+            2
+        );
+    }
+    assert!(!rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(value, ..) if value == "Configure" || value == "Change unavailable")));
+    state.open(2);
+    for language in crate::i18n::Language::ALL {
+        state.preferences.language = language;
+        for kind in [HomeWidget::Crypto, HomeWidget::Stocks] {
+            state.subpage = Some(Subpage::Market(kind));
+            let rendered = scene(&state);
+            let panel = rendered
+                .draw
+                .iter()
+                .find_map(|draw| match draw {
+                    Draw::Glass(rect, ..) if rect.x == 640. && rect.y > 250. => Some(*rect),
+                    _ => None,
+                })
+                .unwrap();
+            for draw in &rendered.draw {
+                if let Draw::Text(_, rect, ..) = draw
+                    && rect.y >= panel.y
+                    && rect.x >= panel.x
+                {
+                    assert!(rect.y + rect.h <= panel.y + panel.h);
+                    assert!(rect.x >= panel.x && rect.x + rect.w <= panel.x + panel.w);
+                }
+            }
+            assert!(panel.y + panel.h < 1000.);
+        }
+    }
+}
+
+#[test]
 fn optional_market_widgets_add_configure_move_remove_and_preserve_settings_on_reset() {
     for kind in [HomeWidget::Crypto, HomeWidget::Stocks] {
         let mut state = ready();
@@ -123,7 +331,7 @@ fn both_market_widgets_render_readable_price_and_age_without_provider_or_delay_l
         state.preferences.crypto.symbol = "BTC".into();
         state.preferences.stocks.enabled = true;
         state.preferences.stocks.symbol = "AAPL".into();
-        for slot in &mut state.markets.slots {
+        for slot in state.markets.slots.iter_mut().take(2) {
             slot.quote = Some(markets::Quote {
                 change_percent: Some(4.),
                 price: 123.45,
@@ -195,7 +403,7 @@ fn market_trends_have_matching_colored_arrows_and_neutral_zeroes_have_no_arrow()
     assert!(rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, _, _, color, _) if label == "+3.25%" && color[1] > color[0])));
     assert!(rendered.draw.iter().any(|draw| matches!(draw, Draw::Text(label, _, _, color, _) if label == "-2.50%" && color[0] > color[1])));
     for change in [Some(0.), Some(-0.0001), None] {
-        for slot in &mut state.markets.slots {
+        for slot in state.markets.slots.iter_mut().take(2) {
             slot.quote.as_mut().unwrap().change_percent = change;
         }
         let rendered = scene(&state);

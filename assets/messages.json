@@ -1,4 +1,58 @@
 {
+  "marketRefreshHelp": {
+    "en": "Updates every 5 minutes on Home. Quotes may be delayed.",
+    "de": "Aktualisierung alle 5 Minuten auf Home. Kurse können verzögert sein.",
+    "es": "Se actualiza cada 5 minutos en Inicio. Las cotizaciones pueden retrasarse.",
+    "zh": "主页每5分钟更新一次。报价可能延迟。",
+    "zh-tw": "首頁每5分鐘更新一次。報價可能延遲。",
+    "pt": "Atualiza a cada 5 minutos no Início. As cotações podem ter atraso.",
+    "it": "Aggiornamento ogni 5 minuti nella Home. Le quotazioni possono essere ritardate.",
+    "ru": "Обновление каждые 5 минут на главном экране. Котировки могут задерживаться.",
+    "pl": "Aktualizacja co 5 minut na ekranie głównym. Notowania mogą być opóźnione.",
+    "fr": "Actualisation toutes les 5 minutes sur l’accueil. Les cours peuvent être différés.",
+    "vi": "Cập nhật mỗi 5 phút trên Trang chủ. Báo giá có thể bị trễ.",
+    "nl": "Elke 5 minuten bijgewerkt op Home. Koersen kunnen vertraagd zijn.",
+    "sv": "Uppdateras var 5:e minut på Hem. Kurser kan vara fördröjda.",
+    "cs": "Aktualizace každých 5 minut na hlavní obrazovce. Kurzy mohou být zpožděné.",
+    "ca": "S’actualitza cada 5 minuts a Inici. Les cotitzacions poden arribar amb retard.",
+    "hu": "Frissítés 5 percenként a kezdőlapon. Az árfolyamok késhetnek."
+  },
+  "notSet": {
+    "en": "Not set",
+    "de": "Nicht festgelegt",
+    "es": "Sin configurar",
+    "zh": "未设置",
+    "zh-tw": "未設定",
+    "pt": "Não definido",
+    "it": "Non impostato",
+    "ru": "Не задано",
+    "pl": "Nie ustawiono",
+    "fr": "Non défini",
+    "vi": "Chưa đặt",
+    "nl": "Niet ingesteld",
+    "sv": "Inte inställt",
+    "cs": "Nenastaveno",
+    "ca": "Sense configurar",
+    "hu": "Nincs beállítva"
+  },
+  "configureInSettings": {
+    "en": "Configure in Settings",
+    "de": "In Einstellungen konfigurieren",
+    "es": "Configurar en Ajustes",
+    "zh": "在设置中配置",
+    "zh-tw": "在設定中配置",
+    "pt": "Configurar nas Definições",
+    "it": "Configura nelle Impostazioni",
+    "ru": "Настройте в настройках",
+    "pl": "Skonfiguruj w Ustawieniach",
+    "fr": "Configurer dans les réglages",
+    "vi": "Cấu hình trong Cài đặt",
+    "nl": "Configureer in Instellingen",
+    "sv": "Konfigurera i Inställningar",
+    "cs": "Konfigurujte v Nastavení",
+    "ca": "Configura als paràmetres",
+    "hu": "Konfigurálás a Beállításokban"
+  },
   "marketJustNow": {
     "en": "Just now",
     "de": "Gerade eben",
@@ -90,7 +144,7 @@
     "hu": "Változás nem érhető el"
   },
   "cryptoDailyBasis": {
-    "en": "Daily change compares with the previous UTC day. Age is time since the price was checked.",
+    "en": "Daily change: previous UTC day. Age: last price check.",
     "de": "Tagesänderung gegenüber dem vorherigen UTC-Tag. Alter seit der Kursabfrage.",
     "es": "Variación frente al día UTC anterior. Antigüedad desde la consulta del precio.",
     "zh": "日涨跌幅与前一个 UTC 日期比较。显示查询价格后的时间。",
@@ -108,7 +162,7 @@
     "hu": "Napi változás az előző UTC-naphoz képest. Az ár ellenőrzése óta eltelt idő."
   },
   "stocksDailyBasis": {
-    "en": "Daily change compares with the previous close. Age is time since the provider's quote, not the latest refresh.",
+    "en": "Daily change: previous close. Age: quote time, not refresh time. Currency follows the listing.",
     "de": "Tagesänderung gegenüber dem vorherigen Schlusskurs. Alter des Anbieter-Kurses, nicht der letzten Abfrage.",
     "es": "Variación frente al cierre anterior. Antigüedad de la cotización del proveedor, no de la última consulta.",
     "zh": "日涨跌幅与前收盘价比较。显示提供商报价后的时间，而非上次刷新时间。",

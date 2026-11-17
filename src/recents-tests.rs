@@ -149,22 +149,28 @@ fn recent_apps_behavior_persists_and_routes_back_without_breaking_navigation() {
 }
 
 #[test]
-fn recent_apps_setting_cycles_and_saves() {
+fn recent_apps_setting_opens_a_nested_picker_and_saves_only_selection() {
     use crate::model::RecentAppsBehavior;
     let mut state = ready();
-    state.focus = Target::Setting(12);
-    for expected in [
-        RecentAppsBehavior::Off,
-        RecentAppsBehavior::ShortPress,
-        RecentAppsBehavior::LongPress,
-    ] {
-        assert!(
-            state
-                .activate()
-                .iter()
-                .any(|effect| matches!(effect, Effect::Save))
-        );
+    state.open(2);
+    for (index, expected) in RecentAppsBehavior::ALL.into_iter().enumerate() {
+        state.focus = Target::Setting(12);
+        let saved = state.preferences.recent_apps_behavior;
+        assert!(state.activate().is_empty());
+        assert_eq!(state.subpage, Some(crate::state::Subpage::RecentApps));
+        state.focus = Target::Choice(0);
+        state.direction(Direction::Down, &controls(&state));
+        state.direction(Direction::Down, &controls(&state));
+        assert_eq!(state.focus, Target::Choice(2));
+        assert_eq!(state.preferences.recent_apps_behavior, saved);
+        state.back();
+        assert_eq!(state.focus, Target::Setting(12));
+        state.activate();
+        state.pointer_focus(Target::Choice(index));
+        assert_eq!(state.activate(), [Effect::Save]);
         assert_eq!(state.preferences.recent_apps_behavior, expected);
+        assert_eq!(state.focus, Target::Setting(12));
+        assert_eq!(state.subpage, None);
     }
 }
 

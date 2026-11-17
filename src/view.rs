@@ -1207,7 +1207,7 @@ fn home_widget_rect(widget: HomeWidget, position: WidgetPosition) -> Rect {
 }
 
 fn configured_widget_rect(state: &State, widget: HomeWidget, position: WidgetPosition) -> Rect {
-    if widget == HomeWidget::Weather && state.preferences.weather_small {
+    if widget.kind() == HomeWidget::Weather && state.preferences.weather_settings(widget).small {
         home_grid_cell_rect(position)
     } else {
         home_widget_rect(widget, position)
@@ -1217,21 +1217,21 @@ fn configured_widget_rect(state: &State, widget: HomeWidget, position: WidgetPos
 fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     let start = out.draw.len();
     let language = state.preferences.language;
-    for widget in HomeWidget::ALL {
+    for widget in state.preferences.widgets() {
         let cell = configured_widget_rect(state, widget, state.preferences.widget_position(widget));
         if !state.preferences.has_widget(widget) {
             continue;
         }
-        if matches!(widget, HomeWidget::Crypto | HomeWidget::Stocks) {
+        if matches!(widget.kind(), HomeWidget::Crypto | HomeWidget::Stocks) {
             market_widget(out, state, assets, widget, cell);
             continue;
         }
-        if widget == HomeWidget::Weather {
-            if state.preferences.weather_small {
-                small_weather(out, state, assets, cell);
+        if widget.kind() == HomeWidget::Weather {
+            if state.preferences.weather_settings(widget).small {
+                small_weather(out, state, assets, cell, widget);
                 continue;
             }
-            let mut summary = weather_summary_layout(state, assets);
+            let mut summary = weather_summary_layout(state, assets, widget);
             // Reflow rather than shrinking the entire widget: text remains legible
             // even when a translated condition or location name is unusually long.
             // Keep the original temperature size unless width fitting requires
@@ -1249,7 +1249,11 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
                 rect.w = cell.w - inset;
             }
             for (label, style, _, rect) in &mut summary.parts {
-                if state.preferences.weather_location.is_none()
+                if state
+                    .preferences
+                    .weather_settings(widget)
+                    .location
+                    .is_none()
                     && label == language.t("setWeatherLocation")
                 {
                     // Setup is an action, not expendable metadata: keep its full
@@ -1263,7 +1267,7 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
                 }
             }
             let controls = out.controls.len();
-            weather_summary(out, state, assets, summary, cell.y);
+            weather_summary(out, state, assets, summary, cell.y, widget);
             if let Some(control) = out.controls.get_mut(controls) {
                 control.rect.x = cell.x;
             }
@@ -1318,7 +1322,7 @@ fn market_widget(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWidg
         .unwrap_or_else(|| {
             language
                 .t(if config.symbol.is_empty() {
-                    "configure"
+                    "notSet"
                 } else if slot.failed {
                     "marketUnavailable"
                 } else {
@@ -1377,7 +1381,13 @@ fn market_widget(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWidg
         }
     } else {
         (
-            language.t("marketChangeUnavailable").to_owned(),
+            language
+                .t(if config.symbol.is_empty() {
+                    "configureInSettings"
+                } else {
+                    "marketChangeUnavailable"
+                })
+                .to_owned(),
             c(0xf5f5f5, 0.65),
             None,
         )
@@ -1391,11 +1401,16 @@ fn market_widget(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWidg
             color,
         );
     }
-    let (label, style) = assets.fit_line(&label, text(18., 550, 0.), 152. - inset, 12.);
+    let change_space = if config.symbol.is_empty() {
+        cell.w
+    } else {
+        152.
+    } - inset;
+    let (label, style) = assets.fit_line(&label, text(18., 550, 0.), change_space, 12.);
     let change_width = assets.width(&label, style);
     out.text(
         label,
-        Rect::new(cell.x + inset, cell.y + 70., 152. - inset, 24.),
+        Rect::new(cell.x + inset, cell.y + 70., change_space, 24.),
         style,
         color,
         false,
@@ -1488,25 +1503,25 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
     out.draw.push(Draw::Clip(Some(state.content_viewport())));
 }
 
-fn small_weather(out: &mut Scene, state: &State, assets: &Assets, cell: Rect) {
+fn small_weather(out: &mut Scene, state: &State, assets: &Assets, cell: Rect, widget: HomeWidget) {
     let language = state.preferences.language;
-    let place = state.preferences.weather_location.as_ref();
-    let reading = place.and_then(|place| state.weather.reading(place));
+    let config = state.preferences.weather_settings(widget);
+    let weather = state.widget_weather(widget);
+    let place = config.location.as_ref();
+    let reading = place.and_then(|place| weather.reading(place));
     let label = reading.map_or_else(
         || {
             language
                 .t(if place.is_none() {
                     "setWeatherLocation"
-                } else if state.weather.loading {
+                } else if weather.loading {
                     "loadingWeather"
                 } else {
                     "weatherUnavailable"
                 })
                 .to_owned()
         },
-        |reading| {
-            weather::format_temperature(reading.temperature, state.preferences.temperature_unit)
-        },
+        |reading| weather::format_temperature(reading.temperature, config.unit),
     );
     let icon = reading.map_or("partly-cloudy", |reading| weather::condition(reading).icon);
     out.image(
@@ -1541,7 +1556,7 @@ fn small_weather(out: &mut Scene, state: &State, assets: &Assets, cell: Rect) {
         c(0xf5f5f5, 0.78),
         false,
     );
-    if state.weather.failed && reading.is_some() {
+    if weather.failed && reading.is_some() {
         let (label, style) =
             assets.fit_line(language.t("lastReading"), text(16., 400, 0.), cell.w, 14.);
         out.text(
@@ -1553,10 +1568,15 @@ fn small_weather(out: &mut Scene, state: &State, assets: &Assets, cell: Rect) {
         );
     }
     if place.is_none() {
-        if state.focus == Target::WeatherConfigure && !state.pointer {
+        let target = if widget == HomeWidget::Weather {
+            Target::WeatherConfigure
+        } else {
+            Target::ConfigureWidget(widget)
+        };
+        if state.focus == target && !state.pointer {
             out.border(cell.inset(-5.), 8.6, 2., WHITE);
         }
-        out.control(Target::WeatherConfigure, cell, true);
+        out.control(target, cell, true);
     }
 }
 
@@ -1568,8 +1588,14 @@ struct WeatherSummary {
     show_icon: bool,
     parts: Vec<(String, TextStyle, Color, Rect)>,
 }
-fn weather_summary_layout(state: &State, assets: &Assets) -> WeatherSummary {
-    weather_summary_layout_for(state, assets, state.preferences.weather_style, false)
+fn weather_summary_layout(state: &State, assets: &Assets, widget: HomeWidget) -> WeatherSummary {
+    weather_summary_layout_for(
+        state,
+        assets,
+        state.preferences.weather_settings(widget).style,
+        false,
+        widget,
+    )
 }
 
 fn weather_summary_layout_for(
@@ -1577,9 +1603,12 @@ fn weather_summary_layout_for(
     assets: &Assets,
     style: crate::model::WeatherStyle,
     preview: bool,
+    widget: HomeWidget,
 ) -> WeatherSummary {
     use crate::model::WeatherStyle;
     let language = state.preferences.language;
+    let config = state.preferences.weather_settings(widget);
+    let weather = state.widget_weather(widget);
     // Settings previews are deliberately offline samples, even before a location is configured.
     let sample = weather::Location {
         name: "Vienna".into(),
@@ -1591,7 +1620,7 @@ fn weather_summary_layout_for(
     let place = if preview {
         Some(&sample)
     } else {
-        state.preferences.weather_location.as_ref()
+        config.location.as_ref()
     };
     let reading = if preview {
         Some(weather::Reading {
@@ -1600,7 +1629,7 @@ fn weather_summary_layout_for(
             is_day: true,
         })
     } else {
-        place.and_then(|place| state.weather.reading(place))
+        place.and_then(|place| weather.reading(place))
     };
     let mut parts = Vec::new();
     let mut add = |label: String, style: TextStyle, x: f32, y: f32, width: f32, opacity: f32| {
@@ -1627,10 +1656,7 @@ fn weather_summary_layout_for(
             let condition = weather::condition(reading);
             icon = format!("weather/{}.png", condition.icon);
             add(
-                weather::format_temperature(
-                    reading.temperature,
-                    state.preferences.temperature_unit,
-                ),
+                weather::format_temperature(reading.temperature, config.unit),
                 text(112., 500, -0.055),
                 252.,
                 46.,
@@ -1645,7 +1671,7 @@ fn weather_summary_layout_for(
                 760.,
                 0.78,
             );
-            if state.weather.failed && !preview {
+            if weather.failed && !preview {
                 add(
                     language.t("lastReading").into(),
                     text(24., 400, 0.),
@@ -1657,7 +1683,7 @@ fn weather_summary_layout_for(
             }
         } else {
             add(
-                if state.weather.loading {
+                if weather.loading {
                     language.t("loadingWeather")
                 } else {
                     language.t("weatherUnavailable")
@@ -1775,6 +1801,7 @@ fn weather_summary(
     assets: &Assets,
     summary: WeatherSummary,
     y: f32,
+    widget: HomeWidget,
 ) {
     let label_focus = summary.parts.last().map(|(_, style, _, rect)| {
         // The label's layout line box includes leading above and below the
@@ -1789,15 +1816,25 @@ fn weather_summary(
         )
     });
     paint_weather_summary(out, assets, &summary, 0., y, 1.);
-    if state.preferences.weather_location.is_none() {
+    if state
+        .preferences
+        .weather_settings(widget)
+        .location
+        .is_none()
+    {
         let rect = Rect::new(84., y, summary.width, summary.height);
-        if state.focus == Target::WeatherConfigure
+        let target = if widget == HomeWidget::Weather {
+            Target::WeatherConfigure
+        } else {
+            Target::ConfigureWidget(widget)
+        };
+        if state.focus == target
             && !state.pointer
             && let Some(label) = label_focus
         {
             out.border(label.inset(-5.), 8.6, 2., c(0xf0f0f0, 0.95));
         }
-        out.control(Target::WeatherConfigure, rect, true);
+        out.control(target, rect, true);
     }
 }
 
@@ -2048,13 +2085,10 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
 }
 
 fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let config = state.preferences.weather_settings(state.active_weather);
     let language = state.preferences.language;
     let s = state.scroll;
-    let city = state
-        .preferences
-        .weather_location
-        .as_ref()
-        .map(|place| place.name.as_str());
+    let city = config.location.as_ref().map(|place| place.name.as_str());
     let style = text(18.4, 450, 0.).leading(1.4);
     let city_lines = city.map_or(1, |city| assets.lines(city, style, 450.));
     let height = (34. + city_lines as f32 * 25.76).max(72.);
@@ -2102,7 +2136,7 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
             rect: Rect::new(640., y, 1120., 72.),
             title: language.t("temperature"),
             icon: Some("thermometer"),
-            value: Some(state.preferences.temperature_unit.symbol()),
+            value: Some(config.unit.symbol()),
             description: None,
             selected: false,
             chevron: true,
@@ -2117,7 +2151,7 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
             rect: Rect::new(640., y + 84., 1120., 72.),
             title: language.t("weatherStyle"),
             icon: Some("grid"),
-            value: Some(language.t(state.preferences.weather_style.label_key())),
+            value: Some(language.t(config.style.label_key())),
             description: None,
             selected: false,
             chevron: true,
@@ -2132,11 +2166,7 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
             rect: Rect::new(640., y + 168., 1120., 72.),
             title: language.t("widgetSize"),
             icon: Some("grid"),
-            value: Some(if state.preferences.weather_small {
-                "1 × 1"
-            } else {
-                "2 × 2"
-            }),
+            value: Some(if config.small { "1 × 1" } else { "2 × 2" }),
             description: None,
             selected: false,
             chevron: false,
@@ -2171,7 +2201,7 @@ fn weather_style_settings(out: &mut Scene, state: &State, assets: &Assets) {
         // A dark inset keeps the real weather treatment readable on the white focus surface.
         let preview = Rect::new(1040., rect.y + 12., 700., 208.);
         out.shape(preview, 16., c(0x192129, 1.));
-        let summary = weather_summary_layout_for(state, assets, style, true);
+        let summary = weather_summary_layout_for(state, assets, style, true, state.active_weather);
         let scale = 0.58_f32.min((preview.w - 64.) / summary.width);
         paint_weather_summary(
             out,
@@ -2181,7 +2211,12 @@ fn weather_style_settings(out: &mut Scene, state: &State, assets: &Assets) {
             preview.y + (preview.h - summary.height * scale) / 2.,
             scale,
         );
-        if style == state.preferences.weather_style {
+        if style
+            == state
+                .preferences
+                .weather_settings(state.active_weather)
+                .style
+        {
             out.icon(
                 assets,
                 "check",
@@ -2193,9 +2228,10 @@ fn weather_style_settings(out: &mut Scene, state: &State, assets: &Assets) {
 }
 
 fn location_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let config = state.preferences.weather_settings(state.active_weather);
     let language = state.preferences.language;
     let mut y = 164.8 - state.scroll;
-    if let Some(place) = &state.preferences.weather_location {
+    if let Some(place) = &config.location {
         let rect = Rect::new(640., y, 1120., 76.2);
         out.glass(rect, 20.);
         out.border(rect, 20., 1., c(0xffffff, 0.04));
@@ -2418,6 +2454,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::AppSorting) => language.t("appSorting"),
+                Some(Subpage::RecentApps) => language.t("recentApps"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
                 _ => "",
             };
@@ -2576,12 +2613,20 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 (
                     language.t("celsius"),
                     None,
-                    state.preferences.temperature_unit == Unit::Celsius,
+                    state
+                        .preferences
+                        .weather_settings(state.active_weather)
+                        .unit
+                        == Unit::Celsius,
                 ),
                 (
                     language.t("fahrenheit"),
                     None,
-                    state.preferences.temperature_unit == Unit::Fahrenheit,
+                    state
+                        .preferences
+                        .weather_settings(state.active_weather)
+                        .unit
+                        == Unit::Fahrenheit,
                 ),
             ],
             Subpage::WeatherLocation
@@ -2605,6 +2650,16 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                         language.t(mode.label_key()),
                         None,
                         mode == state.preferences.app_sorting,
+                    )
+                })
+                .collect(),
+            Subpage::RecentApps => crate::model::RecentAppsBehavior::ALL
+                .into_iter()
+                .map(|mode| {
+                    (
+                        language.t(mode.label_key()),
+                        None,
+                        mode == state.preferences.recent_apps_behavior,
                     )
                 })
                 .collect(),
@@ -2708,7 +2763,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     "recentApps",
                     "clock",
                     Some(language.t(state.preferences.recent_apps_behavior.label_key())),
-                    false,
+                    true,
                 ),
             ]
             .into_iter()
@@ -3096,25 +3151,57 @@ fn inputs_settings(out: &mut Scene, state: &State, assets: &Assets) {
 
 fn widget_position_settings(out: &mut Scene, state: &State, assets: &Assets, widget: HomeWidget) {
     widget_grid(out, state, assets, Some(widget));
-    out.text(
-        state.preferences.language.t("widgetPlacementHelp"),
-        Rect::new(640., 840., 1120., 100.),
-        text(20., 450, 0.).leading(1.4),
-        c(0xeeeeee, 0.8),
-        false,
-    );
-}
-
-fn widget_preview_top(state: &State) -> f32 {
-    if matches!(state.subpage, Some(Subpage::WidgetPosition(_))) {
-        180.
-    } else {
-        252.8
+    let mut x = 640.;
+    for (target, label, width) in [
+        (Target::WidgetStep(0), "←", 64.),
+        (Target::WidgetStep(1), "↑", 64.),
+        (Target::WidgetStep(2), "↓", 64.),
+        (Target::WidgetStep(3), "→", 64.),
+        (Target::WidgetCommit, "OK", 96.),
+        (
+            Target::WidgetCancel,
+            state.preferences.language.t("cancel"),
+            176.,
+        ),
+    ] {
+        let rect = Rect::new(x, 164.8, width, 64.);
+        let focused = state.focus == target;
+        out.shape(rect, 32., c(0xffffff, if focused { 0.96 } else { 0.10 }));
+        out.text(
+            label,
+            Rect::new(x, 184., width, 28.),
+            text(20.8, 550, -0.02),
+            if focused { c(0x242424, 1.) } else { WHITE },
+            true,
+        );
+        out.control(target, rect, false);
+        x += width + 12.;
     }
 }
 
+fn widget_preview_top(_state: &State) -> f32 {
+    252.8
+}
+
+fn widget_label(state: &State, widget: HomeWidget) -> String {
+    let detail = match widget.kind() {
+        HomeWidget::Weather => state
+            .preferences
+            .weather_settings(widget)
+            .location
+            .map(|place| place.name),
+        HomeWidget::Crypto | HomeWidget::Stocks => Some(
+            crate::markets::settings(&state.preferences, widget)
+                .symbol
+                .clone(),
+        )
+        .filter(|symbol| !symbol.is_empty()),
+        _ => None,
+    };
+    detail.unwrap_or_else(|| state.preferences.language.t(widget.key()).to_owned())
+}
+
 fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<HomeWidget>) {
-    let language = state.preferences.language;
     // A scaled Home canvas: cell anchors remain separate hit targets even when
     // the preview widget spans multiple cells. Browsing never changes saved positions.
     let preview = Rect::new(640., widget_preview_top(state) - state.scroll, 1120., 630.);
@@ -3151,7 +3238,9 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
             false,
         );
     }
-    for other in HomeWidget::ALL
+    for other in state
+        .preferences
+        .widgets()
         .into_iter()
         .filter(|other| Some(*other) != moving && state.preferences.has_widget(*other))
     {
@@ -3162,7 +3251,7 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
         ));
         out.shape(rect, 8., c(0x69737c, 0.65));
         let (label, style) = assets.fit_line(
-            language.t(other.key()),
+            &widget_label(state, other),
             text(22., 500, 0.),
             rect.w - 24.,
             16.,
@@ -3187,7 +3276,7 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
             if state.preferences.widget_at(position).is_none()
                 && HomeWidget::ALL
                     .into_iter()
-                    .any(|widget| !state.preferences.has_widget(widget))
+                    .any(|widget| state.preferences.available_widget(widget).is_some())
             {
                 out.text(
                     "+",
@@ -3209,9 +3298,12 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
             c(0xffffff, 0.4),
         );
     }
-    if let Target::Choice(cell) = state.focus
-        && let Some(position) = WidgetPosition::from_cell(cell)
-    {
+    let cell = if let Target::Choice(cell) = state.focus {
+        cell
+    } else {
+        state.widget_position_cell
+    };
+    if let Some(position) = WidgetPosition::from_cell(cell) {
         let valid = state.preferences.can_place_widget(widget, position);
         let rect = if state.preferences.widget_fits(widget, position) {
             map(configured_widget_rect(state, widget, position))
@@ -3230,7 +3322,7 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
         out.border(rect, 8., 3., if valid { WHITE } else { c(0xffa3a3, 1.) });
         let (w, h) = state.preferences.widget_span(widget);
         let (label, style) = assets.fit_line(
-            &format!("{}  {w} × {h}", language.t(widget.key())),
+            &format!("{}  {w} × {h}", widget_label(state, widget)),
             text(24., 550, 0.),
             rect.w - 24.,
             16.,
@@ -3258,7 +3350,7 @@ fn market_settings(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWi
             chevron: true,
         },
     );
-    if kind == HomeWidget::Crypto {
+    if kind.kind() == HomeWidget::Crypto {
         row(
             out,
             state,
@@ -3275,26 +3367,54 @@ fn market_settings(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWi
             },
         );
     }
-    let help = format!(
-        "{}\n{}",
-        language.t(if kind == HomeWidget::Crypto {
-            "cryptoHelp"
-        } else {
-            "stocksHelp"
-        }),
-        language.t(if kind == HomeWidget::Crypto {
-            "cryptoDailyBasis"
-        } else {
-            "stocksDailyBasis"
-        })
-    );
+    let crypto = kind.kind() == HomeWidget::Crypto;
+    let top = if crypto { 352.8 } else { 268.8 } - state.scroll;
+    let style = text(18., 400, 0.).leading(1.45);
+    let notes = [
+        ("refresh", language.t("marketRefreshHelp")),
+        (
+            "clock",
+            language.t(if crypto {
+                "cryptoDailyBasis"
+            } else {
+                "stocksDailyBasis"
+            }),
+        ),
+    ];
+    let heights = notes.map(|(_, label)| {
+        assets.lines(label, style, 1000.) as f32 * style.size * style.line_height
+    });
+    let panel = Rect::new(640., top, 1120., 96. + heights.iter().sum::<f32>() + 16.);
+    out.glass(panel, 20.);
+    out.border(panel, 20., 1., c(0xffffff, 0.07));
     out.text(
-        help,
-        Rect::new(664., 356. - state.scroll, 1072., 240.),
-        text(20., 400, 0.).leading(1.4),
+        if crypto {
+            "Coinbase · BTC, ETH"
+        } else {
+            "Yahoo Finance · AAPL, SAP.DE"
+        },
+        Rect::new(664., top + 24., 1072., 28.),
+        text(20., 550, -0.02),
         WHITE,
         false,
     );
+    let mut y = top + 72.;
+    for ((icon, label), height) in notes.into_iter().zip(heights) {
+        out.icon(
+            assets,
+            icon,
+            Rect::new(664., y + 3., 20., 20.),
+            c(0xffffff, 0.55),
+        );
+        out.text(
+            label,
+            Rect::new(700., y, 1000., height),
+            style,
+            c(0xf5f5f5, 0.72),
+            false,
+        );
+        y += height + 16.;
+    }
 }
 
 fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
@@ -3713,7 +3833,7 @@ fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, cat
     if catalog {
         for widget in HomeWidget::ALL
             .into_iter()
-            .filter(|widget| !state.preferences.has_widget(*widget))
+            .filter_map(|widget| state.preferences.available_widget(widget))
         {
             actions.push((Target::AddWidget(widget), widget.key(), "grid"));
         }
@@ -3722,7 +3842,7 @@ fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, cat
             (Target::ConfigureWidget(widget), "configure", "settings"),
             (Target::MoveWidget(widget), "move", "left"),
         ]);
-        if widget == HomeWidget::Weather {
+        if widget.kind() == HomeWidget::Weather {
             actions.push((Target::WeatherSize, "widgetSize", "grid"));
         }
         actions.push((Target::RemoveWidget(widget), "removeWidget", "circle-minus"));
@@ -3748,7 +3868,7 @@ fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, cat
         out.border(card, 8., 2., WHITE);
         if let Some(widget) = widget {
             out.text(
-                language.t(widget.key()),
+                widget_label(state, widget),
                 card.inset(12.),
                 text(22., 500, 0.),
                 WHITE,
@@ -3809,7 +3929,7 @@ fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, cat
             format!(
                 "{} · {}",
                 language.t(key),
-                if state.preferences.weather_small {
+                if state.preferences.weather_settings(widget.unwrap()).small {
                     "1 × 1"
                 } else {
                     "2 × 2"

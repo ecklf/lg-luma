@@ -97,6 +97,15 @@ supports them, and Reset restores the original Greeting/Weather membership witho
 discarding configured symbols. Crypto quote currency is selectable; Stocks uses the
 provider's listing currency, preserving minor-unit currency codes such as `GBp`.
 
+Additional instances persist in `extra_crypto`, `extra_stocks`, and `extra_weather`,
+with stable per-type indices and independent settings, positions and request generations.
+Legacy primary preferences remain compatible. Weather instances have separate workers and
+cache files; market instances share one bounded worker. Reset disables extra instances
+without discarding their configuration. Placement and resizing account for every instance.
+Move mode uses the same preview geometry as browsing, with arrow, OK and Cancel pills above.
+Unconfigured prices show “Not set” and “Configure in Settings”; market settings use a compact
+provider info card instead of an unstructured description block.
+
 `src/markets.rs` owns a bounded HTTP worker and per-widget request generations. Prices
 come from Coinbase's unauthenticated spot-price endpoint and Yahoo Finance's unofficial
 public chart endpoint. No API credentials are used. Requests use fixed HTTPS origins,
@@ -134,6 +143,7 @@ cell or relocating an expanded widget at a grid edge. Greeting has no size actio
 Short press applies on Home only so Back still navigates settings. Timer-based holds,
 delayed releases, and native webOS Exit notifications use the same preference-aware routing.
 An overlay dismissal consumes the entire press and never reopens Recent apps on release.
+General → Recent apps opens a nested picker; browsing or cancelling does not change the setting.
 
 ### Startup profiling
 

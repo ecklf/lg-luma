@@ -220,6 +220,7 @@ pub enum Command {
     },
     Persist(Cache),
     ClearCache,
+    ClearWidgetCache(u8),
 }
 
 #[derive(Default, Serialize)]
@@ -323,6 +324,19 @@ impl Weather {
         home_visible: bool,
         now: i64,
     ) -> (Option<Command>, bool) {
+        self.sync_widget(
+            &preferences.weather_settings(crate::model::HomeWidget::Weather),
+            home_visible,
+            now,
+        )
+    }
+
+    pub fn sync_widget(
+        &mut self,
+        config: &crate::model::WeatherWidgetSettings,
+        home_visible: bool,
+        now: i64,
+    ) -> (Option<Command>, bool) {
         let before = (
             self.loading,
             self.failed,
@@ -335,18 +349,18 @@ impl Weather {
         {
             self.cache = None;
         }
-        let key = preferences.weather_location.as_ref().map(Location::key);
+        let key = config.location.as_ref().map(Location::key);
         if self.active_key != key {
             self.invalidate_forecast();
             self.active_key = key.clone();
         }
-        let active = preferences.weather_visible() && home_visible && key.is_some();
+        let active = config.enabled && home_visible && key.is_some();
         if active && !self.active_home {
             self.next_fetch = 0;
         }
         self.active_home = active;
         let mut command = None;
-        if !preferences.weather_visible() || !home_visible || key.is_none() {
+        if !config.enabled || !home_visible || key.is_none() {
             if self.pending.take().is_some() {
                 self.forecast_id += 1;
             }
@@ -364,13 +378,10 @@ impl Weather {
                 .cache
                 .as_ref()
                 .is_none_or(|cache| Some(&cache.key) != key.as_ref());
-            command = preferences
-                .weather_location
-                .clone()
-                .map(|location| Command::Forecast {
-                    id: self.forecast_id,
-                    location,
-                });
+            command = config.location.clone().map(|location| Command::Forecast {
+                id: self.forecast_id,
+                location,
+            });
         }
         if active && self.pending.is_some() {
             self.loading = self
