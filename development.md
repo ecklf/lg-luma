@@ -72,6 +72,10 @@ backend. Avoid copying the whole SDK library directory or the TV's graphics driv
 
 ## Controls and navigation
 
+Greeting is time-based only. Legacy `greeting_name` preferences are ignored and not
+saved, and Greeting settings offer date options only. The midnight-to-5am translation
+is a greeting, not a loading message.
+
 `weather_small` defaults to false. When enabled, Weather uses a true 1×1 footprint
 for rendering, placement, collision checks and sanitization. The size toggle preserves
 the city, unit, cache and saved large-widget style. Expanding relocates Weather only

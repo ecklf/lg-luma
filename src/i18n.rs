@@ -778,6 +778,19 @@ mod tests {
         assert_eq!(Language::Es.greeting(2, "Ana"), "¿Aún despiertos, Ana?");
         assert_eq!(Language::Zh.greeting(20, "小明"), "小明，晚上好。");
     }
+
+    #[test]
+    fn overnight_greeting_is_not_a_loading_message_and_changes_at_five() {
+        assert_eq!(Language::En.greeting(0, ""), "Still up?");
+        assert_eq!(Language::En.greeting(4, "Ana"), "Still up, Ana?");
+        assert_eq!(Language::En.greeting(5, "Ana"), "Good morning, Ana.");
+        for language in Language::ALL {
+            assert_eq!(language.greeting(0, ""), language.greeting(4, ""));
+            assert_ne!(language.greeting(4, ""), language.greeting(5, ""));
+            assert!(language.greeting(2, "Ana").contains("Ana"));
+            assert_ne!(language.greeting(2, ""), "One more moment.");
+        }
+    }
     #[test]
     fn clock_and_date_follow_the_selected_locale() {
         let now = OffsetDateTime::parse(
