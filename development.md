@@ -102,7 +102,8 @@ with stable per-type indices and independent settings, positions and request gen
 Legacy primary preferences remain compatible. Weather instances have separate workers and
 cache files; market instances share one bounded worker. Reset disables extra instances
 without discarding their configuration. Placement and resizing account for every instance.
-Move mode uses the same preview geometry as browsing, with arrow, OK and Cancel pills above.
+Move mode uses the same preview geometry as browsing, with non-interactive instructions above:
+arrows to move, OK to confirm and a backspace icon for Back to cancel.
 Unconfigured prices show “Not set” and “Configure in Settings”; market settings use a compact
 provider info card instead of an unstructured description block.
 

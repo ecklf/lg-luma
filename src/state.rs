@@ -83,9 +83,6 @@ pub enum Target {
     ConfigureWidget(HomeWidget),
     RemoveWidget(HomeWidget),
     MoveWidget(HomeWidget),
-    WidgetStep(u8),
-    WidgetCommit,
-    WidgetCancel,
     DateToggle,
     DateFormat,
     ClockFormat,
@@ -2799,31 +2796,6 @@ impl State {
                 self.widget_position_cell = position.cell();
                 self.scroll = 0.;
                 self.panel_started = None;
-            }
-            Target::WidgetStep(step) => {
-                if matches!(self.subpage, Some(Subpage::WidgetPosition(_))) {
-                    self.focus = Target::Choice(self.widget_position_cell);
-                    return self.direction(
-                        match step {
-                            0 => Direction::Left,
-                            1 => Direction::Up,
-                            2 => Direction::Down,
-                            _ => Direction::Right,
-                        },
-                        &[],
-                    );
-                }
-            }
-            Target::WidgetCommit => {
-                if matches!(self.subpage, Some(Subpage::WidgetPosition(_))) {
-                    self.focus = Target::Choice(self.widget_position_cell);
-                    return self.activate();
-                }
-            }
-            Target::WidgetCancel => {
-                if matches!(self.subpage, Some(Subpage::WidgetPosition(_))) {
-                    self.close_subpage();
-                }
             }
             Target::InstallUpdate => {
                 if !self.update_busy()

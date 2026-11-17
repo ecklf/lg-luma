@@ -256,8 +256,8 @@ The greeting changes with the time of day and does not accept a name.
 The overnight greeting says “Still up?” rather than a loading message.
 
 Add multiple Weather, Crypto or Stocks widgets for different cities and symbols. Each has
-its own configuration and position. Move mode keeps the preview in place, with arrow,
-**OK** and **Cancel** pills above it; remote arrows, OK and Back work too.
+its own configuration and position. Move mode keeps the preview in place, with non-interactive
+instructions above it: remote arrows to move, **OK** to confirm and **Back** to cancel.
 
 Weather supports a **1×1** size in **Settings → Widgets → Weather → Size** for a compact
 condition icon, temperature and city. The existing **2×2** layouts remain the default.

@@ -3383,6 +3383,24 @@
     "ca": "Mou",
     "hu": "Áthelyezés"
   },
+  "confirm": {
+    "zh-tw": "確認",
+    "en": "Confirm",
+    "de": "Bestätigen",
+    "es": "Confirmar",
+    "zh": "确认",
+    "pt": "Confirmar",
+    "it": "Conferma",
+    "ru": "Подтвердить",
+    "pl": "Potwierdź",
+    "fr": "Confirmer",
+    "vi": "Xác nhận",
+    "nl": "Bevestigen",
+    "sv": "Bekräfta",
+    "cs": "Potvrdit",
+    "ca": "Confirma",
+    "hu": "Megerősítés"
+  },
   "done": {
     "zh-tw": "完成",
     "en": "Done",
