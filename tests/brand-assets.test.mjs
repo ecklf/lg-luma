@@ -29,6 +29,34 @@ test('every expanded brand has standalone, renderable vector artwork and pinned 
   }
 });
 
+test('Live TV is a centered display without a stand or a ground shadow', async () => {
+  const svg = await fs.readFile(new URL('../assets/logos/live-tv.svg', import.meta.url));
+  const { data, info } = await sharp(svg).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  assert.equal(info.width, 128);
+  assert.equal(info.height, 128);
+  let left = info.width;
+  let top = info.height;
+  let right = -1;
+  let bottom = -1;
+  let white = 0;
+  let live = 0;
+  for (let y = 0; y < info.height; y++) {
+    for (let x = 0; x < info.width; x++) {
+      const offset = (y * info.width + x) * info.channels;
+      if (data[offset + 3] === 0) continue;
+      left = Math.min(left, x);
+      top = Math.min(top, y);
+      right = Math.max(right, x);
+      bottom = Math.max(bottom, y);
+      if (data[offset] > 245 && data[offset + 1] > 245 && data[offset + 2] > 245) white++;
+      if (data[offset] > 240 && data[offset + 1] < 140 && data[offset + 2] < 160) live++;
+    }
+  }
+  assert.deepEqual({ left, top, right, bottom }, { left: 14, top: 30, right: 113, bottom: 97 });
+  assert.ok(white > 200, 'Keep the white play symbol');
+  assert.ok(live > 10, 'Keep the live indicator');
+});
+
 test('input trademark marks retain pinned artwork and render without distortion', async () => {
   const hashes = {
     sony: 'd71dc296ee3e376ff1082776d0ba7b9a779ae13909b696635ce87e112d2f70c7',

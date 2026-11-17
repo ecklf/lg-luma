@@ -206,7 +206,10 @@ fn widget_manager_grid_opens_context_menu_from_every_occupied_cell() {
         let menu = scene(&state);
         assert!(menu.controls.iter().all(|control| matches!(
             control.target,
-            Target::ConfigureWidget(_) | Target::MoveWidget(_) | Target::RemoveWidget(_)
+            Target::ConfigureWidget(_)
+                | Target::MoveWidget(_)
+                | Target::RemoveWidget(_)
+                | Target::WeatherSize
         )));
         assert!(
             menu.controls

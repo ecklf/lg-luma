@@ -109,6 +109,7 @@ pub enum Target {
     WeatherLocation,
     WeatherTemperature,
     WeatherStyle,
+    WeatherSize,
     WeatherQuery,
     WeatherSearch,
     WeatherClear,
@@ -1593,6 +1594,7 @@ impl State {
                     Target::WeatherLocation,
                     Target::WeatherTemperature,
                     Target::WeatherStyle,
+                    Target::WeatherSize,
                 ]),
                 Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
                 _ => None,
@@ -2510,6 +2512,17 @@ impl State {
                 if !self.preferences.reduced_motion {
                     self.panel_started = Some(Instant::now());
                 }
+            }
+            Target::WeatherSize => {
+                self.preferences.toggle_weather_size();
+                if matches!(self.overlay, Some(Overlay::WidgetOptions { .. })) {
+                    // A non-anchor cell may disappear on shrink, and expanding
+                    // at an edge may relocate Weather. Keep its popup attached.
+                    self.overlay = Some(Overlay::WidgetOptions {
+                        cell: self.preferences.weather_position.cell(),
+                    });
+                }
+                return vec![Effect::Save];
             }
             Target::WeatherStyle => {
                 self.subpage = Some(Subpage::WeatherStyle);
