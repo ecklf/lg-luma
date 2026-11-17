@@ -25,7 +25,7 @@ pub const SETTINGS_ORDER: [usize; SECTION_COUNT] = [
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
 /// System row registering Luma as a TV input (luma-helper tv-input).
-pub const TV_INPUT_ROW: usize = 12;
+pub const TV_INPUT_ROW: usize = 14;
 pub const APPS_COLUMNS: usize = 6;
 pub const DRAWER_PADDING: f32 = 24.;
 /// Automatic inventory retries before the error shows: with the 6.5 s Luna timeout about 50 s.

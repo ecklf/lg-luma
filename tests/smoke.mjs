@@ -437,7 +437,7 @@ try {
   assert.ok(!system.ui_text.includes('On'));
   // Desktop previews keep the registration in memory, so the row can be toggled safely.
   const tvInput = await scenario('tv-input', `${systemPage},down,down,down,down,enter`);
-  assert.deepEqual(tvInput.focus, { Setting: 12 });
+  assert.deepEqual(tvInput.focus, { Setting: 14 });
   assert.ok(tvInput.ui_text.includes('On'));
   const updatePreview = await scenario('update-preview', systemPage, [
     '--test-update-version',
