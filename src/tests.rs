@@ -225,7 +225,7 @@ fn controls(state: &State) -> Vec<crate::state::Control> {
 }
 
 #[test]
-fn favorites_edge_fragments_share_draw_hit_and_wheel_viewports() {
+fn favorites_stay_inside_their_card_for_drawing_hits_and_wheel() {
     let mut state = ready();
     let favorites: Vec<_> = state
         .inventory
@@ -235,27 +235,24 @@ fn favorites_edge_fragments_share_draw_hit_and_wheel_viewports() {
         .map(|app| app.id.clone())
         .collect();
     state.preferences.favorites = Some(favorites.clone());
+    let card = state.favorites_viewport();
+    assert_eq!((card.x, card.x + card.w), (60., 1860.));
+    // The seventh tile lies beyond the card, so it is neither drawn there nor a target.
+    assert!(state.hit_test(&controls(&state), 1880., 880.).is_none());
+    assert!(!state.wheel_scroll(&controls(&state), Some((1880., 880.)), 0, -1));
+    assert_eq!(state.home_scroll, 0.);
     assert_eq!(
-        state.hit_test(&controls(&state), 1880., 880.),
-        Some(Target::App(favorites[6].clone()))
+        state.hit_test(&controls(&state), 1800., 880.),
+        Some(Target::App(favorites[5].clone()))
     );
-    assert!(state.wheel_scroll(&controls(&state), Some((1880., 880.)), 0, -1));
+    assert!(state.wheel_scroll(&controls(&state), Some((1800., 880.)), 0, -1));
     assert!((state.home_scroll - crate::state::HOME_TILE_PITCH).abs() < 0.01);
     assert_eq!(state.scroll, 0.);
-    assert_eq!(
-        state.hit_test(&controls(&state), 40., 880.),
-        Some(Target::App(favorites[0].clone()))
-    );
-    let scroll = state.home_scroll;
-    state.pointer_focus(Target::App(favorites[0].clone()));
-    assert_eq!(state.home_scroll, scroll);
-    assert!(state.hit_test(&controls(&state), 4., 880.).is_none());
-    assert!(state.hit_test(&controls(&state), 1915., 880.).is_none());
-    assert!(state.hit_test(&controls(&state), 40., 1060.).is_none());
+    // After scrolling, the first tile has left the card at the left.
+    assert!(state.hit_test(&controls(&state), 40., 880.).is_none());
     let scene = scene(&state);
-    let viewport = state.favorites_viewport();
-    assert!(scene.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Clip(Some(rect)) if rect.x == viewport.x && rect.w == viewport.w)));
-    assert!(state.wheel_scroll(&scene.controls, Some((40., 880.)), 0, 1));
+    assert!(scene.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Clip(Some(rect)) if rect.x == card.x && rect.w == card.w)));
+    assert!(state.wheel_scroll(&scene.controls, Some((200., 880.)), 0, 1));
     assert_eq!(state.home_scroll, 0.);
     assert_eq!(state.scroll, 0.);
 }
@@ -2680,10 +2677,12 @@ fn language_list_scrolls_under_fixed_ui_without_clipping_or_fades() {
     state.subpage = Some(Subpage::Language);
     state.scroll = 180.;
     let rendered = scene(&state);
-    assert!(!rendered.draw.iter().any(|draw| matches!(
-        draw,
-        Draw::Clip(Some(_)) | Draw::EdgeFade(Some(_)) | Draw::EdgeFadeX(Some(_))
-    )));
+    assert!(
+        !rendered
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, Draw::Clip(Some(_)) | Draw::EdgeFade(Some(_))))
+    );
     let first = rendered
         .controls
         .iter()

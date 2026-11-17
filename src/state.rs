@@ -30,13 +30,10 @@ pub const DRAWER_PADDING: f32 = 24.;
 pub const INVENTORY_RETRIES: u32 = 5;
 pub const INVENTORY_RETRY_DELAY: Duration = Duration::from_secs(2);
 pub const HOME_STRIP_LEFT: f32 = 84.;
-// Six favourites in full and the seventh cut off and fading out at the right (Apple TV rows):
-// the strip ends after the sixth tile, so a focused tile never sits in the fade.
+// Six favourites in full inside the glass card, which keeps 24 px around them.
 pub const HOME_STRIP_RIGHT: f32 = 1836.;
 pub const HOME_TILE_WIDTH: f32 = 270.;
 pub const HOME_TILE_PITCH: f32 = 296.4;
-pub const HOME_FADE_LEFT: f32 = 8.;
-pub const HOME_FADE_RIGHT: f32 = 1910.;
 pub const BACKGROUND_FADE: f32 = 0.4;
 pub const CYCLE_FADE: f32 = 1.6;
 
@@ -736,14 +733,11 @@ impl State {
             }
     }
 
+    /// The favourites' glass card: their tiles scroll, draw and take pointer input only inside it.
     pub fn favorites_viewport(&self) -> Rect {
         let content = self.content_viewport();
-        let left = if self.home_scroll > 0. {
-            HOME_FADE_LEFT
-        } else {
-            0.
-        };
-        Rect::new(left, content.y, HOME_FADE_RIGHT - left, content.h)
+        let inset = HOME_STRIP_LEFT - 24.;
+        Rect::new(inset, content.y, 1920. - 2. * inset, content.h)
     }
 
     pub fn apps_viewport(&self) -> Rect {

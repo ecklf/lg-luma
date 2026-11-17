@@ -446,10 +446,12 @@ fn gallery_scrolls_behind_fixed_controls_without_clipping_or_fades() {
         .find(|c| c.target == Target::Background(3))
         .unwrap();
     assert_eq!(old.rect.y - new.rect.y, state.scroll);
-    assert!(!scrolled.draw.iter().any(|draw| matches!(
-        draw,
-        Draw::Clip(Some(_)) | Draw::EdgeFade(Some(_)) | Draw::EdgeFadeX(Some(_))
-    )));
+    assert!(
+        !scrolled
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, Draw::Clip(Some(_)) | Draw::EdgeFade(Some(_))))
+    );
     let last_card = scrolled
         .draw
         .iter()
