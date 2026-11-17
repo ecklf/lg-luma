@@ -2,7 +2,7 @@
 
 A native launcher for rooted LG webOS TVs, inspired by Apple TV.
 
-https://github.com/user-attachments/assets/5b2c6e78-ec77-41f5-a79a-1fcfbe8e524b
+https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 
 <details>
 <summary>Screenshots</summary>
@@ -27,6 +27,27 @@ https://github.com/user-attachments/assets/5b2c6e78-ec77-41f5-a79a-1fcfbe8e524b
 </table>
 
 </details>
+
+## Features
+
+- App drawer styles: tvOS (default) with a 24 px peek, or Minimal with a lower dock and no peek.
+  Choose in **Settings → General → App drawer**. Both use the same drawer navigation.
+- Movable greeting, weather, stock and crypto widgets, with multiple cities or symbols.
+  Weather supports compact 1×1 and larger 2×2 layouts.
+- Stock and crypto prices with daily changes and quote age, without an account or API key.
+  Quotes may be delayed and are informational, not for trading. Coinbase and Yahoo Finance
+  receive the configured symbol and TV IP address. Yahoo's unofficial endpoint may change.
+- Built-in backgrounds and QR-based uploads from a phone or computer on the same network,
+  with JPEG, PNG and WebP support and a 16:9 crop. Upload links work only while the TV dialog
+  is open and focused. Optional rotation and gradient shading leave the LG launch splash unchanged.
+- Saved input icons, with automatic label detection or a choice of bundled device icons.
+- Recent app switching and closing while Luma is focused: hold **Back** for 0.6 seconds,
+  browse with **Left / Right**, open with **OK**, close with **Up**, and dismiss with **Back**.
+  Short-press and Off modes are available in **Settings → General → Recent apps**.
+- QR-managed webhook shortcut tiles, such as Home Assistant actions.
+- 16 interface languages: Catalan, Czech, Dutch, English, French, German, Hungarian, Italian,
+  Polish, Portuguese (Brazil), Russian, Simplified Chinese, Spanish, Swedish, Traditional Chinese
+  and Vietnamese. Choose in **Settings → General → Language**.
 
 ## Compatibility
 
@@ -243,100 +264,6 @@ You can use [LG Input Hook](https://repo.webosbrew.org/apps/org.webosbrew.inputh
 ```
 
 Test on a spare button first. Disable the mapping in Input Hook to restore normal Home behavior.
-
-## Features
-
-Choose the interface language in **Settings → General → Language**. Luma supports Catalan,
-Czech, Dutch, English, French, German, Hungarian, Italian, Polish, Portuguese (Brazil), Russian,
-Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese.
-
-### Widgets
-
-The greeting changes with the time of day and does not accept a name.
-The overnight greeting says “Still up?” rather than a loading message.
-
-Add multiple Weather, Crypto or Stocks widgets for different cities and symbols. Each has
-its own configuration and position. Move mode keeps the preview in place, with non-interactive
-instructions above it: remote arrows to move, **OK** to confirm and **Back** to cancel.
-
-Weather supports a **1×1** size in **Settings → Widgets → Weather → Size** for a compact
-condition icon, temperature and city. The existing **2×2** layouts remain the default.
-You can also select Weather in the widget grid and choose **Size** directly in its popup.
-The popup shows the current size and stays open as you switch between 1×1 and 2×2.
-Move either size in the widget grid. Expanding a widget at an edge or beside Greeting
-automatically finds a free position without moving other widgets.
-
-### Crypto and stock prices
-
-Choose **Settings → Widgets → Add widget → Crypto** or **Stocks**, then place the
-1×1 widget in a free cell. Open its popup and select **Configure** to enter a symbol.
-Crypto accepts Coinbase symbols such as `BTC` or `ETH` and a quote currency
-(`USD`, `EUR`, `GBP`, `JPY`, `CAD`, `AUD`, or `CHF`). Stocks accepts Yahoo Finance
-equity/ETF tickers such as `AAPL`, `BRK-B`, or `SAP.DE`, using the listing's currency.
-
-Both widgets are optional and off by default. They refresh every five minutes only
-while Home is visible. No account or API key is required. Quotes show a compact
-quote age, such as **1m ago**. Crypto age measures time since its price
-check, while stock age measures time since the provider's quote, not the last refresh.
-Daily changes show green up arrows or red down arrows. Crypto compares against the
-previous UTC day's historic price, while stocks compare against the previous close.
-Zero changes are neutral, and missing comparison data is explicitly unavailable.
-Stock quotes may be delayed and can be older outside market hours; configuration includes this guidance.
-Failed updates retain the session's last reading with an
-explicit warning. Price readings are not saved across restarts.
-
-Coinbase and Yahoo Finance receive the configured symbol and the TV's IP address.
-Yahoo's public chart endpoint is unofficial and may change or become unavailable.
-No cookies, authentication tokens, trading actions, or financial advice are involved.
-These widgets are for personal informational use, not trading decisions.
-
-### Backgrounds
-
-Open **Settings → Background → Upload**, then scan the QR code or open the shown
-address on a phone or computer on the same network. Choose a JPEG, PNG or WebP and adjust
-its 16:9 crop before choosing **Save to TV**.
-
-The upload link works only while its TV dialog is open and focused.
-
-Enable **Rotation** beside **Upload** to cycle through backgrounds on each Luma restart and every
-15 minutes with a slow cross-fade. Rotation is off by default and leaves your manually chosen
-LG splash unchanged.
-
-Toggle **Gradient** beside **Rotation** to turn background shading on or off. It defaults to On
-and remembers your choice. Older uploads without an unshaded copy keep their full-resolution
-shaded image. This does not change LG's launch splash.
-
-### Input icons
-
-Open **Settings → Inputs**, select an input, then choose
-**Icon** to open a native picker for bundled SVG icons. Choices are **Automatic** (the default,
-using label detection), **HDMI**, **USB**, **Apple TV**, **Computer**, **Console**, **PlayStation**,
-**NVIDIA Shield**, **Steam**, **Streaming device**, **Nintendo Switch**, **Nintendo Switch 2**,
-**Sony**, **DVD**, **Blu-ray**, **Disk**, and **Xbox**.
-
-An explicit icon choice is saved separately for each input and persists across restarts.
-Choose **Automatic** to clear that input's override and restore label-based icon detection.
-
-### Recent app switching
-
-Choose **Settings → General → Recent apps** to select **Long press** (default),
-**Off**, or **Short press** in a nested picker. Long press opens Recent apps after holding **Back** for 0.6 seconds
-from any page. Short press opens it with a tap on Home while preserving Back navigation elsewhere.
-Off disables the switcher. With the default long press setting, a short press never opens it,
-including on Home.
-
-- **Left / Right**, the pointer, or the scroll wheel browses recent apps and inputs.
-- **OK** or a pointer click opens the selected app or input.
-- **Up** closes the selected app and removes its card.
-- **Back** dismisses the switcher and restores the previous page and focus.
-
-These shortcuts work while Luma is focused. From another app, return to Luma first.
-
-### Shortcut tiles
-
-Shortcut tiles sit on Home like apps but send a web request when selected, for example to a Home
-Assistant webhook. Open **Settings → Widgets → Shortcuts → Configure** and scan
-the QR code.
 
 ## Development
 

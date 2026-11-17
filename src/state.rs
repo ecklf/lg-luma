@@ -186,6 +186,7 @@ pub enum Subpage {
     WeatherStyle,
     Language,
     AppSorting,
+    AppDrawer,
     RecentApps,
     TextRendering,
 }
@@ -621,7 +622,12 @@ impl State {
     }
 
     pub fn dock_y(&self) -> f32 {
-        let home_y = 820.;
+        let home_y = match self.preferences.app_drawer_style {
+            // Leave 57.6px below the glass, with room for the 24px app-row peek.
+            crate::model::AppDrawerStyle::Tvos => 844.,
+            // Leave 48 logical pixels below the glass, including its 24px card padding.
+            crate::model::AppDrawerStyle::Minimal => 853.6,
+        };
         home_y - (home_y - 164.8) * self.drawer_progress()
     }
 
@@ -1345,6 +1351,7 @@ impl State {
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
             Some(Subpage::AppSorting) => Target::Setting(10),
+            Some(Subpage::AppDrawer) => Target::Setting(13),
             Some(Subpage::RecentApps) => Target::Setting(12),
             None => Target::Sidebar(self.section),
         };
@@ -1689,7 +1696,8 @@ impl State {
                         | Subpage::TimeFormat
                         | Subpage::Temperature
                         | Subpage::TextRendering
-                        | Subpage::AppSorting,
+                        | Subpage::AppSorting
+                        | Subpage::AppDrawer,
                     ) => 2,
                     Some(Subpage::RecentApps) => crate::model::RecentAppsBehavior::ALL.len(),
                     Some(Subpage::InputIcons(_)) => crate::model::INPUT_ICONS.len() + 1,
@@ -2891,6 +2899,16 @@ impl State {
             }
             Target::Setting(index) => {
                 match index {
+                    13 => {
+                        self.subpage = Some(Subpage::AppDrawer);
+                        self.focus = Target::Choice(usize::from(
+                            self.preferences.app_drawer_style
+                                == crate::model::AppDrawerStyle::Minimal,
+                        ));
+                        self.scroll = 0.;
+                        self.panel_started = (!self.preferences.reduced_motion).then(Instant::now);
+                        return vec![];
+                    }
                     10 => {
                         self.subpage = Some(Subpage::AppSorting);
                         self.focus = Target::Choice(usize::from(
@@ -3044,6 +3062,10 @@ impl State {
                             .edit_weather(self.active_weather, |config| {
                                 config.style = crate::model::WeatherStyle::ALL[index.min(2)]
                             });
+                    }
+                    Some(Subpage::AppDrawer) => {
+                        self.preferences.app_drawer_style =
+                            crate::model::AppDrawerStyle::ALL[index.min(1)];
                     }
                     Some(Subpage::AppSorting) => {
                         self.preferences.app_sorting = crate::model::AppSorting::ALL[index.min(1)];

@@ -560,6 +560,59 @@ fn dock_is_not_a_control_and_its_glass_is_not_clipped_to_the_content_area() {
 }
 
 #[test]
+fn home_dock_leaves_a_48_pixel_bottom_gap_and_keeps_cards_clickable() {
+    let mut state = ready();
+    state.preferences.app_drawer_style = crate::model::AppDrawerStyle::Minimal;
+    let rendered = scene(&state);
+    let glass = rendered
+        .draw
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Glass(rect, ..) if rect.x == 60. => Some(*rect),
+            _ => None,
+        })
+        .unwrap();
+    assert!((1080. - glass.y - glass.h - 48.).abs() < 0.001);
+    let cards: Vec<_> = rendered
+        .controls
+        .iter()
+        .filter(|control| matches!(control.target, Target::App(_)))
+        .collect();
+    assert!(!cards.is_empty());
+    for card in cards {
+        assert!((card.rect.y - glass.y - 24.).abs() < 0.001);
+        assert!((glass.y + glass.h - card.rect.y - card.rect.h - 24.).abs() < 0.001);
+        let (x, y) = card.rect.center();
+        assert_eq!(
+            state.hit_test(&rendered.controls, x, y),
+            Some(card.target.clone())
+        );
+    }
+}
+
+#[test]
+fn lowered_home_dock_keeps_the_drawer_endpoint_and_transition_monotonic() {
+    let mut state = ready();
+    state.preferences.app_drawer_style = crate::model::AppDrawerStyle::Minimal;
+    assert!((state.dock_y() - 853.6).abs() < 0.001);
+    state.open(1);
+    let mut previous_y = state.dock_y();
+    for step in 1..=20 {
+        state.drawer_visibility = step as f32 / 20.;
+        let y = state.dock_y();
+        assert!(y < previous_y);
+        assert!((164.8 - 0.001..853.6).contains(&y));
+        previous_y = y;
+    }
+    assert!((state.dock_y() - 164.8).abs() < 0.001);
+    state.preferences.reduced_motion = true;
+    state.open(0);
+    assert!((state.dock_y() - 853.6).abs() < 0.001);
+    state.open(1);
+    assert!((state.dock_y() - 164.8).abs() < 0.001);
+}
+
+#[test]
 fn drawer_has_a_compact_gap_even_with_legacy_caption_preferences() {
     for names in [false, true] {
         let mut state = ready();
