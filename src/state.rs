@@ -23,7 +23,7 @@ pub const SETTINGS_ORDER: [usize; SECTION_COUNT] = [
     SYSTEM_SECTION,
 ];
 /// System row turning automatic Homebrew app updates on or off (homebrew_updates.rs).
-pub const HOMEBREW_UPDATES_ROW: usize = 13;
+pub const HOMEBREW_UPDATES_ROW: usize = 15;
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
 pub const APPS_COLUMNS: usize = 6;

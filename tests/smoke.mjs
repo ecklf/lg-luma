@@ -438,7 +438,7 @@ try {
   // The opt-in only changes the saved preference; desktop runs never contact the repository.
   const homebrewPath = `${systemPage},down,down,down,down,enter`;
   const homebrewOn = await scenario('homebrew-updates-on', homebrewPath);
-  assert.deepEqual(homebrewOn.focus, { Setting: 13 });
+  assert.deepEqual(homebrewOn.focus, { Setting: 15 });
   assert.equal(homebrewOn.preferences.homebrew_updates, true);
   const homebrewOff = await scenario('homebrew-updates-off', homebrewPath);
   assert.equal(homebrewOff.preferences.homebrew_updates, false);
