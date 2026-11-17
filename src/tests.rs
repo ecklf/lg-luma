@@ -611,7 +611,7 @@ fn settings_header_moves_between_controls_without_switching_pages() {
 }
 
 #[test]
-fn greeting_configuration_offers_date_and_name_options() {
+fn greeting_configuration_only_offers_date_options() {
     let mut state = ready();
     state.open(2);
     state.focus = Target::Widget(0);
@@ -630,7 +630,7 @@ fn greeting_configuration_offers_date_and_name_options() {
             .iter()
             .filter(|control| control.scrollable)
             .count(),
-        4
+        2
     );
     assert!(state.back().is_empty());
     assert!(state.subpage.is_none());
@@ -678,92 +678,25 @@ fn input_name_replacement_commits_on_every_keyboard_completion_route() {
 }
 
 #[test]
-fn legacy_greeting_names_are_restored_and_saved() {
+fn legacy_greeting_names_are_ignored_and_not_saved() {
     let mut state = ready();
     state.preferences = serde_json::from_value(json!({"greeting_name":"Ana"})).unwrap();
-    assert_eq!(
-        serde_json::to_value(&state.preferences).unwrap()["greeting_name"],
-        "Ana"
+    assert!(
+        serde_json::to_value(&state.preferences)
+            .unwrap()
+            .get("greeting_name")
+            .is_none()
     );
     state.open(2);
     state.focus = Target::Widget(0);
     state.activate();
     let page = scene(&state);
-    assert!(
-        page.draw
-            .iter()
-            .any(|draw| matches!(draw,crate::renderer::Draw::Text(label,..) if label=="Ana"))
-    );
+    assert!(!page.draw.iter().any(|draw|matches!(draw,crate::renderer::Draw::Text(label,..) if label.contains("Ana") || label=="Name" || label=="Clear name")));
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::DateFormat);
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::WidgetCell(0));
     assert!(state.subpage.is_none());
-}
-
-#[test]
-fn greeting_name_editing_commits_every_keyboard_route_and_clears_explicitly() {
-    use crate::state::Subpage;
-    for route in 0..4 {
-        let mut state = ready();
-        state.preferences.greeting_name = "Ana".into();
-        state.open(2);
-        state.subpage = Some(Subpage::Greeting);
-        state.focus = Target::DateFormat;
-        state.direction(Direction::Down, &controls(&state));
-        assert_eq!(state.focus, Target::GreetingName);
-        state.direction(Direction::Right, &controls(&state));
-        assert!(state.text_input_active());
-        assert!(state.editing_text().is_empty());
-        state.text("  小明X");
-        state.delete_surrounding_text(-1, 1);
-        state.text("  ");
-        assert_eq!(state.preferences.greeting_name, "Ana");
-        let effects = match route {
-            0 => {
-                state.overlay = Some(Overlay::SystemKeyboard);
-                state.finish_text_input()
-            }
-            1 => state.back(),
-            2 => {
-                state.focus = Target::Key(crate::state::KEYS.len() - 1);
-                state.activate()
-            }
-            _ => state.return_home(),
-        };
-        assert!(effects.contains(&Effect::Save));
-        assert_eq!(state.preferences.greeting_name, "小明");
-        let loaded: Preferences =
-            serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
-        assert_eq!(loaded.greeting_name, "小明");
-        state.open(2);
-        state.subpage = Some(Subpage::Greeting);
-        state.focus = Target::GreetingName;
-        state.activate();
-        state.text("   ");
-        assert!(state.back().is_empty());
-        assert_eq!(state.preferences.greeting_name, "小明");
-        state.direction(Direction::Down, &controls(&state));
-        assert_eq!(state.focus, Target::GreetingNameReset);
-        assert_eq!(state.activate(), [Effect::Save]);
-        assert!(state.preferences.greeting_name.is_empty());
-        assert_eq!(state.focus, Target::GreetingName);
-    }
-}
-
-#[test]
-fn greeting_names_are_sanitized_and_limited_without_changing_unrelated_preferences() {
-    let mut preferences: Preferences =
-        serde_json::from_value(json!({"greeting_name":"  A\nna\t  ", "hour_24":true})).unwrap();
-    preferences.sanitize();
-    assert_eq!(preferences.greeting_name, "Ana");
-    assert!(preferences.hour_24);
-    preferences.greeting_name = "明".repeat(100);
-    preferences.sanitize();
-    assert_eq!(
-        preferences.greeting_name.chars().count(),
-        crate::model::INPUT_NAME_LIMIT
-    );
 }
 
 #[test]
@@ -2981,7 +2914,7 @@ fn greeting_removal_persists_and_hides_the_combined_widget() {
     let hidden = scene(&state);
     let language = state.preferences.language;
     let now = time::OffsetDateTime::UNIX_EPOCH;
-    let greeting = language.greeting(now.hour(), &state.preferences.greeting_name);
+    let greeting = language.greeting(now.hour(), "");
     assert!(
         !hidden
             .draw

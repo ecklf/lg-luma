@@ -252,8 +252,7 @@ Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese.
 
 ### Widgets
 
-Personalize the greeting in **Settings → Widgets → Greeting → Name**, or use **Clear name**
-to return to an unnamed greeting. Names are saved locally and used at every time of day.
+The greeting changes with the time of day and does not accept a name.
 The overnight greeting says “Still up?” rather than a loading message.
 
 Weather supports a **1×1** size in **Settings → Widgets → Weather → Size** for a compact
