@@ -135,6 +135,93 @@ fn small_weather_renders_readings_setup_loading_and_saved_readings() {
 }
 
 #[test]
+fn weather_popup_resizes_with_remote_and_pointer_and_stays_attached_to_its_anchor() {
+    use crate::{
+        model::{HomeWidget, WidgetPosition},
+        state::Overlay,
+    };
+    for cell in [4, 5, 10, 11] {
+        let mut state = configured();
+        state.open(2);
+        state.section = WIDGETS_SECTION;
+        state.focus = Target::WidgetCell(cell);
+        state.activate();
+        state.direction(Direction::Down, &controls(&state));
+        state.direction(Direction::Down, &controls(&state));
+        assert_eq!(state.focus, Target::WeatherSize);
+        assert!(
+            scene(&state)
+                .draw
+                .iter()
+                .any(|draw| matches!(draw, Draw::Text(label, ..) if label == "Size · 2 × 2"))
+        );
+        assert_eq!(state.activate(), [Effect::Save]);
+        assert!(state.preferences.weather_small);
+        assert!(matches!(
+            state.overlay,
+            Some(Overlay::WidgetOptions { cell: 4 })
+        ));
+        assert_eq!(state.focus, Target::WeatherSize);
+        let rendered = scene(&state);
+        assert!(
+            rendered
+                .draw
+                .iter()
+                .any(|draw| matches!(draw, Draw::Text(label, ..) if label == "Size · 1 × 1"))
+        );
+        let size = rendered
+            .controls
+            .iter()
+            .find(|control| control.target == Target::WeatherSize)
+            .unwrap();
+        let (x, y) = size.rect.center();
+        assert_eq!(
+            state.hit_test(&rendered.controls, x, y),
+            Some(Target::WeatherSize)
+        );
+        state.pointer_focus(Target::WeatherSize);
+        assert_eq!(state.activate(), [Effect::Save]);
+        assert!(!state.preferences.weather_small);
+        state.back();
+        assert_eq!(state.focus, Target::WidgetCell(4));
+        assert!(state.overlay.is_none());
+
+        state.preferences.toggle_weather_size();
+        let edge = WidgetPosition { column: 5, row: 3 };
+        assert!(state.preferences.place_widget(HomeWidget::Weather, edge));
+        state.focus = Target::WidgetCell(edge.cell());
+        state.activate();
+        state.pointer_focus(Target::WeatherSize);
+        assert_eq!(state.activate(), [Effect::Save]);
+        let anchor = state.preferences.weather_position;
+        assert_ne!(anchor, edge);
+        assert!(
+            state
+                .preferences
+                .can_place_widget(HomeWidget::Weather, anchor)
+        );
+        assert!(
+            matches!(state.overlay, Some(Overlay::WidgetOptions { cell }) if cell == anchor.cell())
+        );
+        assert!(
+            controls(&state)
+                .iter()
+                .any(|control| control.target == Target::WeatherSize)
+        );
+        state.back();
+        assert_eq!(state.focus, Target::WidgetCell(anchor.cell()));
+
+        state.focus = Target::WidgetCell(0);
+        state.activate();
+        assert!(
+            !controls(&state)
+                .iter()
+                .any(|control| control.target == Target::WeatherSize)
+        );
+    }
+}
+
+#[test]
 fn small_weather_setup_is_complete_and_hit_testable_in_every_language_and_grid_cell() {
     use crate::{
         i18n::Language,

@@ -2515,6 +2515,13 @@ impl State {
             }
             Target::WeatherSize => {
                 self.preferences.toggle_weather_size();
+                if matches!(self.overlay, Some(Overlay::WidgetOptions { .. })) {
+                    // A non-anchor cell may disappear on shrink, and expanding
+                    // at an edge may relocate Weather. Keep its popup attached.
+                    self.overlay = Some(Overlay::WidgetOptions {
+                        cell: self.preferences.weather_position.cell(),
+                    });
+                }
                 return vec![Effect::Save];
             }
             Target::WeatherStyle => {

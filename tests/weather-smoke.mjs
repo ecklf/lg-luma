@@ -184,7 +184,10 @@ try {
   assert.equal(fahrenheit.preferences.temperature_unit, 'fahrenheit');
   assert.equal(fahrenheit.weather.cache.reading.temperature, 14.2);
   assert.equal(forecastCount(), 1);
-  const removedWidget = await scenario('widget-removed', `${weatherActions},down,down,enter,home`);
+  const removedWidget = await scenario(
+    'widget-removed',
+    `${weatherActions},down,down,down,enter,home`,
+  );
   assert.equal(removedWidget.preferences.show_weather, false);
   assert.equal(removedWidget.preferences.weather_location.name, 'Vienna');
   assert.equal(forecastCount(), 1);
@@ -243,9 +246,12 @@ try {
   forecastMode = 'ok';
   await writePreferences({ weather_location: vienna });
   await writeCache();
-  const small = await scenario('small', `${weatherPage},down,down,down,enter,home,await-weather`);
+  const small = await scenario('small', `${weatherActions},down,down,enter,home,await-weather`);
   assert.equal(small.preferences.weather_small, true);
   assert.equal(small.weather.cache.reading.temperature, 14.2);
+  const sizePopup = await scenario('size-popup', `${weatherActions},down,down`);
+  assert.equal(sizePopup.focus, 'WeatherSize');
+  assert.ok(sizePopup.ui_text.includes('Size · 1 × 1'));
   const smallRestart = await scenario('small-restart', 'home,await-weather');
   assert.equal(smallRestart.preferences.weather_small, true);
   assert.equal(smallRestart.preferences.weather_location.name, 'Vienna');

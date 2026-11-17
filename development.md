@@ -80,6 +80,9 @@ is a greeting, not a loading message.
 for rendering, placement, collision checks and sanitization. The size toggle preserves
 the city, unit, cache and saved large-widget style. Expanding relocates Weather only
 when its current anchor cannot fit the 2×2 footprint.
+Weather's widget popup also exposes Size with the current dimensions. Resizing keeps
+the popup attached to the saved anchor, including when shrinking from a non-anchor
+cell or relocating an expanded widget at a grid edge. Greeting has no size action.
 
 `recent_apps_behavior` persists `long_press` (default), `short_press`, or `off`.
 Short press applies on Home only so Back still navigates settings. Timer-based holds,

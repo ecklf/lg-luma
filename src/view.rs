@@ -3548,8 +3548,11 @@ fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, cat
         actions.extend([
             (Target::ConfigureWidget(widget), "configure", "settings"),
             (Target::MoveWidget(widget), "move", "left"),
-            (Target::RemoveWidget(widget), "removeWidget", "circle-minus"),
         ]);
+        if widget == HomeWidget::Weather {
+            actions.push((Target::WeatherSize, "widgetSize", "grid"));
+        }
+        actions.push((Target::RemoveWidget(widget), "removeWidget", "circle-minus"));
     }
     let empty = actions.is_empty();
     if empty {
@@ -3629,8 +3632,20 @@ fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, cat
                 c(0xffffff, if focused { 0.96 } else { 0.10 })
             },
         );
-        let (label, style) =
-            assets.fit_line(language.t(key), text(20.8, 600, -0.02), rect.w - 88., 16.);
+        let label = if target == Target::WeatherSize {
+            format!(
+                "{} · {}",
+                language.t(key),
+                if state.preferences.weather_small {
+                    "1 × 1"
+                } else {
+                    "2 × 2"
+                }
+            )
+        } else {
+            language.t(key).to_owned()
+        };
+        let (label, style) = assets.fit_line(&label, text(20.8, 600, -0.02), rect.w - 88., 16.);
         out.text(
             label,
             Rect::new(rect.x + 24., rect.y + 20., rect.w - 88., 28.),

@@ -257,6 +257,8 @@ The overnight greeting says “Still up?” rather than a loading message.
 
 Weather supports a **1×1** size in **Settings → Widgets → Weather → Size** for a compact
 condition icon, temperature and city. The existing **2×2** layouts remain the default.
+You can also select Weather in the widget grid and choose **Size** directly in its popup.
+The popup shows the current size and stays open as you switch between 1×1 and 2×2.
 Move either size in the widget grid. Expanding a widget at an edge or beside Greeting
 automatically finds a free position without moving other widgets.
 
