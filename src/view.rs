@@ -1219,9 +1219,11 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
     let language = state.preferences.language;
     for widget in HomeWidget::ALL {
         let cell = configured_widget_rect(state, widget, state.preferences.widget_position(widget));
-        if (widget == HomeWidget::Greeting && !state.preferences.show_greeting)
-            || (widget == HomeWidget::Weather && !state.preferences.show_weather)
-        {
+        if !state.preferences.has_widget(widget) {
+            continue;
+        }
+        if matches!(widget, HomeWidget::Crypto | HomeWidget::Stocks) {
+            market_widget(out, state, assets, widget, cell);
             continue;
         }
         if widget == HomeWidget::Weather {
@@ -1298,6 +1300,115 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
         );
     }
     out.fade(start, 1. - state.drawer_progress(), 1.);
+}
+
+fn market_widget(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWidget, cell: Rect) {
+    let language = state.preferences.language;
+    let config = crate::markets::settings(&state.preferences, kind);
+    let slot = &state.markets.slots[crate::markets::index(kind)];
+    let symbol = if config.symbol.is_empty() {
+        language.t(kind.key())
+    } else {
+        &config.symbol
+    };
+    let value = slot
+        .quote
+        .as_ref()
+        .map(crate::markets::format_price)
+        .unwrap_or_else(|| {
+            language
+                .t(if config.symbol.is_empty() {
+                    "configure"
+                } else if slot.failed {
+                    "marketUnavailable"
+                } else {
+                    "marketLoading"
+                })
+                .to_owned()
+        });
+    let age = slot
+        .quote
+        .as_ref()
+        .map(|quote| {
+            crate::markets::relative_age(
+                language,
+                quote.timestamp,
+                OffsetDateTime::now_utc().unix_timestamp(),
+            )
+        })
+        .unwrap_or_default();
+    let status = if slot.failed && slot.quote.is_some() {
+        language.t("lastReading")
+    } else {
+        ""
+    };
+    for (label, y, size, height) in [
+        (symbol, 0., 20., 24.),
+        (value.as_str(), 26., 34., 42.),
+        (status, 96., 10., 14.),
+    ] {
+        let (label, style) = assets.fit_line(label, text(size, 500, -0.02), cell.w, 10.);
+        out.text(
+            label,
+            Rect::new(cell.x, cell.y + y, cell.w, height),
+            style,
+            WHITE,
+            false,
+        );
+    }
+    let change = slot
+        .quote
+        .as_ref()
+        .and_then(|quote| quote.change_percent)
+        .filter(|change| change.is_finite());
+    let (label, color, icon) = if let Some(change) = change {
+        // Values rounding to zero are neutral, not misleading green/red zeroes.
+        let change = if change.abs() < 0.005 { 0. } else { change };
+        if change > 0. {
+            (format!("+{change:.2}%"), c(0x32d583, 1.), Some("market-up"))
+        } else if change < 0. {
+            (
+                format!("{change:.2}%"),
+                c(0xf97066, 1.),
+                Some("market-down"),
+            )
+        } else {
+            ("0.00%".into(), WHITE, None)
+        }
+    } else {
+        (
+            language.t("marketChangeUnavailable").to_owned(),
+            c(0xf5f5f5, 0.65),
+            None,
+        )
+    };
+    let inset = if icon.is_some() { 23. } else { 0. };
+    if let Some(icon) = icon {
+        out.icon(
+            assets,
+            icon,
+            Rect::new(cell.x, cell.y + 73., 18., 18.),
+            color,
+        );
+    }
+    let (label, style) = assets.fit_line(&label, text(18., 550, 0.), 152. - inset, 12.);
+    let change_width = assets.width(&label, style);
+    out.text(
+        label,
+        Rect::new(cell.x + inset, cell.y + 70., 152. - inset, 24.),
+        style,
+        color,
+        false,
+    );
+    let age_offset = inset + change_width + 16.;
+    let (age, style) = assets.fit_line(&age, text(14., 450, 0.), cell.w - age_offset, 10.);
+    out.text(
+        age,
+        Rect::new(cell.x + age_offset, cell.y + 73., cell.w - age_offset, 20.),
+        style,
+        c(0xf5f5f5, 0.78),
+        false,
+    );
 }
 
 fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
@@ -2300,6 +2411,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 _ => None,
             };
             let sub = match &state.subpage {
+                Some(Subpage::Market(kind)) => language.t(kind.key()),
                 Some(Subpage::Greeting) => language.t("greeting"),
                 Some(Subpage::Weather) => language.t("weather"),
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
@@ -2380,6 +2492,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         if matches!(
             subpage,
             Subpage::WeatherLocation
+                | Subpage::Market(_)
                 | Subpage::Weather
                 | Subpage::WeatherStyle
                 | Subpage::Shortcuts
@@ -2388,6 +2501,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::WidgetPosition(_)
         ) {
             match subpage {
+                Subpage::Market(kind) => market_settings(out, state, assets, *kind),
                 Subpage::WeatherLocation => location_settings(out, state, assets),
                 Subpage::Weather => weather_settings(out, state, assets),
                 Subpage::WeatherStyle => weather_style_settings(out, state, assets),
@@ -2475,7 +2589,8 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::WeatherStyle
             | Subpage::Shortcuts
             | Subpage::Greeting
-            | Subpage::Clock => {
+            | Subpage::Clock
+            | Subpage::Market(_) => {
                 unreachable!()
             }
             Subpage::WidgetPosition(_) => unreachable!(),
@@ -3122,6 +3237,64 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
         );
         out.text(label, rect.inset(12.), style, WHITE, true);
     }
+}
+
+fn market_settings(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWidget) {
+    let language = state.preferences.language;
+    let config = crate::markets::settings(&state.preferences, kind);
+    let (symbol, _) = assets.fit_line(&config.symbol, text(18.4, 450, 0.), 170., 18.4);
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::MarketSymbol(kind),
+            rect: Rect::new(640., 164.8 - state.scroll, 1120., 72.),
+            title: language.t("marketSymbol"),
+            icon: Some("type"),
+            value: Some(&symbol),
+            description: None,
+            selected: false,
+            chevron: true,
+        },
+    );
+    if kind == HomeWidget::Crypto {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::MarketCurrency,
+                rect: Rect::new(640., 248.8 - state.scroll, 1120., 72.),
+                title: language.t("marketCurrency"),
+                icon: Some("grid"),
+                value: Some(&config.currency),
+                description: None,
+                selected: false,
+                chevron: false,
+            },
+        );
+    }
+    let help = format!(
+        "{}\n{}",
+        language.t(if kind == HomeWidget::Crypto {
+            "cryptoHelp"
+        } else {
+            "stocksHelp"
+        }),
+        language.t(if kind == HomeWidget::Crypto {
+            "cryptoDailyBasis"
+        } else {
+            "stocksDailyBasis"
+        })
+    );
+    out.text(
+        help,
+        Rect::new(664., 356. - state.scroll, 1072., 240.),
+        text(20., 400, 0.).leading(1.4),
+        WHITE,
+        false,
+    );
 }
 
 fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
@@ -3963,6 +4136,7 @@ fn keyboard(out: &mut Scene, state: &State, assets: &Assets) {
         match state.keyboard_field {
             TextField::Location => language.t("cityPostcode"),
             TextField::InputName => language.t("inputName"),
+            TextField::Market(_) => language.t("marketSymbol"),
             TextField::Apps => language.t("findApp"),
         },
         Rect::new(389., 324., 1000., 44.),
@@ -4619,10 +4793,10 @@ mod tests {
                 assert!(rect.y >= 164.8 && rect.y + rect.h <= 796.);
                 assert_eq!(
                     rect.w,
-                    if widget != HomeWidget::Weather {
-                        1160.
-                    } else {
-                        568.
+                    match widget {
+                        HomeWidget::Greeting => 1160.,
+                        HomeWidget::Weather => 568.,
+                        _ => 272.,
                     }
                 );
             }

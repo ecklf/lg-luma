@@ -291,15 +291,18 @@ pub const HOME_GRID_CELLS: usize = HOME_GRID_COLUMNS * HOME_GRID_ROWS;
 pub enum HomeWidget {
     Weather,
     Greeting,
+    Crypto,
+    Stocks,
 }
 
 impl HomeWidget {
-    pub const ALL: [Self; 2] = [Self::Greeting, Self::Weather];
+    pub const ALL: [Self; 4] = [Self::Greeting, Self::Weather, Self::Crypto, Self::Stocks];
 
     pub fn span(self) -> (u8, u8) {
         match self {
             Self::Greeting => (4, 1),
             Self::Weather => (2, 2),
+            Self::Crypto | Self::Stocks => (1, 1),
         }
     }
 
@@ -307,6 +310,8 @@ impl HomeWidget {
         match self {
             Self::Weather => "weather",
             Self::Greeting => "greeting",
+            Self::Crypto => "crypto",
+            Self::Stocks => "stocks",
         }
     }
 
@@ -315,8 +320,14 @@ impl HomeWidget {
             column: match self {
                 Self::Greeting => 0,
                 Self::Weather => 4,
+                Self::Crypto => 0,
+                Self::Stocks => 1,
             },
-            row: 0,
+            row: if matches!(self, Self::Crypto | Self::Stocks) {
+                2
+            } else {
+                0
+            },
         }
     }
 }
@@ -356,6 +367,10 @@ impl WidgetPosition {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Preferences {
+    #[serde(deserialize_with = "crate::markets::deserialize_settings")]
+    pub crypto: crate::markets::Settings,
+    #[serde(deserialize_with = "crate::markets::deserialize_settings")]
+    pub stocks: crate::markets::Settings,
     pub weather_small: bool,
     pub recent_apps_behavior: RecentAppsBehavior,
     pub weather_style: WeatherStyle,
@@ -407,6 +422,11 @@ impl Default for Preferences {
     fn default() -> Self {
         Self {
             weather_style: WeatherStyle::default(),
+            crypto: crate::markets::Settings::default(),
+            stocks: crate::markets::Settings {
+                position: HomeWidget::Stocks.default_position(),
+                ..Default::default()
+            },
             weather_small: false,
             recent_apps_behavior: RecentAppsBehavior::default(),
             app_sorting: AppSorting::default(),
@@ -491,6 +511,8 @@ impl Preferences {
         match widget {
             HomeWidget::Greeting => self.greeting_position,
             HomeWidget::Weather => self.weather_position,
+            HomeWidget::Crypto => self.crypto.position,
+            HomeWidget::Stocks => self.stocks.position,
         }
     }
 
@@ -498,16 +520,22 @@ impl Preferences {
         match widget {
             HomeWidget::Greeting => self.show_greeting,
             HomeWidget::Weather => self.show_weather,
+            HomeWidget::Crypto => self.crypto.enabled,
+            HomeWidget::Stocks => self.stocks.enabled,
         }
     }
 
     /// Restore widget membership and placement without discarding configuration.
     pub fn reset_widgets(&mut self) -> bool {
         let changed = HomeWidget::ALL.into_iter().any(|widget| {
-            !self.has_widget(widget) || self.widget_position(widget) != widget.default_position()
+            self.has_widget(widget) != matches!(widget, HomeWidget::Greeting | HomeWidget::Weather)
+                || self.widget_position(widget) != widget.default_position()
         });
         for widget in HomeWidget::ALL {
-            self.set_widget_present(widget, true);
+            self.set_widget_present(
+                widget,
+                matches!(widget, HomeWidget::Greeting | HomeWidget::Weather),
+            );
             self.set_widget_position(widget, widget.default_position());
         }
         self.legacy_date_position = None;
@@ -518,6 +546,8 @@ impl Preferences {
         match widget {
             HomeWidget::Greeting => self.show_greeting = present,
             HomeWidget::Weather => self.show_weather = present,
+            HomeWidget::Crypto => self.crypto.enabled = present,
+            HomeWidget::Stocks => self.stocks.enabled = present,
         }
     }
 
@@ -559,6 +589,8 @@ impl Preferences {
         match widget {
             HomeWidget::Greeting => self.greeting_position = position,
             HomeWidget::Weather => self.weather_position = position,
+            HomeWidget::Crypto => self.crypto.position = position,
+            HomeWidget::Stocks => self.stocks.position = position,
         }
     }
 
@@ -675,6 +707,8 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
+        self.crypto.sanitize(HomeWidget::Crypto);
+        self.stocks.sanitize(HomeWidget::Stocks);
         // Collapse the previous draft's untouched separate-Date arrangement.
         // Custom Greeting/Weather anchors remain unchanged.
         if self.legacy_date_position.take().is_some()
