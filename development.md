@@ -339,8 +339,12 @@ is persisted per input across restarts; choosing **Automatic** clears only that 
 icon override and restores label-based detection. Existing inputs without an override continue
 using Automatic. This is a backward-compatible feature and does not change input names or visibility.
 
-Home favorites form one horizontal glass dock, never a second row. Left/Right follows saved order,
-including reorder mode, and reveals complete cards. Up reaches Inputs or the clock/settings control.
+Home favorites form one horizontal glass dock. General → App drawer selects `tvos` (default) or
+`minimal`, persisted as `app_drawer_style`. tvOS leaves 57.6 logical pixels below the glass and shows
+a clipped, non-interactive 24-logical-pixel peek of the next app row. Minimal lowers the dock to leave 48 logical pixels below
+its glass at the 1920×1080 layout size, without the peek. Both styles share the same open drawer
+position and navigation. Left/Right follows saved order, including reorder mode, and reveals complete
+cards. Up reaches Inputs or the clock/settings control.
 Up from the drawer’s first app row dismisses the drawer immediately while preserving the
 corresponding dock app as the selected Home favorite. Up within later grid rows stays in the drawer.
 Down lifts the dock to the top and reveals a six-column app grid beneath it. Favorites stay in the

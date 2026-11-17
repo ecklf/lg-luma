@@ -250,6 +250,11 @@ Choose the interface language in **Settings → General → Language**. Luma sup
 Czech, Dutch, English, French, German, Hungarian, Italian, Polish, Portuguese (Brazil), Russian,
 Simplified Chinese, Spanish, Swedish, Traditional Chinese and Vietnamese.
 
+Choose **Settings → General → App drawer** to change the Home layout. **tvOS** is the default,
+including for existing preferences without a saved choice, and shows a peek of the next app row.
+**Minimal** uses a compact, lower dock without the peek. Both open the same app drawer with
+identical navigation.
+
 ### Widgets
 
 The greeting changes with the time of day and does not accept a name.

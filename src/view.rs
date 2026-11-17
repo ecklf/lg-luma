@@ -938,7 +938,7 @@ fn tile(out: &mut Scene, state: &State, assets: &Assets, app: &App, rect: Rect, 
         MAIN_TOP
     };
     if rect.y + rect.h < top
-        || rect.y > 1054.
+        || rect.y > viewport.y + viewport.h
         || rect.x + rect.w + 40. < viewport.x
         || rect.x - 40. > viewport.x + viewport.w
     {
@@ -1174,11 +1174,15 @@ fn brand_mark(out: &mut Scene, assets: &Assets, app: &App, rect: Rect, language:
 
 fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
     home_widgets(out, state, assets, now);
-    if state.drawer_visibility > 0. {
+    let peek = state.preferences.app_drawer_style == crate::model::AppDrawerStyle::Tvos;
+    if peek || state.drawer_visibility > 0. {
         let controls = out.controls.len();
         let start = out.draw.len();
         library_grid(out, state, assets);
-        out.fade(start, state.drawer_progress(), 1.);
+        if !peek {
+            out.fade(start, state.drawer_progress(), 1.);
+        }
+        // The Home peek is decorative, including while the drawer settles closed.
         out.controls.truncate(controls);
     }
     favorites_dock(out, state, assets);
@@ -1846,7 +1850,9 @@ fn library(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime)
     }
     let start = out.draw.len();
     library_grid(out, state, assets);
-    out.fade(start, state.drawer_progress(), 1.);
+    if state.preferences.app_drawer_style == crate::model::AppDrawerStyle::Minimal {
+        out.fade(start, state.drawer_progress(), 1.);
+    }
     // The scrolling grid continues underneath the floating glass and pinned cards.
     favorites_dock(out, state, assets);
 }
@@ -1876,9 +1882,22 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
         );
     }
     out.draw.push(Draw::Clip(Some(state.apps_viewport())));
-    let offset = state.dock_y() - 164.8;
+    // Show just 24px of the next row on tvOS Home. Ease the extra inset away
+    // with the dock lift so the fully opened grid keeps its existing geometry.
+    let peek_offset = if state.preferences.app_drawer_style == crate::model::AppDrawerStyle::Tvos {
+        9.6 * (1. - state.drawer_progress())
+    } else {
+        0.
+    };
+    let offset = state.dock_y() - 164.8 + peek_offset;
     let mut y = state.drawer_grid_top();
-    for row in apps.chunks(APPS_COLUMNS) {
+    // A settled Home only needs the first preview row, not offscreen app artwork.
+    let rows = if state.page == Page::Home && state.drawer_visibility == 0. {
+        1
+    } else {
+        usize::MAX
+    };
+    for row in apps.chunks(APPS_COLUMNS).take(rows) {
         let row_height = FACE_HEIGHT;
         for (column, app) in row.iter().enumerate() {
             tile(
@@ -2454,6 +2473,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
                 Some(Subpage::AppSorting) => language.t("appSorting"),
+                Some(Subpage::AppDrawer) => language.t("appDrawer"),
                 Some(Subpage::RecentApps) => language.t("recentApps"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
                 _ => "",
@@ -2643,6 +2663,16 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 .into_iter()
                 .map(|option| (option.name(), None, option == language))
                 .collect(),
+            Subpage::AppDrawer => crate::model::AppDrawerStyle::ALL
+                .into_iter()
+                .map(|style| {
+                    (
+                        language.t(style.label_key()),
+                        None,
+                        style == state.preferences.app_drawer_style,
+                    )
+                })
+                .collect(),
             Subpage::AppSorting => crate::model::AppSorting::ALL
                 .into_iter()
                 .map(|mode| {
@@ -2729,6 +2759,13 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             for (position, (index, key, icon, value, chevron)) in [
                 (1, "clock", "clock", None, true),
                 (4, "language", "language", Some(language.name()), true),
+                (
+                    13,
+                    "appDrawer",
+                    "grid",
+                    Some(language.t(state.preferences.app_drawer_style.label_key())),
+                    true,
+                ),
                 (
                     10,
                     "appSorting",
@@ -5023,7 +5060,7 @@ mod tests {
                         .controls
                         .iter()
                         .filter(|control| matches!(control.target, Target::App(_)))
-                        .all(|control| control.rect.y == 820.)
+                        .all(|control| control.rect.y == state.dock_y())
                 );
             }
         }

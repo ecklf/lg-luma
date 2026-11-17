@@ -213,6 +213,26 @@ impl DateFormat {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
+pub enum AppDrawerStyle {
+    #[default]
+    #[serde(rename = "tvos")]
+    Tvos,
+    Minimal,
+}
+
+impl AppDrawerStyle {
+    pub const ALL: [Self; 2] = [Self::Tvos, Self::Minimal];
+
+    pub fn label_key(self) -> &'static str {
+        match self {
+            Self::Tvos => "appDrawerTvos",
+            Self::Minimal => "appDrawerMinimal",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AppSorting {
     #[default]
     Alphabetical,
@@ -400,6 +420,7 @@ pub struct Preferences {
     pub recent_apps_behavior: RecentAppsBehavior,
     pub weather_style: WeatherStyle,
     pub app_sorting: AppSorting,
+    pub app_drawer_style: AppDrawerStyle,
     pub app_launch_counts: BTreeMap<String, u64>,
     pub greeting_position: WidgetPosition,
     pub weather_position: WidgetPosition,
@@ -458,6 +479,7 @@ impl Default for Preferences {
             weather_small: false,
             recent_apps_behavior: RecentAppsBehavior::default(),
             app_sorting: AppSorting::default(),
+            app_drawer_style: AppDrawerStyle::default(),
             app_launch_counts: BTreeMap::new(),
             greeting_position: HomeWidget::Greeting.default_position(),
             weather_position: HomeWidget::Weather.default_position(),
