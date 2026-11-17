@@ -2485,6 +2485,13 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     })),
                     false,
                 ),
+                (
+                    12,
+                    "recentApps",
+                    "clock",
+                    Some(language.t(state.preferences.recent_apps_behavior.label_key())),
+                    false,
+                ),
             ]
             .into_iter()
             .enumerate()

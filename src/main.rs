@@ -1424,7 +1424,7 @@ fn run() -> Result<(), String> {
                         _ if native_hold => {
                             if !repeat && back_button.native_hold(Instant::now()) {
                                 press = None;
-                                pending = state.open_recents();
+                                pending = state.back_press(true);
                                 cue = Some(Cue::Select);
                             }
                         }
@@ -1496,11 +1496,7 @@ fn run() -> Result<(), String> {
                     keycode: Some(key), ..
                 } if is_back(key, webos) => {
                     if let Some(long) = back_button.release(key, Instant::now()) {
-                        pending = if long {
-                            state.open_recents()
-                        } else {
-                            state.back()
-                        };
+                        pending = state.back_press(long);
                         cue = Some(if long { Cue::Select } else { Cue::Back });
                     }
                 }
@@ -1664,7 +1660,7 @@ fn run() -> Result<(), String> {
         }
         if back_button.held(Instant::now()) {
             press = None;
-            let pending = state.open_recents();
+            let pending = state.back_press(true);
             if state.preferences.ui_sounds && focused && visible && !scripted_input {
                 feedback.play(&sdl, Cue::Select);
             }

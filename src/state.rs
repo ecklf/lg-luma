@@ -2759,6 +2759,10 @@ impl State {
                     }
                     2 => self.preferences.reduced_motion = !self.preferences.reduced_motion,
                     11 => self.preferences.ui_sounds = !self.preferences.ui_sounds,
+                    12 => {
+                        self.preferences.recent_apps_behavior =
+                            self.preferences.recent_apps_behavior.next()
+                    }
                     4 => {
                         self.subpage = Some(Subpage::Language);
                         self.focus = Target::Choice(self.preferences.language.index());
