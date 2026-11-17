@@ -3368,7 +3368,13 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
 fn market_settings(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWidget) {
     let language = state.preferences.language;
     let config = crate::markets::settings(&state.preferences, kind);
-    let (symbol, _) = assets.fit_line(&config.symbol, text(18.4, 450, 0.), 170., 18.4);
+    let editing = state.text_input_active() && state.keyboard_field == TextField::Market(kind);
+    let draft = if editing {
+        format!("{}|", state.editing_text())
+    } else {
+        config.symbol.clone()
+    };
+    let (symbol, _) = assets.fit_line(&draft, text(18.4, 450, 0.), 170., 18.4);
     row(
         out,
         state,

@@ -96,6 +96,8 @@ Both default off and occupy 1×1 cells. The existing add/configure/move/remove w
 supports them, and Reset restores the original Greeting/Weather membership without
 discarding configured symbols. Crypto quote currency is selectable; Stocks uses the
 provider's listing currency, preserving minor-unit currency codes such as `GBp`.
+Stocks also accepts Yahoo Finance index symbols such as `^GSPC` (S&P 500).
+Symbol fields show the live draft while the TV keyboard is open.
 
 Additional instances persist in `extra_crypto`, `extra_stocks`, and `extra_weather`,
 with stable per-type indices and independent settings, positions and request generations.
