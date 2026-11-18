@@ -4,7 +4,7 @@
 //! waits only for an image that is still being decoded. After startup, `finish` drops what
 //! was not used, and workers still decoding discard their results.
 use image::RgbaImage;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
@@ -130,6 +130,37 @@ fn work(shared: &Shared) {
     }
 }
 
+/// Decodes `paths` one by one on a background worker, for images wanted later rather than
+/// for the first frame. Each distinct path is decoded once. At most one result is queued
+/// and one more is being decoded or waiting to send; dropping the receiver stops the worker.
+pub fn decode_in_background(
+    paths: Vec<String>,
+) -> std::sync::mpsc::Receiver<(String, Option<RgbaImage>)> {
+    background_decode(paths, |path| decode(path, Kind::Image))
+}
+
+fn background_decode(
+    mut paths: Vec<String>,
+    mut decode: impl FnMut(&str) -> Option<RgbaImage> + Send + 'static,
+) -> std::sync::mpsc::Receiver<(String, Option<RgbaImage>)> {
+    let mut seen = HashSet::new();
+    paths.retain(|path| seen.insert(path.clone()));
+    // Uploads pause during animation and while hidden. Backpressure keeps those pauses
+    // from retaining a decoded copy of every card outside the renderer's cache budget.
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    let _ = std::thread::Builder::new()
+        .name("luma-artwork-prefetch".into())
+        .spawn(move || {
+            for path in paths {
+                let image = decode(&path);
+                if sender.send((path, image)).is_err() {
+                    break;
+                }
+            }
+        });
+    receiver
+}
+
 static PRELOAD: OnceLock<Preloader> = OnceLock::new();
 
 /// Starts decoding `paths` on up to `threads` workers. Call once, before the renderer exists.
@@ -167,6 +198,76 @@ mod tests {
             .write_to(&mut bytes, image::ImageFormat::Png)
             .unwrap();
         bytes.into_inner()
+    }
+
+    #[test]
+    fn background_decoding_deduplicates_paths_and_keeps_failures_in_order() {
+        let dir = temp_dir("background-duplicates");
+        let path = dir.join("a.png");
+        std::fs::write(&path, png_bytes()).unwrap();
+        let path = path.to_string_lossy().into_owned();
+        let missing = dir.join("missing.png").to_string_lossy().into_owned();
+        let mut paths = vec![path.clone(); 100];
+        paths.extend([missing.clone(), path.clone(), missing.clone()]);
+        let receiver = decode_in_background(paths);
+        let timeout = std::time::Duration::from_secs(5);
+        let (decoded_path, image) = receiver.recv_timeout(timeout).unwrap();
+        assert_eq!(decoded_path, path);
+        let image = image.unwrap();
+        assert_eq!(image.dimensions(), (3, 2));
+        assert_eq!(image.get_pixel(0, 0).0, [1, 2, 3, 255]);
+        let (decoded_path, image) = receiver.recv_timeout(timeout).unwrap();
+        assert_eq!(decoded_path, missing);
+        assert!(image.is_none());
+        assert!(matches!(
+            receiver.recv_timeout(timeout),
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected)
+        ));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn background_decoding_bounds_a_paused_consumer_and_stops_when_dropped() {
+        let (started, decodes) = std::sync::mpsc::channel();
+        let receiver = background_decode(vec!["a".into(), "b".into(), "c".into()], move |path| {
+            started.send(path.to_owned()).unwrap();
+            Some(RgbaImage::new(3, 2))
+        });
+        let timeout = std::time::Duration::from_secs(5);
+        assert_eq!(decodes.recv_timeout(timeout).unwrap(), "a");
+        assert_eq!(decodes.recv_timeout(timeout).unwrap(), "b");
+        // With one result queued and one held by the worker, it cannot start a third.
+        assert!(matches!(
+            decodes.recv_timeout(std::time::Duration::from_millis(100)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ));
+        // A hidden window can discard its receiver even while the worker is blocked.
+        // The closure's sender is dropped when the worker exits; no third decode starts.
+        drop(receiver);
+        assert!(matches!(
+            decodes.recv_timeout(timeout),
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected)
+        ));
+    }
+
+    #[test]
+    fn background_decoding_resumes_after_the_consumer_drains_a_result() {
+        let (started, decodes) = std::sync::mpsc::channel();
+        let receiver = background_decode(vec!["a".into(), "b".into(), "c".into()], move |path| {
+            started.send(path.to_owned()).unwrap();
+            Some(RgbaImage::new(3, 2))
+        });
+        let timeout = std::time::Duration::from_secs(5);
+        assert_eq!(decodes.recv_timeout(timeout).unwrap(), "a");
+        assert_eq!(decodes.recv_timeout(timeout).unwrap(), "b");
+        assert_eq!(receiver.recv_timeout(timeout).unwrap().0, "a");
+        assert_eq!(decodes.recv_timeout(timeout).unwrap(), "c");
+        assert_eq!(receiver.recv_timeout(timeout).unwrap().0, "b");
+        assert_eq!(receiver.recv_timeout(timeout).unwrap().0, "c");
+        assert!(matches!(
+            receiver.recv_timeout(timeout),
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected)
+        ));
     }
 
     #[test]

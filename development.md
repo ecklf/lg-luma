@@ -890,6 +890,12 @@ The explicit diagnostic script action `prewarm` still builds hidden scenes witho
 (`Renderer::prepare`); the TV log reports each (`Luma prewarm: …`). The profiling timeline records
 first-use work per frame (`glyph_ms`, `vector_ms`, `image_ms`).
 
+On webOS, after the first populated frame, bundled drawer surfaces decode on one background
+worker and upload one per visible, non-animating loop pass; logo meshes load one per idle pass
+afterwards. Shared image paths decode once. The result queue holds at most one decoded image,
+with at most one more held by the worker, so hiding Luma or animating cannot accumulate all
+drawer surfaces in CPU memory. This does not eagerly prepare hidden-page text or glyphs.
+
 ## TV startup diagnostics
 
 SAM passes launch metadata as a JSON object in `argv[1]`. The CLI skips that object while leaving

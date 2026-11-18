@@ -937,6 +937,12 @@ fn run() -> Result<(), String> {
     let mut redrawn_total = 0.;
     let mut profile = diagnostics::Profile::default();
     let mut presented = 0usize;
+    // The Apps page's bundled surfaces: decoded in the background once Home is ready, and
+    // uploaded one at a time while nothing animates, so the first drawer opening is smooth.
+    let mut drawer_artwork_due = false;
+    let mut drawer_artwork: Option<std::sync::mpsc::Receiver<(String, Option<image::RgbaImage>)>> =
+        None;
+    let mut drawer_vectors: Vec<String> = Vec::new();
     // When the app inventory last arrived: a Home relaunch already refreshes it, so the
     // window events that follow (Restored, FocusGained) need not ask again right away.
     let mut inventory_at: Option<Instant> = None;
@@ -2014,6 +2020,7 @@ fn run() -> Result<(), String> {
                 {
                     startup_stage("apps ready frame");
                     preload::finish();
+                    drawer_artwork_due = webos;
                     first_ready_frame_stats = Some(renderer.stats().clone());
                 }
                 if options.profile_frames.is_some() {
@@ -2069,6 +2076,57 @@ fn run() -> Result<(), String> {
                 eprintln!("Luma lifecycle: {error}");
             }
             end_registration();
+        }
+        if std::mem::take(&mut drawer_artwork_due) {
+            let page = std::mem::replace(&mut state.page, state::Page::Apps);
+            let visibility = std::mem::replace(&mut state.drawer_visibility, 1.);
+            let drawer = view::scene(&state, &assets, now);
+            state.page = page;
+            state.drawer_visibility = visibility;
+            let paths: Vec<String> = drawer
+                .draw
+                .iter()
+                .filter_map(|draw| match draw {
+                    renderer::Draw::Image(path, ..) | renderer::Draw::TintedImage(path, ..)
+                        if !path.ends_with(".lvec") && !renderer.has_image(path) =>
+                    {
+                        Some(path.clone())
+                    }
+                    _ => None,
+                })
+                .collect();
+            if !paths.is_empty() {
+                drawer_artwork = Some(preload::decode_in_background(paths));
+            }
+            drawer_vectors = drawer
+                .draw
+                .iter()
+                .filter_map(|draw| match draw {
+                    renderer::Draw::Image(path, ..) | renderer::Draw::TintedImage(path, ..)
+                        if path.ends_with(".lvec") =>
+                    {
+                        Some(path.clone())
+                    }
+                    _ => None,
+                })
+                .collect();
+        }
+        if visible
+            && !state.animating()
+            && let Some(receiver) = &drawer_artwork
+        {
+            match receiver.try_recv() {
+                Ok((path, image)) => renderer.adopt_image(path, image),
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => drawer_artwork = None,
+            }
+        } else if visible && !state.animating() {
+            // Logos load on this thread (they become GL buffers): one per idle pass.
+            while let Some(path) = drawer_vectors.pop() {
+                if renderer.preload_vector(&path) {
+                    break;
+                }
+            }
         }
         // Diagnostic scripts can opt into synchronous first-use preparation.
         // Normal startup, inventory refreshes and relaunches never queue it.

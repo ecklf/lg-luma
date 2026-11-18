@@ -786,6 +786,36 @@ impl Renderer {
         (hole.w > 0. && hole.h > 0.).then_some(hole)
     }
 
+    /// Whether an image path already has a texture (or a cached failure).
+    pub fn has_image(&self, path: &str) -> bool {
+        self.textures.contains_key(path)
+    }
+
+    /// Loads a vector logo's mesh ahead of its first draw. True when it was not loaded yet.
+    pub fn preload_vector(&mut self, path: &str) -> bool {
+        if self.vectors.contains_key(path) {
+            return false;
+        }
+        let mesh = vector::Mesh::load(Path::new(path))
+            .map_err(|error| eprintln!("{error}"))
+            .ok();
+        self.vectors.insert(path.into(), mesh);
+        true
+    }
+
+    /// Uploads an image decoded elsewhere, so its first draw does not decode it.
+    pub fn adopt_image(&mut self, path: String, image: Option<image::RgbaImage>) {
+        if self.textures.contains_key(&path) {
+            return;
+        }
+        let texture = image.map(|image| {
+            let mut texture = texture(image.width(), image.height(), image.as_raw());
+            texture.frame = self.frame;
+            texture
+        });
+        self.textures.insert(path, texture);
+    }
+
     /// Appends `count` paint vertices from `start`, merged into the previous batch when it uses
     /// the same texture, clip and fade.
     fn paint_batch(
