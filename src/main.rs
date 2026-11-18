@@ -20,6 +20,7 @@ mod luna;
 mod markets;
 mod model;
 mod platform;
+mod preload;
 mod raster;
 mod recents;
 mod renderer;
@@ -782,6 +783,39 @@ fn run() -> Result<(), String> {
     platform.sync_splash(state.preferences.splash_background());
     startup_stage("preferences and workers");
 
+    // The first scene's images need no GL context: decode them on other cores while SDL,
+    // the window and the shaders start, instead of serially before the first frame.
+    {
+        let now = options
+            .time
+            .unwrap_or_else(|| OffsetDateTime::now_utc().to_offset(local_offset));
+        let scene = view::scene(&state, &assets, now);
+        let has_glass = scene
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, renderer::Draw::Glass(..)));
+        let mut paths = Vec::new();
+        for draw in &scene.draw {
+            if let renderer::Draw::Image(path, rect, ..)
+            | renderer::Draw::TintedImage(path, rect, ..) = draw
+                && !path.ends_with(".lvec")
+            {
+                paths.push((path.clone(), preload::Kind::Image));
+                let full_screen = rect.x <= 0.
+                    && rect.y <= 0.
+                    && rect.x + rect.w >= 1920.
+                    && rect.y + rect.h >= 1080.;
+                if has_glass && full_screen {
+                    let sidecar = glass_backdrop::sidecar_path(std::path::Path::new(path));
+                    paths.push((
+                        sidecar.to_string_lossy().into_owned(),
+                        preload::Kind::GlassAtlas,
+                    ));
+                }
+            }
+        }
+        preload::start(paths, 3);
+    }
     let sdl = sdl2::init()?;
     let mut feedback = feedback::Feedback::default();
     let drivers: Vec<_> = sdl2::video::drivers().collect();
@@ -1968,6 +2002,7 @@ fn run() -> Result<(), String> {
                     && first_ready_frame_stats.is_none()
                 {
                     startup_stage("apps ready frame");
+                    preload::finish();
                     first_ready_frame_stats = Some(renderer.stats().clone());
                 }
                 if options.profile_frames.is_some() {

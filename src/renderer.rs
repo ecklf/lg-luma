@@ -1020,19 +1020,19 @@ impl Renderer {
         let frame = self.frame;
         let started = Instant::now();
         let loaded = !self.textures.contains_key(&path);
-        let entry = self
-            .textures
-            .entry(path.clone())
-            .or_insert_with(|| match image::open(&path) {
-                Ok(image) => {
-                    let image = image.into_rgba8();
-                    Some(texture(image.width(), image.height(), image.as_raw()))
-                }
+        let entry = self.textures.entry(path.clone()).or_insert_with(|| {
+            let decoded = match crate::preload::take(&path) {
+                Some(Some(image)) => Ok(image),
+                Some(None) | None => image::open(&path).map(image::DynamicImage::into_rgba8),
+            };
+            match decoded {
+                Ok(image) => Some(texture(image.width(), image.height(), image.as_raw())),
                 Err(error) => {
                     eprintln!("Artwork {path}: {error}");
                     None
                 }
-            });
+            }
+        });
         if loaded {
             self.stats.image_load_ms += started.elapsed().as_secs_f64() * 1000.;
         }
@@ -1223,10 +1223,11 @@ impl Renderer {
             // exact legacy path for older uploads, missing/corrupt sidecars and A/B checks.
             let prepared = (std::env::var("LUMA_GLASS_PRECOMPUTED").as_deref() != Ok("0"))
                 .then(|| {
-                    crate::glass_backdrop::load(&crate::glass_backdrop::sidecar_path(Path::new(
-                        path,
-                    )))
-                    .ok()
+                    let sidecar = crate::glass_backdrop::sidecar_path(Path::new(path));
+                    match crate::preload::take(&sidecar.to_string_lossy()) {
+                        Some(image) => image,
+                        None => crate::glass_backdrop::load(&sidecar).ok(),
+                    }
                 })
                 .flatten();
             precomputed = prepared.is_some();
