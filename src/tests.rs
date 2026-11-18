@@ -2371,6 +2371,44 @@ fn home_lifecycle_replies_map_for_both_registration_versions() {
 }
 
 #[test]
+fn home_lifecycle_fallback_retries_legacy_and_other_versions_but_not_current_failures() {
+    use crate::platform::{disable_home_lifecycle, home_lifecycle_disabled};
+    let directory = std::env::temp_dir().join(format!(
+        "luma-lifecycle-fallback-test-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&directory).unwrap();
+    let marker = directory.join("no-lifecycle");
+    assert!(!home_lifecycle_disabled(&marker, "3.6.2"));
+
+    // A legacy empty marker no longer disables registration indefinitely.
+    std::fs::write(&marker, b"").unwrap();
+    assert!(!home_lifecycle_disabled(&marker, "3.6.2"));
+
+    // A failed retry records this release. Repeated launches retain the safety fallback.
+    disable_home_lifecycle(&marker, "3.6.2").unwrap();
+    assert!(home_lifecycle_disabled(&marker, "3.6.2"));
+    assert!(home_lifecycle_disabled(&marker, "3.6.2"));
+
+    // Upgrades (and switching releases) retry; merely reading does not erase the marker.
+    assert!(!home_lifecycle_disabled(&marker, "3.6.3"));
+    assert!(!home_lifecycle_disabled(&marker, "3.6.1"));
+    assert!(home_lifecycle_disabled(&marker, "3.6.2"));
+    disable_home_lifecycle(&marker, "3.6.3").unwrap();
+    assert!(home_lifecycle_disabled(&marker, "3.6.3"));
+
+    // Malformed, unknown and unreadable markers fail safe instead of retrying endlessly.
+    for contents in ["broken", "{}", r#"{"version":null}"#, r#"{"version":""}"#] {
+        std::fs::write(&marker, contents).unwrap();
+        assert!(home_lifecycle_disabled(&marker, "3.6.3"), "{contents}");
+    }
+    assert!(home_lifecycle_disabled(&directory, "3.6.3"));
+    assert!(disable_home_lifecycle(&directory, "3.6.3").is_err());
+    std::fs::remove_file(marker).unwrap();
+    std::fs::remove_dir(directory).unwrap();
+}
+
+#[test]
 fn foreground_check_needs_focus_after_a_relaunch_from_the_background() {
     use crate::platform::ForegroundCheck;
     use std::time::{Duration, Instant};

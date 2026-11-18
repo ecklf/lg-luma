@@ -911,102 +911,106 @@ fn run() -> Result<(), String> {
     #[cfg(not(all(feature = "webos", target_os = "linux", target_arch = "arm")))]
     let (lifecycle_event, end_registration): (Option<u32>, Option<EndRegistration>) = (None, None);
     #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
-    let (lifecycle_event, end_registration): (Option<u32>, Option<EndRegistration>) =
-        if webos && options.webos_home {
-            let subsystem = sdl.event()?;
-            // SAFETY: registers one SDL user event type before any are pushed.
-            let event_type = unsafe { subsystem.register_event()? };
-            let pusher = move |sender: sdl2::event::EventSender| {
-                move |lifecycle: platform::Lifecycle| {
-                    let code = match lifecycle {
-                        platform::Lifecycle::Relaunch => 1,
-                        platform::Lifecycle::Close => 2,
-                    };
-                    let _ = sender.push_event(Event::User {
-                        timestamp: 0,
-                        window_id: 0,
-                        type_: event_type,
-                        code,
-                        data1: std::ptr::null_mut(),
-                        data2: std::ptr::null_mut(),
-                    });
-                }
-            };
-            // SAFETY: geteuid has no preconditions.
-            let as_root = unsafe { libc::geteuid() } == 0;
-            if platform::runs_as_lg_home() {
-                // In place of LG's Home executable (webOS 5/6), LG's role is bound to that path,
-                // so Luma registers through lifecycle v2 on its own connection.
-                let push = pusher(subsystem.event_sender());
-                luna::subscribe(
-                    Some(platform::home_id()),
-                    "luna://com.webos.applicationManager/registerApp",
-                    &serde_json::json!({"id": platform::home_id()}),
-                    // sam answers "registered" at once; without it sam would end Home later.
-                    Duration::from_secs(10),
-                    move |message| {
-                        eprintln!("Luma lifecycle: {message}");
-                        let refused = message
-                            .get("returnValue")
-                            .and_then(serde_json::Value::as_bool)
-                            == Some(false);
-                        match platform::Lifecycle::from_reply(&message) {
-                            Some(lifecycle) => push(lifecycle),
-                            // Registration lost (e.g. sam restarted): quit, so sam starts Home
-                            // afresh.
-                            None if refused => push(platform::Lifecycle::Close),
-                            None => {}
-                        }
-                    },
-                )?;
-                (Some(event_type), None)
-            } else if !as_root {
-                (None, None)
-            } else if std::path::Path::new(platform::HOME_LIFECYCLE_OFF).exists() {
-                eprintln!(
-                    "Luma lifecycle: {} exists; Home stays unregistered",
-                    platform::HOME_LIFECYCLE_OFF
-                );
-                (None, None)
-            } else {
-                // A staged Home manifest (webOS 10/11) runs Luma's own executable as root under
-                // LG's app-ID based Home role, which Luma's connection cannot claim. Hold the
-                // registration as that app through `luna-send -a`; sam then expects lifecycle v1.
-                // This does not wait for sam: until it answers, Home is simply unregistered.
-                let push = pusher(subsystem.event_sender());
-                let close = pusher(subsystem.event_sender());
-                match luna::subscribe_as_app(
-                    platform::home_id(),
-                    "luna://com.webos.applicationManager/registerNativeApp",
-                    &serde_json::json!({}),
-                    Duration::from_secs(10),
-                    move |message| {
-                        eprintln!("Luma lifecycle: {message}");
-                        if let Some(lifecycle) = platform::Lifecycle::from_reply(&message) {
-                            push(lifecycle);
-                        }
-                    },
-                    // A registration sam had accepted is gone: quit, so sam starts Home afresh.
-                    // Never accepted: stay, unregistered, as before.
-                    move |registered| {
-                        if registered {
-                            close(platform::Lifecycle::Close);
-                        }
-                    },
-                ) {
-                    Ok(subscription) => (
-                        Some(event_type),
-                        Some(Box::new(move || subscription.end()) as EndRegistration),
-                    ),
-                    Err(error) => {
-                        eprintln!("Luma lifecycle: {error}; Home stays unregistered");
-                        (None, None)
+    let (lifecycle_event, end_registration): (Option<u32>, Option<EndRegistration>) = if webos
+        && options.webos_home
+    {
+        let subsystem = sdl.event()?;
+        // SAFETY: registers one SDL user event type before any are pushed.
+        let event_type = unsafe { subsystem.register_event()? };
+        let pusher = move |sender: sdl2::event::EventSender| {
+            move |lifecycle: platform::Lifecycle| {
+                let code = match lifecycle {
+                    platform::Lifecycle::Relaunch => 1,
+                    platform::Lifecycle::Close => 2,
+                };
+                let _ = sender.push_event(Event::User {
+                    timestamp: 0,
+                    window_id: 0,
+                    type_: event_type,
+                    code,
+                    data1: std::ptr::null_mut(),
+                    data2: std::ptr::null_mut(),
+                });
+            }
+        };
+        // SAFETY: geteuid has no preconditions.
+        let as_root = unsafe { libc::geteuid() } == 0;
+        if platform::runs_as_lg_home() {
+            // In place of LG's Home executable (webOS 5/6), LG's role is bound to that path,
+            // so Luma registers through lifecycle v2 on its own connection.
+            let push = pusher(subsystem.event_sender());
+            luna::subscribe(
+                Some(platform::home_id()),
+                "luna://com.webos.applicationManager/registerApp",
+                &serde_json::json!({"id": platform::home_id()}),
+                // sam answers "registered" at once; without it sam would end Home later.
+                Duration::from_secs(10),
+                move |message| {
+                    eprintln!("Luma lifecycle: {message}");
+                    let refused = message
+                        .get("returnValue")
+                        .and_then(serde_json::Value::as_bool)
+                        == Some(false);
+                    match platform::Lifecycle::from_reply(&message) {
+                        Some(lifecycle) => push(lifecycle),
+                        // Registration lost (e.g. sam restarted): quit, so sam starts Home
+                        // afresh.
+                        None if refused => push(platform::Lifecycle::Close),
+                        None => {}
                     }
+                },
+            )?;
+            (Some(event_type), None)
+        } else if !as_root {
+            (None, None)
+        } else if platform::home_lifecycle_disabled(
+            std::path::Path::new(platform::HOME_LIFECYCLE_OFF),
+            env!("CARGO_PKG_VERSION"),
+        ) {
+            eprintln!(
+                "Luma lifecycle: {} keeps fallback active for this version; Home stays unregistered",
+                platform::HOME_LIFECYCLE_OFF
+            );
+            (None, None)
+        } else {
+            // A staged Home manifest (webOS 10/11) runs Luma's own executable as root under
+            // LG's app-ID based Home role, which Luma's connection cannot claim. Hold the
+            // registration as that app through `luna-send -a`; sam then expects lifecycle v1.
+            // This does not wait for sam: until it answers, Home is simply unregistered.
+            let push = pusher(subsystem.event_sender());
+            let close = pusher(subsystem.event_sender());
+            match luna::subscribe_as_app(
+                platform::home_id(),
+                "luna://com.webos.applicationManager/registerNativeApp",
+                &serde_json::json!({}),
+                Duration::from_secs(10),
+                move |message| {
+                    eprintln!("Luma lifecycle: {message}");
+                    if let Some(lifecycle) = platform::Lifecycle::from_reply(&message) {
+                        push(lifecycle);
+                    }
+                },
+                // A registration sam had accepted is gone: quit, so sam starts Home afresh.
+                // Never accepted: stay, unregistered, as before.
+                move |registered| {
+                    if registered {
+                        close(platform::Lifecycle::Close);
+                    }
+                },
+            ) {
+                Ok(subscription) => (
+                    Some(event_type),
+                    Some(Box::new(move || subscription.end()) as EndRegistration),
+                ),
+                Err(error) => {
+                    eprintln!("Luma lifecycle: {error}; Home stays unregistered");
+                    (None, None)
                 }
             }
-        } else {
-            (None, None)
-        };
+        }
+    } else {
+        (None, None)
+    };
     // Whether a staged Home's relaunch reached the front; see platform::ForegroundCheck.
     let mut foreground = platform::ForegroundCheck::default();
     let mut focused = !start_hidden;
@@ -2012,7 +2016,10 @@ fn run() -> Result<(), String> {
                 "Luma lifecycle: a relaunch did not bring Luma to the front; creating {}",
                 platform::HOME_LIFECYCLE_OFF
             );
-            if let Err(error) = std::fs::write(platform::HOME_LIFECYCLE_OFF, b"") {
+            if let Err(error) = platform::disable_home_lifecycle(
+                std::path::Path::new(platform::HOME_LIFECYCLE_OFF),
+                env!("CARGO_PKG_VERSION"),
+            ) {
                 eprintln!("Luma lifecycle: {error}");
             }
             end_registration();
