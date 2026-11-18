@@ -898,7 +898,8 @@ work remains. Shared image paths decode once. The result queue holds at most one
 with at most one more held by the worker, so hiding Luma or animating cannot accumulate all
 drawer surfaces in CPU memory. On an LG 49UN71006LB (webOS 5.6.2) the first Settings opening
 fell from a 74 ms to a 46 ms frame and the first Background section from 184 ms to 50 ms, with
-no first-use loading left in either.
+no first-use loading left in either. `LUMA_IDLE_PREPARE=0` turns this idle
+preparation off for comparisons.
 
 ## TV startup diagnostics
 

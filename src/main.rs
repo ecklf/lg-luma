@@ -2022,7 +2022,9 @@ fn run() -> Result<(), String> {
                 {
                     startup_stage("apps ready frame");
                     preload::finish();
-                    drawer_artwork_due = webos;
+                    // LUMA_IDLE_PREPARE=0 turns idle preparation off, for comparisons.
+                    drawer_artwork_due =
+                        webos && std::env::var("LUMA_IDLE_PREPARE").as_deref() != Ok("0");
                     first_ready_frame_stats = Some(renderer.stats().clone());
                 }
                 if options.profile_frames.is_some() {
