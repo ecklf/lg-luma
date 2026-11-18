@@ -23,22 +23,21 @@ pub const SETTINGS_ORDER: [usize; SECTION_COUNT] = [
     SYSTEM_SECTION,
 ];
 /// System row turning automatic Homebrew app updates on or off (homebrew_updates.rs).
-pub const HOMEBREW_UPDATES_ROW: usize = 15;
+pub const HOMEBREW_UPDATES_ROW: usize = 16;
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
 pub const APPS_COLUMNS: usize = 6;
 pub const DRAWER_PADDING: f32 = 24.;
+pub const DRAWER_NAME_TOP: f32 = 12.;
+pub const DRAWER_NAME_HEIGHT: f32 = 28.;
 /// Automatic inventory retries before the error shows: with the 6.5 s Luna timeout about 50 s.
 pub const INVENTORY_RETRIES: u32 = 5;
 pub const INVENTORY_RETRY_DELAY: Duration = Duration::from_secs(2);
 pub const HOME_STRIP_LEFT: f32 = 84.;
-// Six favourites in full and the seventh cut off and fading out at the right (Apple TV rows):
-// the strip ends after the sixth tile, so a focused tile never sits in the fade.
+// Six favourites in full inside the glass card, which keeps 24 px around them.
 pub const HOME_STRIP_RIGHT: f32 = 1836.;
 pub const HOME_TILE_WIDTH: f32 = 270.;
 pub const HOME_TILE_PITCH: f32 = 296.4;
-pub const HOME_FADE_LEFT: f32 = 8.;
-pub const HOME_FADE_RIGHT: f32 = 1910.;
 pub const BACKGROUND_FADE: f32 = 0.4;
 pub const CYCLE_FADE: f32 = 1.6;
 
@@ -86,6 +85,8 @@ pub enum Target {
     RemoveWidget(HomeWidget),
     MoveWidget(HomeWidget),
     DateToggle,
+    GreetingName,
+    GreetingNameReset,
     DateFormat,
     ClockFormat,
     ClockTimeFormat,
@@ -195,6 +196,7 @@ pub enum Subpage {
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum TextField {
+    GreetingName,
     Market(HomeWidget),
     Apps,
     Location,
@@ -580,6 +582,9 @@ impl State {
         self.pointer = false;
         self.pressed = None;
         self.open(0);
+        // A system relaunch reveals Home directly, not the previous app's drawer
+        // closing over it. Ordinary navigation keeps its open/close animation.
+        self.drawer_visibility = 0.;
         pending
     }
 
@@ -732,20 +737,23 @@ impl State {
                     SETTINGS_BOTTOM_PADDING
                 }
             } else if self.page == Page::Apps {
+                // Scroll card-only hit regions far enough to reveal their names too.
                 DRAWER_PADDING
+                    + if self.preferences.show_drawer_app_names {
+                        DRAWER_NAME_TOP + DRAWER_NAME_HEIGHT
+                    } else {
+                        0.
+                    }
             } else {
                 12.
             }
     }
 
+    /// The favourites' glass card: their tiles scroll, draw and take pointer input only inside it.
     pub fn favorites_viewport(&self) -> Rect {
         let content = self.content_viewport();
-        let left = if self.home_scroll > 0. {
-            HOME_FADE_LEFT
-        } else {
-            0.
-        };
-        Rect::new(left, content.y, HOME_FADE_RIGHT - left, content.h)
+        let inset = HOME_STRIP_LEFT - 24.;
+        Rect::new(inset, content.y, 1920. - 2. * inset, content.h)
     }
 
     pub fn apps_viewport(&self) -> Rect {
@@ -1646,7 +1654,12 @@ impl State {
                     Some(&[Target::MarketSymbol(kind), Target::MarketCurrency])
                 }
                 Some(Subpage::Market(kind)) => Some(&[Target::MarketSymbol(kind)]),
-                Some(Subpage::Greeting) => Some(&[Target::DateToggle, Target::DateFormat]),
+                Some(Subpage::Greeting) => Some(&[
+                    Target::DateToggle,
+                    Target::DateFormat,
+                    Target::GreetingName,
+                    Target::GreetingNameReset,
+                ]),
                 Some(Subpage::Weather) => Some(&[
                     Target::WeatherLocation,
                     Target::WeatherTemperature,
@@ -1678,6 +1691,7 @@ impl State {
                             Target::ClockFormat
                                 | Target::ClockTimeFormat
                                 | Target::DateFormat
+                                | Target::GreetingName
                                 | Target::WeatherLocation
                                 | Target::WeatherTemperature
                                 | Target::WeatherStyle
@@ -2261,7 +2275,7 @@ impl State {
             }
             if matches!(
                 self.keyboard_field,
-                TextField::InputName | TextField::Market(_)
+                TextField::InputName | TextField::GreetingName | TextField::Market(_)
             ) {
                 let length = self.input_name.chars().count();
                 self.input_name.extend(
@@ -2290,7 +2304,7 @@ impl State {
                 self.weather.edit(query);
             } else if matches!(
                 self.keyboard_field,
-                TextField::InputName | TextField::Market(_)
+                TextField::InputName | TextField::GreetingName | TextField::Market(_)
             ) {
                 self.input_name.pop();
             } else {
@@ -2320,6 +2334,14 @@ impl State {
     }
 
     fn commit_text_input(&mut self) -> Vec<Effect> {
+        if self.keyboard_field == TextField::GreetingName {
+            let name = clean_input_name(&std::mem::take(&mut self.input_name));
+            if !name.is_empty() && self.preferences.greeting_name != name {
+                self.preferences.greeting_name = name;
+                return vec![Effect::Save];
+            }
+            return vec![];
+        }
         if let TextField::Market(kind) = self.keyboard_field {
             let draft = std::mem::take(&mut self.input_name);
             if draft.trim().is_empty() {
@@ -2434,7 +2456,7 @@ impl State {
             self.weather.edit(query);
         } else if matches!(
             self.keyboard_field,
-            TextField::InputName | TextField::Market(_)
+            TextField::InputName | TextField::GreetingName | TextField::Market(_)
         ) {
             self.input_name = query;
         } else {
@@ -2448,13 +2470,17 @@ impl State {
         match self.keyboard_field {
             TextField::Location => &self.weather.query,
             TextField::InputName => &self.input_name,
+            TextField::GreetingName => &self.input_name,
             TextField::Market(_) => &self.input_name,
             TextField::Apps => &self.query,
         }
     }
     pub fn open_keyboard(&mut self, field: TextField) {
         self.keyboard_field = field;
-        if matches!(field, TextField::InputName | TextField::Market(_)) {
+        if matches!(
+            field,
+            TextField::InputName | TextField::GreetingName | TextField::Market(_)
+        ) {
             // The TV keyboard starts empty, so a new name replaces the old one.
             self.input_name.clear();
         }
@@ -2467,6 +2493,7 @@ impl State {
             self.focus = match field {
                 TextField::Location => Target::WeatherQuery,
                 TextField::InputName => Target::InputRename,
+                TextField::GreetingName => Target::GreetingName,
                 TextField::Market(kind) => Target::MarketSymbol(kind),
                 TextField::Apps => Target::Search,
             };
@@ -2495,6 +2522,7 @@ impl State {
         match self.keyboard_field {
             TextField::Location => Target::WeatherSearch,
             TextField::InputName => Target::InputRename,
+            TextField::GreetingName => Target::GreetingName,
             TextField::Market(kind) => Target::MarketSymbol(kind),
             TextField::Apps => Target::Search,
         }
@@ -2705,6 +2733,14 @@ impl State {
                 }
             }
             Target::InputRename => self.open_keyboard(TextField::InputName),
+            Target::GreetingName => self.open_keyboard(TextField::GreetingName),
+            Target::GreetingNameReset => {
+                self.focus = Target::GreetingName;
+                if !self.preferences.greeting_name.is_empty() {
+                    self.preferences.greeting_name.clear();
+                    return vec![Effect::Save];
+                }
+            }
             Target::WidgetCell(cell) if cell < HOME_GRID_CELLS => {
                 if let Some(widget) = WidgetPosition::from_cell(cell)
                     .and_then(|position| self.preferences.widget_at(position))
@@ -2901,6 +2937,10 @@ impl State {
             }
             Target::Setting(index) => {
                 match index {
+                    14 => {
+                        self.preferences.show_drawer_app_names =
+                            !self.preferences.show_drawer_app_names
+                    }
                     13 => {
                         self.subpage = Some(Subpage::AppDrawer);
                         self.focus = Target::Choice(usize::from(
@@ -3275,6 +3315,7 @@ impl State {
                 "Clear" => match self.keyboard_field {
                     TextField::Location => self.weather.edit(String::new()),
                     TextField::InputName => self.input_name.clear(),
+                    TextField::GreetingName => self.input_name.clear(),
                     TextField::Market(_) => self.input_name.clear(),
                     TextField::Apps => self.query.clear(),
                 },

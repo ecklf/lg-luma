@@ -7,10 +7,9 @@ use crate::{
     },
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, APPS_SECTION, Control, HOME_FADE_LEFT, HOME_FADE_RIGHT, HOME_STRIP_LEFT,
-        HOME_STRIP_RIGHT, HOME_TILE_PITCH, HOME_TILE_WIDTH, HOMEBREW_UPDATES_ROW, INPUTS_SECTION,
-        KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage, Target, TextField,
-        WIDGETS_SECTION,
+        APPS_COLUMNS, APPS_SECTION, Control, DRAWER_NAME_HEIGHT, DRAWER_NAME_TOP, HOME_TILE_PITCH,
+        HOME_TILE_WIDTH, HOMEBREW_UPDATES_ROW, INPUTS_SECTION, KEYS, Overlay, Page, Rect,
+        SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -307,7 +306,7 @@ impl Scene {
                         [brightness, brightness, brightness, alpha],
                     );
                 }
-                Draw::Clip(_) | Draw::EdgeFade(_) | Draw::EdgeFadeX(_) => {}
+                Draw::Clip(_) | Draw::EdgeFade(_) => {}
             }
         }
     }
@@ -986,6 +985,21 @@ fn tile(out: &mut Scene, state: &State, assets: &Assets, app: &App, rect: Rect, 
     }
     if focused {
         out.ring(rect, 19.2);
+        if !dock && state.page == Page::Apps && state.preferences.show_drawer_app_names {
+            let (label, style) = assets.fit_line(&app.title, text(22., 550, -0.02), rect.w, 22.);
+            out.text(
+                label,
+                Rect::new(
+                    rect.x,
+                    rect.y + rect.h + DRAWER_NAME_TOP,
+                    rect.w,
+                    DRAWER_NAME_HEIGHT,
+                ),
+                style,
+                WHITE,
+                true,
+            );
+        }
     }
     if state.pressed.as_ref() == Some(&target) {
         out.fade(start, 1., 0.85);
@@ -1280,7 +1294,7 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
         }
         // Keep the original typography within the wider 4×1 footprint,
         // fitting long translations rather than clipping the widget.
-        let label = language.greeting(now.hour(), "");
+        let label = language.greeting(now.hour(), &state.preferences.greeting_name);
         let style = assets.fit_text(&label, text(90.4, 500, -0.065).leading(1.05), cell.w);
         let height = style.size * style.line_height;
         let date_band = if state.preferences.show_date {
@@ -1435,7 +1449,8 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let dock_y = state.dock_y();
     let dock_height = FACE_HEIGHT;
-    let dock = Rect::new(60., dock_y - 24., 1800., dock_height + 48.);
+    let card = state.favorites_viewport();
+    let dock = Rect::new(card.x, dock_y - 24., card.w, dock_height + 48.);
     // The card extends beyond the content viewport; clip only its scrolling contents.
     out.draw.push(Draw::Clip(None));
     out.shadow(dock, 40., 38., 12., 0.22);
@@ -1473,22 +1488,8 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
             },
         );
     }
-    // Like Apple TV's rows, the favourites run to the screen edge: the next tile shows cut off
-    // at the right (and a scrolled-away one at the left), so it is clear the row continues.
+    // The favourites scroll inside their glass card and slide under its edges.
     out.draw.push(Draw::Clip(Some(state.favorites_viewport())));
-    // Soft edges: out to the right from the end of the sixth tile, and in from the left once
-    // the row has scrolled.
-    let left = if state.home_scroll > 0. {
-        [HOME_FADE_LEFT, HOME_STRIP_LEFT]
-    } else {
-        [0., 0.]
-    };
-    out.draw.push(Draw::EdgeFadeX(Some([
-        left[0],
-        left[1],
-        HOME_STRIP_RIGHT,
-        HOME_FADE_RIGHT,
-    ])));
     for (index, app) in apps.iter().enumerate() {
         tile(
             out,
@@ -1504,7 +1505,6 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
             true,
         );
     }
-    out.draw.push(Draw::EdgeFadeX(None));
     out.draw.push(Draw::Clip(Some(state.content_viewport())));
 }
 
@@ -1919,7 +1919,12 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
                 control.rect.y = y - s;
             }
         }
-        y += row_height + 38.4;
+        y += row_height
+            + if state.preferences.show_drawer_app_names {
+                64.
+            } else {
+                38.4
+            };
     }
     out.draw.push(Draw::Clip(None));
 }
@@ -2803,6 +2808,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     Some(language.t(state.preferences.recent_apps_behavior.label_key())),
                     true,
                 ),
+                (
+                    14,
+                    "showAppNames",
+                    "grid",
+                    Some(language.t(if state.preferences.show_drawer_app_names {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
+                    false,
+                ),
             ]
             .into_iter()
             .enumerate()
@@ -3380,7 +3396,13 @@ fn widget_grid(out: &mut Scene, state: &State, assets: &Assets, moving: Option<H
 fn market_settings(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWidget) {
     let language = state.preferences.language;
     let config = crate::markets::settings(&state.preferences, kind);
-    let (symbol, _) = assets.fit_line(&config.symbol, text(18.4, 450, 0.), 170., 18.4);
+    let editing = state.text_input_active() && state.keyboard_field == TextField::Market(kind);
+    let draft = if editing {
+        format!("{}|", state.editing_text())
+    } else {
+        config.symbol.clone()
+    };
+    let (symbol, _) = assets.fit_line(&draft, text(18.4, 450, 0.), 170., 18.4);
     row(
         out,
         state,
@@ -3465,6 +3487,13 @@ fn market_settings(out: &mut Scene, state: &State, assets: &Assets, kind: HomeWi
 
 fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
+    let editing = state.text_input_active() && state.keyboard_field == TextField::GreetingName;
+    let value = if editing {
+        format!("{}|", state.editing_text())
+    } else {
+        state.preferences.greeting_name.clone()
+    };
+    let (name, _) = assets.fit_line(&value, text(18.4, 450, 0.), 170., 18.4);
     for (index, (target, title, value, chevron)) in [
         (
             Target::DateToggle,
@@ -3482,6 +3511,8 @@ fn greeting_settings(out: &mut Scene, state: &State, assets: &Assets) {
             state.preferences.date_format.label(language),
             true,
         ),
+        (Target::GreetingName, "name", name.as_str(), true),
+        (Target::GreetingNameReset, "clearName", "", false),
     ]
     .into_iter()
     .enumerate()
@@ -4302,6 +4333,7 @@ fn keyboard(out: &mut Scene, state: &State, assets: &Assets) {
         match state.keyboard_field {
             TextField::Location => language.t("cityPostcode"),
             TextField::InputName => language.t("inputName"),
+            TextField::GreetingName => language.t("name"),
             TextField::Market(_) => language.t("marketSymbol"),
             TextField::Apps => language.t("findApp"),
         },
@@ -4744,7 +4776,7 @@ mod tests {
     }
 
     #[test]
-    fn greeting_widget_ignores_legacy_names_on_home() {
+    fn greeting_widget_restores_legacy_names_on_home() {
         let assets = assets();
         for name in ["", "Ana"] {
             let preferences = serde_json::from_value(
@@ -4754,7 +4786,7 @@ mod tests {
             let state = State::new(preferences);
             let mut scene = Scene::new();
             home(&mut scene, &state, &assets, OffsetDateTime::UNIX_EPOCH);
-            let greeting = state.preferences.language.greeting(0, "");
+            let greeting = state.preferences.language.greeting(0, name);
             assert!(
                 scene
                     .draw

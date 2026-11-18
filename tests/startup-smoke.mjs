@@ -7,6 +7,8 @@ import sharp from 'sharp';
 const root = path.resolve(import.meta.dirname, '..');
 const out = path.join(root, '.build');
 const binary = path.resolve(root, process.env.CARGO_TARGET_DIR ?? 'target', 'debug/luma');
+// Cocoa does not provide GLES contexts. Default/CI coverage still requires both profiles.
+const profiles = process.argv.includes('--desktop-only') ? [false] : [false, true];
 function run(command, args, env = {}) {
   const result = spawnSync(command, args, {
     cwd: root,
@@ -38,11 +40,11 @@ try {
   const atlas = path.join(assets, 'wallpapers/dunes.glass.png');
   const prepared = await fs.readFile(path.join(source, 'wallpapers/dunes.glass.png'));
   const preferences = path.join(scratch, 'preferences.json');
-  await fs.writeFile(
-    preferences,
-    JSON.stringify({ show_weather: false, reduced_motion: true, background: 'dunes' }),
-  );
-  for (const gles of [false, true]) {
+  for (const gles of profiles) {
+    await fs.writeFile(
+      preferences,
+      JSON.stringify({ show_weather: false, reduced_motion: true, background: 'dunes' }),
+    );
     let reference;
     for (const mode of ['prepared', 'runtime', 'missing', 'corrupt']) {
       if (mode === 'missing') await fs.rm(atlas);
@@ -86,9 +88,61 @@ try {
         assert.deepEqual(pixels, reference, `${name} must preserve every framebuffer pixel`);
       else reference = pixels;
     }
+    await fs.writeFile(atlas, prepared);
+    const homeCache = async (name, script, frames) => {
+      const report = path.join(scratch, `home-${gles ? 'gles' : 'desktop'}-${name}.json`);
+      run(
+        binary,
+        [
+          '--assets',
+          assets,
+          '--preferences',
+          preferences,
+          '--script',
+          script,
+          '--frames',
+          String(frames),
+          '--time',
+          '2026-10-22T20:41:00+02:00',
+          '--weather-test-server',
+          'http://127.0.0.1:1',
+          '--diagnostics',
+          report,
+        ],
+        { LUMA_GLES: gles ? '1' : '0' },
+      );
+      return JSON.parse(await fs.readFile(report, 'utf8')).last_presented;
+    };
+    for (const style of ['tvos', 'minimal']) {
+      await fs.writeFile(
+        preferences,
+        JSON.stringify({
+          show_weather: false,
+          reduced_motion: true,
+          background: 'dunes',
+          app_drawer_style: style,
+        }),
+      );
+      const initial = await homeCache(`${style}-initial`, 'home', 12);
+      // Timed event-loop wakes extend past the old 1.5 s automatic prewarm delay.
+      // Hidden page preparation must not grow Home's caches, even after it is idle.
+      const idle = await homeCache(`${style}-idle`, 'home', 360);
+      for (const key of ['cached_glyphs', 'cached_text_runs', 'vector_meshes', 'artwork_bytes']) {
+        assert.equal(
+          idle[key],
+          initial[key],
+          `Idle ${style} Home must not prepare hidden pages: ${key}`,
+        );
+      }
+      const explicit = await homeCache(`${style}-explicit`, 'home,prewarm', 12);
+      assert.ok(
+        explicit.cached_text_runs > initial.cached_text_runs,
+        'Explicit scripted prewarming must still prepare hidden pages for diagnostics',
+      );
+    }
   }
   console.log(
-    'Startup smoke checks passed: precomputed glass skips runtime filtering with identical desktop/GLES pixels and safe missing/corrupt fallback.',
+    `Startup smoke checks passed (${profiles.length === 2 ? 'desktop GL and GLES' : 'desktop GL only'}): identical glass pixels, safe atlas fallback, and demand-driven hidden pages without idle Home cache growth.`,
   );
 } finally {
   await fs.rm(scratch, { recursive: true, force: true });

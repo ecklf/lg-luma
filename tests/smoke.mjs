@@ -24,6 +24,7 @@ const temporary = await fs.mkdtemp(path.join(out, 'smoke-'));
 try {
   const preferences = path.join(temporary, 'preferences.json');
   await fs.writeFile(preferences, '{}');
+  const fixedTime = ['--time', '2026-10-21T20:41:00+02:00'];
   const scenario = async (name, script, extra = [], frames = 90, environment = {}) => {
     const screenshot = path.join(out, `${name}.png`);
     const dump = path.join(temporary, `${name}.json`);
@@ -43,6 +44,8 @@ try {
         dump,
         '--diagnostics',
         diagnostics,
+        // Greeting assertions must not depend on the runner's clock or timezone.
+        ...(extra.includes('--time') ? [] : fixedTime),
         ...extra,
       ],
       environment,
@@ -93,6 +96,18 @@ try {
   assert.ok(!home.ui_text.includes('Favorites'));
   assert.ok(home.ui_text.some((value) => value.startsWith('Good evening')));
   assert.ok(home.render.capture.glass_surfaces >= 3);
+  assert.equal(home.render.capture.font_size_snapping, true);
+  const fractionalHome = await scenario('home-fractional-fonts', 'home', [], 90, {
+    LUMA_FONT_SIZE_SNAP: '0',
+  });
+  assert.equal(fractionalHome.render.capture.font_size_snapping, false);
+  assert.equal(fractionalHome.render.last_presented.font_size_snapping, false);
+  assert.deepEqual(fractionalHome.ui_text, home.ui_text);
+  assert.notDeepEqual(
+    await fs.readFile(path.join(out, 'home.png')),
+    await fs.readFile(path.join(out, 'home-fractional-fonts.png')),
+    'Whole-pixel sizing must affect the rendered framebuffer',
+  );
   assert.equal(home.render.capture.glass_backdrop_sampling, true);
   const fallback = await scenario('glass-fallback', 'home', [], 90, { LUMA_GLASS: '0' });
   assert.equal(fallback.render.capture.glass_backdrop_sampling, false);
@@ -326,13 +341,15 @@ try {
   const closed = await scenario('dialog-closed', `${manageApps},enter,click:100:900`);
   assert.equal(closed.modal, false);
   assert.deepEqual(closed.focus, { App: 'youtube.leanback.v4' });
-  const fixedTime = ['--time', '2026-10-21T20:41:00+02:00'];
   const one = await scenario('density-1x', 'home', fixedTime);
   const two = await scenario('density-2x', 'home', [...fixedTime, '--capture-scale', '2']);
   assert.deepEqual(two.render.capture.target, { width: 3840, height: 2160 });
   assert.equal(two.render.capture.viewport.scale, 2);
   assert.equal(one.render.capture.viewport.scale, 1);
-  assert.equal(two.render.capture.max_logical_font_px, one.render.capture.max_logical_font_px);
+  assert.ok(
+    Math.abs(two.render.capture.max_logical_font_px - one.render.capture.max_logical_font_px) < 1,
+    'Physical size quantization may change the effective logical em by less than one pixel',
+  );
   for (const capture of [one.render.capture, two.render.capture]) {
     assert.ok(
       Math.abs(
@@ -438,7 +455,7 @@ try {
   // The opt-in only changes the saved preference; desktop runs never contact the repository.
   const homebrewPath = `${systemPage},down,down,down,down,enter`;
   const homebrewOn = await scenario('homebrew-updates-on', homebrewPath);
-  assert.deepEqual(homebrewOn.focus, { Setting: 15 });
+  assert.deepEqual(homebrewOn.focus, { Setting: 16 });
   assert.equal(homebrewOn.preferences.homebrew_updates, true);
   const homebrewOff = await scenario('homebrew-updates-off', homebrewPath);
   assert.equal(homebrewOff.preferences.homebrew_updates, false);
@@ -551,7 +568,7 @@ try {
   const tileEditorClosed = await scenario('tile-editor-closed', `${tileEditorOpen},back`);
   assert.equal(tileEditorClosed.modal, false);
   assert.equal(tileEditorClosed.focus, 'TileEditor');
-  // The exposed card fragments are real pointer targets, including after remote scrolling.
+  // Favourites stay inside their glass card: the space beside it is no pointer target.
   const edgeFavorites = [
     'netflix',
     'youtube.leanback.v4',
@@ -568,16 +585,16 @@ try {
     JSON.stringify({ favorites: edgeFavorites, show_weather: false }),
   );
   const edgeRight = await scenario('favorites-edge-right', 'home,click:1880:880');
-  assert.deepEqual(edgeRight.focus, { App: edgeFavorites[6] });
-  assert.equal(edgeRight.home_scroll, 0, 'Clicking the fragment must not move it');
+  assert.notDeepEqual(edgeRight.focus, { App: edgeFavorites[6] });
+  assert.equal(edgeRight.home_scroll, 0, 'Clicking beside the card must not scroll it');
   const edgeLeft = await scenario(
     'favorites-edge-left',
     `home,${Array(6).fill('right').join(',')},click:40:880`,
   );
-  assert.deepEqual(edgeLeft.focus, { App: edgeFavorites[0] });
+  assert.deepEqual(edgeLeft.focus, { App: edgeFavorites[6] });
   assert.ok(
     Math.abs(edgeLeft.home_scroll - 296.4) < 0.01,
-    'Pointer focus preserves strip position',
+    'Clicking beside the card keeps the strip position',
   );
   await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
   const gradientDisabled = await scenario(
@@ -661,23 +678,36 @@ try {
   assert.deepEqual(resetWidgets.preferences.weather_position, { column: 4, row: 0 });
   assert.equal(resetWidgets.preferences.show_greeting, true);
   assert.equal(resetWidgets.preferences.show_weather, true);
-  await fs.writeFile(preferences, JSON.stringify({ show_weather: false, greeting_name: 'Ana' }));
+  await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
   const overnight = await scenario('greeting-overnight', 'home', [
     '--time',
     '2026-10-22T02:00:00+02:00',
   ]);
   assert.ok(overnight.ui_text.includes('Still up?'));
   assert.ok(!overnight.ui_text.includes('One more moment.'));
-  assert.ok(!overnight.ui_text.some((label) => label.includes('Ana')));
-  assert.ok(!Object.hasOwn(overnight.preferences, 'greeting_name'));
+  const personalized = await scenario(
+    'greeting-personalized',
+    `${greetingPage},down,down,enter,type:Ana,back,home`,
+    ['--time', '2026-10-22T02:00:00+02:00'],
+  );
+  assert.equal(personalized.preferences.greeting_name, 'Ana');
+  assert.ok(personalized.ui_text.includes('Still up, Ana?'));
   const greetingRestart = await scenario('greeting-restart', 'home', [
     '--time',
     '2026-10-22T09:00:00+02:00',
   ]);
-  assert.ok(greetingRestart.ui_text.includes('Good morning.'));
-  const greetingOptions = await scenario('greeting-no-name-options', greetingPage);
-  assert.ok(!greetingOptions.ui_text.includes('Name'));
-  assert.ok(!greetingOptions.ui_text.includes('Clear name'));
+  assert.ok(greetingRestart.ui_text.includes('Good morning, Ana.'));
+  const greetingOptions = await scenario('greeting-name-options', greetingPage);
+  assert.ok(greetingOptions.ui_text.includes('Name'));
+  assert.ok(greetingOptions.ui_text.includes('Clear name'));
+  assert.ok(greetingOptions.ui_text.includes('Ana'));
+  const clearedGreeting = await scenario(
+    'greeting-cleared',
+    `${greetingPage},down,down,down,enter,home`,
+    ['--time', '2026-10-22T09:00:00+02:00'],
+  );
+  assert.equal(clearedGreeting.preferences.greeting_name, '');
+  assert.ok(clearedGreeting.ui_text.includes('Good morning.'));
   console.log(
     'Native smoke checks passed: rendering/alpha, navigation, persistence, SDL pointer input, DPI-aware glyphs, 4K capture and presentation profiling.',
   );
