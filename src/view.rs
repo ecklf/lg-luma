@@ -1020,7 +1020,8 @@ fn tile(
 
 /// Reorders consecutive cards' draws (start, end, focused) so equal draws become one GPU
 /// batch: unfocused cards' shadows first, then everything else in order, then their 1-px
-/// edge borders. An unfocused shadow reaches 22 px past its card and the 1-px border stays
+/// edge borders, then their logos and text (another GPU program; switching costs more
+/// than drawing on TV drivers). Logos and text lie inside their own card. An unfocused shadow reaches 22 px past its card and the 1-px border stays
 /// inside it, while cards are 26.4 px apart: neither touches another card, so only the
 /// order of overlapping shadows in the gaps changes. A focused card stays as it is.
 fn batch_cards(draw: &mut Vec<Draw>, cards: &[(usize, usize, bool)]) {
@@ -1035,6 +1036,7 @@ fn batch_cards(draw: &mut Vec<Draw>, cards: &[(usize, usize, bool)]) {
     let mut shadows = Vec::new();
     let mut body = Vec::new();
     let mut borders = Vec::new();
+    let mut overlays = Vec::new();
     for &(start, stop, focused) in cards {
         let mut border_taken = focused;
         for (offset, command) in items[start - begin..stop - begin].iter().enumerate() {
@@ -1044,11 +1046,22 @@ fn batch_cards(draw: &mut Vec<Draw>, cards: &[(usize, usize, bool)]) {
                     border_taken = true;
                     borders.push(command.clone());
                 }
+                Draw::Image(path, ..) | Draw::TintedImage(path, ..)
+                    if !focused && path.ends_with(".lvec") =>
+                {
+                    overlays.push(command.clone());
+                }
+                Draw::Text(..) if !focused => overlays.push(command.clone()),
                 _ => body.push(command.clone()),
             }
         }
     }
-    let ordered: Vec<Draw> = shadows.into_iter().chain(body).chain(borders).collect();
+    let ordered: Vec<Draw> = shadows
+        .into_iter()
+        .chain(body)
+        .chain(borders)
+        .chain(overlays)
+        .collect();
     draw.splice(begin..begin, ordered);
 }
 

@@ -406,6 +406,8 @@ pub struct Renderer {
     vao: GLuint,
     /// Whether meshes have their own vertex array objects (see vector::use_vertex_arrays).
     vertex_arrays: bool,
+    /// With vertex arrays: the paint attributes over `buffer`, set up once (else 0).
+    paint_array: GLuint,
     white: Texture,
     font_directory: PathBuf,
     fonts: HashMap<u16, Font>,
@@ -501,6 +503,7 @@ impl Renderer {
         let mut buffer = 0;
         let mut vao = 0;
         let vertex_arrays;
+        let mut paint_array = 0;
         unsafe {
             if !gles {
                 gl::GenVertexArrays(1, &mut vao);
@@ -515,6 +518,25 @@ impl Renderer {
                 && (!gles || gl_string(gl::VERSION).starts_with("OpenGL ES 3"))
                 && std::env::var("LUMA_VAO").as_deref() != Ok("0");
             vector::use_vertex_arrays(vertex_arrays);
+            if vertex_arrays {
+                gl::GenVertexArrays(1, &mut paint_array);
+                gl::BindVertexArray(paint_array);
+                gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
+                let mut offset = 0;
+                for (index, size) in [2, 2, 4, 4, 2].into_iter().enumerate() {
+                    gl::EnableVertexAttribArray(index as u32);
+                    gl::VertexAttribPointer(
+                        index as u32,
+                        size,
+                        gl::FLOAT,
+                        gl::FALSE,
+                        56,
+                        (offset * size_of::<f32>()) as *const _,
+                    );
+                    offset += size as usize;
+                }
+                gl::BindVertexArray(vao);
+            }
             gl::Enable(gl::BLEND);
             // Preserve an opaque destination alpha. Using BlendFunc for both
             // channels makes translucent UI darken again in PNG/window compositing.
@@ -536,6 +558,7 @@ impl Renderer {
             buffer,
             vao,
             vertex_arrays,
+            paint_array,
             white,
             font_directory: directory.into(),
             fonts,
@@ -1914,12 +1937,15 @@ impl Renderer {
                             }
                             blending = !*opaque;
                         }
+                        if !paint_bound && self.paint_array != 0 {
+                            // The paint attributes, recorded once: one bind after a mesh.
+                            gl::BindVertexArray(self.paint_array);
+                            mesh_state.vertex_array = None;
+                            gl::UseProgram(self.program);
+                            mesh_state.program = 0;
+                            paint_bound = true;
+                        }
                         if !paint_bound {
-                            if self.vertex_arrays {
-                                // Paint attributes live in the default array, never a mesh's.
-                                gl::BindVertexArray(self.vao);
-                                mesh_state.vertex_array = None;
-                            }
                             gl::UseProgram(self.program);
                             mesh_state.program = 0;
                             gl::BindBuffer(gl::ARRAY_BUFFER, self.buffer);
@@ -2326,6 +2352,9 @@ impl Drop for Renderer {
             gl::DeleteProgram(self.text_program);
             if self.vao != 0 {
                 gl::DeleteVertexArrays(1, &self.vao);
+            }
+            if self.paint_array != 0 {
+                gl::DeleteVertexArrays(1, &self.paint_array);
             }
         }
     }
