@@ -24,6 +24,9 @@ mod font_size_tests;
 const GLYPH_GEOMETRY_BUDGET: usize = 8 * 1024 * 1024;
 const TEXT_GEOMETRY_BUDGET: usize = 32 * 1024 * 1024;
 const TEXTURE_BUDGET: usize = 48 * 1024 * 1024;
+/// Precomputed shadow coverage: at most this many texels per shadow and in total.
+const SHADOW_TEXELS: usize = 1024 * 1024;
+const SHADOW_BUDGET: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TextStyle {
@@ -395,6 +398,8 @@ pub struct Renderer {
     glyphs: HashMap<(char, u16), Glyph>,
     text_runs: HashMap<TextKey, TextRun>,
     textures: HashMap<String, Option<Texture>>,
+    /// Shadow coverage by drawable size, radius and blur (bits), computed once on the CPU.
+    shadows: HashMap<(u32, u32, u32, u32), Texture>,
     vectors: HashMap<String, Option<vector::Mesh>>,
     artwork_variants: HashMap<String, String>,
     vertices: Vec<f32>,
@@ -510,6 +515,7 @@ impl Renderer {
             glyphs: HashMap::new(),
             text_runs: HashMap::new(),
             textures: HashMap::new(),
+            shadows: HashMap::new(),
             vectors: HashMap::new(),
             artwork_variants: HashMap::new(),
             vertices: Vec::with_capacity(65536),
@@ -784,6 +790,78 @@ impl Renderer {
             hole = Rect::new(hole.x, y0, hole.w, y1 - y0);
         }
         (hole.w > 0. && hole.h > 0.).then_some(hole)
+    }
+
+    /// A texture holding a shadow's coverage at each drawable pixel of its snapped quad,
+    /// computed with the paint shader's formula: drawn 1:1, it reproduces that shader's
+    /// output up to 8-bit rounding, without its per-fragment distance and smoothstep.
+    /// None for very large shadows, which keep the shader path.
+    fn shadow_texture(&mut self, quad: Rect, radius: f32, blur: f32) -> Option<GLuint> {
+        static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if !*ENABLED.get_or_init(|| std::env::var("LUMA_SHADOW_TEXTURES").as_deref() != Ok("0"))
+            || blur <= 0.
+        {
+            return None;
+        }
+        let quad = self.snap(quad);
+        let scale = self.stats.viewport.scale.max(0.01);
+        let width = (quad.w * scale).round() as u32;
+        let height = (quad.h * scale).round() as u32;
+        let texels = width as usize * height as usize;
+        if width == 0 || height == 0 || texels > SHADOW_TEXELS {
+            return None;
+        }
+        let key = (width, height, radius.to_bits(), blur.to_bits());
+        let frame = self.frame;
+        if let Some(texture) = self.shadows.get_mut(&key) {
+            texture.frame = frame;
+            return Some(texture.id);
+        }
+        let mut used: usize = self
+            .shadows
+            .values()
+            .map(|t| t.width as usize * t.height as usize)
+            .sum();
+        if used + texels > SHADOW_BUDGET {
+            let mut old: Vec<_> = self
+                .shadows
+                .iter()
+                .filter(|(_, t)| t.frame != frame)
+                .map(|(key, t)| (*key, t.frame))
+                .collect();
+            old.sort_by_key(|(_, frame)| *frame);
+            for (key, _) in old {
+                if used + texels <= SHADOW_BUDGET {
+                    break;
+                }
+                if let Some(t) = self.shadows.remove(&key) {
+                    used -= t.width as usize * t.height as usize;
+                }
+            }
+            if used + texels > SHADOW_BUDGET {
+                return None;
+            }
+        }
+        // As paint.frag: v_shape.zw is the quad's half size, the box is that minus blur.
+        let (hx, hy) = (quad.w / 2. - blur, quad.h / 2. - blur);
+        let r = radius.min(hx.min(hy));
+        let mut pixels = vec![255u8; texels * 4];
+        for row in 0..height {
+            let y = -quad.h / 2. + (row as f32 + 0.5) / scale;
+            for column in 0..width {
+                let x = -quad.w / 2. + (column as f32 + 0.5) / scale;
+                let (qx, qy) = (x.abs() - hx + r, y.abs() - hy + r);
+                let d = qx.max(0.).hypot(qy.max(0.)) + qx.max(qy).min(0.) - r;
+                let t = ((d + blur) / (2. * blur)).clamp(0., 1.);
+                let coverage = 1. - t * t * (3. - 2. * t);
+                pixels[(row * width + column) as usize * 4 + 3] = (coverage * 255.).round() as u8;
+            }
+        }
+        let mut texture = texture(width, height, &pixels);
+        texture.frame = frame;
+        let id = texture.id;
+        self.shadows.insert(key, texture);
+        Some(id)
     }
 
     /// Appends `count` paint vertices from `start`, merged into the previous batch when it uses
@@ -1514,16 +1592,32 @@ impl Renderer {
                     None,
                     None,
                 ),
-                Draw::Shadow(rect, radius, blur, color) => self.gradient_quad(
-                    rect.inset(-*blur),
-                    [0., 0., 1., 1.],
-                    *radius,
-                    -*blur,
-                    [*color; 2],
-                    self.white.id,
-                    None,
-                    self.opaque_cover(commands.get(index)).map(Hole::Skip),
-                ),
+                Draw::Shadow(rect, radius, blur, color) => {
+                    let hole = self.opaque_cover(commands.get(index)).map(Hole::Skip);
+                    match self.shadow_texture(rect.inset(-*blur), *radius, *blur) {
+                        // The same coverage, read instead of computed per fragment.
+                        Some(texture) => self.gradient_quad(
+                            rect.inset(-*blur),
+                            [0., 0., 1., 1.],
+                            -1.,
+                            0.,
+                            [*color; 2],
+                            texture,
+                            None,
+                            hole,
+                        ),
+                        None => self.gradient_quad(
+                            rect.inset(-*blur),
+                            [0., 0., 1., 1.],
+                            *radius,
+                            -*blur,
+                            [*color; 2],
+                            self.white.id,
+                            None,
+                            hole,
+                        ),
+                    }
+                }
                 Draw::Text(text, rect, size, color, centered) => {
                     self.text(text, *rect, *size, *color, *centered)
                 }
