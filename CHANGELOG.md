@@ -1,5 +1,15 @@
 # lg-luma
 
+## 3.8.0
+
+### Minor Changes
+
+- bd418ae: Add SDL game controller navigation, including PS5 DualSense where recognized by the TV backend, with D-pad/left-stick navigation, OK and Back holds, Options, and hot-plug handling.
+
+### Patch Changes
+
+- 7de7cfc: Cheaper drawer shadows and fewer draw calls on TVs: shadows are drawn from precomputed coverage textures prepared while idle, and card shadows and borders share GPU batches.
+
 ## 3.7.0
 
 ### Minor Changes
