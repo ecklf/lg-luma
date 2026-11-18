@@ -130,6 +130,25 @@ fn work(shared: &Shared) {
     }
 }
 
+/// Decodes `paths` one by one on a background worker, for images wanted later rather than
+/// for the first frame. Results arrive on the receiver; dropping it stops the worker.
+pub fn decode_in_background(
+    paths: Vec<String>,
+) -> std::sync::mpsc::Receiver<(String, Option<RgbaImage>)> {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let _ = std::thread::Builder::new()
+        .name("luma-artwork-prefetch".into())
+        .spawn(move || {
+            for path in paths {
+                let image = decode(&path, Kind::Image);
+                if sender.send((path, image)).is_err() {
+                    break;
+                }
+            }
+        });
+    receiver
+}
+
 static PRELOAD: OnceLock<Preloader> = OnceLock::new();
 
 /// Starts decoding `paths` on up to `threads` workers. Call once, before the renderer exists.
