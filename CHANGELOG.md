@@ -1,5 +1,15 @@
 # lg-luma
 
+## 3.6.0
+
+### Minor Changes
+
+- 0bd2ad1: Restore the locally saved greeting name, with Name and Clear name controls in the Greeting widget settings and personalized greetings throughout the day.
+
+### Patch Changes
+
+- f87b78c: Keep hidden Apps and Settings rendering demand-driven instead of preparing them on the SDL thread after inventory refreshes, where they could delay Home relaunches and input. Return directly to Home without replaying the previous drawer's closing animation.
+
 ## 3.5.1
 
 ### Patch Changes
