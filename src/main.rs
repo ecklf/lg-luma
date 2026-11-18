@@ -721,6 +721,7 @@ fn run() -> Result<(), String> {
     );
     if webos && let Some(directory) = preferences_path.parent() {
         app_artwork::set_disk_cache(directory.join("icon-cache"));
+        renderer::set_program_cache(directory.join("shader-cache"));
     }
     let mut state = State::new(initial_preferences);
     if let Some(version) = &options.test_update_version {
