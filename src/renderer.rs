@@ -397,7 +397,48 @@ fn snap_rect(rect: Rect, scale: f32) -> Rect {
     Rect::new(x0, y0, x1 - x0, y1 - y0)
 }
 
+struct PaintPrograms {
+    texture: GLuint,
+    tinted: GLuint,
+    shape: GLuint,
+    app: GLuint,
+}
+
+impl Drop for PaintPrograms {
+    fn drop(&mut self) {
+        for id in [self.texture, self.tinted, self.shape, self.app] {
+            if id != 0 {
+                unsafe { gl::DeleteProgram(id) };
+            }
+        }
+    }
+}
+
+impl PaintPrograms {
+    /// Use a short shader only if every triangle in this batch takes the same paint path.
+    fn select(&self, vertices: &[f32], opaque: bool, app: bool, fallback: GLuint) -> GLuint {
+        let all = |predicate: fn(&[f32]) -> bool| vertices.chunks_exact(14).all(predicate);
+        let inside = opaque && all(|v| v[12] >= 0. && v[13] == 0.);
+        if inside && app {
+            return self.app;
+        }
+        if all(|v| v[12] == -1.) || (inside && !app) {
+            return if all(|v| v[4..8] == [1.; 4]) {
+                self.texture
+            } else {
+                self.tinted
+            };
+        }
+        if !app && all(|v| v[12] >= 0. && v[13] >= 0.) {
+            self.shape
+        } else {
+            fallback
+        }
+    }
+}
+
 pub struct Renderer {
+    paint_programs: Option<PaintPrograms>,
     program: GLuint,
     vector_program: GLuint,
     text_program: GLuint,
@@ -475,6 +516,33 @@ impl Renderer {
             &(fragment_prefix.clone() + include_str!("shaders/paint.frag")),
             &[c"a_position", c"a_uv", c"a_color", c"a_shape", c"a_params"],
         )?;
+        let paint_programs = if std::env::var("LUMA_PAINT_SHADERS").as_deref() == Ok("1") {
+            let build = |source: &str| {
+                link(
+                    &(vertex_prefix.clone() + include_str!("shaders/paint.vert")),
+                    &(fragment_prefix.clone() + source),
+                    &[c"a_position", c"a_uv", c"a_color", c"a_shape", c"a_params"],
+                )
+            };
+            let load = || -> Result<PaintPrograms, String> {
+                let mut programs = PaintPrograms {
+                    texture: 0,
+                    tinted: 0,
+                    shape: 0,
+                    app: 0,
+                };
+                programs.texture = build(include_str!("shaders/texture.frag"))?;
+                programs.tinted = build(include_str!("shaders/tinted.frag"))?;
+                programs.shape = build(include_str!("shaders/shape.frag"))?;
+                programs.app = build(include_str!("shaders/app-interior.frag"))?;
+                Ok(programs)
+            };
+            load()
+                .inspect_err(|error| eprintln!("Specialized paint shaders unavailable: {error}"))
+                .ok()
+        } else {
+            None
+        };
         let vector_program = match link(
             &(vertex_prefix.clone() + include_str!("shaders/vector.vert")),
             &(fragment_prefix.clone() + include_str!("shaders/vector.frag")),
@@ -552,6 +620,7 @@ impl Renderer {
         let white = texture(1, 1, &[255; 4]);
         Ok(Self {
             program,
+            paint_programs,
             vector_program,
             text_program,
             text_embolden,
@@ -1884,6 +1953,8 @@ impl Renderer {
             gl::Uniform1i(uniform_location(self.program, c"u_texture".as_ptr()), 0);
             gl::ActiveTexture(gl::TEXTURE0);
             let mut paint_bound = false;
+            let mut active_paint = 0;
+            let mut shape_configured = false;
             let mut mesh_state = MeshState::default();
             let mut current_fade = None;
             let mut blending = true;
@@ -1937,16 +2008,42 @@ impl Renderer {
                             }
                             blending = !*opaque;
                         }
+                        let program = self
+                            .paint_programs
+                            .as_ref()
+                            .filter(|_| batch.fade.is_none())
+                            .map_or(self.program, |programs| {
+                                programs.select(
+                                    &self.vertices[start * 14..(start + count) * 14],
+                                    *opaque,
+                                    backdrop.is_some(),
+                                    self.program,
+                                )
+                            });
+                        if !paint_bound || active_paint != program {
+                            gl::UseProgram(program);
+                            active_paint = program;
+                        }
+                        if !shape_configured
+                            && self
+                                .paint_programs
+                                .as_ref()
+                                .is_some_and(|p| p.shape == program)
+                        {
+                            gl::Uniform1f(
+                                uniform_location(program, c"u_aa".as_ptr()),
+                                1. / scale.max(0.01),
+                            );
+                            shape_configured = true;
+                        }
                         if !paint_bound && self.paint_array != 0 {
                             // The paint attributes, recorded once: one bind after a mesh.
                             gl::BindVertexArray(self.paint_array);
                             mesh_state.vertex_array = None;
-                            gl::UseProgram(self.program);
                             mesh_state.program = 0;
                             paint_bound = true;
                         }
                         if !paint_bound {
-                            gl::UseProgram(self.program);
                             mesh_state.program = 0;
                             gl::BindBuffer(gl::ARRAY_BUFFER, self.buffer);
                             let mut offset = 0;
@@ -1968,7 +2065,7 @@ impl Renderer {
                             gl::BindTexture(gl::TEXTURE_2D, *texture);
                             bound_texture = *texture;
                         }
-                        if app_uniform != Some(backdrop.is_some()) {
+                        if program == self.program && app_uniform != Some(backdrop.is_some()) {
                             gl::Uniform1i(
                                 uniform_location(self.program, c"u_app".as_ptr()),
                                 i32::from(backdrop.is_some()),
@@ -1980,7 +2077,7 @@ impl Renderer {
                                 [(c"u_app_top", stops[0]), (c"u_app_bottom", stops[1])]
                             {
                                 gl::Uniform3f(
-                                    uniform_location(self.program, name.as_ptr()),
+                                    uniform_location(program, name.as_ptr()),
                                     rgb[0] as f32 / 255.,
                                     rgb[1] as f32 / 255.,
                                     rgb[2] as f32 / 255.,
