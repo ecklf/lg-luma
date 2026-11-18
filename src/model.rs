@@ -634,11 +634,7 @@ impl Preferences {
             AppSorting::Alphabetical => 0,
             AppSorting::Usage => self.app_launch_counts.get(&app.id).copied().unwrap_or(0),
         };
-        (
-            std::cmp::Reverse(count),
-            app.title.to_lowercase(),
-            &app.id,
-        )
+        (std::cmp::Reverse(count), app.title.to_lowercase(), &app.id)
     }
 
     pub fn weather_visible(&self) -> bool {
