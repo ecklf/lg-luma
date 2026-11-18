@@ -40,7 +40,7 @@ mod recents_view;
 pub struct Assets {
     pub root: PathBuf,
     pub version: String,
-    pub metrics: BTreeMap<String, BTreeMap<char, f32>>,
+    pub metrics: BTreeMap<String, crate::font_metrics::Advances>,
     pub artwork: crate::app_artwork::Service,
 }
 impl Assets {
@@ -4680,11 +4680,20 @@ mod tests {
             root: PathBuf::new(),
             version: "test".into(),
             metrics: BTreeMap::from([
-                ("display-500".into(), BTreeMap::from([('W', 1.)])),
-                ("500".into(), BTreeMap::from([('W', 1.2)])),
+                (
+                    "display-500".into(),
+                    crate::font_metrics::Advances::Individual(BTreeMap::from([('W', 1.)])),
+                ),
+                (
+                    "500".into(),
+                    crate::font_metrics::Advances::Individual(BTreeMap::from([('W', 1.2)])),
+                ),
                 (
                     "fallback-500".into(),
-                    BTreeMap::from([('界', 1.), ('한', 1.)]),
+                    crate::font_metrics::Advances::Individual(BTreeMap::from([
+                        ('界', 1.),
+                        ('한', 1.),
+                    ])),
                 ),
             ]),
             artwork: crate::app_artwork::Service::new(false),

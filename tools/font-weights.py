@@ -54,11 +54,21 @@ def fallback(path, keep, family, prefix):
     return advances_by_weight
 
 
+def advance_ranges(advances):
+    runs = []
+    for char, width in sorted(advances.items()):
+        if runs and ord(char) == ord(runs[-1][1]) + 1 and runs[-1][2] == width:
+            runs[-1][1] = char
+        else:
+            runs.append([char, char, width])
+    return runs
+
+
 cjk = fallback(sys.argv[2],
                lambda cp: cp < 0xA000 or 0xF900 <= cp <= 0xFAFF or 0xFF00 <= cp <= 0xFFEF,
                "Luma CJK", "font-cjk")
 # Noto Sans SC carries no Hangul syllables; Korean comes from Noto Sans KR.
 hangul = fallback(sys.argv[3], is_hangul, "Luma KR", "font-kr")
 for weight in (400, 500):
-    metrics[f"fallback-{weight}"] = {**cjk[weight], **hangul[weight]}
-(directory / "font-metrics.json").write_text(json.dumps(metrics, ensure_ascii=False), encoding="utf8")
+    metrics[f"fallback-{weight}"] = advance_ranges({**cjk[weight], **hangul[weight]})
+(directory / "font-metrics.json").write_text(json.dumps(metrics, ensure_ascii=False, separators=(",", ":")), encoding="utf8")
