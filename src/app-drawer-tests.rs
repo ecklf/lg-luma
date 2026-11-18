@@ -2,6 +2,201 @@ use super::*;
 use crate::{model::AppDrawerStyle, renderer::Draw, state::Subpage};
 
 #[test]
+fn selected_drawer_app_name_is_centered_without_changing_card_geometry() {
+    for style in AppDrawerStyle::ALL {
+        for pointer in [false, true] {
+            let mut state = ready();
+            state.preferences.app_drawer_style = style;
+            state.pointer = pointer;
+            state.preferences.reduced_motion = true;
+            state.open(1);
+            let apps: Vec<_> = state.drawer_apps()[..2]
+                .iter()
+                .map(|app| (app.id.clone(), app.title.clone()))
+                .collect();
+            let before = controls(&state);
+            for (id, title) in &apps {
+                state.focus = Target::App(id.clone());
+                let rendered = scene(&state);
+                let card = rendered
+                    .controls
+                    .iter()
+                    .find(|c| c.target == state.focus)
+                    .unwrap();
+                let original = before.iter().find(|c| c.target == state.focus).unwrap();
+                assert_eq!(
+                    (card.rect.x, card.rect.y, card.rect.w, card.rect.h),
+                    (
+                        original.rect.x,
+                        original.rect.y,
+                        original.rect.w,
+                        original.rect.h
+                    )
+                );
+                let labels: Vec<_> = rendered
+                    .draw
+                    .iter()
+                    .filter_map(|draw| match draw {
+                        Draw::Text(label, rect, _, _, true)
+                            if rect.y == card.rect.y + card.rect.h + 12. =>
+                        {
+                            Some((label, rect))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(labels.len(), 1);
+                assert_eq!(labels[0].0, title);
+                assert_eq!(labels[0].1.x, card.rect.x);
+                assert_eq!(labels[0].1.w, card.rect.w);
+                assert!(labels[0].1.y + labels[0].1.h < card.rect.y + card.rect.h + 64.);
+            }
+            let (id, _) = &apps[0];
+            state
+                .inventory
+                .apps
+                .iter_mut()
+                .find(|app| &app.id == id)
+                .unwrap()
+                .title =
+                "A very long application name that cannot fit beneath a single card".into();
+            state.focus = Target::App(id.clone());
+            let rendered = scene(&state);
+            assert!(rendered.draw.iter().any(|draw| matches!(draw,
+                Draw::Text(label, rect, font, _, true)
+                    if label.starts_with("A very") && label.ends_with('…')
+                        && rect.w == 270. && font.size == 22.
+            )));
+        }
+    }
+}
+
+#[test]
+fn drawer_rows_leave_room_below_selected_app_names() {
+    for style in AppDrawerStyle::ALL {
+        let mut state = ready();
+        state.preferences.app_drawer_style = style;
+        state.preferences.reduced_motion = true;
+        state.open(1);
+        let first = Target::App(state.drawer_apps()[0].id.clone());
+        let next_row = Target::App(state.drawer_apps()[6].id.clone());
+        state.focus = first.clone();
+        let rendered = scene(&state);
+        let card = rendered
+            .controls
+            .iter()
+            .find(|c| c.target == first)
+            .unwrap();
+        let next = rendered
+            .controls
+            .iter()
+            .find(|c| c.target == next_row)
+            .unwrap();
+        assert!((next.rect.y - card.rect.y - card.rect.h - 64.).abs() < 0.001);
+        let label = rendered
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text(_, rect, _, _, true) if rect.y == card.rect.y + card.rect.h + 12. => {
+                    Some(rect)
+                }
+                _ => None,
+            })
+            .unwrap();
+        assert!((next.rect.y - label.y - label.h - 24.).abs() < 0.001);
+        assert_eq!(next.rect.x, card.rect.x);
+        assert_eq!(next.rect.w, card.rect.w);
+    }
+}
+
+#[test]
+fn drawer_scroll_reveals_last_app_name_with_bottom_padding() {
+    for style in AppDrawerStyle::ALL {
+        for wheel in [false, true] {
+            let mut state = ready();
+            state.preferences.app_drawer_style = style;
+            state.preferences.reduced_motion = true;
+            let template = state.inventory.apps[0].clone();
+            for index in 0..40 {
+                let mut app = template.clone();
+                app.id = format!("scroll-label-{index}");
+                app.title = format!("Scroll label {index}");
+                state.inventory.apps.push(app);
+            }
+            state.open(1);
+            state.focus = Target::App(state.drawer_apps().last().unwrap().id.clone());
+            let rendered = scene(&state);
+            if wheel {
+                state.wheel_scroll(&rendered.controls, None, 0, -1000);
+            } else {
+                assert!(state.reveal_focus(&rendered.controls));
+            }
+            let rendered = scene(&state);
+            let card = rendered
+                .controls
+                .iter()
+                .find(|c| c.target == state.focus)
+                .unwrap();
+            let label = rendered
+                .draw
+                .iter()
+                .find_map(|draw| match draw {
+                    Draw::Text(_, rect, _, _, true)
+                        if (rect.y - card.rect.y - card.rect.h - 12.).abs() < 0.001 =>
+                    {
+                        Some(rect)
+                    }
+                    _ => None,
+                })
+                .unwrap();
+            assert!((1080. - label.y - label.h - 24.).abs() < 0.001);
+            let previous = state.scroll;
+            state.wheel_scroll(&rendered.controls, None, 0, -1000);
+            assert!((state.scroll - previous).abs() < 0.001);
+        }
+    }
+}
+
+#[test]
+fn selected_favorites_and_home_preview_do_not_get_drawer_names() {
+    for style in AppDrawerStyle::ALL {
+        let mut state = ready();
+        state.preferences.app_drawer_style = style;
+        state.preferences.reduced_motion = true;
+        let id = state.dock_apps()[0].id.clone();
+        state
+            .inventory
+            .apps
+            .iter_mut()
+            .find(|app| app.id == id)
+            .unwrap()
+            .title = "Unique favorite label".into();
+        state.focus = Target::App(id.clone());
+        assert!(!scene(&state).draw.iter().any(|draw| matches!(draw,
+            Draw::Text(label, ..) if label == "Unique favorite label"
+        )));
+        state.open(1);
+        state.focus = Target::DockApp(id);
+        assert!(!scene(&state).draw.iter().any(|draw| matches!(draw,
+            Draw::Text(label, ..) if label == "Unique favorite label"
+        )));
+        let id = state.drawer_apps()[0].id.clone();
+        state
+            .inventory
+            .apps
+            .iter_mut()
+            .find(|app| app.id == id)
+            .unwrap()
+            .title = "Unique drawer label".into();
+        state.open(0);
+        state.focus = Target::App(id);
+        assert!(!scene(&state).draw.iter().any(|draw| matches!(draw,
+            Draw::Text(label, ..) if label == "Unique drawer label"
+        )));
+    }
+}
+
+#[test]
 fn app_drawer_defaults_to_tvos_and_round_trips_both_styles() {
     let legacy: Preferences = serde_json::from_str("{}").unwrap();
     assert_eq!(legacy.app_drawer_style, AppDrawerStyle::Tvos);

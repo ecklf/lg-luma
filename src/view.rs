@@ -7,9 +7,9 @@ use crate::{
     },
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, APPS_SECTION, Control, HOME_TILE_PITCH, HOME_TILE_WIDTH, INPUTS_SECTION,
-        KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage, Target, TextField,
-        WIDGETS_SECTION,
+        APPS_COLUMNS, APPS_SECTION, Control, DRAWER_NAME_HEIGHT, DRAWER_NAME_TOP, HOME_TILE_PITCH,
+        HOME_TILE_WIDTH, INPUTS_SECTION, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage,
+        Target, TextField, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -985,6 +985,21 @@ fn tile(out: &mut Scene, state: &State, assets: &Assets, app: &App, rect: Rect, 
     }
     if focused {
         out.ring(rect, 19.2);
+        if !dock && state.page == Page::Apps {
+            let (label, style) = assets.fit_line(&app.title, text(22., 550, -0.02), rect.w, 22.);
+            out.text(
+                label,
+                Rect::new(
+                    rect.x,
+                    rect.y + rect.h + DRAWER_NAME_TOP,
+                    rect.w,
+                    DRAWER_NAME_HEIGHT,
+                ),
+                style,
+                WHITE,
+                true,
+            );
+        }
     }
     if state.pressed.as_ref() == Some(&target) {
         out.fade(start, 1., 0.85);
@@ -1904,7 +1919,7 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
                 control.rect.y = y - s;
             }
         }
-        y += row_height + 38.4;
+        y += row_height + 64.;
     }
     out.draw.push(Draw::Clip(None));
 }

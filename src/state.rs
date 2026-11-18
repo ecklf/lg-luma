@@ -26,6 +26,8 @@ pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
 pub const APPS_COLUMNS: usize = 6;
 pub const DRAWER_PADDING: f32 = 24.;
+pub const DRAWER_NAME_TOP: f32 = 12.;
+pub const DRAWER_NAME_HEIGHT: f32 = 28.;
 /// Automatic inventory retries before the error shows: with the 6.5 s Luna timeout about 50 s.
 pub const INVENTORY_RETRIES: u32 = 5;
 pub const INVENTORY_RETRY_DELAY: Duration = Duration::from_secs(2);
@@ -733,7 +735,8 @@ impl State {
                     SETTINGS_BOTTOM_PADDING
                 }
             } else if self.page == Page::Apps {
-                DRAWER_PADDING
+                // Scroll card-only hit regions far enough to reveal their names too.
+                DRAWER_PADDING + DRAWER_NAME_TOP + DRAWER_NAME_HEIGHT
             } else {
                 12.
             }
