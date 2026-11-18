@@ -25,6 +25,13 @@ TV interface.
 
 ## Toolchain and commands
 
+The optional [webOS 4 integration](docs/webos4-home.md) uses `tv/legacy-home.py`
+and an ES5 compositor filter. Homebrew requests dynamically resolve the public
+registration on split-bus LS2, retaining normal registration on newer unified LS2.
+Missing recent-history service support selects a real running-card fallback with
+single-app SAM closes. Other history errors do not select the fallback. Navigation
+and modern history operations are unchanged.
+
 ```sh
 nix develop
 pnpm install --frozen-lockfile

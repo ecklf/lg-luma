@@ -6,6 +6,10 @@ use std::mem::MaybeUninit;
 pub const WEBOS_EXIT_KEYCODE: i32 = (1 << 30) | 505;
 pub const WEBOS_HOME_KEYCODE: i32 = (1 << 30) | 384;
 
+pub fn is_home_key(key: Keycode, webos: bool) -> bool {
+    webos && (key == Keycode::Home || i32::from(key) == WEBOS_HOME_KEYCODE)
+}
+
 pub fn decode(mut raw: sys::SDL_Event, webos: bool) -> Event {
     // SAFETY: SDL always initializes the type tag; only keyboard variants have
     // a keysym. Read the scancode as its ABI integer, since native webOS values
@@ -57,5 +61,17 @@ pub fn wait(_pump: &mut EventPump, timeout: u32, webos: bool) -> Option<Event> {
     unsafe {
         (sys::SDL_WaitEventTimeout(raw.as_mut_ptr(), timeout.min(i32::MAX as u32) as i32) == 1)
             .then(|| decode(raw.assume_init(), webos))
+    }
+}
+
+#[cfg(test)]
+mod home_key_tests {
+    use super::*;
+
+    #[test]
+    fn legacy_home_reset_is_tv_navigation_without_changing_desktop_home_keys() {
+        assert!(is_home_key(Keycode::Home, true));
+        assert!(!is_home_key(Keycode::Home, false));
+        assert!(!is_home_key(Keycode::Escape, true));
     }
 }

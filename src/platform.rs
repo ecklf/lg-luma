@@ -771,7 +771,58 @@ fn command_reply(envelope: &Value) -> Result<Value, String> {
 }
 
 fn recent_call(command: &crate::recents::Command) -> Result<Value, String> {
+    // Detect capability, not firmware files that the jailed app cannot read.
+    // Permission errors and timeouts remain errors rather than selecting a fallback.
+    static LEGACY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let legacy = if let Some(legacy) = LEGACY.get() {
+        *legacy
+    } else {
+        let legacy =
+            match recent_operation("luna://com.webos.service.recent/listRecents", json!({})) {
+                Ok(_) => false,
+                Err(error)
+                    if error.contains("Service does not exist: com.webos.service.recent") =>
+                {
+                    true
+                }
+                Err(error) => return Err(error),
+            };
+        let _ = LEGACY.set(legacy);
+        legacy
+    };
+    recent_call_with(command, legacy, recent_operation)
+}
+
+fn recent_call_with(
+    command: &crate::recents::Command,
+    legacy: bool,
+    mut operation: impl FnMut(&str, Value) -> Result<Value, String>,
+) -> Result<Value, String> {
+    // Validate before any mutation. The modern history backend is unchanged.
     let (uri, payload) = command.request()?;
+    if !legacy {
+        return operation(uri, payload);
+    }
+    match command {
+        crate::recents::Command::List => {
+            let running = operation("luna://com.webos.applicationManager/running", json!({}))?;
+            Ok(json!({"returnValue": true, "recentsAppList":
+                crate::recents::background_app_ids(&running)?.into_iter()
+                    .map(|id| json!({"appId": id, "title": id})).collect::<Vec<_>>()
+            }))
+        }
+        crate::recents::Command::Close(id) => operation(
+            "luna://com.webos.applicationManager/closeByAppId",
+            json!({"id": id}),
+        ),
+        crate::recents::Command::Launch(id) => operation(
+            "luna://com.webos.applicationManager/launch",
+            json!({"id": id}),
+        ),
+    }
+}
+
+fn recent_operation(uri: &str, payload: Value) -> Result<Value, String> {
     // The native process uses its own authenticated Homebrew connection, as
     // inventory does. Fixed operations only; no app-ID impersonation or retries
     // of mutations after an ambiguous timeout. LG owns close/keep-alive policy.
@@ -786,6 +837,10 @@ fn recent_call(command: &crate::recents::Command) -> Result<Value, String> {
     )?;
     command_reply(&envelope)
 }
+
+#[cfg(test)]
+#[path = "platform-recents-tests.rs"]
+mod recent_backend_tests;
 
 fn inventory() -> Result<(Inventory, Option<String>), String> {
     let apps = normalize_apps(&inventory_read(

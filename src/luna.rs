@@ -135,13 +135,17 @@ struct Connection {
 }
 
 impl Connection {
-    fn open() -> Result<Self, String> {
-        Self::open_named(None)
+    fn open(public_bus: bool) -> Result<Self, String> {
+        Self::open_bus_named(None, public_bus)
     }
 
     /// `name`: a service name the executable's LS2 role allows (sam identifies a registerApp
     /// caller by it); None registers anonymously.
     fn open_named(name: Option<&CStr>) -> Result<Self, String> {
+        Self::open_bus_named(name, false)
+    }
+
+    fn open_bus_named(name: Option<&CStr>, public_bus: bool) -> Result<Self, String> {
         let mut error = Error::new();
         let mut connection = Self {
             handle: ptr::null_mut(),
@@ -156,7 +160,25 @@ impl Connection {
         // role, and avoids colliding with SDL's own app-named registration.
         // SAFETY: output/error pointers are valid; no fake application ID is sent.
         let name = name.map_or(ptr::null(), CStr::as_ptr);
-        if !unsafe { LSRegister(name, &mut connection.handle, &mut error) } {
+        let registered = unsafe {
+            // Older webOS separates public/private buses; Homebrew exposes exec on
+            // the public bus. Newer unified LS2 removed this entry point. Resolve
+            // it only when needed so the same binary links against the newer NDK.
+            let legacy = if public_bus {
+                libc::dlsym(libc::RTLD_DEFAULT, c"LSRegisterPubPriv".as_ptr())
+            } else {
+                ptr::null_mut()
+            };
+            if legacy.is_null() {
+                LSRegister(name, &mut connection.handle, &mut error)
+            } else {
+                type Register =
+                    unsafe extern "C" fn(*const c_char, *mut *mut c_void, bool, *mut Error) -> bool;
+                let register: Register = std::mem::transmute(legacy);
+                register(name, &mut connection.handle, true, &mut error)
+            }
+        };
+        if !registered {
             return Err(error.describe("registration"));
         }
         // SAFETY: the registered handle and private context stay alive together.
@@ -233,7 +255,8 @@ pub fn call(uri: &str, payload: &Value) -> Result<Value, String> {
 }
 
 pub fn call_with_timeout(uri: &str, payload: &Value, timeout: Duration) -> Result<Value, String> {
-    Connection::open()?.request(uri, payload, timeout)
+    let public_bus = uri.starts_with("luna://org.webosbrew.hbchannel.service/");
+    Connection::open(public_bus)?.request(uri, payload, timeout)
 }
 
 type Sink = Box<dyn FnMut(Value) + Send>;

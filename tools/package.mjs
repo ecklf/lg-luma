@@ -102,7 +102,13 @@ for (const file of await fs.readdir(path.join(out, 'assets/splash')))
   await fs.copyFile(path.join(out, 'assets/splash', file), path.join(stage, 'splash', file));
 await fs.copyFile(path.join(out, 'assets/splash/dunes.png'), path.join(stage, 'splash.png'));
 await fs.chmod(path.join(stage, 'autostart.sh'), 0o755);
-for (const file of ['home.sh', 'luma-helper', 'home-filter.js']) {
+for (const file of [
+  'home.sh',
+  'luma-helper',
+  'home-filter.js',
+  'legacy-home.py',
+  'legacy-home-filter.js',
+]) {
   await fs.copyFile(
     path.join(
       root,

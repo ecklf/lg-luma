@@ -1498,10 +1498,7 @@ fn run() -> Result<(), String> {
                         back_button.cancel();
                     }
                     match key {
-                        _ if webos
-                            && options.webos_home
-                            && i32::from(key) == sdl_events::WEBOS_HOME_KEYCODE =>
-                        {
+                        _ if sdl_events::is_home_key(key, webos) => {
                             if !repeat {
                                 eprintln!("Luma Home key: returning to Home tab");
                                 press = None;

@@ -1,4 +1,4 @@
-//! System recent history, deliberately independent of favorites and running apps.
+//! System recent history, with a running-card fallback for older firmware.
 use crate::{
     app_artwork::Source,
     model::{App, demo_inventory, valid_app_id},
@@ -57,6 +57,34 @@ fn excluded(id: &str) -> bool {
 #[derive(Clone, Debug, Serialize)]
 pub struct Entry {
     pub app: App,
+}
+
+/// Only normal running cards belong in the legacy app switcher.
+pub fn background_app_ids(reply: &Value) -> Result<Vec<String>, String> {
+    let running = reply
+        .get("running")
+        .and_then(Value::as_array)
+        .filter(|apps| apps.len() <= 1000)
+        .ok_or("Invalid running apps reply")?;
+    let mut ids = HashSet::new();
+    Ok(running
+        .iter()
+        .filter(|app| app["defaultWindowType"] == "card")
+        .filter_map(|app| app["id"].as_str())
+        .filter(|id| {
+            valid_app_id(id)
+                && !excluded(id)
+                && !crate::scroll_preview::is_placeholder(id)
+                && !matches!(
+                    *id,
+                    "com.webos.app.livetv" | "airplay" | "com.webos.app.container"
+                )
+                && !id.starts_with("com.webos.app.hdmi")
+                && !id.starts_with("com.webos.app.externalinput.")
+                && ids.insert((*id).to_owned())
+        })
+        .map(str::to_owned)
+        .collect())
 }
 
 pub fn normalize(reply: &Value) -> Result<Vec<Entry>, String> {
