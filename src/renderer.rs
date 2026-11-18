@@ -1182,19 +1182,19 @@ impl Renderer {
         let frame = self.frame;
         let started = Instant::now();
         let loaded = !self.textures.contains_key(&path);
-        let entry = self
-            .textures
-            .entry(path.clone())
-            .or_insert_with(|| match image::open(&path) {
-                Ok(image) => {
-                    let image = image.into_rgba8();
-                    Some(texture(image.width(), image.height(), image.as_raw()))
-                }
+        let entry = self.textures.entry(path.clone()).or_insert_with(|| {
+            let decoded = match crate::preload::take(&path) {
+                Some(Some(image)) => Ok(image),
+                Some(None) | None => image::open(&path).map(image::DynamicImage::into_rgba8),
+            };
+            match decoded {
+                Ok(image) => Some(texture(image.width(), image.height(), image.as_raw())),
                 Err(error) => {
                     eprintln!("Artwork {path}: {error}");
                     None
                 }
-            });
+            }
+        });
         if loaded {
             self.stats.image_load_ms += started.elapsed().as_secs_f64() * 1000.;
         }
@@ -1403,10 +1403,11 @@ impl Renderer {
             // exact legacy path for older uploads, missing/corrupt sidecars and A/B checks.
             let prepared = (std::env::var("LUMA_GLASS_PRECOMPUTED").as_deref() != Ok("0"))
                 .then(|| {
-                    crate::glass_backdrop::load(&crate::glass_backdrop::sidecar_path(Path::new(
-                        path,
-                    )))
-                    .ok()
+                    let sidecar = crate::glass_backdrop::sidecar_path(Path::new(path));
+                    match crate::preload::take(&sidecar.to_string_lossy()) {
+                        Some(image) => image,
+                        None => crate::glass_backdrop::load(&sidecar).ok(),
+                    }
                 })
                 .flatten();
             precomputed = prepared.is_some();
@@ -2154,7 +2155,96 @@ fn compile(kind: GLenum, source: &str) -> Result<GLuint, String> {
     }
 }
 
+/// Where linked program binaries are kept between launches (webOS only): compiling the
+/// shaders is a large part of Luma's startup on TV GPUs.
+static PROGRAM_CACHE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+pub fn set_program_cache(directory: PathBuf) {
+    let _ = PROGRAM_CACHE.set(directory);
+}
+
+/// The cache file for these sources on this exact driver; any change misses the cache.
+fn program_cache_file(vertex: &str, fragment: &str, attributes: &[&CStr]) -> Option<PathBuf> {
+    use std::hash::{Hash, Hasher};
+    let directory = PROGRAM_CACHE.get()?;
+    if !gl::ProgramBinary::is_loaded() || !gl::GetProgramBinary::is_loaded() {
+        return None;
+    }
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for name in [gl::VENDOR, gl::RENDERER, gl::VERSION] {
+        gl_string(name).hash(&mut hasher);
+    }
+    (vertex, fragment, attributes).hash(&mut hasher);
+    Some(directory.join(format!("{:016x}.bin", hasher.finish())))
+}
+
+fn load_program_binary(file: &Path) -> Option<GLuint> {
+    let bytes = std::fs::read(file).ok()?;
+    let format = GLenum::from_le_bytes(bytes.get(..4)?.try_into().ok()?);
+    let binary = &bytes[4..];
+    unsafe {
+        let program = gl::CreateProgram();
+        gl::ProgramBinary(program, format, binary.as_ptr().cast(), binary.len() as i32);
+        let mut success = 0;
+        gl::GetProgramiv(program, gl::LINK_STATUS, &mut success);
+        if success == 0 {
+            // A driver update or a damaged file: compile from source instead.
+            gl::DeleteProgram(program);
+            let _ = std::fs::remove_file(file);
+            return None;
+        }
+        Some(program)
+    }
+}
+
+fn save_program_binary(program: GLuint, file: &Path) {
+    unsafe {
+        let mut length = 0;
+        gl::GetProgramiv(program, gl::PROGRAM_BINARY_LENGTH, &mut length);
+        if length <= 0 {
+            return;
+        }
+        let mut binary = vec![0u8; length as usize];
+        let mut written = 0;
+        let mut format = 0;
+        gl::GetProgramBinary(
+            program,
+            length,
+            &mut written,
+            &mut format,
+            binary.as_mut_ptr().cast(),
+        );
+        if written <= 0 {
+            return;
+        }
+        binary.truncate(written as usize);
+        let mut bytes = format.to_le_bytes().to_vec();
+        bytes.extend_from_slice(&binary);
+        // Write beside, then rename: a crash never leaves a truncated binary in place.
+        let partial = file.with_extension("partial");
+        if file
+            .parent()
+            .is_some_and(|dir| std::fs::create_dir_all(dir).is_ok())
+            && std::fs::write(&partial, bytes).is_ok()
+        {
+            let _ = std::fs::rename(&partial, file);
+        }
+    }
+}
+
 fn link(vertex: &str, fragment: &str, attributes: &[&CStr]) -> Result<GLuint, String> {
+    let cache = program_cache_file(vertex, fragment, attributes);
+    if let Some(program) = cache.as_deref().and_then(load_program_binary) {
+        return Ok(program);
+    }
+    let program = link_source(vertex, fragment, attributes)?;
+    if let Some(file) = cache {
+        save_program_binary(program, &file);
+    }
+    Ok(program)
+}
+
+fn link_source(vertex: &str, fragment: &str, attributes: &[&CStr]) -> Result<GLuint, String> {
     let vertex = compile(gl::VERTEX_SHADER, vertex)?;
     let fragment = match compile(gl::FRAGMENT_SHADER, fragment) {
         Ok(fragment) => fragment,
@@ -2171,6 +2261,13 @@ fn link(vertex: &str, fragment: &str, attributes: &[&CStr]) -> Result<GLuint, St
         gl::AttachShader(program, fragment);
         for (index, name) in attributes.iter().enumerate() {
             gl::BindAttribLocation(program, index as u32, name.as_ptr());
+        }
+        if PROGRAM_CACHE.get().is_some() && gl::ProgramParameteri::is_loaded() {
+            gl::ProgramParameteri(
+                program,
+                gl::PROGRAM_BINARY_RETRIEVABLE_HINT,
+                gl::TRUE as i32,
+            );
         }
         gl::LinkProgram(program);
         gl::DeleteShader(vertex);
