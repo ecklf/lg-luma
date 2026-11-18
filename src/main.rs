@@ -224,9 +224,49 @@ struct Press {
     start: Instant,
     held: bool,
     pointer: bool,
+    pointer_gap: Option<Instant>,
 }
 
 impl Press {
+    const POINTER_GAP_GRACE: Duration = Duration::from_millis(150);
+
+    fn gap_expired(&self, now: Instant) -> bool {
+        self.pointer_gap
+            .is_some_and(|start| now.duration_since(start) >= Self::POINTER_GAP_GRACE)
+    }
+
+    /// Keep short cursor gaps, but never revive a cancelled drag on re-entry.
+    fn pointer_motion(&mut self, hovered: Option<&Target>, now: Instant) -> bool {
+        if !self.pointer {
+            return true;
+        }
+        if self.gap_expired(now) {
+            return false;
+        }
+        match hovered {
+            Some(target) if target == &self.target => self.pointer_gap = None,
+            Some(_) => return false,
+            None => {
+                self.pointer_gap.get_or_insert(now);
+            }
+        }
+        true
+    }
+
+    fn hold_ready(&self, now: Instant) -> bool {
+        !self.held
+            && self.pointer_gap.is_none()
+            && now.duration_since(self.start) >= self.hold_after()
+    }
+
+    fn release(press: &mut Option<Self>, pointer: bool) -> Option<Self> {
+        if press.as_ref().is_some_and(|p| p.pointer == pointer) {
+            press.take()
+        } else {
+            None
+        }
+    }
+
     /// Remote OK stays at 600 ms. Magic Remote wheel clicks often last longer
     /// than that, so pointer uses a higher bar before reorder/options steal the
     /// click (right-click still opens options immediately).
@@ -1573,6 +1613,7 @@ fn run() -> Result<(), String> {
                                     start: Instant::now(),
                                     held: false,
                                     pointer: false,
+                                    pointer_gap: None,
                                 });
                             }
                         }
@@ -1615,8 +1656,7 @@ fn run() -> Result<(), String> {
                     ..
                 } => {
                     // Only consume a keyboard press; never steal a pointer click.
-                    if press.as_ref().is_some_and(|p| !p.pointer)
-                        && let Some(held) = press.take()
+                    if let Some(held) = Press::release(&mut press, false)
                         && !held.held
                         && held.target == state.focus
                     {
@@ -1640,11 +1680,11 @@ fn run() -> Result<(), String> {
                         state.hover = hovered.clone();
                         state.dirty = true;
                     }
-                    // Cancel only when the cursor moves onto a different control.
-                    // Brief gaps (Magic Remote jitter / edge hits) must not drop the click.
-                    if press.as_ref().is_some_and(|p| {
-                        p.pointer && hovered.as_ref().is_some_and(|h| h != &p.target)
-                    }) {
+                    // Brief jitter gaps survive; other targets and sustained departures do not.
+                    if press
+                        .as_mut()
+                        .is_some_and(|p| !p.pointer_motion(hovered.as_ref(), Instant::now()))
+                    {
                         press = None;
                     }
                 }
@@ -1670,6 +1710,7 @@ fn run() -> Result<(), String> {
                                 start: Instant::now(),
                                 held: false,
                                 pointer: true,
+                                pointer_gap: None,
                             });
                         }
                     } else if mouse_btn == MouseButton::Left {
@@ -1683,8 +1724,9 @@ fn run() -> Result<(), String> {
                     ..
                 } => {
                     if press.as_ref().is_some_and(|p| p.pointer) {
-                        if let Some(held) = press.take()
+                        if let Some(held) = Press::release(&mut press, true)
                             && !held.held
+                            && !held.gap_expired(Instant::now())
                             && hit(&scene.controls, &window, x, y, &state).as_ref()
                                 == Some(&held.target)
                         {
@@ -1791,9 +1833,14 @@ fn run() -> Result<(), String> {
                 &updates,
             );
         }
+        let press_now = Instant::now();
+        if press.as_ref().is_some_and(|p| p.gap_expired(press_now)) {
+            press = None;
+            state.pressed = None;
+            state.dirty = true;
+        }
         if let Some(held) = &mut press
-            && !held.held
-            && held.start.elapsed() >= held.hold_after()
+            && held.hold_ready(press_now)
         {
             held.held = true;
             state.pressed = None;
