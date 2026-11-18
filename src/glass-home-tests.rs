@@ -640,8 +640,7 @@ fn drawer_has_a_compact_gap_even_with_legacy_caption_preferences() {
             .filter(|control| matches!(control.target, Target::App(_)))
             .map(|control| control.rect.y + control.rect.h)
             .fold(0., f32::max);
-        // Leave room for the name's 12px top gap and 28px line box, then 24px padding.
-        assert!((1080. - last_bottom - 12. - 28. - 24.).abs() < 0.001);
+        assert!((1080. - last_bottom - 24.).abs() < 0.001);
     }
 }
 

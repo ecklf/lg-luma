@@ -89,9 +89,11 @@ and `target/release/`. Desktop results do not establish TV size or performance.
 
 ## Controls and navigation
 
-The app drawer shows a centered, single-line name beneath the focused grid card in both drawer
-styles. Long names are ellipsized to the card width. Favorites, Home previews and app-management
-cards keep their existing unlabeled appearance; labels do not change card geometry or hit regions.
+General → Show app names is off by default, preserving the compact, unlabeled drawer.
+When enabled, the app drawer shows a centered, single-line name beneath the focused grid card
+in both styles, with wider row spacing and scroll padding for the name. Long names are ellipsized
+to the card width. Favorites, Home previews and app-management cards stay unlabeled; labels do not
+change card sizes or hit regions. The preference is stored as `show_drawer_app_names`.
 
 ### Market price widgets
 

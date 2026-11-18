@@ -736,7 +736,12 @@ impl State {
                 }
             } else if self.page == Page::Apps {
                 // Scroll card-only hit regions far enough to reveal their names too.
-                DRAWER_PADDING + DRAWER_NAME_TOP + DRAWER_NAME_HEIGHT
+                DRAWER_PADDING
+                    + if self.preferences.show_drawer_app_names {
+                        DRAWER_NAME_TOP + DRAWER_NAME_HEIGHT
+                    } else {
+                        0.
+                    }
             } else {
                 12.
             }
@@ -2930,6 +2935,10 @@ impl State {
             }
             Target::Setting(index) => {
                 match index {
+                    14 => {
+                        self.preferences.show_drawer_app_names =
+                            !self.preferences.show_drawer_app_names
+                    }
                     13 => {
                         self.subpage = Some(Subpage::AppDrawer);
                         self.focus = Target::Choice(usize::from(

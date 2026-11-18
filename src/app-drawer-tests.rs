@@ -2,10 +2,64 @@ use super::*;
 use crate::{model::AppDrawerStyle, renderer::Draw, state::Subpage};
 
 #[test]
+fn drawer_app_names_default_off_and_toggle_persists_with_compact_layout_restored() {
+    let legacy: Preferences = serde_json::from_value(json!({"show_home_names": true})).unwrap();
+    assert!(!legacy.show_drawer_app_names);
+    for style in AppDrawerStyle::ALL {
+        let mut state = ready();
+        state.preferences.app_drawer_style = style;
+        state.preferences.reduced_motion = true;
+        for enabled in [false, true, false] {
+            state.open(2);
+            state.focus = Target::Setting(12);
+            state.direction(Direction::Down, &controls(&state));
+            assert_eq!(state.focus, Target::Setting(14));
+            if state.preferences.show_drawer_app_names != enabled {
+                assert_eq!(state.activate(), vec![Effect::Save]);
+            }
+            assert_eq!(state.preferences.show_drawer_app_names, enabled);
+            let loaded: Preferences =
+                serde_json::from_value(serde_json::to_value(&state.preferences).unwrap()).unwrap();
+            assert_eq!(loaded.show_drawer_app_names, enabled);
+            state.open(1);
+            let first = Target::App(state.drawer_apps()[0].id.clone());
+            let next = Target::App(state.drawer_apps()[6].id.clone());
+            state.focus = first.clone();
+            let rendered = scene(&state);
+            let card = rendered
+                .controls
+                .iter()
+                .find(|c| c.target == first)
+                .unwrap();
+            let next = rendered.controls.iter().find(|c| c.target == next).unwrap();
+            let gap = if enabled { 64. } else { 38.4 };
+            assert!((next.rect.y - card.rect.y - card.rect.h - gap).abs() < 0.001);
+            assert_eq!(
+                rendered.draw.iter().any(|draw| matches!(draw,
+                    Draw::Text(_, rect, _, _, true) if rect.y == card.rect.y + card.rect.h + 12.
+                )),
+                enabled
+            );
+            state.wheel_scroll(&rendered.controls, None, 0, -1000);
+            let rendered = scene(&state);
+            let bottom = rendered
+                .controls
+                .iter()
+                .filter(|c| matches!(c.target, Target::App(_)))
+                .map(|c| c.rect.y + c.rect.h)
+                .fold(0., f32::max);
+            let padding = if enabled { 64. } else { 24. };
+            assert!((1080. - bottom - padding).abs() < 0.001);
+        }
+    }
+}
+
+#[test]
 fn selected_drawer_app_name_is_centered_without_changing_card_geometry() {
     for style in AppDrawerStyle::ALL {
         for pointer in [false, true] {
             let mut state = ready();
+            state.preferences.show_drawer_app_names = true;
             state.preferences.app_drawer_style = style;
             state.pointer = pointer;
             state.preferences.reduced_motion = true;
@@ -75,6 +129,7 @@ fn selected_drawer_app_name_is_centered_without_changing_card_geometry() {
 fn drawer_rows_leave_room_below_selected_app_names() {
     for style in AppDrawerStyle::ALL {
         let mut state = ready();
+        state.preferences.show_drawer_app_names = true;
         state.preferences.app_drawer_style = style;
         state.preferences.reduced_motion = true;
         state.open(1);
@@ -114,6 +169,7 @@ fn drawer_scroll_reveals_last_app_name_with_bottom_padding() {
     for style in AppDrawerStyle::ALL {
         for wheel in [false, true] {
             let mut state = ready();
+            state.preferences.show_drawer_app_names = true;
             state.preferences.app_drawer_style = style;
             state.preferences.reduced_motion = true;
             let template = state.inventory.apps[0].clone();
@@ -161,6 +217,7 @@ fn drawer_scroll_reveals_last_app_name_with_bottom_padding() {
 fn selected_favorites_and_home_preview_do_not_get_drawer_names() {
     for style in AppDrawerStyle::ALL {
         let mut state = ready();
+        state.preferences.show_drawer_app_names = true;
         state.preferences.app_drawer_style = style;
         state.preferences.reduced_motion = true;
         let id = state.dock_apps()[0].id.clone();
@@ -229,7 +286,7 @@ fn general_groups_app_sorting_and_app_drawer_in_visual_and_remote_order() {
         .collect();
     assert_eq!(
         settings.iter().map(|(index, _)| *index).collect::<Vec<_>>(),
-        [1, 4, 13, 10, 2, 11, 12]
+        [1, 4, 13, 10, 2, 11, 12, 14]
     );
     assert!((settings[3].1 - settings[2].1 - 84.).abs() < 0.001);
     state.focus = Target::Setting(13);

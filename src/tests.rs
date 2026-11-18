@@ -323,8 +323,7 @@ fn widening_favorites_does_not_widen_apps_or_unclip_offscreen_rows() {
     assert!(!state.wheel_scroll(&controls, Some((1860., 600.)), 0, -1));
     assert_eq!(state.home_scroll, 0.);
     let viewport = state.content_viewport();
-    let scroll_limit =
-        controls[0].rect.y + controls[0].rect.h - (viewport.y + viewport.h - 24. - 12. - 28.);
+    let scroll_limit = controls[0].rect.y + controls[0].rect.h - (viewport.y + viewport.h - 24.);
     assert_eq!(state.scroll, 90_f32.min(scroll_limit));
 }
 
