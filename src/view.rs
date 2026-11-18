@@ -7,9 +7,9 @@ use crate::{
     },
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, APPS_SECTION, Control, DRAWER_NAME_HEIGHT, DRAWER_NAME_TOP, HOME_TILE_PITCH,
-        HOME_TILE_WIDTH, INPUTS_SECTION, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage,
-        Target, TextField, WIDGETS_SECTION,
+        APPS_COLUMNS, APPS_SECTION, Control, DRAWER_NAME_HEIGHT, DRAWER_NAME_TOP,
+        HOME_DOCK_PADDING, HOME_DOCK_SLOTS, HOME_TILE_PITCH, HOME_TILE_WIDTH, INPUTS_SECTION, KEYS,
+        Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage, Target, TextField, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -927,19 +927,15 @@ fn tile(
     assets: &Assets,
     app: &App,
     rect: Rect,
-    dock: bool,
+    dock: Option<Rect>,
 ) -> bool {
-    let target = if dock && state.page == Page::Apps {
+    let target = if dock.is_some() && state.page == Page::Apps {
         Target::DockApp(app.id.clone())
     } else {
         Target::App(app.id.clone())
     };
     out.control(target.clone(), rect, true);
-    let viewport = if dock {
-        state.favorites_viewport()
-    } else {
-        state.content_viewport()
-    };
+    let viewport = dock.unwrap_or_else(|| state.content_viewport());
     let top = if state.page == Page::Apps {
         0.
     } else {
@@ -962,7 +958,7 @@ fn tile(
         if focused { 0.4 } else { 0.165 },
     );
     let favorite_color = app_face(out, assets, app, rect, state.preferences.language, 19.2);
-    if !dock
+    if dock.is_none()
         && state
             .preferences
             .favorites(&state.inventory.apps)
@@ -993,7 +989,7 @@ fn tile(
     }
     if focused {
         out.ring(rect, 19.2);
-        if !dock && state.page == Page::Apps && state.preferences.show_drawer_app_names {
+        if dock.is_none() && state.page == Page::Apps && state.preferences.show_drawer_app_names {
             let (label, style) = assets.fit_line(&app.title, text(22., 550, -0.02), rect.w, 22.);
             out.text(
                 label,
@@ -1505,13 +1501,19 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let dock_y = state.dock_y();
     let dock_height = FACE_HEIGHT;
-    let card = state.favorites_viewport();
+    let apps = state.dock_apps();
+    let card = state.dock_viewport_for(apps.len());
+    let left = card.x + HOME_DOCK_PADDING;
+    let scroll = if apps.len() > HOME_DOCK_SLOTS {
+        state.home_scroll
+    } else {
+        0.
+    };
     let dock = Rect::new(card.x, dock_y - 24., card.w, dock_height + 48.);
     // The card extends beyond the content viewport; clip only its scrolling contents.
     out.draw.push(Draw::Clip(None));
     out.shadow(dock, 40., 38., 12., 0.22);
     out.glass(dock, 40.);
-    let apps = state.dock_apps();
     if state.loading && state.inventory.apps.is_empty() {
         for index in 0..6 {
             out.shape(
@@ -1545,7 +1547,7 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
         );
     }
     // The favourites scroll inside their glass card and slide under its edges.
-    out.draw.push(Draw::Clip(Some(state.favorites_viewport())));
+    out.draw.push(Draw::Clip(Some(card)));
     let mut cards = Vec::new();
     for (index, app) in apps.iter().enumerate() {
         let start = out.draw.len();
@@ -1555,12 +1557,12 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
             assets,
             app,
             Rect::new(
-                84. + index as f32 * HOME_TILE_PITCH - state.home_scroll,
+                left + index as f32 * HOME_TILE_PITCH - scroll,
                 dock_y,
                 HOME_TILE_WIDTH,
                 FACE_HEIGHT,
             ),
-            true,
+            Some(card),
         );
         cards.push((start, out.draw.len(), focused));
     }
@@ -1974,7 +1976,7 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
                     270.,
                     FACE_HEIGHT,
                 ),
-                false,
+                None,
             );
             cards.push((start, out.draw.len(), focused));
             // Reveal/scroll against the final layout, not the moving presentation.
@@ -2878,7 +2880,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             for row in apps.chunks(3) {
                 for (column, app) in row.iter().enumerate() {
                     let rect = Rect::new(640. + column as f32 * 380., y - s, 360., 202.5);
-                    tile(out, state, assets, app, rect, false);
+                    tile(out, state, assets, app, rect, None);
                     if state.preferences.hidden.contains(&app.id) {
                         let badge = Rect::new(rect.x + 12., rect.y + 12., 30., 30.);
                         out.shape(badge, 15., c(0x202020, 0.85));
