@@ -40,6 +40,11 @@ Use **Clear name** to return to an unnamed greeting; names are saved only on you
 
 ## Compatibility
 
+webOS 4 has an optional [legacy Home routing integration](docs/webos4-home.md)
+for its compositor-embedded launcher. It includes a restore command and a running-app
+fallback where the recent-history service is absent. The extracted integration
+requires model-specific TV verification and leaves Luma's navigation unchanged.
+
 > [!NOTE]
 > Luma should start on any TV running webOS 4 or newer. The following configurations have been
 > confirmed to work by the community. Home takeover support varies, as noted below:
