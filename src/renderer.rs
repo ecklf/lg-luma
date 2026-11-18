@@ -83,6 +83,8 @@ struct Texture {
     width: u32,
     height: u32,
     frame: u64,
+    /// Every texel has alpha 255: an untinted, unfaded draw of it hides what lies beneath.
+    opaque: bool,
 }
 impl Drop for Texture {
     fn drop(&mut self) {
@@ -205,6 +207,8 @@ enum BatchKind {
         start: usize,
         count: usize,
         backdrop: Option<[[u8; 3]; 2]>,
+        /// Drawn without blending: lets the GPU discard hidden fragments beneath.
+        opaque: bool,
     },
     Vector {
         path: String,
@@ -222,6 +226,32 @@ struct Batch {
     kind: BatchKind,
     clip: Option<Rect>,
     fade: Option<[f32; 4]>,
+}
+
+/// A region of a quad drawn differently from the rest of it.
+#[derive(Clone, Copy)]
+enum Hole {
+    /// Not drawn: its pixels would not change the target.
+    Skip(Rect),
+    /// Fully opaque: drawn without blending.
+    Opaque(Rect),
+}
+
+thread_local! {
+    /// Uniform locations by program and name: the driver's lookup is a string search,
+    /// and every batch sets a few uniforms. Cleared whenever programs are (re)created.
+    static UNIFORMS: std::cell::RefCell<HashMap<(GLuint, usize), GLint>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+/// `name` must be a static C string literal (its address is the cache key).
+unsafe fn uniform_location(program: GLuint, name: *const std::ffi::c_char) -> GLint {
+    UNIFORMS.with(|cache| {
+        *cache
+            .borrow_mut()
+            .entry((program, name as usize))
+            .or_insert_with(|| unsafe { gl::GetUniformLocation(program, name) })
+    })
 }
 
 fn full_screen(rect: &Rect) -> bool {
@@ -414,6 +444,7 @@ impl Renderer {
         } else {
             "#version 150\n#define varying in\n#define texture2D texture\nout vec4 out_color;\n#define gl_FragColor out_color\n#define PAINT_PRECISION\n".into()
         };
+        UNIFORMS.with(|cache| cache.borrow_mut().clear());
         let program = link(
             &(vertex_prefix.clone() + include_str!("shaders/paint.vert")),
             &(fragment_prefix.clone() + include_str!("shaders/paint.frag")),
@@ -593,7 +624,16 @@ impl Renderer {
         color: Color,
         texture: GLuint,
     ) {
-        self.gradient_quad(rect, uv, radius, border, [color, color], texture, None);
+        self.gradient_quad(
+            rect,
+            uv,
+            radius,
+            border,
+            [color, color],
+            texture,
+            None,
+            None,
+        );
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -606,11 +646,56 @@ impl Renderer {
         colors: [Color; 2],
         texture: GLuint,
         backdrop: Option<[[u8; 3]; 2]>,
+        hole: Option<Hole>,
     ) {
         if rect.w <= 0. || rect.h <= 0. {
             return;
         }
         let rect = self.snap(rect);
+        // Pixels inside `hole` would leave the target unchanged (zero coverage) or are
+        // overdrawn by an opaque draw: rasterize only the four strips around it.
+        if let Some(region) = hole {
+            let (Hole::Skip(hole) | Hole::Opaque(hole)) = region;
+            // Whole physical pixels, rounded inward: the strips meet on pixel boundaries.
+            let scale = self.stats.viewport.scale.max(0.01);
+            let (left, top) = (
+                (hole.x * scale).ceil() / scale,
+                (hole.y * scale).ceil() / scale,
+            );
+            let right = ((hole.x + hole.w) * scale).floor() / scale;
+            let bottom = ((hole.y + hole.h) * scale).floor() / scale;
+            let hole = Rect::new(left, top, right - left, bottom - top);
+            let x0 = hole.x.max(rect.x);
+            let y0 = hole.y.max(rect.y);
+            let x1 = (hole.x + hole.w).min(rect.x + rect.w);
+            let y1 = (hole.y + hole.h).min(rect.y + rect.h);
+            if x1 - x0 >= 8. && y1 - y0 >= 8. {
+                let start = self.vertices.len() / 14;
+                let (left, top) = (rect.x, rect.y);
+                let (right, bottom) = (rect.x + rect.w, rect.y + rect.h);
+                let mut count = 0;
+                for [a, b, c, d] in [
+                    [left, top, right, y0],
+                    [left, y1, right, bottom],
+                    [left, y0, x0, y1],
+                    [x1, y0, right, y1],
+                ] {
+                    if c > a && d > b {
+                        self.quad_part(rect, [a, b, c, d], uv, radius, border, colors);
+                        count += 6;
+                    }
+                }
+                if count > 0 {
+                    self.paint_batch(start, count, texture, backdrop, false);
+                }
+                if let Hole::Opaque(_) = region {
+                    let start = self.vertices.len() / 14;
+                    self.quad_part(rect, [x0, y0, x1, y1], uv, radius, border, colors);
+                    self.paint_batch(start, 6, texture, backdrop, true);
+                }
+                return;
+            }
+        }
         let start = self.vertices.len() / 14;
         for (x, y) in [(0., 0.), (1., 0.), (0., 1.), (0., 1.), (1., 0.), (1., 1.)] {
             let color = colors[y as usize];
@@ -631,7 +716,74 @@ impl Renderer {
                 border,
             ]);
         }
-        self.paint_batch(start, 6, texture, backdrop);
+        self.paint_batch(start, 6, texture, backdrop, false);
+    }
+
+    /// Six paint vertices for the part [x0, y0, x1, y1] of `rect`, with the same attributes
+    /// the whole quad interpolates there.
+    fn quad_part(
+        &mut self,
+        rect: Rect,
+        part: [f32; 4],
+        uv: [f32; 4],
+        radius: f32,
+        border: f32,
+        colors: [Color; 2],
+    ) {
+        for (x, y) in [(0, 1), (2, 1), (0, 3), (0, 3), (2, 1), (2, 3)] {
+            let (px, py) = (part[x], part[y]);
+            let fx = (px - rect.x) / rect.w;
+            let fy = (py - rect.y) / rect.h;
+            let color: [f32; 4] =
+                std::array::from_fn(|i| colors[0][i] + (colors[1][i] - colors[0][i]) * fy);
+            self.vertices.extend_from_slice(&[
+                px,
+                py,
+                uv[0] + fx * (uv[2] - uv[0]),
+                uv[1] + fy * (uv[3] - uv[1]),
+                color[0],
+                color[1],
+                color[2],
+                color[3],
+                (fx - 0.5) * rect.w,
+                (fy - 0.5) * rect.h,
+                rect.w / 2.,
+                rect.h / 2.,
+                radius,
+                border,
+            ]);
+        }
+    }
+
+    /// The region of the next draw that is certainly opaque: an untinted, unfaded app face
+    /// or opaque image. A shadow beneath it does not need those pixels.
+    fn opaque_cover(&self, next: Option<&Draw>) -> Option<Rect> {
+        let (rect, radius) = match next? {
+            Draw::AppImage(_, rect, radius, tint) if tint[3] >= 1. => (*rect, *radius),
+            Draw::Image(path, rect, radius, false)
+                if !path.ends_with(".lvec")
+                    && self
+                        .textures
+                        .get(path.as_str())
+                        .is_some_and(|t| t.as_ref().is_some_and(|t| t.opaque)) =>
+            {
+                (*rect, *radius)
+            }
+            _ => return None,
+        };
+        self.opaque_interior(rect, radius)
+    }
+
+    /// The part of an opaque rounded rect drawn with full coverage: inside the rounded
+    /// corners, two pixels clear of the antialiased edge and within an edge fade's plateau.
+    fn opaque_interior(&self, rect: Rect, radius: f32) -> Option<Rect> {
+        let mut hole = self.snap(rect).inset(radius.max(0.) * 0.3 + 2.);
+        if let Some([_, top, bottom, _]) = self.fade.filter(|fade| fade[1] > fade[0]) {
+            let y0 = hole.y.max(top);
+            let y1 = (hole.y + hole.h).min(bottom);
+            hole = Rect::new(hole.x, y0, hole.w, y1 - y0);
+        }
+        (hole.w > 0. && hole.h > 0.).then_some(hole)
     }
 
     /// Appends `count` paint vertices from `start`, merged into the previous batch when it uses
@@ -642,6 +794,7 @@ impl Renderer {
         count: usize,
         texture: GLuint,
         backdrop: Option<[[u8; 3]; 2]>,
+        opaque: bool,
     ) {
         if let Some(batch) = self.batches.last_mut() {
             let same_clip = match (batch.clip, self.clip) {
@@ -655,10 +808,12 @@ impl Renderer {
                     texture: previous,
                     count: batch_count,
                     backdrop: previous_backdrop,
+                    opaque: previous_opaque,
                     ..
                 } = &mut batch.kind
                 && *previous == texture
                 && *previous_backdrop == backdrop
+                && *previous_opaque == opaque
             {
                 *batch_count += count;
                 return;
@@ -670,6 +825,7 @@ impl Renderer {
                 start,
                 count,
                 backdrop,
+                opaque,
             },
             clip: self.clip,
             fade: self.fade,
@@ -679,7 +835,7 @@ impl Renderer {
     /// The wallpaper with full-screen translucent fills folded in: each fill maps a pixel p to
     /// p * (1 - a) + c * a, so together they are p * m + k, drawn in one pass instead of one
     /// full-screen layer each. Strips keep gradients' products of colour and alpha exact.
-    fn folded_quad(&mut self, rect: Rect, texture: GLuint, scrims: &[Scrim]) {
+    fn folded_quad(&mut self, rect: Rect, texture: GLuint, scrims: &[Scrim], opaque: bool) {
         const STRIPS: usize = 16;
         let fold = |t: f32| {
             let (mut m, mut k) = ([1f32; 3], [0f32; 3]);
@@ -720,7 +876,13 @@ impl Renderer {
                 ]);
             }
         }
-        self.paint_batch(start, STRIPS * 6, texture, None);
+        self.paint_batch(
+            start,
+            STRIPS * 6,
+            texture,
+            None,
+            opaque && self.fade.is_none(),
+        );
     }
 
     fn text(&mut self, text: &str, rect: Rect, style: TextStyle, color: Color, centered: bool) {
@@ -1042,6 +1204,7 @@ impl Renderer {
         };
         texture.frame = frame;
         let id = texture.id;
+        let opaque = texture.opaque && tint[3] >= 1.;
         if contain {
             let scale = (rect.w / texture.width as f32).min(rect.h / texture.height as f32);
             let w = texture.width as f32 * scale;
@@ -1049,9 +1212,22 @@ impl Renderer {
             rect = Rect::new(rect.x + (rect.w - w) / 2., rect.y + (rect.h - h) / 2., w, h);
         }
         if scrims.is_empty() {
-            self.quad(rect, [0., 0., 1., 1.], plain_radius(radius), 0., tint, id);
+            let hole = opaque
+                .then(|| self.opaque_interior(rect, radius))
+                .flatten()
+                .map(Hole::Opaque);
+            self.gradient_quad(
+                rect,
+                [0., 0., 1., 1.],
+                plain_radius(radius),
+                0.,
+                [tint; 2],
+                id,
+                None,
+                hole,
+            );
         } else {
-            self.folded_quad(rect, id, scrims);
+            self.folded_quad(rect, id, scrims, opaque);
         }
     }
 
@@ -1162,6 +1338,10 @@ impl Renderer {
             [tint; 2],
             id,
             Some(image.backdrop),
+            (tint[3] >= 1.)
+                .then(|| self.opaque_interior(rect, radius))
+                .flatten()
+                .map(Hole::Opaque),
         );
     }
 
@@ -1310,13 +1490,18 @@ impl Renderer {
                     *tint,
                     self.white.id,
                 ),
-                Draw::Shape(rect, radius, border, color) => self.quad(
+                // A border's coverage is exactly zero more than its width (plus the
+                // filter) inside the edge.
+                Draw::Shape(rect, radius, border, color) => self.gradient_quad(
                     *rect,
                     [0., 0., 1., 1.],
                     *radius,
                     *border,
-                    *color,
+                    [*color; 2],
                     self.white.id,
+                    None,
+                    (*border > 0.)
+                        .then(|| Hole::Skip(self.snap(*rect).inset(radius + border + 2.))),
                 ),
                 Draw::RoundedGradient(rect, radius, top, bottom) => self.gradient_quad(
                     *rect,
@@ -1326,14 +1511,17 @@ impl Renderer {
                     [*top, *bottom],
                     self.white.id,
                     None,
+                    None,
                 ),
-                Draw::Shadow(rect, radius, blur, color) => self.quad(
+                Draw::Shadow(rect, radius, blur, color) => self.gradient_quad(
                     rect.inset(-*blur),
                     [0., 0., 1., 1.],
                     *radius,
                     -*blur,
-                    *color,
+                    [*color; 2],
                     self.white.id,
+                    None,
+                    self.opaque_cover(commands.get(index)).map(Hole::Skip),
                 ),
                 Draw::Text(text, rect, size, color, centered) => {
                     self.text(text, *rect, *size, *color, *centered)
@@ -1402,10 +1590,19 @@ impl Renderer {
         if let Some([_, _, w, h]) = damage {
             self.stats.redrawn_fraction = f64::from(w * h) / f64::from((width * height).max(1));
         }
-        let scissor = |area: Option<[i32; 4]>| unsafe {
+        // Only changes reach the driver: each state call costs real time on the TV.
+        let mut scissor_state: Option<Option<[i32; 4]>> = None;
+        let mut scissor = |area: Option<[i32; 4]>| unsafe {
+            if scissor_state == Some(area) {
+                return;
+            }
+            let enabled = scissor_state.flatten().is_some();
+            scissor_state = Some(area);
             match area {
                 Some([x, y, w, h]) => {
-                    gl::Enable(gl::SCISSOR_TEST);
+                    if !enabled {
+                        gl::Enable(gl::SCISSOR_TEST);
+                    }
                     gl::Scissor(x, y, w.max(0), h.max(0));
                 }
                 None => gl::Disable(gl::SCISSOR_TEST),
@@ -1429,19 +1626,13 @@ impl Renderer {
             );
             gl::UseProgram(self.program);
             gl::Uniform1i(
-                gl::GetUniformLocation(self.program, c"u_glass_enabled".as_ptr()),
+                uniform_location(self.program, c"u_glass_enabled".as_ptr()),
                 i32::from(glass_enabled),
             );
-            gl::Uniform1i(
-                gl::GetUniformLocation(self.program, c"u_glass_a".as_ptr()),
-                1,
-            );
-            gl::Uniform1i(
-                gl::GetUniformLocation(self.program, c"u_glass_b".as_ptr()),
-                2,
-            );
+            gl::Uniform1i(uniform_location(self.program, c"u_glass_a".as_ptr()), 1);
+            gl::Uniform1i(uniform_location(self.program, c"u_glass_b".as_ptr()), 2);
             gl::Uniform1f(
-                gl::GetUniformLocation(self.program, c"u_glass_mix".as_ptr()),
+                uniform_location(self.program, c"u_glass_mix".as_ptr()),
                 second.map_or(0., |(_, alpha)| alpha),
             );
             gl::ActiveTexture(gl::TEXTURE1);
@@ -1450,16 +1641,17 @@ impl Renderer {
             gl::BindTexture(gl::TEXTURE_2D, glass_b);
             // One drawable pixel in logical units: the paint shader's edge filter width.
             gl::Uniform1f(
-                gl::GetUniformLocation(self.program, c"u_aa".as_ptr()),
+                uniform_location(self.program, c"u_aa".as_ptr()),
                 1. / scale.max(0.01),
             );
-            gl::Uniform1i(
-                gl::GetUniformLocation(self.program, c"u_texture".as_ptr()),
-                0,
-            );
+            gl::Uniform1i(uniform_location(self.program, c"u_texture".as_ptr()), 0);
             gl::ActiveTexture(gl::TEXTURE0);
             let mut paint_bound = false;
             let mut current_fade = None;
+            let mut blending = true;
+            let mut bound_texture = 0;
+            // u_app of the paint program (it keeps its value across program switches).
+            let mut app_uniform: Option<bool> = None;
             for batch in &self.batches {
                 if current_fade != Some(batch.fade) {
                     // The same cheap alpha mask applies to shapes, textures,
@@ -1468,7 +1660,7 @@ impl Renderer {
                     for program in [self.program, self.vector_program, self.text_program] {
                         gl::UseProgram(program);
                         gl::Uniform4f(
-                            gl::GetUniformLocation(program, c"u_edge_fade".as_ptr()),
+                            uniform_location(program, c"u_edge_fade".as_ptr()),
                             fade[0],
                             fade[1],
                             fade[2],
@@ -1496,7 +1688,16 @@ impl Renderer {
                         start,
                         count,
                         backdrop,
+                        opaque,
                     } => {
+                        if *opaque == blending {
+                            if *opaque {
+                                gl::Disable(gl::BLEND);
+                            } else {
+                                gl::Enable(gl::BLEND);
+                            }
+                            blending = !*opaque;
+                        }
                         if !paint_bound {
                             gl::UseProgram(self.program);
                             gl::BindBuffer(gl::ARRAY_BUFFER, self.buffer);
@@ -1515,17 +1716,23 @@ impl Renderer {
                             }
                             paint_bound = true;
                         }
-                        gl::BindTexture(gl::TEXTURE_2D, *texture);
-                        gl::Uniform1i(
-                            gl::GetUniformLocation(self.program, c"u_app".as_ptr()),
-                            i32::from(backdrop.is_some()),
-                        );
+                        if bound_texture != *texture {
+                            gl::BindTexture(gl::TEXTURE_2D, *texture);
+                            bound_texture = *texture;
+                        }
+                        if app_uniform != Some(backdrop.is_some()) {
+                            gl::Uniform1i(
+                                uniform_location(self.program, c"u_app".as_ptr()),
+                                i32::from(backdrop.is_some()),
+                            );
+                            app_uniform = Some(backdrop.is_some());
+                        }
                         if let Some(stops) = backdrop {
                             for (name, rgb) in
                                 [(c"u_app_top", stops[0]), (c"u_app_bottom", stops[1])]
                             {
                                 gl::Uniform3f(
-                                    gl::GetUniformLocation(self.program, name.as_ptr()),
+                                    uniform_location(self.program, name.as_ptr()),
                                     rgb[0] as f32 / 255.,
                                     rgb[1] as f32 / 255.,
                                     rgb[2] as f32 / 255.,
@@ -1534,6 +1741,14 @@ impl Renderer {
                         }
                         gl::DrawArrays(gl::TRIANGLES, *start as i32, *count as i32);
                     }
+                    BatchKind::Vector { .. } | BatchKind::Text { .. } if !blending => {
+                        gl::Enable(gl::BLEND);
+                        blending = true;
+                    }
+                    _ => {}
+                }
+                match &batch.kind {
+                    BatchKind::Paint { .. } => {}
                     BatchKind::Vector { path, rect, tint } => {
                         let Some(mesh) = self.vectors.get(path).and_then(Option::as_ref) else {
                             continue;
@@ -1563,6 +1778,9 @@ impl Renderer {
                         paint_bound = false;
                     }
                 }
+            }
+            if !blending {
+                gl::Enable(gl::BLEND);
             }
             gl::Disable(gl::SCISSOR_TEST);
         }
@@ -1614,17 +1832,14 @@ impl Renderer {
             gl::UseProgram(program);
             if program == self.text_program {
                 gl::Uniform1f(
-                    gl::GetUniformLocation(program, c"u_fringe".as_ptr()),
+                    uniform_location(program, c"u_fringe".as_ptr()),
                     if self.stats.multisample_samples > 1 {
                         0.
                     } else {
                         0.5
                     },
                 );
-                gl::Uniform1f(
-                    gl::GetUniformLocation(program, c"u_embolden".as_ptr()),
-                    embolden,
-                );
+                gl::Uniform1f(uniform_location(program, c"u_embolden".as_ptr()), embolden);
             }
             gl::BindBuffer(gl::ARRAY_BUFFER, mesh.buffer);
             gl::DisableVertexAttribArray(4);
@@ -1642,19 +1857,19 @@ impl Renderer {
                 offset += size as usize;
             }
             gl::Uniform4f(
-                gl::GetUniformLocation(program, c"u_transform".as_ptr()),
+                uniform_location(program, c"u_transform".as_ptr()),
                 transform[0],
                 transform[1],
                 transform[2],
                 transform[3],
             );
             gl::Uniform2f(
-                gl::GetUniformLocation(program, c"u_pixel_scale".as_ptr()),
+                uniform_location(program, c"u_pixel_scale".as_ptr()),
                 viewport.width as f32 / 1920.,
                 viewport.height as f32 / 1080.,
             );
             gl::Uniform4f(
-                gl::GetUniformLocation(program, c"u_tint".as_ptr()),
+                uniform_location(program, c"u_tint".as_ptr()),
                 tint[0],
                 tint[1],
                 tint[2],
@@ -1902,6 +2117,7 @@ fn texture(width: u32, height: u32, pixels: &[u8]) -> Texture {
         width,
         height,
         frame: 0,
+        opaque: !pixels.is_empty() && pixels.chunks_exact(4).all(|texel| texel[3] == 255),
     }
 }
 
