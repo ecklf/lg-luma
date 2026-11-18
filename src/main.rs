@@ -309,6 +309,33 @@ impl BackButton {
     }
 }
 
+fn launch_app(state: &mut State, webos: bool, id: String, send: impl FnOnce(Request)) {
+    if scroll_preview::is_placeholder(&id) {
+        state.notify(state.preferences.language.t("scrollTestOnly"));
+        return;
+    }
+    if state.launching {
+        return;
+    }
+    if webos {
+        state.launching = true;
+        send(Request::Launch(id));
+    } else {
+        let title = state
+            .inventory
+            .apps
+            .iter()
+            .find(|a| a.id == id)
+            .map_or(id.as_str(), |app| app.title.as_str());
+        state.notify(
+            state
+                .preferences
+                .language
+                .format("desktopPreview", &[("app", title)]),
+        );
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn effects(
     effects: Vec<Effect>,
@@ -339,29 +366,7 @@ fn effects(
                 }
             }
             Effect::Launch(id) => {
-                if scroll_preview::is_placeholder(&id) {
-                    state.notify(state.preferences.language.t("scrollTestOnly"));
-                    continue;
-                }
-                if !state.launching {
-                    if platform.webos {
-                        state.launching = true;
-                        platform.send(Request::Launch(id));
-                    } else {
-                        let title = state
-                            .inventory
-                            .apps
-                            .iter()
-                            .find(|a| a.id == id)
-                            .map_or(id.as_str(), |app| app.title.as_str());
-                        state.notify(
-                            state
-                                .preferences
-                                .language
-                                .format("desktopPreview", &[("app", title)]),
-                        );
-                    }
-                }
+                launch_app(state, platform.webos, id, |request| platform.send(request));
             }
             Effect::FireWebhook(tile) => webhook.send(tile),
             Effect::UpdateDownload(release) => updates.request(update::Request::Download(release)),
