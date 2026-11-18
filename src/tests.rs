@@ -40,6 +40,17 @@ fn ready() -> State {
 }
 
 #[test]
+fn animations_are_paced_when_vsync_is_unavailable() {
+    use std::time::Duration;
+
+    assert_eq!(crate::animation_wait(false, Duration::ZERO), 16);
+    assert_eq!(crate::animation_wait(false, Duration::from_millis(5)), 11);
+    assert_eq!(crate::animation_wait(false, Duration::from_millis(16)), 0);
+    assert_eq!(crate::animation_wait(false, Duration::from_millis(30)), 0);
+    assert_eq!(crate::animation_wait(true, Duration::ZERO), 0);
+}
+
+#[test]
 fn tv_app_and_device_settings_launches_are_quiet_and_guarded() {
     for id in ["netflix", "com.palm.app.settings"] {
         let mut state = ready();

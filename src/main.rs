@@ -483,6 +483,16 @@ fn input_refresh_active(state: &State, webos: bool, focused: bool, visible: bool
         && state.recents.visibility == 0.
 }
 
+fn animation_wait(vsync: bool, elapsed: Duration) -> u32 {
+    if vsync {
+        0
+    } else {
+        Duration::from_millis(16)
+            .saturating_sub(elapsed)
+            .as_millis() as u32
+    }
+}
+
 fn weather_tick(
     state: &mut State,
     service: &weather_service::Service,
@@ -915,9 +925,13 @@ fn run() -> Result<(), String> {
     unsafe { gl::GetIntegerv(gl::SAMPLES, &mut samples) };
     eprintln!("Luma GL multisampling: {samples} samples");
     startup_stage("window and GL context");
-    if let Err(error) = video.gl_set_swap_interval(1) {
-        eprintln!("VSync: {error}");
-    }
+    let vsync = match video.gl_set_swap_interval(1) {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("VSync: {error}");
+            false
+        }
+    };
     let mut renderer =
         renderer::Renderer::new(&assets.root.join("font.ttf"), gles, text_config.embolden)?;
     startup_stage("renderer");
@@ -1093,6 +1107,7 @@ fn run() -> Result<(), String> {
         options.time.unwrap_or_else(OffsetDateTime::now_utc),
     );
     while running {
+        let frame_started = Instant::now();
         let now = options
             .time
             .unwrap_or_else(|| OffsetDateTime::now_utc().to_offset(local_offset));
@@ -2207,12 +2222,13 @@ fn run() -> Result<(), String> {
             }
         }
         // Block until input instead of polling at frame rate on idle screens.
-        // VSync paces animation; holds, scripted checks and icons still being
-        // decoded need short timed wakes.
+        // VSync normally paces animation. Software/headless drivers may reject
+        // it, so keep those loops paced too instead of exhausting scripted frame
+        // budgets before wall-clock animations can finish.
         let timeout = if !visible {
             250
         } else if state.animating() || options.profile_frames.is_some() {
-            0
+            animation_wait(vsync, frame_started.elapsed())
         } else if press.is_some()
             || back_button.press.is_some()
             || options.frames.is_some()
