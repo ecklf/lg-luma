@@ -35,6 +35,9 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 - Built-in and uploaded backgrounds, with optional rotation.
 - Webhook shortcuts and 16 interface languages.
 
+Personalize your greeting in **Settings → Widgets → Greeting → Configure → Name**.
+Use **Clear name** to return to an unnamed greeting; names are saved only on your TV.
+
 ## Compatibility
 
 > [!NOTE]

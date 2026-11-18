@@ -414,6 +414,7 @@ fn script(
                 match state.subpage {
                     Some(state::Subpage::WeatherLocation) => state::TextField::Location,
                     Some(state::Subpage::Input(_)) => state::TextField::InputName,
+                    Some(state::Subpage::Greeting) => state::TextField::GreetingName,
                     _ => state::TextField::Apps,
                 }
             };
