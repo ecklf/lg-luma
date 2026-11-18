@@ -237,6 +237,23 @@ enum Hole {
     Opaque(Rect),
 }
 
+thread_local! {
+    /// Uniform locations by program and name: the driver's lookup is a string search,
+    /// and every batch sets a few uniforms. Cleared whenever programs are (re)created.
+    static UNIFORMS: std::cell::RefCell<HashMap<(GLuint, usize), GLint>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+/// `name` must be a static C string literal (its address is the cache key).
+unsafe fn uniform_location(program: GLuint, name: *const std::ffi::c_char) -> GLint {
+    UNIFORMS.with(|cache| {
+        *cache
+            .borrow_mut()
+            .entry((program, name as usize))
+            .or_insert_with(|| unsafe { gl::GetUniformLocation(program, name) })
+    })
+}
+
 fn full_screen(rect: &Rect) -> bool {
     rect.x <= 0. && rect.y <= 0. && rect.x + rect.w >= 1920. && rect.y + rect.h >= 1080.
 }
@@ -427,6 +444,7 @@ impl Renderer {
         } else {
             "#version 150\n#define varying in\n#define texture2D texture\nout vec4 out_color;\n#define gl_FragColor out_color\n#define PAINT_PRECISION\n".into()
         };
+        UNIFORMS.with(|cache| cache.borrow_mut().clear());
         let program = link(
             &(vertex_prefix.clone() + include_str!("shaders/paint.vert")),
             &(fragment_prefix.clone() + include_str!("shaders/paint.frag")),
@@ -640,7 +658,10 @@ impl Renderer {
             let (Hole::Skip(hole) | Hole::Opaque(hole)) = region;
             // Whole physical pixels, rounded inward: the strips meet on pixel boundaries.
             let scale = self.stats.viewport.scale.max(0.01);
-            let (left, top) = ((hole.x * scale).ceil() / scale, (hole.y * scale).ceil() / scale);
+            let (left, top) = (
+                (hole.x * scale).ceil() / scale,
+                (hole.y * scale).ceil() / scale,
+            );
             let right = ((hole.x + hole.w) * scale).floor() / scale;
             let bottom = ((hole.y + hole.h) * scale).floor() / scale;
             let hole = Rect::new(left, top, right - left, bottom - top);
@@ -1569,10 +1590,19 @@ impl Renderer {
         if let Some([_, _, w, h]) = damage {
             self.stats.redrawn_fraction = f64::from(w * h) / f64::from((width * height).max(1));
         }
-        let scissor = |area: Option<[i32; 4]>| unsafe {
+        // Only changes reach the driver: each state call costs real time on the TV.
+        let mut scissor_state: Option<Option<[i32; 4]>> = None;
+        let mut scissor = |area: Option<[i32; 4]>| unsafe {
+            if scissor_state == Some(area) {
+                return;
+            }
+            let enabled = scissor_state.flatten().is_some();
+            scissor_state = Some(area);
             match area {
                 Some([x, y, w, h]) => {
-                    gl::Enable(gl::SCISSOR_TEST);
+                    if !enabled {
+                        gl::Enable(gl::SCISSOR_TEST);
+                    }
                     gl::Scissor(x, y, w.max(0), h.max(0));
                 }
                 None => gl::Disable(gl::SCISSOR_TEST),
@@ -1596,19 +1626,13 @@ impl Renderer {
             );
             gl::UseProgram(self.program);
             gl::Uniform1i(
-                gl::GetUniformLocation(self.program, c"u_glass_enabled".as_ptr()),
+                uniform_location(self.program, c"u_glass_enabled".as_ptr()),
                 i32::from(glass_enabled),
             );
-            gl::Uniform1i(
-                gl::GetUniformLocation(self.program, c"u_glass_a".as_ptr()),
-                1,
-            );
-            gl::Uniform1i(
-                gl::GetUniformLocation(self.program, c"u_glass_b".as_ptr()),
-                2,
-            );
+            gl::Uniform1i(uniform_location(self.program, c"u_glass_a".as_ptr()), 1);
+            gl::Uniform1i(uniform_location(self.program, c"u_glass_b".as_ptr()), 2);
             gl::Uniform1f(
-                gl::GetUniformLocation(self.program, c"u_glass_mix".as_ptr()),
+                uniform_location(self.program, c"u_glass_mix".as_ptr()),
                 second.map_or(0., |(_, alpha)| alpha),
             );
             gl::ActiveTexture(gl::TEXTURE1);
@@ -1617,17 +1641,17 @@ impl Renderer {
             gl::BindTexture(gl::TEXTURE_2D, glass_b);
             // One drawable pixel in logical units: the paint shader's edge filter width.
             gl::Uniform1f(
-                gl::GetUniformLocation(self.program, c"u_aa".as_ptr()),
+                uniform_location(self.program, c"u_aa".as_ptr()),
                 1. / scale.max(0.01),
             );
-            gl::Uniform1i(
-                gl::GetUniformLocation(self.program, c"u_texture".as_ptr()),
-                0,
-            );
+            gl::Uniform1i(uniform_location(self.program, c"u_texture".as_ptr()), 0);
             gl::ActiveTexture(gl::TEXTURE0);
             let mut paint_bound = false;
             let mut current_fade = None;
             let mut blending = true;
+            let mut bound_texture = 0;
+            // u_app of the paint program (it keeps its value across program switches).
+            let mut app_uniform: Option<bool> = None;
             for batch in &self.batches {
                 if current_fade != Some(batch.fade) {
                     // The same cheap alpha mask applies to shapes, textures,
@@ -1636,7 +1660,7 @@ impl Renderer {
                     for program in [self.program, self.vector_program, self.text_program] {
                         gl::UseProgram(program);
                         gl::Uniform4f(
-                            gl::GetUniformLocation(program, c"u_edge_fade".as_ptr()),
+                            uniform_location(program, c"u_edge_fade".as_ptr()),
                             fade[0],
                             fade[1],
                             fade[2],
@@ -1692,17 +1716,23 @@ impl Renderer {
                             }
                             paint_bound = true;
                         }
-                        gl::BindTexture(gl::TEXTURE_2D, *texture);
-                        gl::Uniform1i(
-                            gl::GetUniformLocation(self.program, c"u_app".as_ptr()),
-                            i32::from(backdrop.is_some()),
-                        );
+                        if bound_texture != *texture {
+                            gl::BindTexture(gl::TEXTURE_2D, *texture);
+                            bound_texture = *texture;
+                        }
+                        if app_uniform != Some(backdrop.is_some()) {
+                            gl::Uniform1i(
+                                uniform_location(self.program, c"u_app".as_ptr()),
+                                i32::from(backdrop.is_some()),
+                            );
+                            app_uniform = Some(backdrop.is_some());
+                        }
                         if let Some(stops) = backdrop {
                             for (name, rgb) in
                                 [(c"u_app_top", stops[0]), (c"u_app_bottom", stops[1])]
                             {
                                 gl::Uniform3f(
-                                    gl::GetUniformLocation(self.program, name.as_ptr()),
+                                    uniform_location(self.program, name.as_ptr()),
                                     rgb[0] as f32 / 255.,
                                     rgb[1] as f32 / 255.,
                                     rgb[2] as f32 / 255.,
@@ -1802,17 +1832,14 @@ impl Renderer {
             gl::UseProgram(program);
             if program == self.text_program {
                 gl::Uniform1f(
-                    gl::GetUniformLocation(program, c"u_fringe".as_ptr()),
+                    uniform_location(program, c"u_fringe".as_ptr()),
                     if self.stats.multisample_samples > 1 {
                         0.
                     } else {
                         0.5
                     },
                 );
-                gl::Uniform1f(
-                    gl::GetUniformLocation(program, c"u_embolden".as_ptr()),
-                    embolden,
-                );
+                gl::Uniform1f(uniform_location(program, c"u_embolden".as_ptr()), embolden);
             }
             gl::BindBuffer(gl::ARRAY_BUFFER, mesh.buffer);
             gl::DisableVertexAttribArray(4);
@@ -1830,19 +1857,19 @@ impl Renderer {
                 offset += size as usize;
             }
             gl::Uniform4f(
-                gl::GetUniformLocation(program, c"u_transform".as_ptr()),
+                uniform_location(program, c"u_transform".as_ptr()),
                 transform[0],
                 transform[1],
                 transform[2],
                 transform[3],
             );
             gl::Uniform2f(
-                gl::GetUniformLocation(program, c"u_pixel_scale".as_ptr()),
+                uniform_location(program, c"u_pixel_scale".as_ptr()),
                 viewport.width as f32 / 1920.,
                 viewport.height as f32 / 1080.,
             );
             gl::Uniform4f(
-                gl::GetUniformLocation(program, c"u_tint".as_ptr()),
+                uniform_location(program, c"u_tint".as_ptr()),
                 tint[0],
                 tint[1],
                 tint[2],
