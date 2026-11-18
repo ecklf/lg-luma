@@ -677,15 +677,12 @@ impl State {
                     && (!drawer || !dock.iter().any(|pinned| pinned.id == app.id))
             })
             .collect();
-        apps.sort_by(|a, b| {
-            let rank = |app: &App| {
-                ids.iter()
-                    .position(|id| id == &app.id)
-                    .unwrap_or(usize::MAX)
-            };
-            rank(a)
-                .cmp(&rank(b))
-                .then_with(|| self.preferences.compare_apps(a, b))
+        apps.sort_by_cached_key(|app| {
+            let rank = ids
+                .iter()
+                .position(|id| id == &app.id)
+                .unwrap_or(usize::MAX);
+            (rank, self.preferences.app_sort_key(app))
         });
         apps
     }
@@ -712,7 +709,7 @@ impl State {
                         && !apps.iter().any(|pinned| pinned.id == app.id)
                 })
                 .collect();
-            remaining.sort_by(|a, b| self.preferences.compare_apps(a, b));
+            remaining.sort_by_cached_key(|app| self.preferences.app_sort_key(app));
             apps.extend(remaining.into_iter().take(6 - apps.len()));
         }
         apps
