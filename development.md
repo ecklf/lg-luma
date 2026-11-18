@@ -177,6 +177,16 @@ the immutable directory. Older uploads or missing/corrupt atlases fall back to t
 renderer. Shader sampling, glass appearance, GPU cache budgets and lazy text are unchanged.
 `xvfb-run -a pnpm test:startup` verifies desktop GL/GLES framebuffer equality and fallback.
 
+Before SDL starts, Luma composes the first scene once and decodes its images (wallpaper, glass
+atlas, surfaces) on up to three `luma-preload` workers while SDL, the window and the shaders
+start. The renderer takes a decoded image, waits only for an image still decoding, and decodes
+anything else itself; images the first frames did not use are dropped after the first populated
+frame. On webOS, linked shader programs are kept in `shader-cache` beside preferences, keyed by
+the GL vendor, renderer and version strings and the shader sources, and loaded with
+`glProgramBinary`. A mismatch or failed load compiles from source and replaces the file; deleting
+the folder is always safe. On an LG 49UN71006LB (webOS 5.6.2), both together moved the first
+frame from ~1370 ms to ~800 ms after launch: renderer creation fell from ~245 ms to ~4 ms.
+
 ### Documentation screenshots
 
 `pnpm screenshots` generates `docs/home.png`, `docs/apps.png`, `docs/settings.png` and
