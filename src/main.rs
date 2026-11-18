@@ -226,6 +226,19 @@ struct Press {
     pointer: bool,
 }
 
+impl Press {
+    /// Remote OK stays at 600 ms. Magic Remote wheel clicks often last longer
+    /// than that, so pointer uses a higher bar before reorder/options steal the
+    /// click (right-click still opens options immediately).
+    fn hold_after(&self) -> Duration {
+        if self.pointer {
+            Duration::from_millis(1100)
+        } else {
+            Duration::from_millis(600)
+        }
+    }
+}
+
 const SCRIPT_POINTER: u32 = u32::MAX - 1;
 // SDL-webOS's Back scancode is outside rust-sdl2's standard Scancode enum.
 // Keycode retains the raw value: SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_WEBOS_BACK).
@@ -1547,12 +1560,21 @@ fn run() -> Result<(), String> {
                             cue = Some(Cue::Select);
                         }
                         Keycode::Return | Keycode::KpEnter if !repeat => {
-                            press = Some(Press {
-                                target: state.focus.clone(),
-                                start: Instant::now(),
-                                held: false,
-                                pointer: false,
-                            });
+                            // Magic Remote may emit Return alongside the wheel
+                            // click; do not replace an in-flight pointer press.
+                            // If a pointer hold already opened options and mouse-up
+                            // was lost, drop it so D-pad OK is not stuck.
+                            if press.as_ref().is_some_and(|p| p.pointer && p.held) {
+                                press = None;
+                            }
+                            if !press.as_ref().is_some_and(|p| p.pointer) {
+                                press = Some(Press {
+                                    target: state.focus.clone(),
+                                    start: Instant::now(),
+                                    held: false,
+                                    pointer: false,
+                                });
+                            }
                         }
                         Keycode::Backspace if state.text_input_active() => state.delete(),
                         Keycode::Backspace if !repeat => {
@@ -1592,8 +1614,9 @@ fn run() -> Result<(), String> {
                     keycode: Some(Keycode::Return | Keycode::KpEnter),
                     ..
                 } => {
-                    if let Some(held) = press.take()
-                        && !held.pointer
+                    // Only consume a keyboard press; never steal a pointer click.
+                    if press.as_ref().is_some_and(|p| !p.pointer)
+                        && let Some(held) = press.take()
                         && !held.held
                         && held.target == state.focus
                     {
@@ -1607,17 +1630,21 @@ fn run() -> Result<(), String> {
                 {
                     let hovered = hit(&scene.controls, &window, x, y, &state);
                     if let Some(target) = hovered.clone() {
+                        let changed = state.focus != target;
                         state.pointer_focus(target);
-                        cue = Some(Cue::Navigate);
+                        if changed {
+                            cue = Some(Cue::Navigate);
+                        }
                     }
                     if state.hover != hovered {
                         state.hover = hovered.clone();
                         state.dirty = true;
                     }
-                    if press
-                        .as_ref()
-                        .is_some_and(|p| p.pointer && hovered.as_ref() != Some(&p.target))
-                    {
+                    // Cancel only when the cursor moves onto a different control.
+                    // Brief gaps (Magic Remote jitter / edge hits) must not drop the click.
+                    if press.as_ref().is_some_and(|p| {
+                        p.pointer && hovered.as_ref().is_some_and(|h| h != &p.target)
+                    }) {
                         press = None;
                     }
                 }
@@ -1654,25 +1681,26 @@ fn run() -> Result<(), String> {
                     x,
                     y,
                     ..
-                } => match press.take() {
-                    Some(held)
-                        if held.pointer
+                } => {
+                    if press.as_ref().is_some_and(|p| p.pointer) {
+                        if let Some(held) = press.take()
                             && !held.held
                             && hit(&scene.controls, &window, x, y, &state).as_ref()
-                                == Some(&held.target) =>
-                    {
-                        pending = state.activate();
-                        cue = Some(Cue::Select);
-                    }
-                    None if scene.modal.is_some_and(|rect| {
-                        pointer_position(&window, x, y).is_some_and(|(x, y)| !rect.contains(x, y))
-                    }) =>
+                                == Some(&held.target)
+                        {
+                            pending = state.activate();
+                            cue = Some(Cue::Select);
+                        }
+                    } else if press.is_none()
+                        && scene.modal.is_some_and(|rect| {
+                            pointer_position(&window, x, y)
+                                .is_some_and(|(x, y)| !rect.contains(x, y))
+                        })
                     {
                         pending = state.back();
                         cue = Some(Cue::Back);
                     }
-                    _ => {}
-                },
+                }
                 Event::MouseWheel { x, y, .. } if state.recents_open() => {
                     press = None;
                     let delta = if x != 0 { x } else { -y };
@@ -1765,7 +1793,7 @@ fn run() -> Result<(), String> {
         }
         if let Some(held) = &mut press
             && !held.held
-            && held.start.elapsed() >= Duration::from_millis(600)
+            && held.start.elapsed() >= held.hold_after()
         {
             held.held = true;
             state.pressed = None;

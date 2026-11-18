@@ -40,6 +40,20 @@ fn ready() -> State {
 }
 
 #[test]
+fn magic_remote_hold_threshold_does_not_change_remote_ok_threshold() {
+    use std::time::{Duration, Instant};
+    let mut press = crate::Press {
+        target: Target::App("netflix".into()),
+        start: Instant::now(),
+        held: false,
+        pointer: false,
+    };
+    assert_eq!(press.hold_after(), Duration::from_millis(600));
+    press.pointer = true;
+    assert_eq!(press.hold_after(), Duration::from_millis(1100));
+}
+
+#[test]
 fn ui_sounds_default_off_and_toggle_without_moving_controls() {
     assert!(!Preferences::default().ui_sounds);
     let legacy: Preferences = serde_json::from_value(json!({"hour_24": true})).unwrap();
