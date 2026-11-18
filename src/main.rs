@@ -937,12 +937,14 @@ fn run() -> Result<(), String> {
     let mut redrawn_total = 0.;
     let mut profile = diagnostics::Profile::default();
     let mut presented = 0usize;
-    // The Apps page's bundled surfaces: decoded in the background once Home is ready, and
-    // uploaded one at a time while nothing animates, so the first drawer opening is smooth.
+    // What the Apps page and the Settings sections first draw: images decoded in the
+    // background once Home is ready, then images, logos and text prepared one small piece
+    // per idle pass while nothing animates, so their first opening is smooth.
     let mut drawer_artwork_due = false;
     let mut drawer_artwork: Option<std::sync::mpsc::Receiver<(String, Option<image::RgbaImage>)>> =
         None;
     let mut drawer_vectors: Vec<String> = Vec::new();
+    let mut idle_text: Vec<renderer::Draw> = Vec::new();
     // When the app inventory last arrived: a Home relaunch already refreshes it, so the
     // window events that follow (Restored, FocusGained) need not ask again right away.
     let mut inventory_at: Option<Instant> = None;
@@ -2080,11 +2082,32 @@ fn run() -> Result<(), String> {
         if std::mem::take(&mut drawer_artwork_due) {
             let page = std::mem::replace(&mut state.page, state::Page::Apps);
             let visibility = std::mem::replace(&mut state.drawer_visibility, 1.);
-            let drawer = view::scene(&state, &assets, now);
+            let section = state.section;
+            let subpage = state.subpage.take();
+            let focus = state.focus.clone();
+            let scroll = state.scroll;
+            let mut views = view::scene(&state, &assets, now).draw;
+            // Each Settings section as the sidebar opens it.
+            state.page = state::Page::Settings;
+            state.drawer_visibility = 0.;
+            state.scroll = 0.;
+            for section in state::SETTINGS_ORDER {
+                state.section = section;
+                state.focus = state::Target::Sidebar(section);
+                views.extend(view::scene(&state, &assets, now).draw);
+            }
             state.page = page;
             state.drawer_visibility = visibility;
-            let paths: Vec<String> = drawer
-                .draw
+            state.section = section;
+            state.subpage = subpage;
+            state.focus = focus;
+            state.scroll = scroll;
+            idle_text = views
+                .iter()
+                .filter(|draw| matches!(draw, renderer::Draw::Text(..)))
+                .cloned()
+                .collect();
+            let paths: Vec<String> = views
                 .iter()
                 .filter_map(|draw| match draw {
                     renderer::Draw::Image(path, ..) | renderer::Draw::TintedImage(path, ..)
@@ -2098,8 +2121,7 @@ fn run() -> Result<(), String> {
             if !paths.is_empty() {
                 drawer_artwork = Some(preload::decode_in_background(paths));
             }
-            drawer_vectors = drawer
-                .draw
+            drawer_vectors = views
                 .iter()
                 .filter_map(|draw| match draw {
                     renderer::Draw::Image(path, ..) | renderer::Draw::TintedImage(path, ..)
@@ -2111,19 +2133,32 @@ fn run() -> Result<(), String> {
                 })
                 .collect();
         }
-        if visible
-            && !state.animating()
-            && let Some(receiver) = &drawer_artwork
-        {
-            match receiver.try_recv() {
-                Ok((path, image)) => renderer.adopt_image(path, image),
-                Err(std::sync::mpsc::TryRecvError::Empty) => {}
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => drawer_artwork = None,
-            }
-        } else if visible && !state.animating() {
-            // Logos load on this thread (they become GL buffers): one per idle pass.
-            while let Some(path) = drawer_vectors.pop() {
-                if renderer.preload_vector(&path) {
+        // A few milliseconds of preparation per idle pass, so a key press never waits long.
+        if visible && !state.animating() {
+            let started = Instant::now();
+            while started.elapsed() < Duration::from_millis(4) {
+                let image = match &drawer_artwork {
+                    Some(receiver) => match receiver.try_recv() {
+                        Ok(image) => Some(image),
+                        Err(std::sync::mpsc::TryRecvError::Empty) => None,
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                            drawer_artwork = None;
+                            None
+                        }
+                    },
+                    None => None,
+                };
+                if let Some((path, image)) = image {
+                    renderer.adopt_image(path, image);
+                } else if let Some(path) = drawer_vectors.pop() {
+                    // Logos load on this thread: they become GL buffers.
+                    renderer.preload_vector(&path);
+                } else if !idle_text.is_empty() {
+                    // Text a few runs at a time: glyph outlines and run meshes.
+                    let chunk: Vec<_> = idle_text.drain(..idle_text.len().min(4)).collect();
+                    let (width, height) = window.drawable_size();
+                    renderer.prepare(&chunk, width, height);
+                } else {
                     break;
                 }
             }
@@ -2159,6 +2194,8 @@ fn run() -> Result<(), String> {
             || assets.artwork.pending()
         {
             8
+        } else if drawer_artwork.is_some() || !drawer_vectors.is_empty() || !idle_text.is_empty() {
+            16
         } else if !prewarm.is_empty() {
             500
         } else {
