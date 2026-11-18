@@ -1,5 +1,11 @@
 # lg-luma
 
+## 3.8.1
+
+### Patch Changes
+
+- b22b4fc: Pace animations when VSync is unavailable so headless rendering and scripted captures allow exit animations to finish.
+
 ## 3.8.0
 
 ### Minor Changes

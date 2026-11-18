@@ -484,6 +484,16 @@ fn input_refresh_active(state: &State, webos: bool, focused: bool, visible: bool
         && state.recents.visibility == 0.
 }
 
+fn animation_wait(vsync: bool, elapsed: Duration) -> u32 {
+    if vsync {
+        0
+    } else {
+        Duration::from_millis(16)
+            .saturating_sub(elapsed)
+            .as_millis() as u32
+    }
+}
+
 fn weather_tick(
     state: &mut State,
     service: &weather_service::Service,
@@ -728,6 +738,7 @@ fn run() -> Result<(), String> {
     if webos && let Some(directory) = preferences_path.parent() {
         app_artwork::set_disk_cache(directory.join("icon-cache"));
         renderer::set_program_cache(directory.join("shader-cache"));
+        preload::set_image_cache(directory.join("image-cache"));
     }
     let mut state = State::new(initial_preferences);
     if let Some(version) = &options.test_update_version {
@@ -916,9 +927,13 @@ fn run() -> Result<(), String> {
     unsafe { gl::GetIntegerv(gl::SAMPLES, &mut samples) };
     eprintln!("Luma GL multisampling: {samples} samples");
     startup_stage("window and GL context");
-    if let Err(error) = video.gl_set_swap_interval(1) {
-        eprintln!("VSync: {error}");
-    }
+    let vsync = match video.gl_set_swap_interval(1) {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("VSync: {error}");
+            false
+        }
+    };
     let mut renderer =
         renderer::Renderer::new(&assets.root.join("font.ttf"), gles, text_config.embolden)?;
     startup_stage("renderer");
@@ -943,12 +958,14 @@ fn run() -> Result<(), String> {
     let mut redrawn_total = 0.;
     let mut profile = diagnostics::Profile::default();
     let mut presented = 0usize;
-    // The Apps page's bundled surfaces: decoded in the background once Home is ready, and
-    // uploaded one at a time while nothing animates, so the first drawer opening is smooth.
+    // What the Apps page and the Settings sections first draw: images decoded in the
+    // background once Home is ready, then images, logos and text prepared one small piece
+    // per idle pass while nothing animates, so their first opening is smooth.
     let mut drawer_artwork_due = false;
     let mut drawer_artwork: Option<std::sync::mpsc::Receiver<(String, Option<image::RgbaImage>)>> =
         None;
     let mut drawer_vectors: Vec<String> = Vec::new();
+    let mut idle_text: Vec<renderer::Draw> = Vec::new();
     // When the app inventory last arrived: a Home relaunch already refreshes it, so the
     // window events that follow (Restored, FocusGained) need not ask again right away.
     let mut inventory_at: Option<Instant> = None;
@@ -1094,6 +1111,7 @@ fn run() -> Result<(), String> {
         options.time.unwrap_or_else(OffsetDateTime::now_utc),
     );
     while running {
+        let frame_started = Instant::now();
         let now = options
             .time
             .unwrap_or_else(|| OffsetDateTime::now_utc().to_offset(local_offset));
@@ -1238,6 +1256,28 @@ fn run() -> Result<(), String> {
                         state.preferences.language,
                     );
                     state.set_inventory(inventory, warning);
+                    if !startup_inventory_reported {
+                        // The first inventory names the dock's apps: decode their surfaces
+                        // on the startup workers instead of one by one in the first frame.
+                        let scene = view::scene(&state, &assets, now);
+                        preload::start(
+                            scene
+                                .draw
+                                .iter()
+                                .filter_map(|draw| match draw {
+                                    renderer::Draw::Image(path, ..)
+                                    | renderer::Draw::TintedImage(path, ..)
+                                        if !path.ends_with(".lvec")
+                                            && !renderer.has_image(path) =>
+                                    {
+                                        Some((path.clone(), preload::Kind::Image))
+                                    }
+                                    _ => None,
+                                })
+                                .collect(),
+                            3,
+                        );
+                    }
                     if !startup_inventory_reported {
                         startup_stage("app inventory");
                         startup_inventory_reported = true;
@@ -2077,7 +2117,9 @@ fn run() -> Result<(), String> {
                 {
                     startup_stage("apps ready frame");
                     preload::finish();
-                    drawer_artwork_due = webos;
+                    // LUMA_IDLE_PREPARE=0 turns idle preparation off, for comparisons.
+                    drawer_artwork_due =
+                        webos && std::env::var("LUMA_IDLE_PREPARE").as_deref() != Ok("0");
                     first_ready_frame_stats = Some(renderer.stats().clone());
                 }
                 if options.profile_frames.is_some() {
@@ -2141,11 +2183,32 @@ fn run() -> Result<(), String> {
         if std::mem::take(&mut drawer_artwork_due) {
             let page = std::mem::replace(&mut state.page, state::Page::Apps);
             let visibility = std::mem::replace(&mut state.drawer_visibility, 1.);
-            let drawer = view::scene(&state, &assets, now);
+            let section = state.section;
+            let subpage = state.subpage.take();
+            let focus = state.focus.clone();
+            let scroll = state.scroll;
+            let mut views = view::scene(&state, &assets, now).draw;
+            // Each Settings section as the sidebar opens it.
+            state.page = state::Page::Settings;
+            state.drawer_visibility = 0.;
+            state.scroll = 0.;
+            for section in state::SETTINGS_ORDER {
+                state.section = section;
+                state.focus = state::Target::Sidebar(section);
+                views.extend(view::scene(&state, &assets, now).draw);
+            }
             state.page = page;
             state.drawer_visibility = visibility;
-            let paths: Vec<String> = drawer
-                .draw
+            state.section = section;
+            state.subpage = subpage;
+            state.focus = focus;
+            state.scroll = scroll;
+            idle_text = views
+                .iter()
+                .filter(|draw| matches!(draw, renderer::Draw::Text(..)))
+                .cloned()
+                .collect();
+            let paths: Vec<String> = views
                 .iter()
                 .filter_map(|draw| match draw {
                     renderer::Draw::Image(path, ..) | renderer::Draw::TintedImage(path, ..)
@@ -2159,8 +2222,7 @@ fn run() -> Result<(), String> {
             if !paths.is_empty() {
                 drawer_artwork = Some(preload::decode_in_background(paths));
             }
-            drawer_vectors = drawer
-                .draw
+            drawer_vectors = views
                 .iter()
                 .filter_map(|draw| match draw {
                     renderer::Draw::Image(path, ..) | renderer::Draw::TintedImage(path, ..)
@@ -2172,19 +2234,32 @@ fn run() -> Result<(), String> {
                 })
                 .collect();
         }
-        if visible
-            && !state.animating()
-            && let Some(receiver) = &drawer_artwork
-        {
-            match receiver.try_recv() {
-                Ok((path, image)) => renderer.adopt_image(path, image),
-                Err(std::sync::mpsc::TryRecvError::Empty) => {}
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => drawer_artwork = None,
-            }
-        } else if visible && !state.animating() {
-            // Logos load on this thread (they become GL buffers): one per idle pass.
-            while let Some(path) = drawer_vectors.pop() {
-                if renderer.preload_vector(&path) {
+        // A few milliseconds of preparation per idle pass, so a key press never waits long.
+        if visible && !state.animating() {
+            let started = Instant::now();
+            while started.elapsed() < Duration::from_millis(4) {
+                let image = match &drawer_artwork {
+                    Some(receiver) => match receiver.try_recv() {
+                        Ok(image) => Some(image),
+                        Err(std::sync::mpsc::TryRecvError::Empty) => None,
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                            drawer_artwork = None;
+                            None
+                        }
+                    },
+                    None => None,
+                };
+                if let Some((path, image)) = image {
+                    renderer.adopt_image(path, image);
+                } else if let Some(path) = drawer_vectors.pop() {
+                    // Logos load on this thread: they become GL buffers.
+                    renderer.preload_vector(&path);
+                } else if !idle_text.is_empty() {
+                    // Text a few runs at a time: glyph outlines and run meshes.
+                    let chunk: Vec<_> = idle_text.drain(..idle_text.len().min(4)).collect();
+                    let (width, height) = window.drawable_size();
+                    renderer.prepare(&chunk, width, height);
+                } else {
                     break;
                 }
             }
@@ -2208,18 +2283,21 @@ fn run() -> Result<(), String> {
             }
         }
         // Block until input instead of polling at frame rate on idle screens.
-        // VSync paces animation; holds, scripted checks and icons still being
-        // decoded need short timed wakes.
+        // VSync normally paces animation. Software/headless drivers may reject
+        // it, so keep those loops paced too instead of exhausting scripted frame
+        // budgets before wall-clock animations can finish.
         let timeout = if !visible {
             250
         } else if state.animating() || options.profile_frames.is_some() {
-            0
+            animation_wait(vsync, frame_started.elapsed())
         } else if press.is_some()
             || back_button.press.is_some()
             || options.frames.is_some()
             || assets.artwork.pending()
         {
             8
+        } else if drawer_artwork.is_some() || !drawer_vectors.is_empty() || !idle_text.is_empty() {
+            16
         } else if !prewarm.is_empty() {
             500
         } else {

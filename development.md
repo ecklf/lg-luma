@@ -197,6 +197,11 @@ the GL vendor, renderer and version strings and the shader sources, and loaded w
 the folder is always safe. On an LG 49UN71006LB (webOS 5.6.2), both together moved the first
 frame from ~1370 ms to ~800 ms after launch: renderer creation fell from ~245 ms to ~4 ms.
 
+The first inventory queues the dock's surfaces on the same workers. Decoded images of 512×512
+pixels or more (wallpapers, glass atlases) are kept in `image-cache` beside preferences as raw
+RGBA, keyed by path, file size and modification time, at most four files. On the same TV this
+moved a cold boot's first frame from ~1060 ms to ~910 ms.
+
 ### Documentation screenshots
 
 `pnpm screenshots` generates `docs/home.png`, `docs/apps.png`, `docs/settings.png` and
@@ -899,11 +904,16 @@ The explicit diagnostic script action `prewarm` still builds hidden scenes witho
 (`Renderer::prepare`); the TV log reports each (`Luma prewarm: …`). The profiling timeline records
 first-use work per frame (`glyph_ms`, `vector_ms`, `image_ms`).
 
-On webOS, after the first populated frame, bundled drawer surfaces decode on one background
-worker and upload one per visible, non-animating loop pass; logo meshes load one per idle pass
-afterwards. Shared image paths decode once. The result queue holds at most one decoded image,
+On webOS, after the first populated frame, Luma composes the Apps page and each Settings section
+once. Their images (drawer surfaces, wallpaper thumbnails) decode on one background worker. Each
+visible, non-animating loop pass then spends up to 4 ms uploading decoded images, loading logo
+meshes and tessellating text a few runs at a time, and the loop wakes every 16 ms while such
+work remains. Shared image paths decode once. The result queue holds at most one decoded image,
 with at most one more held by the worker, so hiding Luma or animating cannot accumulate all
-drawer surfaces in CPU memory. This does not eagerly prepare hidden-page text or glyphs.
+drawer surfaces in CPU memory. On an LG 49UN71006LB (webOS 5.6.2) the first Settings opening
+fell from a 74 ms to a 46 ms frame and the first Background section from 184 ms to 50 ms, with
+no first-use loading left in either. `LUMA_IDLE_PREPARE=0` turns this idle
+preparation off for comparisons.
 
 ## TV startup diagnostics
 
