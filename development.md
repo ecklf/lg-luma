@@ -394,6 +394,7 @@ Input meshes trim transparent source bounds; per-mark optical widths give wide w
 room without stretching their aspect ratio. Header pills preserve a 10px icon-to-label gap.
 The time-only clock opens two compact 72px-high, right-aligned, floating Control Center-style controls for
 Launcher settings (Luma logo) and Device settings (settings icon). Device settings opens LG's native settings UI.
+App and Device settings launches are silent on TV; desktop previews show a notice instead of calling TV services.
 
 ### Liquid Glass renderer
 

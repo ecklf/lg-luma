@@ -26,7 +26,19 @@ try {
   const archive = path.join(parent, path.basename(url));
   const downloaded = spawnSync(
     'curl',
-    ['--fail', '--location', '--retry', '3', '--silent', '--show-error', '--output', archive, url],
+    [
+      '--fail',
+      '--location',
+      '--retry',
+      '3',
+      // GitHub release downloads can transiently return 403 as well as 5xx.
+      '--retry-all-errors',
+      '--silent',
+      '--show-error',
+      '--output',
+      archive,
+      url,
+    ],
     { stdio: 'inherit', timeout: 300000 },
   );
   if (downloaded.error) throw downloaded.error;

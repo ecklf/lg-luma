@@ -40,6 +40,66 @@ fn ready() -> State {
 }
 
 #[test]
+fn tv_app_and_device_settings_launches_are_quiet_and_guarded() {
+    for id in ["netflix", "com.palm.app.settings"] {
+        let mut state = ready();
+        let mut requests = Vec::new();
+        crate::launch_app(&mut state, true, id.into(), |request| {
+            requests.push(request)
+        });
+        assert!(state.launching);
+        assert!(state.notice.is_none());
+        assert!(matches!(&requests[..], [crate::Request::Launch(app)] if app == id));
+        crate::launch_app(&mut state, true, id.into(), |_| {
+            panic!("a pending launch must not be sent twice")
+        });
+        assert!(state.notice.is_none());
+    }
+}
+
+#[test]
+fn desktop_app_and_device_settings_launches_keep_preview_notices() {
+    for id in ["netflix", "com.palm.app.settings"] {
+        let mut state = ready();
+        crate::launch_app(&mut state, false, id.into(), |_| {
+            panic!("desktop previews must not call TV services")
+        });
+        assert!(!state.launching);
+        let title = state
+            .inventory
+            .apps
+            .iter()
+            .find(|app| app.id == id)
+            .map_or(id, |app| app.title.as_str());
+        assert_eq!(
+            state.notice.as_ref().unwrap().0,
+            state
+                .preferences
+                .language
+                .format("desktopPreview", &[("app", title)])
+        );
+    }
+}
+
+#[test]
+fn scroll_preview_launches_still_show_a_notice_without_sending_requests() {
+    for webos in [false, true] {
+        let mut state = ready();
+        crate::launch_app(
+            &mut state,
+            webos,
+            "com.luma.scroll-preview.000".into(),
+            |_| panic!("scroll-preview placeholders must never launch"),
+        );
+        assert!(!state.launching);
+        assert_eq!(
+            state.notice.unwrap().0,
+            state.preferences.language.t("scrollTestOnly")
+        );
+    }
+}
+
+#[test]
 fn ui_sounds_default_off_and_toggle_without_moving_controls() {
     assert!(!Preferences::default().ui_sounds);
     let legacy: Preferences = serde_json::from_value(json!({"hour_24": true})).unwrap();
