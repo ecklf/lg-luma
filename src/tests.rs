@@ -116,6 +116,47 @@ fn home_relaunch_returns_from_apps_and_settings() {
 }
 
 #[test]
+fn home_relaunch_skips_drawer_animation_and_restores_home_scene() {
+    for (style, reduced_motion) in [
+        (crate::model::AppDrawerStyle::Minimal, false),
+        (crate::model::AppDrawerStyle::Minimal, true),
+        (crate::model::AppDrawerStyle::Tvos, false),
+        (crate::model::AppDrawerStyle::Tvos, true),
+    ] {
+        for visibility in [0., 0.4, 1.] {
+            let mut state = ready();
+            state.preferences.app_drawer_style = style;
+            state.preferences.reduced_motion = reduced_motion;
+            state.preferences.favorites = Some(vec!["netflix".into()]);
+            state.open(0);
+            let home_draws = scene(&state).draw.len();
+            let home_dock_y = state.dock_y();
+            let dock_cards = state.dock_apps().len();
+            state.open(1);
+            state.drawer_visibility = visibility;
+            state.focus = Target::App("youtube.leanback.v4".into());
+
+            assert!(state.return_home().is_empty());
+            assert_eq!(state.drawer_visibility, 0.);
+            assert_eq!(state.dock_y(), home_dock_y);
+            assert!(!state.animating());
+            let rendered = scene(&state);
+            assert_eq!(
+                rendered
+                    .controls
+                    .iter()
+                    .filter(|control| matches!(control.target, Target::App(_)))
+                    .count(),
+                dock_cards
+            );
+            assert_eq!(rendered.draw.len(), home_draws);
+            state.tick();
+            assert_eq!(state.drawer_visibility, 0.);
+        }
+    }
+}
+
+#[test]
 fn home_relaunch_dismisses_overlays_without_cancelling_mutations() {
     for overlay in [
         Overlay::Options {

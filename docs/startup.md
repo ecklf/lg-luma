@@ -40,15 +40,44 @@ xvfb-run -a pnpm benchmark:startup
 xvfb-run -a pnpm test:startup
 ```
 
+For desktop-GL-only checks on macOS, where Cocoa cannot create a GLES context, use
+`nix develop -c node tests/startup-smoke.mjs --desktop-only`. This explicit option does not
+replace the default dual-profile CI coverage.
+
 The benchmark compares the original fallback and optimized path in the same executable,
 without modifying assets or disabling glass. It writes `.build/startup-benchmark.json`.
 The `--diagnostics` report retains first-frame statistics and cumulative startup stage
 timings even though ordinary renderer statistics subsequently describe the latest frame.
 It also records inventory completion and the first frame after a successful inventory,
 separately from the potentially earlier loading frame.
-The measurement ends after the first swap and excludes screenshots and background page
-prewarming. It starts inside `run()`, not at OS process creation or the remote keypress.
+The measurement ends after the first swap and excludes screenshots and explicitly scripted
+page prewarming. It starts inside `run()`, not at OS process creation or the remote keypress.
 
 The isolated startup smoke suite compares every framebuffer pixel on desktop GL and
 GLES, verifies that prepared atlases avoid runtime filtering, and exercises missing and
-corrupt atlas fallback. Its timings have no machine-dependent pass/fail threshold.
+corrupt atlas fallback. In both drawer styles, it also checks that idle Home does not grow
+hidden-page caches, while the explicit `prewarm` diagnostic action still works. Its timings have no
+machine-dependent pass/fail threshold.
+
+## Returning to Home
+
+Issue #269 reports a 1–2 second Home-key delay on a C1 running 3.2.1. Settled Home renders
+its widgets, dock and, in tvOS style, a decorative first-row preview, but every inventory
+refresh used to schedule full Apps and Settings preparation after 1.5 seconds of idle time.
+That work included synchronous glyph outlining,
+image decoding and GPU uploads on SDL's input/lifecycle thread. A visible but unfocused
+window could also run it behind another app, delaying a Home event that arrived during it.
+
+Hidden-page preparation is now demand-driven; only the explicit `prewarm` script action
+opts into it for diagnostics. Installed icon decoding remains on its separate worker.
+A system Home relaunch also snaps a previously open drawer closed before composing Home,
+without changing ordinary navigation animations or the tvOS Home preview. Unit tests cover
+partial/full drawer states in both drawer styles, with and without reduced motion.
+The original idle-cache smoke regression failed against the old path
+(11 → 54 cached glyphs on the local desktop); that is evidence of hidden work,
+not a measurement of C1 Home-key latency.
+
+TV verification is still required: compare repeated Home returns after launching from the
+dock and drawer, as well as a fresh process start, with the same wallpaper and preferences.
+The earlier glass-atlas optimization above addresses cold-start work separately; these
+changes do not establish the full cause or timing of the reported hardware slowdown.

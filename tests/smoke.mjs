@@ -24,6 +24,7 @@ const temporary = await fs.mkdtemp(path.join(out, 'smoke-'));
 try {
   const preferences = path.join(temporary, 'preferences.json');
   await fs.writeFile(preferences, '{}');
+  const fixedTime = ['--time', '2026-10-21T20:41:00+02:00'];
   const scenario = async (name, script, extra = [], frames = 90, environment = {}) => {
     const screenshot = path.join(out, `${name}.png`);
     const dump = path.join(temporary, `${name}.json`);
@@ -43,6 +44,8 @@ try {
         dump,
         '--diagnostics',
         diagnostics,
+        // Greeting assertions must not depend on the runner's clock or timezone.
+        ...(extra.includes('--time') ? [] : fixedTime),
         ...extra,
       ],
       environment,
@@ -326,7 +329,6 @@ try {
   const closed = await scenario('dialog-closed', `${manageApps},enter,click:100:900`);
   assert.equal(closed.modal, false);
   assert.deepEqual(closed.focus, { App: 'youtube.leanback.v4' });
-  const fixedTime = ['--time', '2026-10-21T20:41:00+02:00'];
   const one = await scenario('density-1x', 'home', fixedTime);
   const two = await scenario('density-2x', 'home', [...fixedTime, '--capture-scale', '2']);
   assert.deepEqual(two.render.capture.target, { width: 3840, height: 2160 });
