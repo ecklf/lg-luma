@@ -187,6 +187,7 @@ pub enum Subpage {
     WeatherStyle,
     Language,
     AppSorting,
+    AppDrawerStyle,
     AppDrawer,
     RecentApps,
     TextRendering,
@@ -1358,7 +1359,14 @@ impl State {
             }
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
-            Some(Subpage::AppSorting) => Target::Setting(10),
+            Some(Subpage::AppSorting) => {
+                self.subpage = Some(Subpage::AppDrawer);
+                Target::Setting(10)
+            }
+            Some(Subpage::AppDrawerStyle) => {
+                self.subpage = Some(Subpage::AppDrawer);
+                Target::Setting(15)
+            }
             Some(Subpage::AppDrawer) => Target::Setting(13),
             Some(Subpage::RecentApps) => Target::Setting(12),
             None => Target::Sidebar(self.section),
@@ -1711,7 +1719,7 @@ impl State {
                         | Subpage::Temperature
                         | Subpage::TextRendering
                         | Subpage::AppSorting
-                        | Subpage::AppDrawer,
+                        | Subpage::AppDrawerStyle,
                     ) => 2,
                     Some(Subpage::RecentApps) => crate::model::RecentAppsBehavior::ALL.len(),
                     Some(Subpage::InputIcons(_)) => crate::model::INPUT_ICONS.len() + 1,
@@ -1821,7 +1829,7 @@ impl State {
             }
             if matches!(
                 self.focus,
-                Target::Setting(0 | 1 | 4 | 7 | 10)
+                Target::Setting(0 | 1 | 4 | 7 | 10 | 13 | 15)
                     | Target::Widget(_)
                     | Target::MoveWidget(_)
                     | Target::InputMode(_)
@@ -1831,6 +1839,13 @@ impl State {
             ) && matches!(direction, Direction::Right)
             {
                 return self.activate();
+            }
+            if self.subpage == Some(Subpage::AppDrawer)
+                && matches!(self.focus, Target::Setting(_))
+                && matches!(direction, Direction::Left)
+            {
+                self.close_subpage();
+                return vec![];
             }
             if matches!(self.focus, Target::Setting(_)) && matches!(direction, Direction::Right) {
                 return vec![];
@@ -2941,6 +2956,13 @@ impl State {
                     }
                     13 => {
                         self.subpage = Some(Subpage::AppDrawer);
+                        self.focus = Target::Setting(15);
+                        self.scroll = 0.;
+                        self.panel_started = (!self.preferences.reduced_motion).then(Instant::now);
+                        return vec![];
+                    }
+                    15 => {
+                        self.subpage = Some(Subpage::AppDrawerStyle);
                         self.focus = Target::Choice(usize::from(
                             self.preferences.app_drawer_style
                                 == crate::model::AppDrawerStyle::Minimal,
@@ -3103,7 +3125,7 @@ impl State {
                                 config.style = crate::model::WeatherStyle::ALL[index.min(2)]
                             });
                     }
-                    Some(Subpage::AppDrawer) => {
+                    Some(Subpage::AppDrawerStyle) => {
                         self.preferences.app_drawer_style =
                             crate::model::AppDrawerStyle::ALL[index.min(1)];
                     }
@@ -3164,6 +3186,7 @@ impl State {
                         | Subpage::Market(_)
                         | Subpage::Greeting
                         | Subpage::Clock
+                        | Subpage::AppDrawer
                         | Subpage::Weather
                         | Subpage::Shortcuts,
                     ) => {

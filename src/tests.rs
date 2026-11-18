@@ -109,7 +109,7 @@ fn ui_sounds_default_off_and_toggle_without_moving_controls() {
         let mut state = ready();
         state.open(2);
         state.direction(Direction::Right, &controls(&state));
-        for _ in 0..5 {
+        for _ in 0..4 {
             state.direction(Direction::Down, &controls(&state));
         }
         assert_eq!(state.focus, Target::Setting(11));

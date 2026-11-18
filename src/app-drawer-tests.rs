@@ -11,7 +11,9 @@ fn drawer_app_names_default_off_and_toggle_persists_with_compact_layout_restored
         state.preferences.reduced_motion = true;
         for enabled in [false, true, false] {
             state.open(2);
-            state.focus = Target::Setting(12);
+            state.focus = Target::Setting(13);
+            state.activate();
+            state.direction(Direction::Down, &controls(&state));
             state.direction(Direction::Down, &controls(&state));
             assert_eq!(state.focus, Target::Setting(14));
             if state.preferences.show_drawer_app_names != enabled {
@@ -274,7 +276,7 @@ fn app_drawer_defaults_to_tvos_and_round_trips_both_styles() {
 }
 
 #[test]
-fn general_groups_app_sorting_and_app_drawer_in_visual_and_remote_order() {
+fn general_groups_drawer_settings_in_a_submenu() {
     let mut state = ready();
     state.open(2);
     let settings: Vec<_> = controls(&state)
@@ -286,12 +288,12 @@ fn general_groups_app_sorting_and_app_drawer_in_visual_and_remote_order() {
         .collect();
     assert_eq!(
         settings.iter().map(|(index, _)| *index).collect::<Vec<_>>(),
-        [1, 4, 13, 10, 2, 11, 12, 14]
+        [1, 4, 13, 2, 11, 12]
     );
     assert!((settings[3].1 - settings[2].1 - 84.).abs() < 0.001);
     state.focus = Target::Setting(13);
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Setting(10));
+    assert_eq!(state.focus, Target::Setting(2));
     state.direction(Direction::Up, &controls(&state));
     assert_eq!(state.focus, Target::Setting(13));
 }
@@ -322,6 +324,19 @@ fn app_drawer_picker_saves_only_on_selection_and_restores_its_parent() {
         assert_eq!(state.focus, Target::Setting(13));
         assert!(state.activate().is_empty());
         assert_eq!(state.subpage, Some(Subpage::AppDrawer));
+        assert_eq!(state.focus, Target::Setting(15));
+        assert_eq!(
+            controls(&state)
+                .into_iter()
+                .filter_map(|control| match control.target {
+                    Target::Setting(index) => Some(index),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            [15, 10, 14]
+        );
+        assert!(state.activate().is_empty());
+        assert_eq!(state.subpage, Some(Subpage::AppDrawerStyle));
         assert_eq!(state.focus, Target::Choice(0));
         let rendered = scene(&state);
         for label in ["tvOS", "Minimal"] {
@@ -332,7 +347,7 @@ fn app_drawer_picker_saves_only_on_selection_and_restores_its_parent() {
         assert_eq!(state.focus, Target::Choice(1));
         assert_eq!(state.preferences.app_drawer_style, AppDrawerStyle::Tvos);
         state.back();
-        assert_eq!(state.focus, Target::Setting(13));
+        assert_eq!(state.focus, Target::Setting(15));
         assert_eq!(state.preferences.app_drawer_style, AppDrawerStyle::Tvos);
         state.activate();
         if pointer {
@@ -352,15 +367,22 @@ fn app_drawer_picker_saves_only_on_selection_and_restores_its_parent() {
         }
         assert_eq!(state.activate(), [Effect::Save]);
         assert_eq!(state.preferences.app_drawer_style, AppDrawerStyle::Minimal);
-        assert_eq!(state.focus, Target::Setting(13));
-        assert!(state.subpage.is_none());
+        assert_eq!(state.focus, Target::Setting(15));
+        assert_eq!(state.subpage, Some(Subpage::AppDrawer));
         state.activate();
         assert_eq!(state.focus, Target::Choice(1));
         state.direction(Direction::Down, &controls(&state));
         assert_eq!(state.focus, Target::Choice(0));
         state.direction(Direction::Left, &controls(&state));
-        assert_eq!(state.focus, Target::Setting(13));
+        assert_eq!(state.focus, Target::Setting(15));
         assert_eq!(state.preferences.app_drawer_style, AppDrawerStyle::Minimal);
+        state.focus = Target::Setting(14);
+        assert_eq!(state.activate(), [Effect::Save]);
+        assert!(state.preferences.show_drawer_app_names);
+        assert_eq!(state.subpage, Some(Subpage::AppDrawer));
+        state.back();
+        assert_eq!(state.focus, Target::Setting(13));
+        assert!(state.subpage.is_none());
     }
 }
 
@@ -471,6 +493,7 @@ fn app_drawer_picker_labels_are_localized_and_fit_all_languages() {
         assert!(scene(&state).draw.iter().any(|draw| matches!(draw,
             Draw::Text(text, ..) if text == language.t("appDrawer"))));
         state.focus = Target::Setting(13);
+        state.activate();
         state.activate();
         for (index, style) in AppDrawerStyle::ALL.into_iter().enumerate() {
             let rendered = scene(&state);
