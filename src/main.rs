@@ -346,7 +346,6 @@ fn effects(
                 if !state.launching {
                     if platform.webos {
                         state.launching = true;
-                        state.notify(state.preferences.language.t("opening"));
                         platform.send(Request::Launch(id));
                     } else {
                         let title = state
