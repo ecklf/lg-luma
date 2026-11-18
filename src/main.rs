@@ -898,6 +898,9 @@ fn run() -> Result<(), String> {
     let mut redrawn_total = 0.;
     let mut profile = diagnostics::Profile::default();
     let mut presented = 0usize;
+    // When the app inventory last arrived: a Home relaunch already refreshes it, so the
+    // window events that follow (Restored, FocusGained) need not ask again right away.
+    let mut inventory_at: Option<Instant> = None;
     let mut first_frame_stats = None;
     let mut first_ready_frame_stats = None;
     let mut startup_inventory_reported = false;
@@ -1169,6 +1172,7 @@ fn run() -> Result<(), String> {
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
                 Response::Inventory(Ok((mut inventory, warning))) => {
+                    inventory_at = Some(Instant::now());
                     if warning.is_none() {
                         input_refresh.superseded(Instant::now());
                     }
@@ -1470,7 +1474,9 @@ fn run() -> Result<(), String> {
                             foreground.confirmed();
                         }
                         state.dirty = true;
-                        if webos {
+                        if webos
+                            && inventory_at.is_none_or(|at| at.elapsed() > Duration::from_secs(5))
+                        {
                             pending.push(Effect::Refresh);
                         }
                     }
