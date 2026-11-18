@@ -920,7 +920,15 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
     out.draw.push(Draw::Clip(None));
 }
 
-fn tile(out: &mut Scene, state: &State, assets: &Assets, app: &App, rect: Rect, dock: bool) {
+/// Returns whether the card is focused (see batch_cards).
+fn tile(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    app: &App,
+    rect: Rect,
+    dock: bool,
+) -> bool {
     let target = if dock && state.page == Page::Apps {
         Target::DockApp(app.id.clone())
     } else {
@@ -942,7 +950,7 @@ fn tile(out: &mut Scene, state: &State, assets: &Assets, app: &App, rect: Rect, 
         || rect.x + rect.w + 40. < viewport.x
         || rect.x - 40. > viewport.x + viewport.w
     {
-        return;
+        return false;
     }
     let start = out.draw.len();
     let focused = state.focus == target;
@@ -1007,6 +1015,41 @@ fn tile(out: &mut Scene, state: &State, assets: &Assets, app: &App, rect: Rect, 
     if state.moving.is_some() && state.moving.as_ref() != Some(&app.id) {
         out.fade(start, 0.48, 1.);
     }
+    focused
+}
+
+/// Reorders consecutive cards' draws (start, end, focused) so equal draws become one GPU
+/// batch: unfocused cards' shadows first, then everything else in order, then their 1-px
+/// edge borders. An unfocused shadow reaches 22 px past its card and the 1-px border stays
+/// inside it, while cards are 26.4 px apart: neither touches another card, so only the
+/// order of overlapping shadows in the gaps changes. A focused card stays as it is.
+fn batch_cards(draw: &mut Vec<Draw>, cards: &[(usize, usize, bool)]) {
+    let (Some(first), Some(last)) = (cards.first(), cards.last()) else {
+        return;
+    };
+    let (begin, end) = (first.0, last.1);
+    if cards.windows(2).any(|pair| pair[0].1 != pair[1].0) {
+        return;
+    }
+    let items: Vec<Draw> = draw.drain(begin..end).collect();
+    let mut shadows = Vec::new();
+    let mut body = Vec::new();
+    let mut borders = Vec::new();
+    for &(start, stop, focused) in cards {
+        let mut border_taken = focused;
+        for (offset, command) in items[start - begin..stop - begin].iter().enumerate() {
+            match command {
+                Draw::Shadow(..) if !focused && offset == 0 => shadows.push(command.clone()),
+                Draw::Shape(_, _, width, _) if !border_taken && *width == 1. => {
+                    border_taken = true;
+                    borders.push(command.clone());
+                }
+                _ => body.push(command.clone()),
+            }
+        }
+    }
+    let ordered: Vec<Draw> = shadows.into_iter().chain(body).chain(borders).collect();
+    draw.splice(begin..begin, ordered);
 }
 
 fn favorite_badge(out: &mut Scene, assets: &Assets, card: Rect, color: Color) {
@@ -1490,8 +1533,10 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
     }
     // The favourites scroll inside their glass card and slide under its edges.
     out.draw.push(Draw::Clip(Some(state.favorites_viewport())));
+    let mut cards = Vec::new();
     for (index, app) in apps.iter().enumerate() {
-        tile(
+        let start = out.draw.len();
+        let focused = tile(
             out,
             state,
             assets,
@@ -1504,7 +1549,9 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
             ),
             true,
         );
+        cards.push((start, out.draw.len(), focused));
     }
+    batch_cards(&mut out.draw, &cards);
     out.draw.push(Draw::Clip(Some(state.content_viewport())));
 }
 
@@ -1898,10 +1945,12 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
     } else {
         usize::MAX
     };
+    let mut cards = Vec::new();
     for row in apps.chunks(APPS_COLUMNS).take(rows) {
         let row_height = FACE_HEIGHT;
         for (column, app) in row.iter().enumerate() {
-            tile(
+            let start = out.draw.len();
+            let focused = tile(
                 out,
                 state,
                 assets,
@@ -1914,6 +1963,7 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
                 ),
                 false,
             );
+            cards.push((start, out.draw.len(), focused));
             // Reveal/scroll against the final layout, not the moving presentation.
             if let Some(control) = out.controls.last_mut() {
                 control.rect.y = y - s;
@@ -1926,6 +1976,7 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
                 38.4
             };
     }
+    batch_cards(&mut out.draw, &cards);
     out.draw.push(Draw::Clip(None));
 }
 

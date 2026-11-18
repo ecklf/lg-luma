@@ -231,6 +231,17 @@ struct Batch {
     fade: Option<[f32; 4]>,
 }
 
+/// Mesh-program state already set within this frame, so unchanged values are not resent.
+#[derive(Default)]
+struct MeshState {
+    /// The mesh program in use (0 after another program was bound).
+    program: GLuint,
+    vector_scale: Option<[f32; 2]>,
+    text_scale: Option<[f32; 2]>,
+    fringe: Option<f32>,
+    embolden: Option<f32>,
+}
+
 /// A region of a quad drawn differently from the rest of it.
 #[derive(Clone, Copy)]
 enum Hole {
@@ -783,6 +794,26 @@ impl Renderer {
             _ => return None,
         };
         self.opaque_interior(rect, radius)
+    }
+
+    /// The opaque region of the later draw that covers `rect`'s centre, before the clip or
+    /// edge fade changes: whatever is drawn in between there is overdrawn by it too.
+    fn cover_after(&self, later: &[Draw], rect: Rect) -> Option<Rect> {
+        let (cx, cy) = (rect.x + rect.w / 2., rect.y + rect.h / 2.);
+        for command in later.iter().take(512) {
+            if matches!(command, Draw::Clip(_) | Draw::EdgeFade(_)) {
+                return None;
+            }
+            if let Some(hole) = self.opaque_cover(Some(command))
+                && hole.x <= cx
+                && cx <= hole.x + hole.w
+                && hole.y <= cy
+                && cy <= hole.y + hole.h
+            {
+                return Some(hole);
+            }
+        }
+        None
     }
 
     /// The part of an opaque rounded rect drawn with full coverage: inside the rounded
@@ -1637,7 +1668,7 @@ impl Renderer {
                     None,
                 ),
                 Draw::Shadow(rect, radius, blur, color) => {
-                    let hole = self.opaque_cover(commands.get(index)).map(Hole::Skip);
+                    let hole = self.cover_after(&commands[index..], *rect).map(Hole::Skip);
                     match self.shadow_texture(rect.inset(-*blur), *radius, *blur) {
                         // The same coverage, read instead of computed per fragment.
                         Some(texture) => self.gradient_quad(
@@ -1786,6 +1817,7 @@ impl Renderer {
             gl::Uniform1i(uniform_location(self.program, c"u_texture".as_ptr()), 0);
             gl::ActiveTexture(gl::TEXTURE0);
             let mut paint_bound = false;
+            let mut mesh_state = MeshState::default();
             let mut current_fade = None;
             let mut blending = true;
             let mut bound_texture = 0;
@@ -1808,6 +1840,7 @@ impl Renderer {
                     }
                     current_fade = Some(batch.fade);
                     paint_bound = false;
+                    mesh_state.program = 0;
                 }
                 let clip = batch.clip.map(|clip| {
                     [
@@ -1839,6 +1872,7 @@ impl Renderer {
                         }
                         if !paint_bound {
                             gl::UseProgram(self.program);
+                            mesh_state.program = 0;
                             gl::BindBuffer(gl::ARRAY_BUFFER, self.buffer);
                             let mut offset = 0;
                             for (index, size) in [2, 2, 4, 4, 2].into_iter().enumerate() {
@@ -1893,6 +1927,7 @@ impl Renderer {
                             continue;
                         };
                         self.draw_mesh(
+                            &mut mesh_state,
                             self.vector_program,
                             mesh,
                             [rect.w / mesh.width, rect.h / mesh.height, rect.x, rect.y],
@@ -1908,6 +1943,7 @@ impl Renderer {
                         };
                         let size = f32::from_bits(key.layout[0]) * vh as f32 / 1080.;
                         self.draw_mesh(
+                            &mut mesh_state,
                             self.text_program,
                             mesh,
                             [1., 1., origin[0], origin[1]],
@@ -1960,6 +1996,7 @@ impl Renderer {
 
     fn draw_mesh(
         &self,
+        state: &mut MeshState,
         program: GLuint,
         mesh: &vector::Mesh,
         transform: [f32; 4],
@@ -1967,18 +2004,29 @@ impl Renderer {
         embolden: f32,
     ) {
         let viewport = self.stats.viewport;
+        let scale = [
+            viewport.width as f32 / 1920.,
+            viewport.height as f32 / 1080.,
+        ];
         unsafe {
-            gl::UseProgram(program);
+            if state.program != program {
+                gl::UseProgram(program);
+                state.program = program;
+            }
             if program == self.text_program {
-                gl::Uniform1f(
-                    uniform_location(program, c"u_fringe".as_ptr()),
-                    if self.stats.multisample_samples > 1 {
-                        0.
-                    } else {
-                        0.5
-                    },
-                );
-                gl::Uniform1f(uniform_location(program, c"u_embolden".as_ptr()), embolden);
+                let fringe = if self.stats.multisample_samples > 1 {
+                    0.
+                } else {
+                    0.5
+                };
+                if state.fringe != Some(fringe) {
+                    gl::Uniform1f(uniform_location(program, c"u_fringe".as_ptr()), fringe);
+                    state.fringe = Some(fringe);
+                }
+                if state.embolden != Some(embolden) {
+                    gl::Uniform1f(uniform_location(program, c"u_embolden".as_ptr()), embolden);
+                    state.embolden = Some(embolden);
+                }
             }
             gl::BindBuffer(gl::ARRAY_BUFFER, mesh.buffer);
             gl::DisableVertexAttribArray(4);
@@ -2002,11 +2050,19 @@ impl Renderer {
                 transform[2],
                 transform[3],
             );
-            gl::Uniform2f(
-                uniform_location(program, c"u_pixel_scale".as_ptr()),
-                viewport.width as f32 / 1920.,
-                viewport.height as f32 / 1080.,
-            );
+            let known = if program == self.text_program {
+                &mut state.text_scale
+            } else {
+                &mut state.vector_scale
+            };
+            if *known != Some(scale) {
+                gl::Uniform2f(
+                    uniform_location(program, c"u_pixel_scale".as_ptr()),
+                    scale[0],
+                    scale[1],
+                );
+                *known = Some(scale);
+            }
             gl::Uniform4f(
                 uniform_location(program, c"u_tint".as_ptr()),
                 tint[0],
