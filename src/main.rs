@@ -1233,6 +1233,28 @@ fn run() -> Result<(), String> {
                     );
                     state.set_inventory(inventory, warning);
                     if !startup_inventory_reported {
+                        // The first inventory names the dock's apps: decode their surfaces
+                        // on the startup workers instead of one by one in the first frame.
+                        let scene = view::scene(&state, &assets, now);
+                        preload::start(
+                            scene
+                                .draw
+                                .iter()
+                                .filter_map(|draw| match draw {
+                                    renderer::Draw::Image(path, ..)
+                                    | renderer::Draw::TintedImage(path, ..)
+                                        if !path.ends_with(".lvec")
+                                            && !renderer.has_image(path) =>
+                                    {
+                                        Some((path.clone(), preload::Kind::Image))
+                                    }
+                                    _ => None,
+                                })
+                                .collect(),
+                            3,
+                        );
+                    }
+                    if !startup_inventory_reported {
                         startup_stage("app inventory");
                         startup_inventory_reported = true;
                     }
