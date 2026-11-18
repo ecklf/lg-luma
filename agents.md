@@ -113,3 +113,14 @@ can publish after the main-branch CI build passes. Ordinary PRs, other merges an
 still build/check/package but do not publish. See `development.md#releases` for setup and retries.
 Only create commits or PRs when explicitly requested. For PR descriptions follow the global
 `commands/pr.md` format instructions.
+
+## Pull requests and commits
+
+Split distinct features into separate PRs rather than bundling unrelated features together.
+This requirement does not apply when the PR author is `ecklf`, who may combine features in one PR.
+
+Use Commitizen / Conventional Commits format for every PR title and commit subject:
+`type(scope): description`, with an optional scope, for example `fix: pace animations without VSync`
+or `docs(agents): clarify PR requirements`. Use an appropriate type such as `feat`, `fix`, `docs`,
+`refactor`, `test`, `build`, `ci`, `perf`, `style`, or `chore`. Mark breaking changes with `!` after
+the type or scope and include a `BREAKING CHANGE:` footer in the commit body.
