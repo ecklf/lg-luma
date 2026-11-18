@@ -1,5 +1,15 @@
 # lg-luma
 
+## 3.8.2
+
+### Patch Changes
+
+- 4f6f39a: Smoother first opening of Settings and its sections on TVs: their images, logos and text are prepared in small steps while Home is idle.
+- 297acdc: Less CPU per frame on TVs: logo, text and paint draws keep their attribute setup in vertex array objects, and card logos are drawn after all faces so the GPU program switches far less often.
+- 279ee57: Add an opt-in native paint shader path for faster drawer animations. Set `LUMA_PAINT_SHADERS=1` to enable it.
+- 07bd338: Reject malformed decoded-image caches and reload the source image, preserving Liquid Glass atlas dimensions and bounding cache allocations.
+- a681a4e: Faster TV startup: the dock's surfaces decode on the startup workers, and large decoded startup images are reused between launches.
+
 ## 3.8.1
 
 ### Patch Changes
