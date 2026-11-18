@@ -83,6 +83,8 @@ struct Texture {
     width: u32,
     height: u32,
     frame: u64,
+    /// Every texel has alpha 255: an untinted, unfaded draw of it hides what lies beneath.
+    opaque: bool,
 }
 impl Drop for Texture {
     fn drop(&mut self) {
@@ -593,7 +595,16 @@ impl Renderer {
         color: Color,
         texture: GLuint,
     ) {
-        self.gradient_quad(rect, uv, radius, border, [color, color], texture, None);
+        self.gradient_quad(
+            rect,
+            uv,
+            radius,
+            border,
+            [color, color],
+            texture,
+            None,
+            None,
+        );
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -606,11 +617,41 @@ impl Renderer {
         colors: [Color; 2],
         texture: GLuint,
         backdrop: Option<[[u8; 3]; 2]>,
+        hole: Option<Rect>,
     ) {
         if rect.w <= 0. || rect.h <= 0. {
             return;
         }
         let rect = self.snap(rect);
+        // Pixels inside `hole` would leave the target unchanged (zero coverage) or are
+        // overdrawn by an opaque draw: rasterize only the four strips around it.
+        if let Some(hole) = hole {
+            let x0 = hole.x.max(rect.x);
+            let y0 = hole.y.max(rect.y);
+            let x1 = (hole.x + hole.w).min(rect.x + rect.w);
+            let y1 = (hole.y + hole.h).min(rect.y + rect.h);
+            if x1 - x0 >= 8. && y1 - y0 >= 8. {
+                let start = self.vertices.len() / 14;
+                let (left, top) = (rect.x, rect.y);
+                let (right, bottom) = (rect.x + rect.w, rect.y + rect.h);
+                let mut count = 0;
+                for [a, b, c, d] in [
+                    [left, top, right, y0],
+                    [left, y1, right, bottom],
+                    [left, y0, x0, y1],
+                    [x1, y0, right, y1],
+                ] {
+                    if c > a && d > b {
+                        self.quad_part(rect, [a, b, c, d], uv, radius, border, colors);
+                        count += 6;
+                    }
+                }
+                if count > 0 {
+                    self.paint_batch(start, count, texture, backdrop);
+                }
+                return;
+            }
+        }
         let start = self.vertices.len() / 14;
         for (x, y) in [(0., 0.), (1., 0.), (0., 1.), (0., 1.), (1., 0.), (1., 1.)] {
             let color = colors[y as usize];
@@ -632,6 +673,69 @@ impl Renderer {
             ]);
         }
         self.paint_batch(start, 6, texture, backdrop);
+    }
+
+    /// Six paint vertices for the part [x0, y0, x1, y1] of `rect`, with the same attributes
+    /// the whole quad interpolates there.
+    fn quad_part(
+        &mut self,
+        rect: Rect,
+        part: [f32; 4],
+        uv: [f32; 4],
+        radius: f32,
+        border: f32,
+        colors: [Color; 2],
+    ) {
+        for (x, y) in [(0, 1), (2, 1), (0, 3), (0, 3), (2, 1), (2, 3)] {
+            let (px, py) = (part[x], part[y]);
+            let fx = (px - rect.x) / rect.w;
+            let fy = (py - rect.y) / rect.h;
+            let color: [f32; 4] =
+                std::array::from_fn(|i| colors[0][i] + (colors[1][i] - colors[0][i]) * fy);
+            self.vertices.extend_from_slice(&[
+                px,
+                py,
+                uv[0] + fx * (uv[2] - uv[0]),
+                uv[1] + fy * (uv[3] - uv[1]),
+                color[0],
+                color[1],
+                color[2],
+                color[3],
+                (fx - 0.5) * rect.w,
+                (fy - 0.5) * rect.h,
+                rect.w / 2.,
+                rect.h / 2.,
+                radius,
+                border,
+            ]);
+        }
+    }
+
+    /// The region of the next draw that is certainly opaque: an untinted, unfaded app face
+    /// or opaque image. A shadow beneath it does not need those pixels.
+    fn opaque_cover(&self, next: Option<&Draw>) -> Option<Rect> {
+        let (rect, radius) = match next? {
+            Draw::AppImage(_, rect, radius, tint) if tint[3] >= 1. => (*rect, *radius),
+            Draw::Image(path, rect, radius, false)
+                if !path.ends_with(".lvec")
+                    && self
+                        .textures
+                        .get(path.as_str())
+                        .is_some_and(|t| t.as_ref().is_some_and(|t| t.opaque)) =>
+            {
+                (*rect, *radius)
+            }
+            _ => return None,
+        };
+        // Inside the rounded corners and two pixels clear of the antialiased edge.
+        let mut hole = self.snap(rect).inset(radius * 0.3 + 2.);
+        // An edge fade makes the face translucent outside its plateau.
+        if let Some([_, top, bottom, _]) = self.fade.filter(|fade| fade[1] > fade[0]) {
+            let y0 = hole.y.max(top);
+            let y1 = (hole.y + hole.h).min(bottom);
+            hole = Rect::new(hole.x, y0, hole.w, y1 - y0);
+        }
+        (hole.w > 0. && hole.h > 0.).then_some(hole)
     }
 
     /// Appends `count` paint vertices from `start`, merged into the previous batch when it uses
@@ -1162,6 +1266,7 @@ impl Renderer {
             [tint; 2],
             id,
             Some(image.backdrop),
+            None,
         );
     }
 
@@ -1310,13 +1415,17 @@ impl Renderer {
                     *tint,
                     self.white.id,
                 ),
-                Draw::Shape(rect, radius, border, color) => self.quad(
+                // A border's coverage is exactly zero more than its width (plus the
+                // filter) inside the edge.
+                Draw::Shape(rect, radius, border, color) => self.gradient_quad(
                     *rect,
                     [0., 0., 1., 1.],
                     *radius,
                     *border,
-                    *color,
+                    [*color; 2],
                     self.white.id,
+                    None,
+                    (*border > 0.).then(|| self.snap(*rect).inset(radius + border + 2.)),
                 ),
                 Draw::RoundedGradient(rect, radius, top, bottom) => self.gradient_quad(
                     *rect,
@@ -1326,14 +1435,17 @@ impl Renderer {
                     [*top, *bottom],
                     self.white.id,
                     None,
+                    None,
                 ),
-                Draw::Shadow(rect, radius, blur, color) => self.quad(
+                Draw::Shadow(rect, radius, blur, color) => self.gradient_quad(
                     rect.inset(-*blur),
                     [0., 0., 1., 1.],
                     *radius,
                     -*blur,
-                    *color,
+                    [*color; 2],
                     self.white.id,
+                    None,
+                    self.opaque_cover(commands.get(index)),
                 ),
                 Draw::Text(text, rect, size, color, centered) => {
                     self.text(text, *rect, *size, *color, *centered)
@@ -1902,6 +2014,7 @@ fn texture(width: u32, height: u32, pixels: &[u8]) -> Texture {
         width,
         height,
         frame: 0,
+        opaque: !pixels.is_empty() && pixels.chunks_exact(4).all(|texel| texel[3] == 255),
     }
 }
 
