@@ -26,8 +26,13 @@ vec3 glass_sample(vec2 uv, float scattering) {
     uv = clamp(uv, vec2(0.5 / 960.0, 0.5 / 540.0), vec2(959.5 / 960.0, 539.5 / 540.0));
     vec2 sharp_uv = vec2(uv.x, uv.y * 0.5);
     vec2 soft_uv = sharp_uv + vec2(0.0, 0.5);
-    vec3 sharp = mix(texture2D(u_glass_a, sharp_uv).rgb, texture2D(u_glass_b, sharp_uv).rgb, u_glass_mix);
-    vec3 soft = mix(texture2D(u_glass_a, soft_uv).rgb, texture2D(u_glass_b, soft_uv).rgb, u_glass_mix);
+    vec3 sharp = texture2D(u_glass_a, sharp_uv).rgb;
+    vec3 soft = texture2D(u_glass_a, soft_uv).rgb;
+    // The second atlas only matters during a wallpaper cross-fade.
+    if (u_glass_mix > 0.0) {
+        sharp = mix(sharp, texture2D(u_glass_b, sharp_uv).rgb, u_glass_mix);
+        soft = mix(soft, texture2D(u_glass_b, soft_uv).rgb, u_glass_mix);
+    }
     return mix(sharp, soft, scattering);
 }
 void main() {
@@ -50,14 +55,22 @@ void main() {
     float alpha = clamp(0.5 - d / u_aa, 0.0, 1.0);
     if (glass) {
         vec3 color = v_color.rgb;
-        if (u_glass_enabled) {
+        float depth = max(-d, 0.0);
+        float bevel = clamp(radius * 0.22, 4.0, 10.0);
+        if (u_glass_enabled && depth >= bevel * 2.0) {
+            // Interior: no lens offset, rim light or hairline (all exactly zero here),
+            // and full scattering. Most glass pixels take this short path.
+            vec3 backdrop = glass_sample(vec2(v_logical_x, v_logical_y) / vec2(1920.0, 1080.0), 0.88);
+            float luminance = dot(backdrop, vec3(0.2126, 0.7152, 0.0722));
+            float focused = step(0.5, v_color.r);
+            color = mix(backdrop, vec3(0.075), 0.14 + 0.44 * luminance);
+            color = mix(color, v_color.rgb, focused * 0.88);
+        } else if (u_glass_enabled) {
             // Exact rounded-box gradient, including axis-aligned flat edges.
             vec2 outside = max(q, vec2(0.0));
             vec2 axis = q.x > q.y ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
             vec2 normal = sign(v_shape.xy) * (max(q.x, q.y) > 0.0
                 ? outside / max(length(outside), 0.0001) : axis);
-            float depth = max(-d, 0.0);
-            float bevel = clamp(radius * 0.22, 4.0, 10.0);
             float rim = 1.0 - smoothstep(0.0, bevel, depth);
             // Bounded curved-lens profile, not a wide painted bevel.
             float slope = rim * rim;

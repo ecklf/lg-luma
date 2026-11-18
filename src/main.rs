@@ -309,6 +309,33 @@ impl BackButton {
     }
 }
 
+fn launch_app(state: &mut State, webos: bool, id: String, send: impl FnOnce(Request)) {
+    if scroll_preview::is_placeholder(&id) {
+        state.notify(state.preferences.language.t("scrollTestOnly"));
+        return;
+    }
+    if state.launching {
+        return;
+    }
+    if webos {
+        state.launching = true;
+        send(Request::Launch(id));
+    } else {
+        let title = state
+            .inventory
+            .apps
+            .iter()
+            .find(|a| a.id == id)
+            .map_or(id.as_str(), |app| app.title.as_str());
+        state.notify(
+            state
+                .preferences
+                .language
+                .format("desktopPreview", &[("app", title)]),
+        );
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn effects(
     effects: Vec<Effect>,
@@ -339,30 +366,7 @@ fn effects(
                 }
             }
             Effect::Launch(id) => {
-                if scroll_preview::is_placeholder(&id) {
-                    state.notify(state.preferences.language.t("scrollTestOnly"));
-                    continue;
-                }
-                if !state.launching {
-                    if platform.webos {
-                        state.launching = true;
-                        state.notify(state.preferences.language.t("opening"));
-                        platform.send(Request::Launch(id));
-                    } else {
-                        let title = state
-                            .inventory
-                            .apps
-                            .iter()
-                            .find(|a| a.id == id)
-                            .map_or(id.as_str(), |app| app.title.as_str());
-                        state.notify(
-                            state
-                                .preferences
-                                .language
-                                .format("desktopPreview", &[("app", title)]),
-                        );
-                    }
-                }
+                launch_app(state, platform.webos, id, |request| platform.send(request));
             }
             Effect::FireWebhook(tile) => webhook.send(tile),
             Effect::UpdateDownload(release) => updates.request(update::Request::Download(release)),
@@ -939,6 +943,9 @@ fn run() -> Result<(), String> {
     let mut drawer_artwork: Option<std::sync::mpsc::Receiver<(String, Option<image::RgbaImage>)>> =
         None;
     let mut drawer_vectors: Vec<String> = Vec::new();
+    // When the app inventory last arrived: a Home relaunch already refreshes it, so the
+    // window events that follow (Restored, FocusGained) need not ask again right away.
+    let mut inventory_at: Option<Instant> = None;
     let mut first_frame_stats = None;
     let mut first_ready_frame_stats = None;
     let mut startup_inventory_reported = false;
@@ -1210,6 +1217,7 @@ fn run() -> Result<(), String> {
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
                 Response::Inventory(Ok((mut inventory, warning))) => {
+                    inventory_at = Some(Instant::now());
                     if warning.is_none() {
                         input_refresh.superseded(Instant::now());
                     }
@@ -1511,7 +1519,9 @@ fn run() -> Result<(), String> {
                             foreground.confirmed();
                         }
                         state.dirty = true;
-                        if webos {
+                        if webos
+                            && inventory_at.is_none_or(|at| at.elapsed() > Duration::from_secs(5))
+                        {
                             pending.push(Effect::Refresh);
                         }
                     }

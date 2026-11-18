@@ -985,7 +985,7 @@ fn tile(out: &mut Scene, state: &State, assets: &Assets, app: &App, rect: Rect, 
     }
     if focused {
         out.ring(rect, 19.2);
-        if !dock && state.page == Page::Apps {
+        if !dock && state.page == Page::Apps && state.preferences.show_drawer_app_names {
             let (label, style) = assets.fit_line(&app.title, text(22., 550, -0.02), rect.w, 22.);
             out.text(
                 label,
@@ -1919,7 +1919,12 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
                 control.rect.y = y - s;
             }
         }
-        y += row_height + 64.;
+        y += row_height
+            + if state.preferences.show_drawer_app_names {
+                64.
+            } else {
+                38.4
+            };
     }
     out.draw.push(Draw::Clip(None));
 }
@@ -2802,6 +2807,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     "clock",
                     Some(language.t(state.preferences.recent_apps_behavior.label_key())),
                     true,
+                ),
+                (
+                    14,
+                    "showAppNames",
+                    "grid",
+                    Some(language.t(if state.preferences.show_drawer_app_names {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
+                    false,
                 ),
             ]
             .into_iter()

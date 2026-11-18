@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 
 ## Features
 
-- Customizable app drawer with names beneath selected non-favorite apps, input icons and recent app switching.
+- Customizable app drawer with optional names beneath selected non-favorite apps (off by default), input icons and recent app switching.
 - Movable greeting, weather, stock and crypto widgets.
 - Built-in and uploaded backgrounds, with optional rotation.
 - Webhook shortcuts and 16 interface languages.
