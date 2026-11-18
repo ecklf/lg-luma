@@ -1914,7 +1914,7 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
                 control.rect.y = y - s;
             }
         }
-        y += row_height + 38.4;
+        y += row_height + 56.;
     }
     out.draw.push(Draw::Clip(None));
 }

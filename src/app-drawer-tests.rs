@@ -49,7 +49,7 @@ fn selected_drawer_app_name_is_centered_without_changing_card_geometry() {
                 assert_eq!(labels[0].0, title);
                 assert_eq!(labels[0].1.x, card.rect.x);
                 assert_eq!(labels[0].1.w, card.rect.w);
-                assert!(labels[0].1.y + labels[0].1.h < card.rect.y + card.rect.h + 38.4);
+                assert!(labels[0].1.y + labels[0].1.h < card.rect.y + card.rect.h + 56.);
             }
             let (id, _) = &apps[0];
             state
@@ -68,6 +68,44 @@ fn selected_drawer_app_name_is_centered_without_changing_card_geometry() {
                         && rect.w == 270. && font.size == 20.
             )));
         }
+    }
+}
+
+#[test]
+fn drawer_rows_leave_room_below_selected_app_names() {
+    for style in AppDrawerStyle::ALL {
+        let mut state = ready();
+        state.preferences.app_drawer_style = style;
+        state.preferences.reduced_motion = true;
+        state.open(1);
+        let first = Target::App(state.drawer_apps()[0].id.clone());
+        let next_row = Target::App(state.drawer_apps()[6].id.clone());
+        state.focus = first.clone();
+        let rendered = scene(&state);
+        let card = rendered
+            .controls
+            .iter()
+            .find(|c| c.target == first)
+            .unwrap();
+        let next = rendered
+            .controls
+            .iter()
+            .find(|c| c.target == next_row)
+            .unwrap();
+        assert!((next.rect.y - card.rect.y - card.rect.h - 56.).abs() < 0.001);
+        let label = rendered
+            .draw
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text(_, rect, _, _, true) if rect.y == card.rect.y + card.rect.h + 8. => {
+                    Some(rect)
+                }
+                _ => None,
+            })
+            .unwrap();
+        assert!((next.rect.y - label.y - label.h - 24.).abs() < 0.001);
+        assert_eq!(next.rect.x, card.rect.x);
+        assert_eq!(next.rect.w, card.rect.w);
     }
 }
 
