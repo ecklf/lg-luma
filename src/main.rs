@@ -2077,6 +2077,10 @@ fn run() -> Result<(), String> {
             }
             end_registration();
         }
+        // Shadow textures seen in recent frames are prepared between them, never inside one.
+        if visible && !state.animating() {
+            renderer.prepare_idle();
+        }
         if std::mem::take(&mut drawer_artwork_due) {
             let page = std::mem::replace(&mut state.page, state::Page::Apps);
             let visibility = std::mem::replace(&mut state.drawer_visibility, 1.);

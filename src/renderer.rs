@@ -24,6 +24,9 @@ mod font_size_tests;
 const GLYPH_GEOMETRY_BUDGET: usize = 8 * 1024 * 1024;
 const TEXT_GEOMETRY_BUDGET: usize = 32 * 1024 * 1024;
 const TEXTURE_BUDGET: usize = 48 * 1024 * 1024;
+/// Precomputed shadow coverage: at most this many texels per shadow and in total.
+const SHADOW_TEXELS: usize = 1024 * 1024;
+const SHADOW_BUDGET: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TextStyle {
@@ -228,6 +231,17 @@ struct Batch {
     fade: Option<[f32; 4]>,
 }
 
+/// Mesh-program state already set within this frame, so unchanged values are not resent.
+#[derive(Default)]
+struct MeshState {
+    /// The mesh program in use (0 after another program was bound).
+    program: GLuint,
+    vector_scale: Option<[f32; 2]>,
+    text_scale: Option<[f32; 2]>,
+    fringe: Option<f32>,
+    embolden: Option<f32>,
+}
+
 /// A region of a quad drawn differently from the rest of it.
 #[derive(Clone, Copy)]
 enum Hole {
@@ -395,6 +409,11 @@ pub struct Renderer {
     glyphs: HashMap<(char, u16), Glyph>,
     text_runs: HashMap<TextKey, TextRun>,
     textures: HashMap<String, Option<Texture>>,
+    /// Shadow coverage by drawable size, radius and blur (bits), computed once on the CPU.
+    shadows: HashMap<(u32, u32, u32, u32), Texture>,
+    /// Shadows seen without a texture yet: (quad, radius, blur), prepared while idle.
+    pending_shadows: Vec<(Rect, f32, f32)>,
+    preparing_shadow: bool,
     vectors: HashMap<String, Option<vector::Mesh>>,
     artwork_variants: HashMap<String, String>,
     vertices: Vec<f32>,
@@ -510,6 +529,9 @@ impl Renderer {
             glyphs: HashMap::new(),
             text_runs: HashMap::new(),
             textures: HashMap::new(),
+            shadows: HashMap::new(),
+            pending_shadows: Vec::new(),
+            preparing_shadow: false,
             vectors: HashMap::new(),
             artwork_variants: HashMap::new(),
             vertices: Vec::with_capacity(65536),
@@ -774,6 +796,26 @@ impl Renderer {
         self.opaque_interior(rect, radius)
     }
 
+    /// The opaque region of the later draw that covers `rect`'s centre, before the clip or
+    /// edge fade changes: whatever is drawn in between there is overdrawn by it too.
+    fn cover_after(&self, later: &[Draw], rect: Rect) -> Option<Rect> {
+        let (cx, cy) = (rect.x + rect.w / 2., rect.y + rect.h / 2.);
+        for command in later.iter().take(512) {
+            if matches!(command, Draw::Clip(_) | Draw::EdgeFade(_)) {
+                return None;
+            }
+            if let Some(hole) = self.opaque_cover(Some(command))
+                && hole.x <= cx
+                && cx <= hole.x + hole.w
+                && hole.y <= cy
+                && cy <= hole.y + hole.h
+            {
+                return Some(hole);
+            }
+        }
+        None
+    }
+
     /// The part of an opaque rounded rect drawn with full coverage: inside the rounded
     /// corners, two pixels clear of the antialiased edge and within an edge fade's plateau.
     fn opaque_interior(&self, rect: Rect, radius: f32) -> Option<Rect> {
@@ -784,6 +826,117 @@ impl Renderer {
             hole = Rect::new(hole.x, y0, hole.w, y1 - y0);
         }
         (hole.w > 0. && hole.h > 0.).then_some(hole)
+    }
+
+    /// A texture holding a shadow's coverage at each drawable pixel of its snapped quad,
+    /// computed with the paint shader's formula: drawn 1:1, it reproduces that shader's
+    /// output up to 8-bit rounding, without its per-fragment distance and smoothstep.
+    /// None for very large shadows, which keep the shader path.
+    fn shadow_texture(&mut self, quad: Rect, radius: f32, blur: f32) -> Option<GLuint> {
+        static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if !*ENABLED.get_or_init(|| std::env::var("LUMA_SHADOW_TEXTURES").as_deref() != Ok("0"))
+            || blur <= 0.
+        {
+            return None;
+        }
+        let quad = self.snap(quad);
+        let scale = self.stats.viewport.scale.max(0.01);
+        let width = (quad.w * scale).round() as u32;
+        let height = (quad.h * scale).round() as u32;
+        let texels = width as usize * height as usize;
+        if width == 0 || height == 0 || texels > SHADOW_TEXELS {
+            return None;
+        }
+        let key = (width, height, radius.to_bits(), blur.to_bits());
+        let frame = self.frame;
+        if let Some(texture) = self.shadows.get_mut(&key) {
+            texture.frame = frame;
+            return Some(texture.id);
+        }
+        // Computing coverage costs CPU time a frame cannot spare: draw this one with the
+        // shader and prepare the texture while idle (see prepare_idle).
+        if !self.preparing_shadow {
+            if !self
+                .pending_shadows
+                .iter()
+                .any(|(q, r, b)| q.w == quad.w && q.h == quad.h && *r == radius && *b == blur)
+            {
+                self.pending_shadows.push((quad, radius, blur));
+            }
+            return None;
+        }
+        let mut used: usize = self
+            .shadows
+            .values()
+            .map(|t| t.width as usize * t.height as usize)
+            .sum();
+        if used + texels > SHADOW_BUDGET {
+            let mut old: Vec<_> = self
+                .shadows
+                .iter()
+                .filter(|(_, t)| t.frame != frame)
+                .map(|(key, t)| (*key, t.frame))
+                .collect();
+            old.sort_by_key(|(_, frame)| *frame);
+            for (key, _) in old {
+                if used + texels <= SHADOW_BUDGET {
+                    break;
+                }
+                if let Some(t) = self.shadows.remove(&key) {
+                    used -= t.width as usize * t.height as usize;
+                }
+            }
+            if used + texels > SHADOW_BUDGET {
+                return None;
+            }
+        }
+        let started = Instant::now();
+        // As paint.frag: v_shape.zw is the quad's half size, the box is that minus blur.
+        let (hx, hy) = (quad.w / 2. - blur, quad.h / 2. - blur);
+        let r = radius.min(hx.min(hy));
+        let coverage = |x: f32, y: f32| {
+            let (qx, qy) = (x.abs() - hx + r, y.abs() - hy + r);
+            let (ox, oy) = (qx.max(0.), qy.max(0.));
+            let d = (ox * ox + oy * oy).sqrt() + qx.max(qy).min(0.) - r;
+            let t = ((d + blur) / (2. * blur)).clamp(0., 1.);
+            ((1. - t * t * (3. - 2. * t)) * 255.).round() as u8
+        };
+        // The coverage is symmetric about both centre lines: compute one quarter (plus the
+        // centre row and column of odd sizes) and mirror it.
+        let (w, h) = (width as usize, height as usize);
+        let mut pixels = vec![255u8; texels * 4];
+        for row in 0..h.div_ceil(2) {
+            let y = -quad.h / 2. + (row as f32 + 0.5) / scale;
+            for column in 0..w.div_ceil(2) {
+                let x = -quad.w / 2. + (column as f32 + 0.5) / scale;
+                let value = coverage(x, y);
+                for (r, c) in [
+                    (row, column),
+                    (row, w - 1 - column),
+                    (h - 1 - row, column),
+                    (h - 1 - row, w - 1 - column),
+                ] {
+                    pixels[(r * w + c) * 4 + 3] = value;
+                }
+            }
+        }
+        self.stats.image_load_ms += started.elapsed().as_secs_f64() * 1000.;
+        let mut texture = texture(width, height, &pixels);
+        texture.frame = frame;
+        let id = texture.id;
+        self.shadows.insert(key, texture);
+        Some(id)
+    }
+
+    /// Prepares one shadow texture seen since the last call; true while more remain.
+    /// Call when nothing animates: the next frame draws that shadow from the texture.
+    pub fn prepare_idle(&mut self) -> bool {
+        if let Some((quad, radius, blur)) = self.pending_shadows.pop() {
+            self.preparing_shadow = true;
+            self.shadow_texture(quad, radius, blur);
+            self.preparing_shadow = false;
+        }
+        !self.pending_shadows.is_empty()
     }
 
     /// Whether an image path already has a texture (or a cached failure).
@@ -1544,16 +1697,32 @@ impl Renderer {
                     None,
                     None,
                 ),
-                Draw::Shadow(rect, radius, blur, color) => self.gradient_quad(
-                    rect.inset(-*blur),
-                    [0., 0., 1., 1.],
-                    *radius,
-                    -*blur,
-                    [*color; 2],
-                    self.white.id,
-                    None,
-                    self.opaque_cover(commands.get(index)).map(Hole::Skip),
-                ),
+                Draw::Shadow(rect, radius, blur, color) => {
+                    let hole = self.cover_after(&commands[index..], *rect).map(Hole::Skip);
+                    match self.shadow_texture(rect.inset(-*blur), *radius, *blur) {
+                        // The same coverage, read instead of computed per fragment.
+                        Some(texture) => self.gradient_quad(
+                            rect.inset(-*blur),
+                            [0., 0., 1., 1.],
+                            -1.,
+                            0.,
+                            [*color; 2],
+                            texture,
+                            None,
+                            hole,
+                        ),
+                        None => self.gradient_quad(
+                            rect.inset(-*blur),
+                            [0., 0., 1., 1.],
+                            *radius,
+                            -*blur,
+                            [*color; 2],
+                            self.white.id,
+                            None,
+                            hole,
+                        ),
+                    }
+                }
                 Draw::Text(text, rect, size, color, centered) => {
                     self.text(text, *rect, *size, *color, *centered)
                 }
@@ -1678,6 +1847,7 @@ impl Renderer {
             gl::Uniform1i(uniform_location(self.program, c"u_texture".as_ptr()), 0);
             gl::ActiveTexture(gl::TEXTURE0);
             let mut paint_bound = false;
+            let mut mesh_state = MeshState::default();
             let mut current_fade = None;
             let mut blending = true;
             let mut bound_texture = 0;
@@ -1700,6 +1870,7 @@ impl Renderer {
                     }
                     current_fade = Some(batch.fade);
                     paint_bound = false;
+                    mesh_state.program = 0;
                 }
                 let clip = batch.clip.map(|clip| {
                     [
@@ -1731,6 +1902,7 @@ impl Renderer {
                         }
                         if !paint_bound {
                             gl::UseProgram(self.program);
+                            mesh_state.program = 0;
                             gl::BindBuffer(gl::ARRAY_BUFFER, self.buffer);
                             let mut offset = 0;
                             for (index, size) in [2, 2, 4, 4, 2].into_iter().enumerate() {
@@ -1785,6 +1957,7 @@ impl Renderer {
                             continue;
                         };
                         self.draw_mesh(
+                            &mut mesh_state,
                             self.vector_program,
                             mesh,
                             [rect.w / mesh.width, rect.h / mesh.height, rect.x, rect.y],
@@ -1800,6 +1973,7 @@ impl Renderer {
                         };
                         let size = f32::from_bits(key.layout[0]) * vh as f32 / 1080.;
                         self.draw_mesh(
+                            &mut mesh_state,
                             self.text_program,
                             mesh,
                             [1., 1., origin[0], origin[1]],
@@ -1852,6 +2026,7 @@ impl Renderer {
 
     fn draw_mesh(
         &self,
+        state: &mut MeshState,
         program: GLuint,
         mesh: &vector::Mesh,
         transform: [f32; 4],
@@ -1859,18 +2034,29 @@ impl Renderer {
         embolden: f32,
     ) {
         let viewport = self.stats.viewport;
+        let scale = [
+            viewport.width as f32 / 1920.,
+            viewport.height as f32 / 1080.,
+        ];
         unsafe {
-            gl::UseProgram(program);
+            if state.program != program {
+                gl::UseProgram(program);
+                state.program = program;
+            }
             if program == self.text_program {
-                gl::Uniform1f(
-                    uniform_location(program, c"u_fringe".as_ptr()),
-                    if self.stats.multisample_samples > 1 {
-                        0.
-                    } else {
-                        0.5
-                    },
-                );
-                gl::Uniform1f(uniform_location(program, c"u_embolden".as_ptr()), embolden);
+                let fringe = if self.stats.multisample_samples > 1 {
+                    0.
+                } else {
+                    0.5
+                };
+                if state.fringe != Some(fringe) {
+                    gl::Uniform1f(uniform_location(program, c"u_fringe".as_ptr()), fringe);
+                    state.fringe = Some(fringe);
+                }
+                if state.embolden != Some(embolden) {
+                    gl::Uniform1f(uniform_location(program, c"u_embolden".as_ptr()), embolden);
+                    state.embolden = Some(embolden);
+                }
             }
             gl::BindBuffer(gl::ARRAY_BUFFER, mesh.buffer);
             gl::DisableVertexAttribArray(4);
@@ -1894,11 +2080,19 @@ impl Renderer {
                 transform[2],
                 transform[3],
             );
-            gl::Uniform2f(
-                uniform_location(program, c"u_pixel_scale".as_ptr()),
-                viewport.width as f32 / 1920.,
-                viewport.height as f32 / 1080.,
-            );
+            let known = if program == self.text_program {
+                &mut state.text_scale
+            } else {
+                &mut state.vector_scale
+            };
+            if *known != Some(scale) {
+                gl::Uniform2f(
+                    uniform_location(program, c"u_pixel_scale".as_ptr()),
+                    scale[0],
+                    scale[1],
+                );
+                *known = Some(scale);
+            }
             gl::Uniform4f(
                 uniform_location(program, c"u_tint".as_ptr()),
                 tint[0],
