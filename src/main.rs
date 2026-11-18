@@ -737,6 +737,7 @@ fn run() -> Result<(), String> {
     if webos && let Some(directory) = preferences_path.parent() {
         app_artwork::set_disk_cache(directory.join("icon-cache"));
         renderer::set_program_cache(directory.join("shader-cache"));
+        preload::set_image_cache(directory.join("image-cache"));
     }
     let mut state = State::new(initial_preferences);
     if let Some(version) = &options.test_update_version {
@@ -1252,6 +1253,28 @@ fn run() -> Result<(), String> {
                         state.preferences.language,
                     );
                     state.set_inventory(inventory, warning);
+                    if !startup_inventory_reported {
+                        // The first inventory names the dock's apps: decode their surfaces
+                        // on the startup workers instead of one by one in the first frame.
+                        let scene = view::scene(&state, &assets, now);
+                        preload::start(
+                            scene
+                                .draw
+                                .iter()
+                                .filter_map(|draw| match draw {
+                                    renderer::Draw::Image(path, ..)
+                                    | renderer::Draw::TintedImage(path, ..)
+                                        if !path.ends_with(".lvec")
+                                            && !renderer.has_image(path) =>
+                                    {
+                                        Some((path.clone(), preload::Kind::Image))
+                                    }
+                                    _ => None,
+                                })
+                                .collect(),
+                            3,
+                        );
+                    }
                     if !startup_inventory_reported {
                         startup_stage("app inventory");
                         startup_inventory_reported = true;
