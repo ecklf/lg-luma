@@ -207,6 +207,8 @@ enum BatchKind {
         start: usize,
         count: usize,
         backdrop: Option<[[u8; 3]; 2]>,
+        /// Drawn without blending: lets the GPU discard hidden fragments beneath.
+        opaque: bool,
     },
     Vector {
         path: String,
@@ -224,6 +226,15 @@ struct Batch {
     kind: BatchKind,
     clip: Option<Rect>,
     fade: Option<[f32; 4]>,
+}
+
+/// A region of a quad drawn differently from the rest of it.
+#[derive(Clone, Copy)]
+enum Hole {
+    /// Not drawn: its pixels would not change the target.
+    Skip(Rect),
+    /// Fully opaque: drawn without blending.
+    Opaque(Rect),
 }
 
 fn full_screen(rect: &Rect) -> bool {
@@ -617,7 +628,7 @@ impl Renderer {
         colors: [Color; 2],
         texture: GLuint,
         backdrop: Option<[[u8; 3]; 2]>,
-        hole: Option<Rect>,
+        hole: Option<Hole>,
     ) {
         if rect.w <= 0. || rect.h <= 0. {
             return;
@@ -625,7 +636,14 @@ impl Renderer {
         let rect = self.snap(rect);
         // Pixels inside `hole` would leave the target unchanged (zero coverage) or are
         // overdrawn by an opaque draw: rasterize only the four strips around it.
-        if let Some(hole) = hole {
+        if let Some(region) = hole {
+            let (Hole::Skip(hole) | Hole::Opaque(hole)) = region;
+            // Whole physical pixels, rounded inward: the strips meet on pixel boundaries.
+            let scale = self.stats.viewport.scale.max(0.01);
+            let (left, top) = ((hole.x * scale).ceil() / scale, (hole.y * scale).ceil() / scale);
+            let right = ((hole.x + hole.w) * scale).floor() / scale;
+            let bottom = ((hole.y + hole.h) * scale).floor() / scale;
+            let hole = Rect::new(left, top, right - left, bottom - top);
             let x0 = hole.x.max(rect.x);
             let y0 = hole.y.max(rect.y);
             let x1 = (hole.x + hole.w).min(rect.x + rect.w);
@@ -647,7 +665,12 @@ impl Renderer {
                     }
                 }
                 if count > 0 {
-                    self.paint_batch(start, count, texture, backdrop);
+                    self.paint_batch(start, count, texture, backdrop, false);
+                }
+                if let Hole::Opaque(_) = region {
+                    let start = self.vertices.len() / 14;
+                    self.quad_part(rect, [x0, y0, x1, y1], uv, radius, border, colors);
+                    self.paint_batch(start, 6, texture, backdrop, true);
                 }
                 return;
             }
@@ -672,7 +695,7 @@ impl Renderer {
                 border,
             ]);
         }
-        self.paint_batch(start, 6, texture, backdrop);
+        self.paint_batch(start, 6, texture, backdrop, false);
     }
 
     /// Six paint vertices for the part [x0, y0, x1, y1] of `rect`, with the same attributes
@@ -727,9 +750,13 @@ impl Renderer {
             }
             _ => return None,
         };
-        // Inside the rounded corners and two pixels clear of the antialiased edge.
-        let mut hole = self.snap(rect).inset(radius * 0.3 + 2.);
-        // An edge fade makes the face translucent outside its plateau.
+        self.opaque_interior(rect, radius)
+    }
+
+    /// The part of an opaque rounded rect drawn with full coverage: inside the rounded
+    /// corners, two pixels clear of the antialiased edge and within an edge fade's plateau.
+    fn opaque_interior(&self, rect: Rect, radius: f32) -> Option<Rect> {
+        let mut hole = self.snap(rect).inset(radius.max(0.) * 0.3 + 2.);
         if let Some([_, top, bottom, _]) = self.fade.filter(|fade| fade[1] > fade[0]) {
             let y0 = hole.y.max(top);
             let y1 = (hole.y + hole.h).min(bottom);
@@ -746,6 +773,7 @@ impl Renderer {
         count: usize,
         texture: GLuint,
         backdrop: Option<[[u8; 3]; 2]>,
+        opaque: bool,
     ) {
         if let Some(batch) = self.batches.last_mut() {
             let same_clip = match (batch.clip, self.clip) {
@@ -759,10 +787,12 @@ impl Renderer {
                     texture: previous,
                     count: batch_count,
                     backdrop: previous_backdrop,
+                    opaque: previous_opaque,
                     ..
                 } = &mut batch.kind
                 && *previous == texture
                 && *previous_backdrop == backdrop
+                && *previous_opaque == opaque
             {
                 *batch_count += count;
                 return;
@@ -774,6 +804,7 @@ impl Renderer {
                 start,
                 count,
                 backdrop,
+                opaque,
             },
             clip: self.clip,
             fade: self.fade,
@@ -783,7 +814,7 @@ impl Renderer {
     /// The wallpaper with full-screen translucent fills folded in: each fill maps a pixel p to
     /// p * (1 - a) + c * a, so together they are p * m + k, drawn in one pass instead of one
     /// full-screen layer each. Strips keep gradients' products of colour and alpha exact.
-    fn folded_quad(&mut self, rect: Rect, texture: GLuint, scrims: &[Scrim]) {
+    fn folded_quad(&mut self, rect: Rect, texture: GLuint, scrims: &[Scrim], opaque: bool) {
         const STRIPS: usize = 16;
         let fold = |t: f32| {
             let (mut m, mut k) = ([1f32; 3], [0f32; 3]);
@@ -824,7 +855,13 @@ impl Renderer {
                 ]);
             }
         }
-        self.paint_batch(start, STRIPS * 6, texture, None);
+        self.paint_batch(
+            start,
+            STRIPS * 6,
+            texture,
+            None,
+            opaque && self.fade.is_none(),
+        );
     }
 
     fn text(&mut self, text: &str, rect: Rect, style: TextStyle, color: Color, centered: bool) {
@@ -1146,6 +1183,7 @@ impl Renderer {
         };
         texture.frame = frame;
         let id = texture.id;
+        let opaque = texture.opaque && tint[3] >= 1.;
         if contain {
             let scale = (rect.w / texture.width as f32).min(rect.h / texture.height as f32);
             let w = texture.width as f32 * scale;
@@ -1153,9 +1191,22 @@ impl Renderer {
             rect = Rect::new(rect.x + (rect.w - w) / 2., rect.y + (rect.h - h) / 2., w, h);
         }
         if scrims.is_empty() {
-            self.quad(rect, [0., 0., 1., 1.], plain_radius(radius), 0., tint, id);
+            let hole = opaque
+                .then(|| self.opaque_interior(rect, radius))
+                .flatten()
+                .map(Hole::Opaque);
+            self.gradient_quad(
+                rect,
+                [0., 0., 1., 1.],
+                plain_radius(radius),
+                0.,
+                [tint; 2],
+                id,
+                None,
+                hole,
+            );
         } else {
-            self.folded_quad(rect, id, scrims);
+            self.folded_quad(rect, id, scrims, opaque);
         }
     }
 
@@ -1266,7 +1317,10 @@ impl Renderer {
             [tint; 2],
             id,
             Some(image.backdrop),
-            None,
+            (tint[3] >= 1.)
+                .then(|| self.opaque_interior(rect, radius))
+                .flatten()
+                .map(Hole::Opaque),
         );
     }
 
@@ -1425,7 +1479,8 @@ impl Renderer {
                     [*color; 2],
                     self.white.id,
                     None,
-                    (*border > 0.).then(|| self.snap(*rect).inset(radius + border + 2.)),
+                    (*border > 0.)
+                        .then(|| Hole::Skip(self.snap(*rect).inset(radius + border + 2.))),
                 ),
                 Draw::RoundedGradient(rect, radius, top, bottom) => self.gradient_quad(
                     *rect,
@@ -1445,7 +1500,7 @@ impl Renderer {
                     [*color; 2],
                     self.white.id,
                     None,
-                    self.opaque_cover(commands.get(index)),
+                    self.opaque_cover(commands.get(index)).map(Hole::Skip),
                 ),
                 Draw::Text(text, rect, size, color, centered) => {
                     self.text(text, *rect, *size, *color, *centered)
@@ -1572,6 +1627,7 @@ impl Renderer {
             gl::ActiveTexture(gl::TEXTURE0);
             let mut paint_bound = false;
             let mut current_fade = None;
+            let mut blending = true;
             for batch in &self.batches {
                 if current_fade != Some(batch.fade) {
                     // The same cheap alpha mask applies to shapes, textures,
@@ -1608,7 +1664,16 @@ impl Renderer {
                         start,
                         count,
                         backdrop,
+                        opaque,
                     } => {
+                        if *opaque == blending {
+                            if *opaque {
+                                gl::Disable(gl::BLEND);
+                            } else {
+                                gl::Enable(gl::BLEND);
+                            }
+                            blending = !*opaque;
+                        }
                         if !paint_bound {
                             gl::UseProgram(self.program);
                             gl::BindBuffer(gl::ARRAY_BUFFER, self.buffer);
@@ -1646,6 +1711,14 @@ impl Renderer {
                         }
                         gl::DrawArrays(gl::TRIANGLES, *start as i32, *count as i32);
                     }
+                    BatchKind::Vector { .. } | BatchKind::Text { .. } if !blending => {
+                        gl::Enable(gl::BLEND);
+                        blending = true;
+                    }
+                    _ => {}
+                }
+                match &batch.kind {
+                    BatchKind::Paint { .. } => {}
                     BatchKind::Vector { path, rect, tint } => {
                         let Some(mesh) = self.vectors.get(path).and_then(Option::as_ref) else {
                             continue;
@@ -1675,6 +1748,9 @@ impl Renderer {
                         paint_bound = false;
                     }
                 }
+            }
+            if !blending {
+                gl::Enable(gl::BLEND);
             }
             gl::Disable(gl::SCISSOR_TEST);
         }
