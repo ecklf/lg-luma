@@ -454,11 +454,16 @@ fn main() {
 
 fn compose(state: &mut State, assets: &view::Assets, now: OffsetDateTime) -> view::Scene {
     let scene = view::scene(state, assets, now);
-    if !state.pointer && state.overlay.is_none() && state.reveal_focus(&scene.controls) {
+    let scene = if !state.pointer && state.overlay.is_none() && state.reveal_focus(&scene.controls)
+    {
         view::scene(state, assets, now)
     } else {
         scene
+    };
+    if state.bind_focus_travel(&scene.controls) {
+        state.dirty = true;
     }
+    scene
 }
 
 fn wallpaper_upload_active(state: &State, webos: bool, focused: bool, visible: bool) -> bool {

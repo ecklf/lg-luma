@@ -7,9 +7,9 @@ use crate::{
     },
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, APPS_SECTION, Control, HOME_TILE_PITCH, HOME_TILE_WIDTH, INPUTS_SECTION,
-        KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage, Target, TextField,
-        WIDGETS_SECTION,
+        APPS_COLUMNS, APPS_SECTION, Control, FOCUS_TRAVEL_RADIUS, HOME_TILE_PITCH, HOME_TILE_WIDTH,
+        INPUTS_SECTION, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage, Target,
+        TextField, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -983,8 +983,9 @@ fn tile(out: &mut Scene, state: &State, assets: &Assets, app: &App, rect: Rect, 
             c(0xededed, 1.),
         );
     }
-    if focused {
-        out.ring(rect, 19.2);
+    // A traveling ring is painted once after its strip instead.
+    if focused && state.focus_travel.is_none() {
+        out.ring(rect, FOCUS_TRAVEL_RADIUS);
     }
     if state.pressed.as_ref() == Some(&target) {
         out.fade(start, 1., 0.85);
@@ -1490,6 +1491,13 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
             true,
         );
     }
+    paint_focus_travel(out, state, 0., |target| {
+        if state.page == Page::Apps {
+            matches!(target, Target::DockApp(_))
+        } else {
+            matches!(target, Target::App(_))
+        }
+    });
     out.draw.push(Draw::Clip(Some(state.content_viewport())));
 }
 
@@ -1906,7 +1914,25 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
         }
         y += row_height + 38.4;
     }
+    // Grid controls hold the final layout; paint at the drawer's presentation offset.
+    paint_focus_travel(out, state, offset, |target| {
+        state.page == Page::Apps && matches!(target, Target::App(_))
+    });
     out.draw.push(Draw::Clip(None));
+}
+
+fn paint_focus_travel(out: &mut Scene, state: &State, y: f32, strip: impl Fn(&Target) -> bool) {
+    if let Some(travel) = &state.focus_travel
+        && strip(&travel.target)
+    {
+        let rect = Rect::new(
+            travel.rect.x,
+            travel.rect.y + y,
+            travel.rect.w,
+            travel.rect.h,
+        );
+        out.ring(rect, FOCUS_TRAVEL_RADIUS);
+    }
 }
 
 /// The existing System status card owns the only update action.
