@@ -362,12 +362,10 @@ impl State {
     pub fn update_response(&mut self, result: Result<Option<String>, String>) {
         match result {
             Ok(latest) => {
-                let announce = latest.is_some() && latest != self.available_update;
+                // Availability stays on the System update card; automatic checks
+                // must not toast over Home when it regains focus.
                 self.available_update = latest;
                 self.update_status = crate::update::Status::Checked;
-                if announce {
-                    self.notify(self.preferences.language.t("updateAvailable"));
-                }
             }
             Err(error) => {
                 eprintln!("Luma update check: {error}");

@@ -3445,6 +3445,10 @@ fn update_status_card_only_claims_latest_after_success_and_allows_single_flight_
     state.activate();
     state.update_response(Ok(Some("9.0.0".into())));
     assert_eq!(state.focus, Target::InstallUpdate);
+    assert!(
+        state.notice.is_none(),
+        "available updates stay on the System card without a Home toast"
+    );
     state.update_response(Err("offline".into()));
     assert_eq!(state.available_update.as_deref(), Some("9.0.0"));
 }
