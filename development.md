@@ -130,9 +130,11 @@ and is rejected on TV. `xvfb-run -a pnpm test:markets` checks both widgets, edit
 currency, persistence, delayed timestamps, failures, bounded replies and redirect refusal.
 CI runs this as its own isolated smoke suite. Tests never call public market feeds.
 
-Greeting is time-based only. Legacy `greeting_name` preferences are ignored and not
-saved, and Greeting settings offer date options only. The midnight-to-5am translation
-is a greeting, not a loading message.
+`greeting_name` is a locally saved, trimmed, control-free name limited to 40 characters.
+Greeting settings reuse the native/desktop keyboard paths and commit typed replacements on
+Done, Back, keyboard dismissal or a system Home return. An empty edit preserves the old name;
+Clear name explicitly removes it. Existing saved names are restored. The midnight-to-5am
+translation remains a greeting, not a loading message.
 
 `weather_small` defaults to false. When enabled, Weather uses a true 1×1 footprint
 for rendering, placement, collision checks and sanitization. The size toggle preserves
@@ -243,12 +245,13 @@ its settings. Adding is atomic: browsing/cancelling placement does not install o
 The legacy `show_greeting` and `show_weather` fields now store whether each widget is installed;
 old hidden widgets start removed. Configuration menus have no widget visibility or position rows.
 `show_date` optionally hides the combined Greeting's date line. Removed Weather never requests forecasts.
-Greeting settings contain the date toggle and format picker, with no separate Date widget or position.
+Greeting settings contain the date toggle, format picker, Name and Clear name actions,
+with no separate Date widget or position.
 The date uses 18.4px/600/+0.12 tracking at 72% opacity; Greeting uses
 90.4px/500/−0.065 tracking and 1.05 leading, fitting shorter for long translations.
 The 32.8px date band keeps both lines inside one grid row.
 Weather content is top-aligned within its 2×2 footprint in every style.
-Greeting has no name editor; legacy `greeting_name` fields are ignored and not serialized.
+Names personalize every time-of-day greeting and remain saved when the widget is removed.
 All three weather styles reflow inside the same fixed footprint. `pnpm screenshots --widgets`
 captures the default arrangement, an alternate arrangement, the grid manager, actions and Add catalog.
 

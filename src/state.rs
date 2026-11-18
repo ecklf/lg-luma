@@ -81,6 +81,8 @@ pub enum Target {
     RemoveWidget(HomeWidget),
     MoveWidget(HomeWidget),
     DateToggle,
+    GreetingName,
+    GreetingNameReset,
     DateFormat,
     ClockFormat,
     ClockTimeFormat,
@@ -190,6 +192,7 @@ pub enum Subpage {
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum TextField {
+    GreetingName,
     Market(HomeWidget),
     Apps,
     Location,
@@ -1641,7 +1644,12 @@ impl State {
                     Some(&[Target::MarketSymbol(kind), Target::MarketCurrency])
                 }
                 Some(Subpage::Market(kind)) => Some(&[Target::MarketSymbol(kind)]),
-                Some(Subpage::Greeting) => Some(&[Target::DateToggle, Target::DateFormat]),
+                Some(Subpage::Greeting) => Some(&[
+                    Target::DateToggle,
+                    Target::DateFormat,
+                    Target::GreetingName,
+                    Target::GreetingNameReset,
+                ]),
                 Some(Subpage::Weather) => Some(&[
                     Target::WeatherLocation,
                     Target::WeatherTemperature,
@@ -1673,6 +1681,7 @@ impl State {
                             Target::ClockFormat
                                 | Target::ClockTimeFormat
                                 | Target::DateFormat
+                                | Target::GreetingName
                                 | Target::WeatherLocation
                                 | Target::WeatherTemperature
                                 | Target::WeatherStyle
@@ -2256,7 +2265,7 @@ impl State {
             }
             if matches!(
                 self.keyboard_field,
-                TextField::InputName | TextField::Market(_)
+                TextField::InputName | TextField::GreetingName | TextField::Market(_)
             ) {
                 let length = self.input_name.chars().count();
                 self.input_name.extend(
@@ -2285,7 +2294,7 @@ impl State {
                 self.weather.edit(query);
             } else if matches!(
                 self.keyboard_field,
-                TextField::InputName | TextField::Market(_)
+                TextField::InputName | TextField::GreetingName | TextField::Market(_)
             ) {
                 self.input_name.pop();
             } else {
@@ -2315,6 +2324,14 @@ impl State {
     }
 
     fn commit_text_input(&mut self) -> Vec<Effect> {
+        if self.keyboard_field == TextField::GreetingName {
+            let name = clean_input_name(&std::mem::take(&mut self.input_name));
+            if !name.is_empty() && self.preferences.greeting_name != name {
+                self.preferences.greeting_name = name;
+                return vec![Effect::Save];
+            }
+            return vec![];
+        }
         if let TextField::Market(kind) = self.keyboard_field {
             let draft = std::mem::take(&mut self.input_name);
             if draft.trim().is_empty() {
@@ -2429,7 +2446,7 @@ impl State {
             self.weather.edit(query);
         } else if matches!(
             self.keyboard_field,
-            TextField::InputName | TextField::Market(_)
+            TextField::InputName | TextField::GreetingName | TextField::Market(_)
         ) {
             self.input_name = query;
         } else {
@@ -2443,13 +2460,17 @@ impl State {
         match self.keyboard_field {
             TextField::Location => &self.weather.query,
             TextField::InputName => &self.input_name,
+            TextField::GreetingName => &self.input_name,
             TextField::Market(_) => &self.input_name,
             TextField::Apps => &self.query,
         }
     }
     pub fn open_keyboard(&mut self, field: TextField) {
         self.keyboard_field = field;
-        if matches!(field, TextField::InputName | TextField::Market(_)) {
+        if matches!(
+            field,
+            TextField::InputName | TextField::GreetingName | TextField::Market(_)
+        ) {
             // The TV keyboard starts empty, so a new name replaces the old one.
             self.input_name.clear();
         }
@@ -2462,6 +2483,7 @@ impl State {
             self.focus = match field {
                 TextField::Location => Target::WeatherQuery,
                 TextField::InputName => Target::InputRename,
+                TextField::GreetingName => Target::GreetingName,
                 TextField::Market(kind) => Target::MarketSymbol(kind),
                 TextField::Apps => Target::Search,
             };
@@ -2490,6 +2512,7 @@ impl State {
         match self.keyboard_field {
             TextField::Location => Target::WeatherSearch,
             TextField::InputName => Target::InputRename,
+            TextField::GreetingName => Target::GreetingName,
             TextField::Market(kind) => Target::MarketSymbol(kind),
             TextField::Apps => Target::Search,
         }
@@ -2700,6 +2723,14 @@ impl State {
                 }
             }
             Target::InputRename => self.open_keyboard(TextField::InputName),
+            Target::GreetingName => self.open_keyboard(TextField::GreetingName),
+            Target::GreetingNameReset => {
+                self.focus = Target::GreetingName;
+                if !self.preferences.greeting_name.is_empty() {
+                    self.preferences.greeting_name.clear();
+                    return vec![Effect::Save];
+                }
+            }
             Target::WidgetCell(cell) if cell < HOME_GRID_CELLS => {
                 if let Some(widget) = WidgetPosition::from_cell(cell)
                     .and_then(|position| self.preferences.widget_at(position))
@@ -3267,6 +3298,7 @@ impl State {
                 "Clear" => match self.keyboard_field {
                     TextField::Location => self.weather.edit(String::new()),
                     TextField::InputName => self.input_name.clear(),
+                    TextField::GreetingName => self.input_name.clear(),
                     TextField::Market(_) => self.input_name.clear(),
                     TextField::Apps => self.query.clear(),
                 },
