@@ -94,7 +94,7 @@ pub fn bounds(command: &Draw) -> Option<Rect> {
             1920.,
             rect.h + 2. * style.size,
         )),
-        Draw::Clip(_) | Draw::EdgeFade(_) | Draw::EdgeFadeX(_) => None,
+        Draw::Clip(_) | Draw::EdgeFade(_) => None,
     }
 }
 
@@ -136,9 +136,7 @@ fn same(a: &Draw, b: &Draw) -> bool {
             (None, None) => true,
             _ => false,
         },
-        (Draw::EdgeFade(f1), Draw::EdgeFade(f2)) | (Draw::EdgeFadeX(f1), Draw::EdgeFadeX(f2)) => {
-            f1 == f2
-        }
+        (Draw::EdgeFade(f1), Draw::EdgeFade(f2)) => f1 == f2,
         _ => false,
     }
 }

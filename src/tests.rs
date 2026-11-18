@@ -40,6 +40,66 @@ fn ready() -> State {
 }
 
 #[test]
+fn tv_app_and_device_settings_launches_are_quiet_and_guarded() {
+    for id in ["netflix", "com.palm.app.settings"] {
+        let mut state = ready();
+        let mut requests = Vec::new();
+        crate::launch_app(&mut state, true, id.into(), |request| {
+            requests.push(request)
+        });
+        assert!(state.launching);
+        assert!(state.notice.is_none());
+        assert!(matches!(&requests[..], [crate::Request::Launch(app)] if app == id));
+        crate::launch_app(&mut state, true, id.into(), |_| {
+            panic!("a pending launch must not be sent twice")
+        });
+        assert!(state.notice.is_none());
+    }
+}
+
+#[test]
+fn desktop_app_and_device_settings_launches_keep_preview_notices() {
+    for id in ["netflix", "com.palm.app.settings"] {
+        let mut state = ready();
+        crate::launch_app(&mut state, false, id.into(), |_| {
+            panic!("desktop previews must not call TV services")
+        });
+        assert!(!state.launching);
+        let title = state
+            .inventory
+            .apps
+            .iter()
+            .find(|app| app.id == id)
+            .map_or(id, |app| app.title.as_str());
+        assert_eq!(
+            state.notice.as_ref().unwrap().0,
+            state
+                .preferences
+                .language
+                .format("desktopPreview", &[("app", title)])
+        );
+    }
+}
+
+#[test]
+fn scroll_preview_launches_still_show_a_notice_without_sending_requests() {
+    for webos in [false, true] {
+        let mut state = ready();
+        crate::launch_app(
+            &mut state,
+            webos,
+            "com.luma.scroll-preview.000".into(),
+            |_| panic!("scroll-preview placeholders must never launch"),
+        );
+        assert!(!state.launching);
+        assert_eq!(
+            state.notice.unwrap().0,
+            state.preferences.language.t("scrollTestOnly")
+        );
+    }
+}
+
+#[test]
 fn ui_sounds_default_off_and_toggle_without_moving_controls() {
     assert!(!Preferences::default().ui_sounds);
     let legacy: Preferences = serde_json::from_value(json!({"hour_24": true})).unwrap();
@@ -112,6 +172,47 @@ fn home_relaunch_returns_from_apps_and_settings() {
         assert!(state.dirty);
         assert!(state.return_home().is_empty());
         assert!(state.overlay.is_none(), "Home again must not open Recents");
+    }
+}
+
+#[test]
+fn home_relaunch_skips_drawer_animation_and_restores_home_scene() {
+    for (style, reduced_motion) in [
+        (crate::model::AppDrawerStyle::Minimal, false),
+        (crate::model::AppDrawerStyle::Minimal, true),
+        (crate::model::AppDrawerStyle::Tvos, false),
+        (crate::model::AppDrawerStyle::Tvos, true),
+    ] {
+        for visibility in [0., 0.4, 1.] {
+            let mut state = ready();
+            state.preferences.app_drawer_style = style;
+            state.preferences.reduced_motion = reduced_motion;
+            state.preferences.favorites = Some(vec!["netflix".into()]);
+            state.open(0);
+            let home_draws = scene(&state).draw.len();
+            let home_dock_y = state.dock_y();
+            let dock_cards = state.dock_apps().len();
+            state.open(1);
+            state.drawer_visibility = visibility;
+            state.focus = Target::App("youtube.leanback.v4".into());
+
+            assert!(state.return_home().is_empty());
+            assert_eq!(state.drawer_visibility, 0.);
+            assert_eq!(state.dock_y(), home_dock_y);
+            assert!(!state.animating());
+            let rendered = scene(&state);
+            assert_eq!(
+                rendered
+                    .controls
+                    .iter()
+                    .filter(|control| matches!(control.target, Target::App(_)))
+                    .count(),
+                dock_cards
+            );
+            assert_eq!(rendered.draw.len(), home_draws);
+            state.tick();
+            assert_eq!(state.drawer_visibility, 0.);
+        }
     }
 }
 
@@ -225,7 +326,7 @@ fn controls(state: &State) -> Vec<crate::state::Control> {
 }
 
 #[test]
-fn favorites_edge_fragments_share_draw_hit_and_wheel_viewports() {
+fn favorites_stay_inside_their_card_for_drawing_hits_and_wheel() {
     let mut state = ready();
     let favorites: Vec<_> = state
         .inventory
@@ -235,27 +336,24 @@ fn favorites_edge_fragments_share_draw_hit_and_wheel_viewports() {
         .map(|app| app.id.clone())
         .collect();
     state.preferences.favorites = Some(favorites.clone());
+    let card = state.favorites_viewport();
+    assert_eq!((card.x, card.x + card.w), (60., 1860.));
+    // The seventh tile lies beyond the card, so it is neither drawn there nor a target.
+    assert!(state.hit_test(&controls(&state), 1880., 880.).is_none());
+    assert!(!state.wheel_scroll(&controls(&state), Some((1880., 880.)), 0, -1));
+    assert_eq!(state.home_scroll, 0.);
     assert_eq!(
-        state.hit_test(&controls(&state), 1880., 880.),
-        Some(Target::App(favorites[6].clone()))
+        state.hit_test(&controls(&state), 1800., 880.),
+        Some(Target::App(favorites[5].clone()))
     );
-    assert!(state.wheel_scroll(&controls(&state), Some((1880., 880.)), 0, -1));
+    assert!(state.wheel_scroll(&controls(&state), Some((1800., 880.)), 0, -1));
     assert!((state.home_scroll - crate::state::HOME_TILE_PITCH).abs() < 0.01);
     assert_eq!(state.scroll, 0.);
-    assert_eq!(
-        state.hit_test(&controls(&state), 40., 880.),
-        Some(Target::App(favorites[0].clone()))
-    );
-    let scroll = state.home_scroll;
-    state.pointer_focus(Target::App(favorites[0].clone()));
-    assert_eq!(state.home_scroll, scroll);
-    assert!(state.hit_test(&controls(&state), 4., 880.).is_none());
-    assert!(state.hit_test(&controls(&state), 1915., 880.).is_none());
-    assert!(state.hit_test(&controls(&state), 40., 1060.).is_none());
+    // After scrolling, the first tile has left the card at the left.
+    assert!(state.hit_test(&controls(&state), 40., 880.).is_none());
     let scene = scene(&state);
-    let viewport = state.favorites_viewport();
-    assert!(scene.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Clip(Some(rect)) if rect.x == viewport.x && rect.w == viewport.w)));
-    assert!(state.wheel_scroll(&scene.controls, Some((40., 880.)), 0, 1));
+    assert!(scene.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Clip(Some(rect)) if rect.x == card.x && rect.w == card.w)));
+    assert!(state.wheel_scroll(&scene.controls, Some((200., 880.)), 0, 1));
     assert_eq!(state.home_scroll, 0.);
     assert_eq!(state.scroll, 0.);
 }
@@ -616,7 +714,7 @@ fn settings_header_moves_between_controls_without_switching_pages() {
 }
 
 #[test]
-fn greeting_configuration_only_offers_date_options() {
+fn greeting_configuration_offers_date_and_name_options() {
     let mut state = ready();
     state.open(2);
     state.focus = Target::Widget(0);
@@ -635,7 +733,7 @@ fn greeting_configuration_only_offers_date_options() {
             .iter()
             .filter(|control| control.scrollable)
             .count(),
-        2
+        4
     );
     assert!(state.back().is_empty());
     assert!(state.subpage.is_none());
@@ -683,25 +781,144 @@ fn input_name_replacement_commits_on_every_keyboard_completion_route() {
 }
 
 #[test]
-fn legacy_greeting_names_are_ignored_and_not_saved() {
+fn legacy_greeting_names_are_restored_and_saved() {
     let mut state = ready();
     state.preferences = serde_json::from_value(json!({"greeting_name":"Ana"})).unwrap();
-    assert!(
-        serde_json::to_value(&state.preferences)
-            .unwrap()
-            .get("greeting_name")
-            .is_none()
+    assert_eq!(
+        serde_json::to_value(&state.preferences).unwrap()["greeting_name"],
+        "Ana"
     );
     state.open(2);
     state.focus = Target::Widget(0);
     state.activate();
     let page = scene(&state);
-    assert!(!page.draw.iter().any(|draw|matches!(draw,crate::renderer::Draw::Text(label,..) if label.contains("Ana") || label=="Name" || label=="Clear name")));
+    for expected in ["Ana", "Name", "Clear name"] {
+        assert!(page.draw.iter().any(
+            |draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == expected)
+        ));
+    }
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::DateFormat);
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.focus, Target::WidgetCell(0));
     assert!(state.subpage.is_none());
+}
+
+#[test]
+fn greeting_name_editing_commits_every_keyboard_route_and_clears_explicitly() {
+    use crate::state::Subpage;
+    for route in 0..4 {
+        let mut state = ready();
+        state.preferences.greeting_name = "Ana".into();
+        state.open(2);
+        state.subpage = Some(Subpage::Greeting);
+        state.focus = Target::DateFormat;
+        state.direction(Direction::Down, &controls(&state));
+        assert_eq!(state.focus, Target::GreetingName);
+        state.direction(Direction::Right, &controls(&state));
+        assert!(state.text_input_active());
+        assert!(state.editing_text().is_empty());
+        state.text("  小明X");
+        state.delete_surrounding_text(-1, 1);
+        state.text("  ");
+        assert_eq!(state.preferences.greeting_name, "Ana");
+        let effects = match route {
+            0 => {
+                state.overlay = Some(Overlay::SystemKeyboard);
+                state.finish_text_input()
+            }
+            1 => state.back(),
+            2 => {
+                state.focus = Target::Key(crate::state::KEYS.len() - 1);
+                state.activate()
+            }
+            _ => state.return_home(),
+        };
+        assert_eq!(effects, [Effect::Save]);
+        assert_eq!(state.preferences.greeting_name, "小明");
+        let loaded: Preferences =
+            serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
+        assert_eq!(loaded.greeting_name, "小明");
+        state.open(2);
+        state.subpage = Some(Subpage::Greeting);
+        state.focus = Target::GreetingName;
+        state.activate();
+        state.text("   ");
+        assert!(state.back().is_empty());
+        assert_eq!(state.preferences.greeting_name, "小明");
+        state.direction(Direction::Down, &controls(&state));
+        assert_eq!(state.focus, Target::GreetingNameReset);
+        assert_eq!(state.activate(), [Effect::Save]);
+        assert!(state.preferences.greeting_name.is_empty());
+        assert_eq!(state.focus, Target::GreetingName);
+        state.focus = Target::GreetingNameReset;
+        assert!(state.activate().is_empty());
+    }
+}
+
+#[test]
+fn native_greeting_name_row_shows_the_live_draft_and_pointer_opens_it() {
+    let mut state = ready();
+    state.preferences.greeting_name = "Ana".into();
+    state.open(2);
+    state.subpage = Some(crate::state::Subpage::Greeting);
+    let rendered = scene(&state);
+    let control = rendered
+        .controls
+        .iter()
+        .find(|control| control.target == Target::GreetingName)
+        .unwrap();
+    let (x, y) = control.rect.center();
+    assert_eq!(
+        state.hit_test(&rendered.controls, x, y),
+        Some(Target::GreetingName)
+    );
+    state.focus = Target::GreetingName;
+    state.activate();
+    state.overlay = Some(Overlay::SystemKeyboard);
+    state.text("Zoë");
+    let rendered = scene(&state);
+    assert!(
+        rendered
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, crate::renderer::Draw::Text(label, ..) if label == "Zoë|"))
+    );
+    assert_eq!(state.preferences.greeting_name, "Ana");
+    assert_eq!(state.finish_text_input(), [Effect::Save]);
+    assert_eq!(state.preferences.greeting_name, "Zoë");
+    assert_eq!(state.focus, Target::GreetingName);
+}
+
+#[test]
+fn greeting_names_are_sanitized_and_limited_without_changing_unrelated_preferences() {
+    let mut preferences: Preferences =
+        serde_json::from_value(json!({"greeting_name":"  A\nna\t  ", "hour_24":true})).unwrap();
+    preferences.sanitize();
+    assert_eq!(preferences.greeting_name, "Ana");
+    assert!(preferences.hour_24);
+    preferences.greeting_name = "明".repeat(100);
+    preferences.sanitize();
+    assert_eq!(
+        preferences.greeting_name.chars().count(),
+        crate::model::INPUT_NAME_LIMIT
+    );
+
+    let mut state = ready();
+    state.open(2);
+    state.subpage = Some(crate::state::Subpage::Greeting);
+    state.focus = Target::GreetingName;
+    state.activate();
+    state.text(&"明".repeat(100));
+    assert_eq!(
+        state.editing_text().chars().count(),
+        crate::model::INPUT_NAME_LIMIT
+    );
+    state.delete();
+    assert_eq!(
+        state.editing_text().chars().count(),
+        crate::model::INPUT_NAME_LIMIT - 1
+    );
 }
 
 #[test]
@@ -2121,6 +2338,65 @@ fn keyboard_done_saves_a_typed_input_name() {
 }
 
 #[test]
+fn home_preload_launches_start_hidden() {
+    for key in ["nid", "appId"] {
+        for id in [crate::platform::HOME_ID, crate::platform::FULL_HOME_ID] {
+            for mode in [
+                "full",
+                "semi-full",
+                "partial",
+                "minimal",
+                "criu",
+                "future-mode",
+            ] {
+                let mut options = crate::Options::default();
+                options.apply_launch_metadata(&json!({
+                    "@system_native_app": true,
+                    (key): id,
+                    "preload": mode,
+                }));
+                assert!(options.webos_home);
+                assert_eq!(options.preload.as_deref(), Some(mode));
+                assert!(options.start_hidden(), "{key}={id}, preload={mode}");
+            }
+        }
+    }
+}
+
+#[test]
+fn ordinary_home_launches_do_not_start_hidden() {
+    for metadata in [
+        json!({"nid": crate::platform::HOME_ID}),
+        json!({"nid": crate::platform::HOME_ID, "preload": ""}),
+        json!({"nid": crate::platform::HOME_ID, "preload": true}),
+        json!({"nid": crate::platform::HOME_ID, "preload": null}),
+        json!({"nid": crate::platform::HOME_ID, "preload": 1}),
+    ] {
+        let mut options = crate::Options::default();
+        options.apply_launch_metadata(&metadata);
+        assert!(options.webos_home);
+        assert_eq!(options.preload, None);
+        assert!(!options.start_hidden(), "{metadata}");
+    }
+}
+
+#[test]
+fn normal_app_preload_does_not_change_startup_visibility() {
+    for metadata in [
+        json!({"nid": crate::platform::APP_ID, "preload": "full"}),
+        json!({"appId": crate::platform::APP_ID, "preload": "full"}),
+        json!({"preload": "full"}),
+        json!({}),
+    ] {
+        let mut options = crate::Options::default();
+        options.apply_launch_metadata(&metadata);
+        assert!(!options.webos_home);
+        assert_eq!(options.preload, None);
+        assert!(!options.start_hidden(), "{metadata}");
+    }
+}
+
+#[test]
 fn home_lifecycle_replies_map_for_both_registration_versions() {
     use crate::platform::Lifecycle;
     // Lifecycle v2 (registerApp, in place of LG's Home executable) names it in "event".
@@ -2154,6 +2430,44 @@ fn home_lifecycle_replies_map_for_both_registration_versions() {
     ] {
         assert_eq!(Lifecycle::from_reply(&reply), None, "{reply}");
     }
+}
+
+#[test]
+fn home_lifecycle_fallback_retries_legacy_and_other_versions_but_not_current_failures() {
+    use crate::platform::{disable_home_lifecycle, home_lifecycle_disabled};
+    let directory = std::env::temp_dir().join(format!(
+        "luma-lifecycle-fallback-test-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&directory).unwrap();
+    let marker = directory.join("no-lifecycle");
+    assert!(!home_lifecycle_disabled(&marker, "3.6.2"));
+
+    // A legacy empty marker no longer disables registration indefinitely.
+    std::fs::write(&marker, b"").unwrap();
+    assert!(!home_lifecycle_disabled(&marker, "3.6.2"));
+
+    // A failed retry records this release. Repeated launches retain the safety fallback.
+    disable_home_lifecycle(&marker, "3.6.2").unwrap();
+    assert!(home_lifecycle_disabled(&marker, "3.6.2"));
+    assert!(home_lifecycle_disabled(&marker, "3.6.2"));
+
+    // Upgrades (and switching releases) retry; merely reading does not erase the marker.
+    assert!(!home_lifecycle_disabled(&marker, "3.6.3"));
+    assert!(!home_lifecycle_disabled(&marker, "3.6.1"));
+    assert!(home_lifecycle_disabled(&marker, "3.6.2"));
+    disable_home_lifecycle(&marker, "3.6.3").unwrap();
+    assert!(home_lifecycle_disabled(&marker, "3.6.3"));
+
+    // Malformed, unknown and unreadable markers fail safe instead of retrying endlessly.
+    for contents in ["broken", "{}", r#"{"version":null}"#, r#"{"version":""}"#] {
+        std::fs::write(&marker, contents).unwrap();
+        assert!(home_lifecycle_disabled(&marker, "3.6.3"), "{contents}");
+    }
+    assert!(home_lifecycle_disabled(&directory, "3.6.3"));
+    assert!(disable_home_lifecycle(&directory, "3.6.3").is_err());
+    std::fs::remove_file(marker).unwrap();
+    std::fs::remove_dir(directory).unwrap();
 }
 
 #[test]
@@ -2682,10 +2996,12 @@ fn language_list_scrolls_under_fixed_ui_without_clipping_or_fades() {
     state.subpage = Some(Subpage::Language);
     state.scroll = 180.;
     let rendered = scene(&state);
-    assert!(!rendered.draw.iter().any(|draw| matches!(
-        draw,
-        Draw::Clip(Some(_)) | Draw::EdgeFade(Some(_)) | Draw::EdgeFadeX(Some(_))
-    )));
+    assert!(
+        !rendered
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, Draw::Clip(Some(_)) | Draw::EdgeFade(Some(_))))
+    );
     let first = rendered
         .controls
         .iter()
@@ -2921,7 +3237,7 @@ fn greeting_removal_persists_and_hides_the_combined_widget() {
     let hidden = scene(&state);
     let language = state.preferences.language;
     let now = time::OffsetDateTime::UNIX_EPOCH;
-    let greeting = language.greeting(now.hour(), "");
+    let greeting = language.greeting(now.hour(), &state.preferences.greeting_name);
     assert!(
         !hidden
             .draw

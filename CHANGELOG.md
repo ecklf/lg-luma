@@ -1,5 +1,50 @@
 # lg-luma
 
+## 3.7.0
+
+### Minor Changes
+
+- d9511c1: Add a Show app names setting under General, off by default. Enable it for selected drawer app labels, or leave it off to retain the original compact spacing and scroll padding.
+- a21485b: Show the selected app's name beneath its card in the app drawer, with more space between rows and without adding labels to favorites. Keep the last row's name visible with bottom padding when scrolling.
+
+### Patch Changes
+
+- 83b3bb5: Faster startup on TVs: the first scene's images decode on worker threads while SDL, the window and the shaders start, and linked shader programs are reused between launches.
+- 81dcdf4: Smoother app drawer and Settings on single-core TV GPUs: shadows and borders skip pixels that cannot change, opaque faces let the GPU discard hidden fragments, the glass interior takes a shorter shader path, and redundant GL state changes are skipped.
+- a288544: Smoother first app drawer opening on TVs: bundled surfaces decode in the background and logos load while Home is idle. Shared surface paths decode only once, with bounded buffering while Luma is hidden or animating.
+- b5f33fe: Stop showing the Home Opening toast when launching an app or Device settings on TV, while keeping desktop preview notices.
+- 53ca20c: Ask for the app inventory once per Home press instead of twice.
+- 2fda3d7: Round font sizes down to whole physical pixels before text layout and outline scaling, preserving fitted text bounds. Add a diagnostic override for comparing the existing fractional sizes; TV sharpness still needs matched hardware captures.
+
+## 3.6.2
+
+### Patch Changes
+
+- 9664872: Retry Home lifecycle registration after a release change or an old empty fallback marker, so an earlier focus failure does not keep forcing slow full restarts after updates. If a retry still fails to regain focus, preserve the restart safety fallback for that Luma version.
+
+## 3.6.1
+
+### Patch Changes
+
+- a137e43: Keep Home-replacement preload launches hidden instead of interrupting the active app or HDMI input. Ordinary Home relaunches continue to show and raise Luma.
+
+## 3.6.0
+
+### Minor Changes
+
+- 0bd2ad1: Restore the locally saved greeting name, with Name and Clear name controls in the Greeting widget settings and personalized greetings throughout the day.
+
+### Patch Changes
+
+- f87b78c: Keep hidden Apps and Settings rendering demand-driven instead of preparing them on the SDL thread after inventory refreshes, where they could delay Home relaunches and input. Return directly to Home without replaying the previous drawer's closing animation.
+
+## 3.5.1
+
+### Patch Changes
+
+- 2ac0eda: Keep the Home favourites inside their glass card. The cut-off neighbouring tile no longer shows beside the card, and the space beside it no longer takes clicks or wheel input; the app drawer's peek below now shows that more apps follow.
+- 706b19b: Show live stock and crypto symbol edits with the TV keyboard, and accept Yahoo Finance index symbols such as ^GSPC.
+
 ## 3.5.0
 
 ### Minor Changes

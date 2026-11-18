@@ -30,24 +30,13 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 
 ## Features
 
-- App drawer styles: tvOS (default) with a 24 px peek, or Minimal with a lower dock and no peek.
-  Choose in **Settings → General → App drawer**. Both use the same drawer navigation.
-- Movable greeting, weather, stock and crypto widgets, with multiple cities or symbols.
-  Weather supports compact 1×1 and larger 2×2 layouts.
-- Stock and crypto prices with daily changes and quote age, without an account or API key.
-  Quotes may be delayed and are informational, not for trading. Coinbase and Yahoo Finance
-  receive the configured symbol and TV IP address. Yahoo's unofficial endpoint may change.
-- Built-in backgrounds and QR-based uploads from a phone or computer on the same network,
-  with JPEG, PNG and WebP support and a 16:9 crop. Upload links work only while the TV dialog
-  is open and focused. Optional rotation and gradient shading leave the LG launch splash unchanged.
-- Saved input icons, with automatic label detection or a choice of bundled device icons.
-- Recent app switching and closing while Luma is focused: hold **Back** for 0.6 seconds,
-  browse with **Left / Right**, open with **OK**, close with **Up**, and dismiss with **Back**.
-  Short-press and Off modes are available in **Settings → General → Recent apps**.
-- QR-managed webhook shortcut tiles, such as Home Assistant actions.
-- 16 interface languages: Catalan, Czech, Dutch, English, French, German, Hungarian, Italian,
-  Polish, Portuguese (Brazil), Russian, Simplified Chinese, Spanish, Swedish, Traditional Chinese
-  and Vietnamese. Choose in **Settings → General → Language**.
+- Customizable app drawer with optional names beneath selected non-favorite apps (off by default), input icons and recent app switching.
+- Movable greeting, weather, stock and crypto widgets.
+- Built-in and uploaded backgrounds, with optional rotation.
+- Webhook shortcuts and 16 interface languages.
+
+Personalize your greeting in **Settings → Widgets → Greeting → Configure → Name**.
+Use **Clear name** to return to an unnamed greeting; names are saved only on your TV.
 
 ## Compatibility
 
@@ -151,7 +140,7 @@ to help make Luma available by default.
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_3.5.0_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_3.7.0_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -224,11 +213,9 @@ helper to mount Luma and then opens Home. If this fails, the cold-boot hook moun
 Keys pass through the filter unchanged, and `home.sh disable` removes both. The early-boot timing
 has not been verified on webOS 24.
 
-At every power-on LG opens the last input from `/var/lib/eim/lastinput`, so Live TV showed before
-Luma. The integration pins that entry to Home: a read-only copy is mounted over it, and the file
-underneath names Home too, because LG reads it before any hook runs in a cold boot. The key filter
-also points Back/Exit from an app at Home instead of Live TV. Inputs you choose work as before;
-`home.sh disable` restores the recorded input.
+On webOS 5/6, Home takeover preserves the TV's input policy. An experimental
+[power-on and Back/Exit policy](#optional-power-on-and-backexit-policy-webos-56) can open Luma
+instead of the last input; tested on webOS 5.6.2 only, not verified on webOS 24.
 
 </details>
 
@@ -260,6 +247,27 @@ Disable before enabling takeover or uninstalling Luma:
 ```sh
 sh /media/developer/apps/usr/palm/applications/com.ecklf.luma/autostart.sh disable
 ```
+
+### Optional power-on and Back/Exit policy (webOS 5/6)
+
+Requires executable Home takeover; this command is not supported on webOS 25/26's manifest method.
+On webOS 25, LG provides **Settings → General → System → Additional Settings → Home Settings →
+Power On Screen → Home** for startup selection ([LG guide](https://www.lg.com/us/support/help-library/lg-tv-choosing-your-power-on-screen--20154629491064)).
+That setting does not configure Back/Exit behavior or guarantee Luma launches after takeover.
+
+Home takeover alone preserves the TV's input policy. After enabling Home takeover, owners who
+want Luma instead of the last TV input at power-on and after leaving apps can explicitly run:
+
+```sh
+sh /var/lib/luma-home/home.sh startup-home on
+# Restore the saved power-on and Back/Exit input while keeping Home takeover:
+sh /var/lib/luma-home/home.sh startup-home off
+```
+
+Select the desired fallback TV input before opting in. This experimental policy pins EIM's
+last-input file read-only; tested on webOS 5.6.2 only. Disabling takeover also restores the saved
+input. Existing draft installations without a saved prior setting use the input recorded in
+EIM's `appId` as their migration fallback.
 
 ### LG Input Hook Method
 
@@ -310,7 +318,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_3.5.0_arm.ipk
+dist/com.ecklf.luma_3.7.0_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png
@@ -346,28 +354,8 @@ pnpm dev --test-extra-apps 120
 Preview preferences are separate from normal preferences. See [development.md](development.md)
 for controls, vector rendering, diagnostics, tests and the source layout.
 
-For release-worthy changes, include a file generated by `pnpm changeset` in your PR. The automated
-Version Packages PR synchronizes app versions and publishes after merging and passing CI.
-See [Releases](development.md#releases) for the workflow and repository setup.
-
 ## License
 
 Luma's code is licensed under MIT. Bundled [Breezy Weather icons](assets/weather/README.md)
 are separately licensed under LGPL-3.0.\
 Luma is not affiliated with LG, Apple, or any other brands shown in its UI.
-
-### Optional power-on and Back/Exit policy (webOS 5/6)
-
-Home takeover alone preserves the TV's input policy. After enabling Home takeover, owners who
-want Luma instead of the last TV input at power-on and after leaving apps can explicitly run:
-
-```sh
-sh /var/lib/luma-home/home.sh startup-home on
-# Restore the saved power-on and Back/Exit input while keeping Home takeover:
-sh /var/lib/luma-home/home.sh startup-home off
-```
-
-Select the desired fallback TV input before opting in. This experimental policy pins EIM's
-last-input file read-only; tested on webOS 5.6.2 only. Disabling takeover also restores the saved
-input. Existing draft installations without a saved prior setting use the input recorded in
-EIM's `appId` as their migration fallback.

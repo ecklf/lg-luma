@@ -421,6 +421,7 @@ pub struct Preferences {
     pub weather_style: WeatherStyle,
     pub app_sorting: AppSorting,
     pub app_drawer_style: AppDrawerStyle,
+    pub show_drawer_app_names: bool,
     pub app_launch_counts: BTreeMap<String, u64>,
     pub greeting_position: WidgetPosition,
     pub weather_position: WidgetPosition,
@@ -439,6 +440,7 @@ pub struct Preferences {
     pub ui_sounds: bool,
     pub show_seconds: bool,
     pub show_greeting: bool,
+    pub greeting_name: String,
     pub show_date: bool,
     pub date_format: DateFormat,
     pub input_modes: BTreeMap<String, InputMode>,
@@ -480,6 +482,7 @@ impl Default for Preferences {
             recent_apps_behavior: RecentAppsBehavior::default(),
             app_sorting: AppSorting::default(),
             app_drawer_style: AppDrawerStyle::default(),
+            show_drawer_app_names: false,
             app_launch_counts: BTreeMap::new(),
             greeting_position: HomeWidget::Greeting.default_position(),
             weather_position: HomeWidget::Weather.default_position(),
@@ -495,6 +498,7 @@ impl Default for Preferences {
             ui_sounds: false,
             show_seconds: false,
             show_greeting: true,
+            greeting_name: String::new(),
             show_date: true,
             date_format: DateFormat::default(),
             input_modes: BTreeMap::new(),
@@ -862,6 +866,7 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
+        self.greeting_name = clean_input_name(&self.greeting_name);
         self.extra_crypto.truncate(HOME_GRID_CELLS);
         self.extra_stocks.truncate(HOME_GRID_CELLS);
         self.extra_weather.truncate(HOME_GRID_CELLS);
