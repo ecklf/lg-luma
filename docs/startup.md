@@ -61,6 +61,22 @@ machine-dependent pass/fail threshold.
 
 ## Returning to Home
 
+On webOS 25/26, the manifest Home integration must register for lifecycle events to resume
+the existing process instead of restarting on each Home press. If a relaunch does not gain
+focus within three seconds, Luma saves `/var/lib/luma-home/no-lifecycle` and falls back to
+restarts to avoid leaving Home unresponsive. The marker now records the failing Luma version:
+that version keeps the fallback, while a different release retries registration. Legacy empty
+markers also allow a retry. A failed retry records the current version again; successful
+registration does not remove the old marker. Malformed or unreadable markers retain the
+fallback conservatively. This is handled by Luma itself, regardless of how the package was
+updated; no updater hook or manual marker deletion is required for normal release changes.
+
+On a maintainer's LG C5 running webOS 26 and Luma 3.6.1, moving aside an October 28 legacy
+marker restored registration, same-PID Home relaunches and subjectively immediate returns.
+That manual test confirms the stale-marker failure mode on that TV, not the automatic
+migration above or compatibility on other firmware. Verify the automatic retry and failed-retry
+fallback on hardware before claiming them as TV-tested.
+
 Issue #269 reports a 1–2 second Home-key delay on a C1 running 3.2.1. Settled Home renders
 its widgets, dock and, in tvOS style, a decorative first-row preview, but every inventory
 refresh used to schedule full Apps and Settings preparation after 1.5 seconds of idle time.

@@ -60,14 +60,60 @@ pub fn runs_as_lg_home() -> bool {
     })
 }
 
-/// While this file exists, a staged Home (webOS 10/11) does not register with sam and is
-/// restarted per Home key as before. Luma creates it when a relaunch did not bring it to the
-/// front; delete it to try registering again.
+/// A staged Home (webOS 10/11) falls back to restarting per Home key when registration
+/// failed to bring it forward. The marker records the failing Luma version, so a different
+/// release can retry without leaving users permanently on the restart path.
 #[cfg_attr(
     not(all(feature = "webos", target_os = "linux", target_arch = "arm")),
     allow(dead_code)
 )]
 pub const HOME_LIFECYCLE_OFF: &str = "/var/lib/luma-home/no-lifecycle";
+
+#[cfg_attr(
+    not(all(feature = "webos", target_os = "linux", target_arch = "arm")),
+    allow(dead_code)
+)]
+pub fn home_lifecycle_disabled(path: &std::path::Path, version: &str) -> bool {
+    match std::fs::read(path) {
+        // Legacy markers were empty and could survive many releases. Retry once; a failed
+        // foreground check writes the current version before ending the registration.
+        Ok(marker) if marker.is_empty() => {
+            eprintln!("Luma lifecycle: retrying registration after a legacy fallback");
+            false
+        }
+        Ok(marker) => match serde_json::from_slice::<Value>(&marker)
+            .ok()
+            .and_then(|value| value.get("version")?.as_str().map(str::to_owned))
+            .filter(|value| !value.is_empty())
+        {
+            Some(failed_version) if failed_version != version => {
+                eprintln!(
+                    "Luma lifecycle: retrying registration after fallback in {failed_version} (now {version})"
+                );
+                false
+            }
+            Some(_) => true,
+            // Unknown or damaged markers must not silently bypass the safety fallback.
+            None => {
+                eprintln!("Luma lifecycle: unreadable fallback marker contents; keeping fallback");
+                true
+            }
+        },
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => {
+            eprintln!("Luma lifecycle: cannot read fallback marker: {error}; keeping fallback");
+            true
+        }
+    }
+}
+
+#[cfg_attr(
+    not(all(feature = "webos", target_os = "linux", target_arch = "arm")),
+    allow(dead_code)
+)]
+pub fn disable_home_lifecycle(path: &std::path::Path, version: &str) -> std::io::Result<()> {
+    std::fs::write(path, json!({"version": version}).to_string())
+}
 
 /// Whether a relaunch actually brought a staged Home (webOS 10/11) to the front. Only the
 /// compositor's focus or remote input counts: SDL_ShowWindow emits Shown by itself, so Shown
