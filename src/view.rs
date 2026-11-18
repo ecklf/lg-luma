@@ -2490,6 +2490,14 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
         };
         if state.section == index && state.subpage.is_some() {
             let nested_path = match &state.subpage {
+                Some(Subpage::AppDrawerStyle | Subpage::AppSorting) => Some(vec![
+                    language.t("appDrawer"),
+                    language.t(if state.subpage == Some(Subpage::AppDrawerStyle) {
+                        "style"
+                    } else {
+                        "sorting"
+                    }),
+                ]),
                 Some(Subpage::DateFormat) => {
                     Some(vec![language.t("greeting"), language.t("dateFormat")])
                 }
@@ -2544,7 +2552,8 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
-                Some(Subpage::AppSorting) => language.t("appSorting"),
+                Some(Subpage::AppSorting) => language.t("sorting"),
+                Some(Subpage::AppDrawerStyle) => language.t("style"),
                 Some(Subpage::AppDrawer) => language.t("appDrawer"),
                 Some(Subpage::RecentApps) => language.t("recentApps"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
@@ -2627,6 +2636,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::Shortcuts
                 | Subpage::Greeting
                 | Subpage::Clock
+                | Subpage::AppDrawer
                 | Subpage::WidgetPosition(_)
         ) {
             match subpage {
@@ -2637,6 +2647,59 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::Shortcuts => shortcut_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
+                Subpage::AppDrawer => {
+                    for (position, (index, key, icon, value, chevron)) in [
+                        (
+                            15,
+                            "style",
+                            "grid",
+                            language.t(state.preferences.app_drawer_style.label_key()),
+                            true,
+                        ),
+                        (
+                            10,
+                            "sorting",
+                            "arrow-up-down",
+                            language.t(state.preferences.app_sorting.label_key()),
+                            true,
+                        ),
+                        (
+                            14,
+                            "showAppNames",
+                            "grid",
+                            language.t(if state.preferences.show_drawer_app_names {
+                                "stateOn"
+                            } else {
+                                "stateOff"
+                            }),
+                            false,
+                        ),
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    {
+                        row(
+                            out,
+                            state,
+                            assets,
+                            Row {
+                                target: Target::Setting(index),
+                                rect: Rect::new(
+                                    640.,
+                                    164.8 + position as f32 * 84. - s,
+                                    1120.,
+                                    72.,
+                                ),
+                                title: language.t(key),
+                                icon: Some(icon),
+                                value: Some(value),
+                                description: None,
+                                selected: false,
+                                chevron,
+                            },
+                        );
+                    }
+                }
                 Subpage::WidgetPosition(widget) => {
                     widget_position_settings(out, state, assets, *widget)
                 }
@@ -2727,6 +2790,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::Shortcuts
             | Subpage::Greeting
             | Subpage::Clock
+            | Subpage::AppDrawer
             | Subpage::Market(_) => {
                 unreachable!()
             }
@@ -2735,7 +2799,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 .into_iter()
                 .map(|option| (option.name(), None, option == language))
                 .collect(),
-            Subpage::AppDrawer => crate::model::AppDrawerStyle::ALL
+            Subpage::AppDrawerStyle => crate::model::AppDrawerStyle::ALL
                 .into_iter()
                 .map(|style| {
                     (
@@ -2831,20 +2895,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             for (position, (index, key, icon, value, chevron)) in [
                 (1, "clock", "clock", None, true),
                 (4, "language", "language", Some(language.name()), true),
-                (
-                    13,
-                    "appDrawer",
-                    "grid",
-                    Some(language.t(state.preferences.app_drawer_style.label_key())),
-                    true,
-                ),
-                (
-                    10,
-                    "appSorting",
-                    "arrow-up-down",
-                    Some(language.t(state.preferences.app_sorting.label_key())),
-                    true,
-                ),
+                (13, "appDrawer", "grid", None, true),
                 (
                     2,
                     "reducedMotion",
@@ -2873,17 +2924,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     "clock",
                     Some(language.t(state.preferences.recent_apps_behavior.label_key())),
                     true,
-                ),
-                (
-                    14,
-                    "showAppNames",
-                    "grid",
-                    Some(language.t(if state.preferences.show_drawer_app_names {
-                        "stateOn"
-                    } else {
-                        "stateOff"
-                    })),
-                    false,
                 ),
             ]
             .into_iter()

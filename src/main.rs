@@ -12,6 +12,7 @@ mod egl_damage;
 mod feedback;
 mod font;
 mod font_metrics;
+mod gamepad;
 mod glass_backdrop;
 mod i18n;
 #[path = "input-refresh.rs"]
@@ -823,6 +824,10 @@ fn run() -> Result<(), String> {
         preload::start(paths, 3);
     }
     let sdl = sdl2::init()?;
+    // Controller initialization must not prevent remote-only use on older TVs.
+    let mut gamepads = gamepad::Gamepads::new(&sdl)
+        .map_err(|error| eprintln!("Luma controllers unavailable: {error}"))
+        .ok();
     let mut feedback = feedback::Feedback::default();
     let drivers: Vec<_> = sdl2::video::drivers().collect();
     if webos && !drivers.contains(&"wayland") {
@@ -1394,11 +1399,62 @@ fn run() -> Result<(), String> {
         if state.dirty {
             scene = compose(&mut state, &assets, now);
         }
-        for event in queued_event
+        let mut input_events: VecDeque<_> = queued_event
             .take()
             .into_iter()
             .chain(std::iter::from_fn(|| sdl_events::poll(&mut events, webos)))
-        {
+            .map(|event| (event, false))
+            .collect();
+        if let Some(gamepads) = &mut gamepads {
+            if focused && visible && !scripted_input {
+                input_events.extend(
+                    gamepads
+                        .repeats(Instant::now())
+                        .into_iter()
+                        .map(|e| (e, true)),
+                );
+            } else {
+                gamepads.reset();
+            }
+        }
+        while let Some((event, controller_input)) = input_events.pop_front() {
+            if controller_input && !(focused && visible) {
+                continue;
+            }
+            if let Some(gamepads) = &mut gamepads {
+                // Disconnecting must cancel holds, never synthesize an OK release.
+                if matches!(event, Event::ControllerDeviceRemoved { .. }) {
+                    press = None;
+                    back_button.cancel();
+                    input_events.retain(|(_, controller)| !controller);
+                }
+                if let Some(translated) = gamepads.handle(
+                    &event,
+                    focused && visible && !scripted_input,
+                    Instant::now(),
+                ) {
+                    if !translated.is_empty() {
+                        // A physical release/direction change supersedes this frame's repeats.
+                        input_events.retain(|(_, controller)| !controller);
+                    }
+                    for event in translated.into_iter().rev() {
+                        input_events.push_front((event, true));
+                    }
+                    continue;
+                }
+                if matches!(
+                    event,
+                    Event::Window {
+                        win_event: WindowEvent::Hidden
+                            | WindowEvent::Minimized
+                            | WindowEvent::FocusLost,
+                        ..
+                    }
+                ) {
+                    gamepads.reset();
+                    input_events.retain(|(_, controller)| !controller);
+                }
+            }
             // Window-entry pointer events can arrive after a slow first upload.
             // Bounded scripted captures own input until their final frame; only
             // their explicitly injected SDL clicks may alter pointer focus.
@@ -1422,7 +1478,7 @@ fn run() -> Result<(), String> {
                 continue;
             }
             // Remote keys only reach the focused surface.
-            if matches!(event, Event::KeyDown { .. } | Event::KeyUp { .. }) {
+            if !controller_input && matches!(event, Event::KeyDown { .. } | Event::KeyUp { .. }) {
                 focused = true;
                 foreground.confirmed();
             }

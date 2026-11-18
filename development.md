@@ -89,6 +89,14 @@ and `target/release/`. Desktop results do not establish TV size or performance.
 
 ## Controls and navigation
 
+SDL-mapped game controllers (including PS5 DualSense when recognized by the TV's SDL
+backend) use D-pad or left stick to navigate, Cross / A for OK, Circle / B for Back,
+and Options / Start for the context menu. Holding OK or Back uses the same behavior
+as the remote. Controllers connected before startup and hot-plugged controllers are
+opened automatically. Input is ignored while Luma is unfocused or hidden; disconnecting
+cancels pending holds. USB/Bluetooth availability depends on the TV firmware and SDL
+backend; verify both on hardware before claiming support for a specific TV.
+
 General → Show app names is off by default, preserving the compact, unlabeled drawer.
 When enabled, the app drawer shows a centered, single-line name beneath the focused grid card
 in both styles, with wider row spacing and scroll padding for the name. Long names are ellipsized
@@ -360,7 +368,8 @@ is persisted per input across restarts; choosing **Automatic** clears only that 
 icon override and restores label-based detection. Existing inputs without an override continue
 using Automatic. This is a backward-compatible feature and does not change input names or visibility.
 
-Home favorites form one horizontal glass dock. General → App drawer selects `tvos` (default) or
+Home favorites form one horizontal glass dock. General → App drawer groups Style, Sorting,
+and Show app names. Style selects `tvos` (default) or
 `minimal`, persisted as `app_drawer_style`. tvOS leaves 57.6 logical pixels below the glass and shows
 a clipped, non-interactive 24-logical-pixel peek of the next app row. Minimal lowers the dock to leave 48 logical pixels below
 its glass at the 1920×1080 layout size, without the peek. Both styles share the same open drawer
