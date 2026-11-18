@@ -985,6 +985,16 @@ fn tile(out: &mut Scene, state: &State, assets: &Assets, app: &App, rect: Rect, 
     }
     if focused {
         out.ring(rect, 19.2);
+        if !dock && state.page == Page::Apps {
+            let (label, style) = assets.fit_line(&app.title, text(20., 550, -0.02), rect.w, 20.);
+            out.text(
+                label,
+                Rect::new(rect.x, rect.y + rect.h + 8., rect.w, 24.),
+                style,
+                WHITE,
+                true,
+            );
+        }
     }
     if state.pressed.as_ref() == Some(&target) {
         out.fade(start, 1., 0.85);

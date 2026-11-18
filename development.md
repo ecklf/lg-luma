@@ -89,6 +89,10 @@ and `target/release/`. Desktop results do not establish TV size or performance.
 
 ## Controls and navigation
 
+The app drawer shows a centered, single-line name beneath the focused grid card in both drawer
+styles. Long names are ellipsized to the card width. Favorites, Home previews and app-management
+cards keep their existing unlabeled appearance; labels do not change card geometry or hit regions.
+
 ### Market price widgets
 
 `crypto` and `stocks` preferences hold `enabled`, `symbol`, `currency`, and `position`.
