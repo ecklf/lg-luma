@@ -189,6 +189,11 @@ the GL vendor, renderer and version strings and the shader sources, and loaded w
 the folder is always safe. On an LG 49UN71006LB (webOS 5.6.2), both together moved the first
 frame from ~1370 ms to ~800 ms after launch: renderer creation fell from ~245 ms to ~4 ms.
 
+The first inventory queues the dock's surfaces on the same workers. Decoded images of 512×512
+pixels or more (wallpapers, glass atlases) are kept in `image-cache` beside preferences as raw
+RGBA, keyed by path, file size and modification time, at most four files. On the same TV this
+moved a cold boot's first frame from ~1060 ms to ~910 ms.
+
 ### Documentation screenshots
 
 `pnpm screenshots` generates `docs/home.png`, `docs/apps.png`, `docs/settings.png` and
