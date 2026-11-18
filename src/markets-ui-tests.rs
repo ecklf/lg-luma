@@ -281,6 +281,51 @@ fn optional_market_widgets_add_configure_move_remove_and_preserve_settings_on_re
 }
 
 #[test]
+fn native_market_symbol_fields_render_live_drafts_without_changing_saved_symbols() {
+    for kind in [
+        HomeWidget::Crypto,
+        HomeWidget::Stocks,
+        HomeWidget::ExtraCrypto(0),
+        HomeWidget::ExtraStocks(0),
+    ] {
+        let mut state = ready();
+        state.preferences.extra_crypto.push(Default::default());
+        state.preferences.extra_stocks.push(Default::default());
+        markets::settings_mut(&mut state.preferences, kind).symbol = "OLD".into();
+        state.open(2);
+        state.section = WIDGETS_SECTION;
+        state.subpage = Some(Subpage::Market(kind));
+        state.focus = Target::MarketSymbol(kind);
+        state.activate();
+        state.overlay = Some(Overlay::SystemKeyboard);
+        for (input, expected) in [("", "|"), ("B", "B|"), ("TCx", "BTCx|")] {
+            state.text(input);
+            assert!(
+                scene(&state)
+                    .draw
+                    .iter()
+                    .any(|draw| matches!(draw, Draw::Text(value, ..) if value == expected))
+            );
+            assert_eq!(markets::settings(&state.preferences, kind).symbol, "OLD");
+        }
+        state.delete_surrounding_text(-1, 1);
+        assert!(
+            scene(&state)
+                .draw
+                .iter()
+                .any(|draw| matches!(draw, Draw::Text(value, ..) if value == "BTC|"))
+        );
+        assert_eq!(state.finish_text_input(), [Effect::Save]);
+        assert!(
+            scene(&state)
+                .draw
+                .iter()
+                .any(|draw| matches!(draw, Draw::Text(value, ..) if value == "BTC"))
+        );
+    }
+}
+
+#[test]
 fn market_keyboard_handles_native_completion_invalid_symbols_and_unicode_deletion() {
     let mut state = ready();
     state.open(2);
@@ -298,6 +343,10 @@ fn market_keyboard_handles_native_completion_invalid_symbols_and_unicode_deletio
     assert!(state.back().is_empty());
     assert_eq!(state.preferences.stocks.symbol, "AAPL");
     assert!(state.notice.is_some());
+    state.activate();
+    state.text("^gspc");
+    assert_eq!(state.finish_text_input(), [Effect::Save]);
+    assert_eq!(state.preferences.stocks.symbol, "^GSPC");
 }
 
 #[test]

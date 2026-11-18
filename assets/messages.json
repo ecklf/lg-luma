@@ -1,4 +1,22 @@
 {
+  "showAppNames": {
+    "en": "Show app names",
+    "de": "App-Namen anzeigen",
+    "es": "Mostrar nombres de apps",
+    "zh": "显示应用名称",
+    "zh-tw": "顯示應用程式名稱",
+    "pt": "Mostrar nomes dos apps",
+    "it": "Mostra nomi delle app",
+    "ru": "Показывать названия приложений",
+    "pl": "Pokazuj nazwy aplikacji",
+    "fr": "Afficher les noms des apps",
+    "vi": "Hiển thị tên ứng dụng",
+    "nl": "Appnamen tonen",
+    "sv": "Visa appnamn",
+    "cs": "Zobrazovat názvy aplikací",
+    "ca": "Mostra els noms de les apps",
+    "hu": "Alkalmazásnevek megjelenítése"
+  },
   "marketRefreshHelp": {
     "en": "Updates every 5 minutes on Home. Quotes may be delayed.",
     "de": "Aktualisierung alle 5 Minuten auf Home. Kurse können verzögert sein.",

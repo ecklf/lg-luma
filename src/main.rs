@@ -20,6 +20,7 @@ mod luna;
 mod markets;
 mod model;
 mod platform;
+mod preload;
 mod raster;
 mod recents;
 mod renderer;
@@ -74,6 +75,8 @@ use time::OffsetDateTime;
 struct Options {
     market_test_server: Option<String>,
     webos_home: bool,
+    /// SAM preload launches must stay in the background until an ordinary Home launch.
+    preload: Option<String>,
     assets: Option<PathBuf>,
     preferences: Option<PathBuf>,
     screenshot: Option<PathBuf>,
@@ -92,6 +95,26 @@ struct Options {
 }
 
 impl Options {
+    fn apply_launch_metadata(&mut self, metadata: &serde_json::Value) {
+        // Luma's staged Home passes nid; LG's executable-based Home passes appId.
+        self.webos_home = ["nid", "appId"].iter().any(|key| {
+            metadata
+                .get(key)
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(platform::is_home_id)
+        }) || platform::runs_as_lg_home();
+        self.preload = self
+            .webos_home
+            .then(|| metadata.get("preload").and_then(serde_json::Value::as_str))
+            .flatten()
+            .filter(|mode| !mode.is_empty())
+            .map(str::to_owned);
+    }
+
+    fn start_hidden(&self) -> bool {
+        self.webos_home && self.preload.is_some()
+    }
+
     fn parse() -> Result<Self, String> {
         let mut result = Self::default();
         let mut args = std::env::args().skip(1).peekable();
@@ -107,17 +130,7 @@ impl Options {
             if let Some(argument) = args.next() {
                 let metadata: serde_json::Value =
                     serde_json::from_str(&argument).map_err(|error| error.to_string())?;
-                // Luma's own Home manifest passes "nid"; LG's Home manifest (Luma run in
-                // place of LG's Home executable) passes "appId" with lifecycle v2.
-                result.webos_home = metadata
-                    .get("nid")
-                    .and_then(serde_json::Value::as_str)
-                    .is_some_and(platform::is_home_id)
-                    || metadata
-                        .get("appId")
-                        .and_then(serde_json::Value::as_str)
-                        .is_some_and(platform::is_home_id)
-                    || platform::runs_as_lg_home();
+                result.apply_launch_metadata(&metadata);
             }
             eprintln!("Luma webOS launch parameters accepted");
         }
@@ -304,6 +317,33 @@ impl BackButton {
     }
 }
 
+fn launch_app(state: &mut State, webos: bool, id: String, send: impl FnOnce(Request)) {
+    if scroll_preview::is_placeholder(&id) {
+        state.notify(state.preferences.language.t("scrollTestOnly"));
+        return;
+    }
+    if state.launching {
+        return;
+    }
+    if webos {
+        state.launching = true;
+        send(Request::Launch(id));
+    } else {
+        let title = state
+            .inventory
+            .apps
+            .iter()
+            .find(|a| a.id == id)
+            .map_or(id.as_str(), |app| app.title.as_str());
+        state.notify(
+            state
+                .preferences
+                .language
+                .format("desktopPreview", &[("app", title)]),
+        );
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn effects(
     effects: Vec<Effect>,
@@ -334,30 +374,7 @@ fn effects(
                 }
             }
             Effect::Launch(id) => {
-                if scroll_preview::is_placeholder(&id) {
-                    state.notify(state.preferences.language.t("scrollTestOnly"));
-                    continue;
-                }
-                if !state.launching {
-                    if platform.webos {
-                        state.launching = true;
-                        state.notify(state.preferences.language.t("opening"));
-                        platform.send(Request::Launch(id));
-                    } else {
-                        let title = state
-                            .inventory
-                            .apps
-                            .iter()
-                            .find(|a| a.id == id)
-                            .map_or(id.as_str(), |app| app.title.as_str());
-                        state.notify(
-                            state
-                                .preferences
-                                .language
-                                .format("desktopPreview", &[("app", title)]),
-                        );
-                    }
-                }
+                launch_app(state, platform.webos, id, |request| platform.send(request));
             }
             Effect::FireWebhook(tile) => webhook.send(tile),
             Effect::UpdateDownload(release) => updates.request(update::Request::Download(release)),
@@ -422,6 +439,7 @@ fn script(
                 match state.subpage {
                     Some(state::Subpage::WeatherLocation) => state::TextField::Location,
                     Some(state::Subpage::Input(_)) => state::TextField::InputName,
+                    Some(state::Subpage::Greeting) => state::TextField::GreetingName,
                     _ => state::TextField::Apps,
                 }
             };
@@ -794,7 +812,7 @@ fn log_home_output() {
     unsafe { sdl2::sys::SDL_LogSetAllPriority(sdl2::sys::SDL_LogPriority::SDL_LOG_PRIORITY_INFO) };
 }
 
-/// The next page to prepare while the screen is idle. Jobs wait while the scene would not
+/// The next explicitly requested diagnostic prewarm. Jobs wait while the scene would not
 /// contain their page (fully shown Recents replaces it), rather than preparing Recents again.
 fn next_prewarm(
     prewarm: &mut Vec<state::Page>,
@@ -909,6 +927,7 @@ fn run() -> Result<(), String> {
     );
     if webos && let Some(directory) = preferences_path.parent() {
         app_artwork::set_disk_cache(directory.join("icon-cache"));
+        renderer::set_program_cache(directory.join("shader-cache"));
     }
     let mut state = State::new(initial_preferences);
     if let Some(version) = &options.test_update_version {
@@ -979,6 +998,39 @@ fn run() -> Result<(), String> {
     platform.sync_splash(state.preferences.splash_background());
     startup_stage("preferences and workers");
 
+    // The first scene's images need no GL context: decode them on other cores while SDL,
+    // the window and the shaders start, instead of serially before the first frame.
+    {
+        let now = options
+            .time
+            .unwrap_or_else(|| OffsetDateTime::now_utc().to_offset(local_offset));
+        let scene = view::scene(&state, &assets, now);
+        let has_glass = scene
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, renderer::Draw::Glass(..)));
+        let mut paths = Vec::new();
+        for draw in &scene.draw {
+            if let renderer::Draw::Image(path, rect, ..)
+            | renderer::Draw::TintedImage(path, rect, ..) = draw
+                && !path.ends_with(".lvec")
+            {
+                paths.push((path.clone(), preload::Kind::Image));
+                let full_screen = rect.x <= 0.
+                    && rect.y <= 0.
+                    && rect.x + rect.w >= 1920.
+                    && rect.y + rect.h >= 1080.;
+                if has_glass && full_screen {
+                    let sidecar = glass_backdrop::sidecar_path(std::path::Path::new(path));
+                    paths.push((
+                        sidecar.to_string_lossy().into_owned(),
+                        preload::Kind::GlassAtlas,
+                    ));
+                }
+            }
+        }
+        preload::start(paths, 3);
+    }
     let sdl = sdl2::init()?;
     let mut feedback = feedback::Feedback::default();
     let drivers: Vec<_> = sdl2::video::drivers().collect();
@@ -1015,9 +1067,16 @@ fn run() -> Result<(), String> {
     } else {
         Size::new(1280, 720)
     });
+    let start_hidden = options.start_hidden();
+    if let Some(mode) = &options.preload {
+        eprintln!("Luma launch: preload={mode}; starting hidden until Home is launched");
+    }
     let create_window = || {
         let mut builder = video.window("Luma", requested.width, requested.height);
         builder.opengl().allow_highdpi().position_centered();
+        if start_hidden {
+            builder.hidden();
+        }
         if options.fullscreen || (webos && options.resolution.is_none()) {
             builder.fullscreen_desktop();
         } else if webos {
@@ -1078,10 +1137,9 @@ fn run() -> Result<(), String> {
             .map_or("off", egl_damage::PartialUpdate::describe)
     );
     let mut damage_tracker = damage::Tracker::default();
-    // Pages to prepare while the screen is idle (text, logos, icons), after each inventory.
+    // Hidden pages are demand-loaded. Only the explicit diagnostic script action
+    // queues preparation: doing it automatically blocks SDL input/lifecycle events.
     let mut prewarm: Vec<state::Page> = Vec::new();
-    let mut prewarm_now = false;
-    let mut last_present = Instant::now();
     let verify_damage = std::env::var("LUMA_DAMAGE_VERIFY").as_deref() == Ok("1");
     // Partial frames: verified, mismatched, worst pixels, largest difference; full frames alike.
     let mut damage_report = (0usize, 0usize, 0usize, 0u8);
@@ -1089,6 +1147,15 @@ fn run() -> Result<(), String> {
     let mut redrawn_total = 0.;
     let mut profile = diagnostics::Profile::default();
     let mut presented = 0usize;
+    // The Apps page's bundled surfaces: decoded in the background once Home is ready, and
+    // uploaded one at a time while nothing animates, so the first drawer opening is smooth.
+    let mut drawer_artwork_due = false;
+    let mut drawer_artwork: Option<std::sync::mpsc::Receiver<(String, Option<image::RgbaImage>)>> =
+        None;
+    let mut drawer_vectors: Vec<String> = Vec::new();
+    // When the app inventory last arrived: a Home relaunch already refreshes it, so the
+    // window events that follow (Restored, FocusGained) need not ask again right away.
+    let mut inventory_at: Option<Instant> = None;
     let mut first_frame_stats = None;
     let mut first_ready_frame_stats = None;
     let mut startup_inventory_reported = false;
@@ -1102,110 +1169,114 @@ fn run() -> Result<(), String> {
     #[cfg(not(all(feature = "webos", target_os = "linux", target_arch = "arm")))]
     let (lifecycle_event, end_registration): (Option<u32>, Option<EndRegistration>) = (None, None);
     #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
-    let (lifecycle_event, end_registration): (Option<u32>, Option<EndRegistration>) =
-        if webos && options.webos_home {
-            let subsystem = sdl.event()?;
-            // SAFETY: registers one SDL user event type before any are pushed.
-            let event_type = unsafe { subsystem.register_event()? };
-            let pusher = move |sender: sdl2::event::EventSender| {
-                move |lifecycle: platform::Lifecycle| {
-                    let code = match lifecycle {
-                        platform::Lifecycle::Relaunch => 1,
-                        platform::Lifecycle::Close => 2,
-                    };
-                    let _ = sender.push_event(Event::User {
-                        timestamp: 0,
-                        window_id: 0,
-                        type_: event_type,
-                        code,
-                        data1: std::ptr::null_mut(),
-                        data2: std::ptr::null_mut(),
-                    });
-                }
-            };
-            // SAFETY: geteuid has no preconditions.
-            let as_root = unsafe { libc::geteuid() } == 0;
-            if platform::runs_as_lg_home() {
-                // In place of LG's Home executable (webOS 5/6), LG's role is bound to that path,
-                // so Luma registers through lifecycle v2 on its own connection.
-                let push = pusher(subsystem.event_sender());
-                luna::subscribe(
-                    Some(platform::home_id()),
-                    "luna://com.webos.applicationManager/registerApp",
-                    &serde_json::json!({"id": platform::home_id()}),
-                    // sam answers "registered" at once; without it sam would end Home later.
-                    Duration::from_secs(10),
-                    move |message| {
-                        eprintln!("Luma lifecycle: {message}");
-                        let refused = message
-                            .get("returnValue")
-                            .and_then(serde_json::Value::as_bool)
-                            == Some(false);
-                        match platform::Lifecycle::from_reply(&message) {
-                            Some(lifecycle) => push(lifecycle),
-                            // Registration lost (e.g. sam restarted): quit, so sam starts Home
-                            // afresh.
-                            None if refused => push(platform::Lifecycle::Close),
-                            None => {}
-                        }
-                    },
-                )?;
-                (Some(event_type), None)
-            } else if !as_root {
-                (None, None)
-            } else if std::path::Path::new(platform::HOME_LIFECYCLE_OFF).exists() {
-                eprintln!(
-                    "Luma lifecycle: {} exists; Home stays unregistered",
-                    platform::HOME_LIFECYCLE_OFF
-                );
-                (None, None)
-            } else {
-                // A staged Home manifest (webOS 10/11) runs Luma's own executable as root under
-                // LG's app-ID based Home role, which Luma's connection cannot claim. Hold the
-                // registration as that app through `luna-send -a`; sam then expects lifecycle v1.
-                // This does not wait for sam: until it answers, Home is simply unregistered.
-                let push = pusher(subsystem.event_sender());
-                let close = pusher(subsystem.event_sender());
-                match luna::subscribe_as_app(
-                    platform::home_id(),
-                    "luna://com.webos.applicationManager/registerNativeApp",
-                    &serde_json::json!({}),
-                    Duration::from_secs(10),
-                    move |message| {
-                        eprintln!("Luma lifecycle: {message}");
-                        if let Some(lifecycle) = platform::Lifecycle::from_reply(&message) {
-                            push(lifecycle);
-                        }
-                    },
-                    // A registration sam had accepted is gone: quit, so sam starts Home afresh.
-                    // Never accepted: stay, unregistered, as before.
-                    move |registered| {
-                        if registered {
-                            close(platform::Lifecycle::Close);
-                        }
-                    },
-                ) {
-                    Ok(subscription) => (
-                        Some(event_type),
-                        Some(Box::new(move || subscription.end()) as EndRegistration),
-                    ),
-                    Err(error) => {
-                        eprintln!("Luma lifecycle: {error}; Home stays unregistered");
-                        (None, None)
+    let (lifecycle_event, end_registration): (Option<u32>, Option<EndRegistration>) = if webos
+        && options.webos_home
+    {
+        let subsystem = sdl.event()?;
+        // SAFETY: registers one SDL user event type before any are pushed.
+        let event_type = unsafe { subsystem.register_event()? };
+        let pusher = move |sender: sdl2::event::EventSender| {
+            move |lifecycle: platform::Lifecycle| {
+                let code = match lifecycle {
+                    platform::Lifecycle::Relaunch => 1,
+                    platform::Lifecycle::Close => 2,
+                };
+                let _ = sender.push_event(Event::User {
+                    timestamp: 0,
+                    window_id: 0,
+                    type_: event_type,
+                    code,
+                    data1: std::ptr::null_mut(),
+                    data2: std::ptr::null_mut(),
+                });
+            }
+        };
+        // SAFETY: geteuid has no preconditions.
+        let as_root = unsafe { libc::geteuid() } == 0;
+        if platform::runs_as_lg_home() {
+            // In place of LG's Home executable (webOS 5/6), LG's role is bound to that path,
+            // so Luma registers through lifecycle v2 on its own connection.
+            let push = pusher(subsystem.event_sender());
+            luna::subscribe(
+                Some(platform::home_id()),
+                "luna://com.webos.applicationManager/registerApp",
+                &serde_json::json!({"id": platform::home_id()}),
+                // sam answers "registered" at once; without it sam would end Home later.
+                Duration::from_secs(10),
+                move |message| {
+                    eprintln!("Luma lifecycle: {message}");
+                    let refused = message
+                        .get("returnValue")
+                        .and_then(serde_json::Value::as_bool)
+                        == Some(false);
+                    match platform::Lifecycle::from_reply(&message) {
+                        Some(lifecycle) => push(lifecycle),
+                        // Registration lost (e.g. sam restarted): quit, so sam starts Home
+                        // afresh.
+                        None if refused => push(platform::Lifecycle::Close),
+                        None => {}
                     }
+                },
+            )?;
+            (Some(event_type), None)
+        } else if !as_root {
+            (None, None)
+        } else if platform::home_lifecycle_disabled(
+            std::path::Path::new(platform::HOME_LIFECYCLE_OFF),
+            env!("CARGO_PKG_VERSION"),
+        ) {
+            eprintln!(
+                "Luma lifecycle: {} keeps fallback active for this version; Home stays unregistered",
+                platform::HOME_LIFECYCLE_OFF
+            );
+            (None, None)
+        } else {
+            // A staged Home manifest (webOS 10/11) runs Luma's own executable as root under
+            // LG's app-ID based Home role, which Luma's connection cannot claim. Hold the
+            // registration as that app through `luna-send -a`; sam then expects lifecycle v1.
+            // This does not wait for sam: until it answers, Home is simply unregistered.
+            let push = pusher(subsystem.event_sender());
+            let close = pusher(subsystem.event_sender());
+            match luna::subscribe_as_app(
+                platform::home_id(),
+                "luna://com.webos.applicationManager/registerNativeApp",
+                &serde_json::json!({}),
+                Duration::from_secs(10),
+                move |message| {
+                    eprintln!("Luma lifecycle: {message}");
+                    if let Some(lifecycle) = platform::Lifecycle::from_reply(&message) {
+                        push(lifecycle);
+                    }
+                },
+                // A registration sam had accepted is gone: quit, so sam starts Home afresh.
+                // Never accepted: stay, unregistered, as before.
+                move |registered| {
+                    if registered {
+                        close(platform::Lifecycle::Close);
+                    }
+                },
+            ) {
+                Ok(subscription) => (
+                    Some(event_type),
+                    Some(Box::new(move || subscription.end()) as EndRegistration),
+                ),
+                Err(error) => {
+                    eprintln!("Luma lifecycle: {error}; Home stays unregistered");
+                    (None, None)
                 }
             }
-        } else {
-            (None, None)
-        };
+        }
+    } else {
+        (None, None)
+    };
     // Whether a staged Home's relaunch reached the front; see platform::ForegroundCheck.
     let mut foreground = platform::ForegroundCheck::default();
-    let mut focused = true;
+    let mut focused = !start_hidden;
     let mut press: Option<Press> = None;
     let mut back_button = BackButton::default();
     let mut last_minute = None;
     let mut frame = 0u64;
-    let mut visible = true;
+    let mut visible = !start_hidden;
     let mut running = true;
     let mut queued_event = None;
     // SDL starts text input during video init. Keep it off until Luma's keyboard opens: on
@@ -1665,10 +1736,10 @@ fn run() -> Result<(), String> {
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
                 Response::Inventory(Ok((mut inventory, warning))) => {
+                    inventory_at = Some(Instant::now());
                     if warning.is_none() {
                         input_refresh.superseded(Instant::now());
                     }
-                    prewarm = vec![state::Page::Settings, state::Page::Apps];
                     if std::mem::take(&mut state.reload_artwork) {
                         assets.artwork.reset();
                     } else {
@@ -1975,7 +2046,9 @@ fn run() -> Result<(), String> {
                             foreground.confirmed();
                         }
                         state.dirty = true;
-                        if webos {
+                        if webos
+                            && inventory_at.is_none_or(|at| at.elapsed() > Duration::from_secs(5))
+                        {
                             pending.push(Effect::Refresh);
                         }
                     }
@@ -2310,7 +2383,7 @@ fn run() -> Result<(), String> {
             if let Some(position) = action.strip_prefix("click:") {
                 scripted_click(&sdl, &window, position)?;
             } else if action == "prewarm" {
-                prewarm_now = true;
+                prewarm = vec![state::Page::Settings, state::Page::Apps];
             } else {
                 let pending = script(&action, &mut state, &scene.controls)?;
                 running &= effects(
@@ -2476,9 +2549,10 @@ fn run() -> Result<(), String> {
                     && first_ready_frame_stats.is_none()
                 {
                     startup_stage("apps ready frame");
+                    preload::finish();
+                    drawer_artwork_due = webos;
                     first_ready_frame_stats = Some(renderer.stats().clone());
                 }
-                last_present = Instant::now();
                 if options.profile_frames.is_some() {
                     profile.record(
                         Instant::now(),
@@ -2525,17 +2599,68 @@ fn run() -> Result<(), String> {
                 "Luma lifecycle: a relaunch did not bring Luma to the front; creating {}",
                 platform::HOME_LIFECYCLE_OFF
             );
-            if let Err(error) = std::fs::write(platform::HOME_LIFECYCLE_OFF, b"") {
+            if let Err(error) = platform::disable_home_lifecycle(
+                std::path::Path::new(platform::HOME_LIFECYCLE_OFF),
+                env!("CARGO_PKG_VERSION"),
+            ) {
                 eprintln!("Luma lifecycle: {error}");
             }
             end_registration();
         }
-        // Prepare other pages one at a time once the screen has been still for a while, so
-        // their first appearance does not pay for text layout, logo meshes and icon uploads.
-        let idle = visible
-            && (prewarm_now
-                || (!state.animating() && last_present.elapsed() > Duration::from_millis(1500)));
-        while let Some(page) = next_prewarm(&mut prewarm, &state, idle) {
+        if std::mem::take(&mut drawer_artwork_due) {
+            let page = std::mem::replace(&mut state.page, state::Page::Apps);
+            let visibility = std::mem::replace(&mut state.drawer_visibility, 1.);
+            let drawer = view::scene(&state, &assets, now);
+            state.page = page;
+            state.drawer_visibility = visibility;
+            let paths: Vec<String> = drawer
+                .draw
+                .iter()
+                .filter_map(|draw| match draw {
+                    renderer::Draw::Image(path, ..) | renderer::Draw::TintedImage(path, ..)
+                        if !path.ends_with(".lvec") && !renderer.has_image(path) =>
+                    {
+                        Some(path.clone())
+                    }
+                    _ => None,
+                })
+                .collect();
+            if !paths.is_empty() {
+                drawer_artwork = Some(preload::decode_in_background(paths));
+            }
+            drawer_vectors = drawer
+                .draw
+                .iter()
+                .filter_map(|draw| match draw {
+                    renderer::Draw::Image(path, ..) | renderer::Draw::TintedImage(path, ..)
+                        if path.ends_with(".lvec") =>
+                    {
+                        Some(path.clone())
+                    }
+                    _ => None,
+                })
+                .collect();
+        }
+        if visible
+            && !state.animating()
+            && let Some(receiver) = &drawer_artwork
+        {
+            match receiver.try_recv() {
+                Ok((path, image)) => renderer.adopt_image(path, image),
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => drawer_artwork = None,
+            }
+        } else if visible && !state.animating() {
+            // Logos load on this thread (they become GL buffers): one per idle pass.
+            while let Some(path) = drawer_vectors.pop() {
+                if renderer.preload_vector(&path) {
+                    break;
+                }
+            }
+        }
+        // Diagnostic scripts can opt into synchronous first-use preparation.
+        // Normal startup, inventory refreshes and relaunches never queue it.
+        while let Some(page) = next_prewarm(&mut prewarm, &state, visible) {
             if page != state.page {
                 let started = Instant::now();
                 let current = std::mem::replace(&mut state.page, page);
@@ -2550,11 +2675,7 @@ fn run() -> Result<(), String> {
                     );
                 }
             }
-            if !prewarm_now {
-                break;
-            }
         }
-        prewarm_now = false;
         // Block until input instead of polling at frame rate on idle screens.
         // VSync paces animation; holds, scripted checks and icons still being
         // decoded need short timed wakes.
