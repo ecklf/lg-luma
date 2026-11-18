@@ -1,9 +1,43 @@
 //! Precompiled SVG triangle geometry, uploaded once without image textures.
-use gl::types::GLuint;
+use gl::types::{GLint, GLuint};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{fs, path::Path};
+
+/// Whether meshes get their own vertex array object (GLES 3 or desktop core). The renderer
+/// decides once its context exists.
+static VERTEX_ARRAYS: AtomicBool = AtomicBool::new(false);
+
+pub fn use_vertex_arrays(enabled: bool) {
+    VERTEX_ARRAYS.store(enabled, Ordering::Relaxed);
+}
+
+/// Points attributes 0-3 at a mesh buffer's interleaved position, offset, colour/origin and
+/// coverage, as the vector and text programs read them; attribute 4 stays off.
+pub fn bind_attributes(buffer: GLuint) {
+    unsafe {
+        gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
+        gl::DisableVertexAttribArray(4);
+        let mut offset = 0;
+        for (index, size) in [2, 2, 4, 1].into_iter().enumerate() {
+            gl::EnableVertexAttribArray(index as u32);
+            gl::VertexAttribPointer(
+                index as u32,
+                size,
+                gl::FLOAT,
+                gl::FALSE,
+                36,
+                (offset * size_of::<f32>()) as *const _,
+            );
+            offset += size as usize;
+        }
+    }
+}
 
 pub struct Mesh {
     pub buffer: GLuint,
+    /// The buffer's attribute setup, recorded once (0 without vertex array objects):
+    /// one bind instead of about ten calls per draw, each costly in TV drivers.
+    pub vertex_array: GLuint,
     pub width: f32,
     pub height: f32,
     pub vertices: i32,
@@ -67,8 +101,20 @@ impl Mesh {
                 gl::STATIC_DRAW,
             );
         }
+        let mut vertex_array = 0;
+        if VERTEX_ARRAYS.load(Ordering::Relaxed) {
+            unsafe {
+                let mut previous: GLint = 0;
+                gl::GetIntegerv(gl::VERTEX_ARRAY_BINDING, &mut previous);
+                gl::GenVertexArrays(1, &mut vertex_array);
+                gl::BindVertexArray(vertex_array);
+                bind_attributes(buffer);
+                gl::BindVertexArray(previous as GLuint);
+            }
+        }
         Ok(Self {
             buffer,
+            vertex_array,
             width,
             height,
             vertices: count as i32,
@@ -79,6 +125,11 @@ impl Mesh {
 
 impl Drop for Mesh {
     fn drop(&mut self) {
-        unsafe { gl::DeleteBuffers(1, &self.buffer) };
+        unsafe {
+            if self.vertex_array != 0 {
+                gl::DeleteVertexArrays(1, &self.vertex_array);
+            }
+            gl::DeleteBuffers(1, &self.buffer);
+        }
     }
 }

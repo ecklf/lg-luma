@@ -236,6 +236,8 @@ struct Batch {
 struct MeshState {
     /// The mesh program in use (0 after another program was bound).
     program: GLuint,
+    /// The vertex array object bound for meshes (None after the paint path bound its own).
+    vertex_array: Option<GLuint>,
     vector_scale: Option<[f32; 2]>,
     text_scale: Option<[f32; 2]>,
     fringe: Option<f32>,
@@ -402,6 +404,10 @@ pub struct Renderer {
     text_embolden: f32,
     buffer: GLuint,
     vao: GLuint,
+    /// Whether meshes have their own vertex array objects (see vector::use_vertex_arrays).
+    vertex_arrays: bool,
+    /// With vertex arrays: the paint attributes over `buffer`, set up once (else 0).
+    paint_array: GLuint,
     white: Texture,
     font_directory: PathBuf,
     fonts: HashMap<u16, Font>,
@@ -496,12 +502,41 @@ impl Renderer {
         };
         let mut buffer = 0;
         let mut vao = 0;
+        let vertex_arrays;
+        let mut paint_array = 0;
         unsafe {
             if !gles {
                 gl::GenVertexArrays(1, &mut vao);
                 gl::BindVertexArray(vao);
             }
             gl::GenBuffers(1, &mut buffer);
+            // Meshes record their attribute setup in vertex array objects where the context
+            // has them (desktop core, GLES 3): TV drivers charge for every state call.
+            vertex_arrays = gl::GenVertexArrays::is_loaded()
+                && gl::BindVertexArray::is_loaded()
+                && gl::DeleteVertexArrays::is_loaded()
+                && (!gles || gl_string(gl::VERSION).starts_with("OpenGL ES 3"))
+                && std::env::var("LUMA_VAO").as_deref() != Ok("0");
+            vector::use_vertex_arrays(vertex_arrays);
+            if vertex_arrays {
+                gl::GenVertexArrays(1, &mut paint_array);
+                gl::BindVertexArray(paint_array);
+                gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
+                let mut offset = 0;
+                for (index, size) in [2, 2, 4, 4, 2].into_iter().enumerate() {
+                    gl::EnableVertexAttribArray(index as u32);
+                    gl::VertexAttribPointer(
+                        index as u32,
+                        size,
+                        gl::FLOAT,
+                        gl::FALSE,
+                        56,
+                        (offset * size_of::<f32>()) as *const _,
+                    );
+                    offset += size as usize;
+                }
+                gl::BindVertexArray(vao);
+            }
             gl::Enable(gl::BLEND);
             // Preserve an opaque destination alpha. Using BlendFunc for both
             // channels makes translucent UI darken again in PNG/window compositing.
@@ -522,6 +557,8 @@ impl Renderer {
             text_embolden,
             buffer,
             vao,
+            vertex_arrays,
+            paint_array,
             white,
             font_directory: directory.into(),
             fonts,
@@ -1900,6 +1937,14 @@ impl Renderer {
                             }
                             blending = !*opaque;
                         }
+                        if !paint_bound && self.paint_array != 0 {
+                            // The paint attributes, recorded once: one bind after a mesh.
+                            gl::BindVertexArray(self.paint_array);
+                            mesh_state.vertex_array = None;
+                            gl::UseProgram(self.program);
+                            mesh_state.program = 0;
+                            paint_bound = true;
+                        }
                         if !paint_bound {
                             gl::UseProgram(self.program);
                             mesh_state.program = 0;
@@ -1987,6 +2032,9 @@ impl Renderer {
             if !blending {
                 gl::Enable(gl::BLEND);
             }
+            if self.vertex_arrays {
+                gl::BindVertexArray(self.vao);
+            }
             gl::Disable(gl::SCISSOR_TEST);
         }
         // Keep the current scene, evict old full-resolution wallpapers before memory grows.
@@ -2058,20 +2106,17 @@ impl Renderer {
                     state.embolden = Some(embolden);
                 }
             }
-            gl::BindBuffer(gl::ARRAY_BUFFER, mesh.buffer);
-            gl::DisableVertexAttribArray(4);
-            let mut offset = 0;
-            for (index, size) in [2, 2, 4, 1].into_iter().enumerate() {
-                gl::EnableVertexAttribArray(index as u32);
-                gl::VertexAttribPointer(
-                    index as u32,
-                    size,
-                    gl::FLOAT,
-                    gl::FALSE,
-                    36,
-                    (offset * size_of::<f32>()) as *const _,
-                );
-                offset += size as usize;
+            if mesh.vertex_array != 0 {
+                if state.vertex_array != Some(mesh.vertex_array) {
+                    gl::BindVertexArray(mesh.vertex_array);
+                    state.vertex_array = Some(mesh.vertex_array);
+                }
+            } else {
+                if self.vertex_arrays && state.vertex_array.is_some() {
+                    gl::BindVertexArray(self.vao);
+                    state.vertex_array = None;
+                }
+                vector::bind_attributes(mesh.buffer);
             }
             gl::Uniform4f(
                 uniform_location(program, c"u_transform".as_ptr()),
@@ -2307,6 +2352,9 @@ impl Drop for Renderer {
             gl::DeleteProgram(self.text_program);
             if self.vao != 0 {
                 gl::DeleteVertexArrays(1, &self.vao);
+            }
+            if self.paint_array != 0 {
+                gl::DeleteVertexArrays(1, &self.paint_array);
             }
         }
     }
