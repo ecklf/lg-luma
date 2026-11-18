@@ -115,6 +115,77 @@ fn mixed_pointer_and_ok_releases_do_not_consume_each_other() {
 }
 
 #[test]
+fn animations_are_paced_when_vsync_is_unavailable() {
+    use std::time::Duration;
+
+    assert_eq!(crate::animation_wait(false, Duration::ZERO), 16);
+    assert_eq!(crate::animation_wait(false, Duration::from_millis(5)), 11);
+    assert_eq!(crate::animation_wait(false, Duration::from_millis(16)), 0);
+    assert_eq!(crate::animation_wait(false, Duration::from_millis(30)), 0);
+    assert_eq!(crate::animation_wait(true, Duration::ZERO), 0);
+}
+
+#[test]
+fn tv_app_and_device_settings_launches_are_quiet_and_guarded() {
+    for id in ["netflix", "com.palm.app.settings"] {
+        let mut state = ready();
+        let mut requests = Vec::new();
+        crate::launch_app(&mut state, true, id.into(), |request| {
+            requests.push(request)
+        });
+        assert!(state.launching);
+        assert!(state.notice.is_none());
+        assert!(matches!(&requests[..], [crate::Request::Launch(app)] if app == id));
+        crate::launch_app(&mut state, true, id.into(), |_| {
+            panic!("a pending launch must not be sent twice")
+        });
+        assert!(state.notice.is_none());
+    }
+}
+
+#[test]
+fn desktop_app_and_device_settings_launches_keep_preview_notices() {
+    for id in ["netflix", "com.palm.app.settings"] {
+        let mut state = ready();
+        crate::launch_app(&mut state, false, id.into(), |_| {
+            panic!("desktop previews must not call TV services")
+        });
+        assert!(!state.launching);
+        let title = state
+            .inventory
+            .apps
+            .iter()
+            .find(|app| app.id == id)
+            .map_or(id, |app| app.title.as_str());
+        assert_eq!(
+            state.notice.as_ref().unwrap().0,
+            state
+                .preferences
+                .language
+                .format("desktopPreview", &[("app", title)])
+        );
+    }
+}
+
+#[test]
+fn scroll_preview_launches_still_show_a_notice_without_sending_requests() {
+    for webos in [false, true] {
+        let mut state = ready();
+        crate::launch_app(
+            &mut state,
+            webos,
+            "com.luma.scroll-preview.000".into(),
+            |_| panic!("scroll-preview placeholders must never launch"),
+        );
+        assert!(!state.launching);
+        assert_eq!(
+            state.notice.unwrap().0,
+            state.preferences.language.t("scrollTestOnly")
+        );
+    }
+}
+
+#[test]
 fn ui_sounds_default_off_and_toggle_without_moving_controls() {
     assert!(!Preferences::default().ui_sounds);
     let legacy: Preferences = serde_json::from_value(json!({"hour_24": true})).unwrap();
@@ -124,7 +195,7 @@ fn ui_sounds_default_off_and_toggle_without_moving_controls() {
         let mut state = ready();
         state.open(2);
         state.direction(Direction::Right, &controls(&state));
-        for _ in 0..5 {
+        for _ in 0..4 {
             state.direction(Direction::Down, &controls(&state));
         }
         assert_eq!(state.focus, Target::Setting(11));

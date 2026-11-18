@@ -11,6 +11,7 @@ mod diagnostics;
 mod egl_damage;
 mod feedback;
 mod font;
+mod gamepad;
 mod glass_backdrop;
 mod i18n;
 #[path = "input-refresh.rs"]
@@ -20,6 +21,7 @@ mod luna;
 mod markets;
 mod model;
 mod platform;
+mod preload;
 mod raster;
 mod recents;
 mod renderer;
@@ -361,6 +363,33 @@ impl BackButton {
     }
 }
 
+fn launch_app(state: &mut State, webos: bool, id: String, send: impl FnOnce(Request)) {
+    if scroll_preview::is_placeholder(&id) {
+        state.notify(state.preferences.language.t("scrollTestOnly"));
+        return;
+    }
+    if state.launching {
+        return;
+    }
+    if webos {
+        state.launching = true;
+        send(Request::Launch(id));
+    } else {
+        let title = state
+            .inventory
+            .apps
+            .iter()
+            .find(|a| a.id == id)
+            .map_or(id.as_str(), |app| app.title.as_str());
+        state.notify(
+            state
+                .preferences
+                .language
+                .format("desktopPreview", &[("app", title)]),
+        );
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn effects(
     effects: Vec<Effect>,
@@ -391,30 +420,7 @@ fn effects(
                 }
             }
             Effect::Launch(id) => {
-                if scroll_preview::is_placeholder(&id) {
-                    state.notify(state.preferences.language.t("scrollTestOnly"));
-                    continue;
-                }
-                if !state.launching {
-                    if platform.webos {
-                        state.launching = true;
-                        state.notify(state.preferences.language.t("opening"));
-                        platform.send(Request::Launch(id));
-                    } else {
-                        let title = state
-                            .inventory
-                            .apps
-                            .iter()
-                            .find(|a| a.id == id)
-                            .map_or(id.as_str(), |app| app.title.as_str());
-                        state.notify(
-                            state
-                                .preferences
-                                .language
-                                .format("desktopPreview", &[("app", title)]),
-                        );
-                    }
-                }
+                launch_app(state, platform.webos, id, |request| platform.send(request));
             }
             Effect::FireWebhook(tile) => webhook.send(tile),
             Effect::UpdateDownload(release) => updates.request(update::Request::Download(release)),
@@ -528,6 +534,16 @@ fn input_refresh_active(state: &State, webos: bool, focused: bool, visible: bool
         && state.moving.is_none()
         && state.pressed.is_none()
         && state.recents.visibility == 0.
+}
+
+fn animation_wait(vsync: bool, elapsed: Duration) -> u32 {
+    if vsync {
+        0
+    } else {
+        Duration::from_millis(16)
+            .saturating_sub(elapsed)
+            .as_millis() as u32
+    }
 }
 
 fn weather_tick(
@@ -773,6 +789,8 @@ fn run() -> Result<(), String> {
     );
     if webos && let Some(directory) = preferences_path.parent() {
         app_artwork::set_disk_cache(directory.join("icon-cache"));
+        renderer::set_program_cache(directory.join("shader-cache"));
+        preload::set_image_cache(directory.join("image-cache"));
     }
     let mut state = State::new(initial_preferences);
     if let Some(version) = &options.test_update_version {
@@ -835,7 +853,44 @@ fn run() -> Result<(), String> {
     platform.sync_splash(state.preferences.splash_background());
     startup_stage("preferences and workers");
 
+    // The first scene's images need no GL context: decode them on other cores while SDL,
+    // the window and the shaders start, instead of serially before the first frame.
+    {
+        let now = options
+            .time
+            .unwrap_or_else(|| OffsetDateTime::now_utc().to_offset(local_offset));
+        let scene = view::scene(&state, &assets, now);
+        let has_glass = scene
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, renderer::Draw::Glass(..)));
+        let mut paths = Vec::new();
+        for draw in &scene.draw {
+            if let renderer::Draw::Image(path, rect, ..)
+            | renderer::Draw::TintedImage(path, rect, ..) = draw
+                && !path.ends_with(".lvec")
+            {
+                paths.push((path.clone(), preload::Kind::Image));
+                let full_screen = rect.x <= 0.
+                    && rect.y <= 0.
+                    && rect.x + rect.w >= 1920.
+                    && rect.y + rect.h >= 1080.;
+                if has_glass && full_screen {
+                    let sidecar = glass_backdrop::sidecar_path(std::path::Path::new(path));
+                    paths.push((
+                        sidecar.to_string_lossy().into_owned(),
+                        preload::Kind::GlassAtlas,
+                    ));
+                }
+            }
+        }
+        preload::start(paths, 3);
+    }
     let sdl = sdl2::init()?;
+    // Controller initialization must not prevent remote-only use on older TVs.
+    let mut gamepads = gamepad::Gamepads::new(&sdl)
+        .map_err(|error| eprintln!("Luma controllers unavailable: {error}"))
+        .ok();
     let mut feedback = feedback::Feedback::default();
     let drivers: Vec<_> = sdl2::video::drivers().collect();
     if webos && !drivers.contains(&"wayland") {
@@ -924,9 +979,13 @@ fn run() -> Result<(), String> {
     unsafe { gl::GetIntegerv(gl::SAMPLES, &mut samples) };
     eprintln!("Luma GL multisampling: {samples} samples");
     startup_stage("window and GL context");
-    if let Err(error) = video.gl_set_swap_interval(1) {
-        eprintln!("VSync: {error}");
-    }
+    let vsync = match video.gl_set_swap_interval(1) {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("VSync: {error}");
+            false
+        }
+    };
     let mut renderer =
         renderer::Renderer::new(&assets.root.join("font.ttf"), gles, text_config.embolden)?;
     startup_stage("renderer");
@@ -951,6 +1010,17 @@ fn run() -> Result<(), String> {
     let mut redrawn_total = 0.;
     let mut profile = diagnostics::Profile::default();
     let mut presented = 0usize;
+    // What the Apps page and the Settings sections first draw: images decoded in the
+    // background once Home is ready, then images, logos and text prepared one small piece
+    // per idle pass while nothing animates, so their first opening is smooth.
+    let mut drawer_artwork_due = false;
+    let mut drawer_artwork: Option<std::sync::mpsc::Receiver<(String, Option<image::RgbaImage>)>> =
+        None;
+    let mut drawer_vectors: Vec<String> = Vec::new();
+    let mut idle_text: Vec<renderer::Draw> = Vec::new();
+    // When the app inventory last arrived: a Home relaunch already refreshes it, so the
+    // window events that follow (Restored, FocusGained) need not ask again right away.
+    let mut inventory_at: Option<Instant> = None;
     let mut first_frame_stats = None;
     let mut first_ready_frame_stats = None;
     let mut startup_inventory_reported = false;
@@ -1093,6 +1163,7 @@ fn run() -> Result<(), String> {
         options.time.unwrap_or_else(OffsetDateTime::now_utc),
     );
     while running {
+        let frame_started = Instant::now();
         let now = options
             .time
             .unwrap_or_else(|| OffsetDateTime::now_utc().to_offset(local_offset));
@@ -1222,6 +1293,7 @@ fn run() -> Result<(), String> {
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
                 Response::Inventory(Ok((mut inventory, warning))) => {
+                    inventory_at = Some(Instant::now());
                     if warning.is_none() {
                         input_refresh.superseded(Instant::now());
                     }
@@ -1236,6 +1308,28 @@ fn run() -> Result<(), String> {
                         state.preferences.language,
                     );
                     state.set_inventory(inventory, warning);
+                    if !startup_inventory_reported {
+                        // The first inventory names the dock's apps: decode their surfaces
+                        // on the startup workers instead of one by one in the first frame.
+                        let scene = view::scene(&state, &assets, now);
+                        preload::start(
+                            scene
+                                .draw
+                                .iter()
+                                .filter_map(|draw| match draw {
+                                    renderer::Draw::Image(path, ..)
+                                    | renderer::Draw::TintedImage(path, ..)
+                                        if !path.ends_with(".lvec")
+                                            && !renderer.has_image(path) =>
+                                    {
+                                        Some((path.clone(), preload::Kind::Image))
+                                    }
+                                    _ => None,
+                                })
+                                .collect(),
+                            3,
+                        );
+                    }
                     if !startup_inventory_reported {
                         startup_stage("app inventory");
                         startup_inventory_reported = true;
@@ -1397,11 +1491,62 @@ fn run() -> Result<(), String> {
         if state.dirty {
             scene = compose(&mut state, &assets, now);
         }
-        for event in queued_event
+        let mut input_events: VecDeque<_> = queued_event
             .take()
             .into_iter()
             .chain(std::iter::from_fn(|| sdl_events::poll(&mut events, webos)))
-        {
+            .map(|event| (event, false))
+            .collect();
+        if let Some(gamepads) = &mut gamepads {
+            if focused && visible && !scripted_input {
+                input_events.extend(
+                    gamepads
+                        .repeats(Instant::now())
+                        .into_iter()
+                        .map(|e| (e, true)),
+                );
+            } else {
+                gamepads.reset();
+            }
+        }
+        while let Some((event, controller_input)) = input_events.pop_front() {
+            if controller_input && !(focused && visible) {
+                continue;
+            }
+            if let Some(gamepads) = &mut gamepads {
+                // Disconnecting must cancel holds, never synthesize an OK release.
+                if matches!(event, Event::ControllerDeviceRemoved { .. }) {
+                    press = None;
+                    back_button.cancel();
+                    input_events.retain(|(_, controller)| !controller);
+                }
+                if let Some(translated) = gamepads.handle(
+                    &event,
+                    focused && visible && !scripted_input,
+                    Instant::now(),
+                ) {
+                    if !translated.is_empty() {
+                        // A physical release/direction change supersedes this frame's repeats.
+                        input_events.retain(|(_, controller)| !controller);
+                    }
+                    for event in translated.into_iter().rev() {
+                        input_events.push_front((event, true));
+                    }
+                    continue;
+                }
+                if matches!(
+                    event,
+                    Event::Window {
+                        win_event: WindowEvent::Hidden
+                            | WindowEvent::Minimized
+                            | WindowEvent::FocusLost,
+                        ..
+                    }
+                ) {
+                    gamepads.reset();
+                    input_events.retain(|(_, controller)| !controller);
+                }
+            }
             // Window-entry pointer events can arrive after a slow first upload.
             // Bounded scripted captures own input until their final frame; only
             // their explicitly injected SDL clicks may alter pointer focus.
@@ -1425,7 +1570,7 @@ fn run() -> Result<(), String> {
                 continue;
             }
             // Remote keys only reach the focused surface.
-            if matches!(event, Event::KeyDown { .. } | Event::KeyUp { .. }) {
+            if !controller_input && matches!(event, Event::KeyDown { .. } | Event::KeyUp { .. }) {
                 focused = true;
                 foreground.confirmed();
             }
@@ -1523,7 +1668,9 @@ fn run() -> Result<(), String> {
                             foreground.confirmed();
                         }
                         state.dirty = true;
-                        if webos {
+                        if webos
+                            && inventory_at.is_none_or(|at| at.elapsed() > Duration::from_secs(5))
+                        {
                             pending.push(Effect::Refresh);
                         }
                     }
@@ -2043,6 +2190,10 @@ fn run() -> Result<(), String> {
                     && first_ready_frame_stats.is_none()
                 {
                     startup_stage("apps ready frame");
+                    preload::finish();
+                    // LUMA_IDLE_PREPARE=0 turns idle preparation off, for comparisons.
+                    drawer_artwork_due =
+                        webos && std::env::var("LUMA_IDLE_PREPARE").as_deref() != Ok("0");
                     first_ready_frame_stats = Some(renderer.stats().clone());
                 }
                 if options.profile_frames.is_some() {
@@ -2099,6 +2250,94 @@ fn run() -> Result<(), String> {
             }
             end_registration();
         }
+        // Shadow textures seen in recent frames are prepared between them, never inside one.
+        if visible && !state.animating() {
+            renderer.prepare_idle();
+        }
+        if std::mem::take(&mut drawer_artwork_due) {
+            let page = std::mem::replace(&mut state.page, state::Page::Apps);
+            let visibility = std::mem::replace(&mut state.drawer_visibility, 1.);
+            let section = state.section;
+            let subpage = state.subpage.take();
+            let focus = state.focus.clone();
+            let scroll = state.scroll;
+            let mut views = view::scene(&state, &assets, now).draw;
+            // Each Settings section as the sidebar opens it.
+            state.page = state::Page::Settings;
+            state.drawer_visibility = 0.;
+            state.scroll = 0.;
+            for section in state::SETTINGS_ORDER {
+                state.section = section;
+                state.focus = state::Target::Sidebar(section);
+                views.extend(view::scene(&state, &assets, now).draw);
+            }
+            state.page = page;
+            state.drawer_visibility = visibility;
+            state.section = section;
+            state.subpage = subpage;
+            state.focus = focus;
+            state.scroll = scroll;
+            idle_text = views
+                .iter()
+                .filter(|draw| matches!(draw, renderer::Draw::Text(..)))
+                .cloned()
+                .collect();
+            let paths: Vec<String> = views
+                .iter()
+                .filter_map(|draw| match draw {
+                    renderer::Draw::Image(path, ..) | renderer::Draw::TintedImage(path, ..)
+                        if !path.ends_with(".lvec") && !renderer.has_image(path) =>
+                    {
+                        Some(path.clone())
+                    }
+                    _ => None,
+                })
+                .collect();
+            if !paths.is_empty() {
+                drawer_artwork = Some(preload::decode_in_background(paths));
+            }
+            drawer_vectors = views
+                .iter()
+                .filter_map(|draw| match draw {
+                    renderer::Draw::Image(path, ..) | renderer::Draw::TintedImage(path, ..)
+                        if path.ends_with(".lvec") =>
+                    {
+                        Some(path.clone())
+                    }
+                    _ => None,
+                })
+                .collect();
+        }
+        // A few milliseconds of preparation per idle pass, so a key press never waits long.
+        if visible && !state.animating() {
+            let started = Instant::now();
+            while started.elapsed() < Duration::from_millis(4) {
+                let image = match &drawer_artwork {
+                    Some(receiver) => match receiver.try_recv() {
+                        Ok(image) => Some(image),
+                        Err(std::sync::mpsc::TryRecvError::Empty) => None,
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                            drawer_artwork = None;
+                            None
+                        }
+                    },
+                    None => None,
+                };
+                if let Some((path, image)) = image {
+                    renderer.adopt_image(path, image);
+                } else if let Some(path) = drawer_vectors.pop() {
+                    // Logos load on this thread: they become GL buffers.
+                    renderer.preload_vector(&path);
+                } else if !idle_text.is_empty() {
+                    // Text a few runs at a time: glyph outlines and run meshes.
+                    let chunk: Vec<_> = idle_text.drain(..idle_text.len().min(4)).collect();
+                    let (width, height) = window.drawable_size();
+                    renderer.prepare(&chunk, width, height);
+                } else {
+                    break;
+                }
+            }
+        }
         // Diagnostic scripts can opt into synchronous first-use preparation.
         // Normal startup, inventory refreshes and relaunches never queue it.
         while let Some(page) = next_prewarm(&mut prewarm, &state, visible) {
@@ -2118,18 +2357,21 @@ fn run() -> Result<(), String> {
             }
         }
         // Block until input instead of polling at frame rate on idle screens.
-        // VSync paces animation; holds, scripted checks and icons still being
-        // decoded need short timed wakes.
+        // VSync normally paces animation. Software/headless drivers may reject
+        // it, so keep those loops paced too instead of exhausting scripted frame
+        // budgets before wall-clock animations can finish.
         let timeout = if !visible {
             250
         } else if state.animating() || options.profile_frames.is_some() {
-            0
+            animation_wait(vsync, frame_started.elapsed())
         } else if press.is_some()
             || back_button.press.is_some()
             || options.frames.is_some()
             || assets.artwork.pending()
         {
             8
+        } else if drawer_artwork.is_some() || !drawer_vectors.is_empty() || !idle_text.is_empty() {
+            16
         } else if !prewarm.is_empty() {
             500
         } else {

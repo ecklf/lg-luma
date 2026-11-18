@@ -7,9 +7,9 @@ use crate::{
     },
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
-        APPS_COLUMNS, APPS_SECTION, Control, HOME_TILE_PITCH, HOME_TILE_WIDTH, INPUTS_SECTION,
-        KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage, Target, TextField,
-        WIDGETS_SECTION,
+        APPS_COLUMNS, APPS_SECTION, Control, DRAWER_NAME_HEIGHT, DRAWER_NAME_TOP, HOME_TILE_PITCH,
+        HOME_TILE_WIDTH, INPUTS_SECTION, KEYS, Overlay, Page, Rect, SYSTEM_SECTION, State, Subpage,
+        Target, TextField, WIDGETS_SECTION,
     },
     weather::{self, Unit},
 };
@@ -920,7 +920,15 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
     out.draw.push(Draw::Clip(None));
 }
 
-fn tile(out: &mut Scene, state: &State, assets: &Assets, app: &App, rect: Rect, dock: bool) {
+/// Returns whether the card is focused (see batch_cards).
+fn tile(
+    out: &mut Scene,
+    state: &State,
+    assets: &Assets,
+    app: &App,
+    rect: Rect,
+    dock: bool,
+) -> bool {
     let target = if dock && state.page == Page::Apps {
         Target::DockApp(app.id.clone())
     } else {
@@ -942,7 +950,7 @@ fn tile(out: &mut Scene, state: &State, assets: &Assets, app: &App, rect: Rect, 
         || rect.x + rect.w + 40. < viewport.x
         || rect.x - 40. > viewport.x + viewport.w
     {
-        return;
+        return false;
     }
     let start = out.draw.len();
     let focused = state.focus == target;
@@ -985,6 +993,21 @@ fn tile(out: &mut Scene, state: &State, assets: &Assets, app: &App, rect: Rect, 
     }
     if focused {
         out.ring(rect, 19.2);
+        if !dock && state.page == Page::Apps && state.preferences.show_drawer_app_names {
+            let (label, style) = assets.fit_line(&app.title, text(22., 550, -0.02), rect.w, 22.);
+            out.text(
+                label,
+                Rect::new(
+                    rect.x,
+                    rect.y + rect.h + DRAWER_NAME_TOP,
+                    rect.w,
+                    DRAWER_NAME_HEIGHT,
+                ),
+                style,
+                WHITE,
+                true,
+            );
+        }
     }
     if state.pressed.as_ref() == Some(&target) {
         out.fade(start, 1., 0.85);
@@ -992,6 +1015,54 @@ fn tile(out: &mut Scene, state: &State, assets: &Assets, app: &App, rect: Rect, 
     if state.moving.is_some() && state.moving.as_ref() != Some(&app.id) {
         out.fade(start, 0.48, 1.);
     }
+    focused
+}
+
+/// Reorders consecutive cards' draws (start, end, focused) so equal draws become one GPU
+/// batch: unfocused cards' shadows first, then everything else in order, then their 1-px
+/// edge borders, then their logos and text (another GPU program; switching costs more
+/// than drawing on TV drivers). Logos and text lie inside their own card. An unfocused shadow reaches 22 px past its card and the 1-px border stays
+/// inside it, while cards are 26.4 px apart: neither touches another card, so only the
+/// order of overlapping shadows in the gaps changes. A focused card stays as it is.
+fn batch_cards(draw: &mut Vec<Draw>, cards: &[(usize, usize, bool)]) {
+    let (Some(first), Some(last)) = (cards.first(), cards.last()) else {
+        return;
+    };
+    let (begin, end) = (first.0, last.1);
+    if cards.windows(2).any(|pair| pair[0].1 != pair[1].0) {
+        return;
+    }
+    let items: Vec<Draw> = draw.drain(begin..end).collect();
+    let mut shadows = Vec::new();
+    let mut body = Vec::new();
+    let mut borders = Vec::new();
+    let mut overlays = Vec::new();
+    for &(start, stop, focused) in cards {
+        let mut border_taken = focused;
+        for (offset, command) in items[start - begin..stop - begin].iter().enumerate() {
+            match command {
+                Draw::Shadow(..) if !focused && offset == 0 => shadows.push(command.clone()),
+                Draw::Shape(_, _, width, _) if !border_taken && *width == 1. => {
+                    border_taken = true;
+                    borders.push(command.clone());
+                }
+                Draw::Image(path, ..) | Draw::TintedImage(path, ..)
+                    if !focused && path.ends_with(".lvec") =>
+                {
+                    overlays.push(command.clone());
+                }
+                Draw::Text(..) if !focused => overlays.push(command.clone()),
+                _ => body.push(command.clone()),
+            }
+        }
+    }
+    let ordered: Vec<Draw> = shadows
+        .into_iter()
+        .chain(body)
+        .chain(borders)
+        .chain(overlays)
+        .collect();
+    draw.splice(begin..begin, ordered);
 }
 
 fn favorite_badge(out: &mut Scene, assets: &Assets, card: Rect, color: Color) {
@@ -1475,8 +1546,10 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
     }
     // The favourites scroll inside their glass card and slide under its edges.
     out.draw.push(Draw::Clip(Some(state.favorites_viewport())));
+    let mut cards = Vec::new();
     for (index, app) in apps.iter().enumerate() {
-        tile(
+        let start = out.draw.len();
+        let focused = tile(
             out,
             state,
             assets,
@@ -1489,7 +1562,9 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
             ),
             true,
         );
+        cards.push((start, out.draw.len(), focused));
     }
+    batch_cards(&mut out.draw, &cards);
     out.draw.push(Draw::Clip(Some(state.content_viewport())));
 }
 
@@ -1883,10 +1958,12 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
     } else {
         usize::MAX
     };
+    let mut cards = Vec::new();
     for row in apps.chunks(APPS_COLUMNS).take(rows) {
         let row_height = FACE_HEIGHT;
         for (column, app) in row.iter().enumerate() {
-            tile(
+            let start = out.draw.len();
+            let focused = tile(
                 out,
                 state,
                 assets,
@@ -1899,13 +1976,20 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
                 ),
                 false,
             );
+            cards.push((start, out.draw.len(), focused));
             // Reveal/scroll against the final layout, not the moving presentation.
             if let Some(control) = out.controls.last_mut() {
                 control.rect.y = y - s;
             }
         }
-        y += row_height + 38.4;
+        y += row_height
+            + if state.preferences.show_drawer_app_names {
+                64.
+            } else {
+                38.4
+            };
     }
+    batch_cards(&mut out.draw, &cards);
     out.draw.push(Draw::Clip(None));
 }
 
@@ -2404,6 +2488,14 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
         };
         if state.section == index && state.subpage.is_some() {
             let nested_path = match &state.subpage {
+                Some(Subpage::AppDrawerStyle | Subpage::AppSorting) => Some(vec![
+                    language.t("appDrawer"),
+                    language.t(if state.subpage == Some(Subpage::AppDrawerStyle) {
+                        "style"
+                    } else {
+                        "sorting"
+                    }),
+                ]),
                 Some(Subpage::DateFormat) => {
                     Some(vec![language.t("greeting"), language.t("dateFormat")])
                 }
@@ -2458,7 +2550,8 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
                 Some(Subpage::Clock) => language.t("clock"),
                 Some(Subpage::Language) => language.t("language"),
-                Some(Subpage::AppSorting) => language.t("appSorting"),
+                Some(Subpage::AppSorting) => language.t("sorting"),
+                Some(Subpage::AppDrawerStyle) => language.t("style"),
                 Some(Subpage::AppDrawer) => language.t("appDrawer"),
                 Some(Subpage::RecentApps) => language.t("recentApps"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
@@ -2541,6 +2634,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::Shortcuts
                 | Subpage::Greeting
                 | Subpage::Clock
+                | Subpage::AppDrawer
                 | Subpage::WidgetPosition(_)
         ) {
             match subpage {
@@ -2551,6 +2645,59 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::Shortcuts => shortcut_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
+                Subpage::AppDrawer => {
+                    for (position, (index, key, icon, value, chevron)) in [
+                        (
+                            15,
+                            "style",
+                            "grid",
+                            language.t(state.preferences.app_drawer_style.label_key()),
+                            true,
+                        ),
+                        (
+                            10,
+                            "sorting",
+                            "arrow-up-down",
+                            language.t(state.preferences.app_sorting.label_key()),
+                            true,
+                        ),
+                        (
+                            14,
+                            "showAppNames",
+                            "grid",
+                            language.t(if state.preferences.show_drawer_app_names {
+                                "stateOn"
+                            } else {
+                                "stateOff"
+                            }),
+                            false,
+                        ),
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    {
+                        row(
+                            out,
+                            state,
+                            assets,
+                            Row {
+                                target: Target::Setting(index),
+                                rect: Rect::new(
+                                    640.,
+                                    164.8 + position as f32 * 84. - s,
+                                    1120.,
+                                    72.,
+                                ),
+                                title: language.t(key),
+                                icon: Some(icon),
+                                value: Some(value),
+                                description: None,
+                                selected: false,
+                                chevron,
+                            },
+                        );
+                    }
+                }
                 Subpage::WidgetPosition(widget) => {
                     widget_position_settings(out, state, assets, *widget)
                 }
@@ -2641,6 +2788,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::Shortcuts
             | Subpage::Greeting
             | Subpage::Clock
+            | Subpage::AppDrawer
             | Subpage::Market(_) => {
                 unreachable!()
             }
@@ -2649,7 +2797,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 .into_iter()
                 .map(|option| (option.name(), None, option == language))
                 .collect(),
-            Subpage::AppDrawer => crate::model::AppDrawerStyle::ALL
+            Subpage::AppDrawerStyle => crate::model::AppDrawerStyle::ALL
                 .into_iter()
                 .map(|style| {
                     (
@@ -2745,20 +2893,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             for (position, (index, key, icon, value, chevron)) in [
                 (1, "clock", "clock", None, true),
                 (4, "language", "language", Some(language.name()), true),
-                (
-                    13,
-                    "appDrawer",
-                    "grid",
-                    Some(language.t(state.preferences.app_drawer_style.label_key())),
-                    true,
-                ),
-                (
-                    10,
-                    "appSorting",
-                    "arrow-up-down",
-                    Some(language.t(state.preferences.app_sorting.label_key())),
-                    true,
-                ),
+                (13, "appDrawer", "grid", None, true),
                 (
                     2,
                     "reducedMotion",

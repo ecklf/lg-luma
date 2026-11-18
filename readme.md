@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 
 ## Features
 
-- Customizable app drawer, input icons and recent app switching.
+- Customizable app drawer with optional names beneath selected non-favorite apps (off by default), input icons and recent app switching.
 - Movable greeting, weather, stock and crypto widgets.
 - Built-in and uploaded backgrounds, with optional rotation.
 - Webhook shortcuts and 16 interface languages.
@@ -140,7 +140,7 @@ to help make Luma available by default.
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_3.6.2_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_3.8.1_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -299,7 +299,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_3.6.2_arm.ipk
+dist/com.ecklf.luma_3.8.1_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png
@@ -334,6 +334,11 @@ pnpm dev --test-extra-apps 120
 
 Preview preferences are separate from normal preferences. See [development.md](development.md)
 for controls, vector rendering, diagnostics, tests and the source layout.
+
+SDL-recognized game controllers can navigate with the D-pad or left stick, select with
+Cross / A, go back with Circle / B, and open options with Options / Start. Controller
+availability, including PS5 DualSense USB/Bluetooth connections, depends on TV firmware
+and the SDL backend and requires verification on your TV.
 
 ## License
 

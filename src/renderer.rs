@@ -18,9 +18,15 @@ use std::{
 
 pub type Color = [f32; 4];
 pub const WHITE: Color = [0.96, 0.96, 0.96, 1.];
+#[cfg(test)]
+#[path = "font-size-tests.rs"]
+mod font_size_tests;
 const GLYPH_GEOMETRY_BUDGET: usize = 8 * 1024 * 1024;
 const TEXT_GEOMETRY_BUDGET: usize = 32 * 1024 * 1024;
 const TEXTURE_BUDGET: usize = 48 * 1024 * 1024;
+/// Precomputed shadow coverage: at most this many texels per shadow and in total.
+const SHADOW_TEXELS: usize = 1024 * 1024;
+const SHADOW_BUDGET: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TextStyle {
@@ -80,6 +86,8 @@ struct Texture {
     width: u32,
     height: u32,
     frame: u64,
+    /// Every texel has alpha 255: an untinted, unfaded draw of it hides what lies beneath.
+    opaque: bool,
 }
 impl Drop for Texture {
     fn drop(&mut self) {
@@ -127,6 +135,7 @@ pub struct RenderStats {
     pub target: Size,
     pub viewport: Viewport,
     pub font_antialiasing: &'static str,
+    pub font_size_snapping: bool,
     pub multisample_samples: u32,
     pub max_logical_font_px: f32,
     pub max_physical_font_px: f32,
@@ -164,6 +173,7 @@ impl RenderStats {
             target,
             viewport: Viewport::new(target),
             font_antialiasing: "vector grayscale coverage",
+            font_size_snapping: std::env::var("LUMA_FONT_SIZE_SNAP").as_deref() != Ok("0"),
             multisample_samples: 0,
             max_logical_font_px: 0.,
             max_physical_font_px: 0.,
@@ -200,6 +210,8 @@ enum BatchKind {
         start: usize,
         count: usize,
         backdrop: Option<[[u8; 3]; 2]>,
+        /// Drawn without blending: lets the GPU discard hidden fragments beneath.
+        opaque: bool,
     },
     Vector {
         path: String,
@@ -217,6 +229,45 @@ struct Batch {
     kind: BatchKind,
     clip: Option<Rect>,
     fade: Option<[f32; 4]>,
+}
+
+/// Mesh-program state already set within this frame, so unchanged values are not resent.
+#[derive(Default)]
+struct MeshState {
+    /// The mesh program in use (0 after another program was bound).
+    program: GLuint,
+    /// The vertex array object bound for meshes (None after the paint path bound its own).
+    vertex_array: Option<GLuint>,
+    vector_scale: Option<[f32; 2]>,
+    text_scale: Option<[f32; 2]>,
+    fringe: Option<f32>,
+    embolden: Option<f32>,
+}
+
+/// A region of a quad drawn differently from the rest of it.
+#[derive(Clone, Copy)]
+enum Hole {
+    /// Not drawn: its pixels would not change the target.
+    Skip(Rect),
+    /// Fully opaque: drawn without blending.
+    Opaque(Rect),
+}
+
+thread_local! {
+    /// Uniform locations by program and name: the driver's lookup is a string search,
+    /// and every batch sets a few uniforms. Cleared whenever programs are (re)created.
+    static UNIFORMS: std::cell::RefCell<HashMap<(GLuint, usize), GLint>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+/// `name` must be a static C string literal (its address is the cache key).
+unsafe fn uniform_location(program: GLuint, name: *const std::ffi::c_char) -> GLint {
+    UNIFORMS.with(|cache| {
+        *cache
+            .borrow_mut()
+            .entry((program, name as usize))
+            .or_insert_with(|| unsafe { gl::GetUniformLocation(program, name) })
+    })
 }
 
 fn full_screen(rect: &Rect) -> bool {
@@ -320,6 +371,18 @@ fn embolden(physical_size: f32, strength: f32) -> f32 {
     strength * ((28. - physical_size) / 12.).clamp(0., 1.)
 }
 
+/// Quantize the em size before layout, not individual outline vertices. Round
+/// down so text fitted by the view's unsnapped metrics cannot grow and wrap.
+/// Rounding in logical pixels would miss fractional drawable densities; rounding
+/// only in the shader would leave advances out of step with the visible glyphs.
+fn physical_font_size(size: f32, scale: f32, snap: bool) -> f32 {
+    if snap {
+        (size * scale).floor().max(1.) / scale
+    } else {
+        size
+    }
+}
+
 fn snap_rect(rect: Rect, scale: f32) -> Rect {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     if !*ENABLED.get_or_init(|| std::env::var("LUMA_SNAP").as_deref() != Ok("0")) {
@@ -334,13 +397,58 @@ fn snap_rect(rect: Rect, scale: f32) -> Rect {
     Rect::new(x0, y0, x1 - x0, y1 - y0)
 }
 
+struct PaintPrograms {
+    texture: GLuint,
+    tinted: GLuint,
+    shape: GLuint,
+    app: GLuint,
+}
+
+impl Drop for PaintPrograms {
+    fn drop(&mut self) {
+        for id in [self.texture, self.tinted, self.shape, self.app] {
+            if id != 0 {
+                unsafe { gl::DeleteProgram(id) };
+            }
+        }
+    }
+}
+
+impl PaintPrograms {
+    /// Use a short shader only if every triangle in this batch takes the same paint path.
+    fn select(&self, vertices: &[f32], opaque: bool, app: bool, fallback: GLuint) -> GLuint {
+        let all = |predicate: fn(&[f32]) -> bool| vertices.chunks_exact(14).all(predicate);
+        let inside = opaque && all(|v| v[12] >= 0. && v[13] == 0.);
+        if inside && app {
+            return self.app;
+        }
+        if all(|v| v[12] == -1.) || (inside && !app) {
+            return if all(|v| v[4..8] == [1.; 4]) {
+                self.texture
+            } else {
+                self.tinted
+            };
+        }
+        if !app && all(|v| v[12] >= 0. && v[13] >= 0.) {
+            self.shape
+        } else {
+            fallback
+        }
+    }
+}
+
 pub struct Renderer {
+    paint_programs: Option<PaintPrograms>,
     program: GLuint,
     vector_program: GLuint,
     text_program: GLuint,
     text_embolden: f32,
     buffer: GLuint,
     vao: GLuint,
+    /// Whether meshes have their own vertex array objects (see vector::use_vertex_arrays).
+    vertex_arrays: bool,
+    /// With vertex arrays: the paint attributes over `buffer`, set up once (else 0).
+    paint_array: GLuint,
     white: Texture,
     font_directory: PathBuf,
     fonts: HashMap<u16, Font>,
@@ -348,6 +456,11 @@ pub struct Renderer {
     glyphs: HashMap<(char, u16), Glyph>,
     text_runs: HashMap<TextKey, TextRun>,
     textures: HashMap<String, Option<Texture>>,
+    /// Shadow coverage by drawable size, radius and blur (bits), computed once on the CPU.
+    shadows: HashMap<(u32, u32, u32, u32), Texture>,
+    /// Shadows seen without a texture yet: (quad, radius, blur), prepared while idle.
+    pending_shadows: Vec<(Rect, f32, f32)>,
+    preparing_shadow: bool,
     vectors: HashMap<String, Option<vector::Mesh>>,
     artwork_variants: HashMap<String, String>,
     vertices: Vec<f32>,
@@ -397,11 +510,39 @@ impl Renderer {
         } else {
             "#version 150\n#define varying in\n#define texture2D texture\nout vec4 out_color;\n#define gl_FragColor out_color\n#define PAINT_PRECISION\n".into()
         };
+        UNIFORMS.with(|cache| cache.borrow_mut().clear());
         let program = link(
             &(vertex_prefix.clone() + include_str!("shaders/paint.vert")),
             &(fragment_prefix.clone() + include_str!("shaders/paint.frag")),
             &[c"a_position", c"a_uv", c"a_color", c"a_shape", c"a_params"],
         )?;
+        let paint_programs = if std::env::var("LUMA_PAINT_SHADERS").as_deref() == Ok("1") {
+            let build = |source: &str| {
+                link(
+                    &(vertex_prefix.clone() + include_str!("shaders/paint.vert")),
+                    &(fragment_prefix.clone() + source),
+                    &[c"a_position", c"a_uv", c"a_color", c"a_shape", c"a_params"],
+                )
+            };
+            let load = || -> Result<PaintPrograms, String> {
+                let mut programs = PaintPrograms {
+                    texture: 0,
+                    tinted: 0,
+                    shape: 0,
+                    app: 0,
+                };
+                programs.texture = build(include_str!("shaders/texture.frag"))?;
+                programs.tinted = build(include_str!("shaders/tinted.frag"))?;
+                programs.shape = build(include_str!("shaders/shape.frag"))?;
+                programs.app = build(include_str!("shaders/app-interior.frag"))?;
+                Ok(programs)
+            };
+            load()
+                .inspect_err(|error| eprintln!("Specialized paint shaders unavailable: {error}"))
+                .ok()
+        } else {
+            None
+        };
         let vector_program = match link(
             &(vertex_prefix.clone() + include_str!("shaders/vector.vert")),
             &(fragment_prefix.clone() + include_str!("shaders/vector.frag")),
@@ -429,12 +570,41 @@ impl Renderer {
         };
         let mut buffer = 0;
         let mut vao = 0;
+        let vertex_arrays;
+        let mut paint_array = 0;
         unsafe {
             if !gles {
                 gl::GenVertexArrays(1, &mut vao);
                 gl::BindVertexArray(vao);
             }
             gl::GenBuffers(1, &mut buffer);
+            // Meshes record their attribute setup in vertex array objects where the context
+            // has them (desktop core, GLES 3): TV drivers charge for every state call.
+            vertex_arrays = gl::GenVertexArrays::is_loaded()
+                && gl::BindVertexArray::is_loaded()
+                && gl::DeleteVertexArrays::is_loaded()
+                && (!gles || gl_string(gl::VERSION).starts_with("OpenGL ES 3"))
+                && std::env::var("LUMA_VAO").as_deref() != Ok("0");
+            vector::use_vertex_arrays(vertex_arrays);
+            if vertex_arrays {
+                gl::GenVertexArrays(1, &mut paint_array);
+                gl::BindVertexArray(paint_array);
+                gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
+                let mut offset = 0;
+                for (index, size) in [2, 2, 4, 4, 2].into_iter().enumerate() {
+                    gl::EnableVertexAttribArray(index as u32);
+                    gl::VertexAttribPointer(
+                        index as u32,
+                        size,
+                        gl::FLOAT,
+                        gl::FALSE,
+                        56,
+                        (offset * size_of::<f32>()) as *const _,
+                    );
+                    offset += size as usize;
+                }
+                gl::BindVertexArray(vao);
+            }
             gl::Enable(gl::BLEND);
             // Preserve an opaque destination alpha. Using BlendFunc for both
             // channels makes translucent UI darken again in PNG/window compositing.
@@ -450,11 +620,14 @@ impl Renderer {
         let white = texture(1, 1, &[255; 4]);
         Ok(Self {
             program,
+            paint_programs,
             vector_program,
             text_program,
             text_embolden,
             buffer,
             vao,
+            vertex_arrays,
+            paint_array,
             white,
             font_directory: directory.into(),
             fonts,
@@ -462,6 +635,9 @@ impl Renderer {
             glyphs: HashMap::new(),
             text_runs: HashMap::new(),
             textures: HashMap::new(),
+            shadows: HashMap::new(),
+            pending_shadows: Vec::new(),
+            preparing_shadow: false,
             vectors: HashMap::new(),
             artwork_variants: HashMap::new(),
             vertices: Vec::with_capacity(65536),
@@ -576,7 +752,16 @@ impl Renderer {
         color: Color,
         texture: GLuint,
     ) {
-        self.gradient_quad(rect, uv, radius, border, [color, color], texture, None);
+        self.gradient_quad(
+            rect,
+            uv,
+            radius,
+            border,
+            [color, color],
+            texture,
+            None,
+            None,
+        );
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -589,11 +774,56 @@ impl Renderer {
         colors: [Color; 2],
         texture: GLuint,
         backdrop: Option<[[u8; 3]; 2]>,
+        hole: Option<Hole>,
     ) {
         if rect.w <= 0. || rect.h <= 0. {
             return;
         }
         let rect = self.snap(rect);
+        // Pixels inside `hole` would leave the target unchanged (zero coverage) or are
+        // overdrawn by an opaque draw: rasterize only the four strips around it.
+        if let Some(region) = hole {
+            let (Hole::Skip(hole) | Hole::Opaque(hole)) = region;
+            // Whole physical pixels, rounded inward: the strips meet on pixel boundaries.
+            let scale = self.stats.viewport.scale.max(0.01);
+            let (left, top) = (
+                (hole.x * scale).ceil() / scale,
+                (hole.y * scale).ceil() / scale,
+            );
+            let right = ((hole.x + hole.w) * scale).floor() / scale;
+            let bottom = ((hole.y + hole.h) * scale).floor() / scale;
+            let hole = Rect::new(left, top, right - left, bottom - top);
+            let x0 = hole.x.max(rect.x);
+            let y0 = hole.y.max(rect.y);
+            let x1 = (hole.x + hole.w).min(rect.x + rect.w);
+            let y1 = (hole.y + hole.h).min(rect.y + rect.h);
+            if x1 - x0 >= 8. && y1 - y0 >= 8. {
+                let start = self.vertices.len() / 14;
+                let (left, top) = (rect.x, rect.y);
+                let (right, bottom) = (rect.x + rect.w, rect.y + rect.h);
+                let mut count = 0;
+                for [a, b, c, d] in [
+                    [left, top, right, y0],
+                    [left, y1, right, bottom],
+                    [left, y0, x0, y1],
+                    [x1, y0, right, y1],
+                ] {
+                    if c > a && d > b {
+                        self.quad_part(rect, [a, b, c, d], uv, radius, border, colors);
+                        count += 6;
+                    }
+                }
+                if count > 0 {
+                    self.paint_batch(start, count, texture, backdrop, false);
+                }
+                if let Hole::Opaque(_) = region {
+                    let start = self.vertices.len() / 14;
+                    self.quad_part(rect, [x0, y0, x1, y1], uv, radius, border, colors);
+                    self.paint_batch(start, 6, texture, backdrop, true);
+                }
+                return;
+            }
+        }
         let start = self.vertices.len() / 14;
         for (x, y) in [(0., 0.), (1., 0.), (0., 1.), (0., 1.), (1., 0.), (1., 1.)] {
             let color = colors[y as usize];
@@ -614,7 +844,235 @@ impl Renderer {
                 border,
             ]);
         }
-        self.paint_batch(start, 6, texture, backdrop);
+        self.paint_batch(start, 6, texture, backdrop, false);
+    }
+
+    /// Six paint vertices for the part [x0, y0, x1, y1] of `rect`, with the same attributes
+    /// the whole quad interpolates there.
+    fn quad_part(
+        &mut self,
+        rect: Rect,
+        part: [f32; 4],
+        uv: [f32; 4],
+        radius: f32,
+        border: f32,
+        colors: [Color; 2],
+    ) {
+        for (x, y) in [(0, 1), (2, 1), (0, 3), (0, 3), (2, 1), (2, 3)] {
+            let (px, py) = (part[x], part[y]);
+            let fx = (px - rect.x) / rect.w;
+            let fy = (py - rect.y) / rect.h;
+            let color: [f32; 4] =
+                std::array::from_fn(|i| colors[0][i] + (colors[1][i] - colors[0][i]) * fy);
+            self.vertices.extend_from_slice(&[
+                px,
+                py,
+                uv[0] + fx * (uv[2] - uv[0]),
+                uv[1] + fy * (uv[3] - uv[1]),
+                color[0],
+                color[1],
+                color[2],
+                color[3],
+                (fx - 0.5) * rect.w,
+                (fy - 0.5) * rect.h,
+                rect.w / 2.,
+                rect.h / 2.,
+                radius,
+                border,
+            ]);
+        }
+    }
+
+    /// The region of the next draw that is certainly opaque: an untinted, unfaded app face
+    /// or opaque image. A shadow beneath it does not need those pixels.
+    fn opaque_cover(&self, next: Option<&Draw>) -> Option<Rect> {
+        let (rect, radius) = match next? {
+            Draw::AppImage(_, rect, radius, tint) if tint[3] >= 1. => (*rect, *radius),
+            Draw::Image(path, rect, radius, false)
+                if !path.ends_with(".lvec")
+                    && self
+                        .textures
+                        .get(path.as_str())
+                        .is_some_and(|t| t.as_ref().is_some_and(|t| t.opaque)) =>
+            {
+                (*rect, *radius)
+            }
+            _ => return None,
+        };
+        self.opaque_interior(rect, radius)
+    }
+
+    /// The opaque region of the later draw that covers `rect`'s centre, before the clip or
+    /// edge fade changes: whatever is drawn in between there is overdrawn by it too.
+    fn cover_after(&self, later: &[Draw], rect: Rect) -> Option<Rect> {
+        let (cx, cy) = (rect.x + rect.w / 2., rect.y + rect.h / 2.);
+        for command in later.iter().take(512) {
+            if matches!(command, Draw::Clip(_) | Draw::EdgeFade(_)) {
+                return None;
+            }
+            if let Some(hole) = self.opaque_cover(Some(command))
+                && hole.x <= cx
+                && cx <= hole.x + hole.w
+                && hole.y <= cy
+                && cy <= hole.y + hole.h
+            {
+                return Some(hole);
+            }
+        }
+        None
+    }
+
+    /// The part of an opaque rounded rect drawn with full coverage: inside the rounded
+    /// corners, two pixels clear of the antialiased edge and within an edge fade's plateau.
+    fn opaque_interior(&self, rect: Rect, radius: f32) -> Option<Rect> {
+        let mut hole = self.snap(rect).inset(radius.max(0.) * 0.3 + 2.);
+        if let Some([_, top, bottom, _]) = self.fade.filter(|fade| fade[1] > fade[0]) {
+            let y0 = hole.y.max(top);
+            let y1 = (hole.y + hole.h).min(bottom);
+            hole = Rect::new(hole.x, y0, hole.w, y1 - y0);
+        }
+        (hole.w > 0. && hole.h > 0.).then_some(hole)
+    }
+
+    /// A texture holding a shadow's coverage at each drawable pixel of its snapped quad,
+    /// computed with the paint shader's formula: drawn 1:1, it reproduces that shader's
+    /// output up to 8-bit rounding, without its per-fragment distance and smoothstep.
+    /// None for very large shadows, which keep the shader path.
+    fn shadow_texture(&mut self, quad: Rect, radius: f32, blur: f32) -> Option<GLuint> {
+        static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if !*ENABLED.get_or_init(|| std::env::var("LUMA_SHADOW_TEXTURES").as_deref() != Ok("0"))
+            || blur <= 0.
+        {
+            return None;
+        }
+        let quad = self.snap(quad);
+        let scale = self.stats.viewport.scale.max(0.01);
+        let width = (quad.w * scale).round() as u32;
+        let height = (quad.h * scale).round() as u32;
+        let texels = width as usize * height as usize;
+        if width == 0 || height == 0 || texels > SHADOW_TEXELS {
+            return None;
+        }
+        let key = (width, height, radius.to_bits(), blur.to_bits());
+        let frame = self.frame;
+        if let Some(texture) = self.shadows.get_mut(&key) {
+            texture.frame = frame;
+            return Some(texture.id);
+        }
+        // Computing coverage costs CPU time a frame cannot spare: draw this one with the
+        // shader and prepare the texture while idle (see prepare_idle).
+        if !self.preparing_shadow {
+            if !self
+                .pending_shadows
+                .iter()
+                .any(|(q, r, b)| q.w == quad.w && q.h == quad.h && *r == radius && *b == blur)
+            {
+                self.pending_shadows.push((quad, radius, blur));
+            }
+            return None;
+        }
+        let mut used: usize = self
+            .shadows
+            .values()
+            .map(|t| t.width as usize * t.height as usize)
+            .sum();
+        if used + texels > SHADOW_BUDGET {
+            let mut old: Vec<_> = self
+                .shadows
+                .iter()
+                .filter(|(_, t)| t.frame != frame)
+                .map(|(key, t)| (*key, t.frame))
+                .collect();
+            old.sort_by_key(|(_, frame)| *frame);
+            for (key, _) in old {
+                if used + texels <= SHADOW_BUDGET {
+                    break;
+                }
+                if let Some(t) = self.shadows.remove(&key) {
+                    used -= t.width as usize * t.height as usize;
+                }
+            }
+            if used + texels > SHADOW_BUDGET {
+                return None;
+            }
+        }
+        let started = Instant::now();
+        // As paint.frag: v_shape.zw is the quad's half size, the box is that minus blur.
+        let (hx, hy) = (quad.w / 2. - blur, quad.h / 2. - blur);
+        let r = radius.min(hx.min(hy));
+        let coverage = |x: f32, y: f32| {
+            let (qx, qy) = (x.abs() - hx + r, y.abs() - hy + r);
+            let (ox, oy) = (qx.max(0.), qy.max(0.));
+            let d = (ox * ox + oy * oy).sqrt() + qx.max(qy).min(0.) - r;
+            let t = ((d + blur) / (2. * blur)).clamp(0., 1.);
+            ((1. - t * t * (3. - 2. * t)) * 255.).round() as u8
+        };
+        // The coverage is symmetric about both centre lines: compute one quarter (plus the
+        // centre row and column of odd sizes) and mirror it.
+        let (w, h) = (width as usize, height as usize);
+        let mut pixels = vec![255u8; texels * 4];
+        for row in 0..h.div_ceil(2) {
+            let y = -quad.h / 2. + (row as f32 + 0.5) / scale;
+            for column in 0..w.div_ceil(2) {
+                let x = -quad.w / 2. + (column as f32 + 0.5) / scale;
+                let value = coverage(x, y);
+                for (r, c) in [
+                    (row, column),
+                    (row, w - 1 - column),
+                    (h - 1 - row, column),
+                    (h - 1 - row, w - 1 - column),
+                ] {
+                    pixels[(r * w + c) * 4 + 3] = value;
+                }
+            }
+        }
+        self.stats.image_load_ms += started.elapsed().as_secs_f64() * 1000.;
+        let mut texture = texture(width, height, &pixels);
+        texture.frame = frame;
+        let id = texture.id;
+        self.shadows.insert(key, texture);
+        Some(id)
+    }
+
+    /// Prepares one shadow texture seen since the last call; true while more remain.
+    /// Call when nothing animates: the next frame draws that shadow from the texture.
+    pub fn prepare_idle(&mut self) -> bool {
+        if let Some((quad, radius, blur)) = self.pending_shadows.pop() {
+            self.preparing_shadow = true;
+            self.shadow_texture(quad, radius, blur);
+            self.preparing_shadow = false;
+        }
+        !self.pending_shadows.is_empty()
+    }
+
+    /// Whether an image path already has a texture (or a cached failure).
+    pub fn has_image(&self, path: &str) -> bool {
+        self.textures.contains_key(path)
+    }
+
+    /// Loads a vector logo's mesh ahead of its first draw. True when it was not loaded yet.
+    pub fn preload_vector(&mut self, path: &str) -> bool {
+        if self.vectors.contains_key(path) {
+            return false;
+        }
+        let mesh = vector::Mesh::load(Path::new(path))
+            .map_err(|error| eprintln!("{error}"))
+            .ok();
+        self.vectors.insert(path.into(), mesh);
+        true
+    }
+
+    /// Uploads an image decoded elsewhere, so its first draw does not decode it.
+    pub fn adopt_image(&mut self, path: String, image: Option<image::RgbaImage>) {
+        if self.textures.contains_key(&path) {
+            return;
+        }
+        let texture = image.map(|image| {
+            let mut texture = texture(image.width(), image.height(), image.as_raw());
+            texture.frame = self.frame;
+            texture
+        });
+        self.textures.insert(path, texture);
     }
 
     /// Appends `count` paint vertices from `start`, merged into the previous batch when it uses
@@ -625,6 +1083,7 @@ impl Renderer {
         count: usize,
         texture: GLuint,
         backdrop: Option<[[u8; 3]; 2]>,
+        opaque: bool,
     ) {
         if let Some(batch) = self.batches.last_mut() {
             let same_clip = match (batch.clip, self.clip) {
@@ -638,10 +1097,12 @@ impl Renderer {
                     texture: previous,
                     count: batch_count,
                     backdrop: previous_backdrop,
+                    opaque: previous_opaque,
                     ..
                 } = &mut batch.kind
                 && *previous == texture
                 && *previous_backdrop == backdrop
+                && *previous_opaque == opaque
             {
                 *batch_count += count;
                 return;
@@ -653,6 +1114,7 @@ impl Renderer {
                 start,
                 count,
                 backdrop,
+                opaque,
             },
             clip: self.clip,
             fade: self.fade,
@@ -662,7 +1124,7 @@ impl Renderer {
     /// The wallpaper with full-screen translucent fills folded in: each fill maps a pixel p to
     /// p * (1 - a) + c * a, so together they are p * m + k, drawn in one pass instead of one
     /// full-screen layer each. Strips keep gradients' products of colour and alpha exact.
-    fn folded_quad(&mut self, rect: Rect, texture: GLuint, scrims: &[Scrim]) {
+    fn folded_quad(&mut self, rect: Rect, texture: GLuint, scrims: &[Scrim], opaque: bool) {
         const STRIPS: usize = 16;
         let fold = |t: f32| {
             let (mut m, mut k) = ([1f32; 3], [0f32; 3]);
@@ -703,14 +1165,24 @@ impl Renderer {
                 ]);
             }
         }
-        self.paint_batch(start, STRIPS * 6, texture, None);
+        self.paint_batch(
+            start,
+            STRIPS * 6,
+            texture,
+            None,
+            opaque && self.fade.is_none(),
+        );
     }
 
     fn text(&mut self, text: &str, rect: Rect, style: TextStyle, color: Color, centered: bool) {
-        // Layout remains logical. Reuse the same run geometry at every density;
-        // its shader snaps insertion origins and computes pixel-sized coverage.
-        let size_f = style.size;
         let viewport = self.stats.viewport;
+        // Keep layout logical, but use the same pixel-sized em for metrics and
+        // outlines. The effective size in TextKey separates density-dependent runs.
+        let size_f = physical_font_size(
+            style.size,
+            viewport.text_scale(),
+            self.stats.font_size_snapping,
+        );
         self.stats.max_logical_font_px = self.stats.max_logical_font_px.max(size_f);
         self.stats.max_physical_font_px = self
             .stats
@@ -743,13 +1215,16 @@ impl Renderer {
             ],
             flags: u8::from(style.align_right)
                 | (u8::from(centered) << 1)
-                | (u8::from(self.stats.multisample_samples > 1) << 2),
+                | (u8::from(self.stats.multisample_samples > 1) << 2)
+                | (u8::from(style.size >= 32.) << 3),
         };
         if self.text_runs.contains_key(&key) {
             self.submit_text(key, origin, color);
             return;
         }
         let rect = Rect::new(0., 0., rect.w, rect.h);
+        // Preserve the view's optical-font choice even if quantization crosses
+        // the 32px threshold. The choice is also part of the run cache key.
         let font_id = style.weight + if style.size >= 32. { 1000 } else { 0 };
         let cjk_id = if style.weight >= 500 { 2500 } else { 2400 };
         let hangul_id = cjk_id + 1000;
@@ -996,19 +1471,19 @@ impl Renderer {
         let frame = self.frame;
         let started = Instant::now();
         let loaded = !self.textures.contains_key(&path);
-        let entry = self
-            .textures
-            .entry(path.clone())
-            .or_insert_with(|| match image::open(&path) {
-                Ok(image) => {
-                    let image = image.into_rgba8();
-                    Some(texture(image.width(), image.height(), image.as_raw()))
-                }
+        let entry = self.textures.entry(path.clone()).or_insert_with(|| {
+            let decoded = match crate::preload::take(&path) {
+                Some(Some(image)) => Ok(image),
+                Some(None) | None => image::open(&path).map(image::DynamicImage::into_rgba8),
+            };
+            match decoded {
+                Ok(image) => Some(texture(image.width(), image.height(), image.as_raw())),
                 Err(error) => {
                     eprintln!("Artwork {path}: {error}");
                     None
                 }
-            });
+            }
+        });
         if loaded {
             self.stats.image_load_ms += started.elapsed().as_secs_f64() * 1000.;
         }
@@ -1018,6 +1493,7 @@ impl Renderer {
         };
         texture.frame = frame;
         let id = texture.id;
+        let opaque = texture.opaque && tint[3] >= 1.;
         if contain {
             let scale = (rect.w / texture.width as f32).min(rect.h / texture.height as f32);
             let w = texture.width as f32 * scale;
@@ -1025,9 +1501,22 @@ impl Renderer {
             rect = Rect::new(rect.x + (rect.w - w) / 2., rect.y + (rect.h - h) / 2., w, h);
         }
         if scrims.is_empty() {
-            self.quad(rect, [0., 0., 1., 1.], plain_radius(radius), 0., tint, id);
+            let hole = opaque
+                .then(|| self.opaque_interior(rect, radius))
+                .flatten()
+                .map(Hole::Opaque);
+            self.gradient_quad(
+                rect,
+                [0., 0., 1., 1.],
+                plain_radius(radius),
+                0.,
+                [tint; 2],
+                id,
+                None,
+                hole,
+            );
         } else {
-            self.folded_quad(rect, id, scrims);
+            self.folded_quad(rect, id, scrims, opaque);
         }
     }
 
@@ -1138,6 +1627,10 @@ impl Renderer {
             [tint; 2],
             id,
             Some(image.backdrop),
+            (tint[3] >= 1.)
+                .then(|| self.opaque_interior(rect, radius))
+                .flatten()
+                .map(Hole::Opaque),
         );
     }
 
@@ -1199,10 +1692,11 @@ impl Renderer {
             // exact legacy path for older uploads, missing/corrupt sidecars and A/B checks.
             let prepared = (std::env::var("LUMA_GLASS_PRECOMPUTED").as_deref() != Ok("0"))
                 .then(|| {
-                    crate::glass_backdrop::load(&crate::glass_backdrop::sidecar_path(Path::new(
-                        path,
-                    )))
-                    .ok()
+                    let sidecar = crate::glass_backdrop::sidecar_path(Path::new(path));
+                    match crate::preload::take(&sidecar.to_string_lossy()) {
+                        Some(image) => image,
+                        None => crate::glass_backdrop::load(&sidecar).ok(),
+                    }
                 })
                 .flatten();
             precomputed = prepared.is_some();
@@ -1286,13 +1780,18 @@ impl Renderer {
                     *tint,
                     self.white.id,
                 ),
-                Draw::Shape(rect, radius, border, color) => self.quad(
+                // A border's coverage is exactly zero more than its width (plus the
+                // filter) inside the edge.
+                Draw::Shape(rect, radius, border, color) => self.gradient_quad(
                     *rect,
                     [0., 0., 1., 1.],
                     *radius,
                     *border,
-                    *color,
+                    [*color; 2],
                     self.white.id,
+                    None,
+                    (*border > 0.)
+                        .then(|| Hole::Skip(self.snap(*rect).inset(radius + border + 2.))),
                 ),
                 Draw::RoundedGradient(rect, radius, top, bottom) => self.gradient_quad(
                     *rect,
@@ -1302,15 +1801,34 @@ impl Renderer {
                     [*top, *bottom],
                     self.white.id,
                     None,
+                    None,
                 ),
-                Draw::Shadow(rect, radius, blur, color) => self.quad(
-                    rect.inset(-*blur),
-                    [0., 0., 1., 1.],
-                    *radius,
-                    -*blur,
-                    *color,
-                    self.white.id,
-                ),
+                Draw::Shadow(rect, radius, blur, color) => {
+                    let hole = self.cover_after(&commands[index..], *rect).map(Hole::Skip);
+                    match self.shadow_texture(rect.inset(-*blur), *radius, *blur) {
+                        // The same coverage, read instead of computed per fragment.
+                        Some(texture) => self.gradient_quad(
+                            rect.inset(-*blur),
+                            [0., 0., 1., 1.],
+                            -1.,
+                            0.,
+                            [*color; 2],
+                            texture,
+                            None,
+                            hole,
+                        ),
+                        None => self.gradient_quad(
+                            rect.inset(-*blur),
+                            [0., 0., 1., 1.],
+                            *radius,
+                            -*blur,
+                            [*color; 2],
+                            self.white.id,
+                            None,
+                            hole,
+                        ),
+                    }
+                }
                 Draw::Text(text, rect, size, color, centered) => {
                     self.text(text, *rect, *size, *color, *centered)
                 }
@@ -1378,10 +1896,19 @@ impl Renderer {
         if let Some([_, _, w, h]) = damage {
             self.stats.redrawn_fraction = f64::from(w * h) / f64::from((width * height).max(1));
         }
-        let scissor = |area: Option<[i32; 4]>| unsafe {
+        // Only changes reach the driver: each state call costs real time on the TV.
+        let mut scissor_state: Option<Option<[i32; 4]>> = None;
+        let mut scissor = |area: Option<[i32; 4]>| unsafe {
+            if scissor_state == Some(area) {
+                return;
+            }
+            let enabled = scissor_state.flatten().is_some();
+            scissor_state = Some(area);
             match area {
                 Some([x, y, w, h]) => {
-                    gl::Enable(gl::SCISSOR_TEST);
+                    if !enabled {
+                        gl::Enable(gl::SCISSOR_TEST);
+                    }
                     gl::Scissor(x, y, w.max(0), h.max(0));
                 }
                 None => gl::Disable(gl::SCISSOR_TEST),
@@ -1405,19 +1932,13 @@ impl Renderer {
             );
             gl::UseProgram(self.program);
             gl::Uniform1i(
-                gl::GetUniformLocation(self.program, c"u_glass_enabled".as_ptr()),
+                uniform_location(self.program, c"u_glass_enabled".as_ptr()),
                 i32::from(glass_enabled),
             );
-            gl::Uniform1i(
-                gl::GetUniformLocation(self.program, c"u_glass_a".as_ptr()),
-                1,
-            );
-            gl::Uniform1i(
-                gl::GetUniformLocation(self.program, c"u_glass_b".as_ptr()),
-                2,
-            );
+            gl::Uniform1i(uniform_location(self.program, c"u_glass_a".as_ptr()), 1);
+            gl::Uniform1i(uniform_location(self.program, c"u_glass_b".as_ptr()), 2);
             gl::Uniform1f(
-                gl::GetUniformLocation(self.program, c"u_glass_mix".as_ptr()),
+                uniform_location(self.program, c"u_glass_mix".as_ptr()),
                 second.map_or(0., |(_, alpha)| alpha),
             );
             gl::ActiveTexture(gl::TEXTURE1);
@@ -1426,16 +1947,20 @@ impl Renderer {
             gl::BindTexture(gl::TEXTURE_2D, glass_b);
             // One drawable pixel in logical units: the paint shader's edge filter width.
             gl::Uniform1f(
-                gl::GetUniformLocation(self.program, c"u_aa".as_ptr()),
+                uniform_location(self.program, c"u_aa".as_ptr()),
                 1. / scale.max(0.01),
             );
-            gl::Uniform1i(
-                gl::GetUniformLocation(self.program, c"u_texture".as_ptr()),
-                0,
-            );
+            gl::Uniform1i(uniform_location(self.program, c"u_texture".as_ptr()), 0);
             gl::ActiveTexture(gl::TEXTURE0);
             let mut paint_bound = false;
+            let mut active_paint = 0;
+            let mut shape_configured = false;
+            let mut mesh_state = MeshState::default();
             let mut current_fade = None;
+            let mut blending = true;
+            let mut bound_texture = 0;
+            // u_app of the paint program (it keeps its value across program switches).
+            let mut app_uniform: Option<bool> = None;
             for batch in &self.batches {
                 if current_fade != Some(batch.fade) {
                     // The same cheap alpha mask applies to shapes, textures,
@@ -1444,7 +1969,7 @@ impl Renderer {
                     for program in [self.program, self.vector_program, self.text_program] {
                         gl::UseProgram(program);
                         gl::Uniform4f(
-                            gl::GetUniformLocation(program, c"u_edge_fade".as_ptr()),
+                            uniform_location(program, c"u_edge_fade".as_ptr()),
                             fade[0],
                             fade[1],
                             fade[2],
@@ -1453,6 +1978,7 @@ impl Renderer {
                     }
                     current_fade = Some(batch.fade);
                     paint_bound = false;
+                    mesh_state.program = 0;
                 }
                 let clip = batch.clip.map(|clip| {
                     [
@@ -1472,9 +1998,53 @@ impl Renderer {
                         start,
                         count,
                         backdrop,
+                        opaque,
                     } => {
+                        if *opaque == blending {
+                            if *opaque {
+                                gl::Disable(gl::BLEND);
+                            } else {
+                                gl::Enable(gl::BLEND);
+                            }
+                            blending = !*opaque;
+                        }
+                        let program = self
+                            .paint_programs
+                            .as_ref()
+                            .filter(|_| batch.fade.is_none())
+                            .map_or(self.program, |programs| {
+                                programs.select(
+                                    &self.vertices[start * 14..(start + count) * 14],
+                                    *opaque,
+                                    backdrop.is_some(),
+                                    self.program,
+                                )
+                            });
+                        if !paint_bound || active_paint != program {
+                            gl::UseProgram(program);
+                            active_paint = program;
+                        }
+                        if !shape_configured
+                            && self
+                                .paint_programs
+                                .as_ref()
+                                .is_some_and(|p| p.shape == program)
+                        {
+                            gl::Uniform1f(
+                                uniform_location(program, c"u_aa".as_ptr()),
+                                1. / scale.max(0.01),
+                            );
+                            shape_configured = true;
+                        }
+                        if !paint_bound && self.paint_array != 0 {
+                            // The paint attributes, recorded once: one bind after a mesh.
+                            gl::BindVertexArray(self.paint_array);
+                            mesh_state.vertex_array = None;
+                            mesh_state.program = 0;
+                            paint_bound = true;
+                        }
                         if !paint_bound {
-                            gl::UseProgram(self.program);
+                            mesh_state.program = 0;
                             gl::BindBuffer(gl::ARRAY_BUFFER, self.buffer);
                             let mut offset = 0;
                             for (index, size) in [2, 2, 4, 4, 2].into_iter().enumerate() {
@@ -1491,17 +2061,23 @@ impl Renderer {
                             }
                             paint_bound = true;
                         }
-                        gl::BindTexture(gl::TEXTURE_2D, *texture);
-                        gl::Uniform1i(
-                            gl::GetUniformLocation(self.program, c"u_app".as_ptr()),
-                            i32::from(backdrop.is_some()),
-                        );
+                        if bound_texture != *texture {
+                            gl::BindTexture(gl::TEXTURE_2D, *texture);
+                            bound_texture = *texture;
+                        }
+                        if program == self.program && app_uniform != Some(backdrop.is_some()) {
+                            gl::Uniform1i(
+                                uniform_location(self.program, c"u_app".as_ptr()),
+                                i32::from(backdrop.is_some()),
+                            );
+                            app_uniform = Some(backdrop.is_some());
+                        }
                         if let Some(stops) = backdrop {
                             for (name, rgb) in
                                 [(c"u_app_top", stops[0]), (c"u_app_bottom", stops[1])]
                             {
                                 gl::Uniform3f(
-                                    gl::GetUniformLocation(self.program, name.as_ptr()),
+                                    uniform_location(program, name.as_ptr()),
                                     rgb[0] as f32 / 255.,
                                     rgb[1] as f32 / 255.,
                                     rgb[2] as f32 / 255.,
@@ -1510,11 +2086,20 @@ impl Renderer {
                         }
                         gl::DrawArrays(gl::TRIANGLES, *start as i32, *count as i32);
                     }
+                    BatchKind::Vector { .. } | BatchKind::Text { .. } if !blending => {
+                        gl::Enable(gl::BLEND);
+                        blending = true;
+                    }
+                    _ => {}
+                }
+                match &batch.kind {
+                    BatchKind::Paint { .. } => {}
                     BatchKind::Vector { path, rect, tint } => {
                         let Some(mesh) = self.vectors.get(path).and_then(Option::as_ref) else {
                             continue;
                         };
                         self.draw_mesh(
+                            &mut mesh_state,
                             self.vector_program,
                             mesh,
                             [rect.w / mesh.width, rect.h / mesh.height, rect.x, rect.y],
@@ -1530,6 +2115,7 @@ impl Renderer {
                         };
                         let size = f32::from_bits(key.layout[0]) * vh as f32 / 1080.;
                         self.draw_mesh(
+                            &mut mesh_state,
                             self.text_program,
                             mesh,
                             [1., 1., origin[0], origin[1]],
@@ -1539,6 +2125,12 @@ impl Renderer {
                         paint_bound = false;
                     }
                 }
+            }
+            if !blending {
+                gl::Enable(gl::BLEND);
+            }
+            if self.vertex_arrays {
+                gl::BindVertexArray(self.vao);
             }
             gl::Disable(gl::SCISSOR_TEST);
         }
@@ -1579,6 +2171,7 @@ impl Renderer {
 
     fn draw_mesh(
         &self,
+        state: &mut MeshState,
         program: GLuint,
         mesh: &vector::Mesh,
         transform: [f32; 4],
@@ -1586,51 +2179,64 @@ impl Renderer {
         embolden: f32,
     ) {
         let viewport = self.stats.viewport;
+        let scale = [
+            viewport.width as f32 / 1920.,
+            viewport.height as f32 / 1080.,
+        ];
         unsafe {
-            gl::UseProgram(program);
-            if program == self.text_program {
-                gl::Uniform1f(
-                    gl::GetUniformLocation(program, c"u_fringe".as_ptr()),
-                    if self.stats.multisample_samples > 1 {
-                        0.
-                    } else {
-                        0.5
-                    },
-                );
-                gl::Uniform1f(
-                    gl::GetUniformLocation(program, c"u_embolden".as_ptr()),
-                    embolden,
-                );
+            if state.program != program {
+                gl::UseProgram(program);
+                state.program = program;
             }
-            gl::BindBuffer(gl::ARRAY_BUFFER, mesh.buffer);
-            gl::DisableVertexAttribArray(4);
-            let mut offset = 0;
-            for (index, size) in [2, 2, 4, 1].into_iter().enumerate() {
-                gl::EnableVertexAttribArray(index as u32);
-                gl::VertexAttribPointer(
-                    index as u32,
-                    size,
-                    gl::FLOAT,
-                    gl::FALSE,
-                    36,
-                    (offset * size_of::<f32>()) as *const _,
-                );
-                offset += size as usize;
+            if program == self.text_program {
+                let fringe = if self.stats.multisample_samples > 1 {
+                    0.
+                } else {
+                    0.5
+                };
+                if state.fringe != Some(fringe) {
+                    gl::Uniform1f(uniform_location(program, c"u_fringe".as_ptr()), fringe);
+                    state.fringe = Some(fringe);
+                }
+                if state.embolden != Some(embolden) {
+                    gl::Uniform1f(uniform_location(program, c"u_embolden".as_ptr()), embolden);
+                    state.embolden = Some(embolden);
+                }
+            }
+            if mesh.vertex_array != 0 {
+                if state.vertex_array != Some(mesh.vertex_array) {
+                    gl::BindVertexArray(mesh.vertex_array);
+                    state.vertex_array = Some(mesh.vertex_array);
+                }
+            } else {
+                if self.vertex_arrays && state.vertex_array.is_some() {
+                    gl::BindVertexArray(self.vao);
+                    state.vertex_array = None;
+                }
+                vector::bind_attributes(mesh.buffer);
             }
             gl::Uniform4f(
-                gl::GetUniformLocation(program, c"u_transform".as_ptr()),
+                uniform_location(program, c"u_transform".as_ptr()),
                 transform[0],
                 transform[1],
                 transform[2],
                 transform[3],
             );
-            gl::Uniform2f(
-                gl::GetUniformLocation(program, c"u_pixel_scale".as_ptr()),
-                viewport.width as f32 / 1920.,
-                viewport.height as f32 / 1080.,
-            );
+            let known = if program == self.text_program {
+                &mut state.text_scale
+            } else {
+                &mut state.vector_scale
+            };
+            if *known != Some(scale) {
+                gl::Uniform2f(
+                    uniform_location(program, c"u_pixel_scale".as_ptr()),
+                    scale[0],
+                    scale[1],
+                );
+                *known = Some(scale);
+            }
             gl::Uniform4f(
-                gl::GetUniformLocation(program, c"u_tint".as_ptr()),
+                uniform_location(program, c"u_tint".as_ptr()),
                 tint[0],
                 tint[1],
                 tint[2],
@@ -1844,6 +2450,9 @@ impl Drop for Renderer {
             if self.vao != 0 {
                 gl::DeleteVertexArrays(1, &self.vao);
             }
+            if self.paint_array != 0 {
+                gl::DeleteVertexArrays(1, &self.paint_array);
+            }
         }
     }
 }
@@ -1878,6 +2487,7 @@ fn texture(width: u32, height: u32, pixels: &[u8]) -> Texture {
         width,
         height,
         frame: 0,
+        opaque: !pixels.is_empty() && pixels.chunks_exact(4).all(|texel| texel[3] == 255),
     }
 }
 
@@ -1914,7 +2524,96 @@ fn compile(kind: GLenum, source: &str) -> Result<GLuint, String> {
     }
 }
 
+/// Where linked program binaries are kept between launches (webOS only): compiling the
+/// shaders is a large part of Luma's startup on TV GPUs.
+static PROGRAM_CACHE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+pub fn set_program_cache(directory: PathBuf) {
+    let _ = PROGRAM_CACHE.set(directory);
+}
+
+/// The cache file for these sources on this exact driver; any change misses the cache.
+fn program_cache_file(vertex: &str, fragment: &str, attributes: &[&CStr]) -> Option<PathBuf> {
+    use std::hash::{Hash, Hasher};
+    let directory = PROGRAM_CACHE.get()?;
+    if !gl::ProgramBinary::is_loaded() || !gl::GetProgramBinary::is_loaded() {
+        return None;
+    }
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for name in [gl::VENDOR, gl::RENDERER, gl::VERSION] {
+        gl_string(name).hash(&mut hasher);
+    }
+    (vertex, fragment, attributes).hash(&mut hasher);
+    Some(directory.join(format!("{:016x}.bin", hasher.finish())))
+}
+
+fn load_program_binary(file: &Path) -> Option<GLuint> {
+    let bytes = std::fs::read(file).ok()?;
+    let format = GLenum::from_le_bytes(bytes.get(..4)?.try_into().ok()?);
+    let binary = &bytes[4..];
+    unsafe {
+        let program = gl::CreateProgram();
+        gl::ProgramBinary(program, format, binary.as_ptr().cast(), binary.len() as i32);
+        let mut success = 0;
+        gl::GetProgramiv(program, gl::LINK_STATUS, &mut success);
+        if success == 0 {
+            // A driver update or a damaged file: compile from source instead.
+            gl::DeleteProgram(program);
+            let _ = std::fs::remove_file(file);
+            return None;
+        }
+        Some(program)
+    }
+}
+
+fn save_program_binary(program: GLuint, file: &Path) {
+    unsafe {
+        let mut length = 0;
+        gl::GetProgramiv(program, gl::PROGRAM_BINARY_LENGTH, &mut length);
+        if length <= 0 {
+            return;
+        }
+        let mut binary = vec![0u8; length as usize];
+        let mut written = 0;
+        let mut format = 0;
+        gl::GetProgramBinary(
+            program,
+            length,
+            &mut written,
+            &mut format,
+            binary.as_mut_ptr().cast(),
+        );
+        if written <= 0 {
+            return;
+        }
+        binary.truncate(written as usize);
+        let mut bytes = format.to_le_bytes().to_vec();
+        bytes.extend_from_slice(&binary);
+        // Write beside, then rename: a crash never leaves a truncated binary in place.
+        let partial = file.with_extension("partial");
+        if file
+            .parent()
+            .is_some_and(|dir| std::fs::create_dir_all(dir).is_ok())
+            && std::fs::write(&partial, bytes).is_ok()
+        {
+            let _ = std::fs::rename(&partial, file);
+        }
+    }
+}
+
 fn link(vertex: &str, fragment: &str, attributes: &[&CStr]) -> Result<GLuint, String> {
+    let cache = program_cache_file(vertex, fragment, attributes);
+    if let Some(program) = cache.as_deref().and_then(load_program_binary) {
+        return Ok(program);
+    }
+    let program = link_source(vertex, fragment, attributes)?;
+    if let Some(file) = cache {
+        save_program_binary(program, &file);
+    }
+    Ok(program)
+}
+
+fn link_source(vertex: &str, fragment: &str, attributes: &[&CStr]) -> Result<GLuint, String> {
     let vertex = compile(gl::VERTEX_SHADER, vertex)?;
     let fragment = match compile(gl::FRAGMENT_SHADER, fragment) {
         Ok(fragment) => fragment,
@@ -1931,6 +2630,13 @@ fn link(vertex: &str, fragment: &str, attributes: &[&CStr]) -> Result<GLuint, St
         gl::AttachShader(program, fragment);
         for (index, name) in attributes.iter().enumerate() {
             gl::BindAttribLocation(program, index as u32, name.as_ptr());
+        }
+        if PROGRAM_CACHE.get().is_some() && gl::ProgramParameteri::is_loaded() {
+            gl::ProgramParameteri(
+                program,
+                gl::PROGRAM_BINARY_RETRIEVABLE_HINT,
+                gl::TRUE as i32,
+            );
         }
         gl::LinkProgram(program);
         gl::DeleteShader(vertex);

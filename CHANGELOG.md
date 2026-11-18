@@ -1,5 +1,37 @@
 # lg-luma
 
+## 3.8.1
+
+### Patch Changes
+
+- b22b4fc: Pace animations when VSync is unavailable so headless rendering and scripted captures allow exit animations to finish.
+
+## 3.8.0
+
+### Minor Changes
+
+- bd418ae: Add SDL game controller navigation, including PS5 DualSense where recognized by the TV backend, with D-pad/left-stick navigation, OK and Back holds, Options, and hot-plug handling.
+
+### Patch Changes
+
+- 7de7cfc: Cheaper drawer shadows and fewer draw calls on TVs: shadows are drawn from precomputed coverage textures prepared while idle, and card shadows and borders share GPU batches.
+
+## 3.7.0
+
+### Minor Changes
+
+- d9511c1: Add a Show app names setting under General, off by default. Enable it for selected drawer app labels, or leave it off to retain the original compact spacing and scroll padding.
+- a21485b: Show the selected app's name beneath its card in the app drawer, with more space between rows and without adding labels to favorites. Keep the last row's name visible with bottom padding when scrolling.
+
+### Patch Changes
+
+- 83b3bb5: Faster startup on TVs: the first scene's images decode on worker threads while SDL, the window and the shaders start, and linked shader programs are reused between launches.
+- 81dcdf4: Smoother app drawer and Settings on single-core TV GPUs: shadows and borders skip pixels that cannot change, opaque faces let the GPU discard hidden fragments, the glass interior takes a shorter shader path, and redundant GL state changes are skipped.
+- a288544: Smoother first app drawer opening on TVs: bundled surfaces decode in the background and logos load while Home is idle. Shared surface paths decode only once, with bounded buffering while Luma is hidden or animating.
+- b5f33fe: Stop showing the Home Opening toast when launching an app or Device settings on TV, while keeping desktop preview notices.
+- 53ca20c: Ask for the app inventory once per Home press instead of twice.
+- 2fda3d7: Round font sizes down to whole physical pixels before text layout and outline scaling, preserving fitted text bounds. Add a diagnostic override for comparing the existing fractional sizes; TV sharpness still needs matched hardware captures.
+
 ## 3.6.2
 
 ### Patch Changes
