@@ -89,6 +89,14 @@ and `target/release/`. Desktop results do not establish TV size or performance.
 
 ## Controls and navigation
 
+SDL-mapped game controllers (including PS5 DualSense when recognized by the TV's SDL
+backend) use D-pad or left stick to navigate, Cross / A for OK, Circle / B for Back,
+and Options / Start for the context menu. Holding OK or Back uses the same behavior
+as the remote. Controllers connected before startup and hot-plugged controllers are
+opened automatically. Input is ignored while Luma is unfocused or hidden; disconnecting
+cancels pending holds. USB/Bluetooth availability depends on the TV firmware and SDL
+backend; verify both on hardware before claiming support for a specific TV.
+
 General → Show app names is off by default, preserving the compact, unlabeled drawer.
 When enabled, the app drawer shows a centered, single-line name beneath the focused grid card
 in both styles, with wider row spacing and scroll padding for the name. Long names are ellipsized

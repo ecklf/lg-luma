@@ -335,6 +335,11 @@ pnpm dev --test-extra-apps 120
 Preview preferences are separate from normal preferences. See [development.md](development.md)
 for controls, vector rendering, diagnostics, tests and the source layout.
 
+SDL-recognized game controllers can navigate with the D-pad or left stick, select with
+Cross / A, go back with Circle / B, and open options with Options / Start. Controller
+availability, including PS5 DualSense USB/Bluetooth connections, depends on TV firmware
+and the SDL backend and requires verification on your TV.
+
 ## License
 
 Luma's code is licensed under MIT. Bundled [Breezy Weather icons](assets/weather/README.md)
