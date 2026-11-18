@@ -18,6 +18,9 @@ use std::{
 
 pub type Color = [f32; 4];
 pub const WHITE: Color = [0.96, 0.96, 0.96, 1.];
+#[cfg(test)]
+#[path = "font-size-tests.rs"]
+mod font_size_tests;
 const GLYPH_GEOMETRY_BUDGET: usize = 8 * 1024 * 1024;
 const TEXT_GEOMETRY_BUDGET: usize = 32 * 1024 * 1024;
 const TEXTURE_BUDGET: usize = 48 * 1024 * 1024;
@@ -127,6 +130,7 @@ pub struct RenderStats {
     pub target: Size,
     pub viewport: Viewport,
     pub font_antialiasing: &'static str,
+    pub font_size_snapping: bool,
     pub multisample_samples: u32,
     pub max_logical_font_px: f32,
     pub max_physical_font_px: f32,
@@ -164,6 +168,7 @@ impl RenderStats {
             target,
             viewport: Viewport::new(target),
             font_antialiasing: "vector grayscale coverage",
+            font_size_snapping: std::env::var("LUMA_FONT_SIZE_SNAP").as_deref() != Ok("0"),
             multisample_samples: 0,
             max_logical_font_px: 0.,
             max_physical_font_px: 0.,
@@ -318,6 +323,18 @@ fn profile_skip(command: &Draw) -> bool {
 /// Full strength up to 16 physical pixels, none from 28. Zero in the default MSAA mode.
 fn embolden(physical_size: f32, strength: f32) -> f32 {
     strength * ((28. - physical_size) / 12.).clamp(0., 1.)
+}
+
+/// Quantize the em size before layout, not individual outline vertices. Round
+/// down so text fitted by the view's unsnapped metrics cannot grow and wrap.
+/// Rounding in logical pixels would miss fractional drawable densities; rounding
+/// only in the shader would leave advances out of step with the visible glyphs.
+fn physical_font_size(size: f32, scale: f32, snap: bool) -> f32 {
+    if snap {
+        (size * scale).floor().max(1.) / scale
+    } else {
+        size
+    }
 }
 
 fn snap_rect(rect: Rect, scale: f32) -> Rect {
@@ -707,10 +724,14 @@ impl Renderer {
     }
 
     fn text(&mut self, text: &str, rect: Rect, style: TextStyle, color: Color, centered: bool) {
-        // Layout remains logical. Reuse the same run geometry at every density;
-        // its shader snaps insertion origins and computes pixel-sized coverage.
-        let size_f = style.size;
         let viewport = self.stats.viewport;
+        // Keep layout logical, but use the same pixel-sized em for metrics and
+        // outlines. The effective size in TextKey separates density-dependent runs.
+        let size_f = physical_font_size(
+            style.size,
+            viewport.text_scale(),
+            self.stats.font_size_snapping,
+        );
         self.stats.max_logical_font_px = self.stats.max_logical_font_px.max(size_f);
         self.stats.max_physical_font_px = self
             .stats
@@ -743,13 +764,16 @@ impl Renderer {
             ],
             flags: u8::from(style.align_right)
                 | (u8::from(centered) << 1)
-                | (u8::from(self.stats.multisample_samples > 1) << 2),
+                | (u8::from(self.stats.multisample_samples > 1) << 2)
+                | (u8::from(style.size >= 32.) << 3),
         };
         if self.text_runs.contains_key(&key) {
             self.submit_text(key, origin, color);
             return;
         }
         let rect = Rect::new(0., 0., rect.w, rect.h);
+        // Preserve the view's optical-font choice even if quantization crosses
+        // the 32px threshold. The choice is also part of the run cache key.
         let font_id = style.weight + if style.size >= 32. { 1000 } else { 0 };
         let cjk_id = if style.weight >= 500 { 2500 } else { 2400 };
         let hangul_id = cjk_id + 1000;

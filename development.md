@@ -716,7 +716,11 @@ such as Hulu, Joyn and Plex closer to the visual weight of Apple TV, YouTube, Da
 
 Text reads the bundled TTF's advances, kerning and line metrics lazily. Only needed glyph outlines
 are tessellated in font-em coordinates. Complete text runs are cached in static GPU buffers,
-independent of position/color/drawable density, avoiding a draw call per letter. CJK fonts open
+independent of position/color, avoiding a draw call per letter. Font em sizes round down to whole
+physical pixels before computing metrics, wrapping and outline scaling; the effective logical
+size keys the run cache, including across drawable-density changes. Rounding down preserves
+the view's fitted text bounds; optical-font selection remains unchanged. `LUMA_FONT_SIZE_SNAP=0`
+restores fractional sizes for comparison; diagnostics expose `font_size_snapping`. CJK fonts open
 only when needed; there are no glyph bitmap atlases or full-font mesh exports.
 
 MSAA mode requests 4× MSAA, with 2×/single-sample fallbacks if EGL rejects a configuration.
@@ -726,6 +730,14 @@ small-text strokes. Single-sample targets use a narrower half-pixel boundary fri
 origins/baselines are pixel-aligned per drawable axis. There is no LCD subpixel rendering, font
 hinting or complex-script shaping. Inspect `multisample_samples` and `font_antialiasing`:
 offscreen captures can be single-sample while the actual window uses MSAA.
+
+For issue #139, compare default sizing with `LUMA_FONT_SIZE_SNAP=0` on the same TV at
+1920×1080, with identical preferences, time, background and text-rendering mode. Restart
+between runs, retain diagnostics (Luma version, drawable size and actual
+`last_presented.multisample_samples`), and use compositor captures or matched panel photos.
+Inspect the greeting stems and small date at native size and nearest-neighbour enlargement.
+Whole-pixel em sizing is not stem hinting and does not guarantee integer-width stems or
+resolve icon filtering; desktop renders do not establish a TV sharpness improvement.
 
 Glyph geometry has an 8 MiB/4096-entry CPU cache target and text runs a 32 MiB/512-entry GPU
 target. Eviction preserves the current frame, which can temporarily exceed those targets.

@@ -96,6 +96,18 @@ try {
   assert.ok(!home.ui_text.includes('Favorites'));
   assert.ok(home.ui_text.some((value) => value.startsWith('Good evening')));
   assert.ok(home.render.capture.glass_surfaces >= 3);
+  assert.equal(home.render.capture.font_size_snapping, true);
+  const fractionalHome = await scenario('home-fractional-fonts', 'home', [], 90, {
+    LUMA_FONT_SIZE_SNAP: '0',
+  });
+  assert.equal(fractionalHome.render.capture.font_size_snapping, false);
+  assert.equal(fractionalHome.render.last_presented.font_size_snapping, false);
+  assert.deepEqual(fractionalHome.ui_text, home.ui_text);
+  assert.notDeepEqual(
+    await fs.readFile(path.join(out, 'home.png')),
+    await fs.readFile(path.join(out, 'home-fractional-fonts.png')),
+    'Whole-pixel sizing must affect the rendered framebuffer',
+  );
   assert.equal(home.render.capture.glass_backdrop_sampling, true);
   const fallback = await scenario('glass-fallback', 'home', [], 90, { LUMA_GLASS: '0' });
   assert.equal(fallback.render.capture.glass_backdrop_sampling, false);
@@ -334,7 +346,10 @@ try {
   assert.deepEqual(two.render.capture.target, { width: 3840, height: 2160 });
   assert.equal(two.render.capture.viewport.scale, 2);
   assert.equal(one.render.capture.viewport.scale, 1);
-  assert.equal(two.render.capture.max_logical_font_px, one.render.capture.max_logical_font_px);
+  assert.ok(
+    Math.abs(two.render.capture.max_logical_font_px - one.render.capture.max_logical_font_px) < 1,
+    'Physical size quantization may change the effective logical em by less than one pixel',
+  );
   for (const capture of [one.render.capture, two.render.capture]) {
     assert.ok(
       Math.abs(
