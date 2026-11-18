@@ -400,6 +400,9 @@ pub struct Renderer {
     textures: HashMap<String, Option<Texture>>,
     /// Shadow coverage by drawable size, radius and blur (bits), computed once on the CPU.
     shadows: HashMap<(u32, u32, u32, u32), Texture>,
+    /// Shadows seen without a texture yet: (quad, radius, blur), prepared while idle.
+    pending_shadows: Vec<(Rect, f32, f32)>,
+    preparing_shadow: bool,
     vectors: HashMap<String, Option<vector::Mesh>>,
     artwork_variants: HashMap<String, String>,
     vertices: Vec<f32>,
@@ -516,6 +519,8 @@ impl Renderer {
             text_runs: HashMap::new(),
             textures: HashMap::new(),
             shadows: HashMap::new(),
+            pending_shadows: Vec::new(),
+            preparing_shadow: false,
             vectors: HashMap::new(),
             artwork_variants: HashMap::new(),
             vertices: Vec::with_capacity(65536),
@@ -817,6 +822,18 @@ impl Renderer {
             texture.frame = frame;
             return Some(texture.id);
         }
+        // Computing coverage costs CPU time a frame cannot spare: draw this one with the
+        // shader and prepare the texture while idle (see prepare_idle).
+        if !self.preparing_shadow {
+            if !self
+                .pending_shadows
+                .iter()
+                .any(|(q, r, b)| q.w == quad.w && q.h == quad.h && *r == radius && *b == blur)
+            {
+                self.pending_shadows.push((quad, radius, blur));
+            }
+            return None;
+        }
         let mut used: usize = self
             .shadows
             .values()
@@ -842,26 +859,53 @@ impl Renderer {
                 return None;
             }
         }
+        let started = Instant::now();
         // As paint.frag: v_shape.zw is the quad's half size, the box is that minus blur.
         let (hx, hy) = (quad.w / 2. - blur, quad.h / 2. - blur);
         let r = radius.min(hx.min(hy));
+        let coverage = |x: f32, y: f32| {
+            let (qx, qy) = (x.abs() - hx + r, y.abs() - hy + r);
+            let (ox, oy) = (qx.max(0.), qy.max(0.));
+            let d = (ox * ox + oy * oy).sqrt() + qx.max(qy).min(0.) - r;
+            let t = ((d + blur) / (2. * blur)).clamp(0., 1.);
+            ((1. - t * t * (3. - 2. * t)) * 255.).round() as u8
+        };
+        // The coverage is symmetric about both centre lines: compute one quarter (plus the
+        // centre row and column of odd sizes) and mirror it.
+        let (w, h) = (width as usize, height as usize);
         let mut pixels = vec![255u8; texels * 4];
-        for row in 0..height {
+        for row in 0..h.div_ceil(2) {
             let y = -quad.h / 2. + (row as f32 + 0.5) / scale;
-            for column in 0..width {
+            for column in 0..w.div_ceil(2) {
                 let x = -quad.w / 2. + (column as f32 + 0.5) / scale;
-                let (qx, qy) = (x.abs() - hx + r, y.abs() - hy + r);
-                let d = qx.max(0.).hypot(qy.max(0.)) + qx.max(qy).min(0.) - r;
-                let t = ((d + blur) / (2. * blur)).clamp(0., 1.);
-                let coverage = 1. - t * t * (3. - 2. * t);
-                pixels[(row * width + column) as usize * 4 + 3] = (coverage * 255.).round() as u8;
+                let value = coverage(x, y);
+                for (r, c) in [
+                    (row, column),
+                    (row, w - 1 - column),
+                    (h - 1 - row, column),
+                    (h - 1 - row, w - 1 - column),
+                ] {
+                    pixels[(r * w + c) * 4 + 3] = value;
+                }
             }
         }
+        self.stats.image_load_ms += started.elapsed().as_secs_f64() * 1000.;
         let mut texture = texture(width, height, &pixels);
         texture.frame = frame;
         let id = texture.id;
         self.shadows.insert(key, texture);
         Some(id)
+    }
+
+    /// Prepares one shadow texture seen since the last call; true while more remain.
+    /// Call when nothing animates: the next frame draws that shadow from the texture.
+    pub fn prepare_idle(&mut self) -> bool {
+        if let Some((quad, radius, blur)) = self.pending_shadows.pop() {
+            self.preparing_shadow = true;
+            self.shadow_texture(quad, radius, blur);
+            self.preparing_shadow = false;
+        }
+        !self.pending_shadows.is_empty()
     }
 
     /// Appends `count` paint vertices from `start`, merged into the previous batch when it uses

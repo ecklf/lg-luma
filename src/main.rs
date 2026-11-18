@@ -2070,6 +2070,10 @@ fn run() -> Result<(), String> {
             }
             end_registration();
         }
+        // Shadow textures seen in recent frames are prepared between them, never inside one.
+        if visible && !state.animating() {
+            renderer.prepare_idle();
+        }
         // Diagnostic scripts can opt into synchronous first-use preparation.
         // Normal startup, inventory refreshes and relaunches never queue it.
         while let Some(page) = next_prewarm(&mut prewarm, &state, visible) {
