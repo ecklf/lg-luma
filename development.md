@@ -544,6 +544,13 @@ source metadata by re-encoding, generates a 480×270 thumbnail, and applies the 
 and readability gradients as bundled wallpapers. Processing and discovery run off the SDL thread;
 GPU uploads remain on SDL. Nothing is fetched from external services.
 
+Midnight is the only bundled wallpaper and the default for new installations. Saved selections of
+removed bundled wallpapers fall back to Midnight during preference sanitization. Uploaded wallpaper
+IDs are preserved, and missing uploads render Midnight without overwriting the saved selection.
+Asset generation clears old generated wallpapers and thumbnails, and packaging rejects other bundled
+wallpaper IDs even when called directly with an older cache. Rotation stays idle with Midnight alone
+and cycles normally after custom images are uploaded.
+
 The gallery holds up to 20 uploaded images under `wallpapers/custom-<random-id>/` beside the
 selected preferences file. The phone page shows this resolved absolute directory path. Names are
 trimmed, control-free and limited to 40 characters; they

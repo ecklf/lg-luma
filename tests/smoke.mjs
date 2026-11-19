@@ -280,9 +280,9 @@ try {
     assert.ok(allApps.apps.includes(id));
   }
   const settings = await scenario('settings', `${backgroundsPage},down,enter,enter`);
-  assert.equal(settings.preferences.background, 'forest');
+  assert.equal(settings.preferences.background, 'midnight');
   const saved = await scenario('saved', 'home,hold,right,back');
-  assert.equal(saved.preferences.background, 'forest');
+  assert.equal(saved.preferences.background, 'midnight');
   assert.deepEqual(saved.preferences.favorites.slice(0, 2), ['youtube.leanback.v4', 'netflix']);
   const upload = await scenario(
     'wallpaper-upload',
@@ -318,14 +318,14 @@ try {
   const custom = await scenario('wallpaper-custom', `${backgroundsPage},down,enter,enter`);
   assert.equal(custom.preferences.background, customId);
   assert.equal(custom.modal, false);
-  assert.deepEqual(custom.focus, { Background: 9 });
+  assert.deepEqual(custom.focus, { Background: 1 });
   const customRestored = await scenario('wallpaper-custom-restored', 'home,down');
   assert.equal(customRestored.preferences.background, customId);
   const bundledRestored = await scenario(
     'wallpaper-bundled-restored',
-    `${backgroundsPage},up,enter,enter`,
+    `${backgroundsPage},left,enter,enter`,
   );
-  assert.equal(bundledRestored.preferences.background, 'forest');
+  assert.equal(bundledRestored.preferences.background, 'midnight');
   const clock = await scenario('clock', 'settings,click:900:200');
   assert.equal(clock.subpage, 'Clock');
   assert.equal(clock.focus, 'ClockFormat');
@@ -381,7 +381,7 @@ try {
     .raw()
     .toBuffer();
   assert.notDeepEqual(high, low, '4K vector text must use the drawable pixel scale');
-  const hasWallpaper = await fs.access(path.join(out, 'assets/wallpapers/forest@2x.jpg')).then(
+  const hasWallpaper = await fs.access(path.join(out, 'assets/wallpapers/midnight@2x.jpg')).then(
     () => true,
     () => false,
   );
@@ -613,7 +613,7 @@ try {
   const cycledAfterRestart = await scenario('wallpaper-cycle-restart', 'down');
   assert.equal(
     cycledAfterRestart.preferences.background,
-    'san-francisco',
+    customId,
     'enabled rotation advances to the next wallpaper when Luma restarts',
   );
   const cycleDisabled = await scenario(

@@ -597,7 +597,7 @@ fn preferences_round_trip_and_corrupt_data_is_not_silently_overwritten() {
     let path = directory.join("preferences.json");
     let mut preferences = Preferences {
         favorites: Some(vec![]),
-        background: "forest".into(),
+        background: "custom-00000000000000000000000000000001".into(),
         ..Preferences::default()
     };
     preferences
@@ -606,7 +606,7 @@ fn preferences_round_trip_and_corrupt_data_is_not_silently_overwritten() {
     storage::save(&path, &preferences).unwrap();
     let loaded = storage::load(&path).unwrap();
     assert_eq!(loaded.favorites, Some(vec![]));
-    assert_eq!(loaded.background, "forest");
+    assert_eq!(loaded.background, "custom-00000000000000000000000000000001");
     assert_eq!(loaded.input_modes["com.webos.app.hdmi1"], InputMode::Off);
     std::fs::write(&path, "broken").unwrap();
     assert!(storage::load(&path).is_err());
@@ -616,11 +616,15 @@ fn preferences_round_trip_and_corrupt_data_is_not_silently_overwritten() {
 #[test]
 fn gallery_and_grid_navigation_scroll_to_keep_focus_visible() {
     let mut state = ready();
-    state.set_wallpapers(vec![crate::wallpapers::Wallpaper {
-        id: "custom-00000000000000000000000000000001".into(),
-        directory: PathBuf::from("/preview/wallpapers/custom-00000000000000000000000000000001"),
-        has_original: true,
-    }]);
+    state.set_wallpapers(
+        (1..=9)
+            .map(|index| crate::wallpapers::Wallpaper {
+                id: format!("custom-{index:032x}"),
+                directory: PathBuf::from(format!("/preview/wallpapers/custom-{index:032x}")),
+                has_original: true,
+            })
+            .collect(),
+    );
     state.open(2);
     state.section = 1;
     state.focus = Target::Background(0);
@@ -676,6 +680,15 @@ fn pointer_focus_does_not_scroll_the_clicked_control() {
 #[test]
 fn gallery_right_crosses_rows_in_gallery_order() {
     let mut state = ready();
+    state.set_wallpapers(
+        (1..=3)
+            .map(|index| crate::wallpapers::Wallpaper {
+                id: format!("custom-{index:032x}"),
+                directory: PathBuf::from(format!("/preview/wallpapers/custom-{index:032x}")),
+                has_original: true,
+            })
+            .collect(),
+    );
     state.open(2);
     state.section = 1;
     state.focus = Target::Background(2);
@@ -1341,12 +1354,12 @@ fn input_visibility_has_explicit_choices_and_returns_to_the_same_input() {
 fn background_sidebar_right_focuses_upload_and_ok_restores_the_applied_background() {
     let mut state = ready();
     state.open(2);
-    state.preferences.background = "forest".into();
+    state.preferences.background = "midnight".into();
     state.focus = Target::Sidebar(1);
     state.section = 1;
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::UploadWallpaper);
-    assert_eq!(state.preferences.background, "forest");
+    assert_eq!(state.preferences.background, "midnight");
     assert!(!state.preferences.wallpaper_cycle);
     assert!(state.overlay.is_none());
     state.direction(Direction::Right, &controls(&state));
@@ -1363,7 +1376,7 @@ fn background_sidebar_right_focuses_upload_and_ok_restores_the_applied_backgroun
     assert_eq!(state.focus, Target::UploadWallpaper);
     state.back();
     state.activate();
-    assert_eq!(state.focus, Target::Background(6));
+    assert_eq!(state.focus, Target::Background(0));
 }
 
 #[test]
@@ -2956,7 +2969,7 @@ fn settings_lists_keep_bottom_padding_for_remote_and_wheel_scrolling() {
         state.open(2);
         if backgrounds {
             state.set_wallpapers(
-                (1..=8)
+                (1..=16)
                     .map(|index| crate::wallpapers::Wallpaper {
                         id: format!("custom-{index:032x}"),
                         directory: std::path::PathBuf::from(".build/padding-fixture"),

@@ -18,6 +18,8 @@ for (const legacy of [
   'wallpaper-runtime',
   'foregrounds',
   'splash',
+  'wallpapers',
+  'thumbnails',
 ]) {
   await fs.rm(path.join(out, legacy), { recursive: true, force: true });
 }
@@ -58,8 +60,7 @@ if (weights.error || weights.status !== 0) {
 await fs.copyFile(path.join(source, 'fonts/ofl.txt'), path.join(out, 'font-license.txt'));
 await fs.copyFile(path.join(source, 'fonts/noto-ofl.txt'), path.join(out, 'font-cjk-license.txt'));
 
-for (const file of await fs.readdir(path.join(source, 'wallpapers'))) {
-  if (!/\.(jpg|svg)$/.test(file)) continue;
+for (const file of ['midnight.svg']) {
   const id = path.parse(file).name;
   const input = path.join(source, 'wallpapers', file);
   for (const scale of highResolution ? [1, 2] : [1]) {
@@ -70,31 +71,13 @@ for (const file of await fs.readdir(path.join(source, 'wallpapers'))) {
       .resize(width, height, { fit: 'outside' })
       .png()
       .toBuffer({ resolveWithObject: true });
-    const position = id === 'dunes' || id === 'summit' ? 0.4 : id === 'san-francisco' ? 0.42 : 0.45;
-    let image = sharp(photo.data).extract({
+    const image = sharp(photo.data).extract({
       left: Math.round((photo.info.width - width) / 2),
-      top: Math.round((photo.info.height - height) * position),
+      top: Math.round((photo.info.height - height) * 0.45),
       width,
       height,
     });
-    const saturation =
-      id === 'san-francisco'
-        ? 0.75
-        : id === 'summit'
-          ? 0.7
-          : ['forest', 'yosemite', 'northern-lights'].includes(id)
-            ? 0.8
-            : 1;
-    const brightness = id === 'san-francisco' ? 0.82 : id === 'summit' ? 0.8 : 1;
-    if (saturation !== 1) {
-      const s = saturation;
-      image = image.recomb([
-        [0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s],
-        [0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s],
-        [0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s],
-      ]);
-    }
-    const data = await image.linear(brightness).png().toBuffer();
+    const data = await image.png().toBuffer();
     await sharp(data)
       .jpeg({ quality: 96 })
       .toFile(path.join(out, 'wallpapers', `${id}-plain${scale === 2 ? '@2x' : ''}.jpg`));

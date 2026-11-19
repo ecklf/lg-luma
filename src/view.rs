@@ -75,7 +75,7 @@ impl Assets {
         let id = if BACKGROUNDS.iter().any(|(known, _)| *known == id) {
             id
         } else {
-            "dunes"
+            crate::model::DEFAULT_BACKGROUND
         };
         let suffix = if state.preferences.wallpaper_gradient {
             ""

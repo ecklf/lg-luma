@@ -75,6 +75,15 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     throw new Error('Packaged launch screen metadata does not match the source.');
   if (owned.some((file) => /\/(?:assets\/)?splash\//.test(file.name)))
     throw new Error('The IPK must not contain per-wallpaper splash assets.');
+  if (
+    owned.some(
+      (file) =>
+        file.type !== '5' &&
+        /\/assets\/(?:wallpapers|thumbnails)\//.test(file.name) &&
+        !/^midnight(?:-plain)?(?:@2x)?\.(?:jpg|glass\.png)$/.test(file.name.split('/').at(-1)),
+    )
+  )
+    throw new Error('The IPK must only bundle Midnight wallpaper assets.');
   const vectorManifest = owned.find((file) => file.name.endsWith('/assets/vector-artwork.json'));
   const vectorAssets = vectorManifest && JSON.parse(vectorManifest.data.toString());
   if (
@@ -106,17 +115,11 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     'assets/font-cjk-500.ttf',
     'assets/font-kr-400.ttf',
     'assets/font-kr-500.ttf',
-    ...[
-      'dunes',
-      'midnight',
-      'san-francisco',
-      'summit',
-      'slate',
-      'forest',
-      'prism',
-      'yosemite',
-      'northern-lights',
-    ].flatMap((name) => [`assets/wallpapers/${name}.jpg`, `assets/thumbnails/${name}.jpg`]),
+    'assets/wallpapers/midnight.jpg',
+    'assets/wallpapers/midnight-plain.jpg',
+    'assets/wallpapers/midnight.glass.png',
+    'assets/wallpapers/midnight-plain.glass.png',
+    'assets/thumbnails/midnight.jpg',
     ...vectorAssets.assets.map((name) => {
       if (typeof name !== 'string' || !/^(logos|ui-icons)\/[a-z0-9-]+\.lvec$/.test(name))
         throw new Error('Invalid packaged vector asset path.');

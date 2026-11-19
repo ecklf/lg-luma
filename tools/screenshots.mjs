@@ -22,7 +22,7 @@ const temporary = await fs.mkdtemp(path.join(scratch, 'documentation-'));
 const preferences = path.join(temporary, 'preferences.json');
 const configuration = {
   language: 'en',
-  background: 'dunes',
+  background: 'midnight',
   hour_24: false,
   show_home_names: false,
   show_weather: true,
