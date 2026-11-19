@@ -215,8 +215,7 @@ fn cycling_uses_all_uploaded_ids_but_not_deleted_or_pending_deletion_entries() {
 }
 
 #[test]
-fn automatic_changes_preserve_manual_splash_across_saves_and_restart_and_manual_selection_resets_time()
- {
+fn automatic_changes_survive_saves_and_restart_and_manual_selection_resets_time() {
     let mut state = ready();
     state.preferences.background = "forest".into();
     state.preferences.wallpaper_cycle = true;
@@ -230,24 +229,38 @@ fn automatic_changes_preserve_manual_splash_across_saves_and_restart_and_manual_
     ));
     assert!(state.cycle_wallpaper(100));
     assert_eq!(state.background_fade, crate::state::CYCLE_FADE);
-    assert_eq!(state.preferences.splash_background(), "forest");
+    let rotated = state.preferences.background.clone();
     state.preferences.show_seconds = !state.preferences.show_seconds;
     let mut preferences: Preferences =
         serde_json::from_value(serde_json::to_value(&state.preferences).unwrap()).unwrap();
     preferences.sanitize();
-    assert_eq!(preferences.splash_background(), "forest");
+    assert_eq!(preferences.background, rotated);
     let mut restored = State::new(preferences);
     assert!(restored.cycle_wallpaper(200));
-    assert_eq!(restored.preferences.splash_background(), "forest");
+    assert_ne!(restored.preferences.background, rotated);
     restored.open(2);
     restored.section = 1;
     restored.focus = Target::Background(0);
     restored.activate();
     assert_eq!(restored.activate(), vec![Effect::Save]);
     assert_eq!(restored.preferences.background, "slate");
-    assert_eq!(restored.preferences.splash_background(), "slate");
     assert_eq!(restored.background_fade, crate::state::BACKGROUND_FADE);
     assert!(restored.preferences.wallpaper_changed > 200);
+}
+
+#[test]
+fn obsolete_splash_preference_is_ignored_without_changing_wallpaper() {
+    let preferences: Preferences = serde_json::from_value(serde_json::json!({
+        "background": "forest", "splash_background": "prism"
+    }))
+    .unwrap();
+    assert_eq!(preferences.background, "forest");
+    assert!(
+        serde_json::to_value(preferences)
+            .unwrap()
+            .get("splash_background")
+            .is_none()
+    );
 }
 
 #[test]

@@ -432,8 +432,6 @@ pub struct Preferences {
     pub custom_tiles: Vec<CustomTile>,
     pub hidden: Vec<String>,
     pub background: String,
-    /// Last manually chosen splash, independent of automatic rotation.
-    pub splash_background: Option<String>,
     pub deleted_backgrounds: Vec<String>,
     pub hour_24: bool,
     pub reduced_motion: bool,
@@ -491,7 +489,6 @@ impl Default for Preferences {
             custom_tiles: vec![],
             hidden: vec![],
             background: "dunes".into(),
-            splash_background: None,
             deleted_backgrounds: vec![],
             hour_24: false,
             reduced_motion: false,
@@ -753,12 +750,6 @@ impl Preferences {
         }
     }
 
-    pub fn splash_background(&self) -> &str {
-        self.splash_background
-            .as_deref()
-            .unwrap_or(&self.background)
-    }
-
     pub fn favorites(&self, apps: &[App]) -> Vec<String> {
         self.favorites.clone().unwrap_or_else(|| {
             let mut ids = Vec::new();
@@ -918,11 +909,6 @@ impl Preferences {
                 self.set_widget_position(widget, position);
             }
             placed.push(widget);
-        }
-        if self.splash_background.as_ref().is_some_and(|id| {
-            !BACKGROUNDS.iter().any(|(known, _)| *known == id) && !crate::wallpapers::valid_id(id)
-        }) {
-            self.splash_background = None;
         }
         if !BACKGROUNDS.iter().any(|(id, _)| *id == self.background)
             && !crate::wallpapers::valid_id(&self.background)

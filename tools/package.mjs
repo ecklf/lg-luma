@@ -91,6 +91,7 @@ await fs.cp(path.join(out, 'assets'), path.join(stage, 'assets'), {
       'wallpaper-runtime',
       'foregrounds',
       'splash',
+      'splash.png',
     ].includes(path.basename(source)) &&
     (highResolution || !source.endsWith('@2x.jpg')) &&
     !(
@@ -103,11 +104,7 @@ await fs.copyFile(
   path.join(stage, 'app-icon-large.png'),
 );
 await fs.copyFile(path.join(root, 'tv/autostart.sh'), path.join(stage, 'autostart.sh'));
-// Splash images: one per background, plus splash.png (the default background) read by webOS.
-await fs.mkdir(path.join(stage, 'splash'), { recursive: true });
-for (const file of await fs.readdir(path.join(out, 'assets/splash')))
-  await fs.copyFile(path.join(out, 'assets/splash', file), path.join(stage, 'splash', file));
-await fs.copyFile(path.join(out, 'assets/splash/dunes.png'), path.join(stage, 'splash.png'));
+await fs.copyFile(path.join(out, 'assets/splash.png'), path.join(stage, 'splash.png'));
 await fs.chmod(path.join(stage, 'autostart.sh'), 0o755);
 for (const file of ['home.sh', 'luma-helper', 'home-filter.js']) {
   await fs.copyFile(

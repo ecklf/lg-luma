@@ -354,8 +354,6 @@ fn effects(
                 if let Err(error) = storage::save(preferences, &state.preferences) {
                     eprintln!("{error}");
                     state.notify(state.preferences.language.t("savedError"));
-                } else {
-                    platform.sync_splash(state.preferences.splash_background());
                 }
             }
             effect @ (Effect::Refresh | Effect::Reload) => {
@@ -781,10 +779,7 @@ fn run() -> Result<(), String> {
             && options.frames.is_none()
             && options.screenshot.is_none(),
     )?;
-    let platform = Platform::new(
-        webos,
-        options.preferences.is_none() && options.test_extra_apps == 0,
-    );
+    let platform = Platform::new(webos);
     let webhook_service = webhook::Service::new();
     let update_service = update::Service::new(public_update_checks);
     effects(
@@ -797,7 +792,6 @@ fn run() -> Result<(), String> {
         &webhook_service,
         &updates,
     );
-    platform.sync_splash(state.preferences.splash_background());
     startup_stage("preferences and workers");
 
     // The first scene's images need no GL context: decode them on other cores while SDL,

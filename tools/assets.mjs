@@ -17,10 +17,11 @@ for (const legacy of [
   'colors.json',
   'wallpaper-runtime',
   'foregrounds',
+  'splash',
 ]) {
   await fs.rm(path.join(out, legacy), { recursive: true, force: true });
 }
-for (const directory of ['wallpapers', 'thumbnails', 'logos', 'ui-icons', 'surfaces', 'splash']) {
+for (const directory of ['wallpapers', 'thumbnails', 'logos', 'ui-icons', 'surfaces']) {
   await fs.mkdir(path.join(out, directory), { recursive: true });
 }
 
@@ -120,15 +121,14 @@ const glass = spawnSync(process.execPath, [path.join(import.meta.dirname, 'glass
 });
 if (glass.error) throw glass.error;
 if (glass.status !== 0) throw new Error('Glass backdrop preparation failed.');
-// webOS shows `splashBackground` (a static image, scaled to 1080p) until the window opens. One
-// 1080p PNG per background lets the package start on the user's wallpaper instead of a grey card.
-for (const file of await fs.readdir(path.join(out, 'wallpapers'))) {
-  if (!file.endsWith('.jpg') || file.includes('@2x') || file.includes('-plain')) continue;
-  await sharp(path.join(out, 'wallpapers', file))
-    .resize(1920, 1080, { fit: 'cover' })
-    .png({ compressionLevel: 9 })
-    .toFile(path.join(out, 'splash', file.replace(/\.jpg$/, '.png')));
-}
+// A single neutral launch screen, independent of wallpaper preferences.
+const splashLogo = await sharp(path.join(source, 'app-icon.svg')).resize(192, 192).png().toBuffer();
+await sharp({
+  create: { width: 1920, height: 1080, channels: 3, background: '#17191c' },
+})
+  .composite([{ input: splashLogo, gravity: 'centre' }])
+  .png({ compressionLevel: 9 })
+  .toFile(path.join(out, 'splash.png'));
 await fs.writeFile(
   path.join(out, 'version.txt'),
   JSON.parse(await fs.readFile(path.join(root, 'appinfo.json'), 'utf8')).version,
