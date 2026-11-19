@@ -114,7 +114,7 @@ try {
   const gles = await scenario('glass-gles', 'home', [], 90, { LUMA_GLES: '1' });
   assert.match(gles.render.graphics.version, /OpenGL ES/);
   assert.equal(gles.render.capture.glass_backdrop_sampling, true);
-  // #350: focus must stay readable without switching to a bright white fill.
+  // #350: preserve bright glass and verify actual dark glyphs, not just scene colors.
   await fs.writeFile(preferences, JSON.stringify({ language: 'it' }));
   for (const [name, script, label, environment] of [
     ['settings-focus', 'settings', { left: 184, top: 188, width: 330, height: 25 }, {}],
@@ -130,9 +130,35 @@ try {
       { left: 704, top: 186, width: 300, height: 32 },
       { LUMA_GLASS: '0' },
     ],
+    [
+      'corner-focus-gles',
+      'home,up,right,right,enter',
+      { left: 1564, top: 154, width: 252, height: 32 },
+      { LUMA_GLES: '1' },
+    ],
+    [
+      'corner-focus-analytic-gles',
+      'home,up,right,right,enter',
+      { left: 1564, top: 154, width: 252, height: 32 },
+      { LUMA_GLES: '1', LUMA_MSAA: '0' },
+    ],
+    [
+      'corner-device-focus-fallback',
+      'home,up,right,right,enter,down',
+      { left: 1564, top: 238, width: 252, height: 32 },
+      { LUMA_GLASS: '0' },
+    ],
+    [
+      'wallpaper-action-focus-gles',
+      `${backgroundsPage},enter`,
+      { left: 1072, top: 292, width: 350, height: 28 },
+      { LUMA_GLES: '1' },
+    ],
   ]) {
-    const focused = await scenario(name, script, [], 12, environment);
-    assert.ok(focused.ui_text.includes('Generale'));
+    const focused = await scenario(name, script, [], 90, environment);
+    assert.ok(
+      focused.ui_text.includes(name.startsWith('corner-') ? 'Impostazioni launcher' : 'Generale'),
+    );
     const { data } = await sharp(path.join(out, `${name}.png`))
       .extract(label)
       .removeAlpha()
@@ -145,8 +171,11 @@ try {
       if (channels.every((value) => value < 100)) dark++;
       if (channels.every((value) => value > 180)) light++;
     }
-    assert.ok(dark > (label.width * label.height) / 2, `${name}: focus fill must stay dark`);
-    assert.ok(light > 20, `${name}: focused label must have visible light glyphs`);
+    assert.ok(
+      light > (label.width * label.height) / 2,
+      `${name}: glass highlight must stay bright`,
+    );
+    assert.ok(dark > 100, `${name}: focused label must have visible dark glyph interiors`);
   }
   await fs.writeFile(preferences, '{}');
   const drawer = await scenario('drawer', 'home,down');
