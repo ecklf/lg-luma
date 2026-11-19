@@ -1,5 +1,11 @@
 # lg-luma
 
+## 3.10.1
+
+### Patch Changes
+
+- 8b23549: Restore bright glass settings highlights and apply text tint directly in the fragment shader, with contrast coverage for popup actions as well as settings.
+
 ## 3.10.0
 
 ### Minor Changes
