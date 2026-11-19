@@ -43,16 +43,14 @@ fn assert_readable_focus(state: &State) {
         .draw
         .iter()
         .find_map(|draw| match draw {
-            Draw::Shape(area, _, 0., color) if same_rect(*area, rect) => Some(*color),
+            Draw::Glass(area, _, color) if same_rect(*area, rect) => Some(*color),
+            Draw::Shape(area, _, 0., color)
+                if state.focus == Target::UseBackground && same_rect(*area, rect) => Some(*color),
             _ => None,
         })
-        .expect("focused settings need a solid fill, not wallpaper-dependent glass");
-    assert_eq!(fill[3], 1.);
-    assert!(luminance(fill) < 0.1);
-    assert!(scene.draw.iter().any(|draw| matches!(draw,
-        Draw::Shape(area, _, width, color)
-            if same_rect(*area, rect) && *width >= 2. && contrast(*color, fill) >= 3.
-    )));
+        .expect("focused controls must retain their glass highlight");
+    assert!(fill[3] >= 0.96);
+    assert!(luminance(fill) > 0.5);
     let mut labels = 0;
     for draw in &scene.draw {
         let (area, color, minimum) = match draw {
@@ -72,6 +70,28 @@ fn assert_readable_focus(state: &State) {
         }
     }
     assert!(labels > 0);
+}
+
+#[test]
+fn focused_corner_settings_and_wallpaper_actions_keep_dark_labels() {
+    for language in crate::i18n::Language::ALL {
+        let mut state = ready();
+        state.preferences.language = language;
+        state.overlay = Some(crate::state::Overlay::Settings);
+        for target in [Target::LumaSettings, Target::TvSettings] {
+            state.focus = target;
+            assert_readable_focus(&state);
+        }
+        state.open(2);
+        state.section = 1;
+        let id = crate::model::BACKGROUNDS[0].0.to_owned();
+        state.overlay = Some(crate::state::Overlay::BackgroundOptions {
+            id,
+            restore: Target::Background(0),
+        });
+        state.focus = Target::UseBackground;
+        assert_readable_focus(&state);
+    }
 }
 
 #[test]

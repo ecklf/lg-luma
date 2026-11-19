@@ -2043,18 +2043,28 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
     let focused = state.focus == row.target;
     let radius = if row.description.is_some() { 20. } else { 48. };
     if focused {
-        settings_focus_surface(out, row.rect, radius);
+        out.draw
+            .push(Draw::Glass(row.rect, radius, c(0xe5ebf0, 1.)));
+        out.border(row.rect, radius, 1.5, c(0xffffff, 0.7));
     } else {
         settings_surface(out, row.rect, radius);
     }
-    let color = if focused { WHITE } else { c(0xeeeeee, 0.73) };
+    let color = if focused {
+        c(0x2c2c2c, 1.)
+    } else {
+        c(0xeeeeee, 0.73)
+    };
     let mut x = row.rect.x + 24.2;
     if let Some(icon) = row.icon {
         out.icon(
             assets,
             icon,
             Rect::new(x, row.rect.y + (row.rect.h - 23.2) / 2., 23.2, 23.2),
-            if focused { WHITE } else { c(0xe4e4e4, 0.61) },
+            if focused {
+                c(0x444444, 1.)
+            } else {
+                c(0xe4e4e4, 0.61)
+            },
         );
         x += 39.2;
     }
@@ -2109,7 +2119,7 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
             ),
             text(15.2, 400, 0.).leading(1.5),
             if focused {
-                c(0xffffff, 0.8)
+                c(0x555555, 1.)
             } else {
                 c(0xf5f5f5, 0.56)
             },
@@ -2127,7 +2137,11 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
                 24.,
             ),
             text(18.4, 450, 0.).right(),
-            if focused { WHITE } else { c(0xeeeeee, 0.73) },
+            if focused {
+                c(0x444444, 1.)
+            } else {
+                c(0xeeeeee, 0.73)
+            },
             false,
         );
     }
@@ -2141,7 +2155,11 @@ fn row(out: &mut Scene, state: &State, assets: &Assets, row: Row<'_>) {
                 18.4,
                 18.4,
             ),
-            if focused { WHITE } else { c(0xe4e4e4, 0.61) },
+            if focused {
+                c(0x444444, 1.)
+            } else {
+                c(0xe4e4e4, 0.61)
+            },
         );
     }
     let scrollable = !matches!(
@@ -2432,7 +2450,7 @@ fn location_settings(out: &mut Scene, state: &State, assets: &Assets) {
                 "check",
                 Rect::new(1717.4, y + (height - 18.4) / 2., 18.4, 18.4),
                 if state.focus == Target::WeatherResult(index) {
-                    WHITE
+                    c(0x444444, 1.)
                 } else {
                     c(0xe4e4e4, 0.61)
                 },
@@ -2461,12 +2479,10 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
         let label = language.t(key);
         let rect = Rect::new(160., 164.8 + position as f32 * 84., 403.2, 72.);
         let focused = state.focus == Target::Sidebar(index);
-        if focused {
-            settings_focus_surface(out, rect, rect.h / 2.);
-        } else {
-            out.pill(rect, false, state.section == index);
-        }
-        let color = if focused || state.section == index {
+        out.pill(rect, focused, state.section == index);
+        let color = if focused {
+            c(0x2c2c2c, 1.)
+        } else if state.section == index {
             WHITE
         } else {
             c(0xeeeeee, 0.73)
@@ -2551,7 +2567,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
             let text_width: f32 = path.iter().map(|part| assets.width(part, style)).sum();
             style.size *= ((rect.w - 48.4 - separators_width) / text_width).min(1.);
             let muted = if focused {
-                c(0xffffff, 0.8)
+                c(0x2c2c2c, 0.7)
             } else {
                 c(0xeeeeee, 0.73)
             };
@@ -2594,7 +2610,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                     "right",
                     Rect::new(rect.x + rect.w - 42.6, rect.y + 26.8, 18.4, 18.4),
                     if focused {
-                        c(0xffffff, 0.8)
+                        c(0x2c2c2c, 0.6)
                     } else {
                         c(0xeeeeee, 0.5)
                     },
@@ -3741,13 +3757,6 @@ fn input_name_rows(out: &mut Scene, state: &State, assets: &Assets, id: &str, y:
 
 fn settings_surface(out: &mut Scene, rect: Rect, radius: f32) {
     out.glass(rect, radius);
-}
-
-fn settings_focus_surface(out: &mut Scene, rect: Rect, radius: f32) {
-    // Keep label polarity stable on TV: an opaque dark fill cannot wash out
-    // light text, regardless of the wallpaper or glass backdrop sampling.
-    out.shape(rect, radius, c(0x30383e, 1.));
-    out.border(rect, radius, 2.5, WHITE);
 }
 
 fn shortcut_settings(out: &mut Scene, state: &State, assets: &Assets) {

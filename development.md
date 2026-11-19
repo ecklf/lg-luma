@@ -89,9 +89,9 @@ and `target/release/`. Desktop results do not establish TV size or performance.
 
 ## Controls and navigation
 
-Focused settings rows and sidebar pills use an opaque charcoal fill, light labels/icons,
-and a white outline. Keep this contrast independent of wallpaper and glass sampling, including
-secondary descriptions, values, selected checkmarks and nested sidebar breadcrumbs.
+Focused settings rows, sidebar pills and popup actions retain bright glass with dark
+labels/icons. Text tint is applied in the fragment shader, separately from glyph coverage.
+Desktop GL/GLES checks do not replace webOS hardware verification of label contrast.
 
 SDL-mapped game controllers (including PS5 DualSense when recognized by the TV's SDL
 backend) use D-pad or left stick to navigate, Cross / A for OK, Circle / B for Back,

@@ -1028,11 +1028,8 @@ fn input_name_actions_only_highlight_the_focused_row_and_keep_the_saved_mode() {
             .draw
             .iter()
             .filter_map(|draw| match draw {
-                crate::renderer::Draw::Shape(rect, _, width, tint)
-                    if rect.x == 640.
-                        && rect.w == 1120.
-                        && *width == 2.5
-                        && *tint == crate::renderer::WHITE =>
+                crate::renderer::Draw::Glass(rect, _, tint)
+                    if rect.x == 640. && rect.w == 1120. && tint[0] > 0.5 =>
                 {
                     Some(rect.y)
                 }
@@ -1073,11 +1070,8 @@ fn clock_choices_only_highlight_focus_while_preserving_saved_checkmarks() {
             .draw
             .iter()
             .filter_map(|draw| match draw {
-                crate::renderer::Draw::Shape(rect, _, width, tint)
-                    if rect.x == 640.
-                        && rect.w == 1120.
-                        && *width == 2.5
-                        && *tint == crate::renderer::WHITE =>
+                crate::renderer::Draw::Glass(rect, _, tint)
+                    if rect.x == 640. && rect.w == 1120. && tint[0] > 0.5 =>
                 {
                     Some(rect.y)
                 }
