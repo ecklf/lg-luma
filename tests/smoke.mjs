@@ -615,7 +615,7 @@ try {
   );
   const cycleDisabled = await scenario(
     'wallpaper-cycle-disabled',
-    `${backgroundsPage},up,right,enter`,
+    `${backgroundsPage},up,right,right,enter`,
   );
   assert.equal(cycleDisabled.preferences.wallpaper_cycle, false);
   assert.ok(cycleDisabled.ui_text.includes('Rotation'));
