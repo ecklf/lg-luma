@@ -401,6 +401,12 @@ fn snap_rect(rect: Rect, scale: f32) -> Rect {
     Rect::new(x0, y0, x1 - x0, y1 - y0)
 }
 
+struct GlassInterior {
+    key: (GLuint, u32, u32, [i32; 4]),
+    texture: GLuint,
+    framebuffer: GLuint,
+}
+
 struct PaintPrograms {
     texture: GLuint,
     tinted: GLuint,
@@ -408,6 +414,8 @@ struct PaintPrograms {
     app: GLuint,
     /// App artwork that is translucent or on its rounded edge (see app-shape.frag).
     app_shape: GLuint,
+    /// Resting glass interiors read from the baked texture (see glass-interior.frag).
+    glass: GLuint,
 }
 
 impl Drop for PaintPrograms {
@@ -418,6 +426,7 @@ impl Drop for PaintPrograms {
             self.shape,
             self.app,
             self.app_shape,
+            self.glass,
         ] {
             if id != 0 {
                 unsafe { gl::DeleteProgram(id) };
@@ -430,6 +439,10 @@ impl PaintPrograms {
     /// Use a short shader only if every triangle in this batch takes the same paint path.
     fn select(&self, vertices: &[f32], interior: bool, app: bool, fallback: GLuint) -> GLuint {
         let all = |predicate: fn(&[f32]) -> bool| vertices.chunks_exact(14).all(predicate);
+        // Glass (border -1000) only takes an interior batch from a baked split (see build).
+        if interior && all(|v| v[13] == -1000.) {
+            return self.glass;
+        }
         let inside = interior && all(|v| v[12] >= 0. && v[13] == 0.);
         if inside && app {
             return self.app;
@@ -450,6 +463,12 @@ impl PaintPrograms {
 }
 
 pub struct Renderer {
+    /// Bakes resting glass interiors for the current backdrop (glass-bake.frag), or 0.
+    glass_bake_program: GLuint,
+    /// The baked interior and the (backdrop texture, drawable size, viewport) it was made for.
+    glass_interior: Option<GlassInterior>,
+    /// This frame's baked interior texture, when glass may be split (set before build).
+    glass_split: Option<GLuint>,
     paint_programs: Option<PaintPrograms>,
     program: GLuint,
     vector_program: GLuint,
@@ -553,12 +572,14 @@ impl Renderer {
                     shape: 0,
                     app: 0,
                     app_shape: 0,
+                    glass: 0,
                 };
                 programs.texture = build(include_str!("shaders/texture.frag"))?;
                 programs.tinted = build(include_str!("shaders/tinted.frag"))?;
                 programs.shape = build(include_str!("shaders/shape.frag"))?;
                 programs.app = build(include_str!("shaders/app-interior.frag"))?;
                 programs.app_shape = build(include_str!("shaders/app-shape.frag"))?;
+                programs.glass = build(include_str!("shaders/glass-interior.frag"))?;
                 Ok(programs)
             };
             load()
@@ -566,6 +587,17 @@ impl Renderer {
                 .ok()
         } else {
             None
+        };
+        let glass_bake_program = if paint_programs.is_some() {
+            link(
+                &(vertex_prefix.clone() + include_str!("shaders/paint.vert")),
+                &(fragment_prefix.clone() + include_str!("shaders/glass-bake.frag")),
+                &[c"a_position", c"a_uv", c"a_color", c"a_shape", c"a_params"],
+            )
+            .inspect_err(|error| eprintln!("Glass interior bake unavailable: {error}"))
+            .unwrap_or(0)
+        } else {
+            0
         };
         let vector_program = match link(
             &(vertex_prefix.clone() + include_str!("shaders/vector.vert")),
@@ -644,6 +676,9 @@ impl Renderer {
         let white = texture(1, 1, &[255; 4]);
         Ok(Self {
             program,
+            glass_bake_program,
+            glass_interior: None,
+            glass_split: None,
             paint_programs,
             vector_program,
             text_program,
@@ -945,6 +980,146 @@ impl Renderer {
             }
         }
         None
+    }
+
+    /// The part of a glass rect where paint.frag takes its interior path (depth at least two
+    /// bevels): along the straight edges, a pixel clear of that depth. None if too small.
+    fn glass_core(&self, rect: Rect, radius: f32) -> Option<Rect> {
+        let rect = self.snap(rect);
+        let radius = radius.min(rect.w / 2.).min(rect.h / 2.).max(0.);
+        let depth = 2. * (radius * 0.22).clamp(4., 10.) + 1.;
+        let (x, y) = (radius.max(depth), depth);
+        let core = Rect::new(rect.x + x, rect.y + y, rect.w - 2. * x, rect.h - 2. * y);
+        (core.w >= 8. && core.h >= 8.).then_some(core)
+    }
+
+    /// Renders resting glass interiors for `backdrop` into a drawable-sized texture, once per
+    /// backdrop, drawable and viewport, with the same vertex path as normal drawing.
+    fn bake_glass_interior(&mut self, backdrop: GLuint, width: u32, height: u32) -> Option<GLuint> {
+        // The same viewport build() derives for this frame (stats still hold the last one).
+        let viewport = Viewport::new(Size::new(width, height));
+        let view = [viewport.x, viewport.y, viewport.width, viewport.height];
+        let key = (backdrop, width, height, view);
+        if let Some(baked) = &self.glass_interior
+            && baked.key == key
+        {
+            return Some(baked.texture);
+        }
+        if let Some(old) = self.glass_interior.take() {
+            unsafe {
+                gl::DeleteFramebuffers(1, &old.framebuffer);
+                gl::DeleteTextures(1, &old.texture);
+            }
+        }
+        let started = Instant::now();
+        let (mut texture, mut framebuffer, mut buffer, mut previous) = (0, 0, 0, 0);
+        let mut quad: Vec<f32> = Vec::with_capacity(6 * 14);
+        for (x, y) in [(0., 0.), (1., 0.), (0., 1.), (0., 1.), (1., 0.), (1., 1.)] {
+            quad.extend_from_slice(&[
+                x * 1920.,
+                y * 1080.,
+                0.,
+                0.,
+                1.,
+                1.,
+                1.,
+                1.,
+                0.,
+                0.,
+                0.,
+                0.,
+                0.,
+                0.,
+            ]);
+        }
+        let complete = unsafe {
+            gl::GetIntegerv(gl::FRAMEBUFFER_BINDING, &mut previous);
+            gl::GenTextures(1, &mut texture);
+            gl::BindTexture(gl::TEXTURE_2D, texture);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
+            gl::TexImage2D(
+                gl::TEXTURE_2D,
+                0,
+                gl::RGBA as i32,
+                width as i32,
+                height as i32,
+                0,
+                gl::RGBA,
+                gl::UNSIGNED_BYTE,
+                std::ptr::null(),
+            );
+            gl::GenFramebuffers(1, &mut framebuffer);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer);
+            gl::FramebufferTexture2D(
+                gl::FRAMEBUFFER,
+                gl::COLOR_ATTACHMENT0,
+                gl::TEXTURE_2D,
+                texture,
+                0,
+            );
+            let complete = gl::CheckFramebufferStatus(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE;
+            if complete {
+                gl::Disable(gl::SCISSOR_TEST);
+                gl::Disable(gl::BLEND);
+                gl::Viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+                gl::UseProgram(self.glass_bake_program);
+                gl::Uniform1i(
+                    uniform_location(self.glass_bake_program, c"u_glass_a".as_ptr()),
+                    1,
+                );
+                gl::ActiveTexture(gl::TEXTURE1);
+                gl::BindTexture(gl::TEXTURE_2D, backdrop);
+                gl::ActiveTexture(gl::TEXTURE0);
+                if self.vao != 0 {
+                    gl::BindVertexArray(self.vao);
+                }
+                gl::GenBuffers(1, &mut buffer);
+                gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
+                gl::BufferData(
+                    gl::ARRAY_BUFFER,
+                    (quad.len() * size_of::<f32>()) as isize,
+                    quad.as_ptr().cast(),
+                    gl::STATIC_DRAW,
+                );
+                let mut offset = 0;
+                for (index, size) in [2, 2, 4, 4, 2].into_iter().enumerate() {
+                    gl::EnableVertexAttribArray(index as u32);
+                    gl::VertexAttribPointer(
+                        index as u32,
+                        size,
+                        gl::FLOAT,
+                        gl::FALSE,
+                        56,
+                        (offset * size_of::<f32>()) as *const _,
+                    );
+                    offset += size as usize;
+                }
+                gl::DrawArrays(gl::TRIANGLES, 0, 6);
+                gl::DeleteBuffers(1, &buffer);
+                gl::Enable(gl::BLEND);
+            }
+            gl::BindFramebuffer(gl::FRAMEBUFFER, previous as GLuint);
+            complete
+        };
+        if !complete {
+            unsafe {
+                gl::DeleteFramebuffers(1, &framebuffer);
+                gl::DeleteTextures(1, &texture);
+            }
+            eprintln!("Luma glass interior: framebuffer incomplete");
+            self.glass_bake_program = 0;
+            return None;
+        }
+        self.stats.glass_prepare_ms += started.elapsed().as_secs_f64() * 1000.;
+        self.glass_interior = Some(GlassInterior {
+            key,
+            texture,
+            framebuffer,
+        });
+        Some(texture)
     }
 
     /// A translucent fill's fully covered part, split off only where a short shader then
@@ -1795,14 +1970,33 @@ impl Renderer {
                 continue;
             }
             match command {
-                Draw::Glass(rect, radius, tint) => self.quad(
-                    *rect,
-                    [0., 0., 1., 1.],
-                    *radius,
-                    -1000.,
-                    *tint,
-                    self.white.id,
-                ),
+                Draw::Glass(rect, radius, tint) => {
+                    let split = self
+                        .glass_split
+                        .filter(|_| self.fade.is_none())
+                        .and_then(|texture| Some((texture, self.glass_core(*rect, *radius)?)));
+                    match split {
+                        // The rim keeps the general shader; it does not read `texture`.
+                        Some((texture, core)) => self.gradient_quad(
+                            *rect,
+                            [0., 0., 1., 1.],
+                            *radius,
+                            -1000.,
+                            [*tint; 2],
+                            texture,
+                            None,
+                            Some(Hole::Interior(core)),
+                        ),
+                        None => self.quad(
+                            *rect,
+                            [0., 0., 1., 1.],
+                            *radius,
+                            -1000.,
+                            *tint,
+                            self.white.id,
+                        ),
+                    }
+                }
                 // A border's coverage is exactly zero more than its width (plus the
                 // filter) inside the edge.
                 Draw::Shape(rect, radius, border, color) => self.gradient_quad(
@@ -1879,7 +2073,6 @@ impl Renderer {
     pub fn render(&mut self, commands: &[Draw], width: u32, height: u32, damage: Option<[i32; 4]>) {
         let area = damage.map(|pixels| Self::damage_area(pixels, width, height));
         let started = Instant::now();
-        self.build(commands, width, height, area);
         let mut backdrops = commands.iter().filter_map(|draw| match draw {
             Draw::Image(path, rect, _, false) if full_screen(rect) => Some((path.as_str(), 1.)),
             Draw::TintedImage(path, rect, _, false, tint) if full_screen(rect) => {
@@ -1912,6 +2105,14 @@ impl Renderer {
         } else {
             glass_a
         };
+        // Resting glass over a single backdrop: bake its interior once, then split glass draws.
+        self.glass_split = (glass_enabled
+            && second.is_none()
+            && glass_a != self.white.id
+            && self.glass_bake_program != 0)
+            .then(|| self.bake_glass_interior(glass_a, width, height))
+            .flatten();
+        self.build(commands, width, height, area);
         let Viewport {
             x: vx,
             y: vy,
@@ -1956,6 +2157,16 @@ impl Renderer {
                 self.vertices.as_ptr().cast(),
                 gl::DYNAMIC_DRAW,
             );
+            if let Some(glass) = self.paint_programs.as_ref().map(|p| p.glass)
+                && self.glass_split.is_some()
+            {
+                gl::UseProgram(glass);
+                gl::Uniform2f(
+                    uniform_location(glass, c"u_drawable".as_ptr()),
+                    width as f32,
+                    height as f32,
+                );
+            }
             gl::UseProgram(self.program);
             gl::Uniform1i(
                 uniform_location(self.program, c"u_glass_enabled".as_ptr()),
@@ -2471,6 +2682,13 @@ fn load_font(directory: &Path, id: u16) -> Result<Font, String> {
 impl Drop for Renderer {
     fn drop(&mut self) {
         unsafe {
+            if let Some(baked) = self.glass_interior.take() {
+                gl::DeleteFramebuffers(1, &baked.framebuffer);
+                gl::DeleteTextures(1, &baked.texture);
+            }
+            if self.glass_bake_program != 0 {
+                gl::DeleteProgram(self.glass_bake_program);
+            }
             gl::DeleteBuffers(1, &self.buffer);
             gl::DeleteProgram(self.program);
             gl::DeleteProgram(self.vector_program);
@@ -2794,6 +3012,7 @@ mod paint_program_tests {
             shape: 3,
             app: 4,
             app_shape: 5,
+            glass: 6,
         };
         let faded = [1., 1., 1., 0.4];
         // A translucent interior needs no edge distance: texture times colour.
@@ -2803,10 +3022,15 @@ mod paint_program_tests {
         // Its rounded edge keeps the coverage, now also for app artwork.
         assert_eq!(programs.select(&quad(faded, 12., 0.), false, false, 9), 3);
         assert_eq!(programs.select(&quad(faded, 12., 0.), false, true, 9), 5);
-        // Glass (border -1000) and blurred shadows keep the general shader.
+        // Glass rims (border -1000) and blurred shadows keep the general shader; only a
+        // baked glass interior takes its own program.
         assert_eq!(
             programs.select(&quad(faded, 12., -1000.), false, true, 9),
             9
+        );
+        assert_eq!(
+            programs.select(&quad(faded, 12., -1000.), true, false, 9),
+            6
         );
         assert_eq!(programs.select(&quad(faded, 12., -8.), false, false, 9), 9);
         // Never delete GL programs without a context.
