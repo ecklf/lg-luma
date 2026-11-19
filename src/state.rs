@@ -1147,7 +1147,6 @@ impl State {
         let Some(id) = next else {
             return false;
         };
-        self.preferences.splash_background = Some(self.preferences.splash_background().to_owned());
         if self.preferences.reduced_motion {
             self.previous_background = None;
         } else {
@@ -3058,11 +3057,6 @@ impl State {
                         Some((self.preferences.background.clone(), Instant::now()));
                     self.background_fade = BACKGROUND_FADE;
                 }
-                self.preferences.splash_background = Some(if crate::wallpapers::valid_id(&id) {
-                    self.preferences.splash_background().to_owned()
-                } else {
-                    id.clone()
-                });
                 self.preferences.background = id;
                 self.preferences.wallpaper_changed = unix_now();
                 self.back();

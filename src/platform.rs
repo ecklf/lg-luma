@@ -181,7 +181,7 @@ impl Lifecycle {
     }
 }
 
-/// Directory holding assets/, lib/ and splash/: next to the executable, or the installed
+/// Directory holding assets/, lib/ and splash.png: next to the executable, or the installed
 /// package when the executable runs in place of LG's Home.
 pub fn install_dir() -> Result<std::path::PathBuf, String> {
     static DIRECTORY: std::sync::OnceLock<Result<std::path::PathBuf, String>> =
@@ -223,7 +223,6 @@ pub enum Request {
     RefreshInputs,
     Launch(String),
     Uninstall(String),
-    SyncSplash(String),
     Recent {
         generation: u64,
         command: crate::recents::Command,
@@ -251,15 +250,13 @@ pub struct Platform {
     sender: mpsc::Sender<Request>,
     pub receiver: mpsc::Receiver<Response>,
     pub webos: bool,
-    splash_enabled: bool,
 }
 
 impl Platform {
-    pub fn new(webos: bool, splash_enabled: bool) -> Self {
+    pub fn new(webos: bool) -> Self {
         let (sender, requests) = mpsc::channel();
         let (responses, receiver) = mpsc::channel();
         thread::spawn(move || {
-            let mut splash_background = None;
             let mut desktop_inventory = demo_inventory();
             let mut desktop_recents = if webos {
                 vec![]
@@ -392,18 +389,6 @@ impl Platform {
                         };
                         Response::Launched { id, result }
                     }
-                    Request::SyncSplash(background) => {
-                        if webos
-                            && splash_enabled
-                            && splash_background.as_ref() != Some(&background)
-                        {
-                            match sync_splash(&background) {
-                                Ok(()) => splash_background = Some(background),
-                                Err(error) => eprintln!("Luma splash: {error}"),
-                            }
-                        }
-                        continue;
-                    }
                 };
                 if responses.send(response).is_err() {
                     break;
@@ -414,18 +399,11 @@ impl Platform {
             sender,
             receiver,
             webos,
-            splash_enabled,
         }
     }
 
     pub fn send(&self, request: Request) {
         let _ = self.sender.send(request);
-    }
-
-    pub fn sync_splash(&self, background: &str) {
-        if self.webos && self.splash_enabled && !crate::wallpapers::valid_id(background) {
-            self.send(Request::SyncSplash(background.to_owned()));
-        }
     }
 }
 
@@ -516,34 +494,6 @@ pub fn update_result_for(
     serde_json::from_str(output)
         .map(Some)
         .map_err(|e| format!("Invalid installer result: {e}"))
-}
-
-fn sync_splash(background: &str) -> Result<(), String> {
-    let directory = install_dir()?;
-    // The executable/manifest Home already runs privileged. Avoid starting another process or
-    // queuing a Homebrew call behind its startup; file work still stays on the platform worker.
-    #[cfg(all(feature = "webos", unix))]
-    if unsafe { libc::geteuid() } == 0 {
-        return luma_tv_helper::files::sync_splash(
-            &luma_tv_helper::system::Tv,
-            &directory,
-            background,
-        )
-        .map(|_| ());
-    }
-    let command = helper_command(
-        "sync-splash",
-        &[json!({"directory":directory,"background":background}).to_string()],
-    )?;
-    let envelope = call(
-        "luna://org.webosbrew.hbchannel.service/exec",
-        json!({"command": command}),
-    )?;
-    let saved = inventory_payload(&envelope, "background")?;
-    if saved.as_str() != Some(background) {
-        return Err("Splash background was not updated".into());
-    }
-    Ok(())
 }
 
 /// Protect launcher identities and vendor system namespaces, never titles.

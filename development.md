@@ -553,8 +553,7 @@ preserves the app storage owner's UID/GID for new directories and files. Prefere
 the generated selected ID. Invalid metadata and entries with missing files are skipped; an unavailable selected image
 renders the bundled default without destroying the saved selection. These files survive app
 updates, and normal/takeover launches using the shared preferences location use the same gallery.
-Custom images are not used as LG's launch splash: runtime splash updates are skipped for them,
-and takeover boot staging uses a bundled fallback.
+The launch splash is a static Luma logo and does not depend on bundled or custom wallpapers.
 
 The fixed actions are **Upload**, **Gradient**, and **Rotation**, from left to right.
 **Gradient** toggles readability shading immediately without moving the controls. Its
@@ -570,9 +569,8 @@ deleted and pending-deletion entries are excluded. The fixed 15-minute interval 
 Unix timestamp; manual selection or enabling cycling restarts it, and a clock behind the last
 change waits. On process start, rotation advances once after the gallery catalog loads, or after
 three seconds if the catalog is delayed. Changes wait until Luma is focused, visible, idle, and outside overlays. Automatic
-changes use a 1.6-second fade (instant with reduced motion) and save without refreshing LG's splash.
-`splash_background` preserves the manual selection across unrelated saves, package restaging, and
-process restarts; old preferences fall back to `background`. Old duration preferences load as On,
+changes use a 1.6-second fade (instant with reduced motion) and save without affecting the static splash.
+The obsolete `splash_background` preference is ignored. Old duration preferences load as On,
 while former per-image exclusions are ignored.
 
 The native process binds an ephemeral port on one private/link-local IPv4 interface only while
@@ -634,23 +632,17 @@ Verify scanning, editing and a test request against a real webhook on TV hardwar
 
 ## Splash images
 
-`pnpm assets` renders one 1920×1080 PNG per background into `.build/assets/splash/` from the shaded
-wallpapers. `tools/package.mjs` ships them under `splash/` plus `splash.png` (the default background),
-which `appinfo.json` names as `splashBackground`, with `bgColor` set to the UI base colour so the
-frame between the splash and the first draw is not black. On a normal TV launch and after successful
-preference saves, the native platform worker passes the loaded background to the native
-`luma-helper sync-splash` command through Homebrew Channel's elevated `exec` service. It atomically updates
-the installed `splash.png` and the matching enabled Home stage, skipping identical images. Desktop
-and isolated `--preferences` / `--test-extra-apps` runs do not update launch splashes. The first launch
-after installation or a package update can still show the packaged default until this sync completes;
-later launches use the saved selection. Already-root Home processes use the Rust file operation directly, avoiding a Homebrew/child-process round trip. With Home takeover enabled, the native Home helper
-copies the selected background's splash into the staged Home app on every apply, reading the saved
-preferences from the TV storage candidates in `storage.rs`. Production installations prefer internal
-storage; developer installations prefer developer storage, with existing files taking precedence over
-the legacy installation-local preferences. Reapplying an active Home mount also refreshes the splash.
-`pnpm test:home` checks splash selection, runtime updates and mounted refreshes with a mocked filesystem
-and no TV calls. Verify the system-rendered splash on a real TV by changing Background, quitting Luma,
-and relaunching its normal tile; desktop checks cannot establish SAM/compositor image caching behavior.
+`pnpm assets` renders one 1920×1080 PNG at `.build/assets/splash.png`, using the bundled Luma SVG
+logo centered at 192×192 on the dark-gray UI base colour (`#17191c`). `tools/package.mjs` ships only
+the root `splash.png`, named by `appinfo.json` as `splashBackground`. The legacy per-wallpaper splash
+cache is removed during asset generation and excluded from packaging.
+
+There are no runtime splash requests, preference-dependent image copies, or elevated splash commands.
+Manifest-based Home staging copies the package's static image on apply, including when refreshing an
+active stage after a package update. Executable-based Home does not stage a splash. Legacy
+`splash_background` preferences are ignored. `pnpm test:home` checks static staging and mounted refreshes
+with a mocked filesystem and no TV calls. Verify the system-rendered splash and cold-launch transition
+on a real TV, since desktop checks cannot establish SAM/compositor image caching behavior.
 
 ## Vector rendering
 
@@ -1004,13 +996,13 @@ is bound to that executable path. Luma detects this (`platform::runs_as_lg_home`
   the inventory. Keyboard edits are saved before leaving their subpage. `close` and a later
   `returnValue: false` (registration lost) quit. SAM keeps the process across Home launches and
   standby (`pause`, reason `keepAlive`) instead of restarting it;
-- resolves `assets/`, `lib/` (extra RPATH) and the splash directory from the installed package,
+- resolves `assets/`, `lib/` (extra RPATH) and the static splash from the installed package,
   since `current_exe()` names LG's path. Production Homebrew Channel installs under
   `/media/cryptofs`, developer installs under `/media/developer` and system installs under
   `/usr/palm/applications` share the lookup list in `tv/install-directories.txt`. Library search
   retains `$ORIGIN/lib` first and includes all three locations before Rust startup. Native
   discovery validates the package manifest and matches the executable by device/inode, so assets
-  and splash updates use the source package even when developer and production copies both exist.
+  and static Home splash staging use the source package even when developer and production copies both exist.
   A missing or unrelated source package is an explicit startup error;
 - writes its stderr to `/tmp/luma-home.log`, because SAM discards a system app's output;
 - skips the per-icon elevated-service fallback for installed artwork: as root every file is
@@ -1356,8 +1348,8 @@ receives the key. Do not infer support for webOS 4 from this option.
 ### Native TV helper
 
 The `tv-helper/` workspace crate ports the former `tv/*.cjs` operations. Its `luma-helper` binary
-contains no GUI initialization, SDL dependency or persistent service. Root Home synchronizes its
-splash directly through the same Rust library on the platform worker. Normal jailed launches
+contains no GUI initialization, SDL dependency or persistent service. Manifest-based Home staging
+copies the static splash from the installed package without reading preferences. Normal jailed launches
 retain Homebrew Channel as the privilege boundary, executing the installed helper with individually
 quoted arguments. The helper retains bounded file reads, combined stdout/stderr caps, timeouts,
 protected application IDs and completion-based uninstall replies. `luna-send` is still used for

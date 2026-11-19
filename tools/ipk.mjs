@@ -71,6 +71,10 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
     throw new Error('Packaged app permissions do not match the source.');
   if (actual.icon !== manifest.icon || actual.largeIcon !== manifest.largeIcon)
     throw new Error('Packaged icon paths do not match the source.');
+  if (actual.splashBackground !== manifest.splashBackground || actual.bgColor !== manifest.bgColor)
+    throw new Error('Packaged launch screen metadata does not match the source.');
+  if (owned.some((file) => /\/(?:assets\/)?splash\//.test(file.name)))
+    throw new Error('The IPK must not contain per-wallpaper splash assets.');
   const vectorManifest = owned.find((file) => file.name.endsWith('/assets/vector-artwork.json'));
   const vectorAssets = vectorManifest && JSON.parse(vectorManifest.data.toString());
   if (
@@ -112,11 +116,7 @@ export function normalizeAndVerifyPackage(bytes, manifest) {
       'prism',
       'yosemite',
       'northern-lights',
-    ].flatMap((name) => [
-      `assets/wallpapers/${name}.jpg`,
-      `assets/thumbnails/${name}.jpg`,
-      `splash/${name}.png`,
-    ]),
+    ].flatMap((name) => [`assets/wallpapers/${name}.jpg`, `assets/thumbnails/${name}.jpg`]),
     ...vectorAssets.assets.map((name) => {
       if (typeof name !== 'string' || !/^(logos|ui-icons)\/[a-z0-9-]+\.lvec$/.test(name))
         throw new Error('Invalid packaged vector asset path.');

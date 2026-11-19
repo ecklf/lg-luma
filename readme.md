@@ -222,11 +222,9 @@ instead of the last input; tested on webOS 5.6.2 only, not verified on webOS 24.
 <details>
 <summary>Method for webOS 25 / 26</summary>
 
-Mounts Luma over the system Home app and reapplies the mount at cold boot. The LG splash
-shown before Luma's window opens is the wallpaper you selected in **Settings → Background**, staged
-from the saved preferences at each boot. Normal app launches also use your selected wallpaper:
-Luma updates the launch splash through Homebrew Channel's root service after loading or saving your
-settings. Open Luma once after installing or updating so subsequent launches use your saved background.
+Mounts Luma over the system Home app and reapplies the mount at cold boot. The launch splash
+uses a centered Luma logo on a dark-gray background, independent of your selected wallpaper.
+Normal app launches and staged Home launches use the same static image, with no runtime splash updates.
 LG Home's original files remain underneath, using the same approach as
 [Glasshouse Home](https://github.com/rorygallagher2024/glasshouse/blob/main/server/lib/home-takeover.js).
 
