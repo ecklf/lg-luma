@@ -33,6 +33,9 @@ mod markets_ui_tests;
 #[path = "weather-style-tests.rs"]
 mod weather_style_tests;
 
+#[path = "settings-contrast-tests.rs"]
+mod settings_contrast_tests;
+
 fn ready() -> State {
     let mut state = State::new(Preferences::default());
     state.set_inventory(demo_inventory(), None);
@@ -1025,8 +1028,11 @@ fn input_name_actions_only_highlight_the_focused_row_and_keep_the_saved_mode() {
             .draw
             .iter()
             .filter_map(|draw| match draw {
-                crate::renderer::Draw::Glass(rect, _, tint)
-                    if rect.x == 640. && rect.w == 1120. && tint[0] > 0.5 =>
+                crate::renderer::Draw::Shape(rect, _, width, tint)
+                    if rect.x == 640.
+                        && rect.w == 1120.
+                        && *width == 2.5
+                        && *tint == crate::renderer::WHITE =>
                 {
                     Some(rect.y)
                 }
@@ -1067,8 +1073,11 @@ fn clock_choices_only_highlight_focus_while_preserving_saved_checkmarks() {
             .draw
             .iter()
             .filter_map(|draw| match draw {
-                crate::renderer::Draw::Glass(rect, _, tint)
-                    if rect.x == 640. && rect.w == 1120. && tint[0] > 0.5 =>
+                crate::renderer::Draw::Shape(rect, _, width, tint)
+                    if rect.x == 640.
+                        && rect.w == 1120.
+                        && *width == 2.5
+                        && *tint == crate::renderer::WHITE =>
                 {
                     Some(rect.y)
                 }
@@ -3463,11 +3472,11 @@ fn update_card_keeps_status_surface_and_button_only_action() {
                 ),
                 (664., 296.8, 1072., 64.)
             );
-            let glass: Vec<_> = rendered
+            let surfaces: Vec<_> = rendered
                 .draw
                 .iter()
                 .filter_map(|draw| match draw {
-                    Draw::Glass(rect, _, color)
+                    Draw::Glass(rect, _, color) | Draw::Shape(rect, _, 0., color)
                         if crate::state::Rect::new(640., 164.8, 1120., 220.)
                             .contains(rect.x, rect.y) =>
                     {
@@ -3477,14 +3486,14 @@ fn update_card_keeps_status_surface_and_button_only_action() {
                 })
                 .collect();
             assert_eq!(
-                glass.len(),
+                surfaces.len(),
                 2,
                 "the status card and its action retain separate surfaces"
             );
-            assert_eq!(glass[0].0.h, 220.);
-            assert_eq!(glass[0].1[3], 0.96);
-            assert_eq!(glass[1].0.h, control.rect.h);
-            assert_eq!(glass[1].1[3], if focused { 1. } else { 0.96 });
+            assert_eq!(surfaces[0].0.h, 220.);
+            assert_eq!(surfaces[0].1[3], 0.96);
+            assert_eq!(surfaces[1].0.h, control.rect.h);
+            assert_eq!(surfaces[1].1[3], if focused { 1. } else { 0.96 });
             for (x, y) in [(650., 175.), (1200., 275.), (1750., 375.)] {
                 assert_eq!(state.hit_test(&rendered.controls, x, y), None);
             }

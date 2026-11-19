@@ -114,6 +114,41 @@ try {
   const gles = await scenario('glass-gles', 'home', [], 90, { LUMA_GLES: '1' });
   assert.match(gles.render.graphics.version, /OpenGL ES/);
   assert.equal(gles.render.capture.glass_backdrop_sampling, true);
+  // #350: focus must stay readable without switching to a bright white fill.
+  await fs.writeFile(preferences, JSON.stringify({ language: 'it' }));
+  for (const [name, script, label, environment] of [
+    ['settings-focus', 'settings', { left: 184, top: 188, width: 330, height: 25 }, {}],
+    [
+      'settings-focus-gles',
+      'settings',
+      { left: 184, top: 188, width: 330, height: 25 },
+      { LUMA_GLES: '1' },
+    ],
+    [
+      'settings-row-focus-fallback',
+      'settings,right',
+      { left: 704, top: 186, width: 300, height: 32 },
+      { LUMA_GLASS: '0' },
+    ],
+  ]) {
+    const focused = await scenario(name, script, [], 12, environment);
+    assert.ok(focused.ui_text.includes('Generale'));
+    const { data } = await sharp(path.join(out, `${name}.png`))
+      .extract(label)
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    let dark = 0;
+    let light = 0;
+    for (let offset = 0; offset < data.length; offset += 3) {
+      const channels = data.subarray(offset, offset + 3);
+      if (channels.every((value) => value < 100)) dark++;
+      if (channels.every((value) => value > 180)) light++;
+    }
+    assert.ok(dark > (label.width * label.height) / 2, `${name}: focus fill must stay dark`);
+    assert.ok(light > 20, `${name}: focused label must have visible light glyphs`);
+  }
+  await fs.writeFile(preferences, '{}');
   const drawer = await scenario('drawer', 'home,down');
   assert.equal(drawer.page, 'Apps');
   const drawerClosed = await scenario('drawer-closed', 'home,right,down,back');
