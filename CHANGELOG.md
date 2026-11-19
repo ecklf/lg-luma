@@ -1,5 +1,15 @@
 # lg-luma
 
+## 3.10.0
+
+### Minor Changes
+
+- 8e73bc6: Show USB storage reported by webOS in Inputs, with naming and visibility controls. Selecting storage rechecks its presence and opens an installed LG media browser rather than treating USB as an HDMI source. TV discovery and media opening still need hardware verification across firmware versions.
+
+### Patch Changes
+
+- 867cd5b: Keep focused settings labels readable with an opaque dark fill, light text and icons, and a clear white outline instead of a bright white focus fill.
+
 ## 3.9.0
 
 ### Minor Changes
