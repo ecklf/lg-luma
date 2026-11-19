@@ -199,7 +199,7 @@ try {
   // Background thumbnails have no captions; their actions are translated in the popup.
   const backgroundOptions = await scenario(
     'zh-background-options',
-    `${backgroundsPage},down,enter`,
+    `${backgroundsPage},right,enter`,
   );
   assert.equal(backgroundOptions.modal, true);
   assert.equal(backgroundOptions.focus, 'UseBackground');
