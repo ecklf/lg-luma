@@ -1,5 +1,13 @@
 # lg-luma
 
+## 3.8.3
+
+### Patch Changes
+
+- 48bc9e0: Bundle only the Midnight wallpaper and make it the default. Existing selections of removed bundled wallpapers fall back to Midnight while uploaded backgrounds and rotation remain supported.
+- a62a16b: Remove the obsolete wallpaper WebAssembly runtime and foreground PNGs from cached assets and native packages.
+- 50cda86: Replace wallpaper-matched launch splashes with one dark-gray splash featuring the centered Luma logo. Remove dynamic splash updates and per-wallpaper splash assets.
+
 ## 3.8.2
 
 ### Patch Changes
