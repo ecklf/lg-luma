@@ -248,11 +248,11 @@ The unavailable-backend check runs with
 
 Weather → Widget style persists `weather_style` (`standard`, the default, `no_icon`,
 or `compact`). Home and Settings use the same native layout and painting functions.
-The picker shows all three designs with offline sample weather, in the saved
-temperature unit. Browsing does not change preferences or fetch a forecast. OK/click
+The picker shows all three designs with offline sample weather, using the saved
+temperature unit and location visibility. Browsing does not change preferences or fetch a forecast. OK/click
 saves a style and returns to Weather, while Back/Left cancels without changing the style.
 The no-icon layout reclaims the icon column. Compact uses two lines, with a small icon,
-condition and location on the second. Cached-reading warnings and setup/error states
+condition and optional location on the second. Cached-reading warnings and setup/error states
 remain visible. `xvfb-run -a pnpm screenshots --weather-styles` captures all designs and
 the settings preview using the native renderer and loopback-only cached sample weather.
 
@@ -366,9 +366,24 @@ Existing greeting, weather, shortcut and input preferences are unchanged. Scroll
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
 with a tighter 48-pixel spacing for Languages and Backgrounds.
 The weekday/date is part of the combined Greeting, not a standalone widget. Weather uses its
-own fixed footprint with a large condition icon, temperature, condition and location. The colored, static
-icons are original Breezy Weather PNGs, including clear/partly-cloudy night variants, bundled locally
-with their LGPL-3.0 license, attribution and source hashes in `assets/weather/`. No icons are fetched at runtime.
+own fixed footprint with a large condition icon, temperature, condition and optional location.
+Breezy Weather remains the default icon style. Weather → Icon style offers Breezy Weather,
+Lucide, Kickstand and Kuankuan with offline condition samples. `weather_icons` stores the primary
+choice; additional instances use `icons`. Lucide, Kickstand and Kuankuan compile to vector meshes;
+Breezy retains its original PNGs. No icons are fetched at runtime. Sources, licenses, adaptations
+and mappings are documented in `assets/weather/README.md`; Kuankuan's preferred editable `.ai`
+sources ship alongside its SVGs. `pnpm assets:weather` optionally restores pinned original files.
+Weather → Show location name defaults on. Turning it off hides the city in every style and size,
+including loading and error states, without changing the forecast location or cache. The primary
+widget persists `weather_show_location`; additional instances persist their own `show_location`.
+Style previews follow the active widget's setting. Location settings still show the selected city.
+
+System → Attributions opens `assets/attributions.txt` as a read-only text field. Up/Down scrolls
+with the remote, the mouse wheel scrolls only over the field, and Back/Left returns to the System
+button. The viewport and scrollbar stay fixed while text scrolls, with drawing and pointer hits
+clipped to the field. The body includes author credits, source URLs and references to full license
+texts in the package; legal notices retain their original English text. No keyboard, network request
+or preference save is involved. `ATTRIBUTIONS.txt` also ships beside `ASSETS.md` in the package.
 Disabled weather
 is hidden. Enabled weather without a location uses the same large 144px artwork and a prominent setup action.
 Settings lists render behind fixed controls. The drawer grid is clipped below its fixed dock so

@@ -121,6 +121,7 @@ for (const file of ['home.sh', 'luma-helper', 'home-filter.js']) {
 }
 await fs.copyFile(path.join(root, 'license'), path.join(stage, 'LICENSE'));
 await fs.copyFile(path.join(root, 'assets.md'), path.join(stage, 'ASSETS.md'));
+await fs.copyFile(path.join(root, 'assets/attributions.txt'), path.join(stage, 'ATTRIBUTIONS.txt'));
 await fs.mkdir(path.join(stage, 'lib'));
 async function copyLibrary(directory, name) {
   const library = await fs.readFile(path.join(directory, name));

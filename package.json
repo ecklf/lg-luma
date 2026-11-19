@@ -35,6 +35,7 @@
     "benchmark:startup": "cargo build --locked --release --package luma --no-default-features && node tools/startup-benchmark.mjs",
     "assets:vector": "node tools/vector-assets.mjs",
     "assets:brands": "node tools/brand-assets.mjs",
+    "assets:weather": "node tools/weather-assets.mjs",
     "assets:fonts": "node tools/font-assets.mjs",
     "runtime": "node tools/webos-runtime.mjs",
     "sdk": "node tools/setup-webos-sdk.mjs",

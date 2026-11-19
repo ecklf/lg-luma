@@ -257,6 +257,53 @@ pub enum WeatherStyle {
     Compact,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WeatherIconStyle {
+    #[default]
+    Breezy,
+    Lucide,
+    Kickstand,
+    Kuankuan,
+}
+
+impl WeatherIconStyle {
+    pub const ALL: [Self; 4] = [Self::Breezy, Self::Lucide, Self::Kickstand, Self::Kuankuan];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Breezy => "Breezy Weather",
+            Self::Lucide => "Lucide",
+            Self::Kickstand => "Kickstand",
+            Self::Kuankuan => "Kuankuan",
+        }
+    }
+
+    pub fn index(self) -> usize {
+        Self::ALL.iter().position(|style| *style == self).unwrap()
+    }
+
+    pub fn asset(self, condition: &str) -> String {
+        match self {
+            Self::Breezy => format!("weather/{condition}.png"),
+            Self::Lucide => format!("ui-icons/weather-{condition}.lvec"),
+            Self::Kickstand => format!(
+                "ui-icons/weather-kickstand-{}.lvec",
+                if condition == "drizzle" {
+                    "rain"
+                } else {
+                    condition
+                }
+            ),
+            Self::Kuankuan => format!("ui-icons/weather-kuankuan-{condition}.lvec"),
+        }
+    }
+
+    pub fn monochrome(self) -> bool {
+        matches!(self, Self::Lucide | Self::Kickstand)
+    }
+}
+
 impl WeatherStyle {
     pub const ALL: [Self; 3] = [Self::Standard, Self::NoIcon, Self::Compact];
 
@@ -359,7 +406,7 @@ impl HomeWidget {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct WeatherWidgetSettings {
     pub enabled: bool,
@@ -370,6 +417,23 @@ pub struct WeatherWidgetSettings {
     pub unit: Unit,
     pub small: bool,
     pub style: WeatherStyle,
+    pub show_location: bool,
+    pub icons: WeatherIconStyle,
+}
+
+impl Default for WeatherWidgetSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            position: WidgetPosition::default(),
+            location: None,
+            unit: Unit::default(),
+            small: false,
+            style: WeatherStyle::default(),
+            show_location: true,
+            icons: WeatherIconStyle::default(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
@@ -415,6 +479,8 @@ pub struct Preferences {
     #[serde(deserialize_with = "crate::markets::deserialize_settings")]
     pub stocks: crate::markets::Settings,
     pub weather_small: bool,
+    pub weather_show_location: bool,
+    pub weather_icons: WeatherIconStyle,
     pub recent_apps_behavior: RecentAppsBehavior,
     pub weather_style: WeatherStyle,
     pub app_sorting: AppSorting,
@@ -475,6 +541,8 @@ impl Default for Preferences {
                 ..Default::default()
             },
             weather_small: false,
+            weather_show_location: true,
+            weather_icons: WeatherIconStyle::default(),
             recent_apps_behavior: RecentAppsBehavior::default(),
             app_sorting: AppSorting::default(),
             app_drawer_style: AppDrawerStyle::default(),
@@ -532,6 +600,8 @@ impl Preferences {
             unit: self.temperature_unit,
             small: self.weather_small,
             style: self.weather_style,
+            show_location: self.weather_show_location,
+            icons: self.weather_icons,
         }
     }
 
@@ -551,6 +621,8 @@ impl Preferences {
             self.temperature_unit = config.unit;
             self.weather_small = config.small;
             self.weather_style = config.style;
+            self.weather_show_location = config.show_location;
+            self.weather_icons = config.icons;
         }
     }
 

@@ -3,7 +3,7 @@ use crate::{
     i18n::Language,
     model::{
         App, BACKGROUNDS, HOME_GRID_CELLS, HOME_GRID_COLUMNS, HOME_GRID_ROWS, HomeWidget, Input,
-        InputMode, WidgetPosition,
+        InputMode, WeatherIconStyle, WidgetPosition,
     },
     renderer::{Color, Draw, TextStyle, WHITE},
     state::{
@@ -1591,11 +1591,12 @@ fn small_weather(out: &mut Scene, state: &State, assets: &Assets, cell: Rect, wi
         |reading| weather::format_temperature(reading.temperature, config.unit),
     );
     let icon = reading.map_or("partly-cloudy", |reading| weather::condition(reading).icon);
-    out.image(
-        assets.path(format!("weather/{icon}.png")),
+    paint_weather_icon(
+        out,
+        assets,
+        config.icons,
+        icon,
         Rect::new(cell.x, cell.y, 48., 48.),
-        0.,
-        true,
     );
     let (label, style) = if reading.is_some() {
         assets.fit_line(&label, text(48., 500, -0.025), cell.w - 60., 16.)
@@ -1614,7 +1615,13 @@ fn small_weather(out: &mut Scene, state: &State, assets: &Assets, cell: Rect, wi
         WHITE,
         false,
     );
-    let detail = place.map_or(language.t("weather"), |place| place.name.as_str());
+    let detail = if config.show_location {
+        place.map_or(language.t("weather"), |place| place.name.as_str())
+    } else {
+        reading.map_or(language.t("weather"), |reading| {
+            language.t(weather::condition(reading).key)
+        })
+    };
     let (detail, style) = assets.fit_line(detail, text(18., 450, 0.), cell.w, 14.);
     out.text(
         detail,
@@ -1651,6 +1658,7 @@ struct WeatherSummary {
     height: f32,
     width: f32,
     icon: String,
+    icon_style: WeatherIconStyle,
     icon_rect: Rect,
     show_icon: bool,
     parts: Vec<(String, TextStyle, Color, Rect)>,
@@ -1709,7 +1717,7 @@ fn weather_summary_layout_for(
         );
         parts.push((label, style, c(0xf5f5f5, opacity), rect));
     };
-    let mut icon = "weather/partly-cloudy.png".to_owned();
+    let mut icon = "partly-cloudy".to_owned();
     if let Some(place) = place {
         add(
             place.name.clone(),
@@ -1721,7 +1729,7 @@ fn weather_summary_layout_for(
         );
         if let Some(reading) = reading {
             let condition = weather::condition(reading);
-            icon = format!("weather/{}.png", condition.icon);
+            icon = condition.icon.to_owned();
             add(
                 weather::format_temperature(reading.temperature, config.unit),
                 text(112., 500, -0.055),
@@ -1800,7 +1808,11 @@ fn weather_summary_layout_for(
                 106.,
             );
             let condition = &mut parts[1];
-            let label = format!("{city} · {}", condition.0);
+            let label = if config.show_location {
+                format!("{city} · {}", condition.0)
+            } else {
+                condition.0.clone()
+            };
             let (label, font) = assets.fit_line(&label, text(26., 450, -0.02), 800., 24.);
             condition.0 = label;
             condition.1 = font;
@@ -1818,6 +1830,20 @@ fn weather_summary_layout_for(
             height = 168.;
         }
     }
+    // Compact readings already consume the city into their condition line. Other
+    // layouts drop the header and close its gap, including loading/error states.
+    if !config.show_location
+        && place.is_some()
+        && !(style == WeatherStyle::Compact && reading.is_some())
+    {
+        parts.remove(0);
+        let offset = if reading.is_some() { 46. } else { 64. };
+        for (_, _, _, rect) in &mut parts {
+            rect.y -= offset;
+        }
+        icon_rect.y -= offset;
+        height -= offset;
+    }
     let right = parts
         .iter()
         .map(|(_, _, _, rect)| rect.x + rect.w)
@@ -1826,9 +1852,26 @@ fn weather_summary_layout_for(
         height,
         width: right - 84.,
         icon,
+        icon_style: config.icons,
         icon_rect,
         show_icon: style != WeatherStyle::NoIcon,
         parts,
+    }
+}
+
+fn paint_weather_icon(
+    out: &mut Scene,
+    assets: &Assets,
+    style: WeatherIconStyle,
+    condition: &str,
+    rect: Rect,
+) {
+    let path = assets.path(style.asset(condition));
+    if style.monochrome() {
+        out.draw
+            .push(Draw::TintedImage(path, rect, 0., true, WHITE));
+    } else {
+        out.image(path, rect, 0., true);
     }
 }
 
@@ -1849,11 +1892,12 @@ fn paint_weather_summary(
         )
     };
     if summary.show_icon {
-        out.image(
-            assets.path(&summary.icon),
+        paint_weather_icon(
+            out,
+            assets,
+            summary.icon_style,
+            &summary.icon,
             transform(summary.icon_rect),
-            0.,
-            true,
         );
     }
     for (label, style, color, rect) in &summary.parts {
@@ -2262,6 +2306,92 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
             chevron: false,
         },
     );
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::WeatherShowLocation,
+            rect: Rect::new(640., y + 252., 1120., 72.),
+            title: language.t("weatherShowLocation"),
+            icon: Some("location"),
+            value: Some(language.t(if config.show_location {
+                "stateOn"
+            } else {
+                "stateOff"
+            })),
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::WeatherIcons,
+            rect: Rect::new(640., y + 336., 1120., 72.),
+            title: language.t("weatherIconStyle"),
+            icon: Some("weather-sun"),
+            value: Some(config.icons.label()),
+            description: None,
+            selected: false,
+            chevron: true,
+        },
+    );
+}
+
+fn weather_icon_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let config = state.preferences.weather_settings(state.active_weather);
+    for (index, style) in WeatherIconStyle::ALL.into_iter().enumerate() {
+        let rect = Rect::new(
+            640.,
+            164.8 + index as f32 * 184. - state.scroll,
+            1120.,
+            168.,
+        );
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::Choice(index),
+                rect,
+                title: style.label(),
+                icon: None,
+                value: None,
+                description: None,
+                selected: false,
+                chevron: false,
+            },
+        );
+        out.shape(
+            Rect::new(1040., rect.y + 12., 700., 144.),
+            16.,
+            c(0x192129, 1.),
+        );
+        for (position, condition) in ["sun", "partly-cloudy", "rain", "snow", "moon"]
+            .into_iter()
+            .enumerate()
+        {
+            paint_weather_icon(
+                out,
+                assets,
+                style,
+                condition,
+                Rect::new(1072. + position as f32 * 128., rect.y + 40., 88., 88.),
+            );
+        }
+        if style == config.icons {
+            out.icon(
+                assets,
+                "check",
+                Rect::new(1696., rect.y + 24., 24., 24.),
+                WHITE,
+            );
+        }
+    }
 }
 
 fn weather_style_settings(out: &mut Scene, state: &State, assets: &Assets) {
@@ -2460,6 +2590,62 @@ fn location_settings(out: &mut Scene, state: &State, assets: &Assets) {
     }
 }
 
+fn attributions(out: &mut Scene, state: &State, assets: &Assets) {
+    let field = state.attributions_viewport();
+    out.shape(field, 16., c(0x192129, 1.));
+    out.border(
+        field,
+        16.,
+        if state.focus == Target::AttributionText && !state.pointer {
+            2.
+        } else {
+            1.
+        },
+        c(0xffffff, 0.3),
+    );
+    let viewport = Rect::new(field.x + 28., field.y + 24., field.w - 72., field.h - 48.);
+    out.draw.push(Draw::Clip(Some(viewport)));
+    let style = text(22., 400, 0.).leading(1.4);
+    let mut offset = 24.;
+    for line in include_str!("../assets/attributions.txt").lines() {
+        let height =
+            assets.lines(line, style, viewport.w).max(1) as f32 * style.size * style.line_height;
+        let rect = Rect::new(
+            viewport.x,
+            field.y + offset - state.scroll,
+            viewport.w,
+            height,
+        );
+        if !line.is_empty() && rect.y + rect.h > viewport.y && rect.y < viewport.y + viewport.h {
+            out.text(line, rect, style, c(0xf5f5f5, 0.9), false);
+        }
+        offset += height;
+    }
+    out.draw.push(Draw::Clip(None));
+    let height = offset + 24.;
+    out.control(
+        Target::AttributionText,
+        Rect::new(field.x, field.y - state.scroll, field.w, height),
+        true,
+    );
+    if height > field.h {
+        let track = Rect::new(field.x + field.w - 16., viewport.y, 4., viewport.h);
+        out.shape(track, 2., c(0xffffff, 0.1));
+        let thumb = (viewport.h * field.h / height).max(24.);
+        let progress = (state.scroll / (height - field.h)).clamp(0., 1.);
+        out.shape(
+            Rect::new(
+                track.x,
+                track.y + progress * (track.h - thumb),
+                track.w,
+                thumb,
+            ),
+            2.,
+            c(0xffffff, 0.65),
+        );
+    }
+}
+
 fn settings(out: &mut Scene, state: &State, assets: &Assets) {
     settings_content(out, state, assets);
     settings_sidebar(out, state, assets);
@@ -2506,18 +2692,23 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::TimeFormat) => {
                     Some(vec![language.t("clock"), language.t("timeFormat")])
                 }
-                Some(Subpage::WeatherLocation | Subpage::Temperature | Subpage::WeatherStyle) => {
-                    Some(vec![
-                        language.t("weather"),
-                        language.t(if state.subpage == Some(Subpage::WeatherLocation) {
-                            "location"
-                        } else if state.subpage == Some(Subpage::Temperature) {
-                            "temperature"
-                        } else {
-                            "weatherStyle"
-                        }),
-                    ])
-                }
+                Some(
+                    Subpage::WeatherLocation
+                    | Subpage::Temperature
+                    | Subpage::WeatherStyle
+                    | Subpage::WeatherIcons,
+                ) => Some(vec![
+                    language.t("weather"),
+                    language.t(if state.subpage == Some(Subpage::WeatherLocation) {
+                        "location"
+                    } else if state.subpage == Some(Subpage::Temperature) {
+                        "temperature"
+                    } else if state.subpage == Some(Subpage::WeatherIcons) {
+                        "weatherIconStyle"
+                    } else {
+                        "weatherStyle"
+                    }),
+                ]),
                 Some(Subpage::InputIcons(id)) => Some(vec![
                     state
                         .inventory
@@ -2556,6 +2747,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::AppDrawer) => language.t("appDrawer"),
                 Some(Subpage::RecentApps) => language.t("recentApps"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
+                Some(Subpage::Attributions) => language.t("attributions"),
                 _ => "",
             };
             let mut path = vec![label];
@@ -2632,6 +2824,8 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::Market(_)
                 | Subpage::Weather
                 | Subpage::WeatherStyle
+                | Subpage::WeatherIcons
+                | Subpage::Attributions
                 | Subpage::Shortcuts
                 | Subpage::Greeting
                 | Subpage::Clock
@@ -2643,6 +2837,8 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::WeatherLocation => location_settings(out, state, assets),
                 Subpage::Weather => weather_settings(out, state, assets),
                 Subpage::WeatherStyle => weather_style_settings(out, state, assets),
+                Subpage::WeatherIcons => weather_icon_settings(out, state, assets),
+                Subpage::Attributions => attributions(out, state, assets),
                 Subpage::Shortcuts => shortcut_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
@@ -2786,6 +2982,8 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             Subpage::WeatherLocation
             | Subpage::Weather
             | Subpage::WeatherStyle
+            | Subpage::WeatherIcons
+            | Subpage::Attributions
             | Subpage::Shortcuts
             | Subpage::Greeting
             | Subpage::Clock
@@ -3202,6 +3400,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 ),
                 (9, language.t("resetIconCache"), "refresh", None, false),
                 (5, language.t("quitApp"), "power", None, false),
+                (16, language.t("attributions"), "type", None, true),
             ]
             .into_iter()
             .enumerate()
@@ -3211,7 +3410,11 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     state,
                     assets,
                     Row {
-                        target: Target::Setting(index),
+                        target: if index == 16 {
+                            Target::Attributions
+                        } else {
+                            Target::Setting(index)
+                        },
                         rect: Rect::new(
                             640.,
                             408.8

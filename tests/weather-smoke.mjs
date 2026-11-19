@@ -119,6 +119,7 @@ async function writeCache(age = 0) {
 }
 async function scenario(name, script, frames = 210) {
   const dump = path.join(temporary, `${name}.json`);
+  const diagnostics = path.join(temporary, `${name}-render.json`);
   const screenshot = path.join(out, `weather-${name}.png`);
   await run(binary, [
     '--preferences',
@@ -135,9 +136,14 @@ async function scenario(name, script, frames = 210) {
     screenshot,
     '--dump-state',
     dump,
+    '--diagnostics',
+    diagnostics,
   ]);
   const state = JSON.parse(await fs.readFile(dump, 'utf8'));
   assert.equal(state.error, null);
+  const rendered = JSON.parse(await fs.readFile(diagnostics, 'utf8'));
+  assert.equal(rendered.capture.missing_images, 0, name);
+  assert.equal(rendered.capture.missing_glyphs, 0, name);
   assert.equal((await sharp(screenshot).stats()).channels[3].min, 255);
   return state;
 }
@@ -177,6 +183,41 @@ try {
 
   await scenario('cache-reopen', 'home,await-weather');
   assert.equal(forecastCount(), 1);
+  const hiddenLocation = await scenario(
+    'hidden-location',
+    `${weatherPage},down,down,down,down,enter,home,await-weather`,
+  );
+  assert.equal(hiddenLocation.preferences.weather_show_location, false);
+  assert.equal(hiddenLocation.preferences.weather_location.name, 'Vienna');
+  assert.equal(hiddenLocation.weather.cache.reading.temperature, 14.2);
+  assert.ok(!hiddenLocation.ui_text.some((label) => label.includes('Vienna')));
+  assert.ok(hiddenLocation.ui_text.includes('14°C'));
+  assert.equal(forecastCount(), 1, 'Hiding the city must not invalidate the forecast');
+  const privateRestart = await scenario('hidden-location-restart', 'home,await-weather');
+  assert.equal(privateRestart.preferences.weather_show_location, false);
+  assert.ok(!privateRestart.ui_text.some((label) => label.includes('Vienna')));
+  const iconsPage = `${weatherPage},down,down,down,down,down,enter`;
+  const picker = await scenario('icon-picker', iconsPage);
+  assert.equal(picker.subpage, 'WeatherIcons');
+  for (const name of ['Breezy Weather', 'Lucide', 'Kickstand', 'Kuankuan'])
+    assert.ok(picker.ui_text.includes(name));
+  for (const [index, icons] of ['breezy', 'lucide', 'kickstand', 'kuankuan'].entries()) {
+    const navigation = index ? `${Array(index).fill('down').join(',')},` : '';
+    // Return to a known default so each choice is exercised by its stable picker index.
+    const saved = JSON.parse(await fs.readFile(preferences, 'utf8'));
+    await fs.writeFile(preferences, JSON.stringify({ ...saved, weather_icons: 'breezy' }));
+    const selected = await scenario(
+      `icons-${icons}`,
+      `${iconsPage},${navigation}enter,home,await-weather`,
+    );
+    assert.equal(selected.preferences.weather_icons, icons);
+    assert.equal(selected.preferences.weather_show_location, false);
+    assert.ok(!selected.ui_text.some((label) => label.includes('Vienna')));
+    assert.equal(forecastCount(), 1, 'Icon selection must reuse the existing forecast');
+    const preview = await scenario(`preview-${icons}`, `${weatherPage},down,down,enter`);
+    assert.equal(preview.subpage, 'WeatherStyle');
+    assert.ok(!preview.ui_text.some((label) => label.includes('Vienna')));
+  }
   const fahrenheit = await scenario(
     'fahrenheit',
     `${weatherPage},down,enter,down,enter,home,await-weather`,
@@ -258,6 +299,7 @@ try {
   const beforeMultiple = forecastCount();
   await writePreferences({
     weather_location: vienna,
+    weather_show_location: false,
     extra_weather: [
       {
         enabled: true,
@@ -269,7 +311,7 @@ try {
     ],
   });
   const multiple = await scenario('multiple', 'home,await-weather');
-  assert.ok(multiple.ui_text.includes('Vienna'));
+  assert.ok(!multiple.ui_text.some((label) => label.includes('Vienna')));
   assert.ok(multiple.ui_text.includes('Paris'));
   assert.equal(multiple.preferences.temperature_unit, 'celsius');
   assert.equal(multiple.preferences.extra_weather[0].unit, 'fahrenheit');

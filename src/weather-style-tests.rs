@@ -34,13 +34,240 @@ fn weather_icons(state: &State) -> Vec<Rect> {
         .iter()
         .filter_map(|draw| match draw {
             Draw::Image(path, rect, ..) | Draw::TintedImage(path, rect, ..)
-                if path.contains("weather/") =>
+                if path.contains("ui-icons/weather-") || path.contains("weather/") =>
             {
                 Some(*rect)
             }
             _ => None,
         })
         .collect()
+}
+
+#[test]
+fn weather_icon_preferences_default_to_breezy_and_round_trip_per_instance() {
+    use crate::model::{HomeWidget, WeatherIconStyle};
+    let old: Preferences = serde_json::from_str(r#"{"extra_weather":[{}]}"#).unwrap();
+    assert_eq!(old.weather_icons, WeatherIconStyle::Breezy);
+    assert_eq!(old.extra_weather[0].icons, WeatherIconStyle::Breezy);
+    for icons in WeatherIconStyle::ALL {
+        let mut state = configured();
+        state.preferences.extra_weather.push(Default::default());
+        state
+            .preferences
+            .edit_weather(HomeWidget::ExtraWeather(0), |config| config.icons = icons);
+        state.preferences.weather_icons = WeatherIconStyle::Lucide;
+        let loaded: Preferences =
+            serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
+        assert_eq!(loaded.weather_icons, WeatherIconStyle::Lucide);
+        assert_eq!(loaded.extra_weather[0].icons, icons);
+        assert_eq!(loaded.weather_location, state.preferences.weather_location);
+    }
+}
+
+#[test]
+fn weather_icon_picker_saves_only_on_selection_and_restores_parent_for_remote_and_pointer() {
+    use crate::model::WeatherIconStyle;
+    let mut state = configured();
+    let cache = state.weather.cache.clone();
+    state.open(2);
+    state.section = WIDGETS_SECTION;
+    state.subpage = Some(Subpage::Weather);
+    state.focus = Target::WeatherShowLocation;
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::WeatherIcons);
+    state.direction(Direction::Right, &controls(&state));
+    assert_eq!(state.subpage, Some(Subpage::WeatherIcons));
+    assert_eq!(state.focus, Target::Choice(0));
+    for _ in 0..3 {
+        state.direction(Direction::Down, &controls(&state));
+    }
+    assert_eq!(state.focus, Target::Choice(3));
+    assert_eq!(state.preferences.weather_icons, WeatherIconStyle::Breezy);
+    state.back();
+    assert_eq!(state.focus, Target::WeatherIcons);
+    state.activate();
+    let rendered = scene(&state);
+    let control = rendered
+        .controls
+        .iter()
+        .find(|control| control.target == Target::Choice(3))
+        .unwrap();
+    let (x, y) = control.rect.center();
+    assert_eq!(
+        state.hit_test(&rendered.controls, x, y),
+        Some(Target::Choice(3))
+    );
+    state.pointer_focus(Target::Choice(3));
+    assert_eq!(state.activate(), [Effect::Save]);
+    assert_eq!(state.preferences.weather_icons, WeatherIconStyle::Kuankuan);
+    assert_eq!(state.subpage, Some(Subpage::Weather));
+    assert_eq!(state.focus, Target::WeatherIcons);
+    assert_eq!(state.weather.cache, cache);
+    state.activate();
+    assert_eq!(state.focus, Target::Choice(3));
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.focus, Target::WeatherIcons);
+}
+
+#[test]
+fn selected_icon_and_location_settings_drive_every_layout_preview_and_home_size() {
+    use crate::model::WeatherIconStyle;
+    for icons in WeatherIconStyle::ALL {
+        for show_location in [false, true] {
+            let mut state = configured();
+            state.preferences.weather_icons = icons;
+            state.preferences.weather_show_location = show_location;
+            for small in [false, true] {
+                state.preferences.weather_small = small;
+                for style in WeatherStyle::ALL {
+                    state.preferences.weather_style = style;
+                    let rendered = scene(&state);
+                    let paths: Vec<_> = rendered
+                        .draw
+                        .iter()
+                        .filter_map(|draw| match draw {
+                            Draw::Image(path, ..) | Draw::TintedImage(path, ..)
+                                if path.contains("weather/")
+                                    || path.contains("ui-icons/weather-") =>
+                            {
+                                Some(path)
+                            }
+                            _ => None,
+                        })
+                        .collect();
+                    if small || style != WeatherStyle::NoIcon {
+                        assert_eq!(paths.len(), 1);
+                        assert!(paths[0].ends_with(&icons.asset("partly-cloudy")));
+                    } else {
+                        assert!(paths.is_empty());
+                    }
+                    assert_eq!(
+                        rendered.draw.iter().any(|draw| matches!(draw,
+                        Draw::Text(label, ..) if label.contains("Vienna"))),
+                        show_location
+                    );
+                }
+            }
+            state.open(2);
+            state.section = WIDGETS_SECTION;
+            state.subpage = Some(Subpage::WeatherStyle);
+            let rendered = scene(&state);
+            let count = rendered.draw.iter().filter(|draw| matches!(draw,
+                Draw::Image(path, ..) | Draw::TintedImage(path, ..) if path.ends_with(&icons.asset("partly-cloudy")))).count();
+            assert_eq!(count, 2);
+            assert_eq!(
+                rendered.draw.iter().any(|draw| matches!(draw,
+                Draw::Text(label, ..) if label.contains("Vienna"))),
+                show_location
+            );
+            assert!(!state.weather.fetching());
+        }
+    }
+}
+
+#[test]
+fn location_visibility_defaults_on_and_round_trips_independently_per_widget() {
+    use crate::model::HomeWidget;
+    let mut prefs: Preferences = serde_json::from_str(r#"{"extra_weather":[{}]}"#).unwrap();
+    assert!(prefs.weather_show_location);
+    assert!(prefs.extra_weather[0].show_location);
+    prefs.edit_weather(HomeWidget::ExtraWeather(0), |config| {
+        config.show_location = false
+    });
+    let loaded: Preferences = serde_json::from_slice(&serde_json::to_vec(&prefs).unwrap()).unwrap();
+    assert!(loaded.weather_show_location);
+    assert!(!loaded.extra_weather[0].show_location);
+    prefs.edit_weather(HomeWidget::Weather, |config| config.show_location = false);
+    prefs.edit_weather(HomeWidget::ExtraWeather(0), |config| {
+        config.show_location = true
+    });
+    let loaded: Preferences = serde_json::from_slice(&serde_json::to_vec(&prefs).unwrap()).unwrap();
+    assert!(!loaded.weather_show_location);
+    assert!(loaded.extra_weather[0].show_location);
+}
+
+#[test]
+fn location_toggle_supports_remote_and_pointer_without_changing_forecast_or_cache() {
+    use crate::model::HomeWidget;
+    let mut state = configured();
+    state.preferences.extra_weather.push(Default::default());
+    let cache = state.weather.cache.clone();
+    let location = state.preferences.weather_location.clone();
+    state.open(2);
+    state.section = WIDGETS_SECTION;
+    state.subpage = Some(Subpage::Weather);
+    state.focus = Target::WeatherSize;
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::WeatherShowLocation);
+    assert_eq!(state.activate(), [Effect::Save]);
+    assert!(!state.preferences.weather_show_location);
+    assert_eq!(state.weather.cache, cache);
+    assert_eq!(state.preferences.weather_location, location);
+    state.active_weather = HomeWidget::ExtraWeather(0);
+    let rendered = scene(&state);
+    let control = rendered
+        .controls
+        .iter()
+        .find(|c| c.target == Target::WeatherShowLocation)
+        .unwrap();
+    let (x, y) = control.rect.center();
+    assert_eq!(
+        state.hit_test(&rendered.controls, x, y),
+        Some(Target::WeatherShowLocation)
+    );
+    state.pointer_focus(Target::WeatherShowLocation);
+    assert_eq!(state.activate(), [Effect::Save]);
+    assert!(!state.preferences.extra_weather[0].show_location);
+    assert!(!state.preferences.weather_show_location);
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::WeatherSize);
+}
+
+#[test]
+fn hidden_location_never_leaks_in_any_style_size_or_weather_state() {
+    for style in WeatherStyle::ALL {
+        for small in [false, true] {
+            for mode in 0..4 {
+                let mut state = configured();
+                state.preferences.weather_style = style;
+                state.preferences.weather_small = small;
+                state.preferences.weather_show_location = false;
+                state.weather.failed = mode == 1 || mode == 3;
+                if mode >= 2 {
+                    state.weather.cache = None;
+                    state.weather.loading = mode == 2;
+                }
+                let rendered = scene(&state);
+                assert!(!rendered.draw.iter().any(|draw| matches!(draw,
+                    Draw::Text(label, ..) if label.contains("Vienna"))));
+                let label = match mode {
+                    0 | 1 => "14°C",
+                    2 => state.preferences.language.t("loadingWeather"),
+                    _ => state.preferences.language.t("weatherUnavailable"),
+                };
+                assert!(rendered.draw.iter().any(|draw| matches!(draw,
+                    Draw::Text(text, ..) if text == label)));
+                if mode == 1 {
+                    assert!(rendered.draw.iter().any(|draw| matches!(draw,
+                        Draw::Text(label, ..) if label == state.preferences.language.t("lastReading"))));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn hidden_location_style_previews_are_private_but_configuration_keeps_city() {
+    let mut state = configured();
+    state.preferences.weather_show_location = false;
+    state.open(2);
+    state.section = WIDGETS_SECTION;
+    state.subpage = Some(Subpage::WeatherStyle);
+    assert!(!scene(&state).draw.iter().any(|draw| matches!(draw,
+        Draw::Text(label, ..) if label.contains("Vienna"))));
+    state.subpage = Some(Subpage::Weather);
+    assert!(scene(&state).draw.iter().any(|draw| matches!(draw,
+        Draw::Text(label, ..) if label == "Vienna")));
 }
 
 #[test]
