@@ -1667,6 +1667,7 @@ impl State {
                             },
                             controls,
                         ),
+                        Direction::Down if self.drawer_apps().is_empty() => {}
                         Direction::Down => {
                             self.open(1);
                             self.focus = self.first_content();
