@@ -3826,6 +3826,9 @@ fn shorten(text: &str) -> String {
 
 /// A custom name such as "PS5" can choose the icon; otherwise the TV's label.
 fn input_icon(input: &Input, custom: Option<&str>) -> &'static str {
+    if input.is_usb_storage() {
+        return "usb";
+    }
     custom
         .map(device_icon)
         .filter(|icon| *icon != "hdmi")
@@ -3899,7 +3902,10 @@ fn input_status_color(input: &Input) -> u32 {
 /// the port), the port when a custom name replaces it, then the status.
 pub fn input_status(input: &Input, renamed: bool, language: Language) -> String {
     let mut parts = vec![];
-    if input.connected == Some(true) && input.title != input.port {
+    if input.connected == Some(true)
+        && input.title != input.port
+        && (!input.is_usb_storage() || renamed)
+    {
         parts.push(input.title.as_str());
     }
     if renamed {
