@@ -226,6 +226,59 @@ struct Press {
     start: Instant,
     held: bool,
     pointer: bool,
+    pointer_gap: Option<Instant>,
+}
+
+impl Press {
+    const POINTER_GAP_GRACE: Duration = Duration::from_millis(150);
+
+    fn gap_expired(&self, now: Instant) -> bool {
+        self.pointer_gap
+            .is_some_and(|start| now.duration_since(start) >= Self::POINTER_GAP_GRACE)
+    }
+
+    /// Keep short cursor gaps, but never revive a cancelled drag on re-entry.
+    fn pointer_motion(&mut self, hovered: Option<&Target>, now: Instant) -> bool {
+        if !self.pointer {
+            return true;
+        }
+        if self.gap_expired(now) {
+            return false;
+        }
+        match hovered {
+            Some(target) if target == &self.target => self.pointer_gap = None,
+            Some(_) => return false,
+            None => {
+                self.pointer_gap.get_or_insert(now);
+            }
+        }
+        true
+    }
+
+    fn hold_ready(&self, now: Instant) -> bool {
+        !self.held
+            && self.pointer_gap.is_none()
+            && now.duration_since(self.start) >= self.hold_after()
+    }
+
+    fn release(press: &mut Option<Self>, pointer: bool) -> Option<Self> {
+        if press.as_ref().is_some_and(|p| p.pointer == pointer) {
+            press.take()
+        } else {
+            None
+        }
+    }
+
+    /// Remote OK stays at 600 ms. Magic Remote wheel clicks often last longer
+    /// than that, so pointer uses a higher bar before reorder/options steal the
+    /// click (right-click still opens options immediately).
+    fn hold_after(&self) -> Duration {
+        if self.pointer {
+            Duration::from_millis(1100)
+        } else {
+            Duration::from_millis(600)
+        }
+    }
 }
 
 const SCRIPT_POINTER: u32 = u32::MAX - 1;
@@ -1688,12 +1741,22 @@ fn run() -> Result<(), String> {
                             cue = Some(Cue::Select);
                         }
                         Keycode::Return | Keycode::KpEnter if !repeat => {
-                            press = Some(Press {
-                                target: state.focus.clone(),
-                                start: Instant::now(),
-                                held: false,
-                                pointer: false,
-                            });
+                            // Magic Remote may emit Return alongside the wheel
+                            // click; do not replace an in-flight pointer press.
+                            // If a pointer hold already opened options and mouse-up
+                            // was lost, drop it so D-pad OK is not stuck.
+                            if press.as_ref().is_some_and(|p| p.pointer && p.held) {
+                                press = None;
+                            }
+                            if !press.as_ref().is_some_and(|p| p.pointer) {
+                                press = Some(Press {
+                                    target: state.focus.clone(),
+                                    start: Instant::now(),
+                                    held: false,
+                                    pointer: false,
+                                    pointer_gap: None,
+                                });
+                            }
                         }
                         Keycode::Backspace if state.text_input_active() => state.delete(),
                         Keycode::Backspace if !repeat => {
@@ -1733,8 +1796,8 @@ fn run() -> Result<(), String> {
                     keycode: Some(Keycode::Return | Keycode::KpEnter),
                     ..
                 } => {
-                    if let Some(held) = press.take()
-                        && !held.pointer
+                    // Only consume a keyboard press; never steal a pointer click.
+                    if let Some(held) = Press::release(&mut press, false)
                         && !held.held
                         && held.target == state.focus
                     {
@@ -1748,16 +1811,20 @@ fn run() -> Result<(), String> {
                 {
                     let hovered = hit(&scene.controls, &window, x, y, &state);
                     if let Some(target) = hovered.clone() {
+                        let changed = state.focus != target;
                         state.pointer_focus(target);
-                        cue = Some(Cue::Navigate);
+                        if changed {
+                            cue = Some(Cue::Navigate);
+                        }
                     }
                     if state.hover != hovered {
                         state.hover = hovered.clone();
                         state.dirty = true;
                     }
+                    // Brief jitter gaps survive; other targets and sustained departures do not.
                     if press
-                        .as_ref()
-                        .is_some_and(|p| p.pointer && hovered.as_ref() != Some(&p.target))
+                        .as_mut()
+                        .is_some_and(|p| !p.pointer_motion(hovered.as_ref(), Instant::now()))
                     {
                         press = None;
                     }
@@ -1784,6 +1851,7 @@ fn run() -> Result<(), String> {
                                 start: Instant::now(),
                                 held: false,
                                 pointer: true,
+                                pointer_gap: None,
                             });
                         }
                     } else if mouse_btn == MouseButton::Left {
@@ -1795,25 +1863,27 @@ fn run() -> Result<(), String> {
                     x,
                     y,
                     ..
-                } => match press.take() {
-                    Some(held)
-                        if held.pointer
+                } => {
+                    if press.as_ref().is_some_and(|p| p.pointer) {
+                        if let Some(held) = Press::release(&mut press, true)
                             && !held.held
+                            && !held.gap_expired(Instant::now())
                             && hit(&scene.controls, &window, x, y, &state).as_ref()
-                                == Some(&held.target) =>
-                    {
-                        pending = state.activate();
-                        cue = Some(Cue::Select);
-                    }
-                    None if scene.modal.is_some_and(|rect| {
-                        pointer_position(&window, x, y).is_some_and(|(x, y)| !rect.contains(x, y))
-                    }) =>
+                                == Some(&held.target)
+                        {
+                            pending = state.activate();
+                            cue = Some(Cue::Select);
+                        }
+                    } else if press.is_none()
+                        && scene.modal.is_some_and(|rect| {
+                            pointer_position(&window, x, y)
+                                .is_some_and(|(x, y)| !rect.contains(x, y))
+                        })
                     {
                         pending = state.back();
                         cue = Some(Cue::Back);
                     }
-                    _ => {}
-                },
+                }
                 Event::MouseWheel { x, y, .. } if state.recents_open() => {
                     press = None;
                     let delta = if x != 0 { x } else { -y };
@@ -1904,9 +1974,14 @@ fn run() -> Result<(), String> {
                 &updates,
             );
         }
+        let press_now = Instant::now();
+        if press.as_ref().is_some_and(|p| p.gap_expired(press_now)) {
+            press = None;
+            state.pressed = None;
+            state.dirty = true;
+        }
         if let Some(held) = &mut press
-            && !held.held
-            && held.start.elapsed() >= Duration::from_millis(600)
+            && held.hold_ready(press_now)
         {
             held.held = true;
             state.pressed = None;
