@@ -280,14 +280,11 @@ try {
     assert.ok(allApps.apps.includes(id));
   }
   const settings = await scenario('settings', `${backgroundsPage},down,enter,enter`);
-  assert.equal(settings.preferences.background, 'forest');
+  assert.equal(settings.preferences.background, 'midnight');
   const saved = await scenario('saved', 'home,hold,right,back');
-  assert.equal(saved.preferences.background, 'forest');
+  assert.equal(saved.preferences.background, 'midnight');
   assert.deepEqual(saved.preferences.favorites.slice(0, 2), ['youtube.leanback.v4', 'netflix']);
-  const upload = await scenario(
-    'wallpaper-upload',
-    `${backgroundsPage},up,up,up,enter,await-upload`,
-  );
+  const upload = await scenario('wallpaper-upload', `${backgroundsPage},up,enter,await-upload`);
   assert.equal(upload.modal, true);
   assert.equal(upload.focus, 'CloseDialog');
   assert.ok(upload.ui_text.includes('Upload'));
@@ -301,7 +298,7 @@ try {
   );
   const uploadClosed = await scenario(
     'wallpaper-upload-closed',
-    `${backgroundsPage},up,up,up,enter,await-upload,back`,
+    `${backgroundsPage},up,enter,await-upload,back`,
   );
   assert.equal(uploadClosed.modal, false);
   assert.equal(uploadClosed.focus, 'UploadWallpaper');
@@ -315,17 +312,17 @@ try {
     .jpeg()
     .toFile(path.join(customDirectory, 'thumbnail.jpg'));
   await fs.writeFile(path.join(customDirectory, 'metadata.json'), JSON.stringify({ id: customId }));
-  const custom = await scenario('wallpaper-custom', `${backgroundsPage},down,enter,enter`);
+  const custom = await scenario('wallpaper-custom', `${backgroundsPage},right,enter,enter`);
   assert.equal(custom.preferences.background, customId);
   assert.equal(custom.modal, false);
-  assert.deepEqual(custom.focus, { Background: 9 });
+  assert.deepEqual(custom.focus, { Background: 1 });
   const customRestored = await scenario('wallpaper-custom-restored', 'home,down');
   assert.equal(customRestored.preferences.background, customId);
   const bundledRestored = await scenario(
     'wallpaper-bundled-restored',
-    `${backgroundsPage},up,enter,enter`,
+    `${backgroundsPage},left,enter,enter`,
   );
-  assert.equal(bundledRestored.preferences.background, 'forest');
+  assert.equal(bundledRestored.preferences.background, 'midnight');
   const clock = await scenario('clock', 'settings,click:900:200');
   assert.equal(clock.subpage, 'Clock');
   assert.equal(clock.focus, 'ClockFormat');
@@ -381,7 +378,7 @@ try {
     .raw()
     .toBuffer();
   assert.notDeepEqual(high, low, '4K vector text must use the drawable pixel scale');
-  const hasWallpaper = await fs.access(path.join(out, 'assets/wallpapers/forest@2x.jpg')).then(
+  const hasWallpaper = await fs.access(path.join(out, 'assets/wallpapers/midnight@2x.jpg')).then(
     () => true,
     () => false,
   );
@@ -590,7 +587,7 @@ try {
   await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
   const gradientDisabled = await scenario(
     'wallpaper-gradient-disabled',
-    `${backgroundsPage},up,up,right,enter`,
+    `${backgroundsPage},up,right,enter`,
   );
   assert.equal(gradientDisabled.focus, 'WallpaperGradient');
   assert.equal(gradientDisabled.preferences.wallpaper_gradient, false);
@@ -599,12 +596,12 @@ try {
   assert.equal(gradientRestored.preferences.wallpaper_gradient, false);
   const gradientEnabled = await scenario(
     'wallpaper-gradient-enabled',
-    `${backgroundsPage},up,up,right,enter`,
+    `${backgroundsPage},up,right,enter`,
   );
   assert.equal(gradientEnabled.preferences.wallpaper_gradient, true);
   const cycleEnabled = await scenario(
     'wallpaper-cycle-enabled',
-    `${backgroundsPage},up,up,right,right,enter`,
+    `${backgroundsPage},up,right,right,enter`,
   );
   assert.equal(cycleEnabled.subpage, null);
   assert.equal(cycleEnabled.focus, 'WallpaperCycle');
@@ -613,12 +610,12 @@ try {
   const cycledAfterRestart = await scenario('wallpaper-cycle-restart', 'down');
   assert.equal(
     cycledAfterRestart.preferences.background,
-    'san-francisco',
+    customId,
     'enabled rotation advances to the next wallpaper when Luma restarts',
   );
   const cycleDisabled = await scenario(
     'wallpaper-cycle-disabled',
-    `${backgroundsPage},up,up,right,right,enter`,
+    `${backgroundsPage},up,right,right,enter`,
   );
   assert.equal(cycleDisabled.preferences.wallpaper_cycle, false);
   assert.ok(cycleDisabled.ui_text.includes('Rotation'));

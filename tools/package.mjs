@@ -93,6 +93,8 @@ await fs.cp(path.join(out, 'assets'), path.join(stage, 'assets'), {
       'splash',
       'splash.png',
     ].includes(path.basename(source)) &&
+    (!['wallpapers', 'thumbnails'].includes(path.basename(path.dirname(source))) ||
+      /^midnight(?:-plain)?(?:@2x)?\.(?:jpg|glass\.png)$/.test(path.basename(source))) &&
     (highResolution || !source.endsWith('@2x.jpg')) &&
     !(
       source.endsWith('.png') && ['logos', 'ui-icons'].includes(path.basename(path.dirname(source)))

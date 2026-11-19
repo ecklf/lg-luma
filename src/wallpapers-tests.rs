@@ -77,7 +77,7 @@ fn generated_ids_are_safe_and_selection_survives_preferences_reload() {
         assert!(!valid_id(invalid));
         preferences.background = invalid.into();
         preferences.sanitize();
-        assert_eq!(preferences.background, "dunes");
+        assert_eq!(preferences.background, "midnight");
     }
 }
 

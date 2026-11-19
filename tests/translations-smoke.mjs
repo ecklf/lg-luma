@@ -181,13 +181,25 @@ try {
   const input = await scenario('zh-input-options', `${inputsPage},enter`);
   for (const key of ['stateOn', 'stateOff', 'stateAuto', 'inputWhenConnected'])
     contains(input, key, 'zh');
+  const customId = `custom-${'2'.repeat(32)}`;
+  const customDirectory = path.join(temporary, 'wallpapers', customId);
+  await fs.mkdir(customDirectory, { recursive: true });
+  await fs.copyFile(
+    path.join(out, 'assets/wallpapers/midnight.jpg'),
+    path.join(customDirectory, 'wallpaper.jpg'),
+  );
+  await fs.copyFile(
+    path.join(out, 'assets/thumbnails/midnight.jpg'),
+    path.join(customDirectory, 'thumbnail.jpg'),
+  );
+  await fs.writeFile(path.join(customDirectory, 'metadata.json'), JSON.stringify({ id: customId }));
   const background = await scenario('zh-background', backgroundsPage);
   for (const key of ['background', 'uploadWallpaper']) contains(background, key, 'zh');
-  assert.deepEqual(background.focus, { Background: 3 });
+  assert.deepEqual(background.focus, { Background: 0 });
   // Background thumbnails have no captions; their actions are translated in the popup.
   const backgroundOptions = await scenario(
     'zh-background-options',
-    `${backgroundsPage},down,enter`,
+    `${backgroundsPage},right,enter`,
   );
   assert.equal(backgroundOptions.modal, true);
   assert.equal(backgroundOptions.focus, 'UseBackground');

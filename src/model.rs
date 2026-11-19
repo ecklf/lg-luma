@@ -3,17 +3,8 @@ use crate::weather::{Location, Unit};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 
-pub const BACKGROUNDS: [(&str, &str); 9] = [
-    ("slate", "Slate"),
-    ("midnight", "Midnight"),
-    ("prism", "Prism"),
-    ("dunes", "Monument Valley"),
-    ("san-francisco", "San Francisco"),
-    ("summit", "Summit"),
-    ("forest", "Forest"),
-    ("yosemite", "Yosemite"),
-    ("northern-lights", "Northern lights"),
-];
+pub const BACKGROUNDS: [(&str, &str); 1] = [("midnight", "Midnight")];
+pub const DEFAULT_BACKGROUND: &str = "midnight";
 
 // Generic fallbacks use delimited words, so "game" does not match "endgame".
 // Non-ASCII bytes count as boundaries for localized titles. Curated vector
@@ -488,7 +479,7 @@ impl Default for Preferences {
             favorites: None,
             custom_tiles: vec![],
             hidden: vec![],
-            background: "dunes".into(),
+            background: DEFAULT_BACKGROUND.into(),
             deleted_backgrounds: vec![],
             hour_24: false,
             reduced_motion: false,
@@ -913,7 +904,7 @@ impl Preferences {
         if !BACKGROUNDS.iter().any(|(id, _)| *id == self.background)
             && !crate::wallpapers::valid_id(&self.background)
         {
-            self.background = "dunes".into();
+            self.background = DEFAULT_BACKGROUND.into();
         }
         let mut seen = HashSet::new();
         self.deleted_backgrounds.retain(|id| {
