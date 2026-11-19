@@ -997,37 +997,17 @@ impl Renderer {
             }
         }
         let started = Instant::now();
-        // As paint.frag: v_shape.zw is the quad's half size, the box is that minus blur.
-        let (hx, hy) = (quad.w / 2. - blur, quad.h / 2. - blur);
-        let r = radius.min(hx.min(hy));
-        let coverage = |x: f32, y: f32| {
-            let (qx, qy) = (x.abs() - hx + r, y.abs() - hy + r);
-            let (ox, oy) = (qx.max(0.), qy.max(0.));
-            let d = (ox * ox + oy * oy).sqrt() + qx.max(qy).min(0.) - r;
-            let t = ((d + blur) / (2. * blur)).clamp(0., 1.);
-            ((1. - t * t * (3. - 2. * t)) * 255.).round() as u8
-        };
-        // The coverage is symmetric about both centre lines: compute one quarter (plus the
-        // centre row and column of odd sizes) and mirror it.
-        let (w, h) = (width as usize, height as usize);
-        let mut pixels = vec![255u8; texels * 4];
-        for row in 0..h.div_ceil(2) {
-            let y = -quad.h / 2. + (row as f32 + 0.5) / scale;
-            for column in 0..w.div_ceil(2) {
-                let x = -quad.w / 2. + (column as f32 + 0.5) / scale;
-                let value = coverage(x, y);
-                for (r, c) in [
-                    (row, column),
-                    (row, w - 1 - column),
-                    (h - 1 - row, column),
-                    (h - 1 - row, w - 1 - column),
-                ] {
-                    pixels[(r * w + c) * 4 + 3] = value;
-                }
-            }
-        }
+        let pixels = shadow_mask(quad, radius, blur, scale, width, height);
         self.stats.image_load_ms += started.elapsed().as_secs_f64() * 1000.;
-        let mut texture = texture(width, height, &pixels);
+        let mut texture = if self.info.version.starts_with("OpenGL ES 3") {
+            upload_texture(width, height, &pixels, true)
+        } else {
+            let rgba: Vec<u8> = pixels
+                .iter()
+                .flat_map(|&alpha| [255, 255, 255, alpha])
+                .collect();
+            texture(width, height, &rgba)
+        };
         texture.frame = frame;
         let id = texture.id;
         self.shadows.insert(key, texture);
@@ -2457,7 +2437,51 @@ impl Drop for Renderer {
     }
 }
 
+fn shadow_mask(quad: Rect, radius: f32, blur: f32, scale: f32, width: u32, height: u32) -> Vec<u8> {
+    // As paint.frag: v_shape.zw is the quad's half size, the box is that minus blur.
+    let (hx, hy) = (quad.w / 2. - blur, quad.h / 2. - blur);
+    let r = radius.min(hx.min(hy));
+    let coverage = |qx: f32, qy: f32| {
+        let (ox, oy) = (qx.max(0.), qy.max(0.));
+        let d = (ox * ox + oy * oy).sqrt() + qx.max(qy).min(0.) - r;
+        let t = ((d + blur) / (2. * blur)).clamp(0., 1.);
+        ((1. - t * t * (3. - 2. * t)) * 255.).round() as u8
+    };
+    // The coverage is symmetric about both centre lines: compute one quarter (plus the
+    // centre row and column of odd sizes) and mirror it.
+    let (w, h) = (width as usize, height as usize);
+    let mut pixels = vec![255u8; w * h];
+    for row in 0..h.div_ceil(2) {
+        let y = -quad.h / 2. + (row as f32 + 0.5) / scale;
+        let qy = y.abs() - hy + r;
+        for column in 0..w.div_ceil(2) {
+            let x = -quad.w / 2. + (column as f32 + 0.5) / scale;
+            let qx = x.abs() - hx + r;
+            let value = coverage(qx, qy);
+            // Past this column the distance depends only on y, or the
+            // rounded coverage has already saturated at full opacity.
+            if value == 255 || qx <= qy.min(0.) {
+                if value != 255 {
+                    pixels[row * w + column..row * w + w - column].fill(value);
+                }
+                break;
+            }
+            pixels[row * w + column] = value;
+            pixels[row * w + w - 1 - column] = value;
+        }
+        let mirror = h - 1 - row;
+        if mirror != row {
+            pixels.copy_within(row * w..(row + 1) * w, mirror * w);
+        }
+    }
+    pixels
+}
+
 fn texture(width: u32, height: u32, pixels: &[u8]) -> Texture {
+    upload_texture(width, height, pixels, false)
+}
+
+fn upload_texture(width: u32, height: u32, pixels: &[u8], coverage: bool) -> Texture {
     let mut id = 0;
     unsafe {
         gl::GenTextures(1, &mut id);
@@ -2466,14 +2490,25 @@ fn texture(width: u32, height: u32, pixels: &[u8]) -> Texture {
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
+        if coverage {
+            // Preserve the original white RGB and filtered coverage in alpha.
+            for channel in [
+                gl::TEXTURE_SWIZZLE_R,
+                gl::TEXTURE_SWIZZLE_G,
+                gl::TEXTURE_SWIZZLE_B,
+            ] {
+                gl::TexParameteri(gl::TEXTURE_2D, channel, gl::ONE as i32);
+            }
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_SWIZZLE_A, gl::RED as i32);
+        }
         gl::TexImage2D(
             gl::TEXTURE_2D,
             0,
-            gl::RGBA as i32,
+            if coverage { gl::R8 } else { gl::RGBA } as i32,
             width as i32,
             height as i32,
             0,
-            gl::RGBA,
+            if coverage { gl::RED } else { gl::RGBA },
             gl::UNSIGNED_BYTE,
             if pixels.is_empty() {
                 std::ptr::null()
@@ -2487,7 +2522,9 @@ fn texture(width: u32, height: u32, pixels: &[u8]) -> Texture {
         width,
         height,
         frame: 0,
-        opaque: !pixels.is_empty() && pixels.chunks_exact(4).all(|texel| texel[3] == 255),
+        opaque: !coverage
+            && !pixels.is_empty()
+            && pixels.chunks_exact(4).all(|texel| texel[3] == 255),
     }
 }
 
@@ -2654,5 +2691,36 @@ fn link_source(vertex: &str, fragment: &str, attributes: &[&CStr]) -> Result<GLu
             ));
         }
         Ok(program)
+    }
+}
+
+#[cfg(test)]
+mod shadow_tests {
+    use super::*;
+
+    #[test]
+    fn compact_mask_matches_individual_texels() {
+        for (width, height) in [(1, 1), (2, 17), (65, 64), (314, 199), (1876, 279)] {
+            for scale in [0.75, 1., 2.] {
+                let quad = Rect::new(0., 0., width as f32 / scale, height as f32 / scale);
+                for (radius, blur) in [(0., 1.), (19.2, 22.), (60., 34.)] {
+                    let mask = shadow_mask(quad, radius, blur, scale, width, height);
+                    let hx = quad.w / 2. - blur;
+                    let hy = quad.h / 2. - blur;
+                    let r = radius.min(hx.min(hy));
+                    for (index, &alpha) in mask.iter().enumerate() {
+                        let x = index as u32 % width;
+                        let y = index as u32 / width;
+                        let x = -quad.w / 2. + (x.min(width - 1 - x) as f32 + 0.5) / scale;
+                        let y = -quad.h / 2. + (y.min(height - 1 - y) as f32 + 0.5) / scale;
+                        let (qx, qy) = (x.abs() - hx + r, y.abs() - hy + r);
+                        let (ox, oy) = (qx.max(0.), qy.max(0.));
+                        let distance = (ox * ox + oy * oy).sqrt() + qx.max(qy).min(0.) - r;
+                        let t = ((distance + blur) / (2. * blur)).clamp(0., 1.);
+                        assert_eq!(alpha, ((1. - t * t * (3. - 2. * t)) * 255.).round() as u8);
+                    }
+                }
+            }
+        }
     }
 }
