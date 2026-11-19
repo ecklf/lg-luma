@@ -36,6 +36,8 @@ pub const HOME_STRIP_LEFT: f32 = 84.;
 pub const HOME_STRIP_RIGHT: f32 = 1836.;
 pub const HOME_TILE_WIDTH: f32 = 270.;
 pub const HOME_TILE_PITCH: f32 = 296.4;
+pub const HOME_DOCK_SLOTS: usize = 6;
+pub const HOME_DOCK_PADDING: f32 = 24.;
 pub const BACKGROUND_FADE: f32 = 0.4;
 pub const CYCLE_FADE: f32 = 1.6;
 
@@ -703,7 +705,7 @@ impl State {
     /// Backfill the six visible dock slots without changing saved favorites.
     pub fn dock_apps(&self) -> Vec<&App> {
         let mut apps = self.favorite_apps();
-        if apps.len() < 6 {
+        if apps.len() < HOME_DOCK_SLOTS {
             let mut remaining: Vec<_> = self
                 .inventory
                 .apps
@@ -714,7 +716,7 @@ impl State {
                 })
                 .collect();
             remaining.sort_by(|a, b| self.preferences.compare_apps(a, b));
-            apps.extend(remaining.into_iter().take(6 - apps.len()));
+            apps.extend(remaining.into_iter().take(HOME_DOCK_SLOTS - apps.len()));
         }
         apps
     }
@@ -750,9 +752,28 @@ impl State {
 
     /// The favourites' glass card: their tiles scroll, draw and take pointer input only inside it.
     pub fn favorites_viewport(&self) -> Rect {
+        // dock_apps backfills from all visible apps. For pointer/wheel events we
+        // only need the number of occupied slots, not their sorted order.
+        let slots = self
+            .inventory
+            .apps
+            .iter()
+            .filter(|app| !self.preferences.hidden.contains(&app.id))
+            .take(HOME_DOCK_SLOTS)
+            .count();
+        self.dock_viewport_for(slots)
+    }
+
+    pub fn dock_viewport_for(&self, count: usize) -> Rect {
         let content = self.content_viewport();
-        let inset = HOME_STRIP_LEFT - 24.;
-        Rect::new(inset, content.y, 1920. - 2. * inset, content.h)
+        let tiles = if (1..HOME_DOCK_SLOTS).contains(&count) {
+            HOME_TILE_WIDTH + (count - 1) as f32 * HOME_TILE_PITCH
+        } else {
+            // Retain the six-slot viewport for overflow and the loading/empty UI.
+            HOME_STRIP_RIGHT - HOME_STRIP_LEFT
+        };
+        let width = tiles + 2. * HOME_DOCK_PADDING;
+        Rect::new((1920. - width) / 2., content.y, width, content.h)
     }
 
     pub fn apps_viewport(&self) -> Rect {

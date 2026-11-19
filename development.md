@@ -385,6 +385,8 @@ corresponding dock app as the selected Home favorite. Up within later grid rows 
 Down lifts the dock to the top and reveals a six-column app grid beneath it. Favorites stay in the
 dock instead of appearing twice in the grid. The drawer has no search or category toolbar.
 The Home dock follows saved pinned order, with no Apps button or Move apps label above it.
+With one to five visible cards, the glass fits the cards with 24 logical pixels of padding on each
+side and stays centered on Home and in the open drawer. Six or more cards use the full-width dock.
 Unused slots (up to six cards) backfill with visible apps in alphabetical order without changing
 favorites. These backfilled apps are excluded from the drawer to avoid duplicates and cannot be
 reordered. In Settings → Apps, a visible favorite's action popup includes **Move**, which opens
