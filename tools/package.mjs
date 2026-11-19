@@ -84,7 +84,14 @@ await fs.cp(path.join(out, 'assets'), path.join(stage, 'assets'), {
   filter: (source) =>
     path.basename(source) !== '.DS_Store' &&
     // Protect direct packaging calls that reuse an older generated asset cache.
-    !['app-icons', 'icons.json', 'colors.json', 'splash'].includes(path.basename(source)) &&
+    ![
+      'app-icons',
+      'icons.json',
+      'colors.json',
+      'wallpaper-runtime',
+      'foregrounds',
+      'splash',
+    ].includes(path.basename(source)) &&
     (highResolution || !source.endsWith('@2x.jpg')) &&
     !(
       source.endsWith('.png') && ['logos', 'ui-icons'].includes(path.basename(path.dirname(source)))
