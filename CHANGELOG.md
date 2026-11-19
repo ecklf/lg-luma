@@ -1,5 +1,15 @@
 # lg-luma
 
+## 3.11.0
+
+### Minor Changes
+
+- 4e2617a: Wrap left/right navigation between the first and last app in favorites and the app drawer by default, without a setting.
+
+### Patch Changes
+
+- af1da29: Shorten the main-thread pause when Luma prepares a new shadow. GLES 3 TVs upload a single coverage channel for each shadow and reuse the existing white color when sampling it.
+
 ## 3.10.1
 
 ### Patch Changes
