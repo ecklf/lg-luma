@@ -1,15 +1,5 @@
 # lg-luma
 
-## 3.9.0
-
-### Minor Changes
-
-- 5e4c33a: Center the Home dock and size it to fit when it contains one to five apps. App cards keep their usual size and spacing.
-
-### Patch Changes
-
-- f180d10: Keep the selected Home dock tile and widgets in place when pressing Down would open an empty app drawer.
-
 ## 3.8.3
 
 ### Patch Changes
