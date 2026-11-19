@@ -518,7 +518,7 @@ try {
     'attributions-bottom',
     `${attributionPage},${Array(50).fill('down').join(',')}`,
     [],
-    180,
+    360,
   );
   assert.ok(creditsBottom.scroll > 0);
   assert.ok(creditsBottom.ui_text.some((text) => text.startsWith('Thank you')));

@@ -384,6 +384,8 @@ button. The viewport and scrollbar stay fixed while text scrolls, with drawing a
 clipped to the field. The body includes author credits, source URLs and references to full license
 texts in the package; legal notices retain their original English text. No keyboard, network request
 or preference save is involved. `ATTRIBUTIONS.txt` also ships beside `ASSETS.md` in the package.
+`xvfb-run -a pnpm screenshots --weather-icons` captures the icon picker, private layout previews
+and Attributions page using the native renderer and cached sample weather.
 Disabled weather
 is hidden. Enabled weather without a location uses the same large 144px artwork and a prominent setup action.
 Settings lists render behind fixed controls. The drawer grid is clipped below its fixed dock so
