@@ -80,6 +80,13 @@ pub struct Input {
     pub signal: Option<bool>,
 }
 
+impl Input {
+    /// A storage identity, not an application ID or an HDMI source.
+    pub fn is_usb_storage(&self) -> bool {
+        self.id.starts_with("luma.usb.")
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Inventory {
     pub apps: Vec<App>,
@@ -806,9 +813,13 @@ impl Preferences {
         self.input_names.get(&input.id).map(String::as_str)
     }
 
-    /// The custom name if one is saved, otherwise the port ("HDMI 2").
+    /// The custom name, otherwise the HDMI port or the storage device's name.
     pub fn input_title<'a>(&'a self, input: &'a Input) -> &'a str {
-        self.input_name(input).unwrap_or(&input.port)
+        self.input_name(input).unwrap_or(if input.is_usb_storage() {
+            &input.title
+        } else {
+            &input.port
+        })
     }
 
     /// Saves a cleaned name; an empty name restores the port title.

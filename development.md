@@ -454,6 +454,35 @@ only the detail to **No signal** when a cable is present. A stale positive signa
 an unplugged cable. A powered dongle stays visible in Auto even without signal; On/Off overrides
 and older firmware without signal information retain their behavior.
 
+The same worker refresh also reads USB storage using
+`com.webos.service.attachedstoragemanager/listDevices` with `{"deviceType":["usb"]}`.
+This is a TV-specific API, not an assumption that OSE's PDM schema applies to TVs.
+Only USB entries with unambiguous device IDs are included. Bounded SHA-256-derived storage
+identities keep names/visibility/icons separate from application and HDMI IDs. Device names
+are shown by default, with a USB icon; existing input overrides remain available. Identities
+remain stable only while webOS reports the same device ID.
+USB service errors are logged and retain the last valid storage snapshot (empty initially),
+with a ten-second retry backoff, without failing an otherwise valid HDMI refresh. A successful
+empty read removes disconnected storage. The existing interaction deferral/focus restoration
+also applies to storage snapshots. F5/System refresh reads storage as part of inventory.
+
+Selecting USB storage first rechecks its presence, then reads the unfiltered installed app list
+and opens the first available LG media browser: `com.webos.app.mediadiscovery`,
+`com.webos.app.photovideo`, or `com.webos.app.smartshare`. It opens the browser's normal entry
+screen, not a verified device-specific deep link; choose the device there. A missing browser,
+disconnected device, or denied read/launch uses the existing launch-error notice. Launch is
+sent once and never retried automatically. Storage launches do not increment app usage counts.
+There is no filesystem browsing, media indexing, formatting, ejecting, or non-storage USB
+peripheral support in Luma. No USB devices are fabricated in the desktop inventory.
+
+Discovery references: [TV storage API inventory](https://github.com/ohmybahgosh/WEBOS-LUNA-SEND-ATLAS/blob/main/docs/services/com.webos.service.attachedstoragemanager.md)
+and [LG media app identities](https://gist.github.com/aabytt/bddbb1bcf031a050d89a89aeee3a6737).
+These establish candidate TV APIs, not hardware verification of this implementation. Manually
+check normal-tile and Home-takeover launches with no drive, one/two drives, hot-plug/removal,
+renaming/hiding, removal while focused/pressed, service denial, and media-app availability.
+Confirm the media browser lets the user select the intended storage on each firmware before
+claiming verified USB support.
+
 System text events update app/location queries; Done/Back stops editing and restores focus.
 
 ### Recent apps

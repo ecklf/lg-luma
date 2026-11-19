@@ -1308,7 +1308,7 @@ fn run() -> Result<(), String> {
                 }
                 Response::Inputs(result) => {
                     if let Err(error) = input_refresh.completed(Instant::now(), result) {
-                        eprintln!("Luma HDMI refresh: {error}");
+                        eprintln!("Luma input refresh: {error}");
                     }
                 }
                 Response::Launched { id, result } => {
