@@ -89,6 +89,11 @@ and `target/release/`. Desktop results do not establish TV size or performance.
 
 ## Controls and navigation
 
+Left/right navigation wraps between the first and last visible app in the favorites dock
+(on Home and in the drawer) and the app drawer grid. This is always enabled, with no preference.
+Drawer navigation still crosses row boundaries in list order; Up/Down keeps its six-column
+behavior. App management and favorite reordering retain their existing non-wrapping behavior.
+
 Focused settings rows, sidebar pills and corner-menu actions retain bright glass with dark
 labels/icons. Text tint is applied in the fragment shader, separately from glyph coverage.
 Desktop GL/GLES checks do not replace webOS hardware verification of label contrast.

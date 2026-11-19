@@ -1549,10 +1549,10 @@ impl State {
                             .get(index.min(self.apps().len().saturating_sub(1)))
                             .map_or_else(|| self.focus.clone(), |app| Target::App(app.id.clone())),
                         Direction::Left => {
-                            Target::DockApp(apps[index.saturating_sub(1)].id.clone())
+                            Target::DockApp(apps[(index + apps.len() - 1) % apps.len()].id.clone())
                         }
                         Direction::Right => {
-                            Target::DockApp(apps[(index + 1).min(apps.len() - 1)].id.clone())
+                            Target::DockApp(apps[(index + 1) % apps.len()].id.clone())
                         }
                     };
                     if matches!(direction, Direction::Up) {
@@ -1652,9 +1652,9 @@ impl State {
                     match direction {
                         Direction::Left | Direction::Right => {
                             let next = if matches!(direction, Direction::Left) {
-                                index.saturating_sub(1)
+                                (index + apps.len() - 1) % apps.len()
                             } else {
-                                (index + 1).min(apps.len() - 1)
+                                (index + 1) % apps.len()
                             };
                             let id = apps[next].id.clone();
                             self.focus(Target::App(id), controls);
@@ -1989,12 +1989,12 @@ impl State {
                     // Its grid index still defines the route; reveal_focus then
                     // scrolls it into view, without letting the fixed nav steal Up.
                     let next = match direction {
-                        Direction::Left => {
-                            Some(Target::App(apps[index.saturating_sub(1)].id.clone()))
-                        }
-                        Direction::Right => Some(Target::App(
-                            apps[(index + 1).min(apps.len() - 1)].id.clone(),
+                        Direction::Left => Some(Target::App(
+                            apps[(index + apps.len() - 1) % apps.len()].id.clone(),
                         )),
+                        Direction::Right => {
+                            Some(Target::App(apps[(index + 1) % apps.len()].id.clone()))
+                        }
                         Direction::Up if index < APPS_COLUMNS => {
                             let target = self
                                 .dock_apps()
