@@ -45,10 +45,13 @@ fn assert_readable_focus(state: &State) {
         .find_map(|draw| match draw {
             Draw::Glass(area, _, color) if same_rect(*area, rect) => Some(*color),
             Draw::Shape(area, _, 0., color)
-                if state.focus == Target::UseBackground && same_rect(*area, rect) => Some(*color),
+                if state.focus == Target::UseBackground && same_rect(*area, rect) =>
+            {
+                Some(*color)
+            }
             _ => None,
         })
-        .expect("focused controls must retain their glass highlight");
+        .expect("focused controls must retain their bright highlight surface");
     assert!(fill[3] >= 0.96);
     assert!(luminance(fill) > 0.5);
     let mut labels = 0;

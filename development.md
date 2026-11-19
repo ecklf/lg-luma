@@ -89,9 +89,17 @@ and `target/release/`. Desktop results do not establish TV size or performance.
 
 ## Controls and navigation
 
-Focused settings rows, sidebar pills and popup actions retain bright glass with dark
+Focused settings rows, sidebar pills and corner-menu actions retain bright glass with dark
 labels/icons. Text tint is applied in the fragment shader, separately from glyph coverage.
 Desktop GL/GLES checks do not replace webOS hardware verification of label contrast.
+
+For #350, the source already requested dark text on bright actions while TV photos
+showed faint labels beside correctly dark icons. Applying the per-draw text tint in
+the fragment stage avoids the constant-color varying path, but this is a candidate
+driver workaround, not a confirmed diagnosis. Before merging, verify focused and
+unfocused settings rows/sidebar pills, both clock-menu actions, and the wallpaper
+selection action on the affected webOS 25 TV. Check both MSAA and Analytic text modes,
+including moving focus away and back so cached glyph geometry is exercised.
 
 SDL-mapped game controllers (including PS5 DualSense when recognized by the TV's SDL
 backend) use D-pad or left stick to navigate, Cross / A for OK, Circle / B for Back,
