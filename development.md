@@ -252,7 +252,9 @@ The picker shows all three designs with offline sample weather, using the saved
 temperature unit and location visibility. Browsing does not change preferences or fetch a forecast. OK/click
 saves a style and returns to Weather, while Back/Left cancels without changing the style.
 The no-icon layout reclaims the icon column. Compact uses two lines, with a small icon,
-condition and optional location on the second. Cached-reading warnings and setup/error states
+condition and optional location on the second. All styles and sizes use one “City · Condition”
+detail line when a reading is available, without a separate city heading. With location names
+hidden the line contains only the condition. Cached-reading warnings and setup/error states
 remain visible. `xvfb-run -a pnpm screenshots --weather-styles` captures all designs and
 the settings preview using the native renderer and loopback-only cached sample weather.
 

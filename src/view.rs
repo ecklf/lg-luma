@@ -1615,14 +1615,24 @@ fn small_weather(out: &mut Scene, state: &State, assets: &Assets, cell: Rect, wi
         WHITE,
         false,
     );
-    let detail = if config.show_location {
-        place.map_or(language.t("weather"), |place| place.name.as_str())
+    let detail = if let Some(reading) = reading {
+        let condition = language.t(weather::condition(reading).key);
+        if config.show_location {
+            place.map_or_else(
+                || condition.to_owned(),
+                |place| format!("{} · {condition}", place.name),
+            )
+        } else {
+            condition.to_owned()
+        }
+    } else if config.show_location {
+        place
+            .map_or(language.t("weather"), |place| place.name.as_str())
+            .to_owned()
     } else {
-        reading.map_or(language.t("weather"), |reading| {
-            language.t(weather::condition(reading).key)
-        })
+        language.t("weather").to_owned()
     };
-    let (detail, style) = assets.fit_line(detail, text(18., 450, 0.), cell.w, 14.);
+    let (detail, style) = assets.fit_line(&detail, text(18., 450, 0.), cell.w, 14.);
     out.text(
         detail,
         Rect::new(cell.x, cell.y + 66., cell.w, 26.),
@@ -1739,7 +1749,11 @@ fn weather_summary_layout_for(
                 0.96,
             );
             add(
-                language.t(condition.key).into(),
+                if config.show_location {
+                    format!("{} · {}", place.name, language.t(condition.key))
+                } else {
+                    language.t(condition.key).into()
+                },
                 text(28., 450, -0.02),
                 252.,
                 180.,
@@ -1798,7 +1812,7 @@ fn weather_summary_layout_for(
     } else if style == WeatherStyle::Compact {
         icon_rect = Rect::new(84., 116., 32., 32.);
         if reading.is_some() {
-            let city = parts.remove(0).0;
+            parts.remove(0);
             let temperature = &mut parts[0];
             temperature.1 = text(88., 500, -0.055);
             temperature.3 = Rect::new(
@@ -1808,12 +1822,7 @@ fn weather_summary_layout_for(
                 106.,
             );
             let condition = &mut parts[1];
-            let label = if config.show_location {
-                format!("{city} · {}", condition.0)
-            } else {
-                condition.0.clone()
-            };
-            let (label, font) = assets.fit_line(&label, text(26., 450, -0.02), 800., 24.);
+            let (label, font) = assets.fit_line(&condition.0, text(26., 450, -0.02), 800., 24.);
             condition.0 = label;
             condition.1 = font;
             condition.3 = Rect::new(128., 116., assets.width(&condition.0, font) + 2., 36.);
@@ -1830,9 +1839,9 @@ fn weather_summary_layout_for(
             height = 168.;
         }
     }
-    // Compact readings already consume the city into their condition line. Other
-    // layouts drop the header and close its gap, including loading/error states.
-    if !config.show_location
+    // Readings share one city/condition line in every style. Without a reading,
+    // keep the city header only when location names are enabled.
+    if (reading.is_some() || !config.show_location)
         && place.is_some()
         && !(style == WeatherStyle::Compact && reading.is_some())
     {

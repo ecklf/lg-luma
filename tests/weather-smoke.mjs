@@ -312,7 +312,7 @@ try {
   });
   const multiple = await scenario('multiple', 'home,await-weather');
   assert.ok(!multiple.ui_text.some((label) => label.includes('Vienna')));
-  assert.ok(multiple.ui_text.includes('Paris'));
+  assert.ok(multiple.ui_text.includes('Paris · Partly cloudy'));
   assert.equal(multiple.preferences.temperature_unit, 'celsius');
   assert.equal(multiple.preferences.extra_weather[0].unit, 'fahrenheit');
   assert.equal(forecastCount(), beforeMultiple + 1);

@@ -47,6 +47,7 @@ const captures = weatherIconPreviews
   ? [
       ['weather-icon-picker', `${weatherPage},down,down,enter,up,enter`],
       ['weather-style-private', `${weatherPage},down,down,enter`],
+      ['weather-style-city', `${weatherPage},down,down,enter`],
       ['attributions', 'settings,down,down,down,down,down,right,down,down,down,down,down,enter'],
     ]
   : widgetPreviews
@@ -99,7 +100,7 @@ try {
               ...configuration,
               reduced_motion: true,
               weather_icons: 'kuankuan',
-              weather_show_location: false,
+              weather_show_location: name === 'weather-style-city',
             }
           : widgetPreviews
             ? {

@@ -538,11 +538,7 @@ fn home_styles_share_content_and_keep_the_dock_fixed() {
     for style in WeatherStyle::ALL {
         state.preferences.weather_style = style;
         let rendered = scene(&state);
-        let top_label = if style == WeatherStyle::Compact {
-            "14°C"
-        } else {
-            "Vienna"
-        };
+        let top_label = "14°C";
         assert!(
             rendered.draw.iter().any(|draw| matches!(draw,
             Draw::Text(label, rect, ..) if label == top_label && rect.y == 188.)),
@@ -574,6 +570,35 @@ fn home_styles_share_content_and_keep_the_dock_fixed() {
     }
     state.preferences.show_weather = false;
     assert!(weather_icons(&state).is_empty());
+}
+
+#[test]
+fn every_style_and_size_combines_city_and_condition_without_a_separate_city_header() {
+    for style in WeatherStyle::ALL {
+        for small in [false, true] {
+            for language in crate::i18n::Language::ALL {
+                let mut state = configured();
+                state.preferences.language = language;
+                state.preferences.weather_style = style;
+                state.preferences.weather_small = small;
+                let expected = format!("Vienna · {}", language.t("partlyCloudy"));
+                let rendered = scene(&state);
+                assert!(
+                    rendered.draw.iter().any(|draw| matches!(draw,
+                    Draw::Text(label, ..) if label == &expected)),
+                    "{style:?}, small={small}, {language:?}"
+                );
+                assert!(!rendered.draw.iter().any(|draw| matches!(draw,
+                    Draw::Text(label, ..) if label == "Vienna")));
+                state.preferences.weather_show_location = false;
+                let rendered = scene(&state);
+                assert!(rendered.draw.iter().any(|draw| matches!(draw,
+                    Draw::Text(label, ..) if label == language.t("partlyCloudy"))));
+                assert!(!rendered.draw.iter().any(|draw| matches!(draw,
+                    Draw::Text(label, ..) if label.contains("Vienna") || label.starts_with('·'))));
+            }
+        }
+    }
 }
 
 #[test]
