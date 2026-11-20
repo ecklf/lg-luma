@@ -420,6 +420,8 @@ struct PaintPrograms {
     app_shape: GLuint,
     /// Resting glass interiors read from the baked texture (see glass-interior.frag).
     glass: GLuint,
+    /// Resting glass in one draw: rims shaded as paint.frag, the -2000 core from the bake.
+    glass_rim: GLuint,
 }
 
 impl Drop for PaintPrograms {
@@ -431,6 +433,7 @@ impl Drop for PaintPrograms {
             self.app,
             self.app_shape,
             self.glass,
+            self.glass_rim,
         ] {
             if id != 0 {
                 unsafe { gl::DeleteProgram(id) };
@@ -444,8 +447,8 @@ impl PaintPrograms {
     fn select(&self, vertices: &[f32], interior: bool, app: bool, fallback: GLuint) -> GLuint {
         let all = |predicate: fn(&[f32]) -> bool| vertices.chunks_exact(14).all(predicate);
         // Glass (border -1000) only takes an interior batch from a baked split (see build).
-        if interior && all(|v| v[13] == -1000.) {
-            return self.glass;
+        if all(|v| v[13] == -1000. || v[13] == -2000.) {
+            return if interior { self.glass } else { self.glass_rim };
         }
         let inside = interior && all(|v| v[12] >= 0. && v[13] == 0.);
         if inside && app {
@@ -577,6 +580,7 @@ impl Renderer {
                     app: 0,
                     app_shape: 0,
                     glass: 0,
+                    glass_rim: 0,
                 };
                 programs.texture = build(include_str!("shaders/texture.frag"))?;
                 programs.tinted = build(include_str!("shaders/tinted.frag"))?;
@@ -584,6 +588,9 @@ impl Renderer {
                 programs.app = build(include_str!("shaders/app-interior.frag"))?;
                 programs.app_shape = build(include_str!("shaders/app-shape.frag"))?;
                 programs.glass = build(include_str!("shaders/glass-interior.frag"))?;
+                programs.glass_rim = build(
+                    &("#define GLASS_ONLY 1\n".to_owned() + include_str!("shaders/paint.frag")),
+                )?;
                 Ok(programs)
             };
             load()
@@ -1006,6 +1013,46 @@ impl Renderer {
         let (x, y) = (radius.max(depth), depth);
         let core = Rect::new(rect.x + x, rect.y + y, rect.w - 2. * x, rect.h - 2. * y);
         (core.w >= 8. && core.h >= 8.).then_some(core)
+    }
+
+    /// One draw per glass: the core (last batch) joins its rim strips with border -2000, which
+    /// the glass program reads from the baked texture.
+    fn merge_glass_core(&mut self) {
+        if self.batches.len() < 2 {
+            return;
+        }
+        let Some(Batch {
+            kind:
+                BatchKind::Paint {
+                    start,
+                    count,
+                    interior: true,
+                    ..
+                },
+            ..
+        }) = self.batches.last()
+        else {
+            return;
+        };
+        let (start, count) = (*start, *count);
+        let previous = self.batches.len() - 2;
+        let BatchKind::Paint {
+            start: strip_start,
+            count: strip_count,
+            interior: false,
+            ..
+        } = &mut self.batches[previous].kind
+        else {
+            return;
+        };
+        if *strip_start + *strip_count != start {
+            return;
+        }
+        *strip_count += count;
+        for vertex in self.vertices[start * 14..(start + count) * 14].chunks_exact_mut(14) {
+            vertex[13] = -2000.;
+        }
+        self.batches.pop();
     }
 
     /// Renders resting glass interiors for `backdrop` into a drawable-sized texture, once per
@@ -2018,17 +2065,20 @@ impl Renderer {
                         .filter(|_| self.fade.is_none())
                         .and_then(|texture| Some((texture, self.glass_core(*rect, *radius)?)));
                     match split {
-                        // The rim keeps the general shader; it does not read `texture`.
-                        Some((texture, core)) => self.gradient_quad(
-                            *rect,
-                            [0., 0., 1., 1.],
-                            *radius,
-                            -1000.,
-                            [*tint; 2],
-                            texture,
-                            None,
-                            Some(Hole::Interior(core)),
-                        ),
+                        // Rims and the baked core in one draw of the glass program.
+                        Some((texture, core)) => {
+                            self.gradient_quad(
+                                *rect,
+                                [0., 0., 1., 1.],
+                                *radius,
+                                -1000.,
+                                [*tint; 2],
+                                texture,
+                                None,
+                                Some(Hole::Interior(core)),
+                            );
+                            self.merge_glass_core();
+                        }
                         None => self.quad(
                             *rect,
                             [0., 0., 1., 1.],
@@ -2209,6 +2259,25 @@ impl Renderer {
                     height as f32,
                 );
             }
+            if let Some(rim) = self.paint_programs.as_ref().map(|p| p.glass_rim)
+                && rim != 0
+                && self.glass_split.is_some()
+            {
+                gl::UseProgram(rim);
+                gl::Uniform1i(uniform_location(rim, c"u_glass_enabled".as_ptr()), 1);
+                gl::Uniform1i(uniform_location(rim, c"u_glass_a".as_ptr()), 1);
+                gl::Uniform1i(uniform_location(rim, c"u_glass_b".as_ptr()), 2);
+                gl::Uniform1f(uniform_location(rim, c"u_glass_mix".as_ptr()), 0.);
+                gl::Uniform1f(
+                    uniform_location(rim, c"u_aa".as_ptr()),
+                    1. / scale.max(0.01),
+                );
+                gl::Uniform2f(
+                    uniform_location(rim, c"u_drawable".as_ptr()),
+                    width as f32,
+                    height as f32,
+                );
+            }
             gl::UseProgram(self.program);
             gl::Uniform1i(
                 uniform_location(self.program, c"u_glass_enabled".as_ptr()),
@@ -2301,6 +2370,17 @@ impl Renderer {
                                     self.program,
                                 )
                             });
+                        // The glass program assumes a baked frame: one backdrop, glass on.
+                        let program = if self.glass_split.is_none()
+                            && self
+                                .paint_programs
+                                .as_ref()
+                                .is_some_and(|p| p.glass_rim == program)
+                        {
+                            self.program
+                        } else {
+                            program
+                        };
                         if !paint_bound || active_paint != program {
                             gl::UseProgram(program);
                             active_paint = program;
@@ -3055,6 +3135,7 @@ mod paint_program_tests {
             app: 4,
             app_shape: 5,
             glass: 6,
+            glass_rim: 7,
         };
         let faded = [1., 1., 1., 0.4];
         // A translucent interior needs no edge distance: texture times colour.
@@ -3064,16 +3145,20 @@ mod paint_program_tests {
         // Its rounded edge keeps the coverage, now also for app artwork.
         assert_eq!(programs.select(&quad(faded, 12., 0.), false, false, 9), 3);
         assert_eq!(programs.select(&quad(faded, 12., 0.), false, true, 9), 5);
-        // Glass rims (border -1000) and blurred shadows keep the general shader; only a
-        // baked glass interior takes its own program.
+        // Glass (border -1000) and its merged baked core (-2000) take the glass program
+        // (render() keeps the general one without a bake); a lone core its own program.
         assert_eq!(
             programs.select(&quad(faded, 12., -1000.), false, true, 9),
-            9
+            7
         );
+        let mut merged = quad(faded, 12., -1000.);
+        merged.extend(quad(faded, 12., -2000.));
+        assert_eq!(programs.select(&merged, false, false, 9), 7);
         assert_eq!(
             programs.select(&quad(faded, 12., -1000.), true, false, 9),
             6
         );
+        // Blurred shadows keep the general shader.
         assert_eq!(programs.select(&quad(faded, 12., -8.), false, false, 9), 9);
         // Never delete GL programs without a context.
         std::mem::forget(programs);
