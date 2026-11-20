@@ -2178,11 +2178,11 @@ impl Renderer {
         let glass_enabled = has_glass
             && self.info.fragment_highp
             && std::env::var("LUMA_GLASS").as_deref() != Ok("0");
-        self.stats.glass_surfaces = commands
-            .iter()
-            .filter(|draw| matches!(draw, Draw::Glass(..)))
-            .count();
-        self.stats.glass_backdrop_sampling = glass_enabled;
+        // Glass is prepared before build(), which starts this frame's stats afresh: count its
+        // loads from zero here and carry them over below.
+        self.stats.glass_prepare_ms = 0.;
+        self.stats.glass_precomputed_loads = 0;
+        self.stats.glass_runtime_prepares = 0;
         let glass_a = if glass_enabled {
             first
                 .map(|(path, _)| self.glass_backdrop(path))
@@ -2204,7 +2204,22 @@ impl Renderer {
             && self.glass_bake_program != 0)
             .then(|| self.bake_glass_interior(glass_a, width, height))
             .flatten();
+        let prepared = (
+            self.stats.glass_prepare_ms,
+            self.stats.glass_precomputed_loads,
+            self.stats.glass_runtime_prepares,
+        );
         self.build(commands, width, height, area);
+        (
+            self.stats.glass_prepare_ms,
+            self.stats.glass_precomputed_loads,
+            self.stats.glass_runtime_prepares,
+        ) = prepared;
+        self.stats.glass_surfaces = commands
+            .iter()
+            .filter(|draw| matches!(draw, Draw::Glass(..)))
+            .count();
+        self.stats.glass_backdrop_sampling = glass_enabled;
         let Viewport {
             x: vx,
             y: vy,
