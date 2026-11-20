@@ -2306,40 +2306,6 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
             chevron: false,
         },
     );
-    row(
-        out,
-        state,
-        assets,
-        Row {
-            target: Target::WeatherShowLocation,
-            rect: Rect::new(640., y + 252., 1120., 72.),
-            title: language.t("weatherShowLocation"),
-            icon: Some("location"),
-            value: Some(language.t(if config.show_location {
-                "stateOn"
-            } else {
-                "stateOff"
-            })),
-            description: None,
-            selected: false,
-            chevron: false,
-        },
-    );
-    row(
-        out,
-        state,
-        assets,
-        Row {
-            target: Target::WeatherIcons,
-            rect: Rect::new(640., y + 336., 1120., 72.),
-            title: language.t("weatherIconStyle"),
-            icon: Some("weather-sun"),
-            value: Some(config.icons.label()),
-            description: None,
-            selected: false,
-            chevron: true,
-        },
-    );
 }
 
 fn weather_icon_settings(out: &mut Scene, state: &State, assets: &Assets) {
@@ -2396,12 +2362,52 @@ fn weather_icon_settings(out: &mut Scene, state: &State, assets: &Assets) {
 
 fn weather_style_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
+    let config = state.preferences.weather_settings(state.active_weather);
+    for (index, (target, title, icon, value, chevron)) in [
+        (
+            Target::WeatherShowLocation,
+            "weatherShowLocation",
+            "location",
+            language.t(if config.show_location {
+                "stateOn"
+            } else {
+                "stateOff"
+            }),
+            false,
+        ),
+        (
+            Target::WeatherIcons,
+            "weatherIconStyle",
+            "grid",
+            config.icons.label(),
+            true,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target,
+                rect: Rect::new(640., 164.8 + index as f32 * 84. - state.scroll, 1120., 72.),
+                title: language.t(title),
+                icon: Some(icon),
+                value: Some(value),
+                description: None,
+                selected: false,
+                chevron,
+            },
+        );
+    }
     for (index, style) in crate::model::WeatherStyle::ALL.into_iter().enumerate() {
         let rect = Rect::new(
             640.,
-            164.8 + index as f32 * 248. - state.scroll,
+            348.8 + index as f32 * 216. - state.scroll,
             1120.,
-            232.,
+            200.,
         );
         row(
             out,
@@ -2419,10 +2425,10 @@ fn weather_style_settings(out: &mut Scene, state: &State, assets: &Assets) {
             },
         );
         // A dark inset keeps the weather preview separate from the row's focus treatment.
-        let preview = Rect::new(1040., rect.y + 12., 700., 208.);
+        let preview = Rect::new(1040., rect.y + 12., 700., 176.);
         out.shape(preview, 16., c(0x192129, 1.));
         let summary = weather_summary_layout_for(state, assets, style, true, state.active_weather);
-        let scale = 0.58_f32.min((preview.w - 64.) / summary.width);
+        let scale = 0.5_f32.min((preview.w - 64.) / summary.width);
         paint_weather_summary(
             out,
             assets,
@@ -2692,22 +2698,22 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::TimeFormat) => {
                     Some(vec![language.t("clock"), language.t("timeFormat")])
                 }
-                Some(
-                    Subpage::WeatherLocation
-                    | Subpage::Temperature
-                    | Subpage::WeatherStyle
-                    | Subpage::WeatherIcons,
-                ) => Some(vec![
+                Some(Subpage::WeatherLocation | Subpage::Temperature | Subpage::WeatherStyle) => {
+                    Some(vec![
+                        language.t("weather"),
+                        language.t(if state.subpage == Some(Subpage::WeatherLocation) {
+                            "location"
+                        } else if state.subpage == Some(Subpage::Temperature) {
+                            "temperature"
+                        } else {
+                            "weatherStyle"
+                        }),
+                    ])
+                }
+                Some(Subpage::WeatherIcons) => Some(vec![
                     language.t("weather"),
-                    language.t(if state.subpage == Some(Subpage::WeatherLocation) {
-                        "location"
-                    } else if state.subpage == Some(Subpage::Temperature) {
-                        "temperature"
-                    } else if state.subpage == Some(Subpage::WeatherIcons) {
-                        "weatherIconStyle"
-                    } else {
-                        "weatherStyle"
-                    }),
+                    language.t("weatherStyle"),
+                    language.t("weatherIconStyle"),
                 ]),
                 Some(Subpage::InputIcons(id)) => Some(vec![
                     state

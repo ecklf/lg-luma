@@ -45,7 +45,7 @@ const widgetsPage = 'settings,down,down,down,down,right';
 const weatherPage = `${widgetsPage},down,right,right,right,right,enter,enter`;
 const captures = weatherIconPreviews
   ? [
-      ['weather-icon-picker', `${weatherPage},down,down,down,down,down,enter`],
+      ['weather-icon-picker', `${weatherPage},down,down,enter,up,enter`],
       ['weather-style-private', `${weatherPage},down,down,enter`],
       ['attributions', 'settings,down,down,down,down,down,right,down,down,down,down,down,enter'],
     ]

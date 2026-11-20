@@ -185,7 +185,7 @@ try {
   assert.equal(forecastCount(), 1);
   const hiddenLocation = await scenario(
     'hidden-location',
-    `${weatherPage},down,down,down,down,enter,home,await-weather`,
+    `${weatherPage},down,down,enter,up,up,enter,home,await-weather`,
   );
   assert.equal(hiddenLocation.preferences.weather_show_location, false);
   assert.equal(hiddenLocation.preferences.weather_location.name, 'Vienna');
@@ -196,7 +196,7 @@ try {
   const privateRestart = await scenario('hidden-location-restart', 'home,await-weather');
   assert.equal(privateRestart.preferences.weather_show_location, false);
   assert.ok(!privateRestart.ui_text.some((label) => label.includes('Vienna')));
-  const iconsPage = `${weatherPage},down,down,down,down,down,enter`;
+  const iconsPage = `${weatherPage},down,down,enter,up,enter`;
   const picker = await scenario('icon-picker', iconsPage);
   assert.equal(picker.subpage, 'WeatherIcons');
   for (const name of ['Breezy Weather', 'Lucide', 'Kickstand', 'Kuankuan'])

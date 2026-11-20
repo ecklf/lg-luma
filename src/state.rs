@@ -1409,7 +1409,7 @@ impl State {
                 Target::WeatherStyle
             }
             Some(Subpage::WeatherIcons) => {
-                self.subpage = Some(Subpage::Weather);
+                self.subpage = Some(Subpage::WeatherStyle);
                 Target::WeatherIcons
             }
             Some(Subpage::Attributions) => Target::Attributions,
@@ -1741,8 +1741,13 @@ impl State {
                     Target::WeatherTemperature,
                     Target::WeatherStyle,
                     Target::WeatherSize,
+                ]),
+                Some(Subpage::WeatherStyle) => Some(&[
                     Target::WeatherShowLocation,
                     Target::WeatherIcons,
+                    Target::Choice(0),
+                    Target::Choice(1),
+                    Target::Choice(2),
                 ]),
                 Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
                 _ => None,

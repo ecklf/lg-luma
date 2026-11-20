@@ -367,13 +367,15 @@ reserve 64 logical pixels below their last item for both remote focus and wheel 
 with a tighter 48-pixel spacing for Languages and Backgrounds.
 The weekday/date is part of the combined Greeting, not a standalone widget. Weather uses its
 own fixed footprint with a large condition icon, temperature, condition and optional location.
-Breezy Weather remains the default icon style. Weather → Icon style offers Breezy Weather,
+Breezy Weather remains the default icon style. Weather → Widget style → Icon style offers Breezy Weather,
 Lucide, Kickstand and Kuankuan with offline condition samples. `weather_icons` stores the primary
 choice; additional instances use `icons`. Lucide, Kickstand and Kuankuan compile to vector meshes;
 Breezy retains its original PNGs. No icons are fetched at runtime. Sources, licenses, adaptations
 and mappings are documented in `assets/weather/README.md`; Kuankuan's preferred editable `.ai`
 sources ship alongside its SVGs. `pnpm assets:weather` optionally restores pinned original files.
-Weather → Show location name defaults on. Turning it off hides the city in every style and size,
+Weather → Widget style → Show location name defaults on. Both appearance controls sit above the
+layout previews in Widget style, not on the Weather configuration page. Returning from the icon
+picker restores its row in Widget style. Turning off the location name hides the city in every style and size,
 including loading and error states, without changing the forecast location or cache. The primary
 widget persists `weather_show_location`; additional instances persist their own `show_location`.
 Style previews follow the active widget's setting. Location settings still show the selected city.

@@ -44,6 +44,51 @@ fn weather_icons(state: &State) -> Vec<Rect> {
 }
 
 #[test]
+fn appearance_controls_live_inside_widget_style_and_update_previews_immediately() {
+    let mut state = configured();
+    state.open(2);
+    state.section = WIDGETS_SECTION;
+    state.subpage = Some(Subpage::Weather);
+    let parent = controls(&state);
+    assert!(
+        !parent
+            .iter()
+            .any(|c| matches!(c.target, Target::WeatherShowLocation | Target::WeatherIcons))
+    );
+    state.focus = Target::WeatherStyle;
+    state.activate();
+    let rendered = scene(&state);
+    for target in [Target::WeatherShowLocation, Target::WeatherIcons] {
+        assert!(rendered.controls.iter().any(|c| c.target == target));
+    }
+    state.direction(Direction::Up, &rendered.controls);
+    assert_eq!(state.focus, Target::WeatherIcons);
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::WeatherShowLocation);
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::WeatherStyle));
+    assert!(
+        !scene(&state)
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, Draw::Text(label, ..) if label.contains("Vienna")))
+    );
+    state.direction(Direction::Down, &controls(&state));
+    state.activate();
+    state.focus = Target::Choice(2);
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::WeatherStyle));
+    assert_eq!(state.focus, Target::WeatherIcons);
+    assert_eq!(weather_icons(&state).len(), 2);
+    assert!(scene(&state).draw.iter().any(|draw| matches!(draw, Draw::TintedImage(path, ..) if path.ends_with("weather-kickstand-partly-cloudy.lvec"))));
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Choice(0));
+    state.back();
+    assert_eq!(state.subpage, Some(Subpage::Weather));
+    assert_eq!(state.focus, Target::WeatherStyle);
+}
+
+#[test]
 fn weather_icon_preferences_default_to_breezy_and_round_trip_per_instance() {
     use crate::model::{HomeWidget, WeatherIconStyle};
     let old: Preferences = serde_json::from_str(r#"{"extra_weather":[{}]}"#).unwrap();
@@ -71,7 +116,7 @@ fn weather_icon_picker_saves_only_on_selection_and_restores_parent_for_remote_an
     let cache = state.weather.cache.clone();
     state.open(2);
     state.section = WIDGETS_SECTION;
-    state.subpage = Some(Subpage::Weather);
+    state.subpage = Some(Subpage::WeatherStyle);
     state.focus = Target::WeatherShowLocation;
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::WeatherIcons);
@@ -100,7 +145,7 @@ fn weather_icon_picker_saves_only_on_selection_and_restores_parent_for_remote_an
     state.pointer_focus(Target::Choice(3));
     assert_eq!(state.activate(), [Effect::Save]);
     assert_eq!(state.preferences.weather_icons, WeatherIconStyle::Kuankuan);
-    assert_eq!(state.subpage, Some(Subpage::Weather));
+    assert_eq!(state.subpage, Some(Subpage::WeatherStyle));
     assert_eq!(state.focus, Target::WeatherIcons);
     assert_eq!(state.weather.cache, cache);
     state.activate();
@@ -195,9 +240,11 @@ fn location_toggle_supports_remote_and_pointer_without_changing_forecast_or_cach
     let location = state.preferences.weather_location.clone();
     state.open(2);
     state.section = WIDGETS_SECTION;
-    state.subpage = Some(Subpage::Weather);
-    state.focus = Target::WeatherSize;
-    state.direction(Direction::Down, &controls(&state));
+    state.subpage = Some(Subpage::WeatherStyle);
+    state.focus = Target::Choice(0);
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::WeatherIcons);
+    state.direction(Direction::Up, &controls(&state));
     assert_eq!(state.focus, Target::WeatherShowLocation);
     assert_eq!(state.activate(), [Effect::Save]);
     assert!(!state.preferences.weather_show_location);
@@ -220,7 +267,7 @@ fn location_toggle_supports_remote_and_pointer_without_changing_forecast_or_cach
     assert!(!state.preferences.extra_weather[0].show_location);
     assert!(!state.preferences.weather_show_location);
     state.direction(Direction::Up, &controls(&state));
-    assert_eq!(state.focus, Target::WeatherSize);
+    assert_eq!(state.focus, Target::SettingsMenu);
 }
 
 #[test]
