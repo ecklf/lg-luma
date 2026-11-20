@@ -3774,3 +3774,46 @@ fn hovering_corner_controls_keeps_their_geometry_and_does_not_change_pages() {
     state.hover = None;
     assert_eq!(tab(&state), idle);
 }
+
+#[test]
+fn settings_app_cards_draw_shadows_faces_then_logos_like_the_drawer() {
+    use crate::renderer::Draw;
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::APPS_SECTION;
+    state.focus = Target::Sidebar(crate::state::APPS_SECTION);
+    let draws = scene(&state).draw;
+    let clip = draws
+        .iter()
+        .position(|draw| matches!(draw, Draw::Clip(Some(_))))
+        .unwrap();
+    let end = clip
+        + draws[clip..]
+            .iter()
+            .position(|draw| matches!(draw, Draw::Clip(None)))
+            .unwrap();
+    let cards = &draws[clip..end];
+    let last_shadow = cards
+        .iter()
+        .rposition(|draw| matches!(draw, Draw::Shadow(..)))
+        .unwrap();
+    let first_logo = cards
+        .iter()
+        .position(|draw| matches!(draw, Draw::Image(path, ..) | Draw::TintedImage(path, ..) if path.ends_with(".lvec")))
+        .unwrap();
+    let last_face = cards
+        .iter()
+        .rposition(|draw| {
+            matches!(draw, Draw::AppImage(..))
+                || matches!(draw, Draw::Image(path, ..) if !path.ends_with(".lvec"))
+        })
+        .unwrap();
+    assert!(
+        cards
+            .iter()
+            .filter(|draw| matches!(draw, Draw::Shadow(..)))
+            .count()
+            > 3
+    );
+    assert!(last_shadow < last_face && last_face < first_logo);
+}

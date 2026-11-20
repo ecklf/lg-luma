@@ -2876,18 +2876,23 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 .push(Draw::Clip(Some(state.app_settings_viewport())));
             let apps = state.apps();
             let mut y = 164.8;
+            let mut cards = Vec::new();
             for row in apps.chunks(3) {
                 for (column, app) in row.iter().enumerate() {
                     let rect = Rect::new(640. + column as f32 * 380., y - s, 360., 202.5);
-                    tile(out, state, assets, app, rect, None);
+                    let start = out.draw.len();
+                    let focused = tile(out, state, assets, app, rect, None);
                     if state.preferences.hidden.contains(&app.id) {
                         let badge = Rect::new(rect.x + 12., rect.y + 12., 30., 30.);
                         out.shape(badge, 15., c(0x202020, 0.85));
                         out.icon(assets, "eye-off", badge.inset(6.), WHITE);
                     }
+                    cards.push((start, out.draw.len(), focused));
                 }
                 y += 226.5;
             }
+            // As in the drawer: shadows, faces, borders, then logos, in fewer program switches.
+            batch_cards(&mut out.draw, &cards);
             out.draw.push(Draw::Clip(None));
         }
         0 => {
