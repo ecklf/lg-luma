@@ -5,9 +5,15 @@ uniform vec3 u_app_top;
 uniform vec3 u_app_bottom;
 uniform bool u_app;
 uniform sampler2D u_glass_a;
+#ifdef GLASS_ONLY
+// Resting, unfaded glass always reads a single backdrop.
+#define u_glass_mix 0.0
+#define u_glass_enabled true
+#else
 uniform sampler2D u_glass_b;
 uniform float u_glass_mix;
 uniform bool u_glass_enabled;
+#endif
 varying PAINT_PRECISION vec2 v_uv;
 varying PAINT_PRECISION vec4 v_color;
 varying PAINT_PRECISION vec4 v_shape;
@@ -15,11 +21,15 @@ varying PAINT_PRECISION vec2 v_params;
 varying PAINT_PRECISION float v_logical_y;
 varying PAINT_PRECISION float v_logical_x;
 float edge_coverage() {
+#ifdef GLASS_ONLY
+    return 1.0;
+#else
     float edge = 1.0;
     if (u_edge_fade.y > u_edge_fade.x)
         edge = smoothstep(u_edge_fade.x, u_edge_fade.y, v_logical_y) *
             (1.0 - smoothstep(u_edge_fade.z, u_edge_fade.w, v_logical_y));
     return edge;
+#endif
 }
 vec3 glass_sample(vec2 uv, float scattering) {
     // Clamp each atlas half independently: no seam leakage or off-screen wrapping.
@@ -29,10 +39,12 @@ vec3 glass_sample(vec2 uv, float scattering) {
     vec3 sharp = texture2D(u_glass_a, sharp_uv).rgb;
     vec3 soft = texture2D(u_glass_a, soft_uv).rgb;
     // The second atlas only matters during a wallpaper cross-fade.
+#ifndef GLASS_ONLY
     if (u_glass_mix > 0.0) {
         sharp = mix(sharp, texture2D(u_glass_b, sharp_uv).rgb, u_glass_mix);
         soft = mix(soft, texture2D(u_glass_b, soft_uv).rgb, u_glass_mix);
     }
+#endif
     return mix(sharp, soft, scattering);
 }
 #ifdef GLASS_ONLY

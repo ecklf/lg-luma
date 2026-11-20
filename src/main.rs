@@ -1004,6 +1004,7 @@ fn run() -> Result<(), String> {
     // Hidden pages are demand-loaded. Only the explicit diagnostic script action
     // queues preparation: doing it automatically blocks SDL input/lifecycle events.
     let mut prewarm: Vec<state::Page> = Vec::new();
+    let profile_finish = std::env::var("LUMA_PROFILE_FINISH").as_deref() == Ok("1");
     let verify_damage = std::env::var("LUMA_DAMAGE_VERIFY").as_deref() == Ok("1");
     // Partial frames: verified, mismatched, worst pixels, largest difference; full frames alike.
     let mut damage_report = (0usize, 0usize, 0usize, 0u8);
@@ -1018,7 +1019,8 @@ fn run() -> Result<(), String> {
     let mut drawer_artwork: Option<std::sync::mpsc::Receiver<(String, Option<image::RgbaImage>)>> =
         None;
     let mut drawer_vectors: Vec<String> = Vec::new();
-    let mut idle_text: Vec<renderer::Draw> = Vec::new();
+    let mut decoded_icons = VecDeque::new();
+    let mut idle_text: VecDeque<renderer::Draw> = VecDeque::new();
     // When the app inventory last arrived: a Home relaunch already refreshes it, so the
     // window events that follow (Restored, FocusGained) need not ask again right away.
     let mut inventory_at: Option<Instant> = None;
@@ -1269,7 +1271,11 @@ fn run() -> Result<(), String> {
                 _ => {}
             }
         }
-        state.dirty |= assets.artwork.poll();
+        state.dirty |= assets.artwork.poll(|icon| {
+            if webos {
+                decoded_icons.push_back(std::sync::Arc::downgrade(icon));
+            }
+        });
         let unix = state::unix_now();
         let startup_cycle = wallpaper_cycle::startup_due(
             state.preferences.wallpaper_cycle,
@@ -2144,7 +2150,14 @@ fn run() -> Result<(), String> {
                     if last_drawable != Some(Size::new(width, height)) {
                         damage_tracker.reset();
                     }
-                    damage_tracker.compare(&scene.draw);
+                    let clip_padding = 2. * (1920. / width as f32).max(1080. / height as f32);
+                    damage_tracker.compare(&scene.draw, clip_padding, |draw| {
+                        if renderer.stats().target == Size::new(width, height) {
+                            renderer.damage_bounds(draw)
+                        } else {
+                            damage::bounds(draw)
+                        }
+                    });
                     // A capture drew this frame already; keep its window frame whole.
                     if captured.is_some() && final_frame {
                         return None;
@@ -2182,6 +2195,13 @@ fn run() -> Result<(), String> {
                     report.2 = report.2.max(differing);
                     report.3 = report.3.max(largest);
                 }
+                let finish_ms = if profile_finish {
+                    let started = Instant::now();
+                    unsafe { gl::Finish() };
+                    started.elapsed().as_secs_f64() * 1000.
+                } else {
+                    0.
+                };
                 let swap_started = Instant::now();
                 window.gl_swap_window();
                 let swap_ms = swap_started.elapsed().as_secs_f64() * 1000.;
@@ -2227,6 +2247,7 @@ fn run() -> Result<(), String> {
                             compose_ms,
                             render_ms: renderer.stats().cpu_submission_ms,
                             swap_ms,
+                            finish_ms,
                             redrawn: renderer.stats().redrawn_fraction,
                             glyph_ms: renderer.stats().glyph_ms,
                             vector_ms: renderer.stats().vector_load_ms,
@@ -2322,17 +2343,18 @@ fn run() -> Result<(), String> {
             state.subpage = subpage;
             state.focus = focus;
             state.scroll = scroll;
-            idle_text = menu
-                .into_iter()
-                .filter(|draw| matches!(draw, renderer::Draw::Text(..)))
-                .chain(
-                    views
-                        .iter()
-                        .filter(|draw| matches!(draw, renderer::Draw::Text(..)))
-                        .cloned(),
-                )
-                .chain(subpage_labels)
-                .collect();
+            idle_text = view::initial_drawer_labels(&state, &assets).into();
+            idle_text.extend(
+                menu.into_iter()
+                    .filter(|draw| matches!(draw, renderer::Draw::Text(..)))
+                    .chain(
+                        views
+                            .iter()
+                            .filter(|draw| matches!(draw, renderer::Draw::Text(..)))
+                            .cloned(),
+                    )
+                    .chain(subpage_labels),
+            );
             let paths: Vec<String> = views
                 .iter()
                 .filter_map(|draw| match draw {
@@ -2365,6 +2387,12 @@ fn run() -> Result<(), String> {
         if idle {
             let started = Instant::now();
             while started.elapsed() < Duration::from_millis(4) {
+                if let Some(handle) = decoded_icons.pop_front() {
+                    if let Some(icon) = handle.upgrade() {
+                        renderer.prepare_app_image(&icon);
+                    }
+                    continue;
+                }
                 let image = match &drawer_artwork {
                     Some(receiver) => match receiver.try_recv() {
                         Ok(image) => Some(image),
@@ -2384,11 +2412,9 @@ fn run() -> Result<(), String> {
                 } else if !idle_text.is_empty() && !renderer.text_cache_has_room() {
                     // Further labels would evict the drawer's and sections' prepared ones.
                     idle_text.clear();
-                } else if !idle_text.is_empty() {
-                    // Text a few runs at a time: glyph outlines and run meshes.
-                    let chunk: Vec<_> = idle_text.drain(..idle_text.len().min(4)).collect();
+                } else if let Some(label) = idle_text.pop_front() {
                     let (width, height) = window.drawable_size();
-                    renderer.prepare(&chunk, width, height);
+                    renderer.prepare(std::slice::from_ref(&label), width, height);
                 } else {
                     break;
                 }
@@ -2426,7 +2452,11 @@ fn run() -> Result<(), String> {
             || assets.artwork.pending()
         {
             8
-        } else if drawer_artwork.is_some() || !drawer_vectors.is_empty() || !idle_text.is_empty() {
+        } else if !decoded_icons.is_empty()
+            || drawer_artwork.is_some()
+            || !drawer_vectors.is_empty()
+            || !idle_text.is_empty()
+        {
             16
         } else if !prewarm.is_empty() {
             500
