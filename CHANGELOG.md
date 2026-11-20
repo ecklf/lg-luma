@@ -1,5 +1,11 @@
 # lg-luma
 
+## 3.11.1
+
+### Patch Changes
+
+- 65dfa47: Center the app move arrows inside their indicator badge.
+
 ## 3.11.0
 
 ### Minor Changes
