@@ -974,16 +974,28 @@ fn tile(
             24.,
         );
         out.shape(indicator, 16., c(0x101318, 0.79));
+        let arrow_size = 16.;
+        let arrow_padding = 14.;
         out.icon(
             assets,
             "left",
-            Rect::new(indicator.x + 8.8, indicator.y + 4., 16., 16.),
+            Rect::new(
+                indicator.x + arrow_padding,
+                indicator.y + (indicator.h - arrow_size) / 2.,
+                arrow_size,
+                arrow_size,
+            ),
             c(0xededed, 1.),
         );
         out.icon(
             assets,
             "arrow",
-            Rect::new(indicator.x + 40., indicator.y + 4., 16., 16.),
+            Rect::new(
+                indicator.x + indicator.w - arrow_padding - arrow_size,
+                indicator.y + (indicator.h - arrow_size) / 2.,
+                arrow_size,
+                arrow_size,
+            ),
             c(0xededed, 1.),
         );
     }
@@ -4539,6 +4551,61 @@ fn full_screen_fill(draw: &Draw) -> bool {
 mod tests {
     use super::*;
     use crate::model::{Input, InputMode, Preferences, demo_inventory};
+
+    #[test]
+    fn move_arrows_are_centered_in_the_badge_and_app_card() {
+        let assets = assets();
+        let mut state = State::new(Preferences::default());
+        state.set_inventory(demo_inventory(), None);
+        let app = &state.inventory.apps[0];
+        state.moving = Some(app.id.clone());
+        for page in [Page::Home, Page::Apps] {
+            state.page = page;
+            for rect in [
+                Rect::new(84., 700., 240., 140.),
+                Rect::new(827.4, 400., 280., 160.),
+            ] {
+                let mut scene = Scene::new();
+                tile(&mut scene, &state, &assets, app, rect, Some(rect));
+                let indicator = scene
+                    .draw
+                    .iter()
+                    .find_map(|draw| match draw {
+                        Draw::Shape(rect, _, _, color) if *color == c(0x101318, 0.79) => {
+                            Some(*rect)
+                        }
+                        _ => None,
+                    })
+                    .unwrap();
+                let arrow = |name: &str| {
+                    scene
+                        .draw
+                        .iter()
+                        .find_map(|draw| match draw {
+                            Draw::TintedImage(path, rect, ..)
+                                if path == &assets.path(format!("ui-icons/{name}.lvec")) =>
+                            {
+                                Some(*rect)
+                            }
+                            _ => None,
+                        })
+                        .unwrap()
+                };
+                let left = arrow("left");
+                let right = arrow("arrow");
+                let center = (left.x + right.x + right.w) / 2.;
+                assert!((center - indicator.x - indicator.w / 2.).abs() < 0.001);
+                assert!((center - rect.x - rect.w / 2.).abs() < 0.001);
+                assert!((left.x - indicator.x - 14.).abs() < 0.001);
+                assert!(left.x + left.w < right.x);
+                for arrow in [left, right] {
+                    assert!(
+                        (arrow.y + arrow.h / 2. - indicator.y - indicator.h / 2.).abs() < 0.001
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn hungarian_home_renders_localized_date_and_honors_date_toggle() {
