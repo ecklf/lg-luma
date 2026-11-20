@@ -2170,8 +2170,8 @@ fn run() -> Result<(), String> {
             end_registration();
         }
         // Shadow textures seen in recent frames are prepared between them, never inside one.
-        if visible && !state.animating() {
-            renderer.prepare_idle();
+        if visible && !state.animating() && renderer.prepare_idle() {
+            damage_tracker.refresh_shadows();
         }
         if std::mem::take(&mut drawer_artwork_due) {
             let page = std::mem::replace(&mut state.page, state::Page::Apps);

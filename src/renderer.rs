@@ -1014,15 +1014,16 @@ impl Renderer {
         Some(id)
     }
 
-    /// Prepares one shadow texture seen since the last call; true while more remain.
+    /// Processes one pending shadow. Its cached coverage may now differ from the shader.
     /// Call when nothing animates: the next frame draws that shadow from the texture.
     pub fn prepare_idle(&mut self) -> bool {
         if let Some((quad, radius, blur)) = self.pending_shadows.pop() {
             self.preparing_shadow = true;
             self.shadow_texture(quad, radius, blur);
             self.preparing_shadow = false;
+            return true;
         }
-        !self.pending_shadows.is_empty()
+        false
     }
 
     /// Whether an image path already has a texture (or a cached failure).

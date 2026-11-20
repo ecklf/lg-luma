@@ -67,6 +67,24 @@ fn an_unchanged_scene_has_no_damage() {
 }
 
 #[test]
+fn an_idle_shadow_refresh_reaches_every_rotating_buffer() {
+    let shadow = Draw::Shadow(Rect::new(100., 90., 30., 20.), 8., 4., [0.; 4]);
+    let scene = [wallpaper(), shadow];
+    let mut tracker = Tracker::default();
+    for _ in 0..4 {
+        tracker.push(&scene);
+    }
+    tracker.refresh_shadows();
+    for _ in 0..3 {
+        tracker.push(&scene);
+        let rect = area(tracker.damage(3));
+        assert_eq!((rect.x, rect.y, rect.w, rect.h), (95., 85., 40., 30.));
+    }
+    tracker.push(&scene);
+    assert_eq!(area(tracker.damage(3)).w, 0.);
+}
+
+#[test]
 fn a_moved_shape_damages_its_old_and_new_place_only() {
     let mut tracker = Tracker::default();
     tracker.push(&[wallpaper(), shape(100.)]);
