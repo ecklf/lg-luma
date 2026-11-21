@@ -65,6 +65,37 @@ impl TextStyle {
     }
 }
 
+/// Identifies what a scene would look like, so an unchanged scene need not be drawn again.
+/// App artwork counts by identity: a changed icon is a new shared image.
+pub fn fingerprint(commands: &[Draw]) -> u64 {
+    use std::hash::{DefaultHasher, Hasher};
+    let mut hasher = DefaultHasher::new();
+    for command in commands {
+        let text = match command {
+            Draw::Glass(rect, radius, color) => format!("g{rect:?}{radius}{color:?}"),
+            Draw::Shape(rect, radius, blur, color) => format!("s{rect:?}{radius}{blur}{color:?}"),
+            Draw::RoundedGradient(rect, radius, top, bottom) => {
+                format!("r{rect:?}{radius}{top:?}{bottom:?}")
+            }
+            Draw::Shadow(rect, radius, blur, color) => format!("h{rect:?}{radius}{blur}{color:?}"),
+            Draw::Text(text, rect, style, color, centered) => {
+                format!("t{text}{rect:?}{style:?}{color:?}{centered}")
+            }
+            Draw::Image(path, rect, radius, contain) => format!("i{path}{rect:?}{radius}{contain}"),
+            Draw::TintedImage(path, rect, radius, contain, tint) => {
+                format!("n{path}{rect:?}{radius}{contain}{tint:?}")
+            }
+            Draw::AppImage(image, rect, radius, tint) => {
+                format!("a{:p}{rect:?}{radius}{tint:?}", Arc::as_ptr(image))
+            }
+            Draw::Clip(clip) => format!("c{clip:?}"),
+            Draw::EdgeFade(fade) => format!("e{fade:?}"),
+        };
+        hasher.write(text.as_bytes());
+    }
+    hasher.finish()
+}
+
 #[derive(Clone)]
 pub enum Draw {
     /// Shared, downsampled wallpaper backdrop; text/artwork remain separate sharp draws.
@@ -2231,6 +2262,12 @@ impl Renderer {
     }
 
     pub fn screenshot(&self, path: &Path, width: u32, height: u32) -> Result<(), String> {
+        self.read_image(width, height)?
+            .save(path)
+            .map_err(|e| e.to_string())
+    }
+
+    fn read_image(&self, width: u32, height: u32) -> Result<image::RgbaImage, String> {
         let mut pixels = vec![0; width as usize * height as usize * 4];
         unsafe {
             gl::ReadPixels(
@@ -2246,7 +2283,7 @@ impl Renderer {
         let mut image = image::RgbaImage::from_raw(width, height, pixels)
             .ok_or("Invalid framebuffer dimensions")?;
         image::imageops::flip_vertical_in_place(&mut image);
-        image.save(path).map_err(|e| e.to_string())
+        Ok(image)
     }
 
     /// Capture the authored TV surface, independent of desktop HiDPI/window limits.
@@ -2256,6 +2293,34 @@ impl Renderer {
         path: &Path,
         size: Size,
     ) -> Result<RenderStats, String> {
+        self.offscreen(commands, size, |renderer| {
+            renderer.screenshot(path, size.width, size.height)
+        })
+        .map(|((), stats)| stats)
+    }
+
+    /// The scene's pixels, upright, for the companion page's live preview. Encoding happens
+    /// elsewhere so the SDL thread only pays for drawing and reading back.
+    pub fn capture_rgba(
+        &mut self,
+        commands: &[Draw],
+        size: Size,
+    ) -> Result<image::RgbaImage, String> {
+        let stats = self.stats.clone();
+        let result = self.offscreen(commands, size, |renderer| {
+            renderer.read_image(size.width, size.height)
+        });
+        // A preview must not replace the statistics of the frames the TV shows.
+        self.stats = stats;
+        result.map(|(image, _)| image)
+    }
+
+    fn offscreen<T>(
+        &mut self,
+        commands: &[Draw],
+        size: Size,
+        read: impl FnOnce(&Self) -> Result<T, String>,
+    ) -> Result<(T, RenderStats), String> {
         if size.width > self.info.max_texture_size
             || size.height > self.info.max_texture_size
             || size.width > self.info.max_viewport[0] as u32
@@ -2286,12 +2351,12 @@ impl Renderer {
         }
         self.render(commands, size.width, size.height, None);
         let stats = self.stats.clone();
-        let result = self.screenshot(path, size.width, size.height);
+        let result = read(self);
         unsafe {
             gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
             gl::DeleteFramebuffers(1, &framebuffer);
         }
-        result.map(|_| stats)
+        result.map(|value| (value, stats))
     }
 
     /// Verification aid (LUMA_DAMAGE_VERIFY=1): compares the window's back buffer after a

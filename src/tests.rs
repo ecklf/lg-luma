@@ -1231,6 +1231,11 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
         preferences
     );
     state.direction(Direction::Down, &controls(&state));
+    assert_eq!(
+        state.focus,
+        Target::Setting(crate::state::WEB_ACCESS_SETTING)
+    );
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(5));
     assert_eq!(state.activate(), vec![Effect::Quit]);
     state.back();
@@ -3776,4 +3781,132 @@ fn hovering_corner_controls_keeps_their_geometry_and_does_not_change_pages() {
     assert_eq!(state.page, Page::Home);
     state.hover = None;
     assert_eq!(tab(&state), idle);
+}
+
+#[test]
+fn web_access_settings_pair_list_and_remove_devices() {
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::SYSTEM_SECTION;
+    state.focus = Target::Setting(crate::state::WEB_ACCESS_SETTING);
+    assert!(state.activate().is_empty());
+    assert_eq!(state.subpage, Some(crate::state::Subpage::WebAccess));
+    assert_eq!(state.focus, Target::WebAccessToggle);
+    assert!(!state.preferences.web_access, "web access is opt-in");
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.web_access);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!state.preferences.web_access);
+
+    // Whole-TV control is a separate opt-in below web access.
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::TvRemoteToggle);
+    assert!(!state.preferences.tv_remote, "whole-TV control is opt-in");
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.tv_remote);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!state.preferences.tv_remote);
+
+    // Asking to pair turns web access on and opens the dialog.
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::WebAccessPair);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.web_access);
+    assert!(matches!(state.overlay, Some(Overlay::WebAccessPair)));
+    assert_eq!(state.focus, Target::CloseDialog);
+    state.back();
+    assert!(state.overlay.is_none());
+    assert_eq!(state.focus, Target::WebAccessPair);
+
+    let device: crate::web_access::Device = serde_json::from_value(serde_json::json!({
+        "id": "abc", "name": "iPhone · Safari", "hash": "00", "paired": 0
+    }))
+    .unwrap();
+    state.web_devices = vec![device];
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::WebAccessDevice("abc".into()));
+    assert!(state.activate().is_empty());
+    assert!(state.web_devices.is_empty());
+    assert_eq!(state.forget_web_devices, vec!["abc".to_owned()]);
+    assert_eq!(state.focus, Target::WebAccessPair);
+
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.subpage, None);
+    assert_eq!(
+        state.focus,
+        Target::Setting(crate::state::WEB_ACCESS_SETTING)
+    );
+}
+
+#[test]
+fn web_settings_apply_like_the_same_choices_on_the_tv() {
+    let mut state = ready();
+    let mut settings = crate::web_settings::Settings::of(&state.preferences);
+    assert!(state.apply_web_settings(settings.clone()).is_empty());
+    settings.hour_24 = true;
+    settings.language = crate::i18n::Language::De;
+    settings.wallpaper_cycle = !state.preferences.wallpaper_cycle;
+    assert_eq!(
+        state.apply_web_settings(settings.clone()),
+        vec![Effect::Save]
+    );
+    assert!(state.preferences.hour_24);
+    assert_eq!(state.preferences.language, crate::i18n::Language::De);
+    // Turning rotation on starts its timer, as the TV toggle does.
+    assert!(state.preferences.wallpaper_changed > 0);
+    assert_eq!(
+        crate::web_settings::Settings::of(&state.preferences),
+        settings
+    );
+}
+
+#[test]
+fn web_widget_layout_follows_the_tv_placement_rules() {
+    use crate::model::HomeWidget;
+    use crate::web_settings::WidgetChange;
+    let mut state = ready();
+    // Weather is 2×2 at the top right by default; the 4×1 greeting cannot move onto it.
+    let blocked = WidgetChange::Move {
+        widget: HomeWidget::Greeting,
+        column: 2,
+        row: 0,
+    };
+    assert!(state.apply_web_widget(blocked).is_empty());
+    let moved = WidgetChange::Move {
+        widget: HomeWidget::Greeting,
+        column: 0,
+        row: 3,
+    };
+    assert_eq!(state.apply_web_widget(moved), vec![Effect::Save]);
+    assert_eq!(state.preferences.greeting_position.row, 3);
+    // Off the grid, then back where it fits; removing keeps configuration.
+    let remove = WidgetChange::Remove {
+        widget: HomeWidget::Weather,
+    };
+    assert_eq!(state.apply_web_widget(remove), vec![Effect::Save]);
+    assert!(!state.preferences.has_widget(HomeWidget::Weather));
+    let outside = WidgetChange::Add {
+        widget: HomeWidget::Weather,
+        column: 5,
+        row: 0,
+    };
+    assert!(
+        state.apply_web_widget(outside).is_empty(),
+        "a 2-wide widget cannot start in column 6"
+    );
+    let add = WidgetChange::Add {
+        widget: HomeWidget::Weather,
+        column: 0,
+        row: 0,
+    };
+    assert_eq!(state.apply_web_widget(add), vec![Effect::Save]);
+    assert!(state.preferences.has_widget(HomeWidget::Weather));
+    assert_eq!(
+        state.apply_web_widget(WidgetChange::Reset),
+        vec![Effect::Save]
+    );
+    assert_eq!(
+        state.preferences.greeting_position,
+        HomeWidget::Greeting.default_position()
+    );
 }

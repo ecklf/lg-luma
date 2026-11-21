@@ -11,6 +11,8 @@ use std::time::{Duration, Instant};
 
 pub const WIDGETS_SECTION: usize = 2;
 pub const SYSTEM_SECTION: usize = 3;
+/// Settings › System › Phone & computer.
+pub const WEB_ACCESS_SETTING: usize = 17;
 pub const APPS_SECTION: usize = 4;
 pub const INPUTS_SECTION: usize = 5;
 pub const SECTION_COUNT: usize = 6;
@@ -128,6 +130,10 @@ pub enum Target {
     TileTest(String),
     TileRemove(String),
     TileEditor,
+    WebAccessToggle,
+    TvRemoteToggle,
+    WebAccessPair,
+    WebAccessDevice(String),
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -170,6 +176,7 @@ pub enum Overlay {
     SystemKeyboard,
     WallpaperUpload,
     TileEditor,
+    WebAccessPair,
     BackgroundOptions { id: String, restore: Target },
     BackgroundDelete { id: String, restore: Target },
     WidgetOptions { cell: usize },
@@ -198,6 +205,7 @@ pub enum Subpage {
     AppDrawer,
     RecentApps,
     TextRendering,
+    WebAccess,
     WeatherIcons,
     Attributions,
 }
@@ -291,6 +299,13 @@ pub struct State {
     pub deleting_wallpaper: Option<String>,
     pub wallpaper_upload: Option<Result<crate::wallpapers::Session, String>>,
     pub tile_editor: Option<Result<crate::companion::Session, String>>,
+    pub web_access_pairing: Option<Result<crate::web_access::Pairing, String>>,
+    /// Paired phones and computers, as the web access worker last reported them.
+    pub web_devices: Vec<crate::web_access::Device>,
+    /// The whole-TV remote's connection, as the worker last reported it.
+    pub tv_remote: crate::tv_remote::Status,
+    /// Devices removed in Settings, for the main loop to revoke.
+    pub forget_web_devices: Vec<String>,
     /// Luma update (Settings → System), driven by the update worker.
     pub update: crate::update::InstallStatus,
     pub panel_started: Option<Instant>,
@@ -351,6 +366,10 @@ impl State {
             deleting_wallpaper: None,
             wallpaper_upload: None,
             tile_editor: None,
+            web_access_pairing: None,
+            web_devices: vec![],
+            forget_web_devices: vec![],
+            tv_remote: crate::tv_remote::Status::default(),
             update: crate::update::InstallStatus::default(),
             panel_started: None,
             weather: weather::Weather::default(),
@@ -1255,6 +1274,60 @@ impl State {
         self.finish_background_delete(&id);
     }
 
+    /// Deletes one of the owner's own photos for a paired phone or computer, like confirming
+    /// Delete in the TV's background options.
+    pub fn delete_web_photo(&mut self, id: &str) -> Vec<Effect> {
+        if !crate::wallpapers::valid_id(id)
+            || !self.can_delete_background(id)
+            || self.deleting_wallpaper.is_some()
+        {
+            return vec![];
+        }
+        self.deleting_wallpaper = Some(id.to_owned());
+        vec![Effect::DeleteWallpaper(id.to_owned())]
+    }
+
+    /// Opens an app or sends a shortcut tile chosen on a paired phone or computer, as selecting
+    /// it on Home does.
+    pub fn web_launch(&mut self, id: &str) -> Vec<Effect> {
+        if self.launching {
+            return vec![];
+        }
+        if let Some(tile) = self.preferences.custom_tile(id).cloned() {
+            return self.send_tile(tile);
+        }
+        if self.inventory.apps.iter().any(|app| app.id == id)
+            || self.inventory.inputs.iter().any(|input| input.id == id)
+        {
+            return vec![Effect::Launch(id.to_owned())];
+        }
+        vec![]
+    }
+
+    /// A Settings › System action from a paired phone or computer, as pressing its row does.
+    pub fn web_action(&mut self, action: &str) -> Vec<Effect> {
+        match action {
+            "refresh" => vec![Effect::Reload],
+            "reset_icons" => {
+                self.reset_icon_cache = true;
+                vec![]
+            }
+            "update" if !self.update_busy() => {
+                if let Some(version) = self.available_update.clone() {
+                    self.update = crate::update::InstallStatus::Downloading(0);
+                    vec![Effect::UpdateDownload(version)]
+                } else {
+                    self.update = crate::update::InstallStatus::Idle;
+                    self.update_status = crate::update::Status::Checking;
+                    self.update_check_requested = true;
+                    self.dirty = true;
+                    vec![]
+                }
+            }
+            _ => vec![],
+        }
+    }
+
     fn finish_background_delete(&mut self, id: &str) {
         let index = self
             .background_ids()
@@ -1424,6 +1497,7 @@ impl State {
                 self.subpage = Some(Subpage::AppDrawer);
                 Target::Setting(15)
             }
+            Some(Subpage::WebAccess) => Target::Setting(WEB_ACCESS_SETTING),
             Some(Subpage::AppDrawer) => Target::Setting(13),
             Some(Subpage::RecentApps) => Target::Setting(12),
             None => Target::Sidebar(self.section),
@@ -1550,7 +1624,7 @@ impl State {
         }
         if matches!(
             self.overlay,
-            Some(Overlay::WallpaperUpload | Overlay::TileEditor)
+            Some(Overlay::WallpaperUpload | Overlay::TileEditor | Overlay::WebAccessPair)
         ) {
             return vec![];
         }
@@ -1894,6 +1968,10 @@ impl State {
                 self.focus,
                 Target::TileEditor
                     | Target::Tile(_)
+                    | Target::WebAccessToggle
+                    | Target::TvRemoteToggle
+                    | Target::WebAccessPair
+                    | Target::WebAccessDevice(_)
                     | Target::InputMode(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
@@ -1910,7 +1988,7 @@ impl State {
             }
             if matches!(
                 self.focus,
-                Target::Setting(0 | 1 | 4 | 7 | 10 | 13 | 15)
+                Target::Setting(0 | 1 | 4 | 7 | 10 | 13 | 15 | WEB_ACCESS_SETTING)
                     | Target::Widget(_)
                     | Target::MoveWidget(_)
                     | Target::InputMode(_)
@@ -1944,6 +2022,10 @@ impl State {
                 return vec![];
             }
             if self.focus == Target::Setting(1) && matches!(direction, Direction::Up) {
+                self.focus(Target::SettingsMenu, controls);
+                return vec![];
+            }
+            if self.focus == Target::WebAccessToggle && matches!(direction, Direction::Up) {
                 self.focus(Target::SettingsMenu, controls);
                 return vec![];
             }
@@ -2473,6 +2555,203 @@ impl State {
         }
     }
 
+    /// Favorites in order and hidden apps from a paired phone or computer. Ids the launcher does
+    /// not know are dropped; saved entries for apps that are not installed right now are kept.
+    pub fn apply_web_arrangement(
+        &mut self,
+        favorites: Vec<String>,
+        hidden: Vec<String>,
+    ) -> Vec<Effect> {
+        let known = |id: &String| self.inventory.apps.iter().any(|app| &app.id == id);
+        let mut next_favorites: Vec<String> = Vec::new();
+        for id in favorites.into_iter().filter(known) {
+            if !next_favorites.contains(&id) {
+                next_favorites.push(id);
+            }
+        }
+        let current = self.preferences.favorites(&self.inventory.apps);
+        next_favorites.extend(current.iter().filter(|id| !known(id)).cloned());
+        let mut next_hidden: Vec<String> = Vec::new();
+        for id in hidden.into_iter().filter(known) {
+            if !next_hidden.contains(&id) && !next_favorites.contains(&id) {
+                next_hidden.push(id);
+            }
+        }
+        next_hidden.extend(
+            self.preferences
+                .hidden
+                .iter()
+                .filter(|id| !known(id))
+                .cloned(),
+        );
+        if current == next_favorites && self.preferences.hidden == next_hidden {
+            return vec![];
+        }
+        self.preferences.favorites = Some(next_favorites);
+        self.preferences.hidden = next_hidden;
+        if self.filter == 5 && self.hidden_count() == 0 {
+            self.filter = 0;
+        }
+        self.reconcile_focus();
+        self.dirty = true;
+        vec![Effect::Save]
+    }
+
+    /// One input's name, visibility and icon from a paired phone or computer, saved like the same
+    /// choices in Settings › Widgets › Inputs.
+    pub fn apply_web_input(&mut self, change: crate::web_settings::InputChange) -> Vec<Effect> {
+        if !self
+            .inventory
+            .inputs
+            .iter()
+            .any(|input| input.id == change.id)
+        {
+            return vec![];
+        }
+        let mut changed = self.preferences.set_input_name(&change.id, &change.name);
+        changed |= self.preferences.set_input_icon(&change.id, &change.icon);
+        if self
+            .preferences
+            .input_modes
+            .get(&change.id)
+            .copied()
+            .unwrap_or_default()
+            != change.mode
+        {
+            self.preferences.input_modes.insert(change.id, change.mode);
+            changed = true;
+        }
+        if !changed {
+            return vec![];
+        }
+        self.dirty = true;
+        vec![Effect::Save]
+    }
+
+    /// A weather place chosen on a paired phone or computer, or `None` to remove it, with the
+    /// same effects as choosing or removing it in Settings › Widgets › Weather.
+    pub fn apply_web_weather_location(
+        &mut self,
+        place: Option<crate::weather::Location>,
+    ) -> Vec<Effect> {
+        if self.preferences.weather_location == place {
+            return vec![];
+        }
+        self.dirty = true;
+        match place {
+            Some(place) => {
+                self.preferences.weather_location = Some(place);
+                self.weather.invalidate_forecast();
+                self.weather.cancel_search();
+                vec![Effect::Save]
+            }
+            None => {
+                self.preferences.weather_location = None;
+                self.weather.remove_location();
+                vec![Effect::Save, Effect::Weather(weather::Command::ClearCache)]
+            }
+        }
+    }
+
+    /// A Home widget layout change from a paired phone or computer, with the TV's placement rules:
+    /// nothing overlaps or leaves the 6×4 grid, and removing keeps a widget's configuration.
+    pub fn apply_web_widget(&mut self, change: crate::web_settings::WidgetChange) -> Vec<Effect> {
+        use crate::model::WidgetPosition;
+        use crate::web_settings::WidgetChange;
+        let changed = match change {
+            WidgetChange::Move {
+                widget,
+                column,
+                row,
+            } => {
+                self.preferences.has_widget(widget)
+                    && self
+                        .preferences
+                        .place_widget(widget, WidgetPosition { column, row })
+            }
+            WidgetChange::Add {
+                widget,
+                column,
+                row,
+            } => {
+                let position = WidgetPosition { column, row };
+                if self.preferences.has_widget(widget)
+                    || !self.preferences.can_place_widget(widget, position)
+                {
+                    false
+                } else {
+                    self.preferences.place_widget(widget, position);
+                    self.preferences.set_widget_present(widget, true);
+                    true
+                }
+            }
+            WidgetChange::Remove { widget } => {
+                let present = self.preferences.has_widget(widget);
+                self.preferences.set_widget_present(widget, false);
+                present
+            }
+            WidgetChange::Reset => self.preferences.reset_widgets(),
+        };
+        if !changed {
+            return vec![];
+        }
+        // Weather starts or stops fetching with its widget, as on the TV.
+        self.weather.invalidate_forecast();
+        self.dirty = true;
+        vec![Effect::Save]
+    }
+
+    /// Shows `id` as the background, fading from the previous one like a choice in Settings.
+    fn use_background(&mut self, id: String) {
+        if !self.preferences.reduced_motion && self.preferences.background != id {
+            self.previous_background = Some((self.preferences.background.clone(), Instant::now()));
+            self.background_fade = BACKGROUND_FADE;
+        }
+        self.preferences.background = id;
+        self.preferences.wallpaper_changed = unix_now();
+    }
+
+    /// A change made on a paired phone or computer, with the same side effects as on the TV.
+    pub fn apply_web_settings(&mut self, settings: crate::web_settings::Settings) -> Vec<Effect> {
+        if crate::web_settings::Settings::of(&self.preferences) == settings {
+            return vec![];
+        }
+        if settings.background != self.preferences.background
+            && self.deleting_wallpaper.as_deref() != Some(settings.background.as_str())
+            && self
+                .background_ids()
+                .any(|known| known == settings.background)
+        {
+            self.use_background(settings.background.clone());
+        }
+        self.preferences.tv_remote = settings.tv_remote;
+        if settings.text_rendering != self.preferences.text_rendering {
+            self.preferences.text_rendering = settings.text_rendering;
+            self.notify(self.preferences.language.t("textRenderingRestart"));
+        }
+        if self.preferences.language != settings.language {
+            self.weather.cancel_search();
+        }
+        if self.preferences.wallpaper_cycle != settings.wallpaper_cycle {
+            self.preferences.wallpaper_changed = unix_now();
+        }
+        let preferences = &mut self.preferences;
+        preferences.hour_24 = settings.hour_24;
+        preferences.show_seconds = settings.show_seconds;
+        preferences.language = settings.language;
+        preferences.app_sorting = settings.app_sorting;
+        preferences.reduced_motion = settings.reduced_motion;
+        preferences.ui_sounds = settings.ui_sounds;
+        preferences.show_date = settings.show_date;
+        preferences.date_format = settings.date_format;
+        preferences.temperature_unit = settings.temperature_unit;
+        preferences.weather_style = settings.weather_style;
+        preferences.wallpaper_cycle = settings.wallpaper_cycle;
+        preferences.wallpaper_gradient = settings.wallpaper_gradient;
+        self.dirty = true;
+        vec![Effect::Save]
+    }
+
     /// Applies the tile list edited on a phone or computer. New tiles join
     /// the end of the Home favorites and removed ones leave favorites and hidden apps.
     pub fn replace_tiles(&mut self, tiles: Vec<CustomTile>) -> Vec<Effect> {
@@ -2679,6 +2958,45 @@ impl State {
                 self.overlay = Some(Overlay::TileEditor);
                 self.focus = Target::CloseDialog;
                 self.pressed = None;
+            }
+            Target::TvRemoteToggle => {
+                self.preferences.tv_remote = !self.preferences.tv_remote;
+                return vec![Effect::Save];
+            }
+            Target::WebAccessToggle => {
+                self.preferences.web_access = !self.preferences.web_access;
+                return vec![Effect::Save];
+            }
+            Target::WebAccessPair => {
+                // Pairing is the way in, so asking to pair turns web access on.
+                let effects = if self.preferences.web_access {
+                    vec![]
+                } else {
+                    self.preferences.web_access = true;
+                    vec![Effect::Save]
+                };
+                self.web_access_pairing = None;
+                self.overlay = Some(Overlay::WebAccessPair);
+                self.focus = Target::CloseDialog;
+                self.pressed = None;
+                return effects;
+            }
+            Target::WebAccessDevice(id) => {
+                if let Some(index) = self.web_devices.iter().position(|device| device.id == id) {
+                    let device = self.web_devices.remove(index);
+                    self.forget_web_devices.push(device.id);
+                    self.notify(
+                        self.preferences
+                            .language
+                            .format("webAccessRemoved", &[("device", &device.name)]),
+                    );
+                    self.focus = self
+                        .web_devices
+                        .get(index.min(self.web_devices.len().saturating_sub(1)))
+                        .map_or(Target::WebAccessPair, |device| {
+                            Target::WebAccessDevice(device.id.clone())
+                        });
+                }
             }
             Target::TvSettings => {
                 if matches!(self.overlay, Some(Overlay::Settings)) {
@@ -3064,6 +3382,15 @@ impl State {
             }
             Target::Setting(index) => {
                 match index {
+                    WEB_ACCESS_SETTING => {
+                        self.subpage = Some(Subpage::WebAccess);
+                        self.focus = Target::WebAccessToggle;
+                        self.scroll = 0.;
+                        if !self.preferences.reduced_motion {
+                            self.panel_started = Some(Instant::now());
+                        }
+                        return vec![];
+                    }
                     14 => {
                         self.preferences.show_drawer_app_names =
                             !self.preferences.show_drawer_app_names
@@ -3167,13 +3494,7 @@ impl State {
                 if !self.background_ids().any(|known| known == id) {
                     return self.back();
                 }
-                if !self.preferences.reduced_motion && self.preferences.background != id {
-                    self.previous_background =
-                        Some((self.preferences.background.clone(), Instant::now()));
-                    self.background_fade = BACKGROUND_FADE;
-                }
-                self.preferences.background = id;
-                self.preferences.wallpaper_changed = unix_now();
+                self.use_background(id);
                 self.back();
                 return vec![Effect::Save];
             }
@@ -3306,6 +3627,7 @@ impl State {
                         | Subpage::AppDrawer
                         | Subpage::Weather
                         | Subpage::Shortcuts
+                        | Subpage::WebAccess
                         | Subpage::Attributions,
                     ) => {
                         return vec![];
@@ -3515,6 +3837,12 @@ impl State {
             if matches!(overlay, Overlay::TileEditor) {
                 self.tile_editor = None;
                 self.focus = Target::TileEditor;
+                self.pressed = None;
+                return vec![];
+            }
+            if matches!(overlay, Overlay::WebAccessPair) {
+                self.web_access_pairing = None;
+                self.focus = Target::WebAccessPair;
                 self.pressed = None;
                 return vec![];
             }

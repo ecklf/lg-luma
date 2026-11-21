@@ -40,20 +40,24 @@ pub fn local_peer(ip: IpAddr) -> bool {
     ip.is_loopback() || matches!(ip, IpAddr::V4(ip) if ip.is_private() || ip.is_link_local())
 }
 
+/// The TV's address on its private network, or loopback for desktop scripts and tests.
+pub fn local_address(loopback_only: bool) -> Result<Ipv4Addr, String> {
+    if loopback_only {
+        return Ok(Ipv4Addr::LOCALHOST);
+    }
+    if_addrs::get_if_addrs()
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .filter_map(|interface| match interface.ip() {
+            IpAddr::V4(ip) if ip.is_private() || ip.is_link_local() => Some(ip),
+            _ => None,
+        })
+        .next()
+        .ok_or_else(|| "Connect the TV to your local network, then reopen this dialog".into())
+}
+
 pub fn listen(loopback_only: bool) -> Result<TcpListener, String> {
-    let address = if loopback_only {
-        Ipv4Addr::LOCALHOST
-    } else {
-        if_addrs::get_if_addrs()
-            .map_err(|e| e.to_string())?
-            .into_iter()
-            .filter_map(|interface| match interface.ip() {
-                IpAddr::V4(ip) if ip.is_private() || ip.is_link_local() => Some(ip),
-                _ => None,
-            })
-            .next()
-            .ok_or("Connect the TV to your local network, then reopen this dialog")?
-    };
+    let address = local_address(loopback_only)?;
     // Bind only the chosen local interface, not every interface or a public address.
     let listener =
         TcpListener::bind((address, 0)).map_err(|e| format!("Local server unavailable: {e}"))?;
@@ -62,7 +66,11 @@ pub fn listen(loopback_only: bool) -> Result<TcpListener, String> {
 }
 
 pub fn session(address: SocketAddr, token: &str) -> Result<Session, String> {
-    let url = format!("http://{address}/{token}/");
+    qr(format!("http://{address}/{token}/"))
+}
+
+/// A session showing `url` as a QR code.
+pub fn qr(url: String) -> Result<Session, String> {
     // Highest correction reserves capacity for the small branded center mark.
     let qr = qrcodegen::QrCode::encode_text(&url, qrcodegen::QrCodeEcc::High)
         .map_err(|e| e.to_string())?;
@@ -191,7 +199,18 @@ pub fn response(
     kind: &str,
     body: &[u8],
 ) -> Result<(), String> {
-    write!(stream, "HTTP/1.1 {status}\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\r\n\r\n", body.len())
+    response_with(stream, status, kind, "", body)
+}
+
+/// `extra` holds further complete header lines, each ending in CRLF.
+pub fn response_with(
+    stream: &mut TcpStream,
+    status: &str,
+    kind: &str,
+    extra: &str,
+    body: &[u8],
+) -> Result<(), String> {
+    write!(stream, "HTTP/1.1 {status}\r\n{extra}Content-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\r\n\r\n", body.len())
         .and_then(|_| stream.write_all(body)).map_err(|e| e.to_string())
 }
 

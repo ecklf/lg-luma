@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#101214" />
+    <title>Luma</title>
+    <link rel="icon" href="luma-mark.svg" />
+    <link rel="apple-touch-icon" href="luma-mark.svg" />
+    <link rel="stylesheet" href="web.css" />
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <div id="backdrop" class="backdrop" aria-hidden="true"></div>
+    <div class="shell">
+      <header class="top">
+        <div class="brand"><img src="luma-mark.svg" alt="" /><span>luma</span></div>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </header>
+
+      <section id="pair" class="pair glass" hidden>
+        <h1 id="pair-title"></h1>
+        <p id="pair-intro" class="muted"></p>
+        <form id="pair-form">
+          <input
+            id="pin"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="7"
+            placeholder="123 456"
+            aria-label="PIN"
+            required
+          />
+          <button id="pair-button" type="submit" class="primary"></button>
+        </form>
+      </section>
+
+      <main id="app" class="layout" hidden>
+        <aside class="stage">
+          <figure class="preview">
+            <div class="screen">
+              <img id="preview" alt="" />
+              <p id="preview-empty" class="preview-empty" hidden></p>
+            </div>
+            <figcaption>
+              <span class="live-dot"></span><span id="preview-label"></span>
+              <button id="remote-toggle" type="button" class="pill-button remote-toggle"></button>
+            </figcaption>
+          </figure>
+          <div id="remote" class="remote" hidden>
+            <div class="dpad">
+              <button type="button" data-key="up" class="dpad-up">
+                <span class="glyph"></span>
+              </button>
+              <button type="button" data-key="left" class="dpad-left">
+                <span class="glyph"></span>
+              </button>
+              <button type="button" data-key="ok" class="dpad-ok">OK</button>
+              <button type="button" data-key="right" class="dpad-right">
+                <span class="glyph"></span>
+              </button>
+              <button type="button" data-key="down" class="dpad-down">
+                <span class="glyph"></span>
+              </button>
+            </div>
+            <div class="remote-side">
+              <button type="button" data-key="back" class="pill-button" id="key-back"></button>
+              <button type="button" data-key="home" class="pill-button key-home">
+                <span class="glyph"></span><span id="key-home"></span>
+              </button>
+              <button type="button" data-key="menu" class="pill-button" id="key-menu"></button>
+            </div>
+            <div id="tv-inputs" class="tv-inputs"></div>
+            <div id="tv-volume" class="tv-volume" hidden>
+              <button type="button" data-key="volume_down" class="round" aria-label="−">−</button>
+              <input id="volume" class="volume" type="range" min="0" max="100" step="1" />
+              <button type="button" data-key="volume_up" class="round" aria-label="+">+</button>
+              <output id="volume-value" class="volume-value" for="volume"></output>
+            </div>
+            <div id="tv-keys" class="tv-keys" hidden>
+              <button type="button" data-key="mute" class="pill-button" id="key-mute"></button>
+              <button type="button" data-key="play" class="round" aria-label="▶">▶</button>
+              <button type="button" data-key="pause" class="round" aria-label="❚❚">❚❚</button>
+              <button type="button" class="pill-button" id="key-screen"></button>
+              <button type="button" class="pill-button danger" id="key-power"></button>
+            </div>
+            <div id="tv-sleep" class="tv-sleep" hidden>
+              <span id="sleep-label" class="muted"></span>
+              <div id="sleep-choices" class="segments" role="radiogroup"></div>
+              <p id="sleep-left" class="hint"></p>
+            </div>
+            <form id="tv-text" class="tv-text" hidden>
+              <input
+                id="tv-text-field"
+                class="text-field"
+                type="text"
+                autocomplete="off"
+                enterkeyhint="send"
+              />
+              <button type="submit" class="pill-button strong" id="tv-text-send"></button>
+            </form>
+            <p id="keyboard-hint" class="hint keyboard-hint"></p>
+          </div>
+        </aside>
+        <div class="panel">
+          <nav id="tabs" class="tabs" role="tablist"></nav>
+          <div id="sections"></div>
+          <footer class="foot">
+            <span id="device" class="muted"></span>
+            <button id="forget" type="button" class="link"></button>
+          </footer>
+        </div>
+      </main>
+      <div id="undo" class="undo" role="status" aria-live="polite" hidden>
+        <span id="undo-text"></span>
+        <button id="undo-button" type="button" class="pill-button strong"></button>
+      </div>
+    </div>
+  </body>
+</html>

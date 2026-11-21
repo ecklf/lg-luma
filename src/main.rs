@@ -33,6 +33,8 @@ mod storage;
 mod text_rendering;
 #[path = "tile-editor.rs"]
 mod tile_editor;
+#[path = "tv-remote.rs"]
+mod tv_remote;
 mod update;
 mod vector;
 mod view;
@@ -41,6 +43,10 @@ mod wallpapers;
 mod weather;
 #[path = "weather-service.rs"]
 mod weather_service;
+#[path = "web-access.rs"]
+mod web_access;
+#[path = "web-settings.rs"]
+mod web_settings;
 mod webhook;
 #[cfg(all(feature = "webos", any(target_os = "linux", test)))]
 #[path = "webos-compat.rs"]
@@ -229,6 +235,8 @@ struct Press {
 }
 
 const SCRIPT_POINTER: u32 = u32::MAX - 1;
+/// Taps on the companion page's live picture.
+const WEB_POINTER: u32 = u32::MAX - 2;
 // SDL-webOS's Back scancode is outside rust-sdl2's standard Scancode enum.
 // Keycode retains the raw value: SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_WEBOS_BACK).
 const WEBOS_BACK_KEYCODE: i32 = (1 << 30) | 482;
@@ -445,6 +453,7 @@ fn script(
         "await-recents" => vec![],
         "await-upload" => vec![],
         "await-tile-editor" => vec![],
+        "await-web-pairing" => vec![],
         _ => return Err(format!("Unknown scripted action: {action}")),
     })
 }
@@ -463,6 +472,159 @@ fn compose(state: &mut State, assets: &view::Assets, now: OffsetDateTime) -> vie
     } else {
         scene
     }
+}
+
+/// Every background Settings offers, with the thumbnail the companion page shows for it.
+fn web_backgrounds(state: &State, assets: &view::Assets) -> Vec<web_settings::Background> {
+    (0..state.background_count())
+        .filter_map(|index| state.background_id(index))
+        .map(|id| {
+            let custom = state.wallpapers.iter().find(|item| item.id == id);
+            web_settings::Background {
+                id: id.to_owned(),
+                name: model::BACKGROUNDS
+                    .iter()
+                    .find(|(known, _)| *known == id)
+                    .map_or_else(String::new, |(_, name)| (*name).to_owned()),
+                thumbnail: custom.map_or_else(
+                    || assets.root.join(format!("thumbnails/{id}.jpg")),
+                    |item| item.thumbnail().into(),
+                ),
+            }
+        })
+        .collect()
+}
+
+/// Every app and shortcut in the order the companion page lists them and sheets draw them.
+fn library_apps(state: &State) -> Vec<&model::App> {
+    let mut apps: Vec<_> = state.inventory.apps.iter().collect();
+    apps.sort_by(|a, b| state.preferences.compare_apps(a, b));
+    apps
+}
+
+fn web_library(state: &State) -> web_settings::Library {
+    web_settings::Library {
+        apps: library_apps(state)
+            .into_iter()
+            .map(|app| web_settings::LibraryApp {
+                id: app.id.clone(),
+                title: app.title.clone(),
+            })
+            .collect(),
+        favorites: state.preferences.favorites(&state.inventory.apps),
+        hidden: state.preferences.hidden.clone(),
+    }
+}
+
+fn web_inputs(state: &State) -> Vec<web_settings::WebInput> {
+    let preferences = &state.preferences;
+    state
+        .inventory
+        .inputs
+        .iter()
+        .map(|input| web_settings::WebInput {
+            id: input.id.clone(),
+            port: input.port.clone(),
+            name: preferences.input_name(input).unwrap_or_default().to_owned(),
+            mode: preferences
+                .input_modes
+                .get(&input.id)
+                .copied()
+                .unwrap_or_default(),
+            icon: preferences
+                .input_icon(&input.id)
+                .unwrap_or_default()
+                .to_owned(),
+            auto_icon: view::input_icon(input, preferences.input_name(input)).to_owned(),
+        })
+        .collect()
+}
+
+/// One sheet of app tiles for the companion page, drawn only when its tiles changed.
+fn app_sheet(
+    state: &State,
+    assets: &view::Assets,
+    renderer: &mut renderer::Renderer,
+    page: usize,
+    known: Option<u64>,
+) -> Result<web_access::Frame, String> {
+    let apps: Vec<_> = library_apps(state)
+        .into_iter()
+        .skip(page * view::SHEET_TILES)
+        .take(view::SHEET_TILES)
+        .collect();
+    let scene = view::app_sheet(state, assets, &apps);
+    let key = renderer::fingerprint(&scene.draw);
+    if known == Some(key) {
+        return Ok(web_access::Frame {
+            key,
+            on_screen: true,
+            image: None,
+        });
+    }
+    let image = renderer.capture_rgba(&scene.draw, Size::HD)?;
+    Ok(web_access::Frame {
+        key,
+        on_screen: true,
+        image: Some(image),
+    })
+}
+
+/// What Luma shows right now, as the companion page's live picture. While another app is in
+/// front Luma's own Home stands in: other apps' pictures are never captured.
+fn live_preview(
+    state: &mut State,
+    assets: &view::Assets,
+    renderer: &mut renderer::Renderer,
+    now: OffsetDateTime,
+    known: Option<u64>,
+    on_screen: bool,
+) -> Result<web_access::Frame, String> {
+    let scene = if on_screen {
+        view::scene(state, assets, now)
+    } else {
+        let page = std::mem::replace(&mut state.page, state::Page::Home);
+        let focus = std::mem::replace(&mut state.focus, state::Target::Nav(0));
+        let overlay = state.overlay.take();
+        let subpage = state.subpage.take();
+        let notice = state.notice.take();
+        let panel = state.panel_started.take();
+        let previous = state.previous_background.take();
+        let hover = state.hover.take();
+        let scroll = std::mem::take(&mut state.scroll);
+        let scene = view::scene(state, assets, now);
+        state.page = page;
+        state.focus = focus;
+        state.overlay = overlay;
+        state.subpage = subpage;
+        state.notice = notice;
+        state.panel_started = panel;
+        state.previous_background = previous;
+        state.hover = hover;
+        state.scroll = scroll;
+        scene
+    };
+    // The same scene behind another app is a different picture for the page.
+    let key = renderer::fingerprint(&scene.draw) ^ u64::from(on_screen);
+    if known == Some(key) {
+        return Ok(web_access::Frame {
+            key,
+            on_screen,
+            image: None,
+        });
+    }
+    let started = Instant::now();
+    let image = renderer.capture_rgba(&scene.draw, Size::new(1024, 576))?;
+    eprintln!(
+        "Luma web preview: drew {} in {} ms",
+        if on_screen { "the screen" } else { "Home" },
+        started.elapsed().as_millis()
+    );
+    Ok(web_access::Frame {
+        key,
+        on_screen,
+        image: Some(image),
+    })
 }
 
 fn wallpaper_upload_active(state: &State, webos: bool, focused: bool, visible: bool) -> bool {
@@ -574,6 +736,17 @@ fn scripted_click(
     if !x.is_finite() || !y.is_finite() {
         return Err("Pointer coordinates must be finite".into());
     }
+    inject_click(sdl, window, *x, *y, SCRIPT_POINTER)
+}
+
+/// A pointer click at TV coordinates, through SDL like the Magic Remote's.
+fn inject_click(
+    sdl: &sdl2::Sdl,
+    window: &sdl2::video::Window,
+    x: f32,
+    y: f32,
+    which: u32,
+) -> Result<(), String> {
     let (w, h) = window.size();
     let scale = (w as f32 / 1920.).min(h as f32 / 1080.);
     let x = (x * scale + (w as f32 - 1920. * scale) / 2.).round() as i32;
@@ -583,7 +756,7 @@ fn scripted_click(
         Event::MouseButtonDown {
             timestamp: 0,
             window_id: window.id(),
-            which: SCRIPT_POINTER,
+            which,
             mouse_btn: MouseButton::Left,
             clicks: 1,
             x,
@@ -592,13 +765,42 @@ fn scripted_click(
         Event::MouseButtonUp {
             timestamp: 0,
             window_id: window.id(),
-            which: SCRIPT_POINTER,
+            which,
             mouse_btn: MouseButton::Left,
             clicks: 1,
             x,
             y,
         },
     ] {
+        events.push_event(event)?;
+    }
+    Ok(())
+}
+
+/// A remote button from the companion page, through SDL like the TV remote's, so presses,
+/// holds, sounds and the TV keyboard behave the same.
+fn inject_key(sdl: &sdl2::Sdl, window: &sdl2::video::Window, key: Keycode) -> Result<(), String> {
+    let events = sdl.event()?;
+    for down in [true, false] {
+        let event = if down {
+            Event::KeyDown {
+                timestamp: 0,
+                window_id: window.id(),
+                keycode: Some(key),
+                scancode: None,
+                keymod: sdl2::keyboard::Mod::NOMOD,
+                repeat: false,
+            }
+        } else {
+            Event::KeyUp {
+                timestamp: 0,
+                window_id: window.id(),
+                keycode: Some(key),
+                scancode: None,
+                keymod: sdl2::keyboard::Mod::NOMOD,
+                repeat: false,
+            }
+        };
         events.push_event(event)?;
     }
     Ok(())
@@ -751,6 +953,14 @@ fn run() -> Result<(), String> {
     let mut wallpaper_service =
         wallpapers::Service::new(&preferences_path, !webos && !options.script.is_empty())?;
     let mut tile_editor_service = tile_editor::Service::new(!webos && !options.script.is_empty())?;
+    let mut web_access_service = web_access::Service::new(
+        preferences_path.with_file_name("web-devices.json"),
+        !webos && !options.script.is_empty(),
+        weather_service::Client::new(options.weather_test_server.as_deref())?,
+    )?;
+    state.web_devices = web_access_service.devices();
+    // Only the TV has the remote-app interface; desktop previews report it unavailable.
+    let mut tv_remote_service = tv_remote::Service::new(&preferences_path, webos);
     if options.test_extra_apps > 0 {
         eprintln!(
             "Luma scroll preview: explicit {}-app expansion; preferences {}",
@@ -1103,6 +1313,7 @@ fn run() -> Result<(), String> {
         &assets,
         options.time.unwrap_or_else(OffsetDateTime::now_utc),
     );
+    let mut sleep_at: Option<Instant> = None;
     while running {
         let frame_started = Instant::now();
         let now = options
@@ -1186,6 +1397,314 @@ fn run() -> Result<(), String> {
                     state.notify(state.preferences.language.t("tileEditorEnded"));
                 }
                 _ => {}
+            }
+        }
+        tv_remote_service.set_enabled(state.preferences.web_access && state.preferences.tv_remote);
+        // The page's sleep timer; it needs the remote interface to turn the TV off.
+        if sleep_at.is_some_and(|at| Instant::now() >= at) {
+            sleep_at = None;
+            if state.tv_remote == tv_remote::Status::Ready {
+                tv_remote_service.send(tv_remote::Command::PowerOff);
+            }
+        }
+        while let Ok(status) = tv_remote_service.receiver.try_recv() {
+            state.tv_remote = status;
+            state.dirty = true;
+        }
+        for id in state.forget_web_devices.drain(..) {
+            web_access_service.forget(&id);
+        }
+        web_access_service.sync(
+            state.preferences.web_access,
+            focused && visible && matches!(state.overlay, Some(Overlay::WebAccessPair)),
+            &web_settings::Settings::of(&state.preferences),
+            &web_settings::Catalog {
+                backgrounds: web_backgrounds(&state, &assets),
+                library: web_library(&state),
+                inputs: web_inputs(&state),
+                weather_location: state.preferences.weather_location.clone(),
+                tiles: state.preferences.custom_tiles.clone(),
+                system: web_settings::SystemStatus {
+                    update_title: state
+                        .preferences
+                        .language
+                        .t(view::update_title(&state))
+                        .to_owned(),
+                    update_detail: view::update_detail(&state, &assets),
+                    update_action: view::update_value(&state),
+                    update_busy: state.update_busy(),
+                    refreshing: state.loading,
+                },
+                widgets: web_settings::WebWidget::all(&state.preferences),
+                tv_remote: state.tv_remote,
+            },
+        );
+        while let Ok(event) = web_access_service.receiver.try_recv() {
+            match event {
+                // Applied even when Luma is in the background: that is what web access is for.
+                web_access::Event::Settings(revision, settings) => {
+                    let pending = state.apply_web_settings(settings);
+                    web_access_service.acknowledge(revision);
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                web_access::Event::Pairing(generation, result)
+                    if generation == web_access_service.generation()
+                        && matches!(state.overlay, Some(Overlay::WebAccessPair)) =>
+                {
+                    if let Err(error) = &result {
+                        eprintln!("Luma web access: {error}");
+                    }
+                    state.web_access_pairing = Some(result);
+                    state.dirty = true;
+                }
+                web_access::Event::Paired(name) => {
+                    if matches!(state.overlay, Some(Overlay::WebAccessPair)) {
+                        state.back();
+                    }
+                    state.notify(
+                        state
+                            .preferences
+                            .language
+                            .format("webAccessPaired", &[("device", &name)]),
+                    );
+                }
+                web_access::Event::Devices(devices) => {
+                    state.web_devices = devices;
+                    state.dirty = true;
+                }
+                web_access::Event::Preview { known, reply } => {
+                    let _ = reply.send(live_preview(
+                        &mut state,
+                        &assets,
+                        &mut renderer,
+                        now,
+                        known,
+                        visible && (focused || !webos),
+                    ));
+                }
+                web_access::Event::AppSheet { page, known, reply } => {
+                    let _ = reply.send(app_sheet(&state, &assets, &mut renderer, page, known));
+                }
+                web_access::Event::Arrange(arrangement) => {
+                    let pending =
+                        state.apply_web_arrangement(arrangement.favorites, arrangement.hidden);
+                    web_access_service.arranged();
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                web_access::Event::Input(change) => {
+                    let pending = state.apply_web_input(change);
+                    web_access_service.inputs_applied();
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                web_access::Event::WeatherLocation(place) => {
+                    let pending = state.apply_web_weather_location(place);
+                    web_access_service.location_applied();
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                web_access::Event::Tiles(tiles) => {
+                    let pending = state.replace_tiles(tiles);
+                    web_access_service.tiles_applied();
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                web_access::Event::Photo { bytes, reply } => wallpaper_service.store(bytes, reply),
+                web_access::Event::DeletePhoto(id) => {
+                    let pending = state.delete_web_photo(&id);
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                web_access::Event::Action(action) => {
+                    let pending = state.web_action(&action);
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                // The whole TV when its remote interface is ready; otherwise Luma only.
+                web_access::Event::Key(key) if state.tv_remote == tv_remote::Status::Ready => {
+                    match tv_remote::button(key) {
+                        Some(button) => tv_remote_service.send(tv_remote::Command::Button(button)),
+                        None if key == "power" => {
+                            tv_remote_service.send(tv_remote::Command::PowerOff)
+                        }
+                        None => {}
+                    }
+                }
+                // Only while Luma is in front: a key reaching Luma means it is focused.
+                web_access::Event::Key(key) if focused && visible => {
+                    let code = match key {
+                        "up" => Some(Keycode::Up),
+                        "down" => Some(Keycode::Down),
+                        "left" => Some(Keycode::Left),
+                        "right" => Some(Keycode::Right),
+                        "ok" => Some(Keycode::Return),
+                        "back" => Some(Keycode::Escape),
+                        "menu" => Some(Keycode::Menu),
+                        _ => None,
+                    };
+                    match code {
+                        Some(code) => {
+                            if let Err(error) = inject_key(&sdl, &window, code) {
+                                eprintln!("Luma web remote: {error}");
+                            }
+                        }
+                        None if key == "home" => {
+                            let pending = state.return_home();
+                            running &= effects(
+                                pending,
+                                &mut state,
+                                &platform,
+                                &preferences_path,
+                                &weather_service,
+                                &wallpaper_service,
+                                &webhook_service,
+                                &updates,
+                            );
+                        }
+                        // Volume, power and media keys need the TV's remote interface.
+                        None => {}
+                    }
+                }
+                web_access::Event::Tap(x, y) if focused && visible => {
+                    if let Err(error) = inject_click(&sdl, &window, x, y, WEB_POINTER) {
+                        eprintln!("Luma web remote: {error}");
+                    }
+                }
+                web_access::Event::Launch(id) => {
+                    let pending = state.web_launch(&id);
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                web_access::Event::Text(text, enter) => {
+                    if state.tv_remote == tv_remote::Status::Ready {
+                        tv_remote_service.send(tv_remote::Command::Text(text));
+                        if enter {
+                            tv_remote_service.send(tv_remote::Command::Enter);
+                        }
+                    } else if focused && visible && state.text_input_active() {
+                        // Without the TV interface, type into Luma's own field.
+                        state.text(&text);
+                        if enter {
+                            let pending = state.finish_text_input();
+                            running &= effects(
+                                pending,
+                                &mut state,
+                                &platform,
+                                &preferences_path,
+                                &weather_service,
+                                &wallpaper_service,
+                                &webhook_service,
+                                &updates,
+                            );
+                        }
+                    }
+                }
+                web_access::Event::Key(_) | web_access::Event::Tap(..) => {}
+                web_access::Event::Tv(change, reply) => {
+                    let (reading, answer) = std::sync::mpsc::channel();
+                    if state.tv_remote == tv_remote::Status::Ready {
+                        if let Some(level) = change.volume {
+                            tv_remote_service.send(tv_remote::Command::Volume(level));
+                        }
+                        if let Some(on) = change.screen {
+                            tv_remote_service.send(tv_remote::Command::Screen(on));
+                        }
+                        match change.sleep {
+                            Some(0) => sleep_at = None,
+                            Some(minutes) => {
+                                sleep_at = Some(
+                                    Instant::now() + Duration::from_secs(u64::from(minutes) * 60),
+                                );
+                            }
+                            None => {}
+                        }
+                        tv_remote_service.send(tv_remote::Command::Read(reading));
+                    }
+                    let _ = reply.send(web_access::TvAnswer {
+                        sleep_left: sleep_at.map(|at| at.saturating_duration_since(Instant::now())),
+                        reading: answer,
+                    });
+                }
+                web_access::Event::Widgets(change) => {
+                    let pending = state.apply_web_widget(change);
+                    running &= effects(
+                        pending,
+                        &mut state,
+                        &platform,
+                        &preferences_path,
+                        &weather_service,
+                        &wallpaper_service,
+                        &webhook_service,
+                        &updates,
+                    );
+                }
+                web_access::Event::Pairing(..) => {}
             }
         }
         state.dirty |= assets.artwork.poll();
@@ -1567,7 +2086,11 @@ fn run() -> Result<(), String> {
                     WindowEvent::Hidden | WindowEvent::Minimized => {
                         if matches!(
                             state.overlay,
-                            Some(Overlay::WallpaperUpload | Overlay::TileEditor)
+                            Some(
+                                Overlay::WallpaperUpload
+                                    | Overlay::TileEditor
+                                    | Overlay::WebAccessPair
+                            )
                         ) {
                             state.back();
                         }
@@ -1590,7 +2113,11 @@ fn run() -> Result<(), String> {
                         if webos {
                             if matches!(
                                 state.overlay,
-                                Some(Overlay::WallpaperUpload | Overlay::TileEditor)
+                                Some(
+                                    Overlay::WallpaperUpload
+                                        | Overlay::TileEditor
+                                        | Overlay::WebAccessPair
+                                )
                             ) {
                                 state.back();
                             }
@@ -1937,6 +2464,9 @@ fn run() -> Result<(), String> {
                     || (action == "await-tile-editor"
                         && matches!(state.overlay, Some(Overlay::TileEditor))
                         && state.tile_editor.is_none())
+                    || (action == "await-web-pairing"
+                        && matches!(state.overlay, Some(Overlay::WebAccessPair))
+                        && state.web_access_pairing.is_none())
             })
             && let Some(action) = options.script.pop_front()
         {
