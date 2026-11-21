@@ -255,6 +255,7 @@ pub enum WeatherStyle {
     Standard,
     NoIcon,
     Compact,
+    OneLine,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
@@ -305,13 +306,14 @@ impl WeatherIconStyle {
 }
 
 impl WeatherStyle {
-    pub const ALL: [Self; 3] = [Self::Standard, Self::NoIcon, Self::Compact];
+    pub const ALL: [Self; 4] = [Self::Standard, Self::NoIcon, Self::Compact, Self::OneLine];
 
     pub fn label_key(self) -> &'static str {
         match self {
             Self::Standard => "weatherStyleStandard",
             Self::NoIcon => "weatherStyleNoIcon",
             Self::Compact => "weatherStyleCompact",
+            Self::OneLine => "weatherStyleOneLine",
         }
     }
 

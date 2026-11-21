@@ -79,7 +79,7 @@ fn appearance_controls_live_inside_widget_style_and_update_previews_immediately(
     state.activate();
     assert_eq!(state.subpage, Some(Subpage::WeatherStyle));
     assert_eq!(state.focus, Target::WeatherIcons);
-    assert_eq!(weather_icons(&state).len(), 2);
+    assert_eq!(weather_icons(&state).len(), 3);
     assert!(scene(&state).draw.iter().any(|draw| matches!(draw, Draw::TintedImage(path, ..) if path.ends_with("weather-kickstand-partly-cloudy.lvec"))));
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Choice(0));
@@ -270,7 +270,7 @@ fn selected_icon_and_location_settings_drive_every_layout_preview_and_home_size(
             let rendered = scene(&state);
             let count = rendered.draw.iter().filter(|draw| matches!(draw,
                 Draw::Image(path, ..) | Draw::TintedImage(path, ..) if path.ends_with(&icons.asset("partly-cloudy")))).count();
-            assert_eq!(count, 2);
+            assert_eq!(count, 3);
             assert_eq!(
                 rendered.draw.iter().any(|draw| matches!(draw,
                 Draw::Text(label, ..) if label.contains("Vienna"))),
@@ -631,6 +631,11 @@ fn home_styles_share_content_and_keep_the_dock_fixed() {
         match style {
             WeatherStyle::Standard => assert_eq!(icons[0].w, 144.),
             WeatherStyle::NoIcon => assert!(icons.is_empty()),
+            WeatherStyle::OneLine => {
+                assert_eq!(icons[0].w, 48.);
+                assert!(rendered.draw.iter().any(|draw| matches!(draw,
+                    Draw::Text(label, rect, ..) if label == "Vienna · Partly cloudy" && rect.x > icons[0].x && rect.y == icons[0].y + 10.)));
+            }
             WeatherStyle::Compact => {
                 assert_eq!(icons[0].w, 32.);
                 assert!(rendered.draw.iter().any(|draw| matches!(draw,
@@ -656,7 +661,7 @@ fn every_style_and_size_combines_city_and_condition_without_a_separate_city_head
                 let rendered = scene(&state);
                 assert!(
                     rendered.draw.iter().any(|draw| matches!(draw,
-                    Draw::Text(label, ..) if label == &expected)),
+                    Draw::Text(label, ..) if label == &expected || (small && style == WeatherStyle::OneLine && label.starts_with("Vienna · ")))),
                     "{style:?}, small={small}, {language:?}"
                 );
                 assert!(!rendered.draw.iter().any(|draw| matches!(draw,
@@ -669,6 +674,42 @@ fn every_style_and_size_combines_city_and_condition_without_a_separate_city_head
                     Draw::Text(label, ..) if label.contains("Vienna") || label.starts_with('·'))));
             }
         }
+    }
+}
+
+#[test]
+fn one_line_style_is_remote_selectable_and_keeps_content_side_by_side() {
+    let mut state = configured();
+    state.open(2);
+    state.section = WIDGETS_SECTION;
+    state.subpage = Some(Subpage::WeatherStyle);
+    state.focus = Target::Choice(2);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Choice(3));
+    assert_eq!(state.activate(), [Effect::Save]);
+    assert_eq!(state.preferences.weather_style, WeatherStyle::OneLine);
+    state.back();
+    state.back();
+    state.back();
+    for small in [false, true] {
+        state.preferences.weather_small = small;
+        let rendered = scene(&state);
+        let rect_for = |expected: &str| {
+            rendered
+                .draw
+                .iter()
+                .find_map(|draw| match draw {
+                    Draw::Text(label, rect, ..) if label == expected => Some(*rect),
+                    _ => None,
+                })
+                .unwrap()
+        };
+        let temperature = rect_for("14°C");
+        let detail = rect_for("Vienna · Partly cloudy");
+        let icon = weather_icons(&state)[0];
+        assert!(icon.x + icon.w <= temperature.x);
+        assert!(temperature.x + temperature.w <= detail.x);
+        assert!(detail.y < temperature.y + temperature.h);
     }
 }
 
@@ -694,10 +735,10 @@ fn weather_grid_keeps_original_temperature_typography_and_spacing() {
                 _ => None,
             })
             .unwrap();
-        let expected_size = if weather_style == WeatherStyle::Compact {
-            88.
-        } else {
-            112.
+        let expected_size = match weather_style {
+            WeatherStyle::Compact => 88.,
+            WeatherStyle::OneLine => 48.,
+            _ => 112.,
         };
         assert_eq!(font.size, expected_size);
         assert_eq!(font.weight, 500);
@@ -724,7 +765,10 @@ fn style_picker_previews_every_design_offline_and_only_saves_on_selection() {
         Draw::Text(label, ..) if label == "Compact inline")));
     assert!(!rendered.draw.iter().any(|draw| matches!(draw,
         Draw::Text(label, ..) if label.contains("Sample weather preview"))));
-    for index in 0..3 {
+    for index in 0..WeatherStyle::ALL.len() {
+        state.focus = Target::Choice(index);
+        state.reveal_focus(&controls(&state));
+        let rendered = scene(&state);
         assert!(
             rendered
                 .controls
@@ -742,7 +786,8 @@ fn style_picker_previews_every_design_offline_and_only_saves_on_selection() {
             Some(Target::Choice(index))
         );
     }
-    assert_eq!(weather_icons(&state).len(), 2);
+    assert_eq!(weather_icons(&state).len(), 3);
+    state.focus = Target::Choice(0);
     assert!(state.preferences.weather_location.is_none());
     assert!(!state.weather.fetching());
     state.direction(Direction::Down, &controls(&state));

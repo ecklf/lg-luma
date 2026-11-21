@@ -1748,6 +1748,7 @@ impl State {
                     Target::Choice(0),
                     Target::Choice(1),
                     Target::Choice(2),
+                    Target::Choice(3),
                 ]),
                 Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
                 _ => None,
@@ -3222,7 +3223,8 @@ impl State {
                     Some(Subpage::WeatherStyle) => {
                         self.preferences
                             .edit_weather(self.active_weather, |config| {
-                                config.style = crate::model::WeatherStyle::ALL[index.min(2)]
+                                config.style = crate::model::WeatherStyle::ALL
+                                    [index.min(crate::model::WeatherStyle::ALL.len() - 1)]
                             });
                     }
                     Some(Subpage::WeatherIcons) => {

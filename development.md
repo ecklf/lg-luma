@@ -369,6 +369,8 @@ reserve 64 logical pixels below their last item for both remote focus and wheel 
 with a tighter 48-pixel spacing for Languages and Backgrounds.
 The weekday/date is part of the combined Greeting, not a standalone widget. Weather uses its
 own fixed footprint with a large condition icon, temperature, condition and optional location.
+The One line style places the icon, temperature and “City · Condition” side by side in both
+sizes, fitting long labels to the available width. Saved-reading warnings stay below the row.
 Breezy Weather remains the default icon style. Weather → Widget style → Icon style offers Breezy Weather,
 Lucide, Kickstand and Kuankuan with offline condition samples in 200-pixel picker rows
 matching the layout previews, with centered 64-pixel icons. Both weather pickers use 20-pixel preview insets with 28-pixel

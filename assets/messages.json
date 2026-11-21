@@ -683,6 +683,24 @@
     "ca": "Mostra el nom de la ubicació",
     "hu": "Helynév megjelenítése"
   },
+  "weatherStyleOneLine": {
+    "en": "One line",
+    "de": "Eine Zeile",
+    "es": "Una línea",
+    "zh": "单行",
+    "zh-tw": "單行",
+    "pt": "Uma linha",
+    "it": "Una riga",
+    "ru": "Одна строка",
+    "pl": "Jeden wiersz",
+    "fr": "Une ligne",
+    "vi": "Một dòng",
+    "nl": "Eén regel",
+    "sv": "En rad",
+    "cs": "Jeden řádek",
+    "ca": "Una línia",
+    "hu": "Egy sor"
+  },
   "weatherStyleCompact": {
     "en": "Compact",
     "de": "Kompakt",

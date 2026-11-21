@@ -1303,6 +1303,23 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
                 continue;
             }
             let mut summary = weather_summary_layout(state, assets, widget);
+            if state.preferences.weather_settings(widget).style
+                == crate::model::WeatherStyle::OneLine
+                && state
+                    .preferences
+                    .weather_settings(widget)
+                    .location
+                    .as_ref()
+                    .and_then(|place| state.widget_weather(widget).reading(place))
+                    .is_some()
+            {
+                summary.icon_rect.x += cell.x - 84.;
+                for (_, _, _, rect) in &mut summary.parts {
+                    rect.x += cell.x - 84.;
+                }
+                weather_summary(out, state, assets, summary, cell.y, widget);
+                continue;
+            }
             // Reflow rather than shrinking the entire widget: text remains legible
             // even when a translated condition or location name is unusually long.
             // Keep the original temperature size unless width fitting requires
@@ -1571,6 +1588,22 @@ fn favorites_dock(out: &mut Scene, state: &State, assets: &Assets) {
 }
 
 fn small_weather(out: &mut Scene, state: &State, assets: &Assets, cell: Rect, widget: HomeWidget) {
+    let config = state.preferences.weather_settings(widget);
+    if config.style == crate::model::WeatherStyle::OneLine
+        && config
+            .location
+            .as_ref()
+            .and_then(|place| state.widget_weather(widget).reading(place))
+            .is_some()
+    {
+        let mut summary = weather_summary_layout(state, assets, widget);
+        summary.icon_rect.x += cell.x - 84.;
+        for (_, _, _, rect) in &mut summary.parts {
+            rect.x += cell.x - 84.;
+        }
+        weather_summary(out, state, assets, summary, cell.y, widget);
+        return;
+    }
     let language = state.preferences.language;
     let config = state.preferences.weather_settings(widget);
     let weather = state.widget_weather(widget);
@@ -1852,6 +1885,55 @@ fn weather_summary_layout_for(
         }
         icon_rect.y -= offset;
         height -= offset;
+    }
+    if style == WeatherStyle::OneLine && reading.is_some() {
+        let width = if preview {
+            1000.
+        } else {
+            configured_widget_rect(state, widget, state.preferences.widget_position(widget)).w
+        };
+        let small = !preview && config.small;
+        let icon_size = if small { 32. } else { 48. };
+        let temperature_x = 84. + icon_size + 12.;
+        icon_rect = Rect::new(84., 0., icon_size, icon_size);
+        let temperature = &mut parts[0];
+        let (label, font) = assets.fit_line(
+            &temperature.0,
+            text(if small { 32. } else { 48. }, 500, -0.025),
+            width * 0.3,
+            24.,
+        );
+        temperature.0 = label;
+        temperature.1 = font;
+        temperature.3 = Rect::new(
+            temperature_x,
+            0.,
+            assets.width(&temperature.0, font) + 2.,
+            58.,
+        );
+        let detail_x = temperature.3.x + temperature.3.w + if small { 8. } else { 16. };
+        let condition = &mut parts[1];
+        let (label, font) = assets.fit_line(
+            &condition.0,
+            text(if small { 16. } else { 26. }, 450, -0.02),
+            (width - (detail_x - 84.)).max(24.),
+            12.,
+        );
+        condition.0 = label;
+        condition.1 = font;
+        condition.3 = Rect::new(
+            detail_x,
+            if small { 6. } else { 10. },
+            assets.width(&condition.0, font) + 2.,
+            36.,
+        );
+        if let Some((label, font, _, rect)) = parts.get_mut(2) {
+            (*label, *font) = assets.fit_line(label, *font, width - (temperature_x - 84.), 14.);
+            rect.x = temperature_x;
+            rect.y = 64.;
+            rect.w = assets.width(label, *font) + 2.;
+        }
+        height = if parts.len() > 2 { 100. } else { 58. };
     }
     let right = parts
         .iter()

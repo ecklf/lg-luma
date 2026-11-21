@@ -48,6 +48,8 @@ const captures = weatherIconPreviews
       ['weather-icon-picker', `${weatherPage},down,down,enter,up,enter`],
       ['weather-style-private', `${weatherPage},down,down,enter`],
       ['weather-style-city', `${weatherPage},down,down,enter`],
+      ['weather-style-one-line', 'home'],
+      ['weather-style-one-line-picker', `${weatherPage},down,down,enter`],
       ['attributions', 'settings,down,down,down,down,down,right,down,down,down,down,down,enter'],
     ]
   : widgetPreviews
@@ -100,7 +102,9 @@ try {
               ...configuration,
               reduced_motion: true,
               weather_icons: 'kuankuan',
-              weather_show_location: name === 'weather-style-city',
+              weather_show_location:
+                name !== 'weather-style-private' && name !== 'weather-icon-picker',
+              weather_style: name.includes('one-line') ? 'one_line' : 'standard',
             }
           : widgetPreviews
             ? {
