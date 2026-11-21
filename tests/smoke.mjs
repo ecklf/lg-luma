@@ -501,7 +501,7 @@ try {
   const clockFocus = await scenario('clock-format-focus', `${clockEditor},enter,down`);
   assert.equal(clockFocus.subpage, 'ClockFormat');
   assert.deepEqual(clockFocus.focus, { Choice: 1 });
-  const system = await scenario('system-settings', `${systemPage},down,down,down,down`);
+  const system = await scenario('system-settings', `${systemPage},down,down,down,down,down`);
   assert.deepEqual(system.focus, { Setting: 5 });
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
   assert.ok(!system.ui_text.includes('Luma update'));
@@ -509,7 +509,7 @@ try {
   assert.ok(system.ui_text.includes('Text rendering'));
   assert.ok(system.ui_text.includes('Reset icon cache'));
   assert.ok(system.ui_text.includes('Attributions'));
-  const attributionPage = `${systemPage},down,down,down,down,down,enter`;
+  const attributionPage = `${systemPage},down,down,down,down,down,down,enter`;
   const credits = await scenario('attributions', attributionPage);
   assert.equal(credits.subpage, 'Attributions');
   assert.equal(credits.focus, 'AttributionText');
@@ -529,6 +529,15 @@ try {
   const resetIcons = await scenario('reset-icon-cache', `${systemPage},down,down,down,enter`);
   assert.deepEqual(resetIcons.focus, { Setting: 9 });
   assert.deepEqual(resetIcons.preferences, system.preferences);
+  assert.ok(system.ui_text.includes('Update Homebrew apps automatically'));
+  assert.equal(system.preferences.homebrew_updates, false);
+  // The opt-in only changes the saved preference; desktop runs never contact the repository.
+  const homebrewPath = `${systemPage},down,down,down,down,enter`;
+  const homebrewOn = await scenario('homebrew-updates-on', homebrewPath);
+  assert.deepEqual(homebrewOn.focus, { Setting: 20 });
+  assert.equal(homebrewOn.preferences.homebrew_updates, true);
+  const homebrewOff = await scenario('homebrew-updates-off', homebrewPath);
+  assert.equal(homebrewOff.preferences.homebrew_updates, false);
   const updatePreview = await scenario('update-preview', systemPage, [
     '--test-update-version',
     '99.0.0',

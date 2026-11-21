@@ -1,5 +1,6 @@
 //! Privileged, bounded TV operations. Shared with Luma for its already-root Home process.
 //! No SDL, image decoding, browser engine, or persistent daemon is needed by the helper.
+pub mod app_update;
 pub mod files;
 pub mod home;
 pub mod input;
