@@ -41,6 +41,21 @@ const sortingPreviews = process.argv.includes('--sorting');
 const widgetPreviews = process.argv.includes('--widgets');
 const weatherPreviews = process.argv.includes('--weather-styles');
 const weatherIconPreviews = process.argv.includes('--weather-icons');
+const weatherConfiguration = (name) => ({
+  ...configuration,
+  reduced_motion: true,
+  weather_icons:
+    name.includes('no-icons') || name.includes('none-picker') || name === 'weather-style-no-icon'
+      ? 'none'
+      : 'kuankuan',
+  weather_show_location: name !== 'weather-style-private' && name !== 'weather-icon-picker',
+  weather_style: name.includes('one-line')
+    ? 'one_line'
+    : name === 'weather-style-compact'
+      ? 'compact'
+      : 'standard',
+  ...(name === 'weather-setup' ? { weather_location: null } : {}),
+});
 const widgetsPage = 'settings,down,down,down,down,right';
 const weatherPage = `${widgetsPage},down,right,right,right,right,enter,enter`;
 const captures = weatherIconPreviews
@@ -52,6 +67,11 @@ const captures = weatherIconPreviews
       ['weather-style-one-line-picker', `${weatherPage},down,down,enter`],
       ['weather-style-no-icons', `${weatherPage},down,down,enter`],
       ['weather-icon-none-picker', `${weatherPage},down,down,enter,up,enter`],
+      ['weather-style-standard', 'home'],
+      ['weather-style-compact', 'home'],
+      ['weather-style-no-icon', 'home'],
+      ['weather-style-picker', `${weatherPage},down,down,enter`],
+      ['weather-setup', 'home,up,down'],
       ['attributions', 'settings,down,down,down,down,down,right,down,down,down,down,down,enter'],
     ]
   : widgetPreviews
@@ -69,6 +89,7 @@ const captures = weatherIconPreviews
           ['weather-style-standard', 'home'],
           ['weather-style-no-icon', 'home'],
           ['weather-style-compact', 'home'],
+          ['weather-style-one-line', 'home'],
           [
             'weather-style-picker',
             `${widgetsPage},down,right,right,right,right,enter,enter,down,down,enter`,
@@ -100,15 +121,7 @@ try {
       preferences,
       JSON.stringify(
         weatherIconPreviews
-          ? {
-              ...configuration,
-              reduced_motion: true,
-              weather_icons:
-                name.includes('no-icons') || name.includes('none-picker') ? 'none' : 'kuankuan',
-              weather_show_location:
-                name !== 'weather-style-private' && name !== 'weather-icon-picker',
-              weather_style: name.includes('one-line') ? 'one_line' : 'standard',
-            }
+          ? weatherConfiguration(name)
           : widgetPreviews
             ? {
                 ...configuration,
@@ -120,15 +133,7 @@ try {
                   name === 'home-layout-moved' ? { column: 0, row: 1 } : { column: 4, row: 0 },
               }
             : weatherPreviews
-              ? {
-                  ...configuration,
-                  weather_style:
-                    name === 'weather-style-no-icon'
-                      ? 'no_icon'
-                      : name === 'weather-style-compact'
-                        ? 'compact'
-                        : 'standard',
-                }
+              ? weatherConfiguration(name)
               : sortingPreviews
                 ? {
                     ...configuration,

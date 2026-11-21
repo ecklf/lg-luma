@@ -246,12 +246,12 @@ other apps need manual hardware verification. A desktop-only backend check is av
 The unavailable-backend check runs with
 `SDL_AUDIODRIVER=luma-unavailable cargo test --locked --bin luma unavailable_audio_ -- --ignored --test-threads=1`.
 
-Weather → Widget style persists `weather_style` (`standard`, the default, `no_icon`,
-or `compact`). Home and Settings use the same native layout and painting functions.
+Weather → Widget style persists `weather_style` (`standard`, the default, `compact`,
+or `one_line`). Home and Settings use the same native layout and painting functions.
 The picker shows all three designs with offline sample weather, using the saved
 temperature unit and location visibility. Browsing does not change preferences or fetch a forecast. OK/click
 saves a style and returns to Weather, while Back/Left cancels without changing the style.
-The no-icon layout reclaims the icon column. Compact uses two lines, with a small icon,
+The No icon choice in Icon style reclaims the icon column. Compact uses two lines, with a small icon,
 condition and optional location on the second. All styles and sizes use one “City · Condition”
 detail line when a reading is available, without a separate city heading. With location names
 hidden the line contains only the condition. Cached-reading warnings and setup/error states
@@ -399,8 +399,9 @@ button. The viewport and scrollbar stay fixed while text scrolls, with drawing a
 clipped to the field. The body includes author credits, source URLs and references to full license
 texts in the package; legal notices retain their original English text. No keyboard, network request
 or preference save is involved. `ATTRIBUTIONS.txt` also ships beside `ASSETS.md` in the package.
-`xvfb-run -a pnpm screenshots --weather-icons` captures the icon picker, private layout previews
-and Attributions page using the native renderer and cached sample weather.
+`xvfb-run -a pnpm screenshots --weather-icons` refreshes every weather documentation image:
+all Home variants, setup, layout and icon pickers, public/private/no-icon previews, and Attributions.
+Both weather capture modes share configuration so removed layouts cannot persist in older previews.
 Disabled weather
 is hidden. Enabled weather without a location uses the same large 144px artwork and a prominent setup action.
 Settings lists render behind fixed controls. The drawer grid is clipped below its fixed dock so
