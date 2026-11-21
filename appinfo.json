@@ -10,8 +10,11 @@
   "appDescription": "A remote-first native webOS launcher.",
   "resolution": "1920x1080",
   "appCategory": ["home"],
+  "requiredPermissions": ["org.webosbrew.homechooser.applications"],
   "requiredACG": ["application.launcher", "application.query", "lunabus.query"],
-  "handlesRelaunch": false,
+  "handlesRelaunch": true,
+  "nativeLifeCycleInterfaceVersion": 2,
+  "noSplashOnLaunch": true,
   "iconColor": "#25272d",
   "splashBackground": "splash.png",
   "bgColor": "#17191c"

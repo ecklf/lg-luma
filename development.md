@@ -1029,6 +1029,42 @@ reply limit. Errors include URI and the bus refusal. Fixed inventory commands ru
 Homebrew Channel `exec`, parsing complete multi-line `luna-send -n 1` JSON replies. Input-read
 failures preserve the last valid inputs. No failed inventory read substitutes demo apps on TV.
 
+### Home Chooser integration
+
+The installed `appinfo.json` declares `appCategory: ["home"]`, so
+[Home Chooser](https://github.com/webosbrew/home-chooser/blob/main/docs/launcher-api.md) can select
+Luma under `com.ecklf.luma`. Keep the window full-screen (no `defaultWindowType: "overlay"`):
+Home Chooser uses this distinction for its empty-screen policy. Back must not exit the root Home.
+
+`handlesRelaunch: true` and `nativeLifeCycleInterfaceVersion: 2` let the pinned SDL-webOS library
+register the installed app through `registerApp`, raise the existing window on `relaunch`, and
+send SDL Quit on `close`. `noSplashOnLaunch: true` avoids SAM splash surfaces for the native
+launcher. This path uses SDL's existing registration, not Luma's separate LG-identity lifecycle
+subscription. Home Chooser launches retain `APPID=com.ecklf.luma`; do not classify them as
+`options.webos_home`, which is reserved for the legacy takeover paths.
+
+Only the `home` category is required for selection. Luma also declares
+`org.webosbrew.homechooser.applications` in `requiredPermissions`, opting into the optional
+launcher API. The existing `requiredACG` already includes `application.query` and
+`application.launcher`. Home Chooser must be installed and opened once before installing Luma,
+so its access files make the permission available. If installation reports
+`Not allowed permission is used`, open Home Chooser and reinstall Luma. Reinstall after changing
+`requiredPermissions`.
+
+The permission declaration does not migrate runtime calls. Luma's platform workers currently
+register anonymously, whereas this API requires a native caller's exact app-named handle
+(already owned by SDL/libhelpers). Existing inventory/artwork and privileged app-management
+paths remain unchanged. Using the API requires routing calls through that handle, not adding
+another anonymous connection or impersonating the app with `luna-send -a`.
+
+Disable the legacy takeover, autostart and any Input Hook Home mapping before selecting Luma.
+Home Chooser owns stock-Home suppression and boot recovery; do not run both integrations.
+For manual TV verification: select Luma, launch an app/input and press Home repeatedly, check
+Back at the root and within settings, cold-boot, switch back to LG Home, and test removal of the
+selected launcher. Check SAM's running list for LG Home after selection and after a reboot;
+Home Chooser documents that webOS 5 keeps it loaded until restart. Host metadata tests do not
+verify compositor behavior or memory savings on hardware.
+
 ### Optional native Home integration
 
 `tv/home.sh` and the native Rust `luma-helper` executable are packaged beside `luma`. They are a root-only, explicit integration

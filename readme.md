@@ -133,6 +133,10 @@ Use **Clear name** to return to an unnamed greeting; names are saved only on you
 
 ### Homebrew Channel
 
+Install [Home Chooser](https://github.com/webosbrew/home-chooser/) and open it once to finish its
+root setup **before installing Luma**. Luma declares Home Chooser's applications API permission;
+if installation reports `Not allowed permission is used`, open Home Chooser and reinstall Luma.
+
 Add this custom repository URL to Homebrew Channel:
 
 ```text
@@ -159,6 +163,31 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 ```
 
 ## Replacing LG Home
+
+### Home Chooser
+
+[Home Chooser](https://github.com/webosbrew/home-chooser/) can select Luma as the full-screen
+Home app without Luma's takeover scripts or an Input Hook mapping:
+
+1. Disable any existing Home-key mapping and Luma autostart. If Luma takeover is enabled, restore
+   LG Home first with `sh /var/lib/luma-home/home.sh disable`.
+2. Install Home Chooser from Homebrew Channel and open it once to finish its root setup.
+3. Install or update Luma, then open Home Chooser, select **Luma**, and confirm. Press Home to try it.
+
+Home Chooser manages the Home key, reboot persistence, stock-Home suppression and recovery if
+Luma is removed. To undo the selection, choose LG Home in Home Chooser. Do not enable Luma's
+takeover or autostart scripts alongside it.
+
+Luma keeps its own app identity and uses SDL-webOS's native lifecycle support to bring the
+existing window back on relaunch, retaining the current view. Back navigates within Luma rather
+than closing the full-screen Home app. Luma declares Home Chooser's applications API permission,
+so Home Chooser must be installed and opened once before installing Luma. The permission is
+declared for future API integration; inventory, artwork and app-management operations still use
+Luma's existing Homebrew Channel integration.
+
+Home Chooser supports webOS 4–12; this does not establish Luma compatibility on every version.
+On webOS 5, Home Chooser documents that LG Home remains loaded until the TV restarts. Memory
+savings and launch/return behavior need verification on your TV; no hardware validation is claimed.
 
 ### Takeover Method
 
