@@ -66,10 +66,12 @@ impl Assets {
 
     fn background(&self, state: &State, id: &str) -> String {
         if let Some(item) = state.wallpapers.iter().find(|item| item.id == id) {
-            return if state.preferences.wallpaper_gradient {
-                item.image()
-            } else {
+            return if !state.preferences.wallpaper_gradient {
                 item.unshaded_image()
+            } else if state.preferences.subtle_photo_gradient {
+                item.subtle_image()
+            } else {
+                item.image()
             };
         }
         let id = if BACKGROUNDS.iter().any(|(known, _)| *known == id) {
@@ -2214,6 +2216,26 @@ struct Row<'a> {
     selected: bool,
     chevron: bool,
 }
+/// The gradient: on, subtle (uploaded photos only) or off.
+fn gradient_value(preferences: &crate::model::Preferences) -> &'static str {
+    match (
+        preferences.wallpaper_gradient,
+        preferences.subtle_photo_gradient,
+    ) {
+        (false, _) => "stateOff",
+        (true, true) => "gradientSubtle",
+        (true, false) => "stateOn",
+    }
+}
+
+fn gradient_value_width(assets: &Assets, language: Language) -> f32 {
+    ["stateOn", "gradientSubtle", "stateOff"]
+        .into_iter()
+        .map(|key| assets.width(language.t(key), text(18.4, 450, 0.)))
+        .fold(0., f32::max)
+        .ceil()
+}
+
 fn rotation_value_width(assets: &Assets, language: Language) -> f32 {
     ["stateOn", "stateOff"]
         .into_iter()
@@ -3318,7 +3340,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             let cycle_label = language.t("wallpaperCycle");
             let gradient_label = language.t("wallpaperGradient");
             let gradient_width = (assets.width(gradient_label, text(20.8, 550, -0.02))
-                + rotation_value_width(assets, language)
+                + gradient_value_width(assets, language)
                 + 111.6)
                 .ceil()
                 .min(360.);
@@ -3368,11 +3390,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     } else {
                         "eye-off"
                     }),
-                    value: Some(language.t(if state.preferences.wallpaper_gradient {
-                        "stateOn"
-                    } else {
-                        "stateOff"
-                    })),
+                    value: Some(language.t(gradient_value(&state.preferences))),
                     description: None,
                     selected: false,
                     chevron: false,

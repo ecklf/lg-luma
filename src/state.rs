@@ -229,6 +229,8 @@ pub enum Effect {
     Launch(String),
     Uninstall(String),
     DeleteWallpaper(String),
+    /// Uploads from before the subtle gradient get their variant in the background.
+    PrepareSubtleWallpapers,
     Recent {
         generation: u64,
         command: crate::recents::Command,
@@ -3154,7 +3156,22 @@ impl State {
                 return vec![Effect::Save];
             }
             Target::WallpaperGradient => {
-                self.preferences.wallpaper_gradient = !self.preferences.wallpaper_gradient;
+                // On, then subtle (for uploaded photos), then off.
+                let preferences = &mut self.preferences;
+                match (
+                    preferences.wallpaper_gradient,
+                    preferences.subtle_photo_gradient,
+                ) {
+                    (true, false) => {
+                        preferences.subtle_photo_gradient = true;
+                        return vec![Effect::Save, Effect::PrepareSubtleWallpapers];
+                    }
+                    (true, true) => preferences.wallpaper_gradient = false,
+                    (false, _) => {
+                        preferences.wallpaper_gradient = true;
+                        preferences.subtle_photo_gradient = false;
+                    }
+                }
                 return vec![Effect::Save];
             }
             Target::UseBackground => {

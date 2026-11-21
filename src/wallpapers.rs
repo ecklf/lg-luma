@@ -26,6 +26,8 @@ const SESSION_TIME: Duration = Duration::from_secs(600);
 const SESSION_REQUEST_LIMIT: usize = 64;
 const REQUEST_TIME: Duration = Duration::from_secs(20);
 const STOP: u64 = u64::MAX;
+/// An upload with the subtle, photo-aware gradient, next to `wallpaper.jpg` (the classic one).
+const SUBTLE: &str = "subtle.jpg";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Wallpaper {
@@ -34,6 +36,9 @@ pub struct Wallpaper {
     pub directory: PathBuf,
     #[serde(skip)]
     pub has_original: bool,
+    /// Has `subtle.jpg`, the photo with the subtle gradient (see `shade_photo`).
+    #[serde(skip)]
+    pub has_subtle: bool,
 }
 
 impl Wallpaper {
@@ -51,6 +56,17 @@ impl Wallpaper {
     pub fn image(&self) -> String {
         self.directory
             .join("wallpaper.jpg")
+            .to_string_lossy()
+            .into_owned()
+    }
+    /// With the subtle gradient; the classic one until an older upload has been prepared.
+    pub fn subtle_image(&self) -> String {
+        self.directory
+            .join(if self.has_subtle {
+                SUBTLE
+            } else {
+                "wallpaper.jpg"
+            })
             .to_string_lossy()
             .into_owned()
     }
@@ -80,7 +96,12 @@ pub enum Event {
 
 enum Command {
     Wake,
-    Delete { id: String, selected: String },
+    Delete {
+        id: String,
+        selected: String,
+    },
+    /// Give older uploads their subtle variant (they predate it).
+    PrepareSubtle,
 }
 
 pub struct Service {
@@ -138,6 +159,11 @@ impl Service {
 
     pub fn delete(&self, id: String, selected: String) {
         let _ = self.wake.send(Command::Delete { id, selected });
+    }
+
+    /// Prepares the subtle variant of uploads that lack it, then reports the catalog again.
+    pub fn prepare_subtle(&self) {
+        let _ = self.wake.send(Command::PrepareSubtle);
     }
 }
 
@@ -206,6 +232,8 @@ fn catalog(directory: &Path) -> Vec<Wallpaper> {
             continue;
         }
         item.has_original = fs::symlink_metadata(path.join("original.jpg"))
+            .is_ok_and(|m| m.is_file() && m.len() > 0 && m.len() <= MAX_BODY as u64);
+        item.has_subtle = fs::symlink_metadata(path.join(SUBTLE))
             .is_ok_and(|m| m.is_file() && m.len() > 0 && m.len() <= MAX_BODY as u64);
         item.directory = path;
         result.push(item);
@@ -356,6 +384,78 @@ fn shade(image: &mut image::RgbImage) {
     }
 }
 
+/// The subtle gradient for photographs: no grey veil and an untouched middle. Only the top
+/// (header, greeting and widgets) and the bottom (dock) darken, each just as much as this photo
+/// needs for white text there: its bright parts, the 90th percentile of luma, end up below a
+/// fixed level.
+fn shade_photo(image: &mut image::RgbImage) {
+    const BASE: [f32; 3] = [13., 16., 19.];
+    let (width, height) = image.dimensions();
+    let luma = |pixel: &image::Rgb<u8>| {
+        0.2126 * f32::from(pixel[0]) + 0.7152 * f32::from(pixel[1]) + 0.0722 * f32::from(pixel[2])
+    };
+    let bright = |rows: std::ops::Range<u32>| {
+        let mut histogram = [0u32; 256];
+        let mut count = 0;
+        for y in rows.step_by(2) {
+            for x in (0..width).step_by(2) {
+                histogram[luma(image.get_pixel(x, y)).round().min(255.) as usize] += 1;
+                count += 1;
+            }
+        }
+        let mut seen = 0;
+        let level = histogram
+            .iter()
+            .position(|bin| {
+                seen += bin;
+                seen * 10 >= count * 9
+            })
+            .unwrap_or(255);
+        (level as f32 / 255.).max(0.001)
+    };
+    let top = (1. - 0.42 / bright(0..height * 45 / 100)).clamp(0.18, 0.72);
+    let bottom = (1. - 0.5 / bright(height * 72 / 100..height)).clamp(0.12, 0.6);
+    let (last_x, last_y) = ((width - 1).max(1) as f32, (height - 1).max(1) as f32);
+    for (x, y, pixel) in image.enumerate_pixels_mut() {
+        let (x, y) = (x as f32 / last_x, y as f32 / last_y);
+        // Strongest at the top left, where the greeting sits.
+        let upper =
+            top * (1. - y / 0.58).max(0.).powf(1.6) * (0.72 + 0.28 * (1. - x / 0.65).max(0.));
+        let t = ((y - 0.6) / 0.4).clamp(0., 1.);
+        let lower = bottom * t * t * (3. - 2. * t);
+        let alpha = 1. - (1. - upper) * (1. - lower);
+        for (channel, base) in pixel.0.iter_mut().zip(BASE) {
+            *channel = (f32::from(*channel) * (1. - alpha) + base * alpha).round() as u8;
+        }
+    }
+}
+
+/// Writes the subtle variant of an upload that predates it, from its unshaded original. Both
+/// files appear complete or not at all.
+fn prepare_subtle(directory: &Path) -> Result<(), String> {
+    let bytes = fs::read(directory.join("original.jpg")).map_err(|e| e.to_string())?;
+    let mut image = decode(&bytes)?;
+    shade_photo(&mut image);
+    let jpeg = jpeg(&image, 94)?;
+    let decoded = image::load_from_memory(&jpeg).map_err(|error| error.to_string())?;
+    let mut png = std::io::Cursor::new(Vec::new());
+    crate::glass_backdrop::prepare(decoded)
+        .write_to(&mut png, image::ImageFormat::Png)
+        .map_err(|error| error.to_string())?;
+    let target = directory.join(SUBTLE);
+    let sidecar = crate::glass_backdrop::sidecar_path(&target);
+    let staged = directory.join(".subtle.jpg");
+    let staged_sidecar = crate::glass_backdrop::sidecar_path(&staged);
+    for file in [&staged, &staged_sidecar] {
+        let _ = fs::remove_file(file);
+    }
+    write_new(&staged_sidecar, png.get_ref())?;
+    write_new(&staged, &jpeg)?;
+    // The sidecar first: an image is only discovered once its glass backdrop is in place.
+    fs::rename(&staged_sidecar, &sidecar).map_err(|e| e.to_string())?;
+    fs::rename(&staged, &target).map_err(|e| e.to_string())
+}
+
 fn jpeg(image: &image::RgbImage, quality: u8) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
     image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, quality)
@@ -370,6 +470,9 @@ fn store(directory: &Path, bytes: &[u8], valid: impl Fn() -> bool) -> Result<Wal
     }
     let mut image = decode(bytes)?;
     let original = jpeg(&image, 94)?;
+    let mut photo = image.clone();
+    shade_photo(&mut photo);
+    let subtle = jpeg(&photo, 94)?;
     let thumbnail =
         image::imageops::resize(&image, 480, 270, image::imageops::FilterType::Triangle);
     shade(&mut image);
@@ -395,14 +498,20 @@ fn store(directory: &Path, bytes: &[u8], valid: impl Fn() -> bool) -> Result<Wal
         id: id.clone(),
         directory: directory.join(&id),
         has_original: true,
+        has_subtle: true,
     };
     let result = (|| {
         write_new(&staging.join("wallpaper.jpg"), &image)?;
         write_new(&staging.join("original.jpg"), &original)?;
         write_new(&staging.join("thumbnail.jpg"), &thumbnail)?;
+        write_new(&staging.join(SUBTLE), &subtle)?;
         // Derive from the final JPEG bytes, just like legacy rendering, without
         // adding blur/decode work to the SDL thread on the next app start.
-        for (name, bytes) in [("wallpaper.jpg", &image), ("original.jpg", &original)] {
+        for (name, bytes) in [
+            ("wallpaper.jpg", &image),
+            ("original.jpg", &original),
+            (SUBTLE, &subtle),
+        ] {
             if !valid() {
                 return Err("Upload session ended".into());
             }
@@ -432,8 +541,10 @@ fn store(directory: &Path, bytes: &[u8], valid: impl Fn() -> bool) -> Result<Wal
             "wallpaper.jpg",
             "original.jpg",
             "thumbnail.jpg",
+            SUBTLE,
             "wallpaper.glass.png",
             "original.glass.png",
+            "subtle.glass.png",
             "metadata.json",
         ] {
             let _ = fs::remove_file(staging.join(file));
@@ -459,6 +570,18 @@ fn worker(
             let result = delete_wallpaper(directory, &id, &selected);
             sender.send(Event::Deleted(id, result)).is_ok()
                 && sender.send(Event::Catalog(catalog(directory))).is_ok()
+        }
+        Command::PrepareSubtle => {
+            let missing: Vec<_> = catalog(directory)
+                .into_iter()
+                .filter(|item| item.has_original && !item.has_subtle)
+                .collect();
+            for item in &missing {
+                if let Err(error) = prepare_subtle(&item.directory) {
+                    eprintln!("Luma wallpapers: subtle variant of {}: {error}", item.id);
+                }
+            }
+            missing.is_empty() || sender.send(Event::Catalog(catalog(directory))).is_ok()
         }
     };
     let mut handled = 0;

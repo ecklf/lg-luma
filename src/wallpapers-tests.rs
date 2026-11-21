@@ -119,6 +119,55 @@ fn uploads_retain_full_resolution_unshaded_images_and_discover_legacy_fallbacks(
 }
 
 #[test]
+fn the_subtle_gradient_darkens_only_the_top_and_bottom_and_follows_the_photo() {
+    let shaded = |level: u8| {
+        let mut photo = image::RgbImage::from_pixel(1920, 1080, image::Rgb([level; 3]));
+        shade_photo(&mut photo);
+        photo
+    };
+    let bright = shaded(235);
+    // The middle keeps the photo exactly: no grey veil.
+    assert_eq!(bright.get_pixel(960, 640).0, [235; 3]);
+    // At the top edge, its bright parts end up at about the level white text needs (0.42).
+    assert!((105..=120).contains(&bright.get_pixel(0, 0).0[0]));
+    // Behind the greeting (top left) more than at the top right, and the bottom darkens too.
+    assert!(bright.get_pixel(100, 120).0[0] < bright.get_pixel(1820, 120).0[0]);
+    assert!(bright.get_pixel(960, 1079).0[0] < 160);
+    // A dark photo needs, and gets, much less.
+    let dark = shaded(40);
+    assert!(dark.get_pixel(40, 40).0[0] > 30);
+    assert_eq!(dark.get_pixel(960, 640).0, [40; 3]);
+}
+
+#[test]
+fn uploads_get_a_subtle_variant_and_older_ones_are_prepared_on_request() {
+    let fixture = Fixture::new();
+    let item = store(&fixture.wallpapers(), &image(1920, 1080), || true).unwrap();
+    let subtle = item.directory.join(SUBTLE);
+    let sidecar = crate::glass_backdrop::sidecar_path(&subtle);
+    assert!(item.has_subtle && subtle.is_file() && sidecar.is_file());
+    assert_eq!(item.subtle_image(), subtle.to_string_lossy());
+    // An upload from before this version has neither file.
+    fs::remove_file(&subtle).unwrap();
+    fs::remove_file(&sidecar).unwrap();
+    let older = catalog(&fixture.wallpapers()).remove(0);
+    assert!(!older.has_subtle);
+    assert_eq!(older.subtle_image(), older.image());
+    prepare_subtle(&older.directory).unwrap();
+    assert!(catalog(&fixture.wallpapers())[0].has_subtle);
+    assert_eq!(
+        crate::glass_backdrop::load(&sidecar).unwrap(),
+        crate::glass_backdrop::prepare(image::open(&subtle).unwrap())
+    );
+    // No staging files are left beside it.
+    let names: Vec<_> = fs::read_dir(&older.directory)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(names.iter().all(|name| !name.starts_with('.')), "{names:?}");
+}
+
+#[test]
 fn deletion_protects_selected_and_bundled_backgrounds_and_only_removes_the_requested_upload() {
     let fixture = Fixture::new();
     let bytes = image(1920, 1080);
@@ -250,6 +299,7 @@ fn gallery_capacity_is_checked_before_decoding_or_creating_another_upload() {
                 id,
                 directory: directory.clone(),
                 has_original: false,
+                has_subtle: false,
             })
             .unwrap(),
         )

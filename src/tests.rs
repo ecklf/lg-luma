@@ -628,6 +628,7 @@ fn gallery_and_grid_navigation_scroll_to_keep_focus_visible() {
                 id: format!("custom-{index:032x}"),
                 directory: PathBuf::from(format!("/preview/wallpapers/custom-{index:032x}")),
                 has_original: true,
+                has_subtle: false,
             })
             .collect(),
     );
@@ -692,6 +693,7 @@ fn gallery_right_crosses_rows_in_gallery_order() {
                 id: format!("custom-{index:032x}"),
                 directory: PathBuf::from(format!("/preview/wallpapers/custom-{index:032x}")),
                 has_original: true,
+                has_subtle: false,
             })
             .collect(),
     );
@@ -2980,6 +2982,7 @@ fn settings_lists_keep_bottom_padding_for_remote_and_wheel_scrolling() {
                         id: format!("custom-{index:032x}"),
                         directory: std::path::PathBuf::from(".build/padding-fixture"),
                         has_original: true,
+                        has_subtle: false,
                     })
                     .collect(),
             );
