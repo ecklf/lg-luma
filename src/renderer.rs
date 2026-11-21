@@ -2016,6 +2016,13 @@ impl Renderer {
             {
                 continue;
             }
+            // Likewise outside the clip, e.g. list rows scrolled out of view: the scissor
+            // discards their pixels, but submitting them still costs CPU time per draw.
+            if let (Some(clip), Some(bounds)) = (self.clip, crate::damage::bounds(command))
+                && !crate::damage::intersects(clip.inset(-2.), bounds)
+            {
+                continue;
+            }
             match command {
                 Draw::Glass(rect, radius, tint) => {
                     let split = self
