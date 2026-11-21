@@ -25,6 +25,8 @@ pub struct Frame {
     pub glyph_ms: f64,
     pub vector_ms: f64,
     pub image_ms: f64,
+    /// Measurement aid (LUMA_PROFILE_FINISH=1): glFinish after rendering, i.e. GPU time left.
+    pub finish_ms: f64,
 }
 #[derive(Serialize)]
 pub struct Timing {
@@ -104,6 +106,7 @@ mod tests {
                     glyph_ms: 0.,
                     vector_ms: 0.,
                     image_ms: 0.,
+                    finish_ms: 0.,
                 },
             );
         }

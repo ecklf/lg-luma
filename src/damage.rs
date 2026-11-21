@@ -20,15 +20,41 @@ pub struct Tracker {
 
 impl Tracker {
     /// Records the scene about to be drawn.
+    #[cfg(test)]
     pub fn push(&mut self, commands: &[Draw]) {
+        self.compare(commands, 2., bounds);
+        self.remember(commands.to_vec());
+    }
+
+    /// Compares a new scene with the last scene actually presented.
+    pub fn compare(
+        &mut self,
+        commands: &[Draw],
+        clip_padding: f32,
+        bounds: impl Fn(&Draw) -> Damage,
+    ) {
         let damage = if self.previous.is_empty() {
             None
         } else {
-            diff(&self.previous, commands)
+            let estimated = diff(&self.previous, commands, &bounds);
+            if estimated.is_some_and(|r| r.w * r.h < 1920. * 1080. / 2.) {
+                estimated
+            } else {
+                let visible = changed_span(&self.previous, commands, clip_padding, &bounds);
+                Some(estimated.map_or(visible, |r| intersection(r, visible)))
+            }
         };
         self.history.push_front(damage);
         self.history.truncate(HISTORY);
-        self.previous = commands.to_vec();
+    }
+
+    /// Takes ownership after the renderer has finished using this scene.
+    pub fn remember(&mut self, commands: Vec<Draw>) {
+        self.previous = commands;
+    }
+
+    pub fn previous(&self) -> &[Draw] {
+        &self.previous
     }
 
     /// What to redraw into a back buffer holding the frame `age` presents ago; 0 means unknown.
@@ -52,10 +78,97 @@ impl Tracker {
     }
 }
 
-fn diff(old: &[Draw], new: &[Draw]) -> Damage {
+#[derive(Default, Clone, Copy)]
+struct PaintState {
+    clip: Option<Rect>,
+    fade: Option<[f32; 4]>,
+}
+
+impl PaintState {
+    fn advance(&mut self, command: &Draw) {
+        match command {
+            Draw::Clip(clip) => self.clip = *clip,
+            Draw::EdgeFade(fade) => self.fade = *fade,
+            _ => {}
+        }
+    }
+
+    fn accumulate(
+        &mut self,
+        area: &mut Rect,
+        command: &Draw,
+        padding: f32,
+        bounds: &impl Fn(&Draw) -> Damage,
+    ) {
+        self.advance(command);
+        if let Some(bounds) = bounds(command) {
+            *area = union(
+                *area,
+                self.clip
+                    .map_or(bounds, |clip| intersection(bounds, clip.inset(-padding))),
+            );
+        }
+    }
+
+    fn matches(&self, other: &Self) -> bool {
+        same(&Draw::Clip(self.clip), &Draw::Clip(other.clip)) && self.fade == other.fade
+    }
+}
+
+fn intersection(a: Rect, b: Rect) -> Rect {
+    let x = a.x.max(b.x);
+    let y = a.y.max(b.y);
+    Rect::new(
+        x,
+        y,
+        ((a.x + a.w).min(b.x + b.w) - x).max(0.),
+        ((a.y + a.h).min(b.y + b.h) - y).max(0.),
+    )
+}
+
+/// Bound the differing span in both scenes by the scissors actually used to paint it.
+/// An identical suffix can still differ visually until its inherited paint state agrees.
+fn changed_span(
+    old: &[Draw],
+    new: &[Draw],
+    padding: f32,
+    bounds: &impl Fn(&Draw) -> Damage,
+) -> Rect {
+    let prefix = old.iter().zip(new).take_while(|(a, b)| same(a, b)).count();
+    let mut before = PaintState::default();
+    for command in &old[..prefix] {
+        before.advance(command);
+    }
+    let (old, new) = (&old[prefix..], &new[prefix..]);
+    let suffix = old
+        .iter()
+        .rev()
+        .zip(new.iter().rev())
+        .take_while(|(a, b)| same(a, b))
+        .count();
+    let (old, tail) = old.split_at(old.len() - suffix);
+    let mut after = before;
+    let mut area = Rect::default();
+    for command in old {
+        before.accumulate(&mut area, command, padding, bounds);
+    }
+    for command in &new[..new.len() - suffix] {
+        after.accumulate(&mut area, command, padding, bounds);
+    }
+    for command in tail {
+        if before.matches(&after) {
+            break;
+        }
+        before.accumulate(&mut area, command, padding, bounds);
+        after.accumulate(&mut area, command, padding, bounds);
+    }
+    area
+}
+
+fn diff(old: &[Draw], new: &[Draw], bounds: &impl Fn(&Draw) -> Damage) -> Damage {
     let mut area = Rect::default();
     let mut j = 0;
-    for command in new {
+    for (index, command) in new.iter().enumerate() {
         if j < old.len() && same(&old[j], command) {
             j += 1;
             continue;
@@ -69,6 +182,16 @@ fn diff(old: &[Draw], new: &[Draw]) -> Damage {
             j = k + 1;
         } else {
             area = union(area, bounds(command)?);
+            // During an animation, the same command often changes position every frame.
+            // Consume its old position too, or all following commands lose alignment.
+            if let Some(previous) = old.get(j)
+                && !new[index + 1..new.len().min(index + 1 + LOOKAHEAD)]
+                    .iter()
+                    .any(|upcoming| same(previous, upcoming))
+            {
+                area = union(area, bounds(previous)?);
+                j += 1;
+            }
         }
     }
     for removed in &old[j.min(old.len())..] {

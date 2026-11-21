@@ -299,7 +299,7 @@ impl Scene {
                 }
                 Draw::Image(path, rect, radius, contain) => {
                     *draw = Draw::TintedImage(
-                        path.clone(),
+                        std::mem::take(path),
                         *rect,
                         *radius,
                         *contain,
@@ -920,6 +920,35 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
     out.draw.push(Draw::Clip(None));
 }
 
+fn drawer_label(assets: &Assets, app: &App, rect: Rect) -> Draw {
+    let (label, style) = assets.fit_line(&app.title, text(22., 550, -0.02), rect.w, 22.);
+    Draw::Text(
+        label,
+        Rect::new(
+            rect.x,
+            rect.y + rect.h + DRAWER_NAME_TOP,
+            rect.w,
+            DRAWER_NAME_HEIGHT,
+        ),
+        style,
+        WHITE,
+        true,
+    )
+}
+
+/// Names are only visible on focus. Prepare the first four rows without changing focus.
+pub fn initial_drawer_labels(state: &State, assets: &Assets) -> Vec<Draw> {
+    if !state.preferences.show_drawer_app_names {
+        return Vec::new();
+    }
+    state
+        .drawer_apps()
+        .into_iter()
+        .take(4 * APPS_COLUMNS)
+        .map(|app| drawer_label(assets, app, Rect::new(0., 0., 270., FACE_HEIGHT)))
+        .collect()
+}
+
 /// Returns whether the card is focused (see batch_cards).
 fn tile(
     out: &mut Scene,
@@ -1002,19 +1031,7 @@ fn tile(
     if focused {
         out.ring(rect, 19.2);
         if dock.is_none() && state.page == Page::Apps && state.preferences.show_drawer_app_names {
-            let (label, style) = assets.fit_line(&app.title, text(22., 550, -0.02), rect.w, 22.);
-            out.text(
-                label,
-                Rect::new(
-                    rect.x,
-                    rect.y + rect.h + DRAWER_NAME_TOP,
-                    rect.w,
-                    DRAWER_NAME_HEIGHT,
-                ),
-                style,
-                WHITE,
-                true,
-            );
+            out.draw.push(drawer_label(assets, app, rect));
         }
     }
     if state.pressed.as_ref() == Some(&target) {
@@ -1259,7 +1276,7 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         let start = out.draw.len();
         library_grid(out, state, assets);
         if !peek {
-            out.fade(start, state.drawer_progress(), 1.);
+            out.fade(start, state.drawer_content_alpha(), 1.);
         }
         // The Home peek is decorative, including while the drawer settles closed.
         out.controls.truncate(controls);
@@ -2097,7 +2114,7 @@ fn library(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime)
     let start = out.draw.len();
     library_grid(out, state, assets);
     if state.preferences.app_drawer_style == crate::model::AppDrawerStyle::Minimal {
-        out.fade(start, state.drawer_progress(), 1.);
+        out.fade(start, state.drawer_content_alpha(), 1.);
     }
     // The scrolling grid continues underneath the floating glass and pinned cards.
     favorites_dock(out, state, assets);
@@ -3035,6 +3052,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                             }),
                             false,
                         ),
+                        (
+                            crate::state::SMOOTH_DRAWER_FADE_SETTING,
+                            "smoothDrawerFade",
+                            "motion",
+                            language.t(if state.preferences.smooth_drawer_fade {
+                                "stateOn"
+                            } else {
+                                "stateOff"
+                            }),
+                            false,
+                        ),
                     ]
                     .into_iter()
                     .enumerate()
@@ -3240,18 +3268,23 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 .push(Draw::Clip(Some(state.app_settings_viewport())));
             let apps = state.apps();
             let mut y = 164.8;
+            let mut cards = Vec::new();
             for row in apps.chunks(3) {
                 for (column, app) in row.iter().enumerate() {
                     let rect = Rect::new(640. + column as f32 * 380., y - s, 360., 202.5);
-                    tile(out, state, assets, app, rect, None);
+                    let start = out.draw.len();
+                    let focused = tile(out, state, assets, app, rect, None);
                     if state.preferences.hidden.contains(&app.id) {
                         let badge = Rect::new(rect.x + 12., rect.y + 12., 30., 30.);
                         out.shape(badge, 15., c(0x202020, 0.85));
                         out.icon(assets, "eye-off", badge.inset(6.), WHITE);
                     }
+                    cards.push((start, out.draw.len(), focused));
                 }
                 y += 226.5;
             }
+            // As in the drawer: shadows, faces, borders, then logos, in fewer program switches.
+            batch_cards(&mut out.draw, &cards);
             out.draw.push(Draw::Clip(None));
         }
         0 => {
@@ -3487,6 +3520,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             }
         }
         SYSTEM_SECTION => {
+            let start = out.draw.len();
             let rect = Rect::new(640., 164.8 - s, 1120., 220.);
             let title = if matches!(state.update, crate::update::InstallStatus::Failed(_)) {
                 "updateError"
@@ -3600,9 +3634,29 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     },
                 );
             }
+            group_row_surfaces(&mut out.draw[start..]);
         }
         _ => {}
     }
+}
+
+/// System rows are painted top to bottom. If every glass surface is below all
+/// preceding labels and decorations, all glass can share a draw before the labels.
+fn group_row_surfaces(commands: &mut [Draw]) {
+    let mut bottom: f32 = f32::NEG_INFINITY;
+    for command in commands.iter() {
+        let Some(bounds) = crate::damage::bounds(command) else {
+            return;
+        };
+        if matches!(command, Draw::Glass(..)) {
+            if bounds.y < bottom + 4. {
+                return;
+            }
+        } else {
+            bottom = bottom.max(bounds.y + bounds.h);
+        }
+    }
+    commands.sort_by_key(|command| !matches!(command, Draw::Glass(..)));
 }
 
 fn inputs_settings(out: &mut Scene, state: &State, assets: &Assets) {

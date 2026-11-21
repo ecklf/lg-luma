@@ -29,7 +29,7 @@ fn png(image: RgbaImage) -> Vec<u8> {
 fn poll_until(service: &Service, mut done: impl FnMut() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(3);
     loop {
-        service.poll();
+        service.poll(|_| {});
         if done() {
             break;
         }

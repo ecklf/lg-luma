@@ -5,9 +5,15 @@ uniform vec3 u_app_top;
 uniform vec3 u_app_bottom;
 uniform bool u_app;
 uniform sampler2D u_glass_a;
+#ifdef GLASS_ONLY
+// Resting, unfaded glass always reads a single backdrop.
+#define u_glass_mix 0.0
+#define u_glass_enabled true
+#else
 uniform sampler2D u_glass_b;
 uniform float u_glass_mix;
 uniform bool u_glass_enabled;
+#endif
 varying PAINT_PRECISION vec2 v_uv;
 varying PAINT_PRECISION vec4 v_color;
 varying PAINT_PRECISION vec4 v_shape;
@@ -15,11 +21,15 @@ varying PAINT_PRECISION vec2 v_params;
 varying PAINT_PRECISION float v_logical_y;
 varying PAINT_PRECISION float v_logical_x;
 float edge_coverage() {
+#ifdef GLASS_ONLY
+    return 1.0;
+#else
     float edge = 1.0;
     if (u_edge_fade.y > u_edge_fade.x)
         edge = smoothstep(u_edge_fade.x, u_edge_fade.y, v_logical_y) *
             (1.0 - smoothstep(u_edge_fade.z, u_edge_fade.w, v_logical_y));
     return edge;
+#endif
 }
 vec3 glass_sample(vec2 uv, float scattering) {
     // Clamp each atlas half independently: no seam leakage or off-screen wrapping.
@@ -29,13 +39,26 @@ vec3 glass_sample(vec2 uv, float scattering) {
     vec3 sharp = texture2D(u_glass_a, sharp_uv).rgb;
     vec3 soft = texture2D(u_glass_a, soft_uv).rgb;
     // The second atlas only matters during a wallpaper cross-fade.
+#ifndef GLASS_ONLY
     if (u_glass_mix > 0.0) {
         sharp = mix(sharp, texture2D(u_glass_b, sharp_uv).rgb, u_glass_mix);
         soft = mix(soft, texture2D(u_glass_b, soft_uv).rgb, u_glass_mix);
     }
+#endif
     return mix(sharp, soft, scattering);
 }
+#ifdef GLASS_ONLY
+uniform vec2 u_drawable;
+#endif
 void main() {
+#ifdef GLASS_ONLY
+    // -2000: the fully covered core of resting glass, baked once (glass-bake.frag).
+    if (v_params.y < -1999.0) {
+        vec3 baked = texture2D(u_texture, gl_FragCoord.xy / u_drawable).rgb;
+        gl_FragColor = vec4(mix(baked, v_color.rgb, step(0.5, v_color.r) * 0.88), v_color.a);
+        return;
+    }
+#else
     if (v_params.x < 0.0) {
         vec4 color = texture2D(u_texture, v_uv) * v_color;
         // -2: wallpaper with folded full-screen fills, p * m + k (k in v_shape).
@@ -44,7 +67,13 @@ void main() {
         gl_FragColor = color * vec4(1.0, 1.0, 1.0, edge_coverage());
         return;
     }
+#endif
+#ifdef GLASS_ONLY
+    // Resting glass only (PaintPrograms::glass_rim): the same glass path, nothing else.
+    bool glass = true;
+#else
     bool glass = v_params.y < -999.0;
+#endif
     float blur = glass ? 0.0 : max(-v_params.y, 0.0);
     vec2 half_size = v_shape.zw - vec2(blur);
     float radius = min(v_params.x, min(half_size.x, half_size.y));

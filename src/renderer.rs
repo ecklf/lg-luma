@@ -112,6 +112,7 @@ struct TextKey {
 }
 
 struct TextRun {
+    x_extent: Option<[f32; 3]>,
     mesh: Option<vector::Mesh>,
     missing_glyphs: usize,
     failures: usize,
@@ -212,6 +213,8 @@ enum BatchKind {
         backdrop: Option<[[u8; 3]; 2]>,
         /// Drawn without blending: lets the GPU discard hidden fragments beneath.
         opaque: bool,
+        /// Every fragment lies inside its shape (coverage 1): no edge distance needed.
+        interior: bool,
     },
     Vector {
         path: String,
@@ -238,6 +241,8 @@ struct MeshState {
     program: GLuint,
     /// The vertex array object bound for meshes (None after the paint path bound its own).
     vertex_array: Option<GLuint>,
+    vector_tint: Option<Color>,
+    text_tint: Option<Color>,
     vector_scale: Option<[f32; 2]>,
     text_scale: Option<[f32; 2]>,
     fringe: Option<f32>,
@@ -251,6 +256,21 @@ enum Hole {
     Skip(Rect),
     /// Fully opaque: drawn without blending.
     Opaque(Rect),
+    /// Fully covered but translucent: blended, without the per-fragment edge distance.
+    Interior(Rect),
+    /// A baked glass core partly covered by the very next opaque card face.
+    CoveredGlass(Rect, Rect),
+}
+
+fn strips([l, t, r, b]: [f32; 4], [x0, y0, x1, y1]: [f32; 4]) -> impl Iterator<Item = [f32; 4]> {
+    [
+        [l, t, r, y0],
+        [l, y1, r, b],
+        [l, y0, x0, y1],
+        [x1, y0, r, y1],
+    ]
+    .into_iter()
+    .filter(|[x, y, r, b]| r > x && b > y)
 }
 
 thread_local! {
@@ -397,16 +417,42 @@ fn snap_rect(rect: Rect, scale: f32) -> Rect {
     Rect::new(x0, y0, x1 - x0, y1 - y0)
 }
 
+struct GlassInterior {
+    key: (GLuint, u32, u32, [i32; 4]),
+    texture: GLuint,
+    framebuffer: GLuint,
+}
+
 struct PaintPrograms {
+    flat: GLuint,
+    folded: GLuint,
+    shadow: GLuint,
     texture: GLuint,
     tinted: GLuint,
     shape: GLuint,
     app: GLuint,
+    /// App artwork that is translucent or on its rounded edge (see app-shape.frag).
+    app_shape: GLuint,
+    /// Resting glass interiors read from the baked texture (see glass-interior.frag).
+    glass: GLuint,
+    /// Resting glass in one draw: rims shaded as paint.frag, the -2000 core from the bake.
+    glass_rim: GLuint,
 }
 
 impl Drop for PaintPrograms {
     fn drop(&mut self) {
-        for id in [self.texture, self.tinted, self.shape, self.app] {
+        for id in [
+            self.flat,
+            self.folded,
+            self.shadow,
+            self.texture,
+            self.tinted,
+            self.shape,
+            self.app,
+            self.app_shape,
+            self.glass,
+            self.glass_rim,
+        ] {
             if id != 0 {
                 unsafe { gl::DeleteProgram(id) };
             }
@@ -416,9 +462,19 @@ impl Drop for PaintPrograms {
 
 impl PaintPrograms {
     /// Use a short shader only if every triangle in this batch takes the same paint path.
-    fn select(&self, vertices: &[f32], opaque: bool, app: bool, fallback: GLuint) -> GLuint {
+    fn select(&self, vertices: &[f32], interior: bool, app: bool, fallback: GLuint) -> GLuint {
         let all = |predicate: fn(&[f32]) -> bool| vertices.chunks_exact(14).all(predicate);
-        let inside = opaque && all(|v| v[12] >= 0. && v[13] == 0.);
+        if all(|v| v[12] == -2.) {
+            return self.folded;
+        }
+        if all(|v| v[12] >= 0. && v[13] < 0. && v[13] > -999.) {
+            return self.shadow;
+        }
+        // Glass (border -1000) only takes an interior batch from a baked split (see build).
+        if all(|v| v[13] == -1000. || v[13] == -2000.) {
+            return if interior { self.glass } else { self.glass_rim };
+        }
+        let inside = interior && all(|v| v[12] >= 0. && v[13] == 0.);
         if inside && app {
             return self.app;
         }
@@ -429,15 +485,24 @@ impl PaintPrograms {
                 self.tinted
             };
         }
-        if !app && all(|v| v[12] >= 0. && v[13] >= 0.) {
-            self.shape
-        } else {
-            fallback
+        match (app, all(|v| v[12] >= 0. && v[13] >= 0.)) {
+            (false, true) => self.shape,
+            (true, true) => self.app_shape,
+            _ => fallback,
         }
     }
 }
 
 pub struct Renderer {
+    /// Bakes resting glass interiors for the current backdrop (glass-bake.frag), or 0.
+    glass_bake_program: GLuint,
+    /// The baked interior and the (backdrop texture, drawable size, viewport) it was made for.
+    glass_interior: Option<GlassInterior>,
+    /// This frame's baked interior texture, when glass may be split (set before build).
+    glass_split: Option<GLuint>,
+    applied_fade: Option<[f32; 4]>,
+    paint_size: Option<Size>,
+    glass_uniforms: Option<(bool, f32)>,
     paint_programs: Option<PaintPrograms>,
     program: GLuint,
     vector_program: GLuint,
@@ -496,6 +561,16 @@ impl Renderer {
             }
         }
         let fragment_highp = !gles || precision > 0;
+        let renderer_name = gl_string(gl::RENDERER);
+        let version_name = gl_string(gl::VERSION);
+        let verified_mali = gles
+            && renderer_name == "Mali-TDVX"
+            && version_name.starts_with("OpenGL ES 3.2 v1.r11p0");
+        let use_paint_programs = match std::env::var("LUMA_PAINT_SHADERS").as_deref() {
+            Ok("1") => true,
+            Ok("0") => false,
+            _ => verified_mali,
+        };
         let qualifier = if fragment_highp { "highp" } else { "mediump" };
         let vertex_prefix = if gles {
             format!("#version 100\nprecision highp float;\n#define PAINT_PRECISION {qualifier}\n")
@@ -516,7 +591,7 @@ impl Renderer {
             &(fragment_prefix.clone() + include_str!("shaders/paint.frag")),
             &[c"a_position", c"a_uv", c"a_color", c"a_shape", c"a_params"],
         )?;
-        let paint_programs = if std::env::var("LUMA_PAINT_SHADERS").as_deref() == Ok("1") {
+        let paint_programs = if use_paint_programs {
             let build = |source: &str| {
                 link(
                     &(vertex_prefix.clone() + include_str!("shaders/paint.vert")),
@@ -526,15 +601,30 @@ impl Renderer {
             };
             let load = || -> Result<PaintPrograms, String> {
                 let mut programs = PaintPrograms {
+                    flat: 0,
+                    folded: 0,
+                    shadow: 0,
                     texture: 0,
                     tinted: 0,
                     shape: 0,
                     app: 0,
+                    app_shape: 0,
+                    glass: 0,
+                    glass_rim: 0,
                 };
+                programs.flat = build(include_str!("shaders/flat.frag"))?;
+                // The folded shader preserves the conditional add and rounding of paint.frag.
+                programs.folded = build(include_str!("shaders/folded.frag"))?;
+                programs.shadow = build(include_str!("shaders/shadow.frag"))?;
                 programs.texture = build(include_str!("shaders/texture.frag"))?;
                 programs.tinted = build(include_str!("shaders/tinted.frag"))?;
                 programs.shape = build(include_str!("shaders/shape.frag"))?;
                 programs.app = build(include_str!("shaders/app-interior.frag"))?;
+                programs.app_shape = build(include_str!("shaders/app-shape.frag"))?;
+                programs.glass = build(include_str!("shaders/glass-interior.frag"))?;
+                programs.glass_rim = build(
+                    &("#define GLASS_ONLY 1\n".to_owned() + include_str!("shaders/paint.frag")),
+                )?;
                 Ok(programs)
             };
             load()
@@ -542,6 +632,17 @@ impl Renderer {
                 .ok()
         } else {
             None
+        };
+        let glass_bake_program = if paint_programs.is_some() {
+            link(
+                &(vertex_prefix.clone() + include_str!("shaders/paint.vert")),
+                &(fragment_prefix.clone() + include_str!("shaders/glass-bake.frag")),
+                &[c"a_position", c"a_uv", c"a_color", c"a_shape", c"a_params"],
+            )
+            .inspect_err(|error| eprintln!("Glass interior bake unavailable: {error}"))
+            .unwrap_or(0)
+        } else {
+            0
         };
         let vector_program = match link(
             &(vertex_prefix.clone() + include_str!("shaders/vector.vert")),
@@ -620,6 +721,12 @@ impl Renderer {
         let white = texture(1, 1, &[255; 4]);
         Ok(Self {
             program,
+            glass_bake_program,
+            glass_interior: None,
+            glass_split: None,
+            applied_fade: None,
+            paint_size: None,
+            glass_uniforms: None,
             paint_programs,
             vector_program,
             text_program,
@@ -648,8 +755,8 @@ impl Renderer {
             stats: RenderStats::new(Size::HD),
             info: GraphicsInfo {
                 vendor: gl_string(gl::VENDOR),
-                renderer: gl_string(gl::RENDERER),
-                version: gl_string(gl::VERSION),
+                renderer: renderer_name,
+                version: version_name,
                 max_texture_size: max_texture_size.max(0) as u32,
                 max_viewport,
                 fragment_highp,
@@ -783,7 +890,10 @@ impl Renderer {
         // Pixels inside `hole` would leave the target unchanged (zero coverage) or are
         // overdrawn by an opaque draw: rasterize only the four strips around it.
         if let Some(region) = hole {
-            let (Hole::Skip(hole) | Hole::Opaque(hole)) = region;
+            let (Hole::Skip(hole)
+            | Hole::Opaque(hole)
+            | Hole::Interior(hole)
+            | Hole::CoveredGlass(hole, _)) = region;
             // Whole physical pixels, rounded inward: the strips meet on pixel boundaries.
             let scale = self.stats.viewport.scale.max(0.01);
             let (left, top) = (
@@ -802,24 +912,37 @@ impl Renderer {
                 let (left, top) = (rect.x, rect.y);
                 let (right, bottom) = (rect.x + rect.w, rect.y + rect.h);
                 let mut count = 0;
-                for [a, b, c, d] in [
-                    [left, top, right, y0],
-                    [left, y1, right, bottom],
-                    [left, y0, x0, y1],
-                    [x1, y0, right, y1],
-                ] {
-                    if c > a && d > b {
-                        self.quad_part(rect, [a, b, c, d], uv, radius, border, colors);
-                        count += 6;
-                    }
+                for strip in strips([left, top, right, bottom], [x0, y0, x1, y1]) {
+                    self.quad_part(rect, strip, uv, radius, border, colors);
+                    count += 6;
                 }
                 if count > 0 {
-                    self.paint_batch(start, count, texture, backdrop, false);
+                    self.paint_batch(start, count, texture, backdrop, false, false);
                 }
-                if let Hole::Opaque(_) = region {
+                if !matches!(region, Hole::Skip(_)) {
                     let start = self.vertices.len() / 14;
-                    self.quad_part(rect, [x0, y0, x1, y1], uv, radius, border, colors);
-                    self.paint_batch(start, 6, texture, backdrop, true);
+                    let core = [x0, y0, x1, y1];
+                    let hidden = if let Hole::CoveredGlass(_, cover) = region {
+                        let a = x0.max((cover.x * scale).ceil() / scale);
+                        let b = y0.max((cover.y * scale).ceil() / scale);
+                        let c = x1.min(((cover.x + cover.w) * scale).floor() / scale);
+                        let d = y1.min(((cover.y + cover.h) * scale).floor() / scale);
+                        (c > a && d > b).then_some([a, b, c, d])
+                    } else {
+                        None
+                    };
+                    if let Some(hidden) = hidden {
+                        for strip in strips(core, hidden) {
+                            self.quad_part(rect, strip, uv, radius, border, colors);
+                        }
+                    } else {
+                        self.quad_part(rect, core, uv, radius, border, colors);
+                    }
+                    let opaque = matches!(region, Hole::Opaque(_));
+                    let count = self.vertices.len() / 14 - start;
+                    if count > 0 {
+                        self.paint_batch(start, count, texture, backdrop, opaque, true);
+                    }
                 }
                 return;
             }
@@ -844,7 +967,7 @@ impl Renderer {
                 border,
             ]);
         }
-        self.paint_batch(start, 6, texture, backdrop, false);
+        self.paint_batch(start, 6, texture, backdrop, false, false);
     }
 
     /// Six paint vertices for the part [x0, y0, x1, y1] of `rect`, with the same attributes
@@ -883,12 +1006,12 @@ impl Renderer {
         }
     }
 
-    /// The region of the next draw that is certainly opaque: an untinted, unfaded app face
-    /// or opaque image. A shadow beneath it does not need those pixels.
+    /// The interior of an app face or image that completely covers earlier draws.
     fn opaque_cover(&self, next: Option<&Draw>) -> Option<Rect> {
         let (rect, radius) = match next? {
             Draw::AppImage(_, rect, radius, tint) if tint[3] >= 1. => (*rect, *radius),
             Draw::Image(path, rect, radius, false)
+            | Draw::TintedImage(path, rect, radius, false, [_, _, _, 1.])
                 if !path.ends_with(".lvec")
                     && self
                         .textures
@@ -899,7 +1022,7 @@ impl Renderer {
             }
             _ => return None,
         };
-        self.opaque_interior(rect, radius)
+        self.fill_interior(rect, radius)
     }
 
     /// The opaque region of the later draw that covers `rect`'s centre, before the clip or
@@ -910,7 +1033,9 @@ impl Renderer {
             if matches!(command, Draw::Clip(_) | Draw::EdgeFade(_)) {
                 return None;
             }
-            if let Some(hole) = self.opaque_cover(Some(command))
+            // Keep the shadow mask's sampling grid when a face is being tinted.
+            if matches!(command, Draw::AppImage(..) | Draw::Image(..))
+                && let Some(hole) = self.opaque_cover(Some(command))
                 && hole.x <= cx
                 && cx <= hole.x + hole.w
                 && hole.y <= cy
@@ -922,9 +1047,197 @@ impl Renderer {
         None
     }
 
-    /// The part of an opaque rounded rect drawn with full coverage: inside the rounded
-    /// corners, two pixels clear of the antialiased edge and within an edge fade's plateau.
-    fn opaque_interior(&self, rect: Rect, radius: f32) -> Option<Rect> {
+    /// The part of a glass rect where paint.frag takes its interior path (depth at least two
+    /// bevels): along the straight edges, a pixel clear of that depth. None if too small.
+    fn glass_core(&self, rect: Rect, radius: f32) -> Option<Rect> {
+        let rect = self.snap(rect);
+        let radius = radius.min(rect.w / 2.).min(rect.h / 2.).max(0.);
+        let depth = 2. * (radius * 0.22).clamp(4., 10.) + 1.;
+        let (x, y) = (radius.max(depth), depth);
+        let core = Rect::new(rect.x + x, rect.y + y, rect.w - 2. * x, rect.h - 2. * y);
+        (core.w >= 8. && core.h >= 8.).then_some(core)
+    }
+
+    /// One draw per glass: the core (last batch) joins its rim strips with border -2000, which
+    /// the glass program reads from the baked texture.
+    fn merge_glass_core(&mut self) {
+        if self.batches.len() < 2 {
+            return;
+        }
+        let Some(Batch {
+            kind:
+                BatchKind::Paint {
+                    start,
+                    count,
+                    interior: true,
+                    ..
+                },
+            ..
+        }) = self.batches.last()
+        else {
+            return;
+        };
+        let (start, count) = (*start, *count);
+        let previous = self.batches.len() - 2;
+        let BatchKind::Paint {
+            start: strip_start,
+            count: strip_count,
+            interior: false,
+            ..
+        } = &mut self.batches[previous].kind
+        else {
+            return;
+        };
+        if *strip_start + *strip_count != start {
+            return;
+        }
+        *strip_count += count;
+        for vertex in self.vertices[start * 14..(start + count) * 14].chunks_exact_mut(14) {
+            vertex[13] = -2000.;
+        }
+        self.batches.pop();
+    }
+
+    /// Renders resting glass interiors for `backdrop` into a drawable-sized texture, once per
+    /// backdrop, drawable and viewport, with the same vertex path as normal drawing.
+    fn bake_glass_interior(&mut self, backdrop: GLuint, width: u32, height: u32) -> Option<GLuint> {
+        // The same viewport build() derives for this frame (stats still hold the last one).
+        let viewport = Viewport::new(Size::new(width, height));
+        let view = [viewport.x, viewport.y, viewport.width, viewport.height];
+        let key = (backdrop, width, height, view);
+        if let Some(baked) = &self.glass_interior
+            && baked.key == key
+        {
+            return Some(baked.texture);
+        }
+        if let Some(old) = self.glass_interior.take() {
+            unsafe {
+                gl::DeleteFramebuffers(1, &old.framebuffer);
+                gl::DeleteTextures(1, &old.texture);
+            }
+        }
+        let started = Instant::now();
+        let (mut texture, mut framebuffer, mut buffer, mut previous) = (0, 0, 0, 0);
+        let mut quad: Vec<f32> = Vec::with_capacity(6 * 14);
+        for (x, y) in [(0., 0.), (1., 0.), (0., 1.), (0., 1.), (1., 0.), (1., 1.)] {
+            quad.extend_from_slice(&[
+                x * 1920.,
+                y * 1080.,
+                0.,
+                0.,
+                1.,
+                1.,
+                1.,
+                1.,
+                0.,
+                0.,
+                0.,
+                0.,
+                0.,
+                0.,
+            ]);
+        }
+        let complete = unsafe {
+            gl::GetIntegerv(gl::FRAMEBUFFER_BINDING, &mut previous);
+            gl::GenTextures(1, &mut texture);
+            gl::BindTexture(gl::TEXTURE_2D, texture);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
+            gl::TexImage2D(
+                gl::TEXTURE_2D,
+                0,
+                gl::RGBA as i32,
+                width as i32,
+                height as i32,
+                0,
+                gl::RGBA,
+                gl::UNSIGNED_BYTE,
+                std::ptr::null(),
+            );
+            gl::GenFramebuffers(1, &mut framebuffer);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer);
+            gl::FramebufferTexture2D(
+                gl::FRAMEBUFFER,
+                gl::COLOR_ATTACHMENT0,
+                gl::TEXTURE_2D,
+                texture,
+                0,
+            );
+            let complete = gl::CheckFramebufferStatus(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE;
+            if complete {
+                gl::Disable(gl::SCISSOR_TEST);
+                gl::Disable(gl::BLEND);
+                gl::Viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+                gl::UseProgram(self.glass_bake_program);
+                gl::Uniform1i(
+                    uniform_location(self.glass_bake_program, c"u_glass_a".as_ptr()),
+                    1,
+                );
+                gl::ActiveTexture(gl::TEXTURE1);
+                gl::BindTexture(gl::TEXTURE_2D, backdrop);
+                gl::ActiveTexture(gl::TEXTURE0);
+                if self.vao != 0 {
+                    gl::BindVertexArray(self.vao);
+                }
+                gl::GenBuffers(1, &mut buffer);
+                gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
+                gl::BufferData(
+                    gl::ARRAY_BUFFER,
+                    (quad.len() * size_of::<f32>()) as isize,
+                    quad.as_ptr().cast(),
+                    gl::STATIC_DRAW,
+                );
+                let mut offset = 0;
+                for (index, size) in [2, 2, 4, 4, 2].into_iter().enumerate() {
+                    gl::EnableVertexAttribArray(index as u32);
+                    gl::VertexAttribPointer(
+                        index as u32,
+                        size,
+                        gl::FLOAT,
+                        gl::FALSE,
+                        56,
+                        (offset * size_of::<f32>()) as *const _,
+                    );
+                    offset += size as usize;
+                }
+                gl::DrawArrays(gl::TRIANGLES, 0, 6);
+                gl::DeleteBuffers(1, &buffer);
+                gl::Enable(gl::BLEND);
+            }
+            gl::BindFramebuffer(gl::FRAMEBUFFER, previous as GLuint);
+            complete
+        };
+        if !complete {
+            unsafe {
+                gl::DeleteFramebuffers(1, &framebuffer);
+                gl::DeleteTextures(1, &texture);
+            }
+            eprintln!("Luma glass interior: framebuffer incomplete");
+            self.glass_bake_program = 0;
+            return None;
+        }
+        self.stats.glass_prepare_ms += started.elapsed().as_secs_f64() * 1000.;
+        self.glass_interior = Some(GlassInterior {
+            key,
+            texture,
+            framebuffer,
+        });
+        Some(texture)
+    }
+
+    /// A translucent fill's fully covered part, split off only where a short shader then
+    /// draws it: the general paint shader would compute the same edge distance anyway.
+    fn translucent_interior(&self, rect: Rect, radius: f32) -> Option<Hole> {
+        self.paint_programs.as_ref()?;
+        self.fill_interior(rect, radius).map(Hole::Interior)
+    }
+
+    /// The part of a rounded rect drawn with full coverage: inside the rounded corners, two
+    /// pixels clear of the antialiased edge and within an edge fade's plateau. Opaque fills
+    /// draw it without blending; translucent ones still skip the edge distance there.
+    fn fill_interior(&self, rect: Rect, radius: f32) -> Option<Rect> {
         let mut hole = self.snap(rect).inset(radius.max(0.) * 0.3 + 2.);
         if let Some([_, top, bottom, _]) = self.fade.filter(|fade| fade[1] > fade[0]) {
             let y0 = hole.y.max(top);
@@ -1064,6 +1377,7 @@ impl Renderer {
         texture: GLuint,
         backdrop: Option<[[u8; 3]; 2]>,
         opaque: bool,
+        interior: bool,
     ) {
         if let Some(batch) = self.batches.last_mut() {
             let same_clip = match (batch.clip, self.clip) {
@@ -1078,11 +1392,13 @@ impl Renderer {
                     count: batch_count,
                     backdrop: previous_backdrop,
                     opaque: previous_opaque,
+                    interior: previous_interior,
                     ..
                 } = &mut batch.kind
                 && *previous == texture
                 && *previous_backdrop == backdrop
                 && *previous_opaque == opaque
+                && *previous_interior == interior
             {
                 *batch_count += count;
                 return;
@@ -1095,6 +1411,7 @@ impl Renderer {
                 count,
                 backdrop,
                 opaque,
+                interior,
             },
             clip: self.clip,
             fade: self.fade,
@@ -1151,7 +1468,53 @@ impl Renderer {
             texture,
             None,
             opaque && self.fade.is_none(),
+            false,
         );
+    }
+
+    fn text_key(
+        &self,
+        text: &str,
+        rect: Rect,
+        style: TextStyle,
+        centered: bool,
+        size_f: f32,
+    ) -> TextKey {
+        TextKey {
+            text: text.into(),
+            weight: style.weight,
+            layout: [
+                size_f.to_bits(),
+                style.tracking.to_bits(),
+                style.line_height.to_bits(),
+                rect.w.to_bits(),
+                rect.h.to_bits(),
+            ],
+            flags: u8::from(style.align_right)
+                | (u8::from(centered) << 1)
+                | (u8::from(self.stats.multisample_samples > 1) << 2)
+                | (u8::from(style.size >= 32.) << 3),
+        }
+    }
+
+    /// Text can overhang its layout box. Once a run exists its vertices give a tighter
+    /// horizontal bound, including baseline snapping and analytic fringe in physical pixels.
+    pub fn damage_bounds(&self, command: &Draw) -> Option<Rect> {
+        let mut bounds = crate::damage::bounds(command)?;
+        if let Draw::Text(text, rect, style, _, centered) = command {
+            let scale = self.stats.viewport.text_scale();
+            let size = physical_font_size(style.size, scale, self.stats.font_size_snapping);
+            let key = self.text_key(text, *rect, *style, *centered, size);
+            if let Some(run) = self.text_runs.get(&key)
+                && let Some([left, right, offset]) = run.x_extent
+            {
+                let sx = self.stats.viewport.width as f32 / 1920.;
+                let padding = (2. + offset * (0.5 + 2. * self.text_embolden.abs())) / sx.max(0.001);
+                bounds.x = rect.x + left - padding;
+                bounds.w = right - left + 2. * padding;
+            }
+        }
+        Some(bounds)
     }
 
     fn text(&mut self, text: &str, rect: Rect, style: TextStyle, color: Color, centered: bool) {
@@ -1183,21 +1546,7 @@ impl Renderer {
             return;
         }
         let origin = [rect.x, rect.y];
-        let key = TextKey {
-            text: text.into(),
-            weight: style.weight,
-            layout: [
-                size_f.to_bits(),
-                style.tracking.to_bits(),
-                style.line_height.to_bits(),
-                rect.w.to_bits(),
-                rect.h.to_bits(),
-            ],
-            flags: u8::from(style.align_right)
-                | (u8::from(centered) << 1)
-                | (u8::from(self.stats.multisample_samples > 1) << 2)
-                | (u8::from(style.size >= 32.) << 3),
-        };
+        let key = self.text_key(text, rect, style, centered, size_f);
         if self.text_runs.contains_key(&key) {
             self.submit_text(key, origin, color);
             return;
@@ -1364,6 +1713,18 @@ impl Renderer {
                 }
             }
         }
+        let x_extent = vertices
+            .chunks_exact(9)
+            .fold(None::<[f32; 3]>, |extent, vertex| {
+                let x = vertex[0] + vertex[4];
+                let offset = vertex[2].abs();
+                Some(match extent {
+                    Some([left, right, max_offset]) => {
+                        [x.min(left), x.max(right), offset.max(max_offset)]
+                    }
+                    None => [x, x, offset],
+                })
+            });
         let mesh = if vertices.is_empty() {
             None
         } else {
@@ -1379,6 +1740,7 @@ impl Renderer {
         self.text_runs.insert(
             key.clone(),
             TextRun {
+                x_extent,
                 mesh,
                 missing_glyphs,
                 failures,
@@ -1481,10 +1843,14 @@ impl Renderer {
             rect = Rect::new(rect.x + (rect.w - w) / 2., rect.y + (rect.h - h) / 2., w, h);
         }
         if scrims.is_empty() {
-            let hole = opaque
-                .then(|| self.opaque_interior(rect, radius))
-                .flatten()
-                .map(Hole::Opaque);
+            // Square images take the plain texture path already: no edge distance to spare.
+            let hole = if opaque {
+                self.fill_interior(rect, radius).map(Hole::Opaque)
+            } else if radius > 0. {
+                self.translucent_interior(rect, radius)
+            } else {
+                None
+            };
             self.gradient_quad(
                 rect,
                 [0., 0., 1., 1.],
@@ -1571,6 +1937,19 @@ impl Renderer {
         });
     }
 
+    /// Upload decoded card artwork when it arrives, or on first draw if input got there first.
+    pub fn prepare_app_image(&mut self, image: &crate::app_artwork::Artwork) {
+        if !self.textures.contains_key(&image.key) {
+            let mut icon = texture(
+                image.pixels.width(),
+                image.pixels.height(),
+                image.pixels.as_raw(),
+            );
+            icon.frame = self.frame;
+            self.textures.insert(image.key.clone(), Some(icon));
+        }
+    }
+
     fn app_image(
         &mut self,
         image: &crate::app_artwork::Artwork,
@@ -1578,14 +1957,8 @@ impl Renderer {
         radius: f32,
         tint: Color,
     ) {
-        let entry = self.textures.entry(image.key.clone()).or_insert_with(|| {
-            Some(texture(
-                image.pixels.width(),
-                image.pixels.height(),
-                image.pixels.as_raw(),
-            ))
-        });
-        let Some(texture) = entry else {
+        self.prepare_app_image(image);
+        let Some(Some(texture)) = self.textures.get_mut(&image.key) else {
             return;
         };
         texture.frame = self.frame;
@@ -1607,10 +1980,11 @@ impl Renderer {
             [tint; 2],
             id,
             Some(image.backdrop),
-            (tint[3] >= 1.)
-                .then(|| self.opaque_interior(rect, radius))
-                .flatten()
-                .map(Hole::Opaque),
+            if tint[3] >= 1. {
+                self.fill_interior(rect, radius).map(Hole::Opaque)
+            } else {
+                self.translucent_interior(rect, radius)
+            },
         );
     }
 
@@ -1746,20 +2120,55 @@ impl Renderer {
                 }
             }
             // Outside the damage the scissor would discard it anyway; skip its layout too.
-            if let (Some(area), Some(bounds)) = (area, crate::damage::bounds(command))
+            if let Some(area) = area
+                && let Some(bounds) = self.damage_bounds(command)
                 && !crate::damage::intersects(area, bounds)
             {
                 continue;
             }
+            // Likewise outside the clip, e.g. list rows scrolled out of view: the scissor
+            // discards their pixels, but submitting them still costs CPU time per draw.
+            if let (Some(clip), Some(bounds)) = (self.clip, crate::damage::bounds(command))
+                && !crate::damage::intersects(clip.inset(-2.), bounds)
+            {
+                continue;
+            }
             match command {
-                Draw::Glass(rect, radius, tint) => self.quad(
-                    *rect,
-                    [0., 0., 1., 1.],
-                    *radius,
-                    -1000.,
-                    *tint,
-                    self.white.id,
-                ),
+                Draw::Glass(rect, radius, tint) => {
+                    let split = self
+                        .glass_split
+                        .filter(|_| self.fade.is_none())
+                        .and_then(|texture| Some((texture, self.glass_core(*rect, *radius)?)));
+                    match split {
+                        // Rims and the baked core in one draw of the glass program.
+                        Some((texture, core)) => {
+                            self.gradient_quad(
+                                *rect,
+                                [0., 0., 1., 1.],
+                                *radius,
+                                -1000.,
+                                [*tint; 2],
+                                texture,
+                                None,
+                                Some(
+                                    self.opaque_cover(commands.get(index))
+                                        .map_or(Hole::Interior(core), |cover| {
+                                            Hole::CoveredGlass(core, cover)
+                                        }),
+                                ),
+                            );
+                            self.merge_glass_core();
+                        }
+                        None => self.quad(
+                            *rect,
+                            [0., 0., 1., 1.],
+                            *radius,
+                            -1000.,
+                            *tint,
+                            self.white.id,
+                        ),
+                    }
+                }
                 // A border's coverage is exactly zero more than its width (plus the
                 // filter) inside the edge.
                 Draw::Shape(rect, radius, border, color) => self.gradient_quad(
@@ -1770,8 +2179,11 @@ impl Renderer {
                     [*color; 2],
                     self.white.id,
                     None,
-                    (*border > 0.)
-                        .then(|| Hole::Skip(self.snap(*rect).inset(radius + border + 2.))),
+                    if *border > 0. {
+                        Some(Hole::Skip(self.snap(*rect).inset(radius + border + 2.)))
+                    } else {
+                        self.translucent_interior(*rect, *radius)
+                    },
                 ),
                 Draw::RoundedGradient(rect, radius, top, bottom) => self.gradient_quad(
                     *rect,
@@ -1781,7 +2193,7 @@ impl Renderer {
                     [*top, *bottom],
                     self.white.id,
                     None,
-                    None,
+                    self.translucent_interior(*rect, *radius),
                 ),
                 Draw::Shadow(rect, radius, blur, color) => {
                     let hole = self.cover_after(&commands[index..], *rect).map(Hole::Skip);
@@ -1833,7 +2245,6 @@ impl Renderer {
     pub fn render(&mut self, commands: &[Draw], width: u32, height: u32, damage: Option<[i32; 4]>) {
         let area = damage.map(|pixels| Self::damage_area(pixels, width, height));
         let started = Instant::now();
-        self.build(commands, width, height, area);
         let mut backdrops = commands.iter().filter_map(|draw| match draw {
             Draw::Image(path, rect, _, false) if full_screen(rect) => Some((path.as_str(), 1.)),
             Draw::TintedImage(path, rect, _, false, tint) if full_screen(rect) => {
@@ -1847,11 +2258,11 @@ impl Renderer {
         let glass_enabled = has_glass
             && self.info.fragment_highp
             && std::env::var("LUMA_GLASS").as_deref() != Ok("0");
-        self.stats.glass_surfaces = commands
-            .iter()
-            .filter(|draw| matches!(draw, Draw::Glass(..)))
-            .count();
-        self.stats.glass_backdrop_sampling = glass_enabled;
+        // Glass is prepared before build(), which starts this frame's stats afresh: count its
+        // loads from zero here and carry them over below.
+        self.stats.glass_prepare_ms = 0.;
+        self.stats.glass_precomputed_loads = 0;
+        self.stats.glass_runtime_prepares = 0;
         let glass_a = if glass_enabled {
             first
                 .map(|(path, _)| self.glass_backdrop(path))
@@ -1866,6 +2277,29 @@ impl Renderer {
         } else {
             glass_a
         };
+        // Resting glass over a single backdrop: bake its interior once, then split glass draws.
+        self.glass_split = (glass_enabled
+            && second.is_none()
+            && glass_a != self.white.id
+            && self.glass_bake_program != 0)
+            .then(|| self.bake_glass_interior(glass_a, width, height))
+            .flatten();
+        let prepared = (
+            self.stats.glass_prepare_ms,
+            self.stats.glass_precomputed_loads,
+            self.stats.glass_runtime_prepares,
+        );
+        self.build(commands, width, height, area);
+        (
+            self.stats.glass_prepare_ms,
+            self.stats.glass_precomputed_loads,
+            self.stats.glass_runtime_prepares,
+        ) = prepared;
+        self.stats.glass_surfaces = commands
+            .iter()
+            .filter(|draw| matches!(draw, Draw::Glass(..)))
+            .count();
+        self.stats.glass_backdrop_sampling = glass_enabled;
         let Viewport {
             x: vx,
             y: vy,
@@ -1910,39 +2344,54 @@ impl Renderer {
                 self.vertices.as_ptr().cast(),
                 gl::DYNAMIC_DRAW,
             );
-            gl::UseProgram(self.program);
-            gl::Uniform1i(
-                uniform_location(self.program, c"u_glass_enabled".as_ptr()),
-                i32::from(glass_enabled),
-            );
-            gl::Uniform1i(uniform_location(self.program, c"u_glass_a".as_ptr()), 1);
-            gl::Uniform1i(uniform_location(self.program, c"u_glass_b".as_ptr()), 2);
-            gl::Uniform1f(
-                uniform_location(self.program, c"u_glass_mix".as_ptr()),
-                second.map_or(0., |(_, alpha)| alpha),
-            );
+            let size = Size::new(width, height);
+            if self.paint_size != Some(size) {
+                let aa = 1. / scale.max(0.01);
+                gl::UseProgram(self.program);
+                gl::Uniform1f(uniform_location(self.program, c"u_aa".as_ptr()), aa);
+                gl::Uniform1i(uniform_location(self.program, c"u_glass_a".as_ptr()), 1);
+                gl::Uniform1i(uniform_location(self.program, c"u_glass_b".as_ptr()), 2);
+                if let Some(p) = &self.paint_programs {
+                    for program in [p.glass, p.glass_rim] {
+                        gl::UseProgram(program);
+                        gl::Uniform2f(
+                            uniform_location(program, c"u_drawable".as_ptr()),
+                            width as f32,
+                            height as f32,
+                        );
+                    }
+                    gl::Uniform1i(uniform_location(p.glass_rim, c"u_glass_a".as_ptr()), 1);
+                    for program in [p.glass_rim, p.shape, p.app_shape] {
+                        gl::UseProgram(program);
+                        gl::Uniform1f(uniform_location(program, c"u_aa".as_ptr()), aa);
+                    }
+                }
+                self.paint_size = Some(size);
+            }
+            let mix = second.map_or(0., |(_, alpha)| alpha);
+            if self.glass_uniforms != Some((glass_enabled, mix)) {
+                gl::UseProgram(self.program);
+                gl::Uniform1i(
+                    uniform_location(self.program, c"u_glass_enabled".as_ptr()),
+                    i32::from(glass_enabled),
+                );
+                gl::Uniform1f(uniform_location(self.program, c"u_glass_mix".as_ptr()), mix);
+                self.glass_uniforms = Some((glass_enabled, mix));
+            }
             gl::ActiveTexture(gl::TEXTURE1);
             gl::BindTexture(gl::TEXTURE_2D, glass_a);
             gl::ActiveTexture(gl::TEXTURE2);
             gl::BindTexture(gl::TEXTURE_2D, glass_b);
-            // One drawable pixel in logical units: the paint shader's edge filter width.
-            gl::Uniform1f(
-                uniform_location(self.program, c"u_aa".as_ptr()),
-                1. / scale.max(0.01),
-            );
-            gl::Uniform1i(uniform_location(self.program, c"u_texture".as_ptr()), 0);
             gl::ActiveTexture(gl::TEXTURE0);
             let mut paint_bound = false;
             let mut active_paint = 0;
-            let mut shape_configured = false;
             let mut mesh_state = MeshState::default();
-            let mut current_fade = None;
             let mut blending = true;
             let mut bound_texture = 0;
             // u_app of the paint program (it keeps its value across program switches).
             let mut app_uniform: Option<bool> = None;
             for batch in &self.batches {
-                if current_fade != Some(batch.fade) {
+                if self.applied_fade != batch.fade {
                     // The same cheap alpha mask applies to shapes, textures,
                     // icons and text; the unmasked wallpaper remains beneath.
                     let fade = batch.fade.unwrap_or([0., 0., 0., 0.]);
@@ -1956,7 +2405,7 @@ impl Renderer {
                             fade[3],
                         );
                     }
-                    current_fade = Some(batch.fade);
+                    self.applied_fade = batch.fade;
                     paint_bound = false;
                     mesh_state.program = 0;
                 }
@@ -1979,6 +2428,7 @@ impl Renderer {
                         count,
                         backdrop,
                         opaque,
+                        interior,
                     } => {
                         if *opaque == blending {
                             if *opaque {
@@ -1993,28 +2443,34 @@ impl Renderer {
                             .as_ref()
                             .filter(|_| batch.fade.is_none())
                             .map_or(self.program, |programs| {
-                                programs.select(
+                                let selected = programs.select(
                                     &self.vertices[start * 14..(start + count) * 14],
-                                    *opaque,
+                                    *interior,
                                     backdrop.is_some(),
                                     self.program,
-                                )
+                                );
+                                if *texture == self.white.id
+                                    && (selected == programs.tinted || selected == programs.texture)
+                                {
+                                    programs.flat
+                                } else {
+                                    selected
+                                }
                             });
-                        if !paint_bound || active_paint != program {
-                            gl::UseProgram(program);
-                            active_paint = program;
-                        }
-                        if !shape_configured
+                        // The glass program assumes a baked frame: one backdrop, glass on.
+                        let program = if self.glass_split.is_none()
                             && self
                                 .paint_programs
                                 .as_ref()
-                                .is_some_and(|p| p.shape == program)
+                                .is_some_and(|p| p.glass_rim == program)
                         {
-                            gl::Uniform1f(
-                                uniform_location(program, c"u_aa".as_ptr()),
-                                1. / scale.max(0.01),
-                            );
-                            shape_configured = true;
+                            self.program
+                        } else {
+                            program
+                        };
+                        if !paint_bound || active_paint != program {
+                            gl::UseProgram(program);
+                            active_paint = program;
                         }
                         if !paint_bound && self.paint_array != 0 {
                             // The paint attributes, recorded once: one bind after a mesh.
@@ -2215,14 +2671,31 @@ impl Renderer {
                 );
                 *known = Some(scale);
             }
-            gl::Uniform4f(
-                uniform_location(program, c"u_tint".as_ptr()),
-                tint[0],
-                tint[1],
-                tint[2],
-                tint[3],
-            );
-            gl::DrawArrays(gl::TRIANGLES, 0, mesh.vertices);
+            let previous_tint = if program == self.text_program {
+                &mut state.text_tint
+            } else {
+                &mut state.vector_tint
+            };
+            if *previous_tint != Some(tint) {
+                gl::Uniform4f(
+                    uniform_location(program, c"u_tint".as_ptr()),
+                    tint[0],
+                    tint[1],
+                    tint[2],
+                    tint[3],
+                );
+                *previous_tint = Some(tint);
+            }
+            if mesh.index_buffer == 0 {
+                gl::DrawArrays(gl::TRIANGLES, 0, mesh.vertices);
+            } else {
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    mesh.vertices,
+                    gl::UNSIGNED_SHORT,
+                    std::ptr::null(),
+                );
+            }
         }
     }
 
@@ -2423,6 +2896,13 @@ fn load_font(directory: &Path, id: u16) -> Result<Font, String> {
 impl Drop for Renderer {
     fn drop(&mut self) {
         unsafe {
+            if let Some(baked) = self.glass_interior.take() {
+                gl::DeleteFramebuffers(1, &baked.framebuffer);
+                gl::DeleteTextures(1, &baked.texture);
+            }
+            if self.glass_bake_program != 0 {
+                gl::DeleteProgram(self.glass_bake_program);
+            }
             gl::DeleteBuffers(1, &self.buffer);
             gl::DeleteProgram(self.program);
             gl::DeleteProgram(self.vector_program);
@@ -2722,5 +3202,79 @@ mod shadow_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod paint_program_tests {
+    use super::*;
+
+    #[test]
+    fn core_strips_draw_each_exposed_pixel_once() {
+        let core = [0., 0., 8., 6.];
+        for covered in [[2., 1., 6., 4.], [0., 1., 7., 6.], core] {
+            let visible: Vec<_> = strips(core, covered).collect();
+            for y in 0..6 {
+                for x in 0..8 {
+                    let (x, y) = (x as f32 + 0.5, y as f32 + 0.5);
+                    let contains = |[l, t, r, b]: [f32; 4]| l <= x && x < r && t <= y && y < b;
+                    assert_eq!(
+                        visible.iter().filter(|r| contains(**r)).count(),
+                        usize::from(!contains(covered))
+                    );
+                }
+            }
+        }
+    }
+
+    /// Six paint vertices with `color`, corner radius and border (see quad_part).
+    fn quad(color: Color, radius: f32, border: f32) -> Vec<f32> {
+        let vertex = [
+            0., 0., 0., 0., color[0], color[1], color[2], color[3], 0., 0., 50., 30., radius,
+            border,
+        ];
+        vertex.repeat(6)
+    }
+
+    #[test]
+    fn translucent_interiors_and_app_edges_take_short_shaders() {
+        let programs = PaintPrograms {
+            flat: 10,
+            folded: 11,
+            shadow: 12,
+            texture: 1,
+            tinted: 2,
+            shape: 3,
+            app: 4,
+            app_shape: 5,
+            glass: 6,
+            glass_rim: 7,
+        };
+        let faded = [1., 1., 1., 0.4];
+        // A translucent interior needs no edge distance: texture times colour.
+        assert_eq!(programs.select(&quad(faded, 12., 0.), true, false, 9), 2);
+        assert_eq!(programs.select(&quad([1.; 4], 12., 0.), true, false, 9), 1);
+        assert_eq!(programs.select(&quad(faded, 12., 0.), true, true, 9), 4);
+        // Its rounded edge keeps the coverage, now also for app artwork.
+        assert_eq!(programs.select(&quad(faded, 12., 0.), false, false, 9), 3);
+        assert_eq!(programs.select(&quad(faded, 12., 0.), false, true, 9), 5);
+        // Glass (border -1000) and its merged baked core (-2000) take the glass program
+        // (render() keeps the general one without a bake); a lone core its own program.
+        assert_eq!(
+            programs.select(&quad(faded, 12., -1000.), false, true, 9),
+            7
+        );
+        let mut merged = quad(faded, 12., -1000.);
+        merged.extend(quad(faded, 12., -2000.));
+        assert_eq!(programs.select(&merged, false, false, 9), 7);
+        assert_eq!(
+            programs.select(&quad(faded, 12., -1000.), true, false, 9),
+            6
+        );
+        // Shadow coverage and folded wallpapers use the corresponding paint formulas.
+        assert_eq!(programs.select(&quad(faded, 12., -8.), false, false, 9), 12);
+        assert_eq!(programs.select(&quad(faded, -2., 0.), false, false, 9), 11);
+        // Never delete GL programs without a context.
+        std::mem::forget(programs);
     }
 }
