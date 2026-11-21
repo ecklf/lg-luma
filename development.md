@@ -246,13 +246,15 @@ other apps need manual hardware verification. A desktop-only backend check is av
 The unavailable-backend check runs with
 `SDL_AUDIODRIVER=luma-unavailable cargo test --locked --bin luma unavailable_audio_ -- --ignored --test-threads=1`.
 
-Weather → Widget style persists `weather_style` (`standard`, the default, `no_icon`,
-or `compact`). Home and Settings use the same native layout and painting functions.
-The picker shows all three designs with offline sample weather, in the saved
-temperature unit. Browsing does not change preferences or fetch a forecast. OK/click
+Weather → Widget style persists `weather_style` (`standard`, the default, `compact`,
+or `one_line`). Home and Settings use the same native layout and painting functions.
+The picker shows all three designs with offline sample weather, using the saved
+temperature unit and location visibility. Browsing does not change preferences or fetch a forecast. OK/click
 saves a style and returns to Weather, while Back/Left cancels without changing the style.
-The no-icon layout reclaims the icon column. Compact uses two lines, with a small icon,
-condition and location on the second. Cached-reading warnings and setup/error states
+The Show icon toggle reclaims the icon column when off. Compact uses two lines, with a small icon,
+condition and optional location on the second. All styles and sizes use one “City · Condition”
+detail line when a reading is available, without a separate city heading. With location names
+hidden the line contains only the condition. Cached-reading warnings and setup/error states
 remain visible. `xvfb-run -a pnpm screenshots --weather-styles` captures all designs and
 the settings preview using the native renderer and loopback-only cached sample weather.
 
@@ -366,9 +368,43 @@ Existing greeting, weather, shortcut and input preferences are unchanged. Scroll
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
 with a tighter 48-pixel spacing for Languages and Backgrounds.
 The weekday/date is part of the combined Greeting, not a standalone widget. Weather uses its
-own fixed footprint with a large condition icon, temperature, condition and location. The colored, static
-icons are original Breezy Weather PNGs, including clear/partly-cloudy night variants, bundled locally
-with their LGPL-3.0 license, attribution and source hashes in `assets/weather/`. No icons are fetched at runtime.
+own fixed footprint with a condition icon, temperature, condition and optional location.
+Standard, Compact and One line are independent of Icon style. Show icon uses the same rounded
+On/Off settings row as Show location name. It hides artwork and closes its gap in every layout
+and size without changing the selected icon set.
+Legacy No icon layouts and icon choices migrate to Show icon off with Kuankuan selected.
+The One line style places the icon, temperature and “City · Condition” side by side in both
+sizes, with uniform 26-pixel text and a 32-pixel icon matching Compact's bottom line
+(18-pixel text and a 24-pixel icon when small). Long labels fit with a shared text size.
+Saved-reading warnings stay below the row.
+One line occupies a 2×1 grid footprint (1×1 in small size). Switching back to a taller
+style relocates the widget if necessary, or keeps the previous style if no space is available.
+Kuankuan is the default icon style. Weather → Widget style → Icon style offers Kuankuan first,
+followed by Breezy, Lucide and Kickstand, with offline condition samples in 200-pixel picker rows
+matching the layout previews, with centered 64-pixel icons. Both weather pickers use 20-pixel preview insets with 28-pixel
+inner corner radii to match the rows' 48-pixel outer corners. Selected previews have 28-pixel white
+checkmarks on subtle circular badges, with 24-pixel top/right padding inside the preview.
+Sidebar breadcrumbs show at most the last three levels, retaining the current page and its closest parents. `weather_icons` stores the primary
+choice; additional instances use `icons`. Lucide, Kickstand and Kuankuan compile to vector meshes;
+Breezy retains its original PNGs. No icons are fetched at runtime. Sources, licenses, adaptations
+and mappings are documented in `assets/weather/README.md`; Kuankuan's preferred editable `.ai`
+sources ship alongside its SVGs. `pnpm assets:weather` optionally restores pinned original files.
+Weather → Widget style → Show location name defaults on. Both appearance controls sit above the
+layout previews in Widget style, not on the Weather configuration page. Returning from the icon
+picker restores its row in Widget style. Turning off the location name hides the city in every style and size,
+including loading and error states, without changing the forecast location or cache. The primary
+widget persists `weather_show_location`; additional instances persist their own `show_location`.
+Style previews follow the active widget's setting. Location settings still show the selected city.
+
+System → Attributions opens `assets/attributions.txt` as a read-only text field. Up/Down scrolls
+with the remote, the mouse wheel scrolls only over the field, and Back/Left returns to the System
+button. The viewport and scrollbar stay fixed while text scrolls, with drawing and pointer hits
+clipped to the field. The body includes author credits, source URLs and references to full license
+texts in the package; legal notices retain their original English text. No keyboard, network request
+or preference save is involved. `ATTRIBUTIONS.txt` also ships beside `ASSETS.md` in the package.
+`xvfb-run -a pnpm screenshots --weather-icons` refreshes every weather documentation image:
+all Home variants, setup, layout and icon pickers, public/private/no-icon previews, and Attributions.
+Both weather capture modes share configuration so removed layouts cannot persist in older previews.
 Disabled weather
 is hidden. Enabled weather without a location uses the same large 144px artwork and a prominent setup action.
 Settings lists render behind fixed controls. The drawer grid is clipped below its fixed dock so

@@ -508,6 +508,24 @@ try {
   assert.ok(system.ui_text.includes('Quit app'));
   assert.ok(system.ui_text.includes('Text rendering'));
   assert.ok(system.ui_text.includes('Reset icon cache'));
+  assert.ok(system.ui_text.includes('Attributions'));
+  const attributionPage = `${systemPage},down,down,down,down,down,enter`;
+  const credits = await scenario('attributions', attributionPage);
+  assert.equal(credits.subpage, 'Attributions');
+  assert.equal(credits.focus, 'AttributionText');
+  assert.ok(credits.ui_text.some((text) => text.startsWith('Luma — acknowledgements')));
+  const creditsBottom = await scenario(
+    'attributions-bottom',
+    `${attributionPage},${Array(50).fill('down').join(',')}`,
+    [],
+    360,
+  );
+  assert.ok(creditsBottom.scroll > 0);
+  assert.ok(creditsBottom.ui_text.some((text) => text.startsWith('Thank you')));
+  assert.deepEqual(creditsBottom.preferences, system.preferences);
+  const creditsBack = await scenario('attributions-back', `${attributionPage},down,back`);
+  assert.equal(creditsBack.subpage, null);
+  assert.equal(creditsBack.focus, 'Attributions');
   const resetIcons = await scenario('reset-icon-cache', `${systemPage},down,down,down,enter`);
   assert.deepEqual(resetIcons.focus, { Setting: 9 });
   assert.deepEqual(resetIcons.preferences, system.preferences);

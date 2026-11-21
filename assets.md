@@ -29,6 +29,11 @@
 - `assets/ui-icons/volume.svg` and the synthesized UI cues in `src/feedback.rs`: original Luma
   artwork/audio, MIT. No Apple/tvOS sound recordings are included.
 - `assets/ui-icons/market-up.svg` and `market-down.svg`: original Luma direction arrows, MIT.
+- Weather icon choices retain separate asset licenses: Breezy Weather (LGPL-3.0-only with
+  upstream additional terms), Lucide (ISC/MIT), KickstandApps WeatherIcons (SIL OFL 1.1), and
+  kuankuan2007/weather-icon (MPL-2.0). See `assets/weather/README.md` for pinned sources,
+  adaptations, copyright notices and the included editable source artwork. No Icons8 assets are bundled.
+- `assets/attributions.txt` is the offline, read-only text shown in System → Attributions.
 
 The bundled icon/logo SVG sources are compiled into derived `.lvec` triangles with the same
 source licenses. Apple TV, Disney+, Prime Video and Das Erste retain the white display treatment.
