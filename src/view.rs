@@ -299,7 +299,7 @@ impl Scene {
                 }
                 Draw::Image(path, rect, radius, contain) => {
                     *draw = Draw::TintedImage(
-                        path.clone(),
+                        std::mem::take(path),
                         *rect,
                         *radius,
                         *contain,
