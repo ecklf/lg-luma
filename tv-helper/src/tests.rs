@@ -102,9 +102,6 @@ impl Fixture {
         );
         f.put(&format!("{DIR}/home.sh"), b"#!/bin/sh\n");
         f.put(&format!("{DIR}/splash.png"), b"default");
-        for name in ["dunes", "forest", "prism"] {
-            f.put(&format!("{DIR}/splash/{name}.png"), name.as_bytes());
-        }
         f
     }
     fn p(&self, path: &str) -> PathBuf {
@@ -734,21 +731,21 @@ fn invalid_ids_and_unrelated_manifests_cannot_select_private_artwork() {
 }
 
 #[test]
-fn splash_updates_tile_and_only_the_enabled_own_manifest_stage() {
+fn static_splash_ignores_wallpaper_and_legacy_splash_preferences() {
     let f = Fixture::new();
     f.put_json(
-        "/var/lib/luma-home/state.json",
-        json!({"enabled":true,"method":"manifest","appDir":DIR}),
+        &format!("/media/developer/{APP}/preferences.json"),
+        json!({"background":"prism","splash_background":"forest"}),
     );
     f.put("/var/lib/luma-home/app/splash.png", b"old");
-    files::sync_splash(&f, Path::new(DIR), "forest").unwrap();
-    assert_eq!(f.read(&format!("{DIR}/splash.png")), b"forest");
-    assert_eq!(f.read("/var/lib/luma-home/app/splash.png"), b"forest");
+    files::stage_splash(&f, Path::new(DIR)).unwrap();
+    assert_eq!(f.read(&format!("{DIR}/splash.png")), b"default");
+    assert_eq!(f.read("/var/lib/luma-home/app/splash.png"), b"default");
     let before = fs::metadata(f.p(&format!("{DIR}/splash.png")))
         .unwrap()
         .modified()
         .unwrap();
-    files::sync_splash(&f, Path::new(DIR), "forest").unwrap();
+    files::stage_splash(&f, Path::new(DIR)).unwrap();
     assert_eq!(
         fs::metadata(f.p(&format!("{DIR}/splash.png")))
             .unwrap()
@@ -758,27 +755,13 @@ fn splash_updates_tile_and_only_the_enabled_own_manifest_stage() {
     );
 }
 #[test]
-fn executable_other_or_disabled_stages_are_never_written() {
-    for c in [
-        json!({"enabled":true,"method":"executable","appDir":DIR}),
-        json!({"enabled":false,"appDir":DIR}),
-        json!({"enabled":true,"appDir":"/other/install"}),
-    ] {
-        let f = Fixture::new();
-        f.put_json("/var/lib/luma-home/state.json", c);
-        f.put("/var/lib/luma-home/app/splash.png", b"old");
-        files::sync_splash(&f, Path::new(DIR), "prism").unwrap();
-        assert_eq!(f.read("/var/lib/luma-home/app/splash.png"), b"old");
-    }
-}
-#[test]
-fn missing_or_invalid_splash_sources_preserve_previous_images() {
+fn missing_or_invalid_static_splash_sources_preserve_staged_image() {
     let f = Fixture::new();
-    for background in ["../forest", "bad/name", "missing"] {
-        assert!(files::sync_splash(&f, Path::new(DIR), background).is_err());
-        assert_eq!(f.read(&format!("{DIR}/splash.png")), b"default");
-    }
-    assert!(files::sync_splash(&f, Path::new("/tmp/com.ecklf.luma"), "forest").is_err());
+    f.put("/var/lib/luma-home/app/splash.png", b"old");
+    assert!(files::stage_splash(&f, Path::new("/tmp/com.ecklf.luma")).is_err());
+    fs::remove_file(f.p(&format!("{DIR}/splash.png"))).unwrap();
+    assert!(files::stage_splash(&f, Path::new(DIR)).is_err());
+    assert_eq!(f.read("/var/lib/luma-home/app/splash.png"), b"old");
 }
 #[test]
 fn failed_atomic_write_cleans_its_private_temporary_file() {
@@ -794,24 +777,24 @@ fn failed_atomic_write_cleans_its_private_temporary_file() {
     }));
 }
 #[test]
-fn stage_uses_persistent_selection_and_retains_manual_background_over_rotation() {
+fn stage_uses_static_splash_without_per_wallpaper_images() {
     let f = Fixture::new();
     f.put_json(
         &format!("/media/developer/{APP}/preferences.json"),
         json!({"background":"prism","splash_background":"forest"}),
     );
     files::stage_splash(&f, Path::new(DIR)).unwrap();
-    assert_eq!(f.read("/var/lib/luma-home/app/splash.png"), b"forest");
+    assert_eq!(f.read("/var/lib/luma-home/app/splash.png"), b"default");
 }
 #[test]
-fn null_manual_selection_falls_back_to_saved_background() {
+fn null_legacy_splash_selection_does_not_change_static_splash() {
     let f = Fixture::new();
     f.put_json(
         &format!("/media/developer/{APP}/preferences.json"),
         json!({"background":"prism","splash_background":null}),
     );
     files::stage_splash(&f, Path::new(DIR)).unwrap();
-    assert_eq!(f.read("/var/lib/luma-home/app/splash.png"), b"prism");
+    assert_eq!(f.read("/var/lib/luma-home/app/splash.png"), b"default");
 }
 #[test]
 fn malformed_missing_and_unavailable_preferences_use_package_splash() {
@@ -827,10 +810,7 @@ fn malformed_missing_and_unavailable_preferences_use_package_splash() {
             preferences,
         );
         files::stage_splash(&f, Path::new(DIR)).unwrap();
-        assert!(matches!(
-            f.read("/var/lib/luma-home/app/splash.png").as_slice(),
-            b"dunes" | b"default"
-        ));
+        assert_eq!(f.read("/var/lib/luma-home/app/splash.png"), b"default");
     }
 }
 #[test]
@@ -843,7 +823,7 @@ fn symlink_storage_directories_are_not_used_as_root_preferences() {
         json!({"background":"forest"}),
     );
     files::stage_splash(&f, Path::new(DIR)).unwrap();
-    assert_eq!(f.read("/var/lib/luma-home/app/splash.png"), b"forest");
+    assert_eq!(f.read("/var/lib/luma-home/app/splash.png"), b"default");
 }
 
 #[test]
@@ -1004,7 +984,7 @@ fn accepted_close_waits_boundedly_and_a_close_race_can_succeed() {
     home::dispatch(&f, "enable", Some(DIR), None).unwrap();
 }
 #[test]
-fn developer_and_production_splash_precedence_matches_native_storage() {
+fn developer_and_production_staging_use_their_own_static_splash() {
     let f = Fixture::new();
     f.put_json(
         &format!("/media/developer/{APP}/preferences.json"),
@@ -1015,14 +995,21 @@ fn developer_and_production_splash_precedence_matches_native_storage() {
         json!({"background":"prism"}),
     );
     files::stage_splash(&f, Path::new(DIR)).unwrap();
-    assert_eq!(f.read("/var/lib/luma-home/app/splash.png"), b"forest");
+    assert_eq!(f.read("/var/lib/luma-home/app/splash.png"), b"default");
     let production = format!("/media/cryptofs/apps/usr/palm/applications/{APP}");
-    f.put(&format!("{production}/splash/prism.png"), b"prism");
+    f.put_json(
+        &format!("{production}/appinfo.json"),
+        json!({"id":APP,"type":"native","main":"luma"}),
+    );
+    f.put(&format!("{production}/splash.png"), b"production-logo");
     files::stage_splash(&f, Path::new(&production)).unwrap();
-    assert_eq!(f.read("/var/lib/luma-home/app/splash.png"), b"prism");
+    assert_eq!(
+        f.read("/var/lib/luma-home/app/splash.png"),
+        b"production-logo"
+    );
 }
 #[test]
-fn persistent_preferences_win_over_package_local_migration_and_active_stages_refresh() {
+fn active_home_stages_refresh_static_splash_from_package_not_preferences() {
     let f = Fixture::new();
     f.put("/etc/starfish-release", b"Rockhopper release 11.2.0");
     f.put_json(
@@ -1036,16 +1023,17 @@ fn persistent_preferences_win_over_package_local_migration_and_active_stages_ref
     home::dispatch(&f, "enable", Some(DIR), None).unwrap();
     assert_eq!(
         f.read("/usr/palm/applications/com.webos.app.home/splash.png"),
-        b"forest"
+        b"default"
     );
     f.put_json(
         &format!("/media/developer/{APP}/preferences.json"),
         json!({"background":"prism"}),
     );
+    f.put(&format!("{DIR}/splash.png"), b"updated-logo");
     home::dispatch(&f, "apply", None, None).unwrap();
     assert_eq!(
         f.read("/usr/palm/applications/com.webos.app.home/splash.png"),
-        b"prism"
+        b"updated-logo"
     );
 }
 const LS2_SERVICE: &str = "/var/luna-service2/services.d/com.webos.service.lumahome.service";

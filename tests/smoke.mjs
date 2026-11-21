@@ -114,6 +114,70 @@ try {
   const gles = await scenario('glass-gles', 'home', [], 90, { LUMA_GLES: '1' });
   assert.match(gles.render.graphics.version, /OpenGL ES/);
   assert.equal(gles.render.capture.glass_backdrop_sampling, true);
+  // #350: preserve bright glass and verify actual dark glyphs, not just scene colors.
+  await fs.writeFile(preferences, JSON.stringify({ language: 'it' }));
+  for (const [name, script, label, environment] of [
+    ['settings-focus', 'settings', { left: 184, top: 188, width: 330, height: 25 }, {}],
+    [
+      'settings-focus-gles',
+      'settings',
+      { left: 184, top: 188, width: 330, height: 25 },
+      { LUMA_GLES: '1' },
+    ],
+    [
+      'settings-row-focus-fallback',
+      'settings,right',
+      { left: 704, top: 186, width: 300, height: 32 },
+      { LUMA_GLASS: '0' },
+    ],
+    [
+      'corner-focus-gles',
+      'home,up,right,right,enter',
+      { left: 1564, top: 154, width: 252, height: 32 },
+      { LUMA_GLES: '1' },
+    ],
+    [
+      'corner-focus-analytic-gles',
+      'home,up,right,right,enter',
+      { left: 1564, top: 154, width: 252, height: 32 },
+      { LUMA_GLES: '1', LUMA_MSAA: '0' },
+    ],
+    [
+      'corner-device-focus-fallback',
+      'home,up,right,right,enter,down',
+      { left: 1564, top: 238, width: 252, height: 32 },
+      { LUMA_GLASS: '0' },
+    ],
+    [
+      'wallpaper-action-focus-gles',
+      `${backgroundsPage},enter`,
+      { left: 1072, top: 292, width: 350, height: 28 },
+      { LUMA_GLES: '1' },
+    ],
+  ]) {
+    const focused = await scenario(name, script, [], 90, environment);
+    assert.ok(
+      focused.ui_text.includes(name.startsWith('corner-') ? 'Impostazioni launcher' : 'Generale'),
+    );
+    const { data } = await sharp(path.join(out, `${name}.png`))
+      .extract(label)
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    let dark = 0;
+    let light = 0;
+    for (let offset = 0; offset < data.length; offset += 3) {
+      const channels = data.subarray(offset, offset + 3);
+      if (channels.every((value) => value < 100)) dark++;
+      if (channels.every((value) => value > 180)) light++;
+    }
+    assert.ok(
+      light > (label.width * label.height) / 2,
+      `${name}: glass highlight must stay bright`,
+    );
+    assert.ok(dark > 100, `${name}: focused label must have visible dark glyph interiors`);
+  }
+  await fs.writeFile(preferences, '{}');
   const drawer = await scenario('drawer', 'home,down');
   assert.equal(drawer.page, 'Apps');
   const drawerClosed = await scenario('drawer-closed', 'home,right,down,back');
@@ -280,14 +344,11 @@ try {
     assert.ok(allApps.apps.includes(id));
   }
   const settings = await scenario('settings', `${backgroundsPage},down,enter,enter`);
-  assert.equal(settings.preferences.background, 'forest');
+  assert.equal(settings.preferences.background, 'midnight');
   const saved = await scenario('saved', 'home,hold,right,back');
-  assert.equal(saved.preferences.background, 'forest');
+  assert.equal(saved.preferences.background, 'midnight');
   assert.deepEqual(saved.preferences.favorites.slice(0, 2), ['youtube.leanback.v4', 'netflix']);
-  const upload = await scenario(
-    'wallpaper-upload',
-    `${backgroundsPage},up,up,up,enter,await-upload`,
-  );
+  const upload = await scenario('wallpaper-upload', `${backgroundsPage},up,enter,await-upload`);
   assert.equal(upload.modal, true);
   assert.equal(upload.focus, 'CloseDialog');
   assert.ok(upload.ui_text.includes('Upload'));
@@ -301,7 +362,7 @@ try {
   );
   const uploadClosed = await scenario(
     'wallpaper-upload-closed',
-    `${backgroundsPage},up,up,up,enter,await-upload,back`,
+    `${backgroundsPage},up,enter,await-upload,back`,
   );
   assert.equal(uploadClosed.modal, false);
   assert.equal(uploadClosed.focus, 'UploadWallpaper');
@@ -315,17 +376,17 @@ try {
     .jpeg()
     .toFile(path.join(customDirectory, 'thumbnail.jpg'));
   await fs.writeFile(path.join(customDirectory, 'metadata.json'), JSON.stringify({ id: customId }));
-  const custom = await scenario('wallpaper-custom', `${backgroundsPage},down,enter,enter`);
+  const custom = await scenario('wallpaper-custom', `${backgroundsPage},right,enter,enter`);
   assert.equal(custom.preferences.background, customId);
   assert.equal(custom.modal, false);
-  assert.deepEqual(custom.focus, { Background: 9 });
+  assert.deepEqual(custom.focus, { Background: 1 });
   const customRestored = await scenario('wallpaper-custom-restored', 'home,down');
   assert.equal(customRestored.preferences.background, customId);
   const bundledRestored = await scenario(
     'wallpaper-bundled-restored',
-    `${backgroundsPage},up,enter,enter`,
+    `${backgroundsPage},left,enter,enter`,
   );
-  assert.equal(bundledRestored.preferences.background, 'forest');
+  assert.equal(bundledRestored.preferences.background, 'midnight');
   const clock = await scenario('clock', 'settings,click:900:200');
   assert.equal(clock.subpage, 'Clock');
   assert.equal(clock.focus, 'ClockFormat');
@@ -381,7 +442,7 @@ try {
     .raw()
     .toBuffer();
   assert.notDeepEqual(high, low, '4K vector text must use the drawable pixel scale');
-  const hasWallpaper = await fs.access(path.join(out, 'assets/wallpapers/forest@2x.jpg')).then(
+  const hasWallpaper = await fs.access(path.join(out, 'assets/wallpapers/midnight@2x.jpg')).then(
     () => true,
     () => false,
   );
@@ -447,6 +508,24 @@ try {
   assert.ok(system.ui_text.includes('Quit app'));
   assert.ok(system.ui_text.includes('Text rendering'));
   assert.ok(system.ui_text.includes('Reset icon cache'));
+  assert.ok(system.ui_text.includes('Attributions'));
+  const attributionPage = `${systemPage},down,down,down,down,down,down,enter`;
+  const credits = await scenario('attributions', attributionPage);
+  assert.equal(credits.subpage, 'Attributions');
+  assert.equal(credits.focus, 'AttributionText');
+  assert.ok(credits.ui_text.some((text) => text.startsWith('Luma — acknowledgements')));
+  const creditsBottom = await scenario(
+    'attributions-bottom',
+    `${attributionPage},${Array(50).fill('down').join(',')}`,
+    [],
+    360,
+  );
+  assert.ok(creditsBottom.scroll > 0);
+  assert.ok(creditsBottom.ui_text.some((text) => text.startsWith('Thank you')));
+  assert.deepEqual(creditsBottom.preferences, system.preferences);
+  const creditsBack = await scenario('attributions-back', `${attributionPage},down,back`);
+  assert.equal(creditsBack.subpage, null);
+  assert.equal(creditsBack.focus, 'Attributions');
   const resetIcons = await scenario('reset-icon-cache', `${systemPage},down,down,down,enter`);
   assert.deepEqual(resetIcons.focus, { Setting: 9 });
   assert.deepEqual(resetIcons.preferences, system.preferences);
@@ -455,7 +534,7 @@ try {
   // The opt-in only changes the saved preference; desktop runs never contact the repository.
   const homebrewPath = `${systemPage},down,down,down,down,enter`;
   const homebrewOn = await scenario('homebrew-updates-on', homebrewPath);
-  assert.deepEqual(homebrewOn.focus, { Setting: 16 });
+  assert.deepEqual(homebrewOn.focus, { Setting: 20 });
   assert.equal(homebrewOn.preferences.homebrew_updates, true);
   const homebrewOff = await scenario('homebrew-updates-off', homebrewPath);
   assert.equal(homebrewOff.preferences.homebrew_updates, false);
@@ -599,7 +678,7 @@ try {
   await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
   const gradientDisabled = await scenario(
     'wallpaper-gradient-disabled',
-    `${backgroundsPage},up,up,right,enter`,
+    `${backgroundsPage},up,right,enter`,
   );
   assert.equal(gradientDisabled.focus, 'WallpaperGradient');
   assert.equal(gradientDisabled.preferences.wallpaper_gradient, false);
@@ -608,12 +687,12 @@ try {
   assert.equal(gradientRestored.preferences.wallpaper_gradient, false);
   const gradientEnabled = await scenario(
     'wallpaper-gradient-enabled',
-    `${backgroundsPage},up,up,right,enter`,
+    `${backgroundsPage},up,right,enter`,
   );
   assert.equal(gradientEnabled.preferences.wallpaper_gradient, true);
   const cycleEnabled = await scenario(
     'wallpaper-cycle-enabled',
-    `${backgroundsPage},up,up,right,right,enter`,
+    `${backgroundsPage},up,right,right,enter`,
   );
   assert.equal(cycleEnabled.subpage, null);
   assert.equal(cycleEnabled.focus, 'WallpaperCycle');
@@ -622,12 +701,12 @@ try {
   const cycledAfterRestart = await scenario('wallpaper-cycle-restart', 'down');
   assert.equal(
     cycledAfterRestart.preferences.background,
-    'san-francisco',
+    customId,
     'enabled rotation advances to the next wallpaper when Luma restarts',
   );
   const cycleDisabled = await scenario(
     'wallpaper-cycle-disabled',
-    `${backgroundsPage},up,up,right,right,enter`,
+    `${backgroundsPage},up,right,right,enter`,
   );
   assert.equal(cycleDisabled.preferences.wallpaper_cycle, false);
   assert.ok(cycleDisabled.ui_text.includes('Rotation'));

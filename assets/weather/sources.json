@@ -1,0 +1,110 @@
+{
+  "kickstand/sun.svg": {
+    "url": "https://raw.githubusercontent.com/kickstandapps/WeatherIcons/289e1fb1804496494addf945b9f0837999fde6f9/SVG%20Files/Sun.svg",
+    "sha256": "958d42aee389cbd3bab8d382c7dbca319af4500ef9e87ecdadaaa85cc5ca53d8"
+  },
+  "kickstand/moon.svg": {
+    "url": "https://raw.githubusercontent.com/kickstandapps/WeatherIcons/289e1fb1804496494addf945b9f0837999fde6f9/SVG%20Files/Moon.svg",
+    "sha256": "78065bcaf1193ccc483d0cc065b69b8585f0227477d4de3efd47f406933d729b"
+  },
+  "kickstand/partly-cloudy.svg": {
+    "url": "https://raw.githubusercontent.com/kickstandapps/WeatherIcons/289e1fb1804496494addf945b9f0837999fde6f9/SVG%20Files/PartlySunny.svg",
+    "sha256": "b0371d8f74fdba1b629fa546e2fc58d4511d26c6df9721415701763a66986b4d"
+  },
+  "kickstand/partly-cloudy-night.svg": {
+    "url": "https://raw.githubusercontent.com/kickstandapps/WeatherIcons/289e1fb1804496494addf945b9f0837999fde6f9/SVG%20Files/PartlyMoon.svg",
+    "sha256": "5dd8ddd3a16312847e7ce6724f24adc876ef81426715788f630693c75b8d579e"
+  },
+  "kickstand/cloud.svg": {
+    "url": "https://raw.githubusercontent.com/kickstandapps/WeatherIcons/289e1fb1804496494addf945b9f0837999fde6f9/SVG%20Files/Cloud.svg",
+    "sha256": "57ace0b465bebcc8758cc7f6c742ffec02afffab358506a45d3efc4eb23fc7c2"
+  },
+  "kickstand/fog.svg": {
+    "url": "https://raw.githubusercontent.com/kickstandapps/WeatherIcons/289e1fb1804496494addf945b9f0837999fde6f9/SVG%20Files/Haze.svg",
+    "sha256": "fe2afeb6486f74358cf5e874da62132d967dfb33b19ab27dcef0c3338e3bb08f"
+  },
+  "kickstand/rain.svg": {
+    "url": "https://raw.githubusercontent.com/kickstandapps/WeatherIcons/289e1fb1804496494addf945b9f0837999fde6f9/SVG%20Files/Rain.svg",
+    "sha256": "9865a0fb3a504f8522f86340a349c55ed1c9f4d1044e4c4058bb6ed74dfac0f5"
+  },
+  "kickstand/snow.svg": {
+    "url": "https://raw.githubusercontent.com/kickstandapps/WeatherIcons/289e1fb1804496494addf945b9f0837999fde6f9/SVG%20Files/Snow.svg",
+    "sha256": "f50b65b7c96c986a9d4513cbaa62cafe1de982f763f60556b433df6eb6059539"
+  },
+  "kickstand/storm.svg": {
+    "url": "https://raw.githubusercontent.com/kickstandapps/WeatherIcons/289e1fb1804496494addf945b9f0837999fde6f9/SVG%20Files/Storm.svg",
+    "sha256": "49513754c8c5a6e9597025b66ba9ee58cc6f6d8cb52f0c6e90a242c7cc7fdffe"
+  },
+  "kickstand/LICENSE": {
+    "url": "https://raw.githubusercontent.com/kickstandapps/WeatherIcons/289e1fb1804496494addf945b9f0837999fde6f9/License.txt",
+    "sha256": "96d3cb2571ffbd6b8a7495455277043d8b14a8a0a5c7420b573709b746ba2284"
+  },
+  "kuankuan/sun.svg": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/svg/%E6%99%B4.svg",
+    "sha256": "0c0bcf09f0ef1b4539d41e0fbddd8958168b93487e317145465e070a561d778b"
+  },
+  "kuankuan/source/sun.ai": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/ai/%E6%99%B4.ai",
+    "sha256": "3ca6f4654dee8bc3b9d23708f3cb3933507c28efb178de385330159c4feafffb"
+  },
+  "kuankuan/partly-cloudy.svg": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/svg/%E5%A4%9A%E4%BA%91.svg",
+    "sha256": "81cc67ad87fad34f7531311b2ae21392de2a5c35cff9633a9ceb51e0bf8f1659"
+  },
+  "kuankuan/source/partly-cloudy.ai": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/ai/%E5%A4%9A%E4%BA%91.ai",
+    "sha256": "253f3fdfac49c987165adf8b71f8af6e840aa08b05be1caffbb449e350ab2aab"
+  },
+  "kuankuan/cloud.svg": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/svg/%E9%98%B4.svg",
+    "sha256": "a118416a1fcc969e787ef0d9536678b862fb65643997bac3859f9c273bdcddaf"
+  },
+  "kuankuan/source/cloud.ai": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/ai/%E9%98%B4.ai",
+    "sha256": "8ede73860deb74d89a133d8719cd158242ff050163fa08780c390b51cd4a7f1a"
+  },
+  "kuankuan/fog.svg": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/svg/%E9%9B%BE.svg",
+    "sha256": "9fb227fa283280956b19b0a2b6388168e46b59c308f93196441e1d9effbb2098"
+  },
+  "kuankuan/source/fog.ai": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/ai/%E9%9B%BE.ai",
+    "sha256": "cde13827a07ddc7190520cea8c4b7fe57253300087bcca8d35322fb6d3a2c7de"
+  },
+  "kuankuan/drizzle.svg": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/svg/%E6%AF%9B%E6%AF%9B%E9%9B%A8-%E7%BB%86%E9%9B%A8.svg",
+    "sha256": "4b99e9bd63cea9659e3c982825050802024e35b3bc4a74366ab04d3f31f5a739"
+  },
+  "kuankuan/source/drizzle.ai": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/ai/%E6%AF%9B%E6%AF%9B%E9%9B%A8-%E7%BB%86%E9%9B%A8.ai",
+    "sha256": "5b18673865457093ee3a3aef45e7e2c2332880825e00f0841f344f55239ae889"
+  },
+  "kuankuan/rain.svg": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/svg/%E9%9B%A8.svg",
+    "sha256": "3e9937166b122622863f2c6104405f82345fc74ec616cb8892c19f3b2823fa43"
+  },
+  "kuankuan/source/rain.ai": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/ai/%E9%9B%A8.ai",
+    "sha256": "6fb7dd00ce7ad1723a7ee13547a689e19f972572205dd6b2322f89f7122f9acd"
+  },
+  "kuankuan/snow.svg": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/svg/%E9%9B%AA.svg",
+    "sha256": "7a1fe2f41ef3f81d07b19713f5a78d68d1b6ef836dfa1c935e0fc3315a7f1fba"
+  },
+  "kuankuan/source/snow.ai": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/ai/%E9%9B%AA.ai",
+    "sha256": "50641df00078ca89acb1ee5cdaa4ab42965dd4d0d2c713a531aa8237d70f2886"
+  },
+  "kuankuan/storm.svg": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/svg/%E9%9B%B7%E9%98%B5%E9%9B%A8.svg",
+    "sha256": "15d289ae2fcb9ebd22820684701064c83fa354d6748459322790ec3326c5d13f"
+  },
+  "kuankuan/source/storm.ai": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/ai/%E9%9B%B7%E9%98%B5%E9%9B%A8.ai",
+    "sha256": "84898c30d7918ce55486990a3b737c5b8389ae62358733cef5951934c0c70f8a"
+  },
+  "kuankuan/LICENSE": {
+    "url": "https://raw.githubusercontent.com/kuankuan2007/weather-icon/53a7a6459a7d0192f8381b604be8f02a0f674d84/LICENSE",
+    "sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5"
+  }
+}

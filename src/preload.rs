@@ -5,7 +5,7 @@
 //! was not used, and workers still decoding discard their results.
 use image::RgbaImage;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 enum Slot {
@@ -36,11 +36,133 @@ pub enum Kind {
     GlassAtlas,
 }
 
-fn decode(path: &str, kind: Kind) -> Option<RgbaImage> {
+fn decode_source(path: &str, kind: Kind) -> Option<RgbaImage> {
     match kind {
         Kind::Image => image::open(path).ok().map(image::DynamicImage::into_rgba8),
         Kind::GlassAtlas => crate::glass_backdrop::load(Path::new(path)).ok(),
     }
+}
+
+/// Where large decoded images are kept between launches (webOS only).
+static IMAGE_CACHE: OnceLock<PathBuf> = OnceLock::new();
+/// Images from this many pixels on are cached: wallpapers and glass atlases, not icons.
+const CACHED_PIXELS: u64 = 512 * 512;
+const CACHED_FILES: usize = 4;
+/// Enough for a 4K wallpaper, without trusting cache headers to bound allocations.
+const CACHED_BYTES: u64 = 32 * 1024 * 1024;
+const CACHED_DIMENSION: u32 = 4096;
+const MAGIC: &[u8; 8] = b"LUMARGBA";
+
+pub fn set_image_cache(directory: PathBuf) {
+    let _ = IMAGE_CACHE.set(directory);
+}
+
+/// The cache file for this exact source file: its path, size and modification time.
+fn cache_file(directory: &Path, path: &str, kind: Kind) -> Option<PathBuf> {
+    use std::hash::{Hash, Hasher};
+    let metadata = std::fs::metadata(path).ok()?;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    (path, metadata.len(), matches!(kind, Kind::GlassAtlas)).hash(&mut hasher);
+    metadata
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_nanos()
+        .hash(&mut hasher);
+    Some(directory.join(format!("{:016x}.rgba", hasher.finish())))
+}
+
+fn cached_image_bytes(width: u32, height: u32, kind: Kind) -> Option<usize> {
+    if width == 0
+        || height == 0
+        || width > CACHED_DIMENSION
+        || height > CACHED_DIMENSION
+        || (matches!(kind, Kind::GlassAtlas)
+            && (width != crate::glass_backdrop::WIDTH
+                || height != crate::glass_backdrop::ATLAS_HEIGHT))
+    {
+        return None;
+    }
+    let bytes = u64::from(width)
+        .checked_mul(u64::from(height))?
+        .checked_mul(4)?;
+    (bytes <= CACHED_BYTES)
+        .then(|| usize::try_from(bytes).ok())
+        .flatten()
+}
+
+fn read_cached(file: &Path, kind: Kind) -> Option<RgbaImage> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(file).ok()?;
+    let mut header = [0; 16];
+    file.read_exact(&mut header).ok()?;
+    if &header[..8] != MAGIC {
+        return None;
+    }
+    let width = u32::from_le_bytes(header[8..12].try_into().ok()?);
+    let height = u32::from_le_bytes(header[12..16].try_into().ok()?);
+    let length = cached_image_bytes(width, height, kind)?;
+    if file.metadata().ok()?.len() != 16 + length as u64 {
+        return None;
+    }
+    let mut bytes = vec![0; length];
+    file.read_exact(&mut bytes).ok()?;
+    RgbaImage::from_raw(width, height, bytes)
+}
+
+fn write_cached(directory: &Path, file: &Path, image: &RgbaImage) {
+    if std::fs::create_dir_all(directory).is_err() {
+        return;
+    }
+    let mut bytes = Vec::with_capacity(16 + image.as_raw().len());
+    bytes.extend_from_slice(MAGIC);
+    bytes.extend_from_slice(&image.width().to_le_bytes());
+    bytes.extend_from_slice(&image.height().to_le_bytes());
+    bytes.extend_from_slice(image.as_raw());
+    // Write beside, then rename: a crash never leaves a truncated image in place.
+    let partial = file.with_extension("partial");
+    if std::fs::write(&partial, bytes).is_err() || std::fs::rename(&partial, file).is_err() {
+        let _ = std::fs::remove_file(&partial);
+        return;
+    }
+    // Keep the newest few: older wallpapers' entries are not needed again soon.
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return;
+    };
+    let mut files: Vec<_> = entries
+        .flatten()
+        .filter(|entry| entry.path().extension().is_some_and(|e| e == "rgba"))
+        .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
+        .collect();
+    files.sort();
+    let excess = files.len().saturating_sub(CACHED_FILES);
+    for (_, path) in files.into_iter().take(excess) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// Decodes an image, reusing a cached decode of large images when the file is unchanged.
+fn decode(path: &str, kind: Kind) -> Option<RgbaImage> {
+    let Some(directory) = IMAGE_CACHE.get() else {
+        return decode_source(path, kind);
+    };
+    decode_cached(directory, path, kind)
+}
+
+fn decode_cached(directory: &Path, path: &str, kind: Kind) -> Option<RgbaImage> {
+    let file = cache_file(directory, path, kind);
+    if let Some(image) = file.as_deref().and_then(|file| read_cached(file, kind)) {
+        return Some(image);
+    }
+    let image = decode_source(path, kind)?;
+    if let Some(file) = file
+        && u64::from(image.width()) * u64::from(image.height()) >= CACHED_PIXELS
+        && cached_image_bytes(image.width(), image.height(), kind).is_some()
+    {
+        write_cached(directory, &file, &image);
+    }
+    Some(image)
 }
 
 #[derive(Default)]
@@ -288,6 +410,79 @@ mod tests {
         assert!(preload.take(&path).is_none(), "taken images are not kept");
         assert!(matches!(preload.take(&missing), Some(None)));
         assert!(preload.take("never-requested.png").is_none());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn large_decodes_are_cached_by_file_identity_and_damaged_entries_are_ignored() {
+        let dir = temp_dir("cache");
+        let source = dir.join("wide.png");
+        let image = RgbaImage::from_fn(600, 500, |x, y| image::Rgba([x as u8, y as u8, 7, 255]));
+        image.save(&source).unwrap();
+        let path = source.to_string_lossy().into_owned();
+        let cache = dir.join("image-cache");
+        let file = cache_file(&cache, &path, Kind::Image).unwrap();
+        write_cached(&cache, &file, &image);
+        assert_eq!(read_cached(&file, Kind::Image).unwrap(), image);
+        // A different kind or a changed source file has another entry.
+        assert_ne!(cache_file(&cache, &path, Kind::GlassAtlas).unwrap(), file);
+        std::fs::write(&file, b"LUMARGBA\x01\0\0\0\x01\0\0\0").unwrap();
+        assert!(
+            read_cached(&file, Kind::Image).is_none(),
+            "truncated data is not an image"
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn invalid_cache_headers_fall_back_to_source_and_are_replaced() {
+        let dir = temp_dir("invalid-cache-headers");
+        let source = dir.join("source.png");
+        let image = RgbaImage::from_pixel(600, 500, image::Rgba([1, 2, 3, 255]));
+        image.save(&source).unwrap();
+        let path = source.to_string_lossy();
+        let cache = dir.join("image-cache");
+        std::fs::create_dir_all(&cache).unwrap();
+        let file = cache_file(&cache, &path, Kind::Image).unwrap();
+        for (width, height) in [(0u32, 0u32), (u32::MAX, u32::MAX), (4096, 4096), (1, 8192)] {
+            let mut bytes = MAGIC.to_vec();
+            bytes.extend_from_slice(&width.to_le_bytes());
+            bytes.extend_from_slice(&height.to_le_bytes());
+            std::fs::write(&file, bytes).unwrap();
+            assert!(read_cached(&file, Kind::Image).is_none());
+            assert_eq!(decode_cached(&cache, &path, Kind::Image).unwrap(), image);
+            assert_eq!(read_cached(&file, Kind::Image).unwrap(), image);
+        }
+        assert_eq!(
+            cached_image_bytes(3840, 2160, Kind::Image),
+            Some(33_177_600)
+        );
+        assert!(cached_image_bytes(1, 8192, Kind::Image).is_none());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn cached_glass_atlases_keep_source_dimension_validation() {
+        let dir = temp_dir("invalid-atlas-cache");
+        let source = dir.join("source.glass.png");
+        let image = RgbaImage::from_pixel(
+            crate::glass_backdrop::WIDTH,
+            crate::glass_backdrop::ATLAS_HEIGHT,
+            image::Rgba([1, 2, 3, 255]),
+        );
+        image.save(&source).unwrap();
+        let path = source.to_string_lossy();
+        let cache = dir.join("image-cache");
+        let file = cache_file(&cache, &path, Kind::GlassAtlas).unwrap();
+        // Equal byte count is not enough: each atlas half has a fixed sampling layout.
+        let wrong = RgbaImage::from_pixel(1920, 540, image::Rgba([4, 5, 6, 255]));
+        write_cached(&cache, &file, &wrong);
+        assert!(read_cached(&file, Kind::GlassAtlas).is_none());
+        assert_eq!(
+            decode_cached(&cache, &path, Kind::GlassAtlas).unwrap(),
+            image
+        );
+        assert_eq!(read_cached(&file, Kind::GlassAtlas).unwrap(), image);
         std::fs::remove_dir_all(dir).unwrap();
     }
 

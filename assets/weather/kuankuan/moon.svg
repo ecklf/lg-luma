@@ -1,0 +1,5 @@
+<!-- Original Luma night companion for Kuankuan's gradient weather set, MIT. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <defs><linearGradient id="moon" x1="120" y1="80" x2="380" y2="420" gradientUnits="userSpaceOnUse"><stop stop-color="#edf3ff"/><stop offset="1" stop-color="#7c95c6"/></linearGradient></defs>
+  <path fill="url(#moon)" d="M294 48A205 205 0 1 0 451 307 170 170 0 0 1 294 48Z"/>
+</svg>

@@ -4,10 +4,8 @@ attribute vec4 a_origin;
 attribute float a_coverage;
 uniform vec4 u_transform;
 uniform vec2 u_pixel_scale;
-uniform vec4 u_tint;
 uniform float u_fringe;
 uniform float u_embolden;
-varying PAINT_PRECISION vec4 v_color;
 varying PAINT_PRECISION float v_coverage;
 varying PAINT_PRECISION float v_logical_y;
 void main() {
@@ -22,7 +20,6 @@ void main() {
     vec2 normal = a_offset * (a_coverage > 0.5 ? -2.0 : 2.0);
     vec2 position = origin + a_position + (a_offset * u_fringe + normal * u_embolden) / u_pixel_scale;
     gl_Position = vec4(position.x / 960.0 - 1.0, 1.0 - position.y / 540.0, 0.0, 1.0);
-    v_color = u_tint;
     v_coverage = mix(1.0, a_coverage, step(0.001, u_fringe));
     v_logical_y = position.y;
 }
