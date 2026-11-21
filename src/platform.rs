@@ -225,6 +225,8 @@ pub enum Request {
     RefreshInputs,
     Launch(String),
     Uninstall(String),
+    /// Read (`None`) or change Luma's TV input registration.
+    TvInput(Option<bool>),
     Recent {
         generation: u64,
         command: crate::recents::Command,
@@ -240,6 +242,10 @@ pub enum Response {
     Uninstalled {
         id: String,
         result: Result<(), String>,
+    },
+    TvInput {
+        request: Option<bool>,
+        result: Result<bool, String>,
     },
     Recent {
         generation: u64,
@@ -260,6 +266,7 @@ impl Platform {
         let (responses, receiver) = mpsc::channel();
         thread::spawn(move || {
             let mut desktop_inventory = demo_inventory();
+            let mut desktop_tv_input = false;
             let mut storage = usb::Storage::default();
             let mut desktop_recents = if webos {
                 vec![]
@@ -394,6 +401,18 @@ impl Platform {
                         };
                         Response::Launched { id, result }
                     }
+                    Request::TvInput(request) => Response::TvInput {
+                        request,
+                        result: if webos {
+                            tv_input(request)
+                        } else {
+                            // Desktop previews keep the registration in memory, never a TV's.
+                            if let Some(enable) = request {
+                                desktop_tv_input = enable;
+                            }
+                            Ok(desktop_tv_input)
+                        },
+                    },
                 };
                 if responses.send(response).is_err() {
                     break;
@@ -499,6 +518,33 @@ pub fn update_result_for(
     serde_json::from_str(output)
         .map(Some)
         .map_err(|e| format!("Invalid installer result: {e}"))
+}
+
+/// Reads or changes whether LG lists Luma as a TV input, through the packaged native helper
+/// (`luma-helper tv-input`). It verifies LG's input list itself and rolls back an unlisted add.
+fn tv_input(request: Option<bool>) -> Result<bool, String> {
+    let command = helper_command(
+        "tv-input",
+        &[match request {
+            None => "status",
+            Some(true) => "enable",
+            Some(false) => "disable",
+        }
+        .to_owned()],
+    )?;
+    let payload = json!({"command": command});
+    // Up to three EIM calls of at most 4 s each: longer than the default Luna timeout.
+    #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
+    let envelope = crate::luna::call_with_timeout(
+        "luna://org.webosbrew.hbchannel.service/exec",
+        &payload,
+        std::time::Duration::from_secs(20),
+    );
+    #[cfg(not(all(feature = "webos", target_os = "linux", target_arch = "arm")))]
+    let envelope = raw_call("luna://org.webosbrew.hbchannel.service/exec", &payload);
+    inventory_payload(&envelope.and_then(checked_response)?, "registered")?
+        .as_bool()
+        .ok_or_else(|| "Invalid TV input status".into())
 }
 
 /// Protect launcher identities and vendor system namespaces, never titles.

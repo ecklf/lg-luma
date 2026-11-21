@@ -11,6 +11,7 @@
   "resolution": "1920x1080",
   "appCategory": ["home"],
   "requiredACG": ["application.launcher", "application.query", "lunabus.query"],
+  "supportGIP": true,
   "handlesRelaunch": false,
   "iconColor": "#25272d",
   "splashBackground": "splash.png",
