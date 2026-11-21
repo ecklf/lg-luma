@@ -959,6 +959,7 @@ fn run() -> Result<(), String> {
         None;
     let mut drawer_vectors: Vec<String> = Vec::new();
     let mut idle_text: Vec<renderer::Draw> = Vec::new();
+    let mut last_layered = false;
     // When the app inventory last arrived: a Home relaunch already refreshes it, so the
     // window events that follow (Restored, FocusGained) need not ask again right away.
     let mut inventory_at: Option<Instant> = None;
@@ -2030,6 +2031,7 @@ fn run() -> Result<(), String> {
             scene = compose(&mut state, &assets, now);
             let compose_ms = compose_started.elapsed().as_secs_f64() * 1000.;
             let (width, height) = window.drawable_size();
+            renderer.set_layers(&scene.layers);
             if width > 0 && height > 0 {
                 if final_frame && let Some(path) = &options.screenshot {
                     captured = Some(renderer.capture(
@@ -2038,8 +2040,11 @@ fn run() -> Result<(), String> {
                         options.capture_size.unwrap_or(Size::HD),
                     )?);
                 }
+                // A fading layer changes every pixel it covers without changing a command.
+                let layered = !scene.layers.is_empty() || std::mem::take(&mut last_layered);
+                last_layered = !scene.layers.is_empty();
                 let damage = partial.as_ref().and_then(|partial| {
-                    if last_drawable != Some(Size::new(width, height)) {
+                    if last_drawable != Some(Size::new(width, height)) || layered {
                         damage_tracker.reset();
                     }
                     damage_tracker.push(&scene.draw);

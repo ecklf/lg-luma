@@ -397,6 +397,58 @@ fn snap_rect(rect: Rect, scale: f32) -> Rect {
     Rect::new(x0, y0, x1 - x0, y1 - y0)
 }
 
+/// A run of commands (`start..end`) that fades as one surface: drawn unfaded once into an
+/// offscreen texture, then composited each frame at `alpha` instead of every command
+/// separately. A whole page crossfading costs one full-screen quad instead of all its glass,
+/// shadows and text. Overlapping parts no longer show through each other while it fades.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Layer {
+    pub start: usize,
+    pub end: usize,
+    pub alpha: f32,
+}
+
+/// The offscreen texture of the last layer and the content it holds.
+struct LayerCache {
+    texture: GLuint,
+    framebuffer: GLuint,
+    size: (u32, u32),
+    key: u64,
+}
+
+/// A layer's content key. App artwork counts by identity: a changed icon is a new image.
+fn fingerprint(commands: &[Draw]) -> u64 {
+    use std::hash::{DefaultHasher, Hasher};
+    let mut hasher = DefaultHasher::new();
+    for command in commands {
+        let text = match command {
+            Draw::Glass(rect, radius, color) => format!("g{rect:?}{radius}{color:?}"),
+            Draw::Shape(rect, radius, blur, color) => format!("s{rect:?}{radius}{blur}{color:?}"),
+            Draw::RoundedGradient(rect, radius, top, bottom) => {
+                format!("r{rect:?}{radius}{top:?}{bottom:?}")
+            }
+            Draw::Shadow(rect, radius, blur, color) => format!("h{rect:?}{radius}{blur}{color:?}"),
+            Draw::Text(text, rect, style, color, centered) => {
+                format!("t{text}{rect:?}{style:?}{color:?}{centered}")
+            }
+            Draw::Image(path, rect, radius, contain) => format!("i{path}{rect:?}{radius}{contain}"),
+            Draw::TintedImage(path, rect, radius, contain, tint) => {
+                format!("n{path}{rect:?}{radius}{contain}{tint:?}")
+            }
+            Draw::AppImage(image, rect, radius, tint) => {
+                format!("a{:p}{rect:?}{radius}{tint:?}", Arc::as_ptr(image))
+            }
+            Draw::Clip(clip) => format!("c{clip:?}"),
+            Draw::EdgeFade(fade) => format!("e{fade:?}"),
+        };
+        hasher.write(text.as_bytes());
+    }
+    hasher.finish()
+}
+
+/// Followed by the layer's index, stands for its texture in a composed command list.
+const LAYER_PATH: &str = "\u{0}luma-layer";
+
 struct PaintPrograms {
     texture: GLuint,
     tinted: GLuint,
@@ -438,6 +490,10 @@ impl PaintPrograms {
 }
 
 pub struct Renderer {
+    /// The layers the next render() composites (see Layer), in command order.
+    layers: Vec<Layer>,
+    /// One offscreen texture per layer index, kept while layers fade.
+    layer_caches: Vec<LayerCache>,
     paint_programs: Option<PaintPrograms>,
     program: GLuint,
     vector_program: GLuint,
@@ -620,6 +676,8 @@ impl Renderer {
         let white = texture(1, 1, &[255; 4]);
         Ok(Self {
             program,
+            layers: Vec::new(),
+            layer_caches: Vec::new(),
             paint_programs,
             vector_program,
             text_program,
@@ -1724,6 +1782,31 @@ impl Renderer {
             if profile_skip(command) {
                 continue;
             }
+            if let Draw::TintedImage(path, rect, _, _, tint) = command
+                && let Some(index) = path.strip_prefix(LAYER_PATH)
+            {
+                if let Some(texture) = index
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|index| self.layer_caches.get(index))
+                    .map(|cache| cache.texture)
+                {
+                    // A texture rendered into: its first row is the bottom of the screen.
+                    // Alpha scales premultiplied colour and coverage alike.
+                    // Radius -1: the plain textured program, no shape edge per fragment.
+                    self.gradient_quad(
+                        *rect,
+                        [0., 1., 1., 0.],
+                        -1.,
+                        0.,
+                        [[tint[3]; 4]; 2],
+                        texture,
+                        None,
+                        None,
+                    );
+                }
+                continue;
+            }
             if let Some(path) = plain_wallpaper(command)
                 && self.clip.is_none()
                 && self.fade.is_none()
@@ -1830,11 +1913,200 @@ impl Renderer {
     /// Draws the scene. With `damage` (drawable pixels from `damage_pixels`), only those pixels
     /// are cleared and drawn; commands entirely outside them are skipped, and the rest of the
     /// back buffer keeps its earlier contents.
+    /// Sets the layers the following render() calls composite (empty: draw every command).
+    /// Their textures are released once no layer remains.
+    pub fn set_layers(&mut self, layers: &[Layer]) {
+        self.layers = layers.to_vec();
+        if layers.is_empty() {
+            for old in self.layer_caches.drain(..) {
+                unsafe {
+                    gl::DeleteFramebuffers(1, &old.framebuffer);
+                    gl::DeleteTextures(1, &old.texture);
+                }
+            }
+        }
+    }
+
     pub fn render(&mut self, commands: &[Draw], width: u32, height: u32, damage: Option<[i32; 4]>) {
+        let layers = std::mem::take(&mut self.layers);
+        if layers.is_empty() {
+            return self.render_frame(commands, commands, width, height, damage, false);
+        }
+        let ordered = layers
+            .iter()
+            .try_fold(0, |end, layer| {
+                (end <= layer.start && layer.start < layer.end && layer.end <= commands.len())
+                    .then_some(layer.end)
+            })
+            .is_some();
+        let mut composed = Vec::with_capacity(commands.len() + 4 * layers.len());
+        if ordered {
+            let mut next = 0;
+            for (index, layer) in layers.iter().enumerate() {
+                composed.extend_from_slice(&commands[next..layer.start]);
+                let (clip, fade) = paint_state(&commands[..layer.start]);
+                let (end_clip, end_fade) = paint_state(&commands[..layer.end]);
+                // The layer draws under the clip and edge fade it starts in; its quad then
+                // covers the screen unclipped, and later commands continue in its end state.
+                let mut content = vec![Draw::Clip(clip), Draw::EdgeFade(fade)];
+                content.extend_from_slice(&commands[layer.start..layer.end]);
+                if self.layer_texture(&content, commands, index, width, height) {
+                    composed.extend([
+                        Draw::Clip(None),
+                        Draw::EdgeFade(None),
+                        Draw::TintedImage(
+                            format!("{LAYER_PATH}{index}"),
+                            Rect::new(0., 0., 1920., 1080.),
+                            0.,
+                            false,
+                            [layer.alpha; 4],
+                        ),
+                        Draw::Clip(end_clip),
+                        Draw::EdgeFade(end_fade),
+                    ]);
+                } else {
+                    // No offscreen target: fade each command, as without a layer.
+                    composed.extend(
+                        commands[layer.start..layer.end]
+                            .iter()
+                            .cloned()
+                            .map(|draw| fade_draw(draw, layer.alpha)),
+                    );
+                }
+                next = layer.end;
+            }
+            composed.extend_from_slice(&commands[next..]);
+        } else {
+            composed = commands.to_vec();
+            for layer in layers.iter().filter(|layer| layer.end <= commands.len()) {
+                for draw in &mut composed[layer.start.min(layer.end)..layer.end] {
+                    *draw = fade_draw(std::mem::replace(draw, Draw::Clip(None)), layer.alpha);
+                }
+            }
+        }
+        // Glass samples the wallpaper of the full list, never a layer's texture.
+        self.render_frame(&composed, commands, width, height, damage, false);
+        self.layers = layers;
+    }
+
+    /// Draws a layer's commands into its texture unless it already holds them.
+    fn layer_texture(
+        &mut self,
+        content: &[Draw],
+        commands: &[Draw],
+        index: usize,
+        width: u32,
+        height: u32,
+    ) -> bool {
+        let backdrops: Vec<Draw> = commands
+            .iter()
+            .filter(|draw| {
+                matches!(draw, Draw::Image(_, rect, _, false) | Draw::TintedImage(_, rect, _, false, _) if full_screen(rect))
+            })
+            .cloned()
+            .collect();
+        let key = fingerprint(content) ^ fingerprint(&backdrops).rotate_left(1);
+        if let Some(cache) = self.layer_caches.get(index)
+            && cache.size == (width, height)
+            && cache.key == key
+        {
+            return true;
+        }
+        if self
+            .layer_caches
+            .get(index)
+            .is_none_or(|cache| cache.size != (width, height))
+        {
+            let (mut texture, mut framebuffer, mut previous) = (0, 0, 0);
+            let complete = unsafe {
+                gl::GetIntegerv(gl::FRAMEBUFFER_BINDING, &mut previous);
+                gl::GenTextures(1, &mut texture);
+                gl::BindTexture(gl::TEXTURE_2D, texture);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
+                gl::TexImage2D(
+                    gl::TEXTURE_2D,
+                    0,
+                    gl::RGBA as i32,
+                    width as i32,
+                    height as i32,
+                    0,
+                    gl::RGBA,
+                    gl::UNSIGNED_BYTE,
+                    std::ptr::null(),
+                );
+                gl::GenFramebuffers(1, &mut framebuffer);
+                gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer);
+                gl::FramebufferTexture2D(
+                    gl::FRAMEBUFFER,
+                    gl::COLOR_ATTACHMENT0,
+                    gl::TEXTURE_2D,
+                    texture,
+                    0,
+                );
+                let complete =
+                    gl::CheckFramebufferStatus(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE;
+                gl::BindFramebuffer(gl::FRAMEBUFFER, previous as GLuint);
+                complete
+            };
+            if !complete {
+                unsafe {
+                    gl::DeleteFramebuffers(1, &framebuffer);
+                    gl::DeleteTextures(1, &texture);
+                }
+                return false;
+            }
+            let cache = LayerCache {
+                texture,
+                framebuffer,
+                size: (width, height),
+                key: 0,
+            };
+            if let Some(old) = self.layer_caches.get_mut(index) {
+                let old = std::mem::replace(old, cache);
+                unsafe {
+                    gl::DeleteFramebuffers(1, &old.framebuffer);
+                    gl::DeleteTextures(1, &old.texture);
+                }
+            } else if index == self.layer_caches.len() {
+                self.layer_caches.push(cache);
+            } else {
+                unsafe {
+                    gl::DeleteFramebuffers(1, &cache.framebuffer);
+                    gl::DeleteTextures(1, &cache.texture);
+                }
+                return false;
+            }
+        }
+        let framebuffer = self.layer_caches[index].framebuffer;
+        let mut previous = 0;
+        unsafe {
+            gl::GetIntegerv(gl::FRAMEBUFFER_BINDING, &mut previous);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer);
+        }
+        // Over a transparent start, the blend equation leaves premultiplied colour and the
+        // layer's coverage in alpha: composited with (ONE, ONE_MINUS_SRC_ALPHA).
+        self.render_frame(content, commands, width, height, None, true);
+        unsafe { gl::BindFramebuffer(gl::FRAMEBUFFER, previous as GLuint) };
+        self.layer_caches[index].key = key;
+        true
+    }
+
+    fn render_frame(
+        &mut self,
+        commands: &[Draw],
+        backdrop_source: &[Draw],
+        width: u32,
+        height: u32,
+        damage: Option<[i32; 4]>,
+        transparent: bool,
+    ) {
         let area = damage.map(|pixels| Self::damage_area(pixels, width, height));
         let started = Instant::now();
         self.build(commands, width, height, area);
-        let mut backdrops = commands.iter().filter_map(|draw| match draw {
+        let mut backdrops = backdrop_source.iter().filter_map(|draw| match draw {
             Draw::Image(path, rect, _, false) if full_screen(rect) => Some((path.as_str(), 1.)),
             Draw::TintedImage(path, rect, _, false, tint) if full_screen(rect) => {
                 Some((path.as_str(), tint[3]))
@@ -1897,7 +2169,11 @@ impl Renderer {
         unsafe {
             gl::Viewport(0, 0, width as i32, height as i32);
             scissor(damage);
-            gl::ClearColor(0.04, 0.04, 0.05, 1.);
+            if transparent {
+                gl::ClearColor(0., 0., 0., 0.);
+            } else {
+                gl::ClearColor(0.04, 0.04, 0.05, 1.);
+            }
             gl::Clear(gl::COLOR_BUFFER_BIT);
             gl::Viewport(vx, vy, vw, vh);
             if self.vao != 0 {
@@ -1932,6 +2208,11 @@ impl Renderer {
             );
             gl::Uniform1i(uniform_location(self.program, c"u_texture".as_ptr()), 0);
             gl::ActiveTexture(gl::TEXTURE0);
+            let layer_textures: Vec<GLuint> = self
+                .layer_caches
+                .iter()
+                .map(|cache| cache.texture)
+                .collect();
             let mut paint_bound = false;
             let mut active_paint = 0;
             let mut shape_configured = false;
@@ -1987,6 +2268,16 @@ impl Renderer {
                                 gl::Enable(gl::BLEND);
                             }
                             blending = !*opaque;
+                        }
+                        // The layer's texture holds premultiplied colour.
+                        let premultiplied = layer_textures.contains(texture);
+                        if premultiplied {
+                            gl::BlendFuncSeparate(
+                                gl::ONE,
+                                gl::ONE_MINUS_SRC_ALPHA,
+                                gl::ONE,
+                                gl::ONE_MINUS_SRC_ALPHA,
+                            );
                         }
                         let program = self
                             .paint_programs
@@ -2065,6 +2356,14 @@ impl Renderer {
                             }
                         }
                         gl::DrawArrays(gl::TRIANGLES, *start as i32, *count as i32);
+                        if premultiplied {
+                            gl::BlendFuncSeparate(
+                                gl::SRC_ALPHA,
+                                gl::ONE_MINUS_SRC_ALPHA,
+                                gl::ONE,
+                                gl::ONE_MINUS_SRC_ALPHA,
+                            );
+                        }
                     }
                     BatchKind::Vector { .. } | BatchKind::Text { .. } if !blending => {
                         gl::Enable(gl::BLEND);
@@ -2723,4 +3022,41 @@ mod shadow_tests {
             }
         }
     }
+}
+/// One command at `alpha`, as a fading view draws it (the fallback without a layer texture).
+fn fade_draw(mut draw: Draw, alpha: f32) -> Draw {
+    match &mut draw {
+        Draw::Glass(_, _, color)
+        | Draw::Shape(_, _, _, color)
+        | Draw::Shadow(_, _, _, color)
+        | Draw::Text(_, _, _, color, _)
+        | Draw::TintedImage(_, _, _, _, color)
+        | Draw::AppImage(_, _, _, color) => color[3] *= alpha,
+        Draw::RoundedGradient(_, _, top, bottom) => {
+            top[3] *= alpha;
+            bottom[3] *= alpha;
+        }
+        Draw::Image(path, rect, radius, contain) => {
+            return Draw::TintedImage(
+                std::mem::take(path),
+                *rect,
+                *radius,
+                *contain,
+                [1., 1., 1., alpha],
+            );
+        }
+        Draw::Clip(_) | Draw::EdgeFade(_) => {}
+    }
+    draw
+}
+
+/// The clip and edge fade in effect after `commands`.
+fn paint_state(commands: &[Draw]) -> (Option<Rect>, Option<[f32; 4]>) {
+    commands
+        .iter()
+        .fold((None, None), |(clip, fade), draw| match draw {
+            Draw::Clip(next) => (*next, fade),
+            Draw::EdgeFade(next) => (clip, *next),
+            _ => (clip, fade),
+        })
 }
