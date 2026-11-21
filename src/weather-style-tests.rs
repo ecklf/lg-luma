@@ -64,6 +64,8 @@ fn appearance_controls_live_inside_widget_style_and_update_previews_immediately(
     state.direction(Direction::Up, &rendered.controls);
     assert_eq!(state.focus, Target::WeatherIcons);
     state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::WeatherShowIcon);
+    state.direction(Direction::Up, &controls(&state));
     assert_eq!(state.focus, Target::WeatherShowLocation);
     state.activate();
     assert_eq!(state.subpage, Some(Subpage::WeatherStyle));
@@ -73,6 +75,7 @@ fn appearance_controls_live_inside_widget_style_and_update_previews_immediately(
             .iter()
             .any(|draw| matches!(draw, Draw::Text(label, ..) if label.contains("Vienna")))
     );
+    state.direction(Direction::Down, &controls(&state));
     state.direction(Direction::Down, &controls(&state));
     state.activate();
     state.focus = Target::Choice(3);
@@ -160,7 +163,7 @@ fn weather_picker_insets_match_outer_corner_radii() {
 }
 
 #[test]
-fn no_icon_is_an_independent_choice_and_legacy_layouts_migrate() {
+fn show_icon_toggle_preserves_artwork_and_legacy_hidden_icons_migrate() {
     use crate::model::WeatherIconStyle;
     let mut prefs: Preferences = serde_json::from_str(
         r#"{"weather_style":"no_icon","extra_weather":[{"style":"no_icon"}]}"#,
@@ -168,23 +171,53 @@ fn no_icon_is_an_independent_choice_and_legacy_layouts_migrate() {
     .unwrap();
     prefs.sanitize();
     assert_eq!(prefs.weather_style, WeatherStyle::Standard);
-    assert_eq!(prefs.weather_icons, WeatherIconStyle::None);
+    assert_eq!(prefs.weather_icons, WeatherIconStyle::Kuankuan);
+    assert!(!prefs.weather_show_icon);
     assert_eq!(prefs.extra_weather[0].style, WeatherStyle::Standard);
-    assert_eq!(prefs.extra_weather[0].icons, WeatherIconStyle::None);
+    assert_eq!(prefs.extra_weather[0].icons, WeatherIconStyle::Kuankuan);
+    assert!(!prefs.extra_weather[0].show_icon);
     assert!(!WeatherStyle::ALL.contains(&WeatherStyle::NoIcon));
     let mut state = configured();
     state.open(2);
     state.section = WIDGETS_SECTION;
-    state.subpage = Some(Subpage::WeatherIcons);
-    state.focus = Target::Choice(3);
-    state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Choice(4));
+    state.subpage = Some(Subpage::WeatherStyle);
+    state.focus = Target::WeatherShowIcon;
+    state.preferences.weather_icons = WeatherIconStyle::Kickstand;
     assert_eq!(state.activate(), [Effect::Save]);
-    assert_eq!(state.preferences.weather_icons, WeatherIconStyle::None);
+    assert_eq!(state.preferences.weather_icons, WeatherIconStyle::Kickstand);
+    assert!(!state.preferences.weather_show_icon);
     assert_eq!(state.preferences.weather_style, WeatherStyle::Standard);
     for style in WeatherStyle::ALL {
         state.preferences.weather_style = style;
         assert!(weather_icons(&state).is_empty());
+    }
+    state.activate();
+    assert!(state.preferences.weather_show_icon);
+    assert_eq!(state.preferences.weather_icons, WeatherIconStyle::Kickstand);
+    let cache = state.weather.cache.clone();
+    state.pointer_focus(Target::WeatherShowIcon);
+    assert_eq!(state.activate(), [Effect::Save]);
+    assert_eq!(state.weather.cache, cache);
+    let loaded: Preferences =
+        serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
+    assert!(!loaded.weather_show_icon);
+    assert_eq!(loaded.weather_icons, WeatherIconStyle::Kickstand);
+    let mut old_choice: Preferences =
+        serde_json::from_str(r#"{"weather_icons":"none","extra_weather":[{"icons":"none"}]}"#)
+            .unwrap();
+    old_choice.sanitize();
+    assert!(!old_choice.weather_show_icon);
+    assert!(!old_choice.extra_weather[0].show_icon);
+    assert_eq!(old_choice.weather_icons, WeatherIconStyle::Kuankuan);
+    assert!(!WeatherIconStyle::ALL.contains(&WeatherIconStyle::None));
+    let mut home = configured();
+    home.preferences.weather_show_icon = false;
+    for small in [false, true] {
+        home.preferences.weather_small = small;
+        for style in WeatherStyle::ALL {
+            home.preferences.weather_style = style;
+            assert!(weather_icons(&home).is_empty());
+        }
     }
 }
 
@@ -220,6 +253,8 @@ fn weather_icon_picker_saves_only_on_selection_and_restores_parent_for_remote_an
     state.section = WIDGETS_SECTION;
     state.subpage = Some(Subpage::WeatherStyle);
     state.focus = Target::WeatherShowLocation;
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::WeatherShowIcon);
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::WeatherIcons);
     state.direction(Direction::Right, &controls(&state));
@@ -350,6 +385,8 @@ fn location_toggle_supports_remote_and_pointer_without_changing_forecast_or_cach
     state.focus = Target::Choice(0);
     state.direction(Direction::Up, &controls(&state));
     assert_eq!(state.focus, Target::WeatherIcons);
+    state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::WeatherShowIcon);
     state.direction(Direction::Up, &controls(&state));
     assert_eq!(state.focus, Target::WeatherShowLocation);
     assert_eq!(state.activate(), [Effect::Save]);

@@ -44,10 +44,9 @@ const weatherIconPreviews = process.argv.includes('--weather-icons');
 const weatherConfiguration = (name) => ({
   ...configuration,
   reduced_motion: true,
-  weather_icons:
-    name.includes('no-icons') || name.includes('none-picker') || name === 'weather-style-no-icon'
-      ? 'none'
-      : 'kuankuan',
+  weather_icons: 'kuankuan',
+  weather_show_icon:
+    !name.includes('no-icons') && !name.includes('none-picker') && name !== 'weather-style-no-icon',
   weather_show_location: name !== 'weather-style-private' && name !== 'weather-icon-picker',
   weather_style: name.includes('one-line')
     ? 'one_line'
@@ -66,7 +65,7 @@ const captures = weatherIconPreviews
       ['weather-style-one-line', 'home'],
       ['weather-style-one-line-picker', `${weatherPage},down,down,enter`],
       ['weather-style-no-icons', `${weatherPage},down,down,enter`],
-      ['weather-icon-none-picker', `${weatherPage},down,down,enter,up,enter`],
+      ['weather-icon-none-picker', `${weatherPage},down,down,enter,up,up`],
       ['weather-style-standard', 'home'],
       ['weather-style-compact', 'home'],
       ['weather-style-no-icon', 'home'],

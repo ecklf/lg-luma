@@ -665,6 +665,24 @@
     "ca": "Estil de les icones",
     "hu": "Ikonstílus"
   },
+  "weatherShowIcon": {
+    "en": "Show icon",
+    "de": "Symbol anzeigen",
+    "es": "Mostrar icono",
+    "zh": "显示图标",
+    "zh-tw": "顯示圖示",
+    "pt": "Mostrar ícone",
+    "it": "Mostra icona",
+    "ru": "Показывать значок",
+    "pl": "Pokaż ikonę",
+    "fr": "Afficher l’icône",
+    "vi": "Hiện biểu tượng",
+    "nl": "Pictogram tonen",
+    "sv": "Visa ikon",
+    "cs": "Zobrazit ikonu",
+    "ca": "Mostra la icona",
+    "hu": "Ikon megjelenítése"
+  },
   "weatherShowLocation": {
     "en": "Show location name",
     "de": "Ortsnamen anzeigen",

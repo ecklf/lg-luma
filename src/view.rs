@@ -1641,11 +1641,11 @@ fn small_weather(out: &mut Scene, state: &State, assets: &Assets, cell: Rect, wi
     paint_weather_icon(
         out,
         assets,
-        config.icons,
+        config.visible_icon_style(),
         icon,
         Rect::new(cell.x, cell.y, 48., 48.),
     );
-    let inset = if config.icons == WeatherIconStyle::None {
+    let inset = if config.visible_icon_style() == WeatherIconStyle::None {
         0.
     } else {
         60.
@@ -1858,7 +1858,8 @@ fn weather_summary_layout_for(
     let mut icon_rect = Rect::new(84., 64., 144., 144.);
     let mut height = 268.;
     if style == WeatherStyle::NoIcon
-        || (style == WeatherStyle::Standard && config.icons == WeatherIconStyle::None)
+        || (style == WeatherStyle::Standard
+            && config.visible_icon_style() == WeatherIconStyle::None)
     {
         for (_, _, _, rect) in parts.iter_mut().skip(1) {
             rect.x = 84.;
@@ -1880,7 +1881,7 @@ fn weather_summary_layout_for(
             condition.0 = label;
             condition.1 = font;
             condition.3 = Rect::new(
-                if config.icons == WeatherIconStyle::None {
+                if config.visible_icon_style() == WeatherIconStyle::None {
                     84.
                 } else {
                     128.
@@ -1924,7 +1925,7 @@ fn weather_summary_layout_for(
         };
         let small = !preview && config.small;
         let icon_size = if small { 24. } else { 32. };
-        let temperature_x = if config.icons == WeatherIconStyle::None {
+        let temperature_x = if config.visible_icon_style() == WeatherIconStyle::None {
             84.
         } else {
             84. + icon_size + 12.
@@ -1974,9 +1975,10 @@ fn weather_summary_layout_for(
         height,
         width: right - 84.,
         icon,
-        icon_style: config.icons,
+        icon_style: config.visible_icon_style(),
         icon_rect,
-        show_icon: style != WeatherStyle::NoIcon && config.icons != WeatherIconStyle::None,
+        show_icon: style != WeatherStyle::NoIcon
+            && config.visible_icon_style() != WeatherIconStyle::None,
         parts,
     }
 }
@@ -2505,6 +2507,17 @@ fn weather_style_settings(out: &mut Scene, state: &State, assets: &Assets) {
             false,
         ),
         (
+            Target::WeatherShowIcon,
+            "weatherShowIcon",
+            "grid",
+            language.t(if config.show_icon {
+                "stateOn"
+            } else {
+                "stateOff"
+            }),
+            false,
+        ),
+        (
             Target::WeatherIcons,
             "weatherIconStyle",
             "grid",
@@ -2524,21 +2537,50 @@ fn weather_style_settings(out: &mut Scene, state: &State, assets: &Assets) {
             state,
             assets,
             Row {
-                target,
+                target: target.clone(),
                 rect: Rect::new(640., 164.8 + index as f32 * 84. - state.scroll, 1120., 72.),
                 title: language.t(title),
                 icon: Some(icon),
-                value: Some(value),
+                value: (target != Target::WeatherShowIcon).then_some(value),
                 description: None,
                 selected: false,
                 chevron,
             },
         );
+        if target == Target::WeatherShowIcon {
+            let width = (rotation_value_width(assets, language) + 32.).max(88.);
+            let pill = Rect::new(
+                1736. - width,
+                180.8 + index as f32 * 84. - state.scroll,
+                width,
+                40.,
+            );
+            out.shape(
+                pill,
+                20.,
+                if config.show_icon {
+                    c(0xe5ebf0, 1.)
+                } else {
+                    c(0x192129, 1.)
+                },
+            );
+            out.text(
+                value,
+                Rect::new(pill.x, pill.y + 8., pill.w, 24.),
+                text(18.4, 500, 0.),
+                if config.show_icon {
+                    c(0x2c2c2c, 1.)
+                } else {
+                    WHITE
+                },
+                true,
+            );
+        }
     }
     for (index, style) in crate::model::WeatherStyle::ALL.into_iter().enumerate() {
         let rect = Rect::new(
             640.,
-            348.8 + index as f32 * 216. - state.scroll,
+            432.8 + index as f32 * 216. - state.scroll,
             1120.,
             200.,
         );

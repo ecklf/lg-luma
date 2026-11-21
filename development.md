@@ -251,7 +251,7 @@ or `one_line`). Home and Settings use the same native layout and painting functi
 The picker shows all three designs with offline sample weather, using the saved
 temperature unit and location visibility. Browsing does not change preferences or fetch a forecast. OK/click
 saves a style and returns to Weather, while Back/Left cancels without changing the style.
-The No icon choice in Icon style reclaims the icon column. Compact uses two lines, with a small icon,
+The Show icon toggle reclaims the icon column when off. Compact uses two lines, with a small icon,
 condition and optional location on the second. All styles and sizes use one “City · Condition”
 detail line when a reading is available, without a separate city heading. With location names
 hidden the line contains only the condition. Cached-reading warnings and setup/error states
@@ -369,8 +369,9 @@ reserve 64 logical pixels below their last item for both remote focus and wheel 
 with a tighter 48-pixel spacing for Languages and Backgrounds.
 The weekday/date is part of the combined Greeting, not a standalone widget. Weather uses its
 own fixed footprint with a condition icon, temperature, condition and optional location.
-Standard, Compact and One line are independent of Icon style. Selecting No icon hides artwork
-and closes its gap in every layout and size. Legacy No icon layouts migrate to Standard with No icon selected.
+Standard, Compact and One line are independent of Icon style. The rounded Show icon On/Off toggle
+hides artwork and closes its gap in every layout and size without changing the selected icon set.
+Legacy No icon layouts and icon choices migrate to Show icon off with Kuankuan selected.
 The One line style places the icon, temperature and “City · Condition” side by side in both
 sizes, with uniform 26-pixel text and a 32-pixel icon matching Compact's bottom line
 (18-pixel text and a 24-pixel icon when small). Long labels fit with a shared text size.
@@ -378,7 +379,7 @@ Saved-reading warnings stay below the row.
 One line occupies a 2×1 grid footprint (1×1 in small size). Switching back to a taller
 style relocates the widget if necessary, or keeps the previous style if no space is available.
 Kuankuan is the default icon style. Weather → Widget style → Icon style offers Kuankuan first,
-followed by Breezy, Lucide, Kickstand and No icon, with offline condition samples in 200-pixel picker rows
+followed by Breezy, Lucide and Kickstand, with offline condition samples in 200-pixel picker rows
 matching the layout previews, with centered 64-pixel icons. Both weather pickers use 20-pixel preview insets with 28-pixel
 inner corner radii to match the rows' 48-pixel outer corners. Sidebar breadcrumbs show at most the
 last three levels, retaining the current page and its closest parents. `weather_icons` stores the primary

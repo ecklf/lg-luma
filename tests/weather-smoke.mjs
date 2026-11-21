@@ -185,7 +185,7 @@ try {
   assert.equal(forecastCount(), 1);
   const hiddenLocation = await scenario(
     'hidden-location',
-    `${weatherPage},down,down,enter,up,up,enter,home,await-weather`,
+    `${weatherPage},down,down,enter,up,up,up,enter,home,await-weather`,
   );
   assert.equal(hiddenLocation.preferences.weather_show_location, false);
   assert.equal(hiddenLocation.preferences.weather_location.name, 'Vienna');
@@ -201,7 +201,17 @@ try {
   assert.equal(picker.subpage, 'WeatherIcons');
   for (const name of ['Kuankuan', 'Breezy', 'Lucide', 'Kickstand'])
     assert.ok(picker.ui_text.includes(name));
-  for (const [index, icons] of ['kuankuan', 'breezy', 'lucide', 'kickstand', 'none'].entries()) {
+  const toggleIcon = `${weatherPage},down,down,enter,up,up,enter,home,await-weather`;
+  const noIcon = await scenario('show-icon-off', toggleIcon);
+  assert.equal(noIcon.preferences.weather_show_icon, false);
+  assert.equal(noIcon.preferences.weather_icons, 'kuankuan');
+  const noIconRestart = await scenario('show-icon-off-restart', 'home,await-weather');
+  assert.equal(noIconRestart.preferences.weather_show_icon, false);
+  const showIcon = await scenario('show-icon-on', toggleIcon);
+  assert.equal(showIcon.preferences.weather_show_icon, true);
+  assert.equal(showIcon.preferences.weather_icons, 'kuankuan');
+  assert.equal(forecastCount(), 1, 'Icon visibility must reuse the existing forecast');
+  for (const [index, icons] of ['kuankuan', 'breezy', 'lucide', 'kickstand'].entries()) {
     const navigation = index ? `${Array(index).fill('down').join(',')},` : '';
     // Return to a known default so each choice is exercised by its stable picker index.
     const saved = JSON.parse(await fs.readFile(preferences, 'utf8'));
@@ -218,6 +228,19 @@ try {
     assert.equal(preview.subpage, 'WeatherStyle');
     assert.ok(!preview.ui_text.some((label) => label.includes('Vienna')));
   }
+  const iconsHidden = await scenario(
+    'icons-hidden',
+    `${weatherPage},down,down,enter,up,up,enter,home,await-weather`,
+  );
+  assert.equal(iconsHidden.preferences.weather_show_icon, false);
+  assert.equal(iconsHidden.preferences.weather_icons, 'kickstand');
+  assert.equal(forecastCount(), 1, 'Hiding icons must reuse the existing forecast');
+  const iconsRestored = await scenario(
+    'icons-restored',
+    `${weatherPage},down,down,enter,up,up,enter,home,await-weather`,
+  );
+  assert.equal(iconsRestored.preferences.weather_show_icon, true);
+  assert.equal(iconsRestored.preferences.weather_icons, 'kickstand');
   const fahrenheit = await scenario(
     'fahrenheit',
     `${weatherPage},down,enter,down,enter,home,await-weather`,

@@ -270,13 +270,7 @@ pub enum WeatherIconStyle {
 }
 
 impl WeatherIconStyle {
-    pub const ALL: [Self; 5] = [
-        Self::Kuankuan,
-        Self::Breezy,
-        Self::Lucide,
-        Self::Kickstand,
-        Self::None,
-    ];
+    pub const ALL: [Self; 4] = [Self::Kuankuan, Self::Breezy, Self::Lucide, Self::Kickstand];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -429,6 +423,7 @@ pub struct WeatherWidgetSettings {
     pub small: bool,
     pub style: WeatherStyle,
     pub show_location: bool,
+    pub show_icon: bool,
     pub icons: WeatherIconStyle,
 }
 
@@ -442,7 +437,18 @@ impl Default for WeatherWidgetSettings {
             small: false,
             style: WeatherStyle::default(),
             show_location: true,
+            show_icon: true,
             icons: WeatherIconStyle::default(),
+        }
+    }
+}
+
+impl WeatherWidgetSettings {
+    pub fn visible_icon_style(&self) -> WeatherIconStyle {
+        if self.show_icon {
+            self.icons
+        } else {
+            WeatherIconStyle::None
         }
     }
 }
@@ -491,6 +497,7 @@ pub struct Preferences {
     pub stocks: crate::markets::Settings,
     pub weather_small: bool,
     pub weather_show_location: bool,
+    pub weather_show_icon: bool,
     pub weather_icons: WeatherIconStyle,
     pub recent_apps_behavior: RecentAppsBehavior,
     pub weather_style: WeatherStyle,
@@ -553,6 +560,7 @@ impl Default for Preferences {
             },
             weather_small: false,
             weather_show_location: true,
+            weather_show_icon: true,
             weather_icons: WeatherIconStyle::default(),
             recent_apps_behavior: RecentAppsBehavior::default(),
             app_sorting: AppSorting::default(),
@@ -612,6 +620,7 @@ impl Preferences {
             small: self.weather_small,
             style: self.weather_style,
             show_location: self.weather_show_location,
+            show_icon: self.weather_show_icon,
             icons: self.weather_icons,
         }
     }
@@ -633,6 +642,7 @@ impl Preferences {
             self.weather_small = config.small;
             self.weather_style = config.style;
             self.weather_show_location = config.show_location;
+            self.weather_show_icon = config.show_icon;
             self.weather_icons = config.icons;
         }
     }
@@ -968,10 +978,18 @@ impl Preferences {
             self.weather_style = WeatherStyle::Standard;
             self.weather_icons = WeatherIconStyle::None;
         }
+        if self.weather_icons == WeatherIconStyle::None {
+            self.weather_icons = WeatherIconStyle::default();
+            self.weather_show_icon = false;
+        }
         for config in &mut self.extra_weather {
             if config.style == WeatherStyle::NoIcon {
                 config.style = WeatherStyle::Standard;
                 config.icons = WeatherIconStyle::None;
+            }
+            if config.icons == WeatherIconStyle::None {
+                config.icons = WeatherIconStyle::default();
+                config.show_icon = false;
             }
         }
         self.greeting_name = clean_input_name(&self.greeting_name);

@@ -28,8 +28,9 @@ rain artwork; condition text still distinguishes them. Weather data remains from
 ## Additional selectable icon sets
 
 Kuankuan is the default when no icon choice is saved. Explicit saved choices remain unchanged.
-The picker calls Breezy Weather “Breezy”. Icon style and location-name visibility
-are independent per-widget settings. Layout previews use both saved settings.
+The picker calls Breezy Weather “Breezy”. Icon style, Show icon and location-name visibility
+are independent per-widget settings. Turning Show icon off keeps the selected artwork.
+Layout previews use all saved appearance settings.
 
 - **Lucide:** `assets/ui-icons/weather-*.svg`, ISC with MIT Feather-derived icons. Full notices
   are in `assets/licenses/lucide.txt`.

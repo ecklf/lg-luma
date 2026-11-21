@@ -116,6 +116,7 @@ pub enum Target {
     WeatherStyle,
     WeatherSize,
     WeatherShowLocation,
+    WeatherShowIcon,
     WeatherIcons,
     Attributions,
     AttributionText,
@@ -1744,6 +1745,7 @@ impl State {
                 ]),
                 Some(Subpage::WeatherStyle) => Some(&[
                     Target::WeatherShowLocation,
+                    Target::WeatherShowIcon,
                     Target::WeatherIcons,
                     Target::Choice(0),
                     Target::Choice(1),
@@ -2780,6 +2782,13 @@ impl State {
                 self.preferences
                     .edit_weather(self.active_weather, |config| {
                         config.show_location = !config.show_location;
+                    });
+                return vec![Effect::Save];
+            }
+            Target::WeatherShowIcon => {
+                self.preferences
+                    .edit_weather(self.active_weather, |config| {
+                        config.show_icon = !config.show_icon;
                     });
                 return vec![Effect::Save];
             }
