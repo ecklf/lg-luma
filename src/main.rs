@@ -11,6 +11,7 @@ mod diagnostics;
 mod egl_damage;
 mod feedback;
 mod font;
+mod font_metrics;
 mod gamepad;
 mod glass_backdrop;
 mod i18n;
