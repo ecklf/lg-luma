@@ -678,6 +678,44 @@ fn every_style_and_size_combines_city_and_condition_without_a_separate_city_head
 }
 
 #[test]
+fn one_line_uses_one_grid_row_and_taller_styles_relocate_from_the_bottom() {
+    use crate::model::{HOME_GRID_ROWS, HomeWidget, WidgetPosition};
+    let mut state = configured();
+    let widget = HomeWidget::Weather;
+    state
+        .preferences
+        .set_weather_widget_style(widget, WeatherStyle::OneLine);
+    assert_eq!(state.preferences.widget_span(widget), (2, 1));
+    let bottom = WidgetPosition {
+        column: 4,
+        row: HOME_GRID_ROWS as u8 - 1,
+    };
+    assert!(state.preferences.can_place_widget(widget, bottom));
+    state.preferences.weather_position = bottom;
+    state
+        .preferences
+        .set_weather_widget_style(widget, WeatherStyle::Standard);
+    assert_eq!(state.preferences.widget_span(widget), (2, 2));
+    assert_ne!(state.preferences.widget_position(widget), bottom);
+    assert!(
+        state
+            .preferences
+            .can_place_widget(widget, state.preferences.widget_position(widget))
+    );
+    state.preferences.toggle_weather_widget_size(widget);
+    state
+        .preferences
+        .set_weather_widget_style(widget, WeatherStyle::OneLine);
+    assert_eq!(state.preferences.widget_span(widget), (1, 1));
+    state.preferences.extra_weather.push(Default::default());
+    let extra = HomeWidget::ExtraWeather(0);
+    state
+        .preferences
+        .set_weather_widget_style(extra, WeatherStyle::OneLine);
+    assert_eq!(state.preferences.widget_span(extra), (2, 1));
+}
+
+#[test]
 fn one_line_style_is_remote_selectable_and_keeps_content_side_by_side() {
     let mut state = configured();
     state.open(2);

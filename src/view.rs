@@ -1278,11 +1278,17 @@ fn home_widget_rect(widget: HomeWidget, position: WidgetPosition) -> Rect {
 }
 
 fn configured_widget_rect(state: &State, widget: HomeWidget, position: WidgetPosition) -> Rect {
-    if widget.kind() == HomeWidget::Weather && state.preferences.weather_settings(widget).small {
-        home_grid_cell_rect(position)
-    } else {
-        home_widget_rect(widget, position)
+    if widget.kind() != HomeWidget::Weather {
+        return home_widget_rect(widget, position);
     }
+    let (width, height) = state.preferences.widget_span(widget);
+    let cell = home_grid_cell_rect(position);
+    Rect::new(
+        cell.x,
+        cell.y,
+        f32::from(width) * (cell.w + 24.) - 24.,
+        f32::from(height) * (cell.h + 24.) - 24.,
+    )
 }
 
 fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
@@ -1298,7 +1304,15 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
             continue;
         }
         if widget.kind() == HomeWidget::Weather {
-            if state.preferences.weather_settings(widget).small {
+            let config = state.preferences.weather_settings(widget);
+            if config.small
+                || (config.style == crate::model::WeatherStyle::OneLine
+                    && config
+                        .location
+                        .as_ref()
+                        .and_then(|place| state.widget_weather(widget).reading(place))
+                        .is_none())
+            {
                 small_weather(out, state, assets, cell, widget);
                 continue;
             }

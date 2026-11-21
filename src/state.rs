@@ -3221,11 +3221,11 @@ impl State {
                         };
                     }
                     Some(Subpage::WeatherStyle) => {
-                        self.preferences
-                            .edit_weather(self.active_weather, |config| {
-                                config.style = crate::model::WeatherStyle::ALL
-                                    [index.min(crate::model::WeatherStyle::ALL.len() - 1)]
-                            });
+                        self.preferences.set_weather_widget_style(
+                            self.active_weather,
+                            crate::model::WeatherStyle::ALL
+                                [index.min(crate::model::WeatherStyle::ALL.len() - 1)],
+                        );
                     }
                     Some(Subpage::WeatherIcons) => {
                         let Some(style) = crate::model::WeatherIconStyle::ALL.get(index) else {
