@@ -16,7 +16,7 @@ pub type Damage = Option<Rect>;
 pub struct Tracker {
     previous: Vec<Draw>,
     history: VecDeque<Damage>,
-    shadows_changed: bool,
+    refreshed: Rect,
 }
 
 impl Tracker {
@@ -29,24 +29,25 @@ impl Tracker {
         };
         // Idle preparation can change shadow coverage by one colour level without
         // changing a Draw command. Propagate it through the ordinary buffer-age history.
-        let damage = if std::mem::take(&mut self.shadows_changed) {
-            damage.map(|area| {
-                commands
-                    .iter()
-                    .filter(|draw| matches!(draw, Draw::Shadow(..)))
-                    .filter_map(bounds)
-                    .fold(area, union)
-            })
-        } else {
-            damage
-        };
+        let refreshed = std::mem::take(&mut self.refreshed);
+        let damage = damage.map(|area| union(area, refreshed));
         self.history.push_front(damage);
         self.history.truncate(HISTORY);
         self.previous = commands.to_vec();
     }
 
-    pub fn refresh_shadows(&mut self) {
-        self.shadows_changed = true;
+    /// Marks the presented shadows `changed` selects for redrawing in every back buffer.
+    pub fn refresh_shadows(
+        &mut self,
+        changed: impl Fn(&Draw) -> bool,
+        bounds: impl Fn(&Draw) -> Damage,
+    ) {
+        self.refreshed = self
+            .previous
+            .iter()
+            .filter(|draw| matches!(draw, Draw::Shadow(..)) && changed(draw))
+            .filter_map(bounds)
+            .fold(self.refreshed, union);
     }
 
     /// What to redraw into a back buffer holding the frame `age` presents ago; 0 means unknown.
