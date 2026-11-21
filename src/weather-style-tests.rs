@@ -75,7 +75,7 @@ fn appearance_controls_live_inside_widget_style_and_update_previews_immediately(
     );
     state.direction(Direction::Down, &controls(&state));
     state.activate();
-    state.focus = Target::Choice(2);
+    state.focus = Target::Choice(3);
     state.activate();
     assert_eq!(state.subpage, Some(Subpage::WeatherStyle));
     assert_eq!(state.focus, Target::WeatherIcons);
@@ -189,11 +189,13 @@ fn no_icon_is_an_independent_choice_and_legacy_layouts_migrate() {
 }
 
 #[test]
-fn weather_icon_preferences_default_to_breezy_and_round_trip_per_instance() {
+fn weather_icon_preferences_default_to_kuankuan_and_round_trip_per_instance() {
     use crate::model::{HomeWidget, WeatherIconStyle};
     let old: Preferences = serde_json::from_str(r#"{"extra_weather":[{}]}"#).unwrap();
-    assert_eq!(old.weather_icons, WeatherIconStyle::Breezy);
-    assert_eq!(old.extra_weather[0].icons, WeatherIconStyle::Breezy);
+    assert_eq!(old.weather_icons, WeatherIconStyle::Kuankuan);
+    assert_eq!(old.extra_weather[0].icons, WeatherIconStyle::Kuankuan);
+    assert_eq!(WeatherIconStyle::ALL[0], WeatherIconStyle::Kuankuan);
+    assert_eq!(WeatherIconStyle::Breezy.label(), "Breezy");
     for icons in WeatherIconStyle::ALL {
         let mut state = configured();
         state.preferences.extra_weather.push(Default::default());
@@ -227,7 +229,7 @@ fn weather_icon_picker_saves_only_on_selection_and_restores_parent_for_remote_an
         state.direction(Direction::Down, &controls(&state));
     }
     assert_eq!(state.focus, Target::Choice(3));
-    assert_eq!(state.preferences.weather_icons, WeatherIconStyle::Breezy);
+    assert_eq!(state.preferences.weather_icons, WeatherIconStyle::Kuankuan);
     state.back();
     assert_eq!(state.focus, Target::WeatherIcons);
     state.activate();
@@ -244,7 +246,7 @@ fn weather_icon_picker_saves_only_on_selection_and_restores_parent_for_remote_an
     );
     state.pointer_focus(Target::Choice(3));
     assert_eq!(state.activate(), [Effect::Save]);
-    assert_eq!(state.preferences.weather_icons, WeatherIconStyle::Kuankuan);
+    assert_eq!(state.preferences.weather_icons, WeatherIconStyle::Kickstand);
     assert_eq!(state.subpage, Some(Subpage::WeatherStyle));
     assert_eq!(state.focus, Target::WeatherIcons);
     assert_eq!(state.weather.cache, cache);

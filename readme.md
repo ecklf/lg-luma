@@ -33,7 +33,7 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 - Customizable app drawer with optional names beneath selected non-favorite apps (off by default), input icons and recent app switching.
 - Left/right navigation wraps between the first and last app in favorites and the app drawer.
 - Movable greeting, weather, stock and crypto widgets.
-- Choose Breezy Weather, Lucide, Kickstand or Kuankuan weather icons and optionally hide the location name. Layout previews follow both settings.
+- Choose Kuankuan (default), Breezy, Lucide, Kickstand or No icon weather artwork and optionally hide the location name. Layout previews follow both settings.
 - Offline credits in System → Attributions, with remote and mouse-wheel scrolling.
 - Midnight background and custom uploads, with optional rotation.
 - Webhook shortcuts and 16 interface languages.

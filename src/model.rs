@@ -261,26 +261,26 @@ pub enum WeatherStyle {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WeatherIconStyle {
-    #[default]
     Breezy,
     Lucide,
     Kickstand,
+    #[default]
     Kuankuan,
     None,
 }
 
 impl WeatherIconStyle {
     pub const ALL: [Self; 5] = [
+        Self::Kuankuan,
         Self::Breezy,
         Self::Lucide,
         Self::Kickstand,
-        Self::Kuankuan,
         Self::None,
     ];
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Breezy => "Breezy Weather",
+            Self::Breezy => "Breezy",
             Self::Lucide => "Lucide",
             Self::Kickstand => "Kickstand",
             Self::Kuankuan => "Kuankuan",

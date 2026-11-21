@@ -377,8 +377,8 @@ sizes, with uniform 26-pixel text and a 32-pixel icon matching Compact's bottom 
 Saved-reading warnings stay below the row.
 One line occupies a 2×1 grid footprint (1×1 in small size). Switching back to a taller
 style relocates the widget if necessary, or keeps the previous style if no space is available.
-Breezy Weather remains the default icon style. Weather → Widget style → Icon style offers Breezy Weather,
-Lucide, Kickstand and Kuankuan with offline condition samples in 200-pixel picker rows
+Kuankuan is the default icon style. Weather → Widget style → Icon style offers Kuankuan first,
+followed by Breezy, Lucide, Kickstand and No icon, with offline condition samples in 200-pixel picker rows
 matching the layout previews, with centered 64-pixel icons. Both weather pickers use 20-pixel preview insets with 28-pixel
 inner corner radii to match the rows' 48-pixel outer corners. Sidebar breadcrumbs show at most the
 last three levels, retaining the current page and its closest parents. `weather_icons` stores the primary

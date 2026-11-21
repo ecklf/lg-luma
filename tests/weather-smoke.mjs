@@ -199,7 +199,7 @@ try {
   const iconsPage = `${weatherPage},down,down,enter,up,enter`;
   const picker = await scenario('icon-picker', iconsPage);
   assert.equal(picker.subpage, 'WeatherIcons');
-  for (const name of ['Breezy Weather', 'Lucide', 'Kickstand', 'Kuankuan'])
+  for (const name of ['Kuankuan', 'Breezy', 'Lucide', 'Kickstand'])
     assert.ok(picker.ui_text.includes(name));
   for (const [index, icons] of ['breezy', 'lucide', 'kickstand', 'kuankuan'].entries()) {
     const navigation = index ? `${Array(index).fill('down').join(',')},` : '';

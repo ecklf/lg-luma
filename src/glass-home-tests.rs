@@ -726,7 +726,7 @@ fn weather_empty_state_uses_a_large_icon_and_setup_action() {
     let state = ready();
     let rendered = scene(&state);
     assert!(rendered.draw.iter().any(|draw| matches!(draw,
-        Draw::Image(path, rect, ..) | Draw::TintedImage(path, rect, ..) if path.ends_with("weather/partly-cloudy.png") && rect.w == 144. && rect.h == 144.)));
+        Draw::Image(path, rect, ..) | Draw::TintedImage(path, rect, ..) if path.ends_with(&state.preferences.weather_icons.asset("partly-cloudy")) && rect.w == 144. && rect.h == 144.)));
     assert!(rendered.draw.iter().any(|draw| matches!(draw,
         Draw::Text(label, _, style, ..) if label == state.preferences.language.t("setWeatherLocation") && style.size >= 24.)));
     let setup = rendered
