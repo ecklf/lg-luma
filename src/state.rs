@@ -24,6 +24,8 @@ pub const SETTINGS_ORDER: [usize; SECTION_COUNT] = [
 ];
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
+/// App drawer row: the grid turns opaque before the motion ends (smooth_drawer_fade).
+pub const SMOOTH_DRAWER_FADE_SETTING: usize = 19;
 pub const APPS_COLUMNS: usize = 6;
 pub const DRAWER_PADDING: f32 = 24.;
 pub const DRAWER_NAME_TOP: f32 = 12.;
@@ -634,6 +636,17 @@ impl State {
     pub fn drawer_progress(&self) -> f32 {
         let t = self.drawer_visibility;
         t * t * (3. - 2. * t)
+    }
+
+    /// The fading grid's opacity. With smooth_drawer_fade it is opaque from 70% of the motion
+    /// on: translucent cards cost the GPU their whole backdrop and shadow, so a shorter fade
+    /// keeps the motion's last frames on the opaque path.
+    pub fn drawer_content_alpha(&self) -> f32 {
+        if self.preferences.smooth_drawer_fade {
+            (self.drawer_progress() / 0.7).min(1.)
+        } else {
+            self.drawer_progress()
+        }
     }
 
     pub fn dock_y(&self) -> f32 {
@@ -3067,6 +3080,9 @@ impl State {
                     14 => {
                         self.preferences.show_drawer_app_names =
                             !self.preferences.show_drawer_app_names
+                    }
+                    SMOOTH_DRAWER_FADE_SETTING => {
+                        self.preferences.smooth_drawer_fade = !self.preferences.smooth_drawer_fade
                     }
                     13 => {
                         self.subpage = Some(Subpage::AppDrawer);

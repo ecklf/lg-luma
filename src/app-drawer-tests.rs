@@ -440,7 +440,7 @@ fn app_drawer_picker_saves_only_on_selection_and_restores_its_parent() {
                     _ => None,
                 })
                 .collect::<Vec<_>>(),
-            [15, 10, 14]
+            [15, 10, 14, crate::state::SMOOTH_DRAWER_FADE_SETTING]
         );
         assert!(state.activate().is_empty());
         assert_eq!(state.subpage, Some(Subpage::AppDrawerStyle));
@@ -615,4 +615,53 @@ fn app_drawer_picker_labels_are_localized_and_fit_all_languages() {
                     if text == language.t(style.label_key()) && font.size >= 18.)));
         }
     }
+}
+
+#[test]
+fn drawer_grid_turns_opaque_before_the_motion_ends() {
+    let mut state = ready();
+    let mut previous = 0.;
+    for step in 0..=100 {
+        state.drawer_visibility = step as f32 / 100.;
+        let alpha = state.drawer_content_alpha();
+        assert!(alpha >= previous);
+        previous = alpha;
+        // The grid fades with the motion, then rides its last 30% fully opaque.
+        if state.drawer_progress() >= 0.7 {
+            assert_eq!(alpha, 1.);
+        } else {
+            assert!(alpha < 1.);
+        }
+    }
+    state.drawer_visibility = 0.;
+    assert_eq!(state.drawer_content_alpha(), 0.);
+    // Off, the grid fades in over the whole motion, as before.
+    state.preferences.smooth_drawer_fade = false;
+    for step in 0..=20 {
+        state.drawer_visibility = step as f32 / 20.;
+        assert_eq!(state.drawer_content_alpha(), state.drawer_progress());
+    }
+}
+
+#[test]
+fn smooth_drawer_fade_toggles_from_the_app_drawer_settings_and_persists() {
+    let mut state = ready();
+    assert!(state.preferences.smooth_drawer_fade);
+    state.open(2);
+    state.focus = Target::Setting(crate::state::SMOOTH_DRAWER_FADE_SETTING);
+    state.subpage = Some(Subpage::AppDrawer);
+    assert!(
+        controls(&state)
+            .iter()
+            .any(|control| control.target == state.focus)
+    );
+    let effects = state.activate();
+    assert!(!state.preferences.smooth_drawer_fade);
+    assert!(effects.iter().any(|effect| matches!(effect, Effect::Save)));
+    let saved = serde_json::to_string(&state.preferences).unwrap();
+    let loaded: crate::model::Preferences = serde_json::from_str(&saved).unwrap();
+    assert!(!loaded.smooth_drawer_fade);
+    // Older preference files without the field get the smooth fade.
+    let legacy: crate::model::Preferences = serde_json::from_str("{}").unwrap();
+    assert!(legacy.smooth_drawer_fade);
 }

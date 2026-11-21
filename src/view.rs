@@ -1259,7 +1259,7 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         let start = out.draw.len();
         library_grid(out, state, assets);
         if !peek {
-            out.fade(start, state.drawer_progress(), 1.);
+            out.fade(start, state.drawer_content_alpha(), 1.);
         }
         // The Home peek is decorative, including while the drawer settles closed.
         out.controls.truncate(controls);
@@ -2097,7 +2097,7 @@ fn library(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime)
     let start = out.draw.len();
     library_grid(out, state, assets);
     if state.preferences.app_drawer_style == crate::model::AppDrawerStyle::Minimal {
-        out.fade(start, state.drawer_progress(), 1.);
+        out.fade(start, state.drawer_content_alpha(), 1.);
     }
     // The scrolling grid continues underneath the floating glass and pinned cards.
     favorites_dock(out, state, assets);
@@ -3029,6 +3029,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                             "showAppNames",
                             "grid",
                             language.t(if state.preferences.show_drawer_app_names {
+                                "stateOn"
+                            } else {
+                                "stateOff"
+                            }),
+                            false,
+                        ),
+                        (
+                            crate::state::SMOOTH_DRAWER_FADE_SETTING,
+                            "smoothDrawerFade",
+                            "motion",
+                            language.t(if state.preferences.smooth_drawer_fade {
                                 "stateOn"
                             } else {
                                 "stateOff"
