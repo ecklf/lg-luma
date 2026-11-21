@@ -10,6 +10,8 @@ use std::{collections::HashSet, sync::mpsc, thread};
 
 #[path = "platform-install.rs"]
 mod installation;
+#[path = "platform-usb.rs"]
+mod usb;
 
 pub const APP_ID: &str = "com.ecklf.luma";
 pub const HOME_ID: &str = "com.webos.app.home";
@@ -181,7 +183,7 @@ impl Lifecycle {
     }
 }
 
-/// Directory holding assets/, lib/ and splash/: next to the executable, or the installed
+/// Directory holding assets/, lib/ and splash.png: next to the executable, or the installed
 /// package when the executable runs in place of LG's Home.
 pub fn install_dir() -> Result<std::path::PathBuf, String> {
     static DIRECTORY: std::sync::OnceLock<Result<std::path::PathBuf, String>> =
@@ -223,7 +225,6 @@ pub enum Request {
     RefreshInputs,
     Launch(String),
     Uninstall(String),
-    SyncSplash(String),
     Recent {
         generation: u64,
         command: crate::recents::Command,
@@ -251,16 +252,15 @@ pub struct Platform {
     sender: mpsc::Sender<Request>,
     pub receiver: mpsc::Receiver<Response>,
     pub webos: bool,
-    splash_enabled: bool,
 }
 
 impl Platform {
-    pub fn new(webos: bool, splash_enabled: bool) -> Self {
+    pub fn new(webos: bool) -> Self {
         let (sender, requests) = mpsc::channel();
         let (responses, receiver) = mpsc::channel();
         thread::spawn(move || {
-            let mut splash_background = None;
             let mut desktop_inventory = demo_inventory();
+            let mut storage = usb::Storage::default();
             let mut desktop_recents = if webos {
                 vec![]
             } else {
@@ -298,12 +298,12 @@ impl Platform {
                         }
                     }
                     Request::Refresh => Response::Inventory(if webos {
-                        inventory()
+                        inventory(&mut storage)
                     } else {
                         Ok((desktop_inventory.clone(), None))
                     }),
                     Request::RefreshInputs => Response::Inputs(if webos {
-                        input_inventory()
+                        input_inventory(&mut storage)
                     } else {
                         Ok(desktop_inventory.inputs.clone())
                     }),
@@ -378,6 +378,8 @@ impl Platform {
                         let result = if webos {
                             if crate::scroll_preview::is_placeholder(&id) {
                                 Err("Scroll preview cards cannot be launched".into())
+                            } else if id.starts_with("luma.usb.") {
+                                usb::launch(&id)
                             } else if !valid_app_id(&id) {
                                 Err("Invalid application identifier".into())
                             } else {
@@ -392,18 +394,6 @@ impl Platform {
                         };
                         Response::Launched { id, result }
                     }
-                    Request::SyncSplash(background) => {
-                        if webos
-                            && splash_enabled
-                            && splash_background.as_ref() != Some(&background)
-                        {
-                            match sync_splash(&background) {
-                                Ok(()) => splash_background = Some(background),
-                                Err(error) => eprintln!("Luma splash: {error}"),
-                            }
-                        }
-                        continue;
-                    }
                 };
                 if responses.send(response).is_err() {
                     break;
@@ -414,18 +404,11 @@ impl Platform {
             sender,
             receiver,
             webos,
-            splash_enabled,
         }
     }
 
     pub fn send(&self, request: Request) {
         let _ = self.sender.send(request);
-    }
-
-    pub fn sync_splash(&self, background: &str) {
-        if self.webos && self.splash_enabled && !crate::wallpapers::valid_id(background) {
-            self.send(Request::SyncSplash(background.to_owned()));
-        }
     }
 }
 
@@ -518,34 +501,6 @@ pub fn update_result_for(
         .map_err(|e| format!("Invalid installer result: {e}"))
 }
 
-fn sync_splash(background: &str) -> Result<(), String> {
-    let directory = install_dir()?;
-    // The executable/manifest Home already runs privileged. Avoid starting another process or
-    // queuing a Homebrew call behind its startup; file work still stays on the platform worker.
-    #[cfg(all(feature = "webos", unix))]
-    if unsafe { libc::geteuid() } == 0 {
-        return luma_tv_helper::files::sync_splash(
-            &luma_tv_helper::system::Tv,
-            &directory,
-            background,
-        )
-        .map(|_| ());
-    }
-    let command = helper_command(
-        "sync-splash",
-        &[json!({"directory":directory,"background":background}).to_string()],
-    )?;
-    let envelope = call(
-        "luna://org.webosbrew.hbchannel.service/exec",
-        json!({"command": command}),
-    )?;
-    let saved = inventory_payload(&envelope, "background")?;
-    if saved.as_str() != Some(background) {
-        return Err("Splash background was not updated".into());
-    }
-    Ok(())
-}
-
 /// Protect launcher identities and vendor system namespaces, never titles.
 /// Conservatively includes removable vendor apps until firmware provides a
 /// reliable cross-version removability flag.
@@ -635,11 +590,15 @@ fn checked_response(value: Value) -> Result<Value, String> {
 }
 
 fn inventory_read(uri: &str, field: &str) -> Result<Value, String> {
+    inventory_read_with_payload(uri, field, json!({}))
+}
+
+fn inventory_read_with_payload(uri: &str, field: &str, payload: Value) -> Result<Value, String> {
     // In place of LG's Home, Luma holds LG Home's LS2 role and asks sam/EIM itself: an early
     // root integration can bring this Home up long before Homebrew's service starts (~21 s vs
     // ~51 s into a cold boot). A refused call answers at once and falls back below.
     if runs_as_lg_home()
-        && let Ok(response) = call(uri, json!({}))
+        && let Ok(response) = call(uri, payload.clone())
         && let Some(value) = response.get(field)
     {
         return Ok(value.clone());
@@ -647,8 +606,9 @@ fn inventory_read(uri: &str, field: &str) -> Result<Value, String> {
     // Fixed inventory commands use Homebrew's elevated service.
     // Use the same one-reply invocation as the web launcher, without guessing
     // CLI behavior from a firmware-version string.
+    let payload = payload.to_string().replace('\'', "'\\''");
     let command = format!(
-        "if [ \"$(id -u)\" = 0 ]; then /usr/bin/luna-send -n 1 -w 4000 {uri} '{{}}'; else printf '%s\\n' '{{\"returnValue\":false,\"errorText\":\"Homebrew Channel needs root access\"}}'; fi"
+        "if [ \"$(id -u)\" = 0 ]; then /usr/bin/luna-send -n 1 -w 4000 {uri} '{payload}'; else printf '%s\\n' '{{\"returnValue\":false,\"errorText\":\"Homebrew Channel needs root access\"}}'; fi"
     );
     let envelope = call(
         "luna://org.webosbrew.hbchannel.service/exec",
@@ -787,12 +747,12 @@ fn recent_call(command: &crate::recents::Command) -> Result<Value, String> {
     command_reply(&envelope)
 }
 
-fn inventory() -> Result<(Inventory, Option<String>), String> {
+fn inventory(storage: &mut usb::Storage) -> Result<(Inventory, Option<String>), String> {
     let apps = normalize_apps(&inventory_read(
         "luna://com.webos.applicationManager/listApps",
         "apps",
     )?)?;
-    let inputs = input_inventory();
+    let inputs = input_inventory(storage);
     match inputs {
         Ok(inputs) => {
             eprintln!(
@@ -812,9 +772,11 @@ fn inventory() -> Result<(Inventory, Option<String>), String> {
     }
 }
 
-fn input_inventory() -> Result<Vec<Input>, String> {
-    inventory_read("luna://com.webos.service.eim/getAllInputStatus", "devices")
-        .and_then(|raw| normalize_inputs(&raw))
+fn input_inventory(storage: &mut usb::Storage) -> Result<Vec<Input>, String> {
+    let mut inputs = inventory_read("luna://com.webos.service.eim/getAllInputStatus", "devices")
+        .and_then(|raw| normalize_inputs(&raw))?;
+    inputs.extend_from_slice(storage.refresh());
+    Ok(inputs)
 }
 
 fn title(value: Option<&str>, fallback: &str) -> String {

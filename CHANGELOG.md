@@ -1,5 +1,71 @@
 # lg-luma
 
+## 3.12.0
+
+### Minor Changes
+
+- 4f6a4ad: Add per-widget location-name visibility, a Show icon toggle and weather icon style settings. Default to Kuankuan, with Breezy, Lucide and Kickstand alternatives, preserving saved choices and reflecting appearance settings in layout previews. Add a read-only, scrollable System → Attributions page and bundle the new artwork's licenses and editable sources.
+
+## 3.11.1
+
+### Patch Changes
+
+- 65dfa47: Center the app move arrows inside their indicator badge.
+
+## 3.11.0
+
+### Minor Changes
+
+- 4e2617a: Wrap left/right navigation between the first and last app in favorites and the app drawer by default, without a setting.
+
+### Patch Changes
+
+- af1da29: Shorten the main-thread pause when Luma prepares a new shadow. GLES 3 TVs upload a single coverage channel for each shadow and reuse the existing white color when sampling it.
+
+## 3.10.1
+
+### Patch Changes
+
+- 8b23549: Restore bright glass settings highlights and apply text tint directly in the fragment shader, with contrast coverage for popup actions as well as settings.
+
+## 3.10.0
+
+### Minor Changes
+
+- 8e73bc6: Show USB storage reported by webOS in Inputs, with naming and visibility controls. Selecting storage rechecks its presence and opens an installed LG media browser rather than treating USB as an HDMI source. TV discovery and media opening still need hardware verification across firmware versions.
+
+### Patch Changes
+
+- 867cd5b: Keep focused settings labels readable with an opaque dark fill, light text and icons, and a clear white outline instead of a bright white focus fill.
+
+## 3.9.0
+
+### Minor Changes
+
+- cbd2d76: Center the Home dock and size it to fit when it contains one to five apps. App cards keep their usual size and spacing.
+
+### Patch Changes
+
+- cbd2d76: Keep the selected Home dock tile and widgets in place when pressing Down would open an empty app drawer.
+
+## 3.8.3
+
+### Patch Changes
+
+- 48bc9e0: Bundle only the Midnight wallpaper and make it the default. Existing selections of removed bundled wallpapers fall back to Midnight while uploaded backgrounds and rotation remain supported.
+- a62a16b: Remove the obsolete wallpaper WebAssembly runtime and foreground PNGs from cached assets and native packages.
+- 50cda86: Replace wallpaper-matched launch splashes with one dark-gray splash featuring the centered Luma logo. Remove dynamic splash updates and per-wallpaper splash assets.
+
+## 3.8.2
+
+### Patch Changes
+
+- 4f6f39a: Smoother first opening of Settings and its sections on TVs: their images, logos and text are prepared in small steps while Home is idle.
+- 297acdc: Less CPU per frame on TVs: logo, text and paint draws keep their attribute setup in vertex array objects, and card logos are drawn after all faces so the GPU program switches far less often.
+- 279ee57: Add an opt-in native paint shader path for faster drawer animations. Set `LUMA_PAINT_SHADERS=1` to enable it.
+- 07bd338: Reject malformed decoded-image caches and reload the source image, preserving Liquid Glass atlas dimensions and bounding cache allocations.
+- a681a4e: Faster TV startup: the dock's surfaces decode on the startup workers, and large decoded startup images are reused between launches.
+
 ## 3.8.1
 
 ### Patch Changes

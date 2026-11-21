@@ -560,6 +560,83 @@ fn dock_is_not_a_control_and_its_glass_is_not_clipped_to_the_content_area() {
 }
 
 #[test]
+fn compact_dock_centers_visible_cards_and_their_pointer_targets() {
+    use crate::state::{HOME_DOCK_PADDING, HOME_TILE_PITCH, HOME_TILE_WIDTH};
+    for n in 1..=7 {
+        let mut state = ready();
+        // Keep the real inventory and hide everything else, as on the TV.
+        let ids: Vec<_> = state
+            .inventory
+            .apps
+            .iter()
+            .take(n)
+            .map(|a| a.id.clone())
+            .collect();
+        state.preferences.hidden = state
+            .inventory
+            .apps
+            .iter()
+            .skip(n)
+            .map(|a| a.id.clone())
+            .collect();
+        state.preferences.favorites = Some(ids.clone());
+        for page in [Page::Home, Page::Apps] {
+            state.page = page;
+            state.drawer_visibility = if page == Page::Home { 0. } else { 1. };
+            // The compact strip must not retain an offset from a previously long strip.
+            state.home_scroll = if n < 6 { HOME_TILE_PITCH } else { 0. };
+            let scene = scene(&state);
+            let rects: Vec<_> = ids
+                .iter()
+                .map(|id| {
+                    let target = if page == Page::Home {
+                        Target::App(id.clone())
+                    } else {
+                        Target::DockApp(id.clone())
+                    };
+                    let r = scene
+                        .controls
+                        .iter()
+                        .find(|c| c.target == target)
+                        .unwrap()
+                        .rect;
+                    (target, r)
+                })
+                .collect();
+            let viewport = state.favorites_viewport();
+            assert!((viewport.center().0 - 960.).abs() < 0.01);
+            let glass = scene
+                .draw
+                .iter()
+                .find_map(|d| match d {
+                    Draw::Glass(r, _, _)
+                        if (r.x - viewport.x).abs() < 0.01 && (r.w - viewport.w).abs() < 0.01 =>
+                    {
+                        Some(r)
+                    }
+                    _ => None,
+                })
+                .expect("dock glass matches the interactive viewport");
+            let end = rects[n.min(6) - 1].1;
+            assert!((rects[0].1.x - glass.x - HOME_DOCK_PADDING).abs() < 0.01);
+            assert!((glass.x + glass.w - end.x - end.w - HOME_DOCK_PADDING).abs() < 0.01);
+            for (i, (target, r)) in rects.iter().enumerate().take(6) {
+                assert_eq!(r.w, HOME_TILE_WIDTH);
+                assert!((r.x - rects[0].1.x - i as f32 * HOME_TILE_PITCH).abs() < 0.01);
+                let (x, y) = r.center();
+                assert_eq!(state.hit_test(&scene.controls, x, y), Some(target.clone()));
+            }
+            if n == 3 {
+                assert!((rects[1].1.center().0 - 960.).abs() < 0.01);
+            }
+            if n >= 6 {
+                assert_eq!((glass.x, glass.w), (60., 1800.));
+            }
+        }
+    }
+}
+
+#[test]
 fn home_dock_leaves_a_48_pixel_bottom_gap_and_keeps_cards_clickable() {
     let mut state = ready();
     state.preferences.app_drawer_style = crate::model::AppDrawerStyle::Minimal;
@@ -649,7 +726,7 @@ fn weather_empty_state_uses_a_large_icon_and_setup_action() {
     let state = ready();
     let rendered = scene(&state);
     assert!(rendered.draw.iter().any(|draw| matches!(draw,
-        Draw::Image(path, rect, ..) | Draw::TintedImage(path, rect, ..) if path.ends_with("weather/partly-cloudy.png") && rect.w == 144. && rect.h == 144.)));
+        Draw::Image(path, rect, ..) | Draw::TintedImage(path, rect, ..) if path.ends_with(&state.preferences.weather_icons.asset("partly-cloudy")) && rect.w == 144. && rect.h == 144.)));
     assert!(rendered.draw.iter().any(|draw| matches!(draw,
         Draw::Text(label, _, style, ..) if label == state.preferences.language.t("setWeatherLocation") && style.size >= 24.)));
     let setup = rendered

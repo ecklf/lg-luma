@@ -1,4 +1,4 @@
-//! Refresh only HDMI status, without reloading apps or queueing repeated reads.
+//! Refresh HDMI and USB storage, without reloading apps or queueing repeated reads.
 use crate::model::Input;
 use std::time::{Duration, Instant};
 

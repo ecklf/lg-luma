@@ -556,7 +556,7 @@ impl Renderer {
         };
         let text_program = match link(
             &(vertex_prefix + include_str!("shaders/text.vert")),
-            &(fragment_prefix + include_str!("shaders/vector.frag")),
+            &(fragment_prefix + include_str!("shaders/text.frag")),
             &[c"a_position", c"a_offset", c"a_origin", c"a_coverage"],
         ) {
             Ok(program) => program,

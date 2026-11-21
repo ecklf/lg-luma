@@ -31,9 +31,16 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 ## Features
 
 - Customizable app drawer with optional names beneath selected non-favorite apps (off by default), input icons and recent app switching.
+- Left/right navigation wraps between the first and last app in favorites and the app drawer.
 - Movable greeting, weather, stock and crypto widgets.
-- Built-in and uploaded backgrounds, with optional rotation.
+- Choose Kuankuan (default), Breezy, Lucide or Kickstand weather artwork, toggle icons on/off, and optionally hide the location name. Layout previews follow these settings.
+- Offline credits in System → Attributions, with remote and mouse-wheel scrolling.
+- Midnight background and custom uploads, with optional rotation.
 - Webhook shortcuts and 16 interface languages.
+
+Inputs also lists USB storage reported by webOS. Selecting a storage device opens an installed
+LG media browser, where you choose the device; it does not switch an HDMI source. USB discovery
+and media opening still need hardware verification across TV firmware versions.
 
 Personalize your greeting in **Settings → Widgets → Greeting → Configure → Name**.
 Use **Clear name** to return to an unnamed greeting; names are saved only on your TV.
@@ -140,7 +147,7 @@ to help make Luma available by default.
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_3.8.1_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_3.12.0_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -222,11 +229,9 @@ instead of the last input; tested on webOS 5.6.2 only, not verified on webOS 24.
 <details>
 <summary>Method for webOS 25 / 26</summary>
 
-Mounts Luma over the system Home app and reapplies the mount at cold boot. The LG splash
-shown before Luma's window opens is the wallpaper you selected in **Settings → Background**, staged
-from the saved preferences at each boot. Normal app launches also use your selected wallpaper:
-Luma updates the launch splash through Homebrew Channel's root service after loading or saving your
-settings. Open Luma once after installing or updating so subsequent launches use your saved background.
+Mounts Luma over the system Home app and reapplies the mount at cold boot. The launch splash
+uses a centered Luma logo on a dark-gray background, independent of your selected wallpaper.
+Normal app launches and staged Home launches use the same static image, with no runtime splash updates.
 LG Home's original files remain underneath, using the same approach as
 [Glasshouse Home](https://github.com/rorygallagher2024/glasshouse/blob/main/server/lib/home-takeover.js).
 
@@ -299,7 +304,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_3.8.1_arm.ipk
+dist/com.ecklf.luma_3.12.0_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png

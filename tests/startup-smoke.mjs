@@ -34,16 +34,16 @@ try {
   }
   await fs.mkdir(path.join(assets, 'wallpapers'));
   await fs.copyFile(
-    path.join(source, 'wallpapers/dunes.jpg'),
-    path.join(assets, 'wallpapers/dunes.jpg'),
+    path.join(source, 'wallpapers/midnight.jpg'),
+    path.join(assets, 'wallpapers/midnight.jpg'),
   );
-  const atlas = path.join(assets, 'wallpapers/dunes.glass.png');
-  const prepared = await fs.readFile(path.join(source, 'wallpapers/dunes.glass.png'));
+  const atlas = path.join(assets, 'wallpapers/midnight.glass.png');
+  const prepared = await fs.readFile(path.join(source, 'wallpapers/midnight.glass.png'));
   const preferences = path.join(scratch, 'preferences.json');
   for (const gles of profiles) {
     await fs.writeFile(
       preferences,
-      JSON.stringify({ show_weather: false, reduced_motion: true, background: 'dunes' }),
+      JSON.stringify({ show_weather: false, reduced_motion: true, background: 'midnight' }),
     );
     let reference;
     for (const mode of ['prepared', 'runtime', 'missing', 'corrupt']) {
@@ -119,7 +119,7 @@ try {
         JSON.stringify({
           show_weather: false,
           reduced_motion: true,
-          background: 'dunes',
+          background: 'midnight',
           app_drawer_style: style,
         }),
       );

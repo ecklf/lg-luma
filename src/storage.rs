@@ -287,7 +287,7 @@ mod tests {
             let candidates = fixture.candidates();
             let existing = &candidates[index];
             let preferences = Preferences {
-                background: "forest".into(),
+                background: "custom-00000000000000000000000000000001".into(),
                 favorites: Some(vec!["youtube.leanback.v4".into()]),
                 ..Preferences::default()
             };
@@ -296,7 +296,10 @@ mod tests {
             // Model root Home on a host-owned directory without requiring sudo.
             let selected = tv_path_in(candidates.clone(), &fixture.legacy(), 0).unwrap();
             assert_eq!(&selected, existing);
-            assert_eq!(load(&selected).unwrap().background, "forest");
+            assert_eq!(
+                load(&selected).unwrap().background,
+                "custom-00000000000000000000000000000001"
+            );
             assert_eq!(fs::read(existing).unwrap(), original);
             for (other, path) in candidates.iter().enumerate() {
                 if other != index {
@@ -366,20 +369,26 @@ mod tests {
         save(
             &fixture.legacy(),
             &Preferences {
-                background: "forest".into(),
+                background: "custom-00000000000000000000000000000001".into(),
                 ..Preferences::default()
             },
         )
         .unwrap();
         let selected = tv_path_in(candidates.clone(), &fixture.legacy(), 0).unwrap();
         assert_eq!(selected, candidates[0]);
-        assert_eq!(load(&selected).unwrap().background, "forest");
+        assert_eq!(
+            load(&selected).unwrap().background,
+            "custom-00000000000000000000000000000001"
+        );
         fs::write(fixture.legacy(), "broken").unwrap();
         assert_eq!(
             tv_path_in(candidates, &fixture.legacy(), 0).unwrap(),
             selected
         );
-        assert_eq!(load(&selected).unwrap().background, "forest");
+        assert_eq!(
+            load(&selected).unwrap().background,
+            "custom-00000000000000000000000000000001"
+        );
     }
 
     #[test]
