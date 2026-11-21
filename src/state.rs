@@ -1748,7 +1748,6 @@ impl State {
                     Target::Choice(0),
                     Target::Choice(1),
                     Target::Choice(2),
-                    Target::Choice(3),
                 ]),
                 Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
                 _ => None,

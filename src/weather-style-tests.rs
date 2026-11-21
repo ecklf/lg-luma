@@ -160,6 +160,35 @@ fn weather_picker_insets_match_outer_corner_radii() {
 }
 
 #[test]
+fn no_icon_is_an_independent_choice_and_legacy_layouts_migrate() {
+    use crate::model::WeatherIconStyle;
+    let mut prefs: Preferences = serde_json::from_str(
+        r#"{"weather_style":"no_icon","extra_weather":[{"style":"no_icon"}]}"#,
+    )
+    .unwrap();
+    prefs.sanitize();
+    assert_eq!(prefs.weather_style, WeatherStyle::Standard);
+    assert_eq!(prefs.weather_icons, WeatherIconStyle::None);
+    assert_eq!(prefs.extra_weather[0].style, WeatherStyle::Standard);
+    assert_eq!(prefs.extra_weather[0].icons, WeatherIconStyle::None);
+    assert!(!WeatherStyle::ALL.contains(&WeatherStyle::NoIcon));
+    let mut state = configured();
+    state.open(2);
+    state.section = WIDGETS_SECTION;
+    state.subpage = Some(Subpage::WeatherIcons);
+    state.focus = Target::Choice(3);
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::Choice(4));
+    assert_eq!(state.activate(), [Effect::Save]);
+    assert_eq!(state.preferences.weather_icons, WeatherIconStyle::None);
+    assert_eq!(state.preferences.weather_style, WeatherStyle::Standard);
+    for style in WeatherStyle::ALL {
+        state.preferences.weather_style = style;
+        assert!(weather_icons(&state).is_empty());
+    }
+}
+
+#[test]
 fn weather_icon_preferences_default_to_breezy_and_round_trip_per_instance() {
     use crate::model::{HomeWidget, WeatherIconStyle};
     let old: Preferences = serde_json::from_str(r#"{"extra_weather":[{}]}"#).unwrap();
@@ -251,7 +280,7 @@ fn selected_icon_and_location_settings_drive_every_layout_preview_and_home_size(
                             _ => None,
                         })
                         .collect();
-                    if small || style != WeatherStyle::NoIcon {
+                    if icons != WeatherIconStyle::None && (small || style != WeatherStyle::NoIcon) {
                         assert_eq!(paths.len(), 1);
                         assert!(paths[0].ends_with(&icons.asset("partly-cloudy")));
                     } else {
@@ -270,7 +299,11 @@ fn selected_icon_and_location_settings_drive_every_layout_preview_and_home_size(
             let rendered = scene(&state);
             let count = rendered.draw.iter().filter(|draw| matches!(draw,
                 Draw::Image(path, ..) | Draw::TintedImage(path, ..) if path.ends_with(&icons.asset("partly-cloudy")))).count();
-            assert_eq!(count, 3);
+            if icons == WeatherIconStyle::None {
+                assert!(weather_icons(&state).is_empty());
+            } else {
+                assert_eq!(count, 3);
+            }
             assert_eq!(
                 rendered.draw.iter().any(|draw| matches!(draw,
                 Draw::Text(label, ..) if label.contains("Vienna"))),
@@ -632,9 +665,9 @@ fn home_styles_share_content_and_keep_the_dock_fixed() {
             WeatherStyle::Standard => assert_eq!(icons[0].w, 144.),
             WeatherStyle::NoIcon => assert!(icons.is_empty()),
             WeatherStyle::OneLine => {
-                assert_eq!(icons[0].w, 48.);
+                assert_eq!(icons[0].w, 32.);
                 assert!(rendered.draw.iter().any(|draw| matches!(draw,
-                    Draw::Text(label, rect, ..) if label == "Vienna · Partly cloudy" && rect.x > icons[0].x && rect.y == icons[0].y + 10.)));
+                    Draw::Text(label, rect, ..) if label == "Vienna · Partly cloudy" && rect.x > icons[0].x && rect.y == icons[0].y)));
             }
             WeatherStyle::Compact => {
                 assert_eq!(icons[0].w, 32.);
@@ -721,9 +754,9 @@ fn one_line_style_is_remote_selectable_and_keeps_content_side_by_side() {
     state.open(2);
     state.section = WIDGETS_SECTION;
     state.subpage = Some(Subpage::WeatherStyle);
-    state.focus = Target::Choice(2);
+    state.focus = Target::Choice(1);
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Choice(3));
+    assert_eq!(state.focus, Target::Choice(2));
     assert_eq!(state.activate(), [Effect::Save]);
     assert_eq!(state.preferences.weather_style, WeatherStyle::OneLine);
     state.back();
@@ -747,7 +780,22 @@ fn one_line_style_is_remote_selectable_and_keeps_content_side_by_side() {
         let icon = weather_icons(&state)[0];
         assert!(icon.x + icon.w <= temperature.x);
         assert!(temperature.x + temperature.w <= detail.x);
-        assert!(detail.y < temperature.y + temperature.h);
+        assert_eq!(detail.y, temperature.y);
+        let fonts: Vec<_> = rendered
+            .draw
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Text(label, _, font, ..)
+                    if label == "14°C" || label == "Vienna · Partly cloudy" =>
+                {
+                    Some(*font)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(fonts.len(), 2);
+        assert_eq!(fonts[0].size, fonts[1].size);
+        assert_eq!(fonts[0].weight, fonts[1].weight);
     }
 }
 
@@ -775,11 +823,18 @@ fn weather_grid_keeps_original_temperature_typography_and_spacing() {
             .unwrap();
         let expected_size = match weather_style {
             WeatherStyle::Compact => 88.,
-            WeatherStyle::OneLine => 48.,
+            WeatherStyle::OneLine => 26.,
             _ => 112.,
         };
         assert_eq!(font.size, expected_size);
-        assert_eq!(font.weight, 500);
+        assert_eq!(
+            font.weight,
+            if weather_style == WeatherStyle::OneLine {
+                450
+            } else {
+                500
+            }
+        );
         assert!(condition.y - (temperature.y + font.size * font.line_height) <= 12.);
     }
 }
@@ -829,19 +884,18 @@ fn style_picker_previews_every_design_offline_and_only_saves_on_selection() {
     assert!(state.preferences.weather_location.is_none());
     assert!(!state.weather.fetching());
     state.direction(Direction::Down, &controls(&state));
-    state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Choice(2));
+    assert_eq!(state.focus, Target::Choice(1));
     assert_eq!(state.preferences.weather_style, WeatherStyle::Standard);
     state.back();
     assert_eq!(state.subpage, Some(Subpage::Weather));
     assert_eq!(state.focus, Target::WeatherStyle);
     state.activate();
-    state.focus = Target::Choice(2);
+    state.focus = Target::Choice(1);
     assert_eq!(state.activate(), [Effect::Save]);
     assert_eq!(state.preferences.weather_style, WeatherStyle::Compact);
     assert_eq!(state.focus, Target::WeatherStyle);
     state.activate();
-    assert_eq!(state.focus, Target::Choice(2));
+    assert_eq!(state.focus, Target::Choice(1));
     state.direction(Direction::Left, &controls(&state));
     assert_eq!(state.subpage, Some(Subpage::Weather));
 }

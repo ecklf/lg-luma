@@ -1645,19 +1645,24 @@ fn small_weather(out: &mut Scene, state: &State, assets: &Assets, cell: Rect, wi
         icon,
         Rect::new(cell.x, cell.y, 48., 48.),
     );
+    let inset = if config.icons == WeatherIconStyle::None {
+        0.
+    } else {
+        60.
+    };
     let (label, style) = if reading.is_some() {
-        assets.fit_line(&label, text(48., 500, -0.025), cell.w - 60., 16.)
+        assets.fit_line(&label, text(48., 500, -0.025), cell.w - inset, 16.)
     } else {
         // Keep the complete setup/loading/error action, wrapping within its cell.
-        let mut style = text(20., 500, -0.025).leading(1.2);
-        while assets.lines(&label, style, cell.w - 60.) > 2 && style.size > 14. {
+        let mut style = text(if config.small { 20. } else { 24. }, 500, -0.025).leading(1.2);
+        while assets.lines(&label, style, cell.w - inset) > 2 && style.size > 14. {
             style.size -= 1.;
         }
         (label, style)
     };
     out.text(
         label,
-        Rect::new(cell.x + 60., cell.y, cell.w - 60., 58.),
+        Rect::new(cell.x + inset, cell.y, cell.w - inset, 58.),
         style,
         WHITE,
         false,
@@ -1852,7 +1857,9 @@ fn weather_summary_layout_for(
     }
     let mut icon_rect = Rect::new(84., 64., 144., 144.);
     let mut height = 268.;
-    if style == WeatherStyle::NoIcon {
+    if style == WeatherStyle::NoIcon
+        || (style == WeatherStyle::Standard && config.icons == WeatherIconStyle::None)
+    {
         for (_, _, _, rect) in parts.iter_mut().skip(1) {
             rect.x = 84.;
         }
@@ -1872,7 +1879,16 @@ fn weather_summary_layout_for(
             let (label, font) = assets.fit_line(&condition.0, text(26., 450, -0.02), 800., 24.);
             condition.0 = label;
             condition.1 = font;
-            condition.3 = Rect::new(128., 116., assets.width(&condition.0, font) + 2., 36.);
+            condition.3 = Rect::new(
+                if config.icons == WeatherIconStyle::None {
+                    84.
+                } else {
+                    128.
+                },
+                116.,
+                assets.width(&condition.0, font) + 2.,
+                36.,
+            );
             if let Some((_, _, _, rect)) = parts.get_mut(2) {
                 rect.x = 84.;
                 rect.y = 168.;
@@ -1907,47 +1923,48 @@ fn weather_summary_layout_for(
             configured_widget_rect(state, widget, state.preferences.widget_position(widget)).w
         };
         let small = !preview && config.small;
-        let icon_size = if small { 32. } else { 48. };
-        let temperature_x = 84. + icon_size + 12.;
+        let icon_size = if small { 24. } else { 32. };
+        let temperature_x = if config.icons == WeatherIconStyle::None {
+            84.
+        } else {
+            84. + icon_size + 12.
+        };
         icon_rect = Rect::new(84., 0., icon_size, icon_size);
+        let gap = if small { 8. } else { 12. };
+        let mut font = text(if small { 18. } else { 26. }, 450, -0.02);
+        let available = width - (temperature_x - 84.) - gap;
+        while font.size > 14.
+            && assets.width(&parts[0].0, font) + assets.width(&parts[1].0, font) + 4. > available
+        {
+            font.size -= 1.;
+        }
         let temperature = &mut parts[0];
-        let (label, font) = assets.fit_line(
-            &temperature.0,
-            text(if small { 32. } else { 48. }, 500, -0.025),
-            width * 0.3,
-            24.,
-        );
-        temperature.0 = label;
         temperature.1 = font;
+        temperature.2 = c(0xf5f5f5, 0.78);
         temperature.3 = Rect::new(
             temperature_x,
             0.,
             assets.width(&temperature.0, font) + 2.,
-            58.,
+            36.,
         );
-        let detail_x = temperature.3.x + temperature.3.w + if small { 8. } else { 16. };
+        let detail_x = temperature.3.x + temperature.3.w + gap;
         let condition = &mut parts[1];
         let (label, font) = assets.fit_line(
             &condition.0,
-            text(if small { 16. } else { 26. }, 450, -0.02),
+            font,
             (width - (detail_x - 84.)).max(24.),
-            12.,
+            font.size,
         );
         condition.0 = label;
         condition.1 = font;
-        condition.3 = Rect::new(
-            detail_x,
-            if small { 6. } else { 10. },
-            assets.width(&condition.0, font) + 2.,
-            36.,
-        );
+        condition.3 = Rect::new(detail_x, 0., assets.width(&condition.0, font) + 2., 36.);
         if let Some((label, font, _, rect)) = parts.get_mut(2) {
             (*label, *font) = assets.fit_line(label, *font, width - (temperature_x - 84.), 14.);
             rect.x = temperature_x;
-            rect.y = 64.;
+            rect.y = 48.;
             rect.w = assets.width(label, *font) + 2.;
         }
-        height = if parts.len() > 2 { 100. } else { 58. };
+        height = if parts.len() > 2 { 84. } else { 36. };
     }
     let right = parts
         .iter()
@@ -1959,7 +1976,7 @@ fn weather_summary_layout_for(
         icon,
         icon_style: config.icons,
         icon_rect,
-        show_icon: style != WeatherStyle::NoIcon,
+        show_icon: style != WeatherStyle::NoIcon && config.icons != WeatherIconStyle::None,
         parts,
     }
 }
@@ -1971,6 +1988,9 @@ fn paint_weather_icon(
     condition: &str,
     rect: Rect,
 ) {
+    if style == WeatherIconStyle::None {
+        return;
+    }
     let path = assets.path(style.asset(condition));
     if style.monochrome() {
         out.draw
@@ -2429,7 +2449,11 @@ fn weather_icon_settings(out: &mut Scene, state: &State, assets: &Assets) {
             Row {
                 target: Target::Choice(index),
                 rect,
-                title: style.label(),
+                title: if style == WeatherIconStyle::None {
+                    state.preferences.language.t("weatherStyleNoIcon")
+                } else {
+                    style.label()
+                },
                 icon: None,
                 value: None,
                 description: None,
@@ -2484,7 +2508,11 @@ fn weather_style_settings(out: &mut Scene, state: &State, assets: &Assets) {
             Target::WeatherIcons,
             "weatherIconStyle",
             "grid",
-            config.icons.label(),
+            if config.icons == WeatherIconStyle::None {
+                language.t("weatherStyleNoIcon")
+            } else {
+                config.icons.label()
+            },
             true,
         ),
     ]

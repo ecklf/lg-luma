@@ -266,10 +266,17 @@ pub enum WeatherIconStyle {
     Lucide,
     Kickstand,
     Kuankuan,
+    None,
 }
 
 impl WeatherIconStyle {
-    pub const ALL: [Self; 4] = [Self::Breezy, Self::Lucide, Self::Kickstand, Self::Kuankuan];
+    pub const ALL: [Self; 5] = [
+        Self::Breezy,
+        Self::Lucide,
+        Self::Kickstand,
+        Self::Kuankuan,
+        Self::None,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -277,6 +284,7 @@ impl WeatherIconStyle {
             Self::Lucide => "Lucide",
             Self::Kickstand => "Kickstand",
             Self::Kuankuan => "Kuankuan",
+            Self::None => "No icon",
         }
     }
 
@@ -297,6 +305,7 @@ impl WeatherIconStyle {
                 }
             ),
             Self::Kuankuan => format!("ui-icons/weather-kuankuan-{condition}.lvec"),
+            Self::None => String::new(),
         }
     }
 
@@ -306,7 +315,7 @@ impl WeatherIconStyle {
 }
 
 impl WeatherStyle {
-    pub const ALL: [Self; 4] = [Self::Standard, Self::NoIcon, Self::Compact, Self::OneLine];
+    pub const ALL: [Self; 3] = [Self::Standard, Self::Compact, Self::OneLine];
 
     pub fn label_key(self) -> &'static str {
         match self {
@@ -955,6 +964,16 @@ impl Preferences {
     }
 
     pub fn sanitize(&mut self) {
+        if self.weather_style == WeatherStyle::NoIcon {
+            self.weather_style = WeatherStyle::Standard;
+            self.weather_icons = WeatherIconStyle::None;
+        }
+        for config in &mut self.extra_weather {
+            if config.style == WeatherStyle::NoIcon {
+                config.style = WeatherStyle::Standard;
+                config.icons = WeatherIconStyle::None;
+            }
+        }
         self.greeting_name = clean_input_name(&self.greeting_name);
         self.extra_crypto.truncate(HOME_GRID_CELLS);
         self.extra_stocks.truncate(HOME_GRID_CELLS);

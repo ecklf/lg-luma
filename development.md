@@ -368,9 +368,13 @@ Existing greeting, weather, shortcut and input preferences are unchanged. Scroll
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
 with a tighter 48-pixel spacing for Languages and Backgrounds.
 The weekday/date is part of the combined Greeting, not a standalone widget. Weather uses its
-own fixed footprint with a large condition icon, temperature, condition and optional location.
+own fixed footprint with a condition icon, temperature, condition and optional location.
+Standard, Compact and One line are independent of Icon style. Selecting No icon hides artwork
+and closes its gap in every layout and size. Legacy No icon layouts migrate to Standard with No icon selected.
 The One line style places the icon, temperature and “City · Condition” side by side in both
-sizes, fitting long labels to the available width. Saved-reading warnings stay below the row.
+sizes, with uniform 26-pixel text and a 32-pixel icon matching Compact's bottom line
+(18-pixel text and a 24-pixel icon when small). Long labels fit with a shared text size.
+Saved-reading warnings stay below the row.
 One line occupies a 2×1 grid footprint (1×1 in small size). Switching back to a taller
 style relocates the widget if necessary, or keeps the previous style if no space is available.
 Breezy Weather remains the default icon style. Weather → Widget style → Icon style offers Breezy Weather,
