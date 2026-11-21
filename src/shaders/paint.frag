@@ -35,7 +35,18 @@ vec3 glass_sample(vec2 uv, float scattering) {
     }
     return mix(sharp, soft, scattering);
 }
+#ifdef GLASS_ONLY
+uniform vec2 u_drawable;
+#endif
 void main() {
+#ifdef GLASS_ONLY
+    // -2000: the fully covered core of resting glass, baked once (glass-bake.frag).
+    if (v_params.y < -1999.0) {
+        vec3 baked = texture2D(u_texture, gl_FragCoord.xy / u_drawable).rgb;
+        gl_FragColor = vec4(mix(baked, v_color.rgb, step(0.5, v_color.r) * 0.88), v_color.a);
+        return;
+    }
+#else
     if (v_params.x < 0.0) {
         vec4 color = texture2D(u_texture, v_uv) * v_color;
         // -2: wallpaper with folded full-screen fills, p * m + k (k in v_shape).
@@ -44,7 +55,13 @@ void main() {
         gl_FragColor = color * vec4(1.0, 1.0, 1.0, edge_coverage());
         return;
     }
+#endif
+#ifdef GLASS_ONLY
+    // Resting glass only (PaintPrograms::glass_rim): the same glass path, nothing else.
+    bool glass = true;
+#else
     bool glass = v_params.y < -999.0;
+#endif
     float blur = glass ? 0.0 : max(-v_params.y, 0.0);
     vec2 half_size = v_shape.zw - vec2(blur);
     float radius = min(v_params.x, min(half_size.x, half_size.y));
