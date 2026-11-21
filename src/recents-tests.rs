@@ -696,8 +696,23 @@ fn recents_crossfade_reverses_without_jumping_and_restores_parent_input_immediat
             .collect::<Vec<_>>(),
         parent.iter().map(|c| &c.target).collect::<Vec<_>>()
     );
-    assert!(outgoing.draw.iter().any(|draw| matches!(draw,
-        Draw::TintedImage(path, _, _, _, tint) if path.ends_with("logos/netflix.lvec") && tint[3] > 0. && tint[3] < 1.)));
+    // Faded either per command or as part of a layer: its effective opacity is partial.
+    let opacity = |index: usize, alpha: f32| {
+        outgoing
+            .layers
+            .iter()
+            .filter(|layer| layer.start <= index && index < layer.end)
+            .fold(alpha, |alpha, layer| alpha * layer.alpha)
+    };
+    assert!(
+        outgoing
+            .draw
+            .iter()
+            .enumerate()
+            .any(|(index, draw)| matches!(draw,
+        Draw::TintedImage(path, _, _, _, tint) if path.ends_with("logos/netflix.lvec")
+            && opacity(index, tint[3]) > 0. && opacity(index, tint[3]) < 1.))
+    );
     state.recents.updated = start + Duration::from_millis(40);
     state
         .recents
