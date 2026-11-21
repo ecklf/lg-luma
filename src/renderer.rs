@@ -259,6 +259,19 @@ enum Hole {
     Opaque(Rect),
     /// Fully covered but translucent: blended, without the per-fragment edge distance.
     Interior(Rect),
+    /// A baked glass core partly covered by the very next opaque card face.
+    CoveredGlass(Rect, Rect),
+}
+
+fn strips([l, t, r, b]: [f32; 4], [x0, y0, x1, y1]: [f32; 4]) -> impl Iterator<Item = [f32; 4]> {
+    [
+        [l, t, r, y0],
+        [l, y1, r, b],
+        [l, y0, x0, y1],
+        [x1, y0, r, y1],
+    ]
+    .into_iter()
+    .filter(|[x, y, r, b]| r > x && b > y)
 }
 
 thread_local! {
@@ -415,6 +428,9 @@ struct GlassInterior {
 }
 
 struct PaintPrograms {
+    flat: GLuint,
+    folded: GLuint,
+    shadow: GLuint,
     texture: GLuint,
     tinted: GLuint,
     shape: GLuint,
@@ -430,6 +446,9 @@ struct PaintPrograms {
 impl Drop for PaintPrograms {
     fn drop(&mut self) {
         for id in [
+            self.flat,
+            self.folded,
+            self.shadow,
             self.texture,
             self.tinted,
             self.shape,
@@ -449,6 +468,12 @@ impl PaintPrograms {
     /// Use a short shader only if every triangle in this batch takes the same paint path.
     fn select(&self, vertices: &[f32], interior: bool, app: bool, fallback: GLuint) -> GLuint {
         let all = |predicate: fn(&[f32]) -> bool| vertices.chunks_exact(14).all(predicate);
+        if all(|v| v[12] == -2.) {
+            return self.folded;
+        }
+        if all(|v| v[12] >= 0. && v[13] < 0. && v[13] > -999.) {
+            return self.shadow;
+        }
         // Glass (border -1000) only takes an interior batch from a baked split (see build).
         if all(|v| v[13] == -1000. || v[13] == -2000.) {
             return if interior { self.glass } else { self.glass_rim };
@@ -580,6 +605,9 @@ impl Renderer {
             };
             let load = || -> Result<PaintPrograms, String> {
                 let mut programs = PaintPrograms {
+                    flat: 0,
+                    folded: 0,
+                    shadow: 0,
                     texture: 0,
                     tinted: 0,
                     shape: 0,
@@ -588,6 +616,10 @@ impl Renderer {
                     glass: 0,
                     glass_rim: 0,
                 };
+                programs.flat = build(include_str!("shaders/flat.frag"))?;
+                // The folded shader preserves the conditional add and rounding of paint.frag.
+                programs.folded = build(include_str!("shaders/folded.frag"))?;
+                programs.shadow = build(include_str!("shaders/shadow.frag"))?;
                 programs.texture = build(include_str!("shaders/texture.frag"))?;
                 programs.tinted = build(include_str!("shaders/tinted.frag"))?;
                 programs.shape = build(include_str!("shaders/shape.frag"))?;
@@ -873,7 +905,10 @@ impl Renderer {
         // Pixels inside `hole` would leave the target unchanged (zero coverage) or are
         // overdrawn by an opaque draw: rasterize only the four strips around it.
         if let Some(region) = hole {
-            let (Hole::Skip(hole) | Hole::Opaque(hole) | Hole::Interior(hole)) = region;
+            let (Hole::Skip(hole)
+            | Hole::Opaque(hole)
+            | Hole::Interior(hole)
+            | Hole::CoveredGlass(hole, _)) = region;
             // Whole physical pixels, rounded inward: the strips meet on pixel boundaries.
             let scale = self.stats.viewport.scale.max(0.01);
             let (left, top) = (
@@ -892,25 +927,37 @@ impl Renderer {
                 let (left, top) = (rect.x, rect.y);
                 let (right, bottom) = (rect.x + rect.w, rect.y + rect.h);
                 let mut count = 0;
-                for [a, b, c, d] in [
-                    [left, top, right, y0],
-                    [left, y1, right, bottom],
-                    [left, y0, x0, y1],
-                    [x1, y0, right, y1],
-                ] {
-                    if c > a && d > b {
-                        self.quad_part(rect, [a, b, c, d], uv, radius, border, colors);
-                        count += 6;
-                    }
+                for strip in strips([left, top, right, bottom], [x0, y0, x1, y1]) {
+                    self.quad_part(rect, strip, uv, radius, border, colors);
+                    count += 6;
                 }
                 if count > 0 {
                     self.paint_batch(start, count, texture, backdrop, false, false);
                 }
-                if let Hole::Opaque(_) | Hole::Interior(_) = region {
+                if !matches!(region, Hole::Skip(_)) {
                     let start = self.vertices.len() / 14;
-                    self.quad_part(rect, [x0, y0, x1, y1], uv, radius, border, colors);
+                    let core = [x0, y0, x1, y1];
+                    let hidden = if let Hole::CoveredGlass(_, cover) = region {
+                        let a = x0.max((cover.x * scale).ceil() / scale);
+                        let b = y0.max((cover.y * scale).ceil() / scale);
+                        let c = x1.min(((cover.x + cover.w) * scale).floor() / scale);
+                        let d = y1.min(((cover.y + cover.h) * scale).floor() / scale);
+                        (c > a && d > b).then_some([a, b, c, d])
+                    } else {
+                        None
+                    };
+                    if let Some(hidden) = hidden {
+                        for strip in strips(core, hidden) {
+                            self.quad_part(rect, strip, uv, radius, border, colors);
+                        }
+                    } else {
+                        self.quad_part(rect, core, uv, radius, border, colors);
+                    }
                     let opaque = matches!(region, Hole::Opaque(_));
-                    self.paint_batch(start, 6, texture, backdrop, opaque, true);
+                    let count = self.vertices.len() / 14 - start;
+                    if count > 0 {
+                        self.paint_batch(start, count, texture, backdrop, opaque, true);
+                    }
                 }
                 return;
             }
@@ -974,12 +1021,12 @@ impl Renderer {
         }
     }
 
-    /// The region of the next draw that is certainly opaque: an untinted, unfaded app face
-    /// or opaque image. A shadow beneath it does not need those pixels.
+    /// The interior of an app face or image that completely covers earlier draws.
     fn opaque_cover(&self, next: Option<&Draw>) -> Option<Rect> {
         let (rect, radius) = match next? {
             Draw::AppImage(_, rect, radius, tint) if tint[3] >= 1. => (*rect, *radius),
             Draw::Image(path, rect, radius, false)
+            | Draw::TintedImage(path, rect, radius, false, [_, _, _, 1.])
                 if !path.ends_with(".lvec")
                     && self
                         .textures
@@ -1001,7 +1048,9 @@ impl Renderer {
             if matches!(command, Draw::Clip(_) | Draw::EdgeFade(_)) {
                 return None;
             }
-            if let Some(hole) = self.opaque_cover(Some(command))
+            // Keep the shadow mask's sampling grid when a face is being tinted.
+            if matches!(command, Draw::AppImage(..) | Draw::Image(..))
+                && let Some(hole) = self.opaque_cover(Some(command))
                 && hole.x <= cx
                 && cx <= hole.x + hole.w
                 && hole.y <= cy
@@ -2106,7 +2155,8 @@ impl Renderer {
                 }
             }
             // Outside the damage the scissor would discard it anyway; skip its layout too.
-            if let (Some(area), Some(bounds)) = (area, crate::damage::bounds(command))
+            if let Some(area) = area
+                && let Some(bounds) = self.damage_bounds(command)
                 && !crate::damage::intersects(area, bounds)
             {
                 continue;
@@ -2135,7 +2185,12 @@ impl Renderer {
                                 [*tint; 2],
                                 texture,
                                 None,
-                                Some(Hole::Interior(core)),
+                                Some(
+                                    self.opaque_cover(commands.get(index))
+                                        .map_or(Hole::Interior(core), |cover| {
+                                            Hole::CoveredGlass(core, cover)
+                                        }),
+                                ),
                             );
                             self.merge_glass_core();
                         }
@@ -2423,12 +2478,19 @@ impl Renderer {
                             .as_ref()
                             .filter(|_| batch.fade.is_none())
                             .map_or(self.program, |programs| {
-                                programs.select(
+                                let selected = programs.select(
                                     &self.vertices[start * 14..(start + count) * 14],
                                     *interior,
                                     backdrop.is_some(),
                                     self.program,
-                                )
+                                );
+                                if *texture == self.white.id
+                                    && (selected == programs.tinted || selected == programs.texture)
+                                {
+                                    programs.flat
+                                } else {
+                                    selected
+                                }
                             });
                         // The glass program assumes a baked frame: one backdrop, glass on.
                         let program = if self.glass_split.is_none()
@@ -3182,6 +3244,24 @@ mod shadow_tests {
 mod paint_program_tests {
     use super::*;
 
+    #[test]
+    fn core_strips_draw_each_exposed_pixel_once() {
+        let core = [0., 0., 8., 6.];
+        for covered in [[2., 1., 6., 4.], [0., 1., 7., 6.], core] {
+            let visible: Vec<_> = strips(core, covered).collect();
+            for y in 0..6 {
+                for x in 0..8 {
+                    let (x, y) = (x as f32 + 0.5, y as f32 + 0.5);
+                    let contains = |[l, t, r, b]: [f32; 4]| l <= x && x < r && t <= y && y < b;
+                    assert_eq!(
+                        visible.iter().filter(|r| contains(**r)).count(),
+                        usize::from(!contains(covered))
+                    );
+                }
+            }
+        }
+    }
+
     /// Six paint vertices with `color`, corner radius and border (see quad_part).
     fn quad(color: Color, radius: f32, border: f32) -> Vec<f32> {
         let vertex = [
@@ -3194,6 +3274,9 @@ mod paint_program_tests {
     #[test]
     fn translucent_interiors_and_app_edges_take_short_shaders() {
         let programs = PaintPrograms {
+            flat: 10,
+            folded: 11,
+            shadow: 12,
             texture: 1,
             tinted: 2,
             shape: 3,
@@ -3223,8 +3306,9 @@ mod paint_program_tests {
             programs.select(&quad(faded, 12., -1000.), true, false, 9),
             6
         );
-        // Blurred shadows keep the general shader.
-        assert_eq!(programs.select(&quad(faded, 12., -8.), false, false, 9), 9);
+        // Shadow coverage and folded wallpapers use the corresponding paint formulas.
+        assert_eq!(programs.select(&quad(faded, 12., -8.), false, false, 9), 12);
+        assert_eq!(programs.select(&quad(faded, -2., 0.), false, false, 9), 11);
         // Never delete GL programs without a context.
         std::mem::forget(programs);
     }
