@@ -89,7 +89,7 @@ fn appearance_controls_live_inside_widget_style_and_update_previews_immediately(
 }
 
 #[test]
-fn icon_picker_has_compact_rows_and_sidebar_keeps_only_the_last_three_levels() {
+fn icon_picker_matches_style_row_height_and_sidebar_keeps_only_the_last_three_levels() {
     for language in crate::i18n::Language::ALL {
         let mut state = configured();
         state.preferences.language = language;
@@ -124,7 +124,7 @@ fn icon_picker_has_compact_rows_and_sidebar_keeps_only_the_last_three_levels() {
                 .iter()
                 .find(|c| c.target == Target::Choice(index))
                 .unwrap();
-            assert_eq!(row.rect.h, 112.);
+            assert_eq!(row.rect.h, 200.);
             let (x, y) = row.rect.center();
             assert_eq!(
                 state.hit_test(&rendered.controls, x, y),

@@ -2322,9 +2322,9 @@ fn weather_icon_settings(out: &mut Scene, state: &State, assets: &Assets) {
     for (index, style) in WeatherIconStyle::ALL.into_iter().enumerate() {
         let rect = Rect::new(
             640.,
-            164.8 + index as f32 * 128. - state.scroll,
+            164.8 + index as f32 * 216. - state.scroll,
             1120.,
-            112.,
+            200.,
         );
         row(
             out,
@@ -2355,7 +2355,7 @@ fn weather_icon_settings(out: &mut Scene, state: &State, assets: &Assets) {
                 assets,
                 style,
                 condition,
-                Rect::new(1084. + position as f32 * 128., rect.y + 24., 64., 64.),
+                Rect::new(1084. + position as f32 * 128., rect.y + 68., 64., 64.),
             );
         }
         if style == config.icons {
