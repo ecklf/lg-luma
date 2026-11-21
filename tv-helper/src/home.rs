@@ -766,7 +766,7 @@ impl<'a, S: System> Home<'a, S> {
             let bytes = system::read(self.system, app.join(name), 16 * 1024 * 1024)?;
             system::write(self.system, format!("{STATE}/{name}"), &bytes, mode)?;
         }
-        // The compositor key filter (early launch, Back/Exit).
+        // The compositor key filter (early launch, Back/Exit) and the cold-boot loading screen.
         let source = String::from_utf8(system::read(
             self.system,
             app.join("home-filter.js"),
@@ -775,6 +775,8 @@ impl<'a, S: System> Home<'a, S> {
         .map_err(|e| e.to_string())?;
         let filter = filter_source(&source, &self.id, self.exists(INPUT_FLAG))?;
         system::write(self.system, FILTER, filter.as_bytes(), 0o644)?;
+        let logo = system::read(self.system, app.join("boot-logo.png"), 1024 * 1024)?;
+        system::write(self.system, format!("{STATE}/boot-logo.png"), &logo, 0o644)?;
         // Retire the former interpreter script only after both replacement files are available.
         system::remove(self.system, format!("{STATE}/home.cjs"))?;
         Ok(())
