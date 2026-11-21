@@ -22,13 +22,6 @@ pub fn valid_app_id(id: &str) -> bool {
             .split(['.', '_', '-'])
             .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_alphanumeric()))
 }
-pub fn valid_background(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= 32
-        && id
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-}
 pub fn accepted(reply: serde_json::Value) -> Result<serde_json::Value> {
     if reply
         .get("returnValue")

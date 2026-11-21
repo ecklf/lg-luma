@@ -831,12 +831,7 @@ impl<'a, S: System> Home<'a, S> {
         self.close_normal()?;
         if method == "manifest" {
             system::mkdir(self.system, STAGE)?;
-            let mut links = vec![
-                "luma".to_owned(),
-                "assets".into(),
-                "lib".into(),
-                "splash".into(),
-            ];
+            let mut links = vec!["luma".to_owned(), "assets".into(), "lib".into()];
             for key in ["icon", "largeIcon"] {
                 if let Some(name) = manifest[key].as_str() {
                     if Path::new(name).is_absolute()

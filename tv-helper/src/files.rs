@@ -1,13 +1,12 @@
 use crate::{
     APP, ROOTS, Result,
     system::{self, System},
-    valid_app_id, valid_background,
+    valid_app_id,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
     collections::HashSet,
-    fs,
     path::{Component, Path, PathBuf},
 };
 
@@ -112,93 +111,9 @@ fn installed(system: &impl System, directory: &Path) -> Result<Value> {
     }
     Ok(app)
 }
-pub fn sync_splash(system: &impl System, directory: &Path, background: &str) -> Result<Value> {
-    installed(system, directory)?;
-    if !valid_background(background) {
-        return Err("Invalid splash background".into());
-    }
-    let image = system::read(
-        system,
-        directory.join(format!("splash/{background}.png")),
-        32 * 1024 * 1024,
-    )?;
-    replace(system, &directory.join("splash.png"), &image)?;
-    let config_path = Path::new("/var/lib/luma-home/state.json");
-    if system::exists(system, config_path) {
-        let config = system::json(system, config_path)?;
-        if config["enabled"] == true
-            && config["method"] != "executable"
-            && config["appDir"].as_str() == directory.to_str()
-        {
-            replace(
-                system,
-                Path::new("/var/lib/luma-home/app/splash.png"),
-                &image,
-            )?;
-        }
-    }
-    Ok(json!({"returnValue":true,"background":background}))
-}
-fn replace(system: &impl System, path: &Path, image: &[u8]) -> Result<()> {
-    if system::read(system, path, 32 * 1024 * 1024).is_ok_and(|bytes| bytes == image) {
-        return Ok(());
-    }
-    system::write(system, path, image, 0o644)
-}
-/// Select the same app-owned storage precedence as native preferences; never follow a storage
-/// directory symlink while running as root. Older native builds also saved splash_background.
+/// Stage the package's static launch screen without consulting user preferences.
 pub(crate) fn stage_splash(system: &impl System, directory: &Path) -> Result<()> {
-    let mut candidates = vec![
-        format!("/media/developer/{APP}/preferences.json"),
-        format!("/media/developer/temp/{APP}/preferences.json"),
-        format!("/media/internal/.{APP}/preferences.json"),
-    ];
-    if directory.starts_with("/media/cryptofs") {
-        candidates.rotate_right(1);
-    }
-    let mut ranked = vec![];
-    for (index, path) in candidates.into_iter().enumerate() {
-        let parent = Path::new(&path).parent().unwrap();
-        if let Ok(meta) = fs::symlink_metadata(system.path(parent))
-            && meta.is_dir()
-            && system::exists(system, &path)
-        {
-            #[cfg(unix)]
-            let root_owned = {
-                use std::os::unix::fs::MetadataExt;
-                meta.uid() == 0
-            };
-            #[cfg(not(unix))]
-            let root_owned = false;
-            ranked.push((root_owned, index, path));
-        }
-    }
-    ranked.sort_by_key(|(root, index, _)| (*root, *index));
-    let mut candidates: Vec<_> = ranked
-        .into_iter()
-        .map(|(_, _, path)| PathBuf::from(path))
-        .collect();
-    candidates.push(directory.join("preferences.json"));
-    let background = candidates
-        .iter()
-        .find_map(|path| {
-            system::json(system, path).ok().and_then(|value| {
-                value
-                    .get("splash_background")
-                    .and_then(Value::as_str)
-                    .filter(|s| !s.is_empty())
-                    .or_else(|| value.get("background").and_then(Value::as_str))
-                    .filter(|s| valid_background(s))
-                    .map(str::to_owned)
-            })
-        })
-        .unwrap_or_else(|| "dunes".into());
-    let path = directory.join(format!("splash/{background}.png"));
-    let path = if system::exists(system, &path) {
-        path
-    } else {
-        directory.join("splash.png")
-    };
-    let bytes = system::read(system, path, 32 * 1024 * 1024)?;
+    installed(system, directory)?;
+    let bytes = system::read(system, directory.join("splash.png"), 32 * 1024 * 1024)?;
     system::write(system, "/var/lib/luma-home/app/splash.png", &bytes, 0o644)
 }

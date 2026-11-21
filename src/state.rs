@@ -24,9 +24,9 @@ pub const SETTINGS_ORDER: [usize; SECTION_COUNT] = [
 ];
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
-/// System row registering Luma as a TV input (luma-helper tv-input). Row 14 is the drawer's
-/// app names.
-pub const TV_INPUT_ROW: usize = 15;
+/// System row registering Luma as a TV input (luma-helper tv-input). Rows up to 16 are taken
+/// (14 drawer app names, 15 drawer style, 16 attributions); 17 is reserved for web access.
+pub const TV_INPUT_ROW: usize = 18;
 pub const APPS_COLUMNS: usize = 6;
 pub const DRAWER_PADDING: f32 = 24.;
 pub const DRAWER_NAME_TOP: f32 = 12.;
@@ -39,6 +39,8 @@ pub const HOME_STRIP_LEFT: f32 = 84.;
 pub const HOME_STRIP_RIGHT: f32 = 1836.;
 pub const HOME_TILE_WIDTH: f32 = 270.;
 pub const HOME_TILE_PITCH: f32 = 296.4;
+pub const HOME_DOCK_SLOTS: usize = 6;
+pub const HOME_DOCK_PADDING: f32 = 24.;
 pub const BACKGROUND_FADE: f32 = 0.4;
 pub const CYCLE_FADE: f32 = 1.6;
 
@@ -128,6 +130,11 @@ pub enum Target {
     WeatherTemperature,
     WeatherStyle,
     WeatherSize,
+    WeatherShowLocation,
+    WeatherShowIcon,
+    WeatherIcons,
+    Attributions,
+    AttributionText,
     WeatherQuery,
     WeatherSearch,
     WeatherClear,
@@ -202,9 +209,12 @@ pub enum Subpage {
     WeatherStyle,
     Language,
     AppSorting,
+    AppDrawerStyle,
     AppDrawer,
     RecentApps,
     TextRendering,
+    WeatherIcons,
+    Attributions,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -721,7 +731,7 @@ impl State {
     /// Backfill the six visible dock slots without changing saved favorites.
     pub fn dock_apps(&self) -> Vec<&App> {
         let mut apps = self.favorite_apps();
-        if apps.len() < 6 {
+        if apps.len() < HOME_DOCK_SLOTS {
             let mut remaining: Vec<_> = self
                 .inventory
                 .apps
@@ -732,7 +742,7 @@ impl State {
                 })
                 .collect();
             remaining.sort_by(|a, b| self.preferences.compare_apps(a, b));
-            apps.extend(remaining.into_iter().take(6 - apps.len()));
+            apps.extend(remaining.into_iter().take(HOME_DOCK_SLOTS - apps.len()));
         }
         apps
     }
@@ -768,9 +778,28 @@ impl State {
 
     /// The favourites' glass card: their tiles scroll, draw and take pointer input only inside it.
     pub fn favorites_viewport(&self) -> Rect {
+        // dock_apps backfills from all visible apps. For pointer/wheel events we
+        // only need the number of occupied slots, not their sorted order.
+        let slots = self
+            .inventory
+            .apps
+            .iter()
+            .filter(|app| !self.preferences.hidden.contains(&app.id))
+            .take(HOME_DOCK_SLOTS)
+            .count();
+        self.dock_viewport_for(slots)
+    }
+
+    pub fn dock_viewport_for(&self, count: usize) -> Rect {
         let content = self.content_viewport();
-        let inset = HOME_STRIP_LEFT - 24.;
-        Rect::new(inset, content.y, 1920. - 2. * inset, content.h)
+        let tiles = if (1..HOME_DOCK_SLOTS).contains(&count) {
+            HOME_TILE_WIDTH + (count - 1) as f32 * HOME_TILE_PITCH
+        } else {
+            // Retain the six-slot viewport for overflow and the loading/empty UI.
+            HOME_STRIP_RIGHT - HOME_STRIP_LEFT
+        };
+        let width = tiles + 2. * HOME_DOCK_PADDING;
+        Rect::new((1920. - width) / 2., content.y, width, content.h)
     }
 
     pub fn apps_viewport(&self) -> Rect {
@@ -794,6 +823,20 @@ impl State {
         Rect::new(620., 244.8, 1160., content.y + content.h - 244.8)
     }
 
+    pub fn attributions_viewport(&self) -> Rect {
+        Rect::new(640., 164.8, 1120., 1080. - 164.8 - SETTINGS_BOTTOM_PADDING)
+    }
+
+    fn scroll_attributions(&mut self, controls: &[Control], delta: f32) {
+        let viewport = self.attributions_viewport();
+        let height = controls
+            .iter()
+            .find(|control| control.target == Target::AttributionText)
+            .map_or(viewport.h, |control| control.rect.h);
+        self.scroll = (self.scroll + delta).clamp(0., (height - viewport.h).max(0.));
+        self.dirty = true;
+    }
+
     pub fn hit_test(&self, controls: &[Control], x: f32, y: f32) -> Option<Target> {
         controls
             .iter()
@@ -806,8 +849,9 @@ impl State {
                 {
                     return false;
                 }
-                let viewport = if (self.page == Page::Home
-                    && matches!(control.target, Target::App(_)))
+                let viewport = if control.target == Target::AttributionText {
+                    self.attributions_viewport()
+                } else if (self.page == Page::Home && matches!(control.target, Target::App(_)))
                     || matches!(control.target, Target::DockApp(_))
                 {
                     self.favorites_viewport()
@@ -833,6 +877,16 @@ impl State {
         x: i32,
         y: i32,
     ) -> bool {
+        if self.page == Page::Settings
+            && self.subpage == Some(Subpage::Attributions)
+            && self.overlay.is_none()
+        {
+            if position.is_none_or(|(x, y)| self.attributions_viewport().contains(x, y)) {
+                self.scroll_attributions(controls, -y as f32 * 90.);
+                self.pointer = true;
+            }
+            return false;
+        }
         let backgrounds =
             self.page == Page::Settings && self.section == 1 && self.subpage.is_none();
         if self.managing_apps()
@@ -1083,7 +1137,7 @@ impl State {
             ) {
                 self.scroll = 0.;
             } else if control.scrollable
-                && !matches!(self.focus, Target::DockApp(_))
+                && !matches!(self.focus, Target::DockApp(_) | Target::AttributionText)
                 && self.page != Page::Home
             {
                 let top = if self.managing_apps() {
@@ -1165,7 +1219,6 @@ impl State {
         let Some(id) = next else {
             return false;
         };
-        self.preferences.splash_background = Some(self.preferences.splash_background().to_owned());
         if self.preferences.reduced_motion {
             self.previous_background = None;
         } else {
@@ -1375,9 +1428,21 @@ impl State {
                 self.subpage = Some(Subpage::Weather);
                 Target::WeatherStyle
             }
+            Some(Subpage::WeatherIcons) => {
+                self.subpage = Some(Subpage::WeatherStyle);
+                Target::WeatherIcons
+            }
+            Some(Subpage::Attributions) => Target::Attributions,
             Some(Subpage::Language) => Target::Setting(4),
             Some(Subpage::TextRendering) => Target::Setting(7),
-            Some(Subpage::AppSorting) => Target::Setting(10),
+            Some(Subpage::AppSorting) => {
+                self.subpage = Some(Subpage::AppDrawer);
+                Target::Setting(10)
+            }
+            Some(Subpage::AppDrawerStyle) => {
+                self.subpage = Some(Subpage::AppDrawer);
+                Target::Setting(15)
+            }
             Some(Subpage::AppDrawer) => Target::Setting(13),
             Some(Subpage::RecentApps) => Target::Setting(12),
             None => Target::Sidebar(self.section),
@@ -1391,6 +1456,19 @@ impl State {
         self.dirty = true;
         if self.recents_open() {
             return self.recent_direction(direction);
+        }
+        if self.overlay.is_none()
+            && self.page == Page::Settings
+            && self.subpage == Some(Subpage::Attributions)
+            && self.focus == Target::AttributionText
+        {
+            match direction {
+                Direction::Up => self.scroll_attributions(controls, -180.),
+                Direction::Down => self.scroll_attributions(controls, 180.),
+                Direction::Left => self.close_subpage(),
+                Direction::Right => {}
+            }
+            return vec![];
         }
         if self.overlay.is_none()
             && self.page == Page::Settings
@@ -1540,10 +1618,10 @@ impl State {
                             .get(index.min(self.apps().len().saturating_sub(1)))
                             .map_or_else(|| self.focus.clone(), |app| Target::App(app.id.clone())),
                         Direction::Left => {
-                            Target::DockApp(apps[index.saturating_sub(1)].id.clone())
+                            Target::DockApp(apps[(index + apps.len() - 1) % apps.len()].id.clone())
                         }
                         Direction::Right => {
-                            Target::DockApp(apps[(index + 1).min(apps.len() - 1)].id.clone())
+                            Target::DockApp(apps[(index + 1) % apps.len()].id.clone())
                         }
                     };
                     if matches!(direction, Direction::Up) {
@@ -1643,9 +1721,9 @@ impl State {
                     match direction {
                         Direction::Left | Direction::Right => {
                             let next = if matches!(direction, Direction::Left) {
-                                index.saturating_sub(1)
+                                (index + apps.len() - 1) % apps.len()
                             } else {
-                                (index + 1).min(apps.len() - 1)
+                                (index + 1) % apps.len()
                             };
                             let id = apps[next].id.clone();
                             self.focus(Target::App(id), controls);
@@ -1658,6 +1736,7 @@ impl State {
                             },
                             controls,
                         ),
+                        Direction::Down if self.drawer_apps().is_empty() => {}
                         Direction::Down => {
                             self.open(1);
                             self.focus = self.first_content();
@@ -1682,6 +1761,14 @@ impl State {
                     Target::WeatherTemperature,
                     Target::WeatherStyle,
                     Target::WeatherSize,
+                ]),
+                Some(Subpage::WeatherStyle) => Some(&[
+                    Target::WeatherShowLocation,
+                    Target::WeatherShowIcon,
+                    Target::WeatherIcons,
+                    Target::Choice(0),
+                    Target::Choice(1),
+                    Target::Choice(2),
                 ]),
                 Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
                 _ => None,
@@ -1712,6 +1799,7 @@ impl State {
                                 | Target::WeatherLocation
                                 | Target::WeatherTemperature
                                 | Target::WeatherStyle
+                                | Target::WeatherIcons
                                 | Target::MarketSymbol(_)
                                 | Target::MoveWidget(_)
                         ) =>
@@ -1730,9 +1818,10 @@ impl State {
                         | Subpage::Temperature
                         | Subpage::TextRendering
                         | Subpage::AppSorting
-                        | Subpage::AppDrawer,
+                        | Subpage::AppDrawerStyle,
                     ) => 2,
                     Some(Subpage::RecentApps) => crate::model::RecentAppsBehavior::ALL.len(),
+                    Some(Subpage::WeatherIcons) => crate::model::WeatherIconStyle::ALL.len(),
                     Some(Subpage::InputIcons(_)) => crate::model::INPUT_ICONS.len() + 1,
                     Some(Subpage::Language) => Language::ALL.len(),
                     Some(Subpage::DateFormat) => crate::model::DateFormat::ALL.len(),
@@ -1840,16 +1929,24 @@ impl State {
             }
             if matches!(
                 self.focus,
-                Target::Setting(0 | 1 | 4 | 7 | 10)
+                Target::Setting(0 | 1 | 4 | 7 | 10 | 13 | 15)
                     | Target::Widget(_)
                     | Target::MoveWidget(_)
                     | Target::InputMode(_)
                     | Target::WeatherLocation
                     | Target::WeatherTemperature
                     | Target::WeatherStyle
+                    | Target::Attributions
             ) && matches!(direction, Direction::Right)
             {
                 return self.activate();
+            }
+            if self.subpage == Some(Subpage::AppDrawer)
+                && matches!(self.focus, Target::Setting(_))
+                && matches!(direction, Direction::Left)
+            {
+                self.close_subpage();
+                return vec![];
             }
             if matches!(self.focus, Target::Setting(_)) && matches!(direction, Direction::Right) {
                 return vec![];
@@ -1972,12 +2069,12 @@ impl State {
                     // Its grid index still defines the route; reveal_focus then
                     // scrolls it into view, without letting the fixed nav steal Up.
                     let next = match direction {
-                        Direction::Left => {
-                            Some(Target::App(apps[index.saturating_sub(1)].id.clone()))
-                        }
-                        Direction::Right => Some(Target::App(
-                            apps[(index + 1).min(apps.len() - 1)].id.clone(),
+                        Direction::Left => Some(Target::App(
+                            apps[(index + apps.len() - 1) % apps.len()].id.clone(),
                         )),
+                        Direction::Right => {
+                            Some(Target::App(apps[(index + 1) % apps.len()].id.clone()))
+                        }
                         Direction::Up if index < APPS_COLUMNS => {
                             let target = self
                                 .dock_apps()
@@ -2738,6 +2835,38 @@ impl State {
                     self.panel_started = Some(Instant::now());
                 }
             }
+            Target::WeatherShowLocation => {
+                self.preferences
+                    .edit_weather(self.active_weather, |config| {
+                        config.show_location = !config.show_location;
+                    });
+                return vec![Effect::Save];
+            }
+            Target::WeatherShowIcon => {
+                self.preferences
+                    .edit_weather(self.active_weather, |config| {
+                        config.show_icon = !config.show_icon;
+                    });
+                return vec![Effect::Save];
+            }
+            Target::WeatherIcons => {
+                self.subpage = Some(Subpage::WeatherIcons);
+                self.focus = Target::Choice(
+                    self.preferences
+                        .weather_settings(self.active_weather)
+                        .icons
+                        .index(),
+                );
+                self.scroll = 0.;
+                self.panel_started = (!self.preferences.reduced_motion).then(Instant::now);
+            }
+            Target::Attributions => {
+                self.subpage = Some(Subpage::Attributions);
+                self.focus = Target::AttributionText;
+                self.scroll = 0.;
+                self.panel_started = (!self.preferences.reduced_motion).then(Instant::now);
+            }
+            Target::AttributionText => {}
             Target::WeatherQuery => self.open_keyboard(TextField::Location),
             Target::DateToggle => {
                 self.preferences.show_date = !self.preferences.show_date;
@@ -2998,6 +3127,13 @@ impl State {
                     }
                     13 => {
                         self.subpage = Some(Subpage::AppDrawer);
+                        self.focus = Target::Setting(15);
+                        self.scroll = 0.;
+                        self.panel_started = (!self.preferences.reduced_motion).then(Instant::now);
+                        return vec![];
+                    }
+                    15 => {
+                        self.subpage = Some(Subpage::AppDrawerStyle);
                         self.focus = Target::Choice(usize::from(
                             self.preferences.app_drawer_style
                                 == crate::model::AppDrawerStyle::Minimal,
@@ -3103,11 +3239,6 @@ impl State {
                         Some((self.preferences.background.clone(), Instant::now()));
                     self.background_fade = BACKGROUND_FADE;
                 }
-                self.preferences.splash_background = Some(if crate::wallpapers::valid_id(&id) {
-                    self.preferences.splash_background().to_owned()
-                } else {
-                    id.clone()
-                });
                 self.preferences.background = id;
                 self.preferences.wallpaper_changed = unix_now();
                 self.back();
@@ -3165,12 +3296,20 @@ impl State {
                         };
                     }
                     Some(Subpage::WeatherStyle) => {
-                        self.preferences
-                            .edit_weather(self.active_weather, |config| {
-                                config.style = crate::model::WeatherStyle::ALL[index.min(2)]
-                            });
+                        self.preferences.set_weather_widget_style(
+                            self.active_weather,
+                            crate::model::WeatherStyle::ALL
+                                [index.min(crate::model::WeatherStyle::ALL.len() - 1)],
+                        );
                     }
-                    Some(Subpage::AppDrawer) => {
+                    Some(Subpage::WeatherIcons) => {
+                        let Some(style) = crate::model::WeatherIconStyle::ALL.get(index) else {
+                            return vec![];
+                        };
+                        self.preferences
+                            .edit_weather(self.active_weather, |config| config.icons = *style);
+                    }
+                    Some(Subpage::AppDrawerStyle) => {
                         self.preferences.app_drawer_style =
                             crate::model::AppDrawerStyle::ALL[index.min(1)];
                     }
@@ -3231,8 +3370,10 @@ impl State {
                         | Subpage::Market(_)
                         | Subpage::Greeting
                         | Subpage::Clock
+                        | Subpage::AppDrawer
                         | Subpage::Weather
-                        | Subpage::Shortcuts,
+                        | Subpage::Shortcuts
+                        | Subpage::Attributions,
                     ) => {
                         return vec![];
                     }
