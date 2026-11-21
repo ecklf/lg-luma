@@ -121,7 +121,13 @@ try {
     await run('cargo', ['build', '--locked', '--package', 'luma']);
   await fs.writeFile(
     preferences,
-    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
+    JSON.stringify({
+      language: 'en',
+      show_home_names: true,
+      reduced_motion: true,
+      weather_style: 'standard',
+      weather_position: { column: 4, row: 0 },
+    }),
   );
   const languages = await scenario('picker-en', picker);
   assert.equal(languages.subpage, 'Language');
@@ -231,7 +237,13 @@ try {
 
   await fs.writeFile(
     preferences,
-    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
+    JSON.stringify({
+      language: 'en',
+      show_home_names: true,
+      reduced_motion: true,
+      weather_style: 'standard',
+      weather_position: { column: 4, row: 0 },
+    }),
   );
   const portuguese = await scenario(
     'pt-home',
@@ -276,7 +288,13 @@ try {
 
   await fs.writeFile(
     preferences,
-    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
+    JSON.stringify({
+      language: 'en',
+      show_home_names: true,
+      reduced_motion: true,
+      weather_style: 'standard',
+      weather_position: { column: 4, row: 0 },
+    }),
   );
   const portuguesePicker = `${picker},${Array(7).fill('down').join(',')}`;
   const portugueseFocused = await scenario('pt-picker', portuguesePicker);
@@ -337,7 +355,13 @@ try {
   await scenario('vi-4k', 'home,down', ['--capture-scale', '2']);
   await fs.writeFile(
     preferences,
-    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
+    JSON.stringify({
+      language: 'en',
+      show_home_names: true,
+      reduced_motion: true,
+      weather_style: 'standard',
+      weather_position: { column: 4, row: 0 },
+    }),
   );
   const traditionalPicker = `${picker},${Array(13).fill('down').join(',')}`;
   const traditionalFocused = await scenario('zh-tw-picker', traditionalPicker);
@@ -365,7 +389,13 @@ try {
 
   await fs.writeFile(
     preferences,
-    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
+    JSON.stringify({
+      language: 'en',
+      show_home_names: true,
+      reduced_motion: true,
+      weather_style: 'standard',
+      weather_position: { column: 4, row: 0 },
+    }),
   );
   const catalan = await scenario('ca-home', `${picker},up,up,enter,home`);
   assert.equal(catalan.preferences.language, 'ca');
@@ -395,7 +425,13 @@ try {
 
   await fs.writeFile(
     preferences,
-    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
+    JSON.stringify({
+      language: 'en',
+      show_home_names: true,
+      reduced_motion: true,
+      weather_style: 'standard',
+      weather_position: { column: 4, row: 0 },
+    }),
   );
   const hungarianPicker = `${picker},${Array(4).fill('down').join(',')}`;
   const hungarianFocused = await scenario('hu-picker', hungarianPicker);

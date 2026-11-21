@@ -8,6 +8,9 @@ use crate::{
 
 fn configured() -> State {
     let mut state = ready();
+    // Layout-specific checks retain an explicitly configured Standard widget.
+    state.preferences.weather_style = WeatherStyle::Standard;
+    state.preferences.weather_position = crate::model::WidgetPosition { column: 4, row: 0 };
     let location = weather::Location {
         name: "Vienna".into(),
         region: String::new(),
@@ -530,9 +533,51 @@ fn hidden_location_style_previews_are_private_but_configuration_keeps_city() {
 }
 
 #[test]
+fn unset_weather_defaults_to_one_line_below_greeting_without_overwriting_saved_choices() {
+    use crate::model::{HomeWidget, WidgetPosition};
+    let mut defaults: Preferences = serde_json::from_str(r#"{"extra_weather":[{}]}"#).unwrap();
+    defaults.sanitize();
+    assert_eq!(defaults.weather_style, WeatherStyle::OneLine);
+    assert_eq!(
+        defaults.weather_position,
+        WidgetPosition { column: 0, row: 1 }
+    );
+    assert_eq!(defaults.widget_span(HomeWidget::Weather), (2, 1));
+    assert!(defaults.can_place_widget(HomeWidget::Weather, defaults.weather_position));
+    assert_eq!(defaults.extra_weather[0].style, WeatherStyle::OneLine);
+    for (json, style, position) in [
+        (
+            r#"{"weather_style":"standard","weather_position":{"column":4,"row":0}}"#,
+            WeatherStyle::Standard,
+            WidgetPosition { column: 4, row: 0 },
+        ),
+        (
+            r#"{"weather_style":"compact","weather_position":{"column":3,"row":2}}"#,
+            WeatherStyle::Compact,
+            WidgetPosition { column: 3, row: 2 },
+        ),
+        (
+            r#"{"weather_style":"compact"}"#,
+            WeatherStyle::Compact,
+            WidgetPosition { column: 0, row: 1 },
+        ),
+        (
+            r#"{"weather_position":{"column":4,"row":0}}"#,
+            WeatherStyle::OneLine,
+            WidgetPosition { column: 4, row: 0 },
+        ),
+    ] {
+        let mut prefs: Preferences = serde_json::from_str(json).unwrap();
+        prefs.sanitize();
+        assert_eq!(prefs.weather_style, style);
+        assert_eq!(prefs.weather_position, position);
+    }
+}
+
+#[test]
 fn weather_styles_default_and_round_trip_without_changing_other_preferences() {
     let old: Preferences = serde_json::from_str("{}").unwrap();
-    assert_eq!(old.weather_style, WeatherStyle::Standard);
+    assert_eq!(old.weather_style, WeatherStyle::OneLine);
     for style in WeatherStyle::ALL {
         let mut state = configured();
         state.preferences.weather_style = style;
@@ -950,6 +995,7 @@ fn weather_grid_keeps_original_temperature_typography_and_spacing() {
 #[test]
 fn style_picker_previews_every_design_offline_and_only_saves_on_selection() {
     let mut state = ready();
+    state.preferences.weather_style = WeatherStyle::Standard;
     state.open(2);
     state.section = WIDGETS_SECTION;
     state.subpage = Some(Subpage::Weather);

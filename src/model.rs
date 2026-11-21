@@ -251,10 +251,10 @@ impl AppSorting {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WeatherStyle {
-    #[default]
     Standard,
     NoIcon,
     Compact,
+    #[default]
     OneLine,
 }
 
@@ -397,15 +397,15 @@ impl HomeWidget {
         WidgetPosition {
             column: match self.kind() {
                 Self::Greeting => 0,
-                Self::Weather => 4,
+                Self::Weather => 0,
                 Self::Crypto => 0,
                 Self::Stocks => 1,
                 _ => unreachable!(),
             },
-            row: if matches!(self.kind(), Self::Crypto | Self::Stocks) {
-                2
-            } else {
-                0
+            row: match self.kind() {
+                Self::Weather => 1,
+                Self::Crypto | Self::Stocks => 2,
+                _ => 0,
             },
         }
     }
@@ -431,7 +431,7 @@ impl Default for WeatherWidgetSettings {
     fn default() -> Self {
         Self {
             enabled: false,
-            position: WidgetPosition::default(),
+            position: HomeWidget::Weather.default_position(),
             location: None,
             unit: Unit::default(),
             small: false,

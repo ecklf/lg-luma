@@ -4,6 +4,14 @@ use crate::{
     state::{APPS_SECTION, Rect, Subpage},
 };
 
+// These grid and layout regressions exercise a saved, two-row Standard widget.
+fn ready() -> State {
+    let mut state = super::ready();
+    state.preferences.weather_style = crate::model::WeatherStyle::Standard;
+    state.preferences.weather_position = crate::model::WidgetPosition { column: 4, row: 0 };
+    state
+}
+
 #[test]
 fn inputs_have_their_own_sidebar_section_directly_below_apps() {
     use crate::state::{INPUTS_SECTION, SETTINGS_ORDER, WIDGETS_SECTION};
@@ -449,7 +457,7 @@ fn widget_positions_default_to_requested_spans_and_sanitize_safely() {
     );
     assert_eq!(
         preferences.weather_position,
-        WidgetPosition { column: 4, row: 0 }
+        WidgetPosition { column: 0, row: 1 }
     );
     assert!(preferences.weather_visible());
     for greeting in 0..crate::model::HOME_GRID_CELLS {
