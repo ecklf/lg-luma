@@ -2435,6 +2435,14 @@ fn weather_settings(out: &mut Scene, state: &State, assets: &Assets) {
     );
 }
 
+fn weather_preview_checkmark(out: &mut Scene, assets: &Assets, row: Rect) {
+    // The preview is inset 20px; keep the check 24px from its top/right edges.
+    let badge = Rect::new(row.x + row.w - 80., row.y + 36., 44., 44.);
+    out.shape(badge, 22., c(0xffffff, 0.10));
+    out.border(badge, 22., 1., c(0xffffff, 0.18));
+    out.icon(assets, "check", badge.inset(8.), WHITE);
+}
+
 fn weather_icon_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let config = state.preferences.weather_settings(state.active_weather);
     for (index, style) in WeatherIconStyle::ALL.into_iter().enumerate() {
@@ -2481,12 +2489,7 @@ fn weather_icon_settings(out: &mut Scene, state: &State, assets: &Assets) {
             );
         }
         if style == config.icons {
-            out.icon(
-                assets,
-                "check",
-                Rect::new(1696., rect.y + 24., 24., 24.),
-                WHITE,
-            );
+            weather_preview_checkmark(out, assets, rect);
         }
     }
 }
@@ -2590,12 +2593,7 @@ fn weather_style_settings(out: &mut Scene, state: &State, assets: &Assets) {
                 .weather_settings(state.active_weather)
                 .style
         {
-            out.icon(
-                assets,
-                "check",
-                Rect::new(1696., rect.y + 24., 24., 24.),
-                WHITE,
-            );
+            weather_preview_checkmark(out, assets, rect);
         }
     }
 }

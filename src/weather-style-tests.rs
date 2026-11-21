@@ -264,6 +264,33 @@ fn show_icon_toggle_preserves_artwork_and_legacy_hidden_icons_migrate() {
 }
 
 #[test]
+fn weather_picker_selection_badges_are_inset_and_visible() {
+    for subpage in [Subpage::WeatherIcons, Subpage::WeatherStyle] {
+        let mut state = configured();
+        state.open(2);
+        state.section = WIDGETS_SECTION;
+        state.subpage = Some(subpage);
+        let rendered = scene(&state);
+        let row = rendered
+            .controls
+            .iter()
+            .find(|control| control.target == Target::Choice(0))
+            .unwrap()
+            .rect;
+        assert!(rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::TintedImage(path, rect, ..) if path.ends_with("check.lvec")
+                && rect.w == 28. && rect.h == 28.
+                && rect.y == row.y + 44.
+                && rect.x + rect.w == row.x + row.w - 44.
+        )));
+        assert!(rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::Shape(rect, radius, ..) if *radius == 22.
+                && rect.w == 44. && rect.h == 44. && rect.y == row.y + 36.
+        )));
+    }
+}
+
+#[test]
 fn weather_icon_preferences_default_to_kuankuan_and_round_trip_per_instance() {
     use crate::model::{HomeWidget, WeatherIconStyle};
     let old: Preferences = serde_json::from_str(r#"{"extra_weather":[{}]}"#).unwrap();

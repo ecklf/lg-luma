@@ -382,8 +382,9 @@ style relocates the widget if necessary, or keeps the previous style if no space
 Kuankuan is the default icon style. Weather → Widget style → Icon style offers Kuankuan first,
 followed by Breezy, Lucide and Kickstand, with offline condition samples in 200-pixel picker rows
 matching the layout previews, with centered 64-pixel icons. Both weather pickers use 20-pixel preview insets with 28-pixel
-inner corner radii to match the rows' 48-pixel outer corners. Sidebar breadcrumbs show at most the
-last three levels, retaining the current page and its closest parents. `weather_icons` stores the primary
+inner corner radii to match the rows' 48-pixel outer corners. Selected previews have 28-pixel white
+checkmarks on subtle circular badges, with 24-pixel top/right padding inside the preview.
+Sidebar breadcrumbs show at most the last three levels, retaining the current page and its closest parents. `weather_icons` stores the primary
 choice; additional instances use `icons`. Lucide, Kickstand and Kuankuan compile to vector meshes;
 Breezy retains its original PNGs. No icons are fetched at runtime. Sources, licenses, adaptations
 and mappings are documented in `assets/weather/README.md`; Kuankuan's preferred editable `.ai`
