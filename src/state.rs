@@ -2735,17 +2735,33 @@ impl State {
         if self.preferences.wallpaper_cycle != settings.wallpaper_cycle {
             self.preferences.wallpaper_changed = unix_now();
         }
+        // Style and size change the weather widget's footprint: the TV's own paths move it to a
+        // free spot, or keep the old value when none is left.
+        if settings.weather_style != self.preferences.weather_style {
+            self.preferences
+                .set_weather_widget_style(HomeWidget::Weather, settings.weather_style);
+        }
+        if settings.weather_small != self.preferences.weather_small {
+            self.preferences
+                .toggle_weather_widget_size(HomeWidget::Weather);
+        }
         let preferences = &mut self.preferences;
         preferences.hour_24 = settings.hour_24;
         preferences.show_seconds = settings.show_seconds;
         preferences.language = settings.language;
         preferences.app_sorting = settings.app_sorting;
+        preferences.app_drawer_style = settings.app_drawer_style;
+        preferences.show_drawer_app_names = settings.show_drawer_app_names;
+        preferences.recent_apps_behavior = settings.recent_apps_behavior;
         preferences.reduced_motion = settings.reduced_motion;
         preferences.ui_sounds = settings.ui_sounds;
         preferences.show_date = settings.show_date;
         preferences.date_format = settings.date_format;
+        preferences.greeting_name = settings.greeting_name;
         preferences.temperature_unit = settings.temperature_unit;
-        preferences.weather_style = settings.weather_style;
+        preferences.weather_show_location = settings.weather_show_location;
+        preferences.weather_show_icon = settings.weather_show_icon;
+        preferences.weather_icons = settings.weather_icons;
         preferences.wallpaper_cycle = settings.wallpaper_cycle;
         preferences.wallpaper_gradient = settings.wallpaper_gradient;
         self.dirty = true;

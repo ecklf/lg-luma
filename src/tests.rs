@@ -3861,6 +3861,66 @@ fn web_settings_apply_like_the_same_choices_on_the_tv() {
 }
 
 #[test]
+fn web_settings_cover_the_drawer_recents_greeting_and_weather_display() {
+    use crate::model::{AppDrawerStyle, RecentAppsBehavior, WeatherIconStyle};
+    let mut state = ready();
+    let mut settings = crate::web_settings::Settings::of(&state.preferences);
+    settings.app_drawer_style = AppDrawerStyle::Minimal;
+    settings.show_drawer_app_names = !settings.show_drawer_app_names;
+    settings.recent_apps_behavior = RecentAppsBehavior::ShortPress;
+    settings.weather_show_location = !settings.weather_show_location;
+    settings.weather_show_icon = !settings.weather_show_icon;
+    settings.weather_icons = WeatherIconStyle::Lucide;
+    // The same cleaning as the TV keyboard; an unknown icon style falls back to the default.
+    settings.greeting_name = "  Max\n ".into();
+    let settings = settings.cleaned();
+    assert_eq!(settings.greeting_name, "Max");
+    assert_eq!(
+        state.apply_web_settings(settings.clone()),
+        vec![Effect::Save]
+    );
+    let preferences = &state.preferences;
+    assert_eq!(preferences.app_drawer_style, AppDrawerStyle::Minimal);
+    assert_eq!(
+        preferences.recent_apps_behavior,
+        RecentAppsBehavior::ShortPress
+    );
+    assert_eq!(preferences.weather_icons, WeatherIconStyle::Lucide);
+    assert_eq!(preferences.greeting_name, "Max");
+    assert_eq!(
+        crate::web_settings::Settings::of(&state.preferences),
+        settings
+    );
+    let mut hidden = crate::web_settings::Settings::of(&state.preferences);
+    hidden.weather_icons = WeatherIconStyle::None;
+    assert_eq!(hidden.cleaned().weather_icons, WeatherIconStyle::default());
+}
+
+#[test]
+fn web_weather_size_and_style_move_the_widget_like_the_tv() {
+    use crate::model::HomeWidget;
+    let mut state = ready();
+    let mut settings = crate::web_settings::Settings::of(&state.preferences);
+    assert!(!settings.weather_small);
+    settings.weather_small = true;
+    assert_eq!(
+        state.apply_web_settings(settings.clone()),
+        vec![Effect::Save]
+    );
+    assert!(state.preferences.weather_small);
+    // Growing back goes through the TV's relocation: the 2 × 2 widget always fits somewhere.
+    settings.weather_small = false;
+    state.apply_web_settings(settings);
+    assert!(!state.preferences.weather_small);
+    let position = state.preferences.widget_position(HomeWidget::Weather);
+    assert!(
+        state
+            .preferences
+            .can_place_widget(HomeWidget::Weather, position)
+    );
+}
+
+#[test]
 fn web_widget_layout_follows_the_tv_placement_rules() {
     use crate::model::HomeWidget;
     use crate::web_settings::WidgetChange;

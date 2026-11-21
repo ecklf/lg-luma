@@ -2,7 +2,8 @@
 //! Labels come from the TV's own message catalog, so the page reads like Settings on the TV.
 use crate::i18n::Language;
 use crate::model::{
-    AppSorting, DateFormat, HomeWidget, INPUT_ICONS, InputMode, Preferences, WeatherStyle,
+    AppDrawerStyle, AppSorting, DateFormat, HomeWidget, INPUT_ICONS, InputMode, Preferences,
+    RecentAppsBehavior, WeatherIconStyle, WeatherStyle,
 };
 use crate::text_rendering::TextRendering;
 use crate::weather::Unit;
@@ -18,12 +19,22 @@ pub struct Settings {
     pub show_seconds: bool,
     pub language: Language,
     pub app_sorting: AppSorting,
+    pub app_drawer_style: AppDrawerStyle,
+    pub show_drawer_app_names: bool,
+    pub recent_apps_behavior: RecentAppsBehavior,
     pub reduced_motion: bool,
     pub ui_sounds: bool,
     pub show_date: bool,
     pub date_format: DateFormat,
+    /// The greeting's name; empty greets without one.
+    pub greeting_name: String,
     pub temperature_unit: Unit,
     pub weather_style: WeatherStyle,
+    /// The Home weather widget: 1 × 1 instead of 2 × 2.
+    pub weather_small: bool,
+    pub weather_show_location: bool,
+    pub weather_show_icon: bool,
+    pub weather_icons: WeatherIconStyle,
     /// One of the backgrounds in the catalog; the launcher ignores any other id.
     pub background: String,
     pub wallpaper_cycle: bool,
@@ -40,12 +51,20 @@ impl Settings {
             show_seconds: preferences.show_seconds,
             language: preferences.language,
             app_sorting: preferences.app_sorting,
+            app_drawer_style: preferences.app_drawer_style,
+            show_drawer_app_names: preferences.show_drawer_app_names,
+            recent_apps_behavior: preferences.recent_apps_behavior,
             reduced_motion: preferences.reduced_motion,
             ui_sounds: preferences.ui_sounds,
             show_date: preferences.show_date,
             date_format: preferences.date_format,
+            greeting_name: preferences.greeting_name.clone(),
             temperature_unit: preferences.temperature_unit,
             weather_style: preferences.weather_style,
+            weather_small: preferences.weather_small,
+            weather_show_location: preferences.weather_show_location,
+            weather_show_icon: preferences.weather_show_icon,
+            weather_icons: preferences.weather_icons,
             background: preferences.background.clone(),
             wallpaper_cycle: preferences.wallpaper_cycle,
             wallpaper_gradient: preferences.wallpaper_gradient,
@@ -54,8 +73,13 @@ impl Settings {
         }
     }
 
-    /// Kept for the request path; every field is already a closed choice.
-    pub fn cleaned(self) -> Self {
+    /// The greeting name is the only free text: cleaned as the TV's keyboard cleans it. The
+    /// icon style is one of those the TV offers ("no icon" is the separate icon switch).
+    pub fn cleaned(mut self) -> Self {
+        self.greeting_name = crate::model::clean_input_name(&self.greeting_name);
+        if !WeatherIconStyle::ALL.contains(&self.weather_icons) {
+            self.weather_icons = WeatherIconStyle::default();
+        }
         self
     }
 }
@@ -334,6 +358,17 @@ const LABELS: &[(&str, &str)] = &[
     ("wallpaperCycle", "wallpaperCycle"),
     ("wallpaperGradient", "wallpaperGradient"),
     ("textRendering", "textRendering"),
+    ("appDrawer", "appDrawer"),
+    ("drawerStyle", "style"),
+    ("showAppNames", "showAppNames"),
+    ("recentApps", "recentApps"),
+    ("greetingName", "name"),
+    ("widgetSize", "widgetSize"),
+    ("weatherShowLocation", "weatherShowLocation"),
+    ("weatherShowIcon", "weatherShowIcon"),
+    ("weatherIconStyle", "weatherIconStyle"),
+    ("crypto", "crypto"),
+    ("stocks", "stocks"),
 ];
 
 /// The page's whole view of the TV: current values plus every label in the TV's language, so the
@@ -375,6 +410,19 @@ pub fn listing(settings: &Settings, catalog: &Catalog) -> serde_json::Value {
         ],
         "input_icon": std::iter::once(choice("", t("inputIconAutomatic")))
             .chain(INPUT_ICONS.iter().map(|(icon, key)| choice(icon, t(key))))
+            .collect::<Vec<_>>(),
+        "app_drawer_style": AppDrawerStyle::ALL
+            .iter()
+            .map(|item| choice(item, t(item.label_key())))
+            .collect::<Vec<_>>(),
+        "recent_apps_behavior": RecentAppsBehavior::ALL
+            .iter()
+            .map(|item| choice(item, t(item.label_key())))
+            .collect::<Vec<_>>(),
+        "weather_small": [choice(false, "2 × 2"), choice(true, "1 × 1")],
+        "weather_icons": WeatherIconStyle::ALL
+            .iter()
+            .map(|item| choice(item, item.label()))
             .collect::<Vec<_>>(),
         "text_rendering": TextRendering::ALL
             .iter()

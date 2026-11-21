@@ -454,6 +454,23 @@ function pickerRow(key, label) {
   return row;
 }
 
+// Free text saved when the field is left or Enter is pressed, like the TV's keyboard.
+function textRow(key, label, placeholder = '') {
+  const row = create('label', 'row stacked');
+  const field = create('input', 'text-field');
+  field.type = 'text';
+  field.maxLength = 40;
+  field.autocomplete = 'off';
+  field.enterKeyHint = 'done';
+  field.placeholder = placeholder;
+  field.value = state.settings[key];
+  field.setAttribute('aria-label', label);
+  field.addEventListener('change', () => change(key, field.value.trim()));
+  field.addEventListener('keydown', (event) => event.key === 'Enter' && field.blur());
+  row.append(title(label), field);
+  return row;
+}
+
 function choiceRow(key, label) {
   return state.choices[key].length > 3 ? pickerRow(key, label) : segmentRow(key, label);
 }
@@ -1497,7 +1514,8 @@ function dragWidget(event, entry, block, board) {
 }
 
 function widgetName(widget) {
-  return widget === 'greeting' ? state.labels.greeting : state.labels.weather;
+  const l = state.labels;
+  return { greeting: l.greeting, crypto: l.crypto, stocks: l.stocks }[widget] ?? l.weather;
 }
 
 function changeWidgets(change) {
@@ -1699,9 +1717,15 @@ function sections() {
       group(
         null,
         choiceRow('language', l.language),
-        choiceRow('app_sorting', l.appSorting),
         toggleRow('reduced_motion', l.reducedMotion),
         toggleRow('ui_sounds', l.uiSounds),
+        choiceRow('recent_apps_behavior', l.recentApps),
+      ),
+      group(
+        l.appDrawer,
+        choiceRow('app_drawer_style', l.drawerStyle),
+        choiceRow('app_sorting', l.appSorting),
+        toggleRow('show_drawer_app_names', l.showAppNames),
       ),
     ],
     apps: appsSection(),
@@ -1718,12 +1742,23 @@ function sections() {
     ],
     widgets: [
       group(l.widgetPosition, widgetGrid()),
-      group(l.greeting, toggleRow('show_date', l.date), choiceRow('date_format', l.dateFormat)),
+      group(
+        l.greeting,
+        textRow('greeting_name', l.greetingName),
+        toggleRow('show_date', l.date),
+        choiceRow('date_format', l.dateFormat),
+      ),
       group(
         l.weather,
         ...locationRows(),
         choiceRow('temperature_unit', l.temperature),
         choiceRow('weather_style', l.weatherStyle),
+        choiceRow('weather_small', l.widgetSize),
+        toggleRow('weather_show_location', l.weatherShowLocation),
+        toggleRow('weather_show_icon', l.weatherShowIcon),
+        ...(state.settings.weather_show_icon
+          ? [choiceRow('weather_icons', l.weatherIconStyle)]
+          : []),
       ),
       group(l.shortcuts, ...tileRows()),
     ],
@@ -1805,7 +1840,7 @@ function apply(result) {
 function change(key, value) {
   const next = { ...state.settings, [key]: value };
   state.settings = next;
-  if (key === 'background') render();
+  if (key === 'background' || key === 'weather_show_icon') render();
   // Changes go out one at a time, in order, so the TV ends on the last one.
   queue = queue.then(async () => {
     message(strings.saving, false, true);
