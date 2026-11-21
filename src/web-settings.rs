@@ -146,34 +146,103 @@ pub struct Catalog {
     pub tv_remote: crate::tv_remote::Status,
 }
 
-/// A Home widget on the 6×4 grid, or off it.
+/// A Home widget on the 6×4 grid, or off it. Extra weather, crypto and stocks widgets are listed
+/// too, plus one not yet created per kind while there is room for another.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct WebWidget {
     pub widget: HomeWidget,
+    /// 1 for the first widget of a kind, 2 for the next, as the TV numbers them.
+    pub number: u8,
     pub present: bool,
     pub column: u8,
     pub row: u8,
     pub width: u8,
     pub height: u8,
+    /// A weather widget's own settings; for the first one they are also plain settings.
+    pub weather: Option<WebWeather>,
+    pub market: Option<WebMarket>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct WebWeather {
+    pub location: Option<crate::weather::Location>,
+    pub unit: Unit,
+    pub style: WeatherStyle,
+    pub small: bool,
+    pub show_location: bool,
+    pub show_icon: bool,
+    pub icons: WeatherIconStyle,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct WebMarket {
+    pub symbol: String,
+    pub currency: String,
 }
 
 impl WebWidget {
     pub fn all(preferences: &Preferences) -> Vec<Self> {
-        HomeWidget::ALL
+        let next = [HomeWidget::Weather, HomeWidget::Crypto, HomeWidget::Stocks]
             .into_iter()
-            .map(|widget| {
-                let position = preferences.widget_position(widget);
-                let (width, height) = widget.span();
-                Self {
-                    widget,
-                    present: preferences.has_widget(widget),
-                    column: position.column,
-                    row: position.row,
-                    width,
-                    height,
-                }
-            })
+            .filter_map(|kind| preferences.available_widget(kind))
+            .filter(|widget| !preferences.widgets().contains(widget));
+        preferences
+            .widgets()
+            .into_iter()
+            .map(|widget| Self::of(preferences, widget, true))
+            .chain(next.map(|widget| Self::of(preferences, widget, false)))
             .collect()
+    }
+
+    /// `exists`: false for the next extra widget, which has no settings until it is added.
+    fn of(preferences: &Preferences, widget: HomeWidget, exists: bool) -> Self {
+        let position = if exists {
+            preferences.widget_position(widget)
+        } else {
+            crate::model::WidgetPosition { column: 0, row: 0 }
+        };
+        let (width, height) = if exists {
+            preferences.widget_span(widget)
+        } else {
+            widget.span()
+        };
+        let number = match widget {
+            HomeWidget::ExtraWeather(i)
+            | HomeWidget::ExtraCrypto(i)
+            | HomeWidget::ExtraStocks(i) => i.saturating_add(2),
+            _ => 1,
+        };
+        let weather = (exists && widget.kind() == HomeWidget::Weather).then(|| {
+            let config = preferences.weather_settings(widget);
+            WebWeather {
+                location: config.location,
+                unit: config.unit,
+                style: config.style,
+                small: config.small,
+                show_location: config.show_location,
+                show_icon: config.show_icon,
+                icons: config.icons,
+            }
+        });
+        let market = (exists && matches!(widget.kind(), HomeWidget::Crypto | HomeWidget::Stocks))
+            .then(|| {
+                let config = crate::markets::settings(preferences, widget);
+                WebMarket {
+                    symbol: config.symbol.clone(),
+                    currency: config.currency.clone(),
+                }
+            });
+        Self {
+            widget,
+            number,
+            present: exists && preferences.has_widget(widget),
+            column: position.column,
+            row: position.row,
+            width,
+            height,
+            weather,
+            market,
+        }
     }
 }
 
@@ -195,6 +264,22 @@ pub enum WidgetChange {
         widget: HomeWidget,
     },
     Reset,
+    /// Any weather widget's own settings (the place has its own request).
+    Weather {
+        widget: HomeWidget,
+        unit: Unit,
+        style: WeatherStyle,
+        small: bool,
+        show_location: bool,
+        show_icon: bool,
+        icons: WeatherIconStyle,
+    },
+    /// A crypto or stocks widget's symbol (checked as the TV checks typed ones) and currency.
+    Market {
+        widget: HomeWidget,
+        symbol: String,
+        currency: String,
+    },
 }
 
 /// Settings › System as the TV shows it right now.
@@ -369,6 +454,9 @@ const LABELS: &[(&str, &str)] = &[
     ("weatherIconStyle", "weatherIconStyle"),
     ("crypto", "crypto"),
     ("stocks", "stocks"),
+    ("marketSymbol", "marketSymbol"),
+    ("currency", "marketCurrency"),
+    ("invalidMarketSymbol", "invalidMarketSymbol"),
 ];
 
 /// The page's whole view of the TV: current values plus every label in the TV's language, so the
@@ -423,6 +511,10 @@ pub fn listing(settings: &Settings, catalog: &Catalog) -> serde_json::Value {
         "weather_icons": WeatherIconStyle::ALL
             .iter()
             .map(|item| choice(item, item.label()))
+            .collect::<Vec<_>>(),
+        "currency": crate::markets::CURRENCIES
+            .iter()
+            .map(|item| choice(item, item))
             .collect::<Vec<_>>(),
         "text_rendering": TextRendering::ALL
             .iter()

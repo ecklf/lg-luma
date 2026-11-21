@@ -2630,27 +2630,35 @@ impl State {
 
     /// A weather place chosen on a paired phone or computer, or `None` to remove it, with the
     /// same effects as choosing or removing it in Settings › Widgets › Weather.
+    /// A place chosen on the page for any weather widget, as Settings › Weather › Location sets it.
     pub fn apply_web_weather_location(
         &mut self,
+        widget: HomeWidget,
         place: Option<crate::weather::Location>,
     ) -> Vec<Effect> {
-        if self.preferences.weather_location == place {
+        if widget.kind() != HomeWidget::Weather
+            || !self.preferences.widgets().contains(&widget)
+            || self.preferences.weather_settings(widget).location == place
+        {
             return vec![];
         }
         self.dirty = true;
-        match place {
-            Some(place) => {
-                self.preferences.weather_location = Some(place);
-                self.weather.invalidate_forecast();
-                self.weather.cancel_search();
-                vec![Effect::Save]
-            }
-            None => {
-                self.preferences.weather_location = None;
-                self.weather.remove_location();
-                vec![Effect::Save, Effect::Weather(weather::Command::ClearCache)]
-            }
+        let cleared = place.is_none();
+        self.preferences
+            .edit_weather(widget, |config| config.location = place);
+        if cleared {
+            self.widget_weather_mut(widget).remove_location();
+            return vec![
+                Effect::Save,
+                Effect::Weather(match widget {
+                    HomeWidget::ExtraWeather(index) => weather::Command::ClearWidgetCache(index),
+                    _ => weather::Command::ClearCache,
+                }),
+            ];
         }
+        self.widget_weather_mut(widget).invalidate_forecast();
+        self.weather.cancel_search();
+        vec![Effect::Save]
     }
 
     /// A Home widget layout change from a paired phone or computer, with the TV's placement rules:
@@ -2658,6 +2666,14 @@ impl State {
     pub fn apply_web_widget(&mut self, change: crate::web_settings::WidgetChange) -> Vec<Effect> {
         use crate::model::WidgetPosition;
         use crate::web_settings::WidgetChange;
+        let target = match &change {
+            WidgetChange::Move { widget, .. }
+            | WidgetChange::Add { widget, .. }
+            | WidgetChange::Remove { widget }
+            | WidgetChange::Weather { widget, .. }
+            | WidgetChange::Market { widget, .. } => Some(*widget),
+            WidgetChange::Reset => None,
+        };
         let changed = match change {
             WidgetChange::Move {
                 widget,
@@ -2675,28 +2691,104 @@ impl State {
                 row,
             } => {
                 let position = WidgetPosition { column, row };
-                if self.preferences.has_widget(widget)
-                    || !self.preferences.can_place_widget(widget, position)
-                {
+                // Only an existing widget or the next extra one of its kind, as the TV offers.
+                let addable = self.preferences.widgets().contains(&widget)
+                    || self.preferences.available_widget(widget.kind()) == Some(widget);
+                if !addable || self.preferences.has_widget(widget) {
                     false
                 } else {
-                    self.preferences.place_widget(widget, position);
-                    self.preferences.set_widget_present(widget, true);
-                    true
+                    self.preferences.prepare_widget(widget);
+                    if self.preferences.can_place_widget(widget, position) {
+                        self.preferences.place_widget(widget, position);
+                        self.preferences.set_widget_present(widget, true);
+                        true
+                    } else {
+                        false
+                    }
                 }
             }
             WidgetChange::Remove { widget } => {
-                let present = self.preferences.has_widget(widget);
-                self.preferences.set_widget_present(widget, false);
+                let present = self.preferences.widgets().contains(&widget)
+                    && self.preferences.has_widget(widget);
+                if present {
+                    self.preferences.set_widget_present(widget, false);
+                }
                 present
             }
             WidgetChange::Reset => self.preferences.reset_widgets(),
+            WidgetChange::Weather {
+                widget,
+                unit,
+                style,
+                small,
+                show_location,
+                show_icon,
+                icons,
+            } => {
+                if widget.kind() != HomeWidget::Weather
+                    || !self.preferences.widgets().contains(&widget)
+                {
+                    return vec![];
+                }
+                let before = self.preferences.weather_settings(widget);
+                if style != before.style {
+                    self.preferences.set_weather_widget_style(widget, style);
+                }
+                if small != before.small {
+                    self.preferences.toggle_weather_widget_size(widget);
+                }
+                let icons = if crate::model::WeatherIconStyle::ALL.contains(&icons) {
+                    icons
+                } else {
+                    before.icons
+                };
+                self.preferences.edit_weather(widget, |config| {
+                    config.unit = unit;
+                    config.show_location = show_location;
+                    config.show_icon = show_icon;
+                    config.icons = icons;
+                });
+                self.preferences.weather_settings(widget) != before
+            }
+            WidgetChange::Market {
+                widget,
+                symbol,
+                currency,
+            } => {
+                if !matches!(widget.kind(), HomeWidget::Crypto | HomeWidget::Stocks)
+                    || !self.preferences.widgets().contains(&widget)
+                    || !crate::markets::CURRENCIES.contains(&currency.as_str())
+                {
+                    return vec![];
+                }
+                // The page checks it first and explains a refusal there.
+                let Some(symbol) = crate::markets::normalize_symbol(widget, &symbol) else {
+                    return vec![];
+                };
+                let config = crate::markets::settings_mut(&mut self.preferences, widget);
+                let changed = config.symbol != symbol || config.currency != currency;
+                config.symbol = symbol;
+                config.currency = currency;
+                changed
+            }
         };
         if !changed {
             return vec![];
         }
         // Weather starts or stops fetching with its widget, as on the TV.
-        self.weather.invalidate_forecast();
+        let weather: Vec<_> = match target {
+            Some(widget) if widget.kind() == HomeWidget::Weather => vec![widget],
+            Some(_) => vec![],
+            None => self
+                .preferences
+                .widgets()
+                .into_iter()
+                .filter(|widget| widget.kind() == HomeWidget::Weather)
+                .collect(),
+        };
+        for widget in weather {
+            self.widget_weather_mut(widget).invalidate_forecast();
+        }
         self.dirty = true;
         vec![Effect::Save]
     }

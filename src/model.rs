@@ -411,7 +411,7 @@ impl HomeWidget {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct WeatherWidgetSettings {
     pub enabled: bool,

@@ -471,6 +471,55 @@ function textRow(key, label, placeholder = '') {
   return row;
 }
 
+// The same switch and choice rows for a value that is not a plain setting (a widget's own).
+function switchControl(label, checked, onChange) {
+  const row = create('label', 'row inline');
+  const holder = create('span', 'switch');
+  const input = create('input');
+  input.type = 'checkbox';
+  input.role = 'switch';
+  input.checked = checked;
+  input.setAttribute('aria-label', label);
+  input.addEventListener('change', () => onChange(input.checked));
+  holder.append(input, create('span'));
+  row.append(title(label), holder);
+  return row;
+}
+
+function choiceControl(label, name, choices, value, onChange) {
+  const current = choices.find((choice) => choice.value === value);
+  if (choices.length > 3) {
+    const row = create('label', 'row picker');
+    const select = create('select');
+    select.setAttribute('aria-label', label);
+    for (const choice of choices) {
+      const option = create('option', '', choice.label);
+      option.value = JSON.stringify(choice.value);
+      option.selected = choice === current;
+      select.append(option);
+    }
+    select.addEventListener('change', () => onChange(JSON.parse(select.value)));
+    row.append(title(label), create('span', 'value', current?.label ?? ''), select);
+    return row;
+  }
+  const row = create('div', 'row stacked');
+  const group = create('div', 'segments');
+  group.role = 'radiogroup';
+  group.setAttribute('aria-label', label);
+  for (const choice of choices) {
+    const option = create('label');
+    const input = create('input');
+    input.type = 'radio';
+    input.name = name;
+    input.checked = choice === current;
+    input.addEventListener('change', () => onChange(choice.value));
+    option.append(input, create('span', '', choice.label));
+    group.append(option);
+  }
+  row.append(title(label), group);
+  return row;
+}
+
 function choiceRow(key, label) {
   return state.choices[key].length > 3 ? pickerRow(key, label) : segmentRow(key, label);
 }
@@ -1090,12 +1139,15 @@ function appsSection() {
 let places = [];
 let placeQuery = '';
 let placeNote = '';
+// The weather widget the search is for; results show under that widget only.
+let placeTarget = 'weather';
 
 function placeLabel(place) {
   return [place.name, place.region, place.country].filter(Boolean).join(', ');
 }
 
-async function searchPlaces(query) {
+async function searchPlaces(query, widget = 'weather') {
+  placeTarget = widget;
   placeQuery = query;
   placeNote = state.labels.searching;
   places = [];
@@ -1111,14 +1163,14 @@ async function searchPlaces(query) {
   render();
 }
 
-function choosePlace(index) {
+function choosePlace(index, widget = 'weather') {
   places = [];
   placeQuery = '';
   placeNote = '';
   queue = queue.then(async () => {
     message(strings.saving, false, true);
     try {
-      apply(await call('api/location', { index }));
+      apply(await call('api/location', { index, widget }));
       message(strings.saved);
     } catch (error) {
       if (error instanceof PairingNeeded) return startPairing(error.message);
@@ -1128,21 +1180,19 @@ function choosePlace(index) {
   });
 }
 
-function locationRows() {
+// The first weather widget by default; a further one passes its entry.
+function locationRows(entry = null) {
   const l = state.labels;
+  const widget = entry ? entry.widget : 'weather';
+  const location = entry ? entry.weather.location : state.weatherLocation;
+  const own = widgetKey(placeTarget) === widgetKey(widget);
   const rows = [];
   const current = create('div', 'row inline');
-  current.append(
-    create(
-      'span',
-      'title',
-      state.weatherLocation ? placeLabel(state.weatherLocation) : l.setWeatherLocation,
-    ),
-  );
-  if (state.weatherLocation) {
+  current.append(create('span', 'title', location ? placeLabel(location) : l.setWeatherLocation));
+  if (location) {
     const remove = create('button', 'pill-button', l.removeWeatherLocation);
     remove.type = 'button';
-    remove.addEventListener('click', () => choosePlace(null));
+    remove.addEventListener('click', () => choosePlace(null, widget));
     current.append(remove);
   }
   rows.push(current);
@@ -1153,7 +1203,7 @@ function locationRows() {
   field.enterKeyHint = 'search';
   field.autocomplete = 'off';
   field.placeholder = l.cityPostcode;
-  field.value = placeQuery;
+  field.value = own ? placeQuery : '';
   field.setAttribute('aria-label', l.cityPostcode);
   const go = create('button', 'pill-button strong', l.searchLocations);
   go.type = 'submit';
@@ -1161,9 +1211,10 @@ function locationRows() {
   search.addEventListener('submit', (event) => {
     event.preventDefault();
     field.blur();
-    searchPlaces(field.value.trim());
+    searchPlaces(field.value.trim(), widget);
   });
   rows.push(search);
+  if (!own) return rows;
   if (placeNote) rows.push(create('p', 'hint', placeNote));
   places.forEach((place, index) => {
     const option = create('button', 'row place');
@@ -1172,7 +1223,7 @@ function locationRows() {
       create('span', 'title', place.name),
       create('span', 'muted', [place.region, place.country].filter(Boolean).join(', ')),
     );
-    option.addEventListener('click', () => choosePlace(index));
+    option.addEventListener('click', () => choosePlace(index, widget));
     rows.push(option);
   });
   return rows;
@@ -1513,9 +1564,125 @@ function dragWidget(event, entry, block, board) {
   });
 }
 
-function widgetName(widget) {
+// Widgets are "weather" or, for further ones of a kind, { extra_weather: 0 }.
+function widgetKey(widget) {
+  return JSON.stringify(widget);
+}
+
+function sameWidget(a, b) {
+  return a !== null && b !== null && widgetKey(a) === widgetKey(b);
+}
+
+function widgetKind(widget) {
+  return typeof widget === 'string' ? widget : Object.keys(widget)[0].replace('extra_', '');
+}
+
+// "Weather", then "Weather 2", "Weather 3" for further ones, as the TV numbers them.
+function widgetName(entry) {
   const l = state.labels;
-  return { greeting: l.greeting, crypto: l.crypto, stocks: l.stocks }[widget] ?? l.weather;
+  const kind = widgetKind(entry.widget);
+  const name = { greeting: l.greeting, crypto: l.crypto, stocks: l.stocks }[kind] ?? l.weather;
+  // A not yet created next widget does not count; it only shows as "Add: Weather 2".
+  const more = state.widgets.some(
+    (other) =>
+      other !== entry &&
+      widgetKind(other.widget) === kind &&
+      other.number > 1 &&
+      (other.present || other.weather || other.market),
+  );
+  return entry.number > 1 || (more && entry.number === 1) ? `${name} ${entry.number}` : name;
+}
+
+// A further weather widget: the same settings as the first one, kept per widget.
+function weatherRows(entry) {
+  const l = state.labels;
+  const c = state.choices;
+  const config = entry.weather;
+  const name = widgetKey(entry.widget);
+  const send = (field, value) => {
+    entry.weather = { ...config, [field]: value };
+    const { unit, style, small, show_location, show_icon, icons } = entry.weather;
+    if (field === 'show_icon') render();
+    changeWidgets({
+      action: 'weather',
+      widget: entry.widget,
+      unit,
+      style,
+      small,
+      show_location,
+      show_icon,
+      icons,
+    });
+  };
+  return [
+    ...locationRows(entry),
+    choiceControl(l.temperature, `unit-${name}`, c.temperature_unit, config.unit, (value) =>
+      send('unit', value),
+    ),
+    choiceControl(l.weatherStyle, `style-${name}`, c.weather_style, config.style, (value) =>
+      send('style', value),
+    ),
+    choiceControl(l.widgetSize, `size-${name}`, c.weather_small, config.small, (value) =>
+      send('small', value),
+    ),
+    switchControl(l.weatherShowLocation, config.show_location, (value) =>
+      send('show_location', value),
+    ),
+    switchControl(l.weatherShowIcon, config.show_icon, (value) => send('show_icon', value)),
+    ...(config.show_icon
+      ? [
+          choiceControl(
+            l.weatherIconStyle,
+            `icons-${name}`,
+            c.weather_icons,
+            config.icons,
+            (value) => send('icons', value),
+          ),
+        ]
+      : []),
+  ];
+}
+
+// A crypto or stocks widget: its symbol (checked by the TV) and currency.
+function marketRows(entry) {
+  const l = state.labels;
+  const config = entry.market;
+  const send = (symbol, currency) =>
+    changeWidgets({ action: 'market', widget: entry.widget, symbol, currency });
+  const row = create('label', 'row stacked');
+  const field = create('input', 'text-field');
+  field.type = 'text';
+  field.maxLength = 32;
+  field.autocomplete = 'off';
+  field.autocapitalize = 'characters';
+  field.enterKeyHint = 'done';
+  field.value = config.symbol;
+  field.setAttribute('aria-label', l.marketSymbol);
+  field.addEventListener('change', () => {
+    const symbol = field.value.trim();
+    if (symbol) send(symbol, config.currency);
+  });
+  field.addEventListener('keydown', (event) => event.key === 'Enter' && field.blur());
+  row.append(title(l.marketSymbol), field);
+  return [
+    row,
+    choiceControl(
+      l.currency,
+      `currency-${widgetKey(entry.widget)}`,
+      state.choices.currency,
+      config.currency,
+      (value) => send(config.symbol, value),
+    ),
+  ];
+}
+
+// Below the grid: every crypto and stocks widget, and weather widgets after the first.
+function widgetCards() {
+  return state.widgets
+    .filter((entry) => (entry.weather && entry.number > 1) || entry.market)
+    .map((entry) =>
+      group(widgetName(entry), ...(entry.weather ? weatherRows(entry) : marketRows(entry))),
+    );
 }
 
 function changeWidgets(change) {
@@ -1532,10 +1699,10 @@ function changeWidgets(change) {
 }
 
 function fits(widget, column, row) {
-  const item = state.widgets.find((entry) => entry.widget === widget);
+  const item = state.widgets.find((entry) => sameWidget(entry.widget, widget));
   if (column + item.width > state.grid.columns || row + item.height > state.grid.rows) return false;
   return state.widgets
-    .filter((other) => other.widget !== widget && other.present)
+    .filter((other) => !sameWidget(other.widget, widget) && other.present)
     .every(
       (other) =>
         column >= other.column + other.width ||
@@ -1552,7 +1719,7 @@ function widgetGrid() {
   const board = create('div', 'widget-grid');
   board.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
   board.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-  const selected = state.widgets.find((entry) => entry.widget === selectedWidget);
+  const selected = state.widgets.find((entry) => sameWidget(entry.widget, selectedWidget));
   for (let cell = 0; cell < columns * rows; cell++) {
     const column = cell % columns;
     const row = Math.floor(cell / columns);
@@ -1571,14 +1738,14 @@ function widgetGrid() {
     board.append(spot);
   }
   for (const entry of state.widgets.filter((item) => item.present)) {
-    const block = create('button', 'grid-widget', widgetName(entry.widget));
+    const block = create('button', 'grid-widget', widgetName(entry));
     block.type = 'button';
     block.style.gridArea = `${entry.row + 1} / ${entry.column + 1} / span ${entry.height} / span ${entry.width}`;
-    block.setAttribute('aria-pressed', String(entry.widget === selectedWidget));
+    block.setAttribute('aria-pressed', String(sameWidget(entry.widget, selectedWidget)));
     block.addEventListener('pointerdown', (event) => dragWidget(event, entry, block, board));
     block.addEventListener('click', () => {
       if (swallowClick) return;
-      selectedWidget = selectedWidget === entry.widget ? null : entry.widget;
+      selectedWidget = sameWidget(selectedWidget, entry.widget) ? null : entry.widget;
       render();
     });
     board.append(block);
@@ -1594,9 +1761,9 @@ function widgetGrid() {
     actions.append(remove);
   }
   for (const entry of state.widgets.filter((item) => !item.present)) {
-    const add = create('button', 'pill-button', `${l.addWidget}: ${widgetName(entry.widget)}`);
+    const add = create('button', 'pill-button', `${l.addWidget}: ${widgetName(entry)}`);
     add.type = 'button';
-    add.setAttribute('aria-pressed', String(entry.widget === selectedWidget));
+    add.setAttribute('aria-pressed', String(sameWidget(entry.widget, selectedWidget)));
     add.addEventListener('click', () => {
       selectedWidget = entry.widget;
       render();
@@ -1760,6 +1927,7 @@ function sections() {
           ? [choiceRow('weather_icons', l.weatherIconStyle)]
           : []),
       ),
+      ...widgetCards(),
       group(l.shortcuts, ...tileRows()),
     ],
     system: systemSection(),

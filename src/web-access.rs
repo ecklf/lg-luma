@@ -13,6 +13,7 @@ use crate::companion::{
     Request, Session, error_response, local_address, local_peer, qr, read_exact, response,
     response_with,
 };
+use crate::model::HomeWidget;
 use crate::web_settings::{
     Arrangement, Catalog, InputChange, Settings, WidgetChange, listing, strings,
 };
@@ -121,7 +122,7 @@ pub enum Event {
     /// The complete shortcut tile list after a change from the page.
     Tiles(Vec<crate::model::CustomTile>),
     /// A place from the page's search, or `None` to remove the weather location.
-    WeatherLocation(Option<crate::weather::Location>),
+    WeatherLocation(HomeWidget, Option<crate::weather::Location>),
     /// Volume, screen or sleep timer changes from the page, answered with the TV's state.
     Tv(TvChange, mpsc::Sender<TvAnswer>),
 }
@@ -1125,6 +1126,7 @@ fn translate(language: crate::i18n::Language, message: &str) -> String {
         "Add a name for this shortcut." => "tileIncomplete",
         "Enter a valid http:// or https:// address with a host name." => "tileUrlInvalid",
         "No more shortcuts can be added." => "tileLimit",
+        "Check the symbol." => "invalidMarketSymbol",
         "This shortcut was removed. Reload the page." | "This shortcut was already removed." => {
             "webReload"
         }
@@ -1266,6 +1268,16 @@ fn change_widgets(
             "Reload the page.",
         );
     };
+    if let WidgetChange::Market { widget, symbol, .. } = &change
+        && crate::markets::normalize_symbol(*widget, symbol).is_none()
+    {
+        return refuse(
+            stream,
+            context,
+            "422 Unprocessable Content",
+            "Check the symbol.",
+        );
+    }
     context
         .sender
         .send(Event::Widgets(change))
@@ -1639,6 +1651,12 @@ fn choose_place(
     #[derive(Deserialize)]
     struct Choice {
         index: Option<usize>,
+        /// The weather widget the place is for; the first one when left out.
+        #[serde(default = "first_weather")]
+        widget: HomeWidget,
+    }
+    fn first_weather() -> HomeWidget {
+        HomeWidget::Weather
     }
     let mut shared = context.shared.lock().unwrap();
     let Some(name) = device(request, &shared.devices).map(|device| device.name.clone()) else {
@@ -1669,14 +1687,16 @@ fn choose_place(
         },
         None => None,
     };
-    shared.catalog.weather_location = place.clone();
+    if choice.widget == HomeWidget::Weather {
+        shared.catalog.weather_location = place.clone();
+    }
     shared.locating = true;
     let mut reply = page(&shared, request);
     drop(shared);
     reply["device"] = serde_json::json!(name);
     context
         .sender
-        .send(Event::WeatherLocation(place))
+        .send(Event::WeatherLocation(choice.widget, place))
         .map_err(|_| "Launcher stopped".to_owned())?;
     json(stream, "200 OK", &reply)
 }

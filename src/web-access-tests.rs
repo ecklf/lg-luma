@@ -369,13 +369,30 @@ fn pairs_once_and_then_changes_settings() {
     assert_eq!(get("/icon/input-playstation.svg", "").0, 200);
     assert_eq!(get("/icon/input-..%2Fx.svg", "").0, 404);
 
+    // A market symbol the TV would not accept is refused with the TV's own explanation.
+    let symbol =
+        r#"{"action":"market","widget":"stocks","symbol":"not a symbol!","currency":"USD"}"#;
+    let (status, _, body) = post("/api/widgets", &cookie, symbol);
+    assert_eq!(status, 422);
+    assert!(
+        body.contains(
+            &crate::i18n::Language::En
+                .t("invalidMarketSymbol")
+                .replace('"', "\\\"")
+        )
+    );
+    // Further widgets are named like { "extra_weather": 0 }, and an unknown field is refused.
+    let extra = r#"{"action":"remove","widget":{"extra_weather":0},"x":1}"#;
+    assert_eq!(post("/api/widgets", &cookie, extra).0, 422);
+
     // A place is chosen by position in the last search, never by coordinates from the page.
     assert_eq!(post("/api/location", &cookie, r#"{"index":0}"#).0, 422);
     assert_eq!(post("/api/places", &cookie, r#"{"query":"a"}"#).0, 422);
     let (status, _, _) = post("/api/location", &cookie, r#"{"index":null}"#);
     assert_eq!(status, 200);
     loop {
-        if let Event::WeatherLocation(place) = next_event(&service) {
+        if let Event::WeatherLocation(widget, place) = next_event(&service) {
+            assert_eq!(widget, crate::model::HomeWidget::Weather);
             assert!(place.is_none());
             break;
         }

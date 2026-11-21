@@ -3921,6 +3921,107 @@ fn web_weather_size_and_style_move_the_widget_like_the_tv() {
 }
 
 #[test]
+fn web_widgets_list_add_and_configure_further_widgets_like_the_tv() {
+    use crate::model::{HomeWidget, WeatherStyle};
+    use crate::web_settings::{WebWidget, WidgetChange};
+    let mut state = ready();
+    let listed = WebWidget::all(&state.preferences);
+    // The four widgets, plus the next weather, crypto and stocks widget not yet created.
+    let next = HomeWidget::ExtraWeather(0);
+    let entry = listed.iter().find(|entry| entry.widget == next).unwrap();
+    assert!(!entry.present && entry.weather.is_none() && entry.number == 2);
+    // Only that next one can be added, not an arbitrary index.
+    let far = WidgetChange::Add {
+        widget: HomeWidget::ExtraWeather(5),
+        column: 0,
+        row: 2,
+    };
+    assert!(state.apply_web_widget(far).is_empty());
+    assert!(state.preferences.extra_weather.is_empty());
+    let free = (0..crate::model::HOME_GRID_CELLS)
+        .filter_map(crate::model::WidgetPosition::from_cell)
+        .find(|position| {
+            let mut preferences = state.preferences.clone();
+            preferences.prepare_widget(next);
+            preferences.can_place_widget(next, *position)
+        })
+        .unwrap();
+    let add = WidgetChange::Add {
+        widget: next,
+        column: free.column,
+        row: free.row,
+    };
+    assert_eq!(state.apply_web_widget(add), vec![Effect::Save]);
+    assert!(state.preferences.has_widget(next));
+    // Its own settings, through the TV's size and style rules.
+    let config = WidgetChange::Weather {
+        widget: next,
+        unit: crate::weather::Unit::Fahrenheit,
+        style: WeatherStyle::ALL[0],
+        small: true,
+        show_location: false,
+        show_icon: true,
+        icons: crate::model::WeatherIconStyle::Kickstand,
+    };
+    assert_eq!(state.apply_web_widget(config), vec![Effect::Save]);
+    let saved = state.preferences.weather_settings(next);
+    assert!(saved.small && !saved.show_location);
+    assert_eq!(saved.unit, crate::weather::Unit::Fahrenheit);
+    let entry = WebWidget::all(&state.preferences)
+        .into_iter()
+        .find(|entry| entry.widget == next)
+        .unwrap();
+    assert_eq!(
+        (entry.width, entry.height),
+        (1, 1),
+        "the grid shows the real size"
+    );
+    // A place for that widget leaves the first weather widget's place alone.
+    let first = state.preferences.weather_location.clone();
+    let place = crate::weather::Location {
+        name: "Berlin".into(),
+        region: String::new(),
+        country: "Germany".into(),
+        latitude: 52.5,
+        longitude: 13.4,
+    };
+    assert_eq!(
+        state.apply_web_weather_location(next, Some(place.clone())),
+        vec![Effect::Save]
+    );
+    assert_eq!(
+        state.preferences.weather_settings(next).location,
+        Some(place)
+    );
+    assert_eq!(state.preferences.weather_location, first);
+}
+
+#[test]
+fn web_market_widgets_take_checked_symbols_and_known_currencies() {
+    use crate::model::HomeWidget;
+    use crate::web_settings::WidgetChange;
+    let mut state = ready();
+    let market = |symbol: &str, currency: &str| WidgetChange::Market {
+        widget: HomeWidget::Stocks,
+        symbol: symbol.into(),
+        currency: currency.into(),
+    };
+    assert_eq!(
+        state.apply_web_widget(market(" aapl ", "EUR")),
+        vec![Effect::Save]
+    );
+    assert_eq!(state.preferences.stocks.symbol, "AAPL");
+    assert_eq!(state.preferences.stocks.currency, "EUR");
+    assert!(
+        state
+            .apply_web_widget(market("not a symbol!", "EUR"))
+            .is_empty()
+    );
+    assert!(state.apply_web_widget(market("MSFT", "XYZ")).is_empty());
+    assert_eq!(state.preferences.stocks.symbol, "AAPL");
+}
+
+#[test]
 fn web_widget_layout_follows_the_tv_placement_rules() {
     use crate::model::HomeWidget;
     use crate::web_settings::WidgetChange;

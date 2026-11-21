@@ -1523,8 +1523,8 @@ fn run() -> Result<(), String> {
                         &updates,
                     );
                 }
-                web_access::Event::WeatherLocation(place) => {
-                    let pending = state.apply_web_weather_location(place);
+                web_access::Event::WeatherLocation(widget, place) => {
+                    let pending = state.apply_web_weather_location(widget, place);
                     web_access_service.location_applied();
                     running &= effects(
                         pending,
