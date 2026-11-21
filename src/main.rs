@@ -959,7 +959,7 @@ fn run() -> Result<(), String> {
         None;
     let mut drawer_vectors: Vec<String> = Vec::new();
     let mut idle_text: Vec<renderer::Draw> = Vec::new();
-    let mut last_layered = false;
+    let mut last_layer_area = state::Rect::default();
     // After the idle queue has been filled and worked off (see drawer_artwork_due).
     let mut layers_prepared = None;
     // When the app inventory last arrived: a Home relaunch already refreshes it, so the
@@ -2042,13 +2042,21 @@ fn run() -> Result<(), String> {
                         options.capture_size.unwrap_or(Size::HD),
                     )?);
                 }
-                // A fading layer changes every pixel it covers without changing a command.
-                let layered = !scene.layers.is_empty() || std::mem::take(&mut last_layered);
-                last_layered = !scene.layers.is_empty();
+                // A fading layer changes the pixels it covers without changing a command; so
+                // does its last frame give way to the commands drawn directly.
+                let layer_area = damage::area(
+                    scene
+                        .layers
+                        .iter()
+                        .flat_map(|layer| &scene.draw[layer.start..layer.end]),
+                );
+                let layered = damage::union(layer_area, last_layer_area);
+                last_layer_area = layer_area;
                 let damage = partial.as_ref().and_then(|partial| {
-                    if last_drawable != Some(Size::new(width, height)) || layered {
+                    if last_drawable != Some(Size::new(width, height)) {
                         damage_tracker.reset();
                     }
+                    damage_tracker.include(layered);
                     damage_tracker.push(&scene.draw);
                     // A capture drew this frame already; keep its window frame whole.
                     if captured.is_some() && final_frame {
