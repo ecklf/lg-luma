@@ -135,6 +135,31 @@ fn icon_picker_has_compact_rows_and_sidebar_keeps_only_the_last_three_levels() {
 }
 
 #[test]
+fn weather_picker_insets_match_outer_corner_radii() {
+    for subpage in [Subpage::WeatherIcons, Subpage::WeatherStyle] {
+        let mut state = configured();
+        state.open(2);
+        state.section = WIDGETS_SECTION;
+        state.subpage = Some(subpage);
+        let rendered = scene(&state);
+        for row in rendered
+            .controls
+            .iter()
+            .filter(|control| matches!(control.target, Target::Choice(_)))
+        {
+            assert!(rendered.draw.iter().any(|draw| matches!(draw,
+                Draw::Shape(inner, radius, ..)
+                    if inner.x == 1040.
+                    && inner.y == row.rect.y + 20.
+                    && inner.w == 700.
+                    && inner.h == row.rect.h - 40.
+                    && *radius == 48. - 20.
+            )));
+        }
+    }
+}
+
+#[test]
 fn weather_icon_preferences_default_to_breezy_and_round_trip_per_instance() {
     use crate::model::{HomeWidget, WeatherIconStyle};
     let old: Preferences = serde_json::from_str(r#"{"extra_weather":[{}]}"#).unwrap();

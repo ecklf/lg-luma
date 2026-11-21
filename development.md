@@ -371,7 +371,8 @@ The weekday/date is part of the combined Greeting, not a standalone widget. Weat
 own fixed footprint with a large condition icon, temperature, condition and optional location.
 Breezy Weather remains the default icon style. Weather → Widget style → Icon style offers Breezy Weather,
 Lucide, Kickstand and Kuankuan with offline condition samples in compact 112-pixel picker rows
-with 64-pixel icons. Sidebar breadcrumbs show at most the
+with 64-pixel icons. Both weather pickers use 20-pixel preview insets with 28-pixel
+inner corner radii to match the rows' 48-pixel outer corners. Sidebar breadcrumbs show at most the
 last three levels, retaining the current page and its closest parents. `weather_icons` stores the primary
 choice; additional instances use `icons`. Lucide, Kickstand and Kuankuan compile to vector meshes;
 Breezy retains its original PNGs. No icons are fetched at runtime. Sources, licenses, adaptations

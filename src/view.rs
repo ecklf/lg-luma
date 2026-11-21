@@ -2342,8 +2342,8 @@ fn weather_icon_settings(out: &mut Scene, state: &State, assets: &Assets) {
             },
         );
         out.shape(
-            Rect::new(1040., rect.y + 12., 700., 88.),
-            16.,
+            Rect::new(1040., rect.y + 20., 700., rect.h - 40.),
+            28.,
             c(0x192129, 1.),
         );
         for (position, condition) in ["sun", "partly-cloudy", "rain", "snow", "moon"]
@@ -2434,8 +2434,9 @@ fn weather_style_settings(out: &mut Scene, state: &State, assets: &Assets) {
             },
         );
         // A dark inset keeps the weather preview separate from the row's focus treatment.
-        let preview = Rect::new(1040., rect.y + 12., 700., 176.);
-        out.shape(preview, 16., c(0x192129, 1.));
+        // Match the outer 48px corners with a 20px inset: 48 - 20 = 28.
+        let preview = Rect::new(1040., rect.y + 20., 700., rect.h - 40.);
+        out.shape(preview, 28., c(0x192129, 1.));
         let summary = weather_summary_layout_for(state, assets, style, true, state.active_weather);
         let scale = 0.5_f32.min((preview.w - 64.) / summary.width);
         paint_weather_summary(
