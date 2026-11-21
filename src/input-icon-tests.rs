@@ -8,6 +8,64 @@ use crate::{
 use serde_json::json;
 
 #[test]
+fn usb_storage_has_native_controls_icons_and_launches_without_counting_app_usage() {
+    let mut state = ready();
+    let input = crate::model::Input {
+        id: "luma.usb.a1".into(),
+        title: "Movies".into(),
+        port: "USB".into(),
+        connected: Some(true),
+        signal: None,
+    };
+    let id = input.id.clone();
+    state.set_inputs(vec![input]);
+    let has_icon = |state: &crate::state::State, icon: &str| {
+        scene(state).draw.iter().any(|d| matches!(d, Draw::TintedImage(path, ..) if path.ends_with(&format!("ui-icons/input-{icon}.lvec"))))
+    };
+    assert!(has_icon(&state, "usb"));
+    assert!(
+        scene(&state)
+            .draw
+            .iter()
+            .any(|draw| matches!(draw, Draw::Text(value, ..) if value == "Movies"))
+    );
+    assert!(
+        controls(&state)
+            .iter()
+            .any(|control| control.target == Target::Input(id.clone()))
+    );
+    state.focus = Target::Input(id.clone());
+    assert_eq!(state.activate(), vec![Effect::Launch(id.clone())]);
+    assert!(state.record_app_launch(&id).is_empty());
+
+    state.preferences.set_input_name(&id, "PS5");
+    assert!(has_icon(&state, "usb"));
+    state.preferences.set_input_icon(&id, "disk");
+    assert!(has_icon(&state, "disk"));
+    state.open(2);
+    state.focus = Target::Sidebar(crate::state::INPUTS_SECTION);
+    state.activate();
+    assert!(has_icon(&state, "disk"));
+    state.focus = Target::InputMode(id.clone());
+    state.activate();
+    assert_eq!(state.subpage, Some(Subpage::Input(id.clone())));
+
+    state
+        .preferences
+        .input_modes
+        .insert(id.clone(), crate::model::InputMode::Off);
+    let mut loaded: Preferences =
+        serde_json::from_value(serde_json::to_value(&state.preferences).unwrap()).unwrap();
+    loaded.sanitize();
+    assert_eq!(loaded.input_name(&state.inventory.inputs[0]), Some("PS5"));
+    assert_eq!(loaded.input_icon(&id), Some("disk"));
+    assert!(!loaded.input_visible(&state.inventory.inputs[0]));
+    state.set_inputs(vec![]);
+    assert_eq!(state.subpage, None);
+    assert_eq!(state.focus, Target::Sidebar(crate::state::INPUTS_SECTION));
+}
+
+#[test]
 fn input_icon_preferences_validate_and_round_trip_without_changing_old_defaults() {
     let old: Preferences = serde_json::from_value(json!({"background": "forest"})).unwrap();
     assert!(old.input_icons.is_empty());

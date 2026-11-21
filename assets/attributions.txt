@@ -1,0 +1,83 @@
+Luma — acknowledgements and third-party notices
+
+Luma is an independent project, not affiliated with LG, Apple or the other brands shown in the interface. Luma's original code and artwork are licensed under MIT.
+https://github.com/ecklf/lg-luma
+
+WEATHER ICONS
+
+Breezy Weather artwork — Breezy Weather contributors.
+LGPL-3.0-only with upstream additional terms. Unmodified, separately replaceable PNG resources. Drizzle and rain share the same source artwork.
+https://github.com/breezy-weather/breezy-weather
+Source revision: 6602dfac0e30a2825ff9e90e2c10a4e518802459
+License texts and source mapping: assets/weather/README.md, COPYING, COPYING.LESSER and LICENSE_ADDITIONAL.
+
+Lucide icons — Lucide contributors; Feather-derived icons by Cole Bemis.
+ISC and MIT. Includes the outline weather icons and many interface controls.
+https://lucide.dev
+Full copyright and license notices: licenses/lucide.txt.
+
+Kickstand WeatherIcons — Copyright (c) 2013 KickstandApps.
+SIL Open Font License 1.1. Original regular-weight SVG artwork, inspired by but independently drawn from Climacons. Haze represents fog; rain also represents drizzle. Rendered in white without modifying the source paths.
+https://github.com/kickstandapps/WeatherIcons
+Source revision: 289e1fb1804496494addf945b9f0837999fde6f9
+Full license and editable SVG sources: assets/weather/kickstand/.
+
+Kuankuan weather icons — kuankuan2007.
+Mozilla Public License 2.0. The original daytime SVGs and Illustrator sources remain available under MPL-2.0. Luma adds a partly-cloudy night adaptation under MPL-2.0 and an original moon companion under MIT. These asset licenses do not change Luma's MIT code license.
+https://github.com/kuankuan2007/weather-icon
+Source revision: 53a7a6459a7d0192f8381b604be8f02a0f674d84
+Full license, SVGs and preferred editable Illustrator sources: assets/weather/kuankuan/ and its source/ directory. Source mapping and SHA-256 hashes: assets/weather/sources.json. These sources are included with the app and in Luma's public repository.
+
+WEATHER AND MARKET DATA
+
+Weather forecasts and location search — Open-Meteo, CC BY 4.0. Luma formats the data, converts temperature units and translates condition labels.
+https://open-meteo.com/
+https://creativecommons.org/licenses/by/4.0/
+
+Optional cryptocurrency prices — Coinbase Exchange public market data.
+https://www.coinbase.com/
+Optional stock and index prices — Yahoo Finance. Quotes may be delayed. Data is provided by the respective services and is not investment advice.
+https://finance.yahoo.com/
+
+FONTS
+
+Inter — Rasmus Andersson, SIL Open Font License 1.1.
+https://rsms.me/inter/
+Luma uses a subset with the optical size pinned for TV rendering.
+Full license: assets/font-license.txt.
+
+Noto Sans SC and Noto Sans KR — Adobe and the Noto contributors, SIL Open Font License 1.1. Generated subsets are renamed Luma CJK and Luma KR; original copyright and license tables are retained.
+https://github.com/notofonts/noto-cjk
+Full license: assets/font-cjk-license.txt.
+
+RUNTIME AND SUPPORT LIBRARIES
+
+SDL2 / SDL-webOS — SDL contributors and webOS port contributors, zlib license.
+https://github.com/webosbrew/SDL-webos
+Full copyright and license notice: licenses/sdl2.txt.
+
+QR Code generator — Project Nayuki, MIT.
+https://www.nayuki.io/page/qr-code-generator-library
+Full copyright and license notice: licenses/qrcodegen.txt.
+
+if-addrs — MaidSafe.net limited and messense, MIT.
+https://github.com/messense/if-addrs
+Full copyright and license notice: licenses/if-addrs.txt.
+
+APP AND INPUT ARTWORK
+
+Simple Icons contributions — CC0. Includes selected input and service marks.
+https://simpleicons.org/
+Full notice: licenses/simple-icons.txt.
+
+Jellyfin artwork — Jellyfin contributors, CC BY-SA 4.0. The original gradient and source attribution are retained.
+https://github.com/jellyfin/jellyfin-ux
+
+Other app logos and device marks identify their respective products and belong to their respective owners. Some logo artwork is public domain; other artwork retains the owner's rights. Appearance here does not imply endorsement.
+
+The bundled ASSETS.md lists individual authors, source URLs, licenses, public-domain declarations and trademark notices for every curated brand asset. Compiled vector meshes retain the source artwork's license. Live installed-app artwork comes from the TV's own installed applications, not a collected icon database.
+
+Full asset sources and notices:
+https://github.com/ecklf/lg-luma/blob/main/assets.md
+
+Thank you to all upstream authors, translators and contributors.

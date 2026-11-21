@@ -89,6 +89,31 @@ and `target/release/`. Desktop results do not establish TV size or performance.
 
 ## Controls and navigation
 
+Left/right navigation wraps between the first and last visible app in the favorites dock
+(on Home and in the drawer) and the app drawer grid. This is always enabled, with no preference.
+Drawer navigation still crosses row boundaries in list order; Up/Down keeps its six-column
+behavior. App management and favorite reordering retain their existing non-wrapping behavior.
+
+Focused settings rows, sidebar pills and corner-menu actions retain bright glass with dark
+labels/icons. Text tint is applied in the fragment shader, separately from glyph coverage.
+Desktop GL/GLES checks do not replace webOS hardware verification of label contrast.
+
+For #350, the source already requested dark text on bright actions while TV photos
+showed faint labels beside correctly dark icons. Applying the per-draw text tint in
+the fragment stage avoids the constant-color varying path, but this is a candidate
+driver workaround, not a confirmed diagnosis. Before merging, verify focused and
+unfocused settings rows/sidebar pills, both clock-menu actions, and the wallpaper
+selection action on the affected webOS 25 TV. Check both MSAA and Analytic text modes,
+including moving focus away and back so cached glyph geometry is exercised.
+
+SDL-mapped game controllers (including PS5 DualSense when recognized by the TV's SDL
+backend) use D-pad or left stick to navigate, Cross / A for OK, Circle / B for Back,
+and Options / Start for the context menu. Holding OK or Back uses the same behavior
+as the remote. Controllers connected before startup and hot-plugged controllers are
+opened automatically. Input is ignored while Luma is unfocused or hidden; disconnecting
+cancels pending holds. USB/Bluetooth availability depends on the TV firmware and SDL
+backend; verify both on hardware before claiming support for a specific TV.
+
 General → Show app names is off by default, preserving the compact, unlabeled drawer.
 When enabled, the app drawer shows a centered, single-line name beneath the focused grid card
 in both styles, with wider row spacing and scroll padding for the name. Long names are ellipsized
@@ -189,6 +214,11 @@ the GL vendor, renderer and version strings and the shader sources, and loaded w
 the folder is always safe. On an LG 49UN71006LB (webOS 5.6.2), both together moved the first
 frame from ~1370 ms to ~800 ms after launch: renderer creation fell from ~245 ms to ~4 ms.
 
+The first inventory queues the dock's surfaces on the same workers. Decoded images of 512×512
+pixels or more (wallpapers, glass atlases) are kept in `image-cache` beside preferences as raw
+RGBA, keyed by path, file size and modification time, at most four files. On the same TV this
+moved a cold boot's first frame from ~1060 ms to ~910 ms.
+
 ### Documentation screenshots
 
 `pnpm screenshots` generates `docs/home.png`, `docs/apps.png`, `docs/settings.png` and
@@ -216,13 +246,15 @@ other apps need manual hardware verification. A desktop-only backend check is av
 The unavailable-backend check runs with
 `SDL_AUDIODRIVER=luma-unavailable cargo test --locked --bin luma unavailable_audio_ -- --ignored --test-threads=1`.
 
-Weather → Widget style persists `weather_style` (`standard`, the default, `no_icon`,
-or `compact`). Home and Settings use the same native layout and painting functions.
-The picker shows all three designs with offline sample weather, in the saved
-temperature unit. Browsing does not change preferences or fetch a forecast. OK/click
+Weather → Widget style persists `weather_style` (`standard`, the default, `compact`,
+or `one_line`). Home and Settings use the same native layout and painting functions.
+The picker shows all three designs with offline sample weather, using the saved
+temperature unit and location visibility. Browsing does not change preferences or fetch a forecast. OK/click
 saves a style and returns to Weather, while Back/Left cancels without changing the style.
-The no-icon layout reclaims the icon column. Compact uses two lines, with a small icon,
-condition and location on the second. Cached-reading warnings and setup/error states
+The Show icon toggle reclaims the icon column when off. Compact uses two lines, with a small icon,
+condition and optional location on the second. All styles and sizes use one “City · Condition”
+detail line when a reading is available, without a separate city heading. With location names
+hidden the line contains only the condition. Cached-reading warnings and setup/error states
 remain visible. `xvfb-run -a pnpm screenshots --weather-styles` captures all designs and
 the settings preview using the native renderer and loopback-only cached sample weather.
 
@@ -336,9 +368,43 @@ Existing greeting, weather, shortcut and input preferences are unchanged. Scroll
 reserve 64 logical pixels below their last item for both remote focus and wheel scrolling,
 with a tighter 48-pixel spacing for Languages and Backgrounds.
 The weekday/date is part of the combined Greeting, not a standalone widget. Weather uses its
-own fixed footprint with a large condition icon, temperature, condition and location. The colored, static
-icons are original Breezy Weather PNGs, including clear/partly-cloudy night variants, bundled locally
-with their LGPL-3.0 license, attribution and source hashes in `assets/weather/`. No icons are fetched at runtime.
+own fixed footprint with a condition icon, temperature, condition and optional location.
+Standard, Compact and One line are independent of Icon style. Show icon uses the same rounded
+On/Off settings row as Show location name. It hides artwork and closes its gap in every layout
+and size without changing the selected icon set.
+Legacy No icon layouts and icon choices migrate to Show icon off with Kuankuan selected.
+The One line style places the icon, temperature and “City · Condition” side by side in both
+sizes, with uniform 26-pixel text and a 32-pixel icon matching Compact's bottom line
+(18-pixel text and a 24-pixel icon when small). Long labels fit with a shared text size.
+Saved-reading warnings stay below the row.
+One line occupies a 2×1 grid footprint (1×1 in small size). Switching back to a taller
+style relocates the widget if necessary, or keeps the previous style if no space is available.
+Kuankuan is the default icon style. Weather → Widget style → Icon style offers Kuankuan first,
+followed by Breezy, Lucide and Kickstand, with offline condition samples in 200-pixel picker rows
+matching the layout previews, with centered 64-pixel icons. Both weather pickers use 20-pixel preview insets with 28-pixel
+inner corner radii to match the rows' 48-pixel outer corners. Selected previews have 28-pixel white
+checkmarks on subtle circular badges, with 24-pixel top/right padding inside the preview.
+Sidebar breadcrumbs show at most the last three levels, retaining the current page and its closest parents. `weather_icons` stores the primary
+choice; additional instances use `icons`. Lucide, Kickstand and Kuankuan compile to vector meshes;
+Breezy retains its original PNGs. No icons are fetched at runtime. Sources, licenses, adaptations
+and mappings are documented in `assets/weather/README.md`; Kuankuan's preferred editable `.ai`
+sources ship alongside its SVGs. `pnpm assets:weather` optionally restores pinned original files.
+Weather → Widget style → Show location name defaults on. Both appearance controls sit above the
+layout previews in Widget style, not on the Weather configuration page. Returning from the icon
+picker restores its row in Widget style. Turning off the location name hides the city in every style and size,
+including loading and error states, without changing the forecast location or cache. The primary
+widget persists `weather_show_location`; additional instances persist their own `show_location`.
+Style previews follow the active widget's setting. Location settings still show the selected city.
+
+System → Attributions opens `assets/attributions.txt` as a read-only text field. Up/Down scrolls
+with the remote, the mouse wheel scrolls only over the field, and Back/Left returns to the System
+button. The viewport and scrollbar stay fixed while text scrolls, with drawing and pointer hits
+clipped to the field. The body includes author credits, source URLs and references to full license
+texts in the package; legal notices retain their original English text. No keyboard, network request
+or preference save is involved. `ATTRIBUTIONS.txt` also ships beside `ASSETS.md` in the package.
+`xvfb-run -a pnpm screenshots --weather-icons` refreshes every weather documentation image:
+all Home variants, setup, layout and icon pickers, public/private/no-icon previews, and Attributions.
+Both weather capture modes share configuration so removed layouts cannot persist in older previews.
 Disabled weather
 is hidden. Enabled weather without a location uses the same large 144px artwork and a prominent setup action.
 Settings lists render behind fixed controls. The drawer grid is clipped below its fixed dock so
@@ -360,7 +426,8 @@ is persisted per input across restarts; choosing **Automatic** clears only that 
 icon override and restores label-based detection. Existing inputs without an override continue
 using Automatic. This is a backward-compatible feature and does not change input names or visibility.
 
-Home favorites form one horizontal glass dock. General → App drawer selects `tvos` (default) or
+Home favorites form one horizontal glass dock. General → App drawer groups Style, Sorting,
+and Show app names. Style selects `tvos` (default) or
 `minimal`, persisted as `app_drawer_style`. tvOS leaves 57.6 logical pixels below the glass and shows
 a clipped, non-interactive 24-logical-pixel peek of the next app row. Minimal lowers the dock to leave 48 logical pixels below
 its glass at the 1920×1080 layout size, without the peek. Both styles share the same open drawer
@@ -371,6 +438,8 @@ corresponding dock app as the selected Home favorite. Up within later grid rows 
 Down lifts the dock to the top and reveals a six-column app grid beneath it. Favorites stay in the
 dock instead of appearing twice in the grid. The drawer has no search or category toolbar.
 The Home dock follows saved pinned order, with no Apps button or Move apps label above it.
+With one to five visible cards, the glass fits the cards with 24 logical pixels of padding on each
+side and stays centered on Home and in the open drawer. Six or more cards use the full-width dock.
 Unused slots (up to six cards) backfill with visible apps in alphabetical order without changing
 favorites. These backfilled apps are excluded from the drawer to avoid duplicates and cannot be
 reordered. In Settings → Apps, a visible favorite's action popup includes **Move**, which opens
@@ -437,6 +506,35 @@ the existing fallback when unavailable or malformed. Optional boolean `hdmiSigna
 only the detail to **No signal** when a cable is present. A stale positive signal cannot override
 an unplugged cable. A powered dongle stays visible in Auto even without signal; On/Off overrides
 and older firmware without signal information retain their behavior.
+
+The same worker refresh also reads USB storage using
+`com.webos.service.attachedstoragemanager/listDevices` with `{"deviceType":["usb"]}`.
+This is a TV-specific API, not an assumption that OSE's PDM schema applies to TVs.
+Only USB entries with unambiguous device IDs are included. Bounded SHA-256-derived storage
+identities keep names/visibility/icons separate from application and HDMI IDs. Device names
+are shown by default, with a USB icon; existing input overrides remain available. Identities
+remain stable only while webOS reports the same device ID.
+USB service errors are logged and retain the last valid storage snapshot (empty initially),
+with a ten-second retry backoff, without failing an otherwise valid HDMI refresh. A successful
+empty read removes disconnected storage. The existing interaction deferral/focus restoration
+also applies to storage snapshots. F5/System refresh reads storage as part of inventory.
+
+Selecting USB storage first rechecks its presence, then reads the unfiltered installed app list
+and opens the first available LG media browser: `com.webos.app.mediadiscovery`,
+`com.webos.app.photovideo`, or `com.webos.app.smartshare`. It opens the browser's normal entry
+screen, not a verified device-specific deep link; choose the device there. A missing browser,
+disconnected device, or denied read/launch uses the existing launch-error notice. Launch is
+sent once and never retried automatically. Storage launches do not increment app usage counts.
+There is no filesystem browsing, media indexing, formatting, ejecting, or non-storage USB
+peripheral support in Luma. No USB devices are fabricated in the desktop inventory.
+
+Discovery references: [TV storage API inventory](https://github.com/ohmybahgosh/WEBOS-LUNA-SEND-ATLAS/blob/main/docs/services/com.webos.service.attachedstoragemanager.md)
+and [LG media app identities](https://gist.github.com/aabytt/bddbb1bcf031a050d89a89aeee3a6737).
+These establish candidate TV APIs, not hardware verification of this implementation. Manually
+check normal-tile and Home-takeover launches with no drive, one/two drives, hot-plug/removal,
+renaming/hiding, removal while focused/pressed, service denial, and media-app availability.
+Confirm the media browser lets the user select the intended storage on each firmware before
+claiming verified USB support.
 
 System text events update app/location queries; Done/Back stops editing and restores focus.
 
@@ -530,6 +628,13 @@ source metadata by re-encoding, generates a 480×270 thumbnail, and applies the 
 and readability gradients as bundled wallpapers. Processing and discovery run off the SDL thread;
 GPU uploads remain on SDL. Nothing is fetched from external services.
 
+Midnight is the only bundled wallpaper and the default for new installations. Saved selections of
+removed bundled wallpapers fall back to Midnight during preference sanitization. Uploaded wallpaper
+IDs are preserved, and missing uploads render Midnight without overwriting the saved selection.
+Asset generation clears old generated wallpapers and thumbnails, and packaging rejects other bundled
+wallpaper IDs even when called directly with an older cache. Rotation stays idle with Midnight alone
+and cycles normally after custom images are uploaded.
+
 The gallery holds up to 20 uploaded images under `wallpapers/custom-<random-id>/` beside the
 selected preferences file. The phone page shows this resolved absolute directory path. Names are
 trimmed, control-free and limited to 40 characters; they
@@ -539,8 +644,7 @@ preserves the app storage owner's UID/GID for new directories and files. Prefere
 the generated selected ID. Invalid metadata and entries with missing files are skipped; an unavailable selected image
 renders the bundled default without destroying the saved selection. These files survive app
 updates, and normal/takeover launches using the shared preferences location use the same gallery.
-Custom images are not used as LG's launch splash: runtime splash updates are skipped for them,
-and takeover boot staging uses a bundled fallback.
+The launch splash is a static Luma logo and does not depend on bundled or custom wallpapers.
 
 The fixed actions are **Upload**, **Gradient**, and **Rotation**, from left to right.
 **Gradient** toggles readability shading immediately without moving the controls. Its
@@ -556,9 +660,8 @@ deleted and pending-deletion entries are excluded. The fixed 15-minute interval 
 Unix timestamp; manual selection or enabling cycling restarts it, and a clock behind the last
 change waits. On process start, rotation advances once after the gallery catalog loads, or after
 three seconds if the catalog is delayed. Changes wait until Luma is focused, visible, idle, and outside overlays. Automatic
-changes use a 1.6-second fade (instant with reduced motion) and save without refreshing LG's splash.
-`splash_background` preserves the manual selection across unrelated saves, package restaging, and
-process restarts; old preferences fall back to `background`. Old duration preferences load as On,
+changes use a 1.6-second fade (instant with reduced motion) and save without affecting the static splash.
+The obsolete `splash_background` preference is ignored. Old duration preferences load as On,
 while former per-image exclusions are ignored.
 
 The native process binds an ephemeral port on one private/link-local IPv4 interface only while
@@ -620,23 +723,17 @@ Verify scanning, editing and a test request against a real webhook on TV hardwar
 
 ## Splash images
 
-`pnpm assets` renders one 1920×1080 PNG per background into `.build/assets/splash/` from the shaded
-wallpapers. `tools/package.mjs` ships them under `splash/` plus `splash.png` (the default background),
-which `appinfo.json` names as `splashBackground`, with `bgColor` set to the UI base colour so the
-frame between the splash and the first draw is not black. On a normal TV launch and after successful
-preference saves, the native platform worker passes the loaded background to the native
-`luma-helper sync-splash` command through Homebrew Channel's elevated `exec` service. It atomically updates
-the installed `splash.png` and the matching enabled Home stage, skipping identical images. Desktop
-and isolated `--preferences` / `--test-extra-apps` runs do not update launch splashes. The first launch
-after installation or a package update can still show the packaged default until this sync completes;
-later launches use the saved selection. Already-root Home processes use the Rust file operation directly, avoiding a Homebrew/child-process round trip. With Home takeover enabled, the native Home helper
-copies the selected background's splash into the staged Home app on every apply, reading the saved
-preferences from the TV storage candidates in `storage.rs`. Production installations prefer internal
-storage; developer installations prefer developer storage, with existing files taking precedence over
-the legacy installation-local preferences. Reapplying an active Home mount also refreshes the splash.
-`pnpm test:home` checks splash selection, runtime updates and mounted refreshes with a mocked filesystem
-and no TV calls. Verify the system-rendered splash on a real TV by changing Background, quitting Luma,
-and relaunching its normal tile; desktop checks cannot establish SAM/compositor image caching behavior.
+`pnpm assets` renders one 1920×1080 PNG at `.build/assets/splash.png`, using the bundled Luma SVG
+logo centered at 192×192 on the dark-gray UI base colour (`#17191c`). `tools/package.mjs` ships only
+the root `splash.png`, named by `appinfo.json` as `splashBackground`. The legacy per-wallpaper splash
+cache is removed during asset generation and excluded from packaging.
+
+There are no runtime splash requests, preference-dependent image copies, or elevated splash commands.
+Manifest-based Home staging copies the package's static image on apply, including when refreshing an
+active stage after a package update. Executable-based Home does not stage a splash. Legacy
+`splash_background` preferences are ignored. `pnpm test:home` checks static staging and mounted refreshes
+with a mocked filesystem and no TV calls. Verify the system-rendered splash and cold-launch transition
+on a real TV, since desktop checks cannot establish SAM/compositor image caching behavior.
 
 ## Vector rendering
 
@@ -890,11 +987,16 @@ The explicit diagnostic script action `prewarm` still builds hidden scenes witho
 (`Renderer::prepare`); the TV log reports each (`Luma prewarm: …`). The profiling timeline records
 first-use work per frame (`glyph_ms`, `vector_ms`, `image_ms`).
 
-On webOS, after the first populated frame, bundled drawer surfaces decode on one background
-worker and upload one per visible, non-animating loop pass; logo meshes load one per idle pass
-afterwards. Shared image paths decode once. The result queue holds at most one decoded image,
+On webOS, after the first populated frame, Luma composes the Apps page and each Settings section
+once. Their images (drawer surfaces, wallpaper thumbnails) decode on one background worker. Each
+visible, non-animating loop pass then spends up to 4 ms uploading decoded images, loading logo
+meshes and tessellating text a few runs at a time, and the loop wakes every 16 ms while such
+work remains. Shared image paths decode once. The result queue holds at most one decoded image,
 with at most one more held by the worker, so hiding Luma or animating cannot accumulate all
-drawer surfaces in CPU memory. This does not eagerly prepare hidden-page text or glyphs.
+drawer surfaces in CPU memory. On an LG 49UN71006LB (webOS 5.6.2) the first Settings opening
+fell from a 74 ms to a 46 ms frame and the first Background section from 184 ms to 50 ms, with
+no first-use loading left in either. `LUMA_IDLE_PREPARE=0` turns this idle
+preparation off for comparisons.
 
 ## TV startup diagnostics
 
@@ -985,13 +1087,13 @@ is bound to that executable path. Luma detects this (`platform::runs_as_lg_home`
   the inventory. Keyboard edits are saved before leaving their subpage. `close` and a later
   `returnValue: false` (registration lost) quit. SAM keeps the process across Home launches and
   standby (`pause`, reason `keepAlive`) instead of restarting it;
-- resolves `assets/`, `lib/` (extra RPATH) and the splash directory from the installed package,
+- resolves `assets/`, `lib/` (extra RPATH) and the static splash from the installed package,
   since `current_exe()` names LG's path. Production Homebrew Channel installs under
   `/media/cryptofs`, developer installs under `/media/developer` and system installs under
   `/usr/palm/applications` share the lookup list in `tv/install-directories.txt`. Library search
   retains `$ORIGIN/lib` first and includes all three locations before Rust startup. Native
   discovery validates the package manifest and matches the executable by device/inode, so assets
-  and splash updates use the source package even when developer and production copies both exist.
+  and static Home splash staging use the source package even when developer and production copies both exist.
   A missing or unrelated source package is an explicit startup error;
 - writes its stderr to `/tmp/luma-home.log`, because SAM discards a system app's output;
 - skips the per-icon elevated-service fallback for installed artwork: as root every file is
@@ -1337,8 +1439,8 @@ receives the key. Do not infer support for webOS 4 from this option.
 ### Native TV helper
 
 The `tv-helper/` workspace crate ports the former `tv/*.cjs` operations. Its `luma-helper` binary
-contains no GUI initialization, SDL dependency or persistent service. Root Home synchronizes its
-splash directly through the same Rust library on the platform worker. Normal jailed launches
+contains no GUI initialization, SDL dependency or persistent service. Manifest-based Home staging
+copies the static splash from the installed package without reading preferences. Normal jailed launches
 retain Homebrew Channel as the privilege boundary, executing the installed helper with individually
 quoted arguments. The helper retains bounded file reads, combined stdout/stderr caps, timeouts,
 protected application IDs and completion-based uninstall replies. `luna-send` is still used for

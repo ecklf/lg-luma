@@ -1,20 +1,7 @@
 # Luma assets and references
 
-- `assets/mark.svg`, `assets/app-icon.svg`, and the Midnight/Slate/Prism SVG wallpapers:
+- `assets/mark.svg`, `assets/app-icon.svg`, and the Midnight SVG wallpaper:
   original Luma artwork, MIT. webOS supplies the app icon panel using `iconColor`.
-- `assets/wallpapers/dunes.jpg`: Unsplash photo `1509316785289-025f5b846b35`,
-  https://images.unsplash.com/photo-1509316785289-025f5b846b35, [Unsplash License](https://unsplash.com/license).
-- `assets/wallpapers/san-francisco.jpg`: Unsplash photo `1501594907352-04cda38ebc29`,
-  https://images.unsplash.com/photo-1501594907352-04cda38ebc29, Unsplash License.
-- `assets/wallpapers/summit.jpg`: Unsplash photo `1454496522488-7a8e488e8606`,
-  https://images.unsplash.com/photo-1454496522488-7a8e488e8606, Unsplash License.
-- `assets/wallpapers/forest.jpg`: Unsplash photo `1441974231531-c6227db76b6e`,
-  https://images.unsplash.com/photo-1441974231531-c6227db76b6e, Unsplash License.
-- `assets/wallpapers/yosemite.jpg`: [Tunnel View, Yosemite Valley, Yosemite NP](https://commons.wikimedia.org/wiki/File:Tunnel_View,_Yosemite_Valley,_Yosemite_NP_-_Diliff.jpg)
-  by David Iliff (Diliff), [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
-  Resized to a 2560px JPEG; generated wallpapers/thumbnails retain the source license.
-- `assets/wallpapers/northern-lights.jpg`: Unsplash photo `1531366936337-7c912a4589a7`,
-  https://images.unsplash.com/photo-1531366936337-7c912a4589a7, Unsplash License.
 - Inter variable font (Latin, Latin Extended-A, Vietnamese + Cyrillic subset, `opsz` pinned at 14): Rasmus Andersson, SIL Open Font License 1.1, `assets/fonts/ofl.txt`.
 - Noto Sans SC: copyright 2014–2021 Adobe, SIL OFL 1.1. Source/license in `assets/fonts/`;
   `tools/font-assets.mjs` pins the Google Fonts revision and checksums. Generated regular/medium
@@ -42,6 +29,11 @@
 - `assets/ui-icons/volume.svg` and the synthesized UI cues in `src/feedback.rs`: original Luma
   artwork/audio, MIT. No Apple/tvOS sound recordings are included.
 - `assets/ui-icons/market-up.svg` and `market-down.svg`: original Luma direction arrows, MIT.
+- Weather icon choices retain separate asset licenses: Breezy Weather (LGPL-3.0-only with
+  upstream additional terms), Lucide (ISC/MIT), KickstandApps WeatherIcons (SIL OFL 1.1), and
+  kuankuan2007/weather-icon (MPL-2.0). See `assets/weather/README.md` for pinned sources,
+  adaptations, copyright notices and the included editable source artwork. No Icons8 assets are bundled.
+- `assets/attributions.txt` is the offline, read-only text shown in System → Attributions.
 
 The bundled icon/logo SVG sources are compiled into derived `.lvec` triangles with the same
 source licenses. Apple TV, Disney+, Prime Video and Das Erste retain the white display treatment.

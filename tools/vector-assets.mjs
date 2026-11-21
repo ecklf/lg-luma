@@ -71,6 +71,19 @@ export async function generateVectorAssets() {
     });
   }
 
+  for (const set of ['kickstand', 'kuankuan']) {
+    for (const file of await fs.readdir(path.join(root, 'assets/weather', set))) {
+      if (!file.endsWith('.svg')) continue;
+      assets.push({
+        source: path.join(root, 'assets/weather', set, file),
+        output: path.join(out, 'ui-icons', `weather-${set}-${path.parse(file).name}.lvec`),
+        monochrome: set === 'kickstand',
+        trim: true,
+        reference_size: 256,
+      });
+    }
+  }
+
   const manifest = path.join(sources, 'manifest.json');
   await fs.writeFile(manifest, JSON.stringify(assets));
   const result = spawnSync(

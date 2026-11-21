@@ -92,6 +92,8 @@ fn app_sorting_picker_supports_remote_pointer_and_parent_navigation() {
     for pointer in [false, true] {
         let mut state = ready();
         state.open(2);
+        state.focus = Target::Setting(13);
+        state.activate();
         assert!(scene(&state).draw.iter().any(|draw| matches!(draw,
             Draw::TintedImage(path, ..) if path.ends_with("arrow-up-down.lvec"))));
         assert!(
@@ -117,6 +119,7 @@ fn app_sorting_picker_supports_remote_pointer_and_parent_navigation() {
         assert_eq!(state.activate(), [Effect::Save]);
         assert_eq!(state.preferences.app_sorting, AppSorting::Usage);
         assert_eq!(state.focus, Target::Setting(10));
+        assert_eq!(state.subpage, Some(Subpage::AppDrawer));
         state.activate();
         assert_eq!(state.focus, Target::Choice(1));
         state.back();

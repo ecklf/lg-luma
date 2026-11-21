@@ -19,7 +19,7 @@ try {
   const preferences = path.join(scratch, 'preferences.json');
   await fs.writeFile(
     preferences,
-    JSON.stringify({ show_weather: false, reduced_motion: true, background: 'dunes' }),
+    JSON.stringify({ show_weather: false, reduced_motion: true, background: 'midnight' }),
   );
   for (let run = 0; run < runs; run++) {
     for (const mode of ['runtime', 'prepared']) {

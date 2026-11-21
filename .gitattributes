@@ -1,0 +1,2 @@
+# Preserve preferred editable third-party artwork as opaque source assets.
+assets/weather/kuankuan/source/*.ai binary

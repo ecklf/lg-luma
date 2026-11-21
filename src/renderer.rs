@@ -24,6 +24,9 @@ mod font_size_tests;
 const GLYPH_GEOMETRY_BUDGET: usize = 8 * 1024 * 1024;
 const TEXT_GEOMETRY_BUDGET: usize = 32 * 1024 * 1024;
 const TEXTURE_BUDGET: usize = 48 * 1024 * 1024;
+/// Precomputed shadow coverage: at most this many texels per shadow and in total.
+const SHADOW_TEXELS: usize = 1024 * 1024;
+const SHADOW_BUDGET: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TextStyle {
@@ -259,6 +262,19 @@ struct Batch {
     fade: Option<[f32; 4]>,
 }
 
+/// Mesh-program state already set within this frame, so unchanged values are not resent.
+#[derive(Default)]
+struct MeshState {
+    /// The mesh program in use (0 after another program was bound).
+    program: GLuint,
+    /// The vertex array object bound for meshes (None after the paint path bound its own).
+    vertex_array: Option<GLuint>,
+    vector_scale: Option<[f32; 2]>,
+    text_scale: Option<[f32; 2]>,
+    fringe: Option<f32>,
+    embolden: Option<f32>,
+}
+
 /// A region of a quad drawn differently from the rest of it.
 #[derive(Clone, Copy)]
 enum Hole {
@@ -412,13 +428,58 @@ fn snap_rect(rect: Rect, scale: f32) -> Rect {
     Rect::new(x0, y0, x1 - x0, y1 - y0)
 }
 
+struct PaintPrograms {
+    texture: GLuint,
+    tinted: GLuint,
+    shape: GLuint,
+    app: GLuint,
+}
+
+impl Drop for PaintPrograms {
+    fn drop(&mut self) {
+        for id in [self.texture, self.tinted, self.shape, self.app] {
+            if id != 0 {
+                unsafe { gl::DeleteProgram(id) };
+            }
+        }
+    }
+}
+
+impl PaintPrograms {
+    /// Use a short shader only if every triangle in this batch takes the same paint path.
+    fn select(&self, vertices: &[f32], opaque: bool, app: bool, fallback: GLuint) -> GLuint {
+        let all = |predicate: fn(&[f32]) -> bool| vertices.chunks_exact(14).all(predicate);
+        let inside = opaque && all(|v| v[12] >= 0. && v[13] == 0.);
+        if inside && app {
+            return self.app;
+        }
+        if all(|v| v[12] == -1.) || (inside && !app) {
+            return if all(|v| v[4..8] == [1.; 4]) {
+                self.texture
+            } else {
+                self.tinted
+            };
+        }
+        if !app && all(|v| v[12] >= 0. && v[13] >= 0.) {
+            self.shape
+        } else {
+            fallback
+        }
+    }
+}
+
 pub struct Renderer {
+    paint_programs: Option<PaintPrograms>,
     program: GLuint,
     vector_program: GLuint,
     text_program: GLuint,
     text_embolden: f32,
     buffer: GLuint,
     vao: GLuint,
+    /// Whether meshes have their own vertex array objects (see vector::use_vertex_arrays).
+    vertex_arrays: bool,
+    /// With vertex arrays: the paint attributes over `buffer`, set up once (else 0).
+    paint_array: GLuint,
     white: Texture,
     font_directory: PathBuf,
     fonts: HashMap<u16, Font>,
@@ -426,6 +487,11 @@ pub struct Renderer {
     glyphs: HashMap<(char, u16), Glyph>,
     text_runs: HashMap<TextKey, TextRun>,
     textures: HashMap<String, Option<Texture>>,
+    /// Shadow coverage by drawable size, radius and blur (bits), computed once on the CPU.
+    shadows: HashMap<(u32, u32, u32, u32), Texture>,
+    /// Shadows seen without a texture yet: (quad, radius, blur), prepared while idle.
+    pending_shadows: Vec<(Rect, f32, f32)>,
+    preparing_shadow: bool,
     vectors: HashMap<String, Option<vector::Mesh>>,
     artwork_variants: HashMap<String, String>,
     vertices: Vec<f32>,
@@ -481,6 +547,33 @@ impl Renderer {
             &(fragment_prefix.clone() + include_str!("shaders/paint.frag")),
             &[c"a_position", c"a_uv", c"a_color", c"a_shape", c"a_params"],
         )?;
+        let paint_programs = if std::env::var("LUMA_PAINT_SHADERS").as_deref() == Ok("1") {
+            let build = |source: &str| {
+                link(
+                    &(vertex_prefix.clone() + include_str!("shaders/paint.vert")),
+                    &(fragment_prefix.clone() + source),
+                    &[c"a_position", c"a_uv", c"a_color", c"a_shape", c"a_params"],
+                )
+            };
+            let load = || -> Result<PaintPrograms, String> {
+                let mut programs = PaintPrograms {
+                    texture: 0,
+                    tinted: 0,
+                    shape: 0,
+                    app: 0,
+                };
+                programs.texture = build(include_str!("shaders/texture.frag"))?;
+                programs.tinted = build(include_str!("shaders/tinted.frag"))?;
+                programs.shape = build(include_str!("shaders/shape.frag"))?;
+                programs.app = build(include_str!("shaders/app-interior.frag"))?;
+                Ok(programs)
+            };
+            load()
+                .inspect_err(|error| eprintln!("Specialized paint shaders unavailable: {error}"))
+                .ok()
+        } else {
+            None
+        };
         let vector_program = match link(
             &(vertex_prefix.clone() + include_str!("shaders/vector.vert")),
             &(fragment_prefix.clone() + include_str!("shaders/vector.frag")),
@@ -494,7 +587,7 @@ impl Renderer {
         };
         let text_program = match link(
             &(vertex_prefix + include_str!("shaders/text.vert")),
-            &(fragment_prefix + include_str!("shaders/vector.frag")),
+            &(fragment_prefix + include_str!("shaders/text.frag")),
             &[c"a_position", c"a_offset", c"a_origin", c"a_coverage"],
         ) {
             Ok(program) => program,
@@ -508,12 +601,41 @@ impl Renderer {
         };
         let mut buffer = 0;
         let mut vao = 0;
+        let vertex_arrays;
+        let mut paint_array = 0;
         unsafe {
             if !gles {
                 gl::GenVertexArrays(1, &mut vao);
                 gl::BindVertexArray(vao);
             }
             gl::GenBuffers(1, &mut buffer);
+            // Meshes record their attribute setup in vertex array objects where the context
+            // has them (desktop core, GLES 3): TV drivers charge for every state call.
+            vertex_arrays = gl::GenVertexArrays::is_loaded()
+                && gl::BindVertexArray::is_loaded()
+                && gl::DeleteVertexArrays::is_loaded()
+                && (!gles || gl_string(gl::VERSION).starts_with("OpenGL ES 3"))
+                && std::env::var("LUMA_VAO").as_deref() != Ok("0");
+            vector::use_vertex_arrays(vertex_arrays);
+            if vertex_arrays {
+                gl::GenVertexArrays(1, &mut paint_array);
+                gl::BindVertexArray(paint_array);
+                gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
+                let mut offset = 0;
+                for (index, size) in [2, 2, 4, 4, 2].into_iter().enumerate() {
+                    gl::EnableVertexAttribArray(index as u32);
+                    gl::VertexAttribPointer(
+                        index as u32,
+                        size,
+                        gl::FLOAT,
+                        gl::FALSE,
+                        56,
+                        (offset * size_of::<f32>()) as *const _,
+                    );
+                    offset += size as usize;
+                }
+                gl::BindVertexArray(vao);
+            }
             gl::Enable(gl::BLEND);
             // Preserve an opaque destination alpha. Using BlendFunc for both
             // channels makes translucent UI darken again in PNG/window compositing.
@@ -529,11 +651,14 @@ impl Renderer {
         let white = texture(1, 1, &[255; 4]);
         Ok(Self {
             program,
+            paint_programs,
             vector_program,
             text_program,
             text_embolden,
             buffer,
             vao,
+            vertex_arrays,
+            paint_array,
             white,
             font_directory: directory.into(),
             fonts,
@@ -541,6 +666,9 @@ impl Renderer {
             glyphs: HashMap::new(),
             text_runs: HashMap::new(),
             textures: HashMap::new(),
+            shadows: HashMap::new(),
+            pending_shadows: Vec::new(),
+            preparing_shadow: false,
             vectors: HashMap::new(),
             artwork_variants: HashMap::new(),
             vertices: Vec::with_capacity(65536),
@@ -805,6 +933,26 @@ impl Renderer {
         self.opaque_interior(rect, radius)
     }
 
+    /// The opaque region of the later draw that covers `rect`'s centre, before the clip or
+    /// edge fade changes: whatever is drawn in between there is overdrawn by it too.
+    fn cover_after(&self, later: &[Draw], rect: Rect) -> Option<Rect> {
+        let (cx, cy) = (rect.x + rect.w / 2., rect.y + rect.h / 2.);
+        for command in later.iter().take(512) {
+            if matches!(command, Draw::Clip(_) | Draw::EdgeFade(_)) {
+                return None;
+            }
+            if let Some(hole) = self.opaque_cover(Some(command))
+                && hole.x <= cx
+                && cx <= hole.x + hole.w
+                && hole.y <= cy
+                && cy <= hole.y + hole.h
+            {
+                return Some(hole);
+            }
+        }
+        None
+    }
+
     /// The part of an opaque rounded rect drawn with full coverage: inside the rounded
     /// corners, two pixels clear of the antialiased edge and within an edge fade's plateau.
     fn opaque_interior(&self, rect: Rect, radius: f32) -> Option<Rect> {
@@ -815,6 +963,97 @@ impl Renderer {
             hole = Rect::new(hole.x, y0, hole.w, y1 - y0);
         }
         (hole.w > 0. && hole.h > 0.).then_some(hole)
+    }
+
+    /// A texture holding a shadow's coverage at each drawable pixel of its snapped quad,
+    /// computed with the paint shader's formula: drawn 1:1, it reproduces that shader's
+    /// output up to 8-bit rounding, without its per-fragment distance and smoothstep.
+    /// None for very large shadows, which keep the shader path.
+    fn shadow_texture(&mut self, quad: Rect, radius: f32, blur: f32) -> Option<GLuint> {
+        static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if !*ENABLED.get_or_init(|| std::env::var("LUMA_SHADOW_TEXTURES").as_deref() != Ok("0"))
+            || blur <= 0.
+        {
+            return None;
+        }
+        let quad = self.snap(quad);
+        let scale = self.stats.viewport.scale.max(0.01);
+        let width = (quad.w * scale).round() as u32;
+        let height = (quad.h * scale).round() as u32;
+        let texels = width as usize * height as usize;
+        if width == 0 || height == 0 || texels > SHADOW_TEXELS {
+            return None;
+        }
+        let key = (width, height, radius.to_bits(), blur.to_bits());
+        let frame = self.frame;
+        if let Some(texture) = self.shadows.get_mut(&key) {
+            texture.frame = frame;
+            return Some(texture.id);
+        }
+        // Computing coverage costs CPU time a frame cannot spare: draw this one with the
+        // shader and prepare the texture while idle (see prepare_idle).
+        if !self.preparing_shadow {
+            if !self
+                .pending_shadows
+                .iter()
+                .any(|(q, r, b)| q.w == quad.w && q.h == quad.h && *r == radius && *b == blur)
+            {
+                self.pending_shadows.push((quad, radius, blur));
+            }
+            return None;
+        }
+        let mut used: usize = self
+            .shadows
+            .values()
+            .map(|t| t.width as usize * t.height as usize)
+            .sum();
+        if used + texels > SHADOW_BUDGET {
+            let mut old: Vec<_> = self
+                .shadows
+                .iter()
+                .filter(|(_, t)| t.frame != frame)
+                .map(|(key, t)| (*key, t.frame))
+                .collect();
+            old.sort_by_key(|(_, frame)| *frame);
+            for (key, _) in old {
+                if used + texels <= SHADOW_BUDGET {
+                    break;
+                }
+                if let Some(t) = self.shadows.remove(&key) {
+                    used -= t.width as usize * t.height as usize;
+                }
+            }
+            if used + texels > SHADOW_BUDGET {
+                return None;
+            }
+        }
+        let started = Instant::now();
+        let pixels = shadow_mask(quad, radius, blur, scale, width, height);
+        self.stats.image_load_ms += started.elapsed().as_secs_f64() * 1000.;
+        let mut texture = if self.info.version.starts_with("OpenGL ES 3") {
+            upload_texture(width, height, &pixels, true)
+        } else {
+            let rgba: Vec<u8> = pixels
+                .iter()
+                .flat_map(|&alpha| [255, 255, 255, alpha])
+                .collect();
+            texture(width, height, &rgba)
+        };
+        texture.frame = frame;
+        let id = texture.id;
+        self.shadows.insert(key, texture);
+        Some(id)
+    }
+
+    /// Prepares one shadow texture seen since the last call; true while more remain.
+    /// Call when nothing animates: the next frame draws that shadow from the texture.
+    pub fn prepare_idle(&mut self) -> bool {
+        if let Some((quad, radius, blur)) = self.pending_shadows.pop() {
+            self.preparing_shadow = true;
+            self.shadow_texture(quad, radius, blur);
+            self.preparing_shadow = false;
+        }
+        !self.pending_shadows.is_empty()
     }
 
     /// Whether an image path already has a texture (or a cached failure).
@@ -1575,16 +1814,32 @@ impl Renderer {
                     None,
                     None,
                 ),
-                Draw::Shadow(rect, radius, blur, color) => self.gradient_quad(
-                    rect.inset(-*blur),
-                    [0., 0., 1., 1.],
-                    *radius,
-                    -*blur,
-                    [*color; 2],
-                    self.white.id,
-                    None,
-                    self.opaque_cover(commands.get(index)).map(Hole::Skip),
-                ),
+                Draw::Shadow(rect, radius, blur, color) => {
+                    let hole = self.cover_after(&commands[index..], *rect).map(Hole::Skip);
+                    match self.shadow_texture(rect.inset(-*blur), *radius, *blur) {
+                        // The same coverage, read instead of computed per fragment.
+                        Some(texture) => self.gradient_quad(
+                            rect.inset(-*blur),
+                            [0., 0., 1., 1.],
+                            -1.,
+                            0.,
+                            [*color; 2],
+                            texture,
+                            None,
+                            hole,
+                        ),
+                        None => self.gradient_quad(
+                            rect.inset(-*blur),
+                            [0., 0., 1., 1.],
+                            *radius,
+                            -*blur,
+                            [*color; 2],
+                            self.white.id,
+                            None,
+                            hole,
+                        ),
+                    }
+                }
                 Draw::Text(text, rect, size, color, centered) => {
                     self.text(text, *rect, *size, *color, *centered)
                 }
@@ -1709,6 +1964,9 @@ impl Renderer {
             gl::Uniform1i(uniform_location(self.program, c"u_texture".as_ptr()), 0);
             gl::ActiveTexture(gl::TEXTURE0);
             let mut paint_bound = false;
+            let mut active_paint = 0;
+            let mut shape_configured = false;
+            let mut mesh_state = MeshState::default();
             let mut current_fade = None;
             let mut blending = true;
             let mut bound_texture = 0;
@@ -1731,6 +1989,7 @@ impl Renderer {
                     }
                     current_fade = Some(batch.fade);
                     paint_bound = false;
+                    mesh_state.program = 0;
                 }
                 let clip = batch.clip.map(|clip| {
                     [
@@ -1760,8 +2019,43 @@ impl Renderer {
                             }
                             blending = !*opaque;
                         }
+                        let program = self
+                            .paint_programs
+                            .as_ref()
+                            .filter(|_| batch.fade.is_none())
+                            .map_or(self.program, |programs| {
+                                programs.select(
+                                    &self.vertices[start * 14..(start + count) * 14],
+                                    *opaque,
+                                    backdrop.is_some(),
+                                    self.program,
+                                )
+                            });
+                        if !paint_bound || active_paint != program {
+                            gl::UseProgram(program);
+                            active_paint = program;
+                        }
+                        if !shape_configured
+                            && self
+                                .paint_programs
+                                .as_ref()
+                                .is_some_and(|p| p.shape == program)
+                        {
+                            gl::Uniform1f(
+                                uniform_location(program, c"u_aa".as_ptr()),
+                                1. / scale.max(0.01),
+                            );
+                            shape_configured = true;
+                        }
+                        if !paint_bound && self.paint_array != 0 {
+                            // The paint attributes, recorded once: one bind after a mesh.
+                            gl::BindVertexArray(self.paint_array);
+                            mesh_state.vertex_array = None;
+                            mesh_state.program = 0;
+                            paint_bound = true;
+                        }
                         if !paint_bound {
-                            gl::UseProgram(self.program);
+                            mesh_state.program = 0;
                             gl::BindBuffer(gl::ARRAY_BUFFER, self.buffer);
                             let mut offset = 0;
                             for (index, size) in [2, 2, 4, 4, 2].into_iter().enumerate() {
@@ -1782,7 +2076,7 @@ impl Renderer {
                             gl::BindTexture(gl::TEXTURE_2D, *texture);
                             bound_texture = *texture;
                         }
-                        if app_uniform != Some(backdrop.is_some()) {
+                        if program == self.program && app_uniform != Some(backdrop.is_some()) {
                             gl::Uniform1i(
                                 uniform_location(self.program, c"u_app".as_ptr()),
                                 i32::from(backdrop.is_some()),
@@ -1794,7 +2088,7 @@ impl Renderer {
                                 [(c"u_app_top", stops[0]), (c"u_app_bottom", stops[1])]
                             {
                                 gl::Uniform3f(
-                                    uniform_location(self.program, name.as_ptr()),
+                                    uniform_location(program, name.as_ptr()),
                                     rgb[0] as f32 / 255.,
                                     rgb[1] as f32 / 255.,
                                     rgb[2] as f32 / 255.,
@@ -1816,6 +2110,7 @@ impl Renderer {
                             continue;
                         };
                         self.draw_mesh(
+                            &mut mesh_state,
                             self.vector_program,
                             mesh,
                             [rect.w / mesh.width, rect.h / mesh.height, rect.x, rect.y],
@@ -1831,6 +2126,7 @@ impl Renderer {
                         };
                         let size = f32::from_bits(key.layout[0]) * vh as f32 / 1080.;
                         self.draw_mesh(
+                            &mut mesh_state,
                             self.text_program,
                             mesh,
                             [1., 1., origin[0], origin[1]],
@@ -1843,6 +2139,9 @@ impl Renderer {
             }
             if !blending {
                 gl::Enable(gl::BLEND);
+            }
+            if self.vertex_arrays {
+                gl::BindVertexArray(self.vao);
             }
             gl::Disable(gl::SCISSOR_TEST);
         }
@@ -1883,6 +2182,7 @@ impl Renderer {
 
     fn draw_mesh(
         &self,
+        state: &mut MeshState,
         program: GLuint,
         mesh: &vector::Mesh,
         transform: [f32; 4],
@@ -1890,33 +2190,41 @@ impl Renderer {
         embolden: f32,
     ) {
         let viewport = self.stats.viewport;
+        let scale = [
+            viewport.width as f32 / 1920.,
+            viewport.height as f32 / 1080.,
+        ];
         unsafe {
-            gl::UseProgram(program);
-            if program == self.text_program {
-                gl::Uniform1f(
-                    uniform_location(program, c"u_fringe".as_ptr()),
-                    if self.stats.multisample_samples > 1 {
-                        0.
-                    } else {
-                        0.5
-                    },
-                );
-                gl::Uniform1f(uniform_location(program, c"u_embolden".as_ptr()), embolden);
+            if state.program != program {
+                gl::UseProgram(program);
+                state.program = program;
             }
-            gl::BindBuffer(gl::ARRAY_BUFFER, mesh.buffer);
-            gl::DisableVertexAttribArray(4);
-            let mut offset = 0;
-            for (index, size) in [2, 2, 4, 1].into_iter().enumerate() {
-                gl::EnableVertexAttribArray(index as u32);
-                gl::VertexAttribPointer(
-                    index as u32,
-                    size,
-                    gl::FLOAT,
-                    gl::FALSE,
-                    36,
-                    (offset * size_of::<f32>()) as *const _,
-                );
-                offset += size as usize;
+            if program == self.text_program {
+                let fringe = if self.stats.multisample_samples > 1 {
+                    0.
+                } else {
+                    0.5
+                };
+                if state.fringe != Some(fringe) {
+                    gl::Uniform1f(uniform_location(program, c"u_fringe".as_ptr()), fringe);
+                    state.fringe = Some(fringe);
+                }
+                if state.embolden != Some(embolden) {
+                    gl::Uniform1f(uniform_location(program, c"u_embolden".as_ptr()), embolden);
+                    state.embolden = Some(embolden);
+                }
+            }
+            if mesh.vertex_array != 0 {
+                if state.vertex_array != Some(mesh.vertex_array) {
+                    gl::BindVertexArray(mesh.vertex_array);
+                    state.vertex_array = Some(mesh.vertex_array);
+                }
+            } else {
+                if self.vertex_arrays && state.vertex_array.is_some() {
+                    gl::BindVertexArray(self.vao);
+                    state.vertex_array = None;
+                }
+                vector::bind_attributes(mesh.buffer);
             }
             gl::Uniform4f(
                 uniform_location(program, c"u_transform".as_ptr()),
@@ -1925,11 +2233,19 @@ impl Renderer {
                 transform[2],
                 transform[3],
             );
-            gl::Uniform2f(
-                uniform_location(program, c"u_pixel_scale".as_ptr()),
-                viewport.width as f32 / 1920.,
-                viewport.height as f32 / 1080.,
-            );
+            let known = if program == self.text_program {
+                &mut state.text_scale
+            } else {
+                &mut state.vector_scale
+            };
+            if *known != Some(scale) {
+                gl::Uniform2f(
+                    uniform_location(program, c"u_pixel_scale".as_ptr()),
+                    scale[0],
+                    scale[1],
+                );
+                *known = Some(scale);
+            }
             gl::Uniform4f(
                 uniform_location(program, c"u_tint".as_ptr()),
                 tint[0],
@@ -2179,11 +2495,58 @@ impl Drop for Renderer {
             if self.vao != 0 {
                 gl::DeleteVertexArrays(1, &self.vao);
             }
+            if self.paint_array != 0 {
+                gl::DeleteVertexArrays(1, &self.paint_array);
+            }
         }
     }
 }
 
+fn shadow_mask(quad: Rect, radius: f32, blur: f32, scale: f32, width: u32, height: u32) -> Vec<u8> {
+    // As paint.frag: v_shape.zw is the quad's half size, the box is that minus blur.
+    let (hx, hy) = (quad.w / 2. - blur, quad.h / 2. - blur);
+    let r = radius.min(hx.min(hy));
+    let coverage = |qx: f32, qy: f32| {
+        let (ox, oy) = (qx.max(0.), qy.max(0.));
+        let d = (ox * ox + oy * oy).sqrt() + qx.max(qy).min(0.) - r;
+        let t = ((d + blur) / (2. * blur)).clamp(0., 1.);
+        ((1. - t * t * (3. - 2. * t)) * 255.).round() as u8
+    };
+    // The coverage is symmetric about both centre lines: compute one quarter (plus the
+    // centre row and column of odd sizes) and mirror it.
+    let (w, h) = (width as usize, height as usize);
+    let mut pixels = vec![255u8; w * h];
+    for row in 0..h.div_ceil(2) {
+        let y = -quad.h / 2. + (row as f32 + 0.5) / scale;
+        let qy = y.abs() - hy + r;
+        for column in 0..w.div_ceil(2) {
+            let x = -quad.w / 2. + (column as f32 + 0.5) / scale;
+            let qx = x.abs() - hx + r;
+            let value = coverage(qx, qy);
+            // Past this column the distance depends only on y, or the
+            // rounded coverage has already saturated at full opacity.
+            if value == 255 || qx <= qy.min(0.) {
+                if value != 255 {
+                    pixels[row * w + column..row * w + w - column].fill(value);
+                }
+                break;
+            }
+            pixels[row * w + column] = value;
+            pixels[row * w + w - 1 - column] = value;
+        }
+        let mirror = h - 1 - row;
+        if mirror != row {
+            pixels.copy_within(row * w..(row + 1) * w, mirror * w);
+        }
+    }
+    pixels
+}
+
 fn texture(width: u32, height: u32, pixels: &[u8]) -> Texture {
+    upload_texture(width, height, pixels, false)
+}
+
+fn upload_texture(width: u32, height: u32, pixels: &[u8], coverage: bool) -> Texture {
     let mut id = 0;
     unsafe {
         gl::GenTextures(1, &mut id);
@@ -2192,14 +2555,25 @@ fn texture(width: u32, height: u32, pixels: &[u8]) -> Texture {
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
+        if coverage {
+            // Preserve the original white RGB and filtered coverage in alpha.
+            for channel in [
+                gl::TEXTURE_SWIZZLE_R,
+                gl::TEXTURE_SWIZZLE_G,
+                gl::TEXTURE_SWIZZLE_B,
+            ] {
+                gl::TexParameteri(gl::TEXTURE_2D, channel, gl::ONE as i32);
+            }
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_SWIZZLE_A, gl::RED as i32);
+        }
         gl::TexImage2D(
             gl::TEXTURE_2D,
             0,
-            gl::RGBA as i32,
+            if coverage { gl::R8 } else { gl::RGBA } as i32,
             width as i32,
             height as i32,
             0,
-            gl::RGBA,
+            if coverage { gl::RED } else { gl::RGBA },
             gl::UNSIGNED_BYTE,
             if pixels.is_empty() {
                 std::ptr::null()
@@ -2213,7 +2587,9 @@ fn texture(width: u32, height: u32, pixels: &[u8]) -> Texture {
         width,
         height,
         frame: 0,
-        opaque: !pixels.is_empty() && pixels.chunks_exact(4).all(|texel| texel[3] == 255),
+        opaque: !coverage
+            && !pixels.is_empty()
+            && pixels.chunks_exact(4).all(|texel| texel[3] == 255),
     }
 }
 
@@ -2380,5 +2756,36 @@ fn link_source(vertex: &str, fragment: &str, attributes: &[&CStr]) -> Result<GLu
             ));
         }
         Ok(program)
+    }
+}
+
+#[cfg(test)]
+mod shadow_tests {
+    use super::*;
+
+    #[test]
+    fn compact_mask_matches_individual_texels() {
+        for (width, height) in [(1, 1), (2, 17), (65, 64), (314, 199), (1876, 279)] {
+            for scale in [0.75, 1., 2.] {
+                let quad = Rect::new(0., 0., width as f32 / scale, height as f32 / scale);
+                for (radius, blur) in [(0., 1.), (19.2, 22.), (60., 34.)] {
+                    let mask = shadow_mask(quad, radius, blur, scale, width, height);
+                    let hx = quad.w / 2. - blur;
+                    let hy = quad.h / 2. - blur;
+                    let r = radius.min(hx.min(hy));
+                    for (index, &alpha) in mask.iter().enumerate() {
+                        let x = index as u32 % width;
+                        let y = index as u32 / width;
+                        let x = -quad.w / 2. + (x.min(width - 1 - x) as f32 + 0.5) / scale;
+                        let y = -quad.h / 2. + (y.min(height - 1 - y) as f32 + 0.5) / scale;
+                        let (qx, qy) = (x.abs() - hx + r, y.abs() - hy + r);
+                        let (ox, oy) = (qx.max(0.), qy.max(0.));
+                        let distance = (ox * ox + oy * oy).sqrt() + qx.max(qy).min(0.) - r;
+                        let t = ((distance + blur) / (2. * blur)).clamp(0., 1.);
+                        assert_eq!(alpha, ((1. - t * t * (3. - 2. * t)) * 255.).round() as u8);
+                    }
+                }
+            }
+        }
     }
 }

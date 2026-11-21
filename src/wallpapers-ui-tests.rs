@@ -10,6 +10,53 @@ fn custom(index: u32) -> Wallpaper {
 }
 
 #[test]
+fn midnight_is_the_only_bundled_wallpaper_and_removed_selections_migrate() {
+    assert_eq!(BACKGROUNDS, [("midnight", "Midnight")]);
+    assert_eq!(Preferences::default().background, "midnight");
+    for removed in [
+        "dunes",
+        "forest",
+        "slate",
+        "prism",
+        "summit",
+        "yosemite",
+        "northern-lights",
+        "san-francisco",
+    ] {
+        let mut preferences: Preferences = serde_json::from_value(serde_json::json!({
+            "background": removed, "show_seconds": true,
+            "deleted_backgrounds": ["midnight", removed]
+        }))
+        .unwrap();
+        preferences.sanitize();
+        assert_eq!(preferences.background, "midnight", "{removed}");
+        assert!(preferences.show_seconds);
+        assert!(preferences.deleted_backgrounds.is_empty());
+    }
+    let uploaded = custom(1);
+    let mut preferences: Preferences = serde_json::from_value(serde_json::json!({
+        "background": uploaded.id, "wallpaper_cycle": true
+    }))
+    .unwrap();
+    preferences.sanitize();
+    assert_eq!(preferences.background, uploaded.id);
+    assert!(preferences.wallpaper_cycle);
+}
+
+#[test]
+fn midnight_only_rotation_waits_for_uploaded_backgrounds() {
+    let mut state = ready();
+    assert_eq!(state.background_count(), 1);
+    state.preferences.wallpaper_cycle = true;
+    assert!(!state.cycle_wallpaper(100));
+    state.set_wallpapers(vec![custom(1)]);
+    assert!(state.cycle_wallpaper(200));
+    assert_eq!(state.preferences.background, custom(1).id);
+    assert!(state.cycle_wallpaper(300));
+    assert_eq!(state.preferences.background, "midnight");
+}
+
+#[test]
 fn upload_sits_left_of_rotation_and_both_remain_fixed_in_every_language() {
     let mut state = ready();
     state.open(2);
@@ -155,7 +202,7 @@ fn gradient_toggle_is_saved_stable_and_switches_bundled_and_uploaded_images() {
         assert!(state.overlay.is_none() && state.subpage.is_none());
         let rendered = scene(&state);
         assert!(
-            matches!(&rendered.draw[0], Draw::Image(path, ..) if path.ends_with("dunes-plain.jpg"))
+            matches!(&rendered.draw[0], Draw::Image(path, ..) if path.ends_with("midnight-plain.jpg"))
         );
         for (old, new) in before.iter().zip(&rendered.controls) {
             assert_eq!(old.target, new.target);
@@ -169,12 +216,14 @@ fn gradient_toggle_is_saved_stable_and_switches_bundled_and_uploaded_images() {
         assert!(!restored.wallpaper_gradient);
         assert_eq!(state.activate(), vec![Effect::Save]);
         assert!(
-            matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("dunes.jpg"))
+            matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("midnight.jpg"))
         );
     }
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Background(1));
+    assert_eq!(state.focus, Target::Background(0));
     state.direction(Direction::Up, &controls(&state));
+    assert_eq!(state.focus, Target::UploadWallpaper);
+    state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::WallpaperGradient);
     let item = custom(1);
     state.preferences.background = item.id.clone();
@@ -196,29 +245,28 @@ fn cycling_uses_all_uploaded_ids_but_not_deleted_or_pending_deletion_entries() {
     let first = custom(1);
     let second = custom(2);
     state.set_wallpapers(vec![first.clone(), second.clone()]);
-    state.preferences.background = "northern-lights".into();
+    state.preferences.background = "midnight".into();
     state.deleting_wallpaper = Some(first.id.clone());
     assert!(state.cycle_wallpaper(100));
     assert_eq!(state.preferences.background, second.id);
     assert!(!state.can_delete_background(&second.id));
     assert!(state.previous_background.is_none());
     assert!(state.cycle_wallpaper(200));
-    assert_eq!(state.preferences.background, "slate");
+    assert_eq!(state.preferences.background, "midnight");
     state.deleting_wallpaper = None;
-    state.preferences.background = "northern-lights".into();
+    state.preferences.background = "midnight".into();
     assert!(state.cycle_wallpaper(300));
     assert_eq!(state.preferences.background, first.id);
-    state.preferences.background = "dunes".into();
-    state.preferences.deleted_backgrounds = vec!["san-francisco".into()];
+    state.preferences.background = "midnight".into();
+    state.deleting_wallpaper = Some(first.id.clone());
     assert!(state.cycle_wallpaper(400));
-    assert_eq!(state.preferences.background, "summit");
+    assert_eq!(state.preferences.background, second.id);
 }
 
 #[test]
-fn automatic_changes_preserve_manual_splash_across_saves_and_restart_and_manual_selection_resets_time()
- {
+fn automatic_changes_survive_saves_and_restart_and_manual_selection_resets_time() {
     let mut state = ready();
-    state.preferences.background = "forest".into();
+    state.set_wallpapers(vec![custom(1), custom(2)]);
     state.preferences.wallpaper_cycle = true;
     state.preferences.wallpaper_changed = 100;
     assert!(!crate::wallpaper_cycle::due(true, 100, 100));
@@ -230,24 +278,39 @@ fn automatic_changes_preserve_manual_splash_across_saves_and_restart_and_manual_
     ));
     assert!(state.cycle_wallpaper(100));
     assert_eq!(state.background_fade, crate::state::CYCLE_FADE);
-    assert_eq!(state.preferences.splash_background(), "forest");
+    let rotated = state.preferences.background.clone();
     state.preferences.show_seconds = !state.preferences.show_seconds;
     let mut preferences: Preferences =
         serde_json::from_value(serde_json::to_value(&state.preferences).unwrap()).unwrap();
     preferences.sanitize();
-    assert_eq!(preferences.splash_background(), "forest");
+    assert_eq!(preferences.background, rotated);
     let mut restored = State::new(preferences);
+    restored.set_wallpapers(vec![custom(1), custom(2)]);
     assert!(restored.cycle_wallpaper(200));
-    assert_eq!(restored.preferences.splash_background(), "forest");
+    assert_ne!(restored.preferences.background, rotated);
     restored.open(2);
     restored.section = 1;
     restored.focus = Target::Background(0);
     restored.activate();
     assert_eq!(restored.activate(), vec![Effect::Save]);
-    assert_eq!(restored.preferences.background, "slate");
-    assert_eq!(restored.preferences.splash_background(), "slate");
+    assert_eq!(restored.preferences.background, "midnight");
     assert_eq!(restored.background_fade, crate::state::BACKGROUND_FADE);
     assert!(restored.preferences.wallpaper_changed > 200);
+}
+
+#[test]
+fn obsolete_splash_preference_is_ignored_without_changing_wallpaper() {
+    let preferences: Preferences = serde_json::from_value(serde_json::json!({
+        "background": "forest", "splash_background": "prism"
+    }))
+    .unwrap();
+    assert_eq!(preferences.background, "forest");
+    assert!(
+        serde_json::to_value(preferences)
+            .unwrap()
+            .get("splash_background")
+            .is_none()
+    );
 }
 
 #[test]
@@ -257,9 +320,11 @@ fn former_exclusions_are_ignored_and_only_the_on_off_state_is_saved() {
     }))
     .unwrap();
     let mut state = State::new(preferences);
+    state.preferences.sanitize();
+    state.set_wallpapers(vec![custom(1)]);
     assert!(state.preferences.wallpaper_cycle);
     assert!(state.cycle_wallpaper(100));
-    assert_eq!(state.preferences.background, "san-francisco");
+    assert_eq!(state.preferences.background, custom(1).id);
     let saved = serde_json::to_value(state.preferences).unwrap();
     assert_eq!(saved["wallpaper_cycle"], true);
     assert!(saved.get("wallpaper_skip").is_none());
@@ -372,6 +437,7 @@ fn upload_instructions_are_ordered_and_only_the_displayed_url_loses_its_slash() 
 #[test]
 fn upload_button_is_compact_and_rotation_is_right_aligned_in_every_language() {
     let mut state = ready();
+    state.set_wallpapers(vec![custom(1), custom(2)]);
     state.open(2);
     state.section = 1;
     for language in crate::i18n::Language::ALL {
@@ -413,7 +479,7 @@ fn gallery_scrolls_behind_fixed_controls_without_clipping_or_fades() {
     let mut state = ready();
     state.open(2);
     state.section = 1;
-    state.set_wallpapers((1..=8).map(custom).collect());
+    state.set_wallpapers((1..=16).map(custom).collect());
     let before = controls(&state);
     state.wheel_scroll(&before, Some((1000., 600.)), 0, -3);
     assert!(state.scroll > 0.);
@@ -512,7 +578,7 @@ fn remote_background_focus_stays_below_the_fixed_upload_action() {
     let mut state = ready();
     state.open(2);
     state.section = 1;
-    state.set_wallpapers((1..=9).map(custom).collect());
+    state.set_wallpapers((1..=17).map(custom).collect());
     state.focus = Target::Background(2);
     for _ in 0..5 {
         state.direction(Direction::Down, &controls(&state));
@@ -538,7 +604,7 @@ fn custom_gallery_navigation_reveals_whole_cards_in_incomplete_rows() {
     let mut state = ready();
     state.open(2);
     state.section = 1;
-    state.set_wallpapers(vec![custom(1), custom(2)]);
+    state.set_wallpapers((1..=10).map(custom).collect());
     state.focus = Target::Background(8);
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::Background(9));
@@ -568,7 +634,7 @@ fn upload_discovery_does_not_apply_and_custom_selection_uses_immutable_paths() {
     state.section = 1;
     let item = custom(1);
     state.set_wallpapers(vec![item.clone()]);
-    assert_eq!(state.preferences.background, "dunes");
+    assert_eq!(state.preferences.background, "midnight");
     let gallery = scene(&state);
     assert!(
         gallery
@@ -596,7 +662,7 @@ fn upload_discovery_does_not_apply_and_custom_selection_uses_immutable_paths() {
     assert_eq!(restored.preferences.background, item.id);
     // Missing uploads fall back without overwriting the saved selection.
     assert!(
-        matches!(&scene(&restored).draw[0], Draw::Image(path, ..) if path.ends_with("wallpapers/dunes.jpg"))
+        matches!(&scene(&restored).draw[0], Draw::Image(path, ..) if path.ends_with("wallpapers/midnight.jpg"))
     );
     restored.set_wallpapers(vec![item.clone()]);
     assert!(matches!(&scene(&restored).draw[0], Draw::Image(path, ..) if path == &item.image()));
@@ -609,20 +675,23 @@ fn catalog_updates_keep_the_focused_image_and_pointer_geometry_stationary() {
     state.section = 1;
     let item = custom(1);
     state.set_wallpapers(vec![item.clone()]);
-    state.focus = Target::Background(9);
+    state.focus = Target::Background(BACKGROUNDS.len());
     state.set_wallpapers(vec![custom(2), item.clone()]);
-    assert_eq!(state.focus, Target::Background(10));
-    assert_eq!(state.background_id(10), Some(item.id.as_str()));
+    assert_eq!(state.focus, Target::Background(BACKGROUNDS.len() + 1));
+    assert_eq!(
+        state.background_id(BACKGROUNDS.len() + 1),
+        Some(item.id.as_str())
+    );
     let scroll = state.scroll;
     let before = controls(&state)
         .into_iter()
-        .find(|c| c.target == Target::Background(10))
+        .find(|c| c.target == Target::Background(BACKGROUNDS.len() + 1))
         .unwrap();
-    state.pointer_focus(Target::Background(10));
+    state.pointer_focus(Target::Background(BACKGROUNDS.len() + 1));
     assert_eq!(state.scroll, scroll);
     let after = controls(&state)
         .into_iter()
-        .find(|c| c.target == Target::Background(10))
+        .find(|c| c.target == Target::Background(BACKGROUNDS.len() + 1))
         .unwrap();
     assert_eq!((before.rect.x, before.rect.y), (after.rect.x, after.rect.y));
 }
@@ -630,9 +699,10 @@ fn catalog_updates_keep_the_focused_image_and_pointer_geometry_stationary() {
 #[test]
 fn background_popup_is_modal_lifts_the_same_thumbnail_and_restores_its_parent() {
     let mut state = ready();
+    state.set_wallpapers(vec![custom(1)]);
     state.open(2);
     state.section = 1;
-    state.focus = Target::Background(0);
+    state.focus = Target::Background(1);
     let before = controls(&state)
         .into_iter()
         .find(|c| c.target == state.focus)
@@ -666,7 +736,7 @@ fn background_popup_is_modal_lifts_the_same_thumbnail_and_restores_its_parent() 
     state.activate();
     assert_eq!(state.focus, Target::DeleteBackground);
     state.back();
-    assert_eq!(state.focus, Target::Background(0));
+    assert_eq!(state.focus, Target::Background(1));
     assert!(state.overlay.is_none());
 }
 
@@ -702,6 +772,9 @@ fn selected_background_has_no_delete_action_and_rejects_forced_confirmation() {
 #[test]
 fn every_unselected_bundled_background_can_be_removed_and_stays_removed_after_reload() {
     let mut state = ready();
+    let selected = custom(1);
+    state.set_wallpapers(vec![selected.clone()]);
+    state.preferences.background = selected.id.clone();
     state.open(2);
     state.section = 1;
     for (id, _) in BACKGROUNDS {
@@ -725,9 +798,10 @@ fn every_unselected_bundled_background_can_be_removed_and_stays_removed_after_re
     let mut preferences: crate::model::Preferences =
         serde_json::from_slice(&serde_json::to_vec(&state.preferences).unwrap()).unwrap();
     preferences.sanitize();
-    let restored = State::new(preferences);
+    let mut restored = State::new(preferences);
+    restored.set_wallpapers(vec![selected.clone()]);
     assert_eq!(restored.background_count(), 1);
-    assert_eq!(restored.background_id(0), Some("dunes"));
+    assert_eq!(restored.background_id(0), Some(selected.id.as_str()));
 }
 
 #[test]
@@ -762,7 +836,7 @@ fn uploaded_deletion_is_single_flight_handles_failures_and_keeps_unrelated_focus
     state.back();
     state.focus = Target::UseBackground;
     assert!(state.activate().is_empty()); // Cannot apply an image being deleted.
-    assert_eq!(state.preferences.background, "dunes");
+    assert_eq!(state.preferences.background, "midnight");
     state.back();
     state.focus = Target::Background(BACKGROUNDS.len() + 1);
     state.wallpaper_deleted(lake.id, Ok(()));
@@ -781,7 +855,7 @@ fn filtered_bundled_entries_do_not_misidentify_custom_thumbnails_or_popup_parent
     state.section = 1;
     state.preferences.deleted_backgrounds = BACKGROUNDS
         .iter()
-        .filter(|(id, _)| *id != "dunes")
+        .filter(|(id, _)| *id != "midnight")
         .map(|(id, _)| (*id).into())
         .collect();
     let lake = custom(1);

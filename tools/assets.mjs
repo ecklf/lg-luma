@@ -11,10 +11,19 @@ const highResolution = process.argv.includes('--4k');
 // Original raster artwork stays separate and replaceable, with its licenses/source notice.
 await fs.cp(path.join(source, 'weather'), path.join(out, 'weather'), { recursive: true });
 // Retire generated dumps from older asset caches as well as the source assets.
-for (const legacy of ['app-icons', 'icons.json', 'colors.json']) {
+for (const legacy of [
+  'app-icons',
+  'icons.json',
+  'colors.json',
+  'wallpaper-runtime',
+  'foregrounds',
+  'splash',
+  'wallpapers',
+  'thumbnails',
+]) {
   await fs.rm(path.join(out, legacy), { recursive: true, force: true });
 }
-for (const directory of ['wallpapers', 'thumbnails', 'logos', 'ui-icons', 'surfaces', 'splash']) {
+for (const directory of ['wallpapers', 'thumbnails', 'logos', 'ui-icons', 'surfaces']) {
   await fs.mkdir(path.join(out, directory), { recursive: true });
 }
 
@@ -51,8 +60,7 @@ if (weights.error || weights.status !== 0) {
 await fs.copyFile(path.join(source, 'fonts/ofl.txt'), path.join(out, 'font-license.txt'));
 await fs.copyFile(path.join(source, 'fonts/noto-ofl.txt'), path.join(out, 'font-cjk-license.txt'));
 
-for (const file of await fs.readdir(path.join(source, 'wallpapers'))) {
-  if (!/\.(jpg|svg)$/.test(file)) continue;
+for (const file of ['midnight.svg']) {
   const id = path.parse(file).name;
   const input = path.join(source, 'wallpapers', file);
   for (const scale of highResolution ? [1, 2] : [1]) {
@@ -63,31 +71,13 @@ for (const file of await fs.readdir(path.join(source, 'wallpapers'))) {
       .resize(width, height, { fit: 'outside' })
       .png()
       .toBuffer({ resolveWithObject: true });
-    const position = id === 'dunes' || id === 'summit' ? 0.4 : id === 'san-francisco' ? 0.42 : 0.45;
-    let image = sharp(photo.data).extract({
+    const image = sharp(photo.data).extract({
       left: Math.round((photo.info.width - width) / 2),
-      top: Math.round((photo.info.height - height) * position),
+      top: Math.round((photo.info.height - height) * 0.45),
       width,
       height,
     });
-    const saturation =
-      id === 'san-francisco'
-        ? 0.75
-        : id === 'summit'
-          ? 0.7
-          : ['forest', 'yosemite', 'northern-lights'].includes(id)
-            ? 0.8
-            : 1;
-    const brightness = id === 'san-francisco' ? 0.82 : id === 'summit' ? 0.8 : 1;
-    if (saturation !== 1) {
-      const s = saturation;
-      image = image.recomb([
-        [0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s],
-        [0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s],
-        [0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s],
-      ]);
-    }
-    const data = await image.linear(brightness).png().toBuffer();
+    const data = await image.png().toBuffer();
     await sharp(data)
       .jpeg({ quality: 96 })
       .toFile(path.join(out, 'wallpapers', `${id}-plain${scale === 2 ? '@2x' : ''}.jpg`));
@@ -114,15 +104,14 @@ const glass = spawnSync(process.execPath, [path.join(import.meta.dirname, 'glass
 });
 if (glass.error) throw glass.error;
 if (glass.status !== 0) throw new Error('Glass backdrop preparation failed.');
-// webOS shows `splashBackground` (a static image, scaled to 1080p) until the window opens. One
-// 1080p PNG per background lets the package start on the user's wallpaper instead of a grey card.
-for (const file of await fs.readdir(path.join(out, 'wallpapers'))) {
-  if (!file.endsWith('.jpg') || file.includes('@2x') || file.includes('-plain')) continue;
-  await sharp(path.join(out, 'wallpapers', file))
-    .resize(1920, 1080, { fit: 'cover' })
-    .png({ compressionLevel: 9 })
-    .toFile(path.join(out, 'splash', file.replace(/\.jpg$/, '.png')));
-}
+// A single neutral launch screen, independent of wallpaper preferences.
+const splashLogo = await sharp(path.join(source, 'app-icon.svg')).resize(192, 192).png().toBuffer();
+await sharp({
+  create: { width: 1920, height: 1080, channels: 3, background: '#17191c' },
+})
+  .composite([{ input: splashLogo, gravity: 'centre' }])
+  .png({ compressionLevel: 9 })
+  .toFile(path.join(out, 'splash.png'));
 await fs.writeFile(
   path.join(out, 'version.txt'),
   JSON.parse(await fs.readFile(path.join(root, 'appinfo.json'), 'utf8')).version,
