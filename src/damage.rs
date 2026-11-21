@@ -31,6 +31,11 @@ impl Tracker {
         self.previous = commands.to_vec();
     }
 
+    /// The scene recorded last, i.e. the one on screen after it was drawn.
+    pub fn previous(&self) -> &[Draw] {
+        &self.previous
+    }
+
     /// What to redraw into a back buffer holding the frame `age` presents ago; 0 means unknown.
     pub fn damage(&self, age: u32) -> Damage {
         let age = age as usize;

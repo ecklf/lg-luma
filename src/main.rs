@@ -960,6 +960,8 @@ fn run() -> Result<(), String> {
     let mut drawer_vectors: Vec<String> = Vec::new();
     let mut idle_text: Vec<renderer::Draw> = Vec::new();
     let mut last_layered = false;
+    // After the idle queue has been filled and worked off (see drawer_artwork_due).
+    let mut layers_prepared = None;
     // When the app inventory last arrived: a Home relaunch already refreshes it, so the
     // window events that follow (Restored, FocusGained) need not ask again right away.
     let mut inventory_at: Option<Instant> = None;
@@ -2175,10 +2177,24 @@ fn run() -> Result<(), String> {
             end_registration();
         }
         // Shadow textures seen in recent frames are prepared between them, never inside one.
-        if visible && !state.animating() {
+        let idle = visible && !state.animating();
+        if idle {
             renderer.prepare_idle();
         }
+        if idle
+            && layers_prepared == Some(false)
+            && !damage_tracker.previous().is_empty()
+            && drawer_artwork.is_none()
+            && drawer_vectors.is_empty()
+            && idle_text.is_empty()
+        {
+            // Last in the idle queue: the offscreen layers of a first Recents crossfade.
+            let (width, height) = window.drawable_size();
+            renderer.prepare_layers(damage_tracker.previous(), width, height);
+            layers_prepared = Some(true);
+        }
         if std::mem::take(&mut drawer_artwork_due) {
+            layers_prepared.get_or_insert(false);
             let page = std::mem::replace(&mut state.page, state::Page::Apps);
             let visibility = std::mem::replace(&mut state.drawer_visibility, 1.);
             let section = state.section;

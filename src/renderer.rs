@@ -492,7 +492,7 @@ impl PaintPrograms {
 pub struct Renderer {
     /// The layers the next render() composites (see Layer), in command order.
     layers: Vec<Layer>,
-    /// One offscreen texture per layer index, kept while layers fade.
+    /// One offscreen texture per layer index, kept for the next crossfade.
     layer_caches: Vec<LayerCache>,
     paint_programs: Option<PaintPrograms>,
     program: GLuint,
@@ -1914,17 +1914,20 @@ impl Renderer {
     /// are cleared and drawn; commands entirely outside them are skipped, and the rest of the
     /// back buffer keeps its earlier contents.
     /// Sets the layers the following render() calls composite (empty: draw every command).
-    /// Their textures are released once no layer remains.
     pub fn set_layers(&mut self, layers: &[Layer]) {
         self.layers = layers.to_vec();
-        if layers.is_empty() {
-            for old in self.layer_caches.drain(..) {
-                unsafe {
-                    gl::DeleteFramebuffers(1, &old.framebuffer);
-                    gl::DeleteTextures(1, &old.texture);
-                }
+    }
+
+    /// Allocates the two layer textures Recents uses and draws `commands` into them once,
+    /// while idle: the first crossfade then neither allocates nor first-uses that path.
+    pub fn prepare_layers(&mut self, commands: &[Draw], width: u32, height: u32) {
+        let stats = self.stats.clone();
+        for index in 0..2 {
+            if self.layer_caches.len() == index {
+                self.layer_texture(commands, commands, index, width, height, &mut 1);
             }
         }
+        self.stats = stats;
     }
 
     pub fn render(&mut self, commands: &[Draw], width: u32, height: u32, damage: Option<[i32; 4]>) {
@@ -1941,6 +1944,9 @@ impl Renderer {
             .is_some();
         let mut composed = Vec::with_capacity(commands.len() + 4 * layers.len());
         if ordered {
+            // Drawing a layer's texture costs about as much as drawing its commands faded:
+            // one per frame, so a crossfade's first frame never pays for two.
+            let mut render_budget = 1;
             let mut next = 0;
             for (index, layer) in layers.iter().enumerate() {
                 composed.extend_from_slice(&commands[next..layer.start]);
@@ -1950,7 +1956,8 @@ impl Renderer {
                 // covers the screen unclipped, and later commands continue in its end state.
                 let mut content = vec![Draw::Clip(clip), Draw::EdgeFade(fade)];
                 content.extend_from_slice(&commands[layer.start..layer.end]);
-                if self.layer_texture(&content, commands, index, width, height) {
+                if self.layer_texture(&content, commands, index, width, height, &mut render_budget)
+                {
                     composed.extend([
                         Draw::Clip(None),
                         Draw::EdgeFade(None),
@@ -1965,7 +1972,7 @@ impl Renderer {
                         Draw::EdgeFade(end_fade),
                     ]);
                 } else {
-                    // No offscreen target: fade each command, as without a layer.
+                    // Not drawn yet this frame, or no offscreen target: fade each command.
                     composed.extend(
                         commands[layer.start..layer.end]
                             .iter()
@@ -1997,6 +2004,7 @@ impl Renderer {
         index: usize,
         width: u32,
         height: u32,
+        budget: &mut usize,
     ) -> bool {
         let backdrops: Vec<Draw> = commands
             .iter()
@@ -2012,6 +2020,10 @@ impl Renderer {
         {
             return true;
         }
+        if *budget == 0 {
+            return false;
+        }
+        *budget -= 1;
         if self
             .layer_caches
             .get(index)
@@ -2993,36 +3005,6 @@ fn link_source(vertex: &str, fragment: &str, attributes: &[&CStr]) -> Result<GLu
     }
 }
 
-#[cfg(test)]
-mod shadow_tests {
-    use super::*;
-
-    #[test]
-    fn compact_mask_matches_individual_texels() {
-        for (width, height) in [(1, 1), (2, 17), (65, 64), (314, 199), (1876, 279)] {
-            for scale in [0.75, 1., 2.] {
-                let quad = Rect::new(0., 0., width as f32 / scale, height as f32 / scale);
-                for (radius, blur) in [(0., 1.), (19.2, 22.), (60., 34.)] {
-                    let mask = shadow_mask(quad, radius, blur, scale, width, height);
-                    let hx = quad.w / 2. - blur;
-                    let hy = quad.h / 2. - blur;
-                    let r = radius.min(hx.min(hy));
-                    for (index, &alpha) in mask.iter().enumerate() {
-                        let x = index as u32 % width;
-                        let y = index as u32 / width;
-                        let x = -quad.w / 2. + (x.min(width - 1 - x) as f32 + 0.5) / scale;
-                        let y = -quad.h / 2. + (y.min(height - 1 - y) as f32 + 0.5) / scale;
-                        let (qx, qy) = (x.abs() - hx + r, y.abs() - hy + r);
-                        let (ox, oy) = (qx.max(0.), qy.max(0.));
-                        let distance = (ox * ox + oy * oy).sqrt() + qx.max(qy).min(0.) - r;
-                        let t = ((distance + blur) / (2. * blur)).clamp(0., 1.);
-                        assert_eq!(alpha, ((1. - t * t * (3. - 2. * t)) * 255.).round() as u8);
-                    }
-                }
-            }
-        }
-    }
-}
 /// One command at `alpha`, as a fading view draws it (the fallback without a layer texture).
 fn fade_draw(mut draw: Draw, alpha: f32) -> Draw {
     match &mut draw {
@@ -3059,4 +3041,35 @@ fn paint_state(commands: &[Draw]) -> (Option<Rect>, Option<[f32; 4]>) {
             Draw::EdgeFade(next) => (clip, *next),
             _ => (clip, fade),
         })
+}
+
+#[cfg(test)]
+mod shadow_tests {
+    use super::*;
+
+    #[test]
+    fn compact_mask_matches_individual_texels() {
+        for (width, height) in [(1, 1), (2, 17), (65, 64), (314, 199), (1876, 279)] {
+            for scale in [0.75, 1., 2.] {
+                let quad = Rect::new(0., 0., width as f32 / scale, height as f32 / scale);
+                for (radius, blur) in [(0., 1.), (19.2, 22.), (60., 34.)] {
+                    let mask = shadow_mask(quad, radius, blur, scale, width, height);
+                    let hx = quad.w / 2. - blur;
+                    let hy = quad.h / 2. - blur;
+                    let r = radius.min(hx.min(hy));
+                    for (index, &alpha) in mask.iter().enumerate() {
+                        let x = index as u32 % width;
+                        let y = index as u32 / width;
+                        let x = -quad.w / 2. + (x.min(width - 1 - x) as f32 + 0.5) / scale;
+                        let y = -quad.h / 2. + (y.min(height - 1 - y) as f32 + 0.5) / scale;
+                        let (qx, qy) = (x.abs() - hx + r, y.abs() - hy + r);
+                        let (ox, oy) = (qx.max(0.), qy.max(0.));
+                        let distance = (ox * ox + oy * oy).sqrt() + qx.max(qy).min(0.) - r;
+                        let t = ((distance + blur) / (2. * blur)).clamp(0., 1.);
+                        assert_eq!(alpha, ((1. - t * t * (3. - 2. * t)) * 255.).round() as u8);
+                    }
+                }
+            }
+        }
+    }
 }
