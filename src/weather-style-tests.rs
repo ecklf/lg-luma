@@ -163,6 +163,48 @@ fn weather_picker_insets_match_outer_corner_radii() {
 }
 
 #[test]
+fn icon_and_location_visibility_use_matching_row_values() {
+    for language in crate::i18n::Language::ALL {
+        for enabled in [false, true] {
+            let mut state = configured();
+            state.preferences.language = language;
+            state.preferences.weather_show_icon = enabled;
+            state.preferences.weather_show_location = enabled;
+            state.open(2);
+            state.section = WIDGETS_SECTION;
+            state.subpage = Some(Subpage::WeatherStyle);
+            state.focus = Target::Choice(0);
+            let rendered = scene(&state);
+            let label = language.t(if enabled { "stateOn" } else { "stateOff" });
+            let values: Vec<_> = rendered
+                .draw
+                .iter()
+                .filter_map(|draw| match draw {
+                    Draw::Text(text, rect, font, color, center) if text == label => {
+                        Some((rect, font, color, center))
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(values.len(), 2);
+            let (location, location_font, location_color, location_center) = values[0];
+            let (icon, icon_font, icon_color, icon_center) = values[1];
+            assert_eq!(
+                (location.x, location.w, location.h),
+                (icon.x, icon.w, icon.h)
+            );
+            assert!((icon.y - location.y - 84.).abs() < 0.001);
+            assert_eq!(
+                (location_font.size, location_font.weight),
+                (icon_font.size, icon_font.weight)
+            );
+            assert_eq!(location_color, icon_color);
+            assert_eq!(location_center, icon_center);
+        }
+    }
+}
+
+#[test]
 fn show_icon_toggle_preserves_artwork_and_legacy_hidden_icons_migrate() {
     use crate::model::WeatherIconStyle;
     let mut prefs: Preferences = serde_json::from_str(

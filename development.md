@@ -369,8 +369,9 @@ reserve 64 logical pixels below their last item for both remote focus and wheel 
 with a tighter 48-pixel spacing for Languages and Backgrounds.
 The weekday/date is part of the combined Greeting, not a standalone widget. Weather uses its
 own fixed footprint with a condition icon, temperature, condition and optional location.
-Standard, Compact and One line are independent of Icon style. The rounded Show icon On/Off toggle
-hides artwork and closes its gap in every layout and size without changing the selected icon set.
+Standard, Compact and One line are independent of Icon style. Show icon uses the same rounded
+On/Off settings row as Show location name. It hides artwork and closes its gap in every layout
+and size without changing the selected icon set.
 Legacy No icon layouts and icon choices migrate to Show icon off with Kuankuan selected.
 The One line style places the icon, temperature and “City · Condition” side by side in both
 sizes, with uniform 26-pixel text and a 32-pixel icon matching Compact's bottom line

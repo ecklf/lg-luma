@@ -2537,45 +2537,16 @@ fn weather_style_settings(out: &mut Scene, state: &State, assets: &Assets) {
             state,
             assets,
             Row {
-                target: target.clone(),
+                target,
                 rect: Rect::new(640., 164.8 + index as f32 * 84. - state.scroll, 1120., 72.),
                 title: language.t(title),
                 icon: Some(icon),
-                value: (target != Target::WeatherShowIcon).then_some(value),
+                value: Some(value),
                 description: None,
                 selected: false,
                 chevron,
             },
         );
-        if target == Target::WeatherShowIcon {
-            let width = (rotation_value_width(assets, language) + 32.).max(88.);
-            let pill = Rect::new(
-                1736. - width,
-                180.8 + index as f32 * 84. - state.scroll,
-                width,
-                40.,
-            );
-            out.shape(
-                pill,
-                20.,
-                if config.show_icon {
-                    c(0xe5ebf0, 1.)
-                } else {
-                    c(0x192129, 1.)
-                },
-            );
-            out.text(
-                value,
-                Rect::new(pill.x, pill.y + 8., pill.w, 24.),
-                text(18.4, 500, 0.),
-                if config.show_icon {
-                    c(0x2c2c2c, 1.)
-                } else {
-                    WHITE
-                },
-                true,
-            );
-        }
     }
     for (index, style) in crate::model::WeatherStyle::ALL.into_iter().enumerate() {
         let rect = Rect::new(

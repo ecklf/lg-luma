@@ -54,6 +54,9 @@ const weatherConfiguration = (name) => ({
       ? 'compact'
       : 'standard',
   ...(name === 'weather-setup' ? { weather_location: null } : {}),
+  ...(name === 'weather-style-one-line-below-greeting'
+    ? { weather_position: { column: 0, row: 1 } }
+    : {}),
 });
 const widgetsPage = 'settings,down,down,down,down,right';
 const weatherPage = `${widgetsPage},down,right,right,right,right,enter,enter`;
@@ -63,6 +66,7 @@ const captures = weatherIconPreviews
       ['weather-style-private', `${weatherPage},down,down,enter`],
       ['weather-style-city', `${weatherPage},down,down,enter`],
       ['weather-style-one-line', 'home'],
+      ['weather-style-one-line-below-greeting', 'home'],
       ['weather-style-one-line-picker', `${weatherPage},down,down,enter`],
       ['weather-style-no-icons', `${weatherPage},down,down,enter`],
       ['weather-icon-none-picker', `${weatherPage},down,down,enter,up,up`],
@@ -115,6 +119,8 @@ const captures = weatherIconPreviews
           ];
 try {
   for (const [name, script] of captures) {
+    const only = process.argv.find((argument) => argument.startsWith('--only='))?.slice(7);
+    if (only && name !== only) continue;
     // Independent state makes screenshots stable regardless of capture order.
     await fs.writeFile(
       preferences,
