@@ -89,6 +89,52 @@ fn appearance_controls_live_inside_widget_style_and_update_previews_immediately(
 }
 
 #[test]
+fn icon_picker_has_compact_rows_and_sidebar_keeps_only_the_last_three_levels() {
+    for language in crate::i18n::Language::ALL {
+        let mut state = configured();
+        state.preferences.language = language;
+        state.open(2);
+        state.section = WIDGETS_SECTION;
+        state.subpage = Some(Subpage::WeatherIcons);
+        state.focus = Target::Choice(0);
+        let rendered = scene(&state);
+        let breadcrumb: Vec<_> = rendered
+            .draw
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Text(label, rect, ..)
+                    if rect.x >= 160. && rect.x < 564. && rect.y > 500. && rect.y < 574. =>
+                {
+                    Some(label.as_str())
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            breadcrumb,
+            [
+                language.t("weather"),
+                language.t("weatherStyle"),
+                language.t("weatherIconStyle")
+            ]
+        );
+        for index in 0..4 {
+            let row = rendered
+                .controls
+                .iter()
+                .find(|c| c.target == Target::Choice(index))
+                .unwrap();
+            assert_eq!(row.rect.h, 112.);
+            let (x, y) = row.rect.center();
+            assert_eq!(
+                state.hit_test(&rendered.controls, x, y),
+                Some(Target::Choice(index))
+            );
+        }
+    }
+}
+
+#[test]
 fn weather_icon_preferences_default_to_breezy_and_round_trip_per_instance() {
     use crate::model::{HomeWidget, WeatherIconStyle};
     let old: Preferences = serde_json::from_str(r#"{"extra_weather":[{}]}"#).unwrap();

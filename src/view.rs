@@ -2322,9 +2322,9 @@ fn weather_icon_settings(out: &mut Scene, state: &State, assets: &Assets) {
     for (index, style) in WeatherIconStyle::ALL.into_iter().enumerate() {
         let rect = Rect::new(
             640.,
-            164.8 + index as f32 * 184. - state.scroll,
+            164.8 + index as f32 * 128. - state.scroll,
             1120.,
-            168.,
+            112.,
         );
         row(
             out,
@@ -2342,7 +2342,7 @@ fn weather_icon_settings(out: &mut Scene, state: &State, assets: &Assets) {
             },
         );
         out.shape(
-            Rect::new(1040., rect.y + 12., 700., 144.),
+            Rect::new(1040., rect.y + 12., 700., 88.),
             16.,
             c(0x192129, 1.),
         );
@@ -2355,7 +2355,7 @@ fn weather_icon_settings(out: &mut Scene, state: &State, assets: &Assets) {
                 assets,
                 style,
                 condition,
-                Rect::new(1072. + position as f32 * 128., rect.y + 40., 88., 88.),
+                Rect::new(1084. + position as f32 * 128., rect.y + 24., 64., 64.),
             );
         }
         if style == config.icons {
@@ -2767,6 +2767,9 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
             };
             let mut path = vec![label];
             path.extend(nested_path.unwrap_or_else(|| vec![sub]));
+            // Preserve the current page and its nearest parents instead of
+            // shrinking an arbitrarily deep breadcrumb into the sidebar pill.
+            let path = &path[path.len().saturating_sub(3)..];
             let gap = 6.;
             let chevron_size = 17.;
             let separators_width = (path.len() - 1) as f32 * (gap * 2. + chevron_size);
