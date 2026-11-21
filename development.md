@@ -246,8 +246,9 @@ other apps need manual hardware verification. A desktop-only backend check is av
 The unavailable-backend check runs with
 `SDL_AUDIODRIVER=luma-unavailable cargo test --locked --bin luma unavailable_audio_ -- --ignored --test-threads=1`.
 
-Weather → Widget style persists `weather_style` (`standard`, the default, `compact`,
-or `one_line`). Home and Settings use the same native layout and painting functions.
+Weather → Widget style persists `weather_style` (`standard`, `compact`, or `one_line`, the default).
+Unset weather positions default to column 0, row 1 below Greeting. Saved styles and positions
+remain unchanged. Home and Settings use the same native layout and painting functions.
 The picker shows all three designs with offline sample weather, using the saved
 temperature unit and location visibility. Browsing does not change preferences or fetch a forecast. OK/click
 saves a style and returns to Weather, while Back/Left cancels without changing the style.
@@ -1226,7 +1227,9 @@ visible, the widget enabled and a city configured. ureq/rustls uses embedded cer
 an eight-second timeout, no redirects/proxy and 256 KiB reply limits. Search/forecast/cache writes
 have separate workers and generation IDs, avoiding stale responses overwriting current state.
 Fresh Celsius readings are reused for 15 minutes; valid saved data lasts up to six hours and
-failure retries after five minutes. Unit changes convert unrounded cached Celsius immediately.
+failures with a usable saved reading retry after five minutes. Without a reading, retries happen
+after 10, 20, 30, 60 and 120 seconds, then every five minutes while Home is visible. Success or
+a location change resets this bounded startup backoff. Unit changes convert unrounded cached Celsius immediately.
 Removing a city clears its cache. The `.weather.json` sidecar uses Unix-seconds timestamps.
 Mock servers accept only literal loopback HTTP origins and are refused in TV builds.
 

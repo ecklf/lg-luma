@@ -121,7 +121,13 @@ try {
     await run('cargo', ['build', '--locked', '--package', 'luma']);
   await fs.writeFile(
     preferences,
-    JSON.stringify({ language: 'en', show_home_names: true, reduced_motion: true }),
+    JSON.stringify({
+      language: 'en',
+      show_home_names: true,
+      reduced_motion: true,
+      weather_style: 'standard',
+      weather_position: { column: 4, row: 0 },
+    }),
   );
   const languages = await scenario('picker-en', picker);
   assert.equal(languages.subpage, 'Language');
