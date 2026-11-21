@@ -102,6 +102,13 @@ async function scenario(name, script, extra = []) {
 function contains(state, key, language) {
   assert.ok(state.ui_text.includes(messages[key][language]), `Missing rendered ${key}/${language}`);
 }
+function containsWeatherCondition(state, language) {
+  const city = state.preferences.weather_location.name;
+  assert.ok(
+    state.ui_text.includes(`${city} · ${messages.partlyCloudy[language]}`),
+    `Missing combined city and translated condition/${language}`,
+  );
+}
 const picker = 'settings,enter,down,enter';
 const widgetsPage = 'settings,down,down,down,down,enter';
 const weatherPage = `${widgetsPage},down,right,right,right,right,enter,enter`;
@@ -145,7 +152,7 @@ try {
     `${location},type:Vienna,back,enter,await-search,down,enter,home,await-weather`,
   );
   assert.equal(selected.preferences.weather_location.name, '维也纳');
-  contains(selected, 'partlyCloudy', 'zh');
+  containsWeatherCondition(selected, 'zh');
   assert.equal(requests.find((request) => request.path === '/v1/search').query.language, 'zh');
   const forecasts = requests.filter((request) => request.path === '/v1/forecast').length;
   const changed = await scenario(
@@ -153,8 +160,8 @@ try {
     `${picker},${Array(13).fill('up').join(',')},enter,home,await-weather`,
   );
   assert.equal(changed.preferences.language, 'de');
-  contains(changed, 'partlyCloudy', 'de');
-  assert.ok(changed.ui_text.includes('维也纳'), 'The saved city name is data, not a UI label');
+  assert.equal(changed.preferences.weather_location.name, '维也纳');
+  containsWeatherCondition(changed, 'de');
   assert.equal(
     requests.filter((request) => request.path === '/v1/forecast').length,
     forecasts,
@@ -260,7 +267,7 @@ try {
   assert.equal(portugueseWeather.preferences.language, 'pt');
   assert.equal(portugueseWeather.preferences.weather_location.name, 'Viena');
   assert.equal(portugueseWeather.preferences.weather_location.country, 'Áustria');
-  contains(portugueseWeather, 'partlyCloudy', 'pt');
+  containsWeatherCondition(portugueseWeather, 'pt');
   assert.equal(
     requests.filter((request) => request.path === '/v1/search').at(-1).query.language,
     'pt',
@@ -323,7 +330,7 @@ try {
   );
   assert.equal(vietnameseWeather.preferences.weather_location.name, 'Viên');
   assert.equal(vietnameseWeather.preferences.weather_location.country, 'Áo');
-  contains(vietnameseWeather, 'partlyCloudy', 'vi');
+  containsWeatherCondition(vietnameseWeather, 'vi');
   const vietnameseSearch = requests.filter((request) => request.path === '/v1/search').at(-1);
   assert.equal(vietnameseSearch.query.language, 'vi', 'Geocoding must use the Vietnamese locale');
   assert.equal(vietnameseSearch.query.name, 'Viên', 'Accented queries must round-trip unchanged');
@@ -349,7 +356,7 @@ try {
     'zh-tw-weather',
     `${location},type:Vienna,back,enter,await-search,down,enter,home,await-weather`,
   );
-  contains(traditionalWeather, 'partlyCloudy', 'zh-tw');
+  containsWeatherCondition(traditionalWeather, 'zh-tw');
   assert.equal(
     requests.filter((request) => request.path === '/v1/search').at(-1).query.language,
     'zh',
@@ -380,7 +387,7 @@ try {
     `${location},type:Viena,back,enter,await-search,down,enter,home,await-weather`,
   );
   assert.equal(catalanWeather.preferences.weather_location.country, 'Àustria');
-  contains(catalanWeather, 'partlyCloudy', 'ca');
+  containsWeatherCondition(catalanWeather, 'ca');
   assert.equal(
     requests.filter((request) => request.path === '/v1/search').at(-1).query.language,
     'ca',
@@ -412,7 +419,7 @@ try {
   );
   assert.equal(hungarianWeather.preferences.weather_location.name, 'Bécs');
   assert.equal(hungarianWeather.preferences.weather_location.country, 'Ausztria');
-  contains(hungarianWeather, 'partlyCloudy', 'hu');
+  containsWeatherCondition(hungarianWeather, 'hu');
   assert.equal(
     requests.filter((request) => request.path === '/v1/search').at(-1).query.language,
     'hu',

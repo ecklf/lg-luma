@@ -201,11 +201,11 @@ try {
   assert.equal(picker.subpage, 'WeatherIcons');
   for (const name of ['Kuankuan', 'Breezy', 'Lucide', 'Kickstand'])
     assert.ok(picker.ui_text.includes(name));
-  for (const [index, icons] of ['breezy', 'lucide', 'kickstand', 'kuankuan'].entries()) {
+  for (const [index, icons] of ['kuankuan', 'breezy', 'lucide', 'kickstand', 'none'].entries()) {
     const navigation = index ? `${Array(index).fill('down').join(',')},` : '';
     // Return to a known default so each choice is exercised by its stable picker index.
     const saved = JSON.parse(await fs.readFile(preferences, 'utf8'));
-    await fs.writeFile(preferences, JSON.stringify({ ...saved, weather_icons: 'breezy' }));
+    await fs.writeFile(preferences, JSON.stringify({ ...saved, weather_icons: 'kuankuan' }));
     const selected = await scenario(
       `icons-${icons}`,
       `${iconsPage},${navigation}enter,home,await-weather`,
