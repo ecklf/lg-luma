@@ -537,6 +537,19 @@ try {
   assert.ok(updatePreview.ui_text.includes('Update available'));
   assert.ok(updatePreview.ui_text.some((label) => label.includes('Latest: 99.0.0')));
   assert.ok(updatePreview.ui_text.includes('Install 99.0.0'));
+  const migration = await scenario('v4-upgrade-confirmation', `${systemPage},enter`, [
+    '--test-update-version',
+    '4.0.0',
+  ]);
+  assert.equal(migration.focus, 'CloseDialog');
+  assert.ok(migration.ui_text.includes('Before upgrading to Luma v4'));
+  assert.ok(migration.ui_text.includes('I understand, update Luma'));
+  const migrationClosed = await scenario('v4-upgrade-closed', `${systemPage},enter,enter`, [
+    '--test-update-version',
+    '4.0.0',
+  ]);
+  assert.equal(migrationClosed.focus, 'InstallUpdate');
+  assert.ok(!migrationClosed.ui_text.includes('Before upgrading to Luma v4'));
   const afterUpdatePreview = await scenario('update-preview-cleared', systemPage);
   assert.equal(afterUpdatePreview.focus, 'CheckUpdates');
   assert.ok(!afterUpdatePreview.ui_text.includes('Update available'));
