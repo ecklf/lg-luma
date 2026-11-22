@@ -173,10 +173,6 @@ as the full-screen Home app without Luma's takeover scripts or an Input Hook map
 2. Install Home Chooser from Homebrew Channel and open it once to finish its root setup.
 3. Install or update Luma, then open Home Chooser, select **Luma**, and confirm. Press Home to try it.
 
-Home Chooser manages the Home key, reboot persistence, stock-Home suppression and recovery if
-Luma is removed. To undo the selection, choose LG Home in Home Chooser. Do not enable Luma's
-takeover or autostart scripts alongside it.
-
 <details>
 <summary>Old methods</summary>
 
