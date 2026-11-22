@@ -1031,6 +1031,18 @@ failures preserve the last valid inputs. No failed inventory read substitutes de
 
 ### Home Chooser integration
 
+When Home Chooser reports Luma as the selected, permitted Home, Luma claims the foreground
+Home key through `SDL_WEBOS_ACCESS_POLICY_KEYS_HOME`. Pressing Home in Apps, Settings or an
+overlay returns straight to Luma's Home tab. At the root it stays in Luma rather than exiting
+or opening Recents. A later status reporting unselected/unavailable releases the claim.
+The pinned SDL-webOS backend applies hint changes to existing surfaces through a callback.
+This is a native window policy, not a Home Chooser key-remapping API or a global key filter.
+
+TV verification is pending: test cold startup before/after the selection probe, Home from
+Apps/Settings/overlays, repeated Home at the root, launching another app and returning with
+Home, switching the selected launcher, and a firmware that also emits a relaunch. Host tests
+cover the selection policy and idempotent Home navigation, not compositor key delivery.
+
 The installed `appinfo.json` declares `appCategory: ["home"]`, so
 [Home Chooser](https://github.com/webosbrew/home-chooser/blob/main/docs/launcher-api.md) can select
 Luma under `com.ecklf.luma`. Keep the window full-screen (no `defaultWindowType: "overlay"`):

@@ -235,6 +235,16 @@ const SCRIPT_POINTER: u32 = u32::MAX - 1;
 // Keycode retains the raw value: SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_WEBOS_BACK).
 const WEBOS_BACK_KEYCODE: i32 = (1 << 30) | 482;
 
+/// Only a selected launcher (or legacy Home takeover) should claim the system Home key.
+fn claim_home_key(webos: bool, legacy_home: bool, chooser: Option<&home_chooser::Status>) -> bool {
+    webos
+        && (legacy_home
+            || matches!(
+                chooser,
+                Some(home_chooser::Status::Ready { selected: true })
+            ))
+}
+
 fn is_back(key: Keycode, webos: bool) -> bool {
     matches!(key, Keycode::Escape | Keycode::AcBack)
         || i32::from(key) == 461
@@ -686,11 +696,16 @@ fn run() -> Result<(), String> {
         // Magic Remotes send the separate Exit key for a long Back press.
         // Claim it before video init so the compositor does not close Luma.
         sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_EXIT", "true");
-        // SAM may not relaunch Home when its surface is already foreground. Handle the
-        // physical key ourselves only as Home; normal tile launches keep LG's routing.
-        if options.webos_home {
-            sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_HOME", "true");
-        }
+        // Legacy Home claims this immediately. Home Chooser launches wait until the
+        // service confirms selection, then update the surface policy on the SDL thread.
+        sdl2::hint::set(
+            "SDL_WEBOS_ACCESS_POLICY_KEYS_HOME",
+            if claim_home_key(webos, options.webos_home, None) {
+                "true"
+            } else {
+                "false"
+            },
+        );
         // SDL-webOS answers tvpower's screen saver requests with `ack: !suspend_screensaver`, and
         // SDL suspends the screen saver unless this hint allows it: LG's screen saver never
         // started while Luma was in front. A launcher has no video to protect.
@@ -1417,6 +1432,18 @@ fn run() -> Result<(), String> {
         if let Some(status) = home_chooser::take_status()
             && state.home_chooser.as_ref() != Some(&status)
         {
+            if webos {
+                // The pinned SDL-webOS backend updates existing surfaces via its hint callback.
+                // A lost selection or unavailable service releases the key to system routing.
+                sdl2::hint::set(
+                    "SDL_WEBOS_ACCESS_POLICY_KEYS_HOME",
+                    if claim_home_key(webos, options.webos_home, Some(&status)) {
+                        "true"
+                    } else {
+                        "false"
+                    },
+                );
+            }
             state.home_chooser = Some(status);
             state.dirty = true;
         }
@@ -1677,7 +1704,11 @@ fn run() -> Result<(), String> {
                     }
                     match key {
                         _ if webos
-                            && options.webos_home
+                            && claim_home_key(
+                                webos,
+                                options.webos_home,
+                                state.home_chooser.as_ref(),
+                            )
                             && i32::from(key) == sdl_events::WEBOS_HOME_KEYCODE =>
                         {
                             if !repeat {

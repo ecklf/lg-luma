@@ -183,6 +183,11 @@ as the full-screen Home app without Luma's takeover scripts or an Input Hook map
 You can also open **Settings → System → Home Chooser** in Luma for setup guidance or to request
 using Luma as Home. Home Chooser asks you to confirm the change.
 
+When selected, Luma requests foreground Home-key handling to return directly from Apps,
+Settings or an overlay to its Home tab. Pressing Home at the root stays in Luma. This native
+key-delivery path still needs TV verification, including Home from another app and switching
+the selected launcher.
+
 Home Chooser will be the default method in v4. In-app upgrades from v1–v3 to v4 or later require
 explicit confirmation of these steps before downloading. **Close** is focused by default. This
 safeguard only applies to Luma releases that include it, not older installations or updates

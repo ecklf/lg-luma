@@ -231,6 +231,50 @@ fn home_relaunch_returns_from_apps_and_settings() {
 }
 
 #[test]
+fn home_key_policy_tracks_chooser_selection_without_affecting_legacy_home() {
+    use crate::home_chooser::Status;
+    let selected = Status::Ready { selected: true };
+    assert!(crate::claim_home_key(true, false, Some(&selected)));
+    assert!(!crate::claim_home_key(false, false, Some(&selected)));
+    assert!(!crate::claim_home_key(true, false, None));
+    for status in [
+        Status::Unavailable,
+        Status::UpdateRequired,
+        Status::SetupRequired,
+        Status::PermissionRequired,
+        Status::Ready { selected: false },
+    ] {
+        assert!(!crate::claim_home_key(true, false, Some(&status)));
+        assert!(crate::claim_home_key(true, true, Some(&status)));
+        assert!(!crate::claim_home_key(false, true, Some(&status)));
+    }
+    assert!(crate::claim_home_key(true, true, None));
+}
+
+#[test]
+fn selected_chooser_home_returns_to_root_without_exiting_or_opening_recents() {
+    let status = crate::home_chooser::Status::Ready { selected: true };
+    for page in [0, 1, 2] {
+        let mut state = ready();
+        state.home_chooser = Some(status.clone());
+        state.open(page);
+        assert!(crate::claim_home_key(
+            true,
+            false,
+            state.home_chooser.as_ref()
+        ));
+        assert!(state.return_home().is_empty());
+        assert_eq!(state.page, Page::Home);
+        assert!(state.overlay.is_none());
+        // A platform relaunch after the physical key is harmless and idempotent.
+        assert!(state.return_home().is_empty());
+        assert_eq!(state.page, Page::Home);
+        assert!(state.overlay.is_none());
+        assert_eq!(state.recents.visibility, 0.);
+    }
+}
+
+#[test]
 fn home_relaunch_skips_drawer_animation_and_restores_home_scene() {
     for (style, reduced_motion) in [
         (crate::model::AppDrawerStyle::Minimal, false),
