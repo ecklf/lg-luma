@@ -160,13 +160,26 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 
 ## Replacing LG Home
 
-### Home Chooser
+### Home Chooser (recommended)
 
-[Home Chooser](https://github.com/webosbrew/home-chooser/) can select Luma as the full-screen
-Home app without Luma's takeover scripts or an Input Hook mapping:
+[Home Chooser](https://github.com/webosbrew/home-chooser/) is the recommended way to select Luma
+as the full-screen Home app without Luma's takeover scripts or an Input Hook mapping:
 
-1. Disable any existing Home-key mapping and Luma autostart. If Luma takeover is enabled, restore
-   LG Home first with `sh /var/lib/luma-home/home.sh disable`.
+> [!IMPORTANT]
+> If you previously enabled an old takeover or autostart method, disable it **before selecting
+> Luma in Home Chooser**. Also remove any Home-key mapping in LG Input Hook. Do not run the old
+> methods alongside Home Chooser.
+
+Run the relevant disable command(s) in the TV's root SSH shell, only for methods you enabled:
+
+```sh
+# Old Home takeover: restore LG Home and remove the takeover boot hook.
+sh /var/lib/luma-home/home.sh disable
+# Old Luma autostart: remove its cold-boot launch hook.
+sh /media/developer/apps/usr/palm/applications/com.ecklf.luma/autostart.sh disable
+```
+
+1. Disable any old methods as described above.
 2. Install Home Chooser from Homebrew Channel and open it once to finish its root setup.
 3. Install or update Luma, then open Home Chooser, select **Luma**, and confirm. Press Home to try it.
 
@@ -183,6 +196,12 @@ integration. The optional Home Chooser applications API will be introduced separ
 Home Chooser supports webOS 4–12; this does not establish Luma compatibility on every version.
 On webOS 5, Home Chooser documents that LG Home remains loaded until the TV restarts. Memory
 savings and launch/return behavior need verification on your TV; no hardware validation is claimed.
+
+<details>
+<summary>Old methods</summary>
+
+These legacy methods are kept for reference. Use **Home Chooser (recommended)** above for new
+setups. Disable any enabled old method before switching to Home Chooser.
 
 ### Takeover Method
 
@@ -307,6 +326,8 @@ You can use [LG Input Hook](https://repo.webosbrew.org/apps/org.webosbrew.inputh
 ```
 
 Test on a spare button first. Disable the mapping in Input Hook to restore normal Home behavior.
+
+</details>
 
 ## Development
 
