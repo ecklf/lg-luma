@@ -22,6 +22,9 @@ pub const SETTINGS_ORDER: [usize; SECTION_COUNT] = [
     WIDGETS_SECTION,
     SYSTEM_SECTION,
 ];
+/// System row turning automatic Homebrew app updates on or off (homebrew_updates.rs). Rows up
+/// to 16 are taken (16: attributions); 17–19 are reserved for other open features.
+pub const HOMEBREW_UPDATES_ROW: usize = 20;
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
 pub const APPS_COLUMNS: usize = 6;
@@ -3153,6 +3156,9 @@ impl State {
                         return vec![];
                     }
                     5 => return vec![Effect::Quit],
+                    HOMEBREW_UPDATES_ROW => {
+                        self.preferences.homebrew_updates = !self.preferences.homebrew_updates
+                    }
                     9 => {
                         self.reset_icon_cache = true;
                         return vec![];

@@ -13,6 +13,7 @@ mod feedback;
 mod font;
 mod gamepad;
 mod glass_backdrop;
+mod homebrew_updates;
 mod i18n;
 #[path = "input-refresh.rs"]
 mod input_refresh;
@@ -769,6 +770,7 @@ fn run() -> Result<(), String> {
         weather_cache,
     );
     let updates = update::Worker::new(webos && public_update_checks);
+    let homebrew = homebrew_updates::Worker::new(webos && public_update_checks);
     if webos && options.market_test_server.is_some() {
         return Err("Market test servers are only available in desktop builds".into());
     }
@@ -1219,6 +1221,11 @@ fn run() -> Result<(), String> {
         }
         while let Ok(response) = updates.receiver.try_recv() {
             state.install_response(response);
+        }
+        homebrew.set_enabled(state.preferences.homebrew_updates);
+        while let Ok(homebrew_updates::Event::Updated(title)) = homebrew.receiver.try_recv() {
+            let updated = state.preferences.language.t("homebrewUpdated");
+            state.notify(format!("{title} · {updated}"));
         }
         if std::mem::take(&mut state.reset_icon_cache) {
             assets.artwork.reset_icon_cache();

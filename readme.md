@@ -36,6 +36,8 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 - Choose Kuankuan (default), Breezy, Lucide or Kickstand weather artwork, toggle icons on/off, and optionally hide the location name. Layout previews follow these settings.
 - Offline credits in System → Attributions, with remote and mouse-wheel scrolling.
 - Midnight background and custom uploads, with optional rotation.
+- Optional automatic updates for apps installed through Homebrew Channel (off by default; see
+  **Settings → System**).
 - Webhook shortcuts and 16 interface languages.
 
 Inputs also lists USB storage reported by webOS. Selecting a storage device opens an installed
