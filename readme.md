@@ -154,7 +154,7 @@ to help make Luma available by default.
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_3.12.1_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_3.13.0_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -182,6 +182,11 @@ as the full-screen Home app without Luma's takeover scripts or an Input Hook map
 
 You can also open **Settings → System → Home Chooser** in Luma for setup guidance or to request
 using Luma as Home. Home Chooser asks you to confirm the change.
+
+Home Chooser will be the default method in v4. In-app upgrades from v1–v3 to v4 or later require
+explicit confirmation of these steps before downloading. **Close** is focused by default. This
+safeguard only applies to Luma releases that include it, not older installations or updates
+performed through Homebrew Channel or SSH.
 
 <details>
 <summary>Old methods</summary>
@@ -335,7 +340,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_3.12.1_arm.ipk
+dist/com.ecklf.luma_3.13.0_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png
