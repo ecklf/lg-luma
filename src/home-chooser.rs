@@ -3,6 +3,7 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
 use std::{
+    collections::HashMap,
     sync::{
         Mutex,
         atomic::{AtomicBool, Ordering},
@@ -13,6 +14,145 @@ use std::{
 const SERVICE: &str = "luna://org.webosbrew.homechooser.service";
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static INFO: Mutex<Option<(Instant, Result<Info, String>)>> = Mutex::new(None);
+static STATUS: Mutex<Option<Status>> = Mutex::new(None);
+static INVALIDATE: AtomicBool = AtomicBool::new(false);
+static CHANGED: AtomicBool = AtomicBool::new(false);
+static FEEDS: Mutex<Option<HashMap<&'static str, Feed>>> = Mutex::new(None);
+pub type IconCandidates = Vec<Vec<u8>>;
+pub type IconBatch = Vec<Result<IconCandidates, String>>;
+
+#[derive(Default)]
+struct Feed {
+    snapshot: Option<Value>,
+    ended: bool,
+}
+
+impl Feed {
+    fn apply(&mut self, reply: Value, field: &str, limit: usize) -> Result<bool, String> {
+        if self.ended {
+            return Ok(false);
+        }
+        let valid = checked(reply).and_then(|reply| {
+            if reply.get("subscribed").and_then(Value::as_bool) != Some(true) {
+                return Err("Home Chooser did not accept subscription".into());
+            }
+            let values = array(&reply, field, limit)?;
+            if values.as_array().unwrap().iter().any(|v| !v.is_object()) {
+                return Err("Invalid Home Chooser subscription entry".into());
+            }
+            Ok(reply)
+        });
+        match valid {
+            Ok(reply) => {
+                let changed = self.snapshot.as_ref() != Some(&reply);
+                self.snapshot = Some(reply);
+                Ok(changed)
+            }
+            Err(error) => {
+                self.snapshot = None;
+                self.ended = true;
+                Err(error)
+            }
+        }
+    }
+}
+
+pub fn take_changed() -> bool {
+    CHANGED.swap(false, Ordering::AcqRel)
+}
+
+fn feed_field(method: &str) -> Option<(&'static str, &'static str, usize)> {
+    match method {
+        "listApps" => Some(("listApps", "apps", 1000)),
+        "listInputs" => Some(("listInputs", "inputs", 128)),
+        _ => None,
+    }
+}
+
+fn feed_reply(method: &'static str, reply: Value) {
+    let Some((_, field, limit)) = feed_field(method) else {
+        return;
+    };
+    if let Ok(mut feeds) = FEEDS.lock() {
+        let Some(feed) = feeds.as_mut().and_then(|feeds| feeds.get_mut(method)) else {
+            return;
+        };
+        match feed.apply(reply, field, limit) {
+            Ok(changed) => {
+                if changed {
+                    CHANGED.store(true, Ordering::Release);
+                }
+            }
+            Err(error) => {
+                eprintln!(
+                    "Luma Home Chooser subscription {method}: {error}; reverting to one-shot refreshes"
+                );
+                CHANGED.store(true, Ordering::Release);
+            }
+        }
+    }
+}
+
+fn subscribe(method: &'static str) -> Result<(), String> {
+    let uri = format!("{SERVICE}/{method}");
+    #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
+    return crate::luna::native_app::subscribe(&uri, move |reply| feed_reply(method, reply));
+    #[cfg(not(all(feature = "webos", target_os = "linux", target_arch = "arm")))]
+    {
+        let _ = uri;
+        Err("Home Chooser subscriptions require native webOS".into())
+    }
+}
+
+fn feed_snapshot(method: &str, version: u64) -> Option<Value> {
+    let (method, _, _) = feed_field(method)?;
+    if version < 2 {
+        return None;
+    }
+    let start = {
+        let mut feeds = FEEDS.lock().ok()?;
+        let feeds = feeds.get_or_insert_with(HashMap::new);
+        if let Some(feed) = feeds.get(method) {
+            return feed.snapshot.clone();
+        }
+        feeds.insert(method, Feed::default());
+        true
+    };
+    if start && let Err(error) = subscribe(method) {
+        feed_reply(method, json!({"returnValue": false, "errorText": error}));
+    }
+    None
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Status {
+    Unavailable,
+    UpdateRequired,
+    SetupRequired,
+    PermissionRequired,
+    Ready { selected: bool },
+}
+
+impl Status {
+    pub fn message_key(&self) -> &'static str {
+        match self {
+            Self::Unavailable => "homeChooserUnavailable",
+            Self::UpdateRequired => "homeChooserUpdate",
+            Self::SetupRequired => "homeChooserSetup",
+            Self::PermissionRequired => "homeChooserPermission",
+            Self::Ready { selected: false } => "homeChooserSelect",
+            Self::Ready { selected: true } => "homeChooserReady",
+        }
+    }
+}
+
+pub fn take_status() -> Option<Status> {
+    STATUS.try_lock().ok()?.take()
+}
+
+pub fn invalidate() {
+    INVALIDATE.store(true, Ordering::Release);
+}
 
 pub fn set_enabled(enabled: bool) {
     ENABLED.store(enabled, Ordering::Release);
@@ -21,6 +161,7 @@ pub fn set_enabled(enabled: bool) {
 #[derive(Clone, Debug)]
 struct Info {
     version: u64,
+    selected: bool,
 }
 
 fn checked(reply: Value) -> Result<Value, String> {
@@ -40,22 +181,89 @@ fn checked(reply: Value) -> Result<Value, String> {
     Ok(reply)
 }
 
-fn info(reply: Value) -> Result<Info, String> {
-    let reply = checked(reply)?;
+fn inspect(reply: Value) -> (Result<Info, String>, Status) {
+    let reply = match checked(reply) {
+        Ok(reply) => reply,
+        Err(error) => return (Err(error), Status::Unavailable),
+    };
     let version = reply
         .get("apiVersion")
         .and_then(Value::as_u64)
-        .filter(|n| *n >= 1)
-        .ok_or("Home Chooser API is too old")?;
+        .filter(|n| *n >= 1);
+    let Some(version) = version else {
+        return (
+            Err("Home Chooser API is too old".into()),
+            Status::UpdateRequired,
+        );
+    };
     if reply.get("root").and_then(Value::as_bool) != Some(true) {
-        return Err("Open Home Chooser to finish root setup".into());
+        return (
+            Err("Open Home Chooser to finish root setup".into()),
+            Status::SetupRequired,
+        );
     }
     if reply.get("permitted").and_then(Value::as_bool) != Some(true) {
-        return Err("Reinstall Luma after Home Chooser permission setup".into());
+        return (
+            Err("Reinstall Luma after Home Chooser permission setup".into()),
+            Status::PermissionRequired,
+        );
     }
     // Reads do not require isSelectedHome. Never infer mutation authorization
     // from a cached status reply or silently promote a pending uninstall.
-    Ok(Info { version })
+    let Some(selected) = reply.get("isSelectedHome").and_then(Value::as_bool) else {
+        return (
+            Err("Invalid Home Chooser selection status".into()),
+            Status::Unavailable,
+        );
+    };
+    (Ok(Info { version, selected }), Status::Ready { selected })
+}
+
+#[cfg(test)]
+fn info(reply: Value) -> Result<Info, String> {
+    inspect(reply).0
+}
+
+fn probe() -> Result<Info, String> {
+    let (result, status) = match transport("getInfo", &json!({})) {
+        Ok(reply) => inspect(reply),
+        Err(error) => (Err(error), Status::Unavailable),
+    };
+    if let Ok(mut queued) = STATUS.lock() {
+        *queued = Some(status);
+    }
+    result
+}
+
+pub fn refresh_status() {
+    if ENABLED.load(Ordering::Acquire) {
+        invalidate();
+        let _ = read_info();
+    }
+}
+
+/// Called only after an explicit owner action. Home Chooser owns confirmation.
+pub fn request_payload() -> Value {
+    refresh_status();
+    let request = INFO
+        .lock()
+        .ok()
+        .and_then(|cache| {
+            cache
+                .as_ref()
+                .and_then(|(_, result)| result.as_ref().ok())
+                .map(|info| !info.selected)
+        })
+        .unwrap_or(false);
+    chooser_launch(request)
+}
+
+fn chooser_launch(request: bool) -> Value {
+    if request {
+        json!({"id": "org.webosbrew.homechooser", "params": {"request": crate::platform::APP_ID}})
+    } else {
+        json!({"id": "org.webosbrew.homechooser"})
+    }
 }
 
 fn transport(method: &str, payload: &Value) -> Result<Value, String> {
@@ -69,16 +277,17 @@ fn transport(method: &str, payload: &Value) -> Result<Value, String> {
     }
 }
 
-fn read(method: &str, payload: Value, level: u64) -> Result<Value, String> {
+fn read_info() -> Result<Info, String> {
     // Serialize probes across artwork/platform workers and cache negative
     // detection briefly, so a missing/refused service is not queried per icon.
     let status = {
         let mut cache = INFO.lock().map_err(|_| "Home Chooser status lock failed")?;
-        if cache
-            .as_ref()
-            .is_none_or(|(at, _)| at.elapsed() >= Duration::from_secs(30))
+        if INVALIDATE.swap(false, Ordering::AcqRel)
+            || cache
+                .as_ref()
+                .is_none_or(|(at, _)| at.elapsed() >= Duration::from_secs(30))
         {
-            let result = transport("getInfo", &json!({})).and_then(info);
+            let result = probe();
             if let Err(error) = &result {
                 eprintln!("Luma Home Chooser: {error}; using Homebrew fallback");
             }
@@ -90,6 +299,14 @@ fn read(method: &str, payload: Value, level: u64) -> Result<Value, String> {
             .1
             .clone()?
     };
+    Ok(status)
+}
+
+fn read(method: &str, payload: Value, level: u64) -> Result<Value, String> {
+    let status = read_info()?;
+    if let Some(snapshot) = feed_snapshot(method, status.version) {
+        return Ok(snapshot);
+    }
     request(&status, method, payload, level, transport)
 }
 
@@ -194,36 +411,77 @@ fn parse_icons(reply: &Value, count: usize) -> Result<Vec<Value>, String> {
     Ok(icons.clone())
 }
 
-fn icons_with(
-    id: &str,
+fn icons_batch_with(
+    ids: &[&str],
     mut read: impl FnMut(Value) -> Result<Value, String>,
-) -> Result<Vec<Vec<u8>>, String> {
-    if !crate::model::valid_app_id(id) {
+) -> Result<IconBatch, String> {
+    if ids.iter().any(|id| !crate::model::valid_app_id(id)) {
         return Err("Invalid Home Chooser icon app ID".into());
     }
-    // Request both candidates in one batch, retaining the existing large-first
-    // preference and the artwork worker's bounded, version-keyed cache.
-    let items = [
-        json!({"id": id, "size": "largeIcon"}),
-        json!({"id": id, "size": "icon"}),
-    ];
-    let icons = parse_icons(&read(json!({"items": items}))?, items.len())?;
     let mut result = Vec::new();
-    for (index, mut icon) in icons.into_iter().enumerate() {
-        if icon.get("errorCode").and_then(Value::as_str) == Some("overBudget") {
-            icon = parse_icons(&read(json!({"items": [items[index]]}))?, 1)?.remove(0);
+    for chunk in ids.chunks(32) {
+        let mut pending: Vec<_> = chunk
+            .iter()
+            .flat_map(|id| {
+                [
+                    json!({"id": id, "size": "largeIcon"}),
+                    json!({"id": id, "size": "icon"}),
+                ]
+            })
+            .enumerate()
+            .collect();
+        let mut decoded: Vec<Result<Option<Vec<u8>>, String>> = vec![Ok(None); pending.len()];
+        while !pending.is_empty() {
+            let items: Vec<_> = pending.iter().map(|(_, item)| item.clone()).collect();
+            let icons = parse_icons(&read(json!({"items": items}))?, pending.len())?;
+            let count = pending.len();
+            let mut deferred = Vec::new();
+            for ((slot, item), icon) in pending.into_iter().zip(icons) {
+                decoded[slot] = match icon.get("errorCode").and_then(Value::as_str) {
+                    Some("overBudget") => {
+                        deferred.push((slot, item));
+                        continue;
+                    }
+                    Some("noIcon" | "notFound" | "iconTooLarge") => Ok(None),
+                    Some(code) => {
+                        eprintln!("Luma Home Chooser icon {:?}: {code}", item);
+                        Err(format!("Home Chooser icon: {code}"))
+                    }
+                    None => icon_bytes(&icon).map(Some),
+                };
+            }
+            if deferred.len() == count {
+                return Err("Home Chooser icon budget made no progress".into());
+            }
+            pending = deferred;
         }
-        match icon.get("errorCode").and_then(Value::as_str) {
-            Some("noIcon" | "notFound" | "iconTooLarge") => continue,
-            Some(code) => return Err(format!("Home Chooser icon: {code}")),
-            None => result.push(icon_bytes(&icon)?),
+        for pair in decoded.chunks(2) {
+            let bytes: Vec<_> = pair
+                .iter()
+                .filter_map(|icon| icon.as_ref().ok()?.clone())
+                .collect();
+            if bytes.is_empty()
+                && let Some(error) = pair.iter().find_map(|icon| icon.as_ref().err())
+            {
+                result.push(Err(error.clone()));
+            } else {
+                result.push(Ok(bytes));
+            }
         }
     }
     Ok(result)
 }
 
-pub fn icons(id: &str) -> Option<Vec<Vec<u8>>> {
-    optional(|| icons_with(id, |payload| read("getIcons", payload, 2)))
+#[cfg(test)]
+fn icons_with(
+    id: &str,
+    read: impl FnMut(Value) -> Result<Value, String>,
+) -> Result<Vec<Vec<u8>>, String> {
+    icons_batch_with(&[id], read)?.remove(0)
+}
+
+pub fn icons_batch(ids: &[&str]) -> Option<IconBatch> {
+    optional(|| icons_batch_with(ids, |payload| read("getIcons", payload, 2)))
 }
 
 #[cfg(test)]

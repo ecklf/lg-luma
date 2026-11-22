@@ -78,6 +78,8 @@ pub struct Input {
     pub connected: Option<bool>,
     /// Optional signal information; never overrides the cable state or Auto visibility.
     pub signal: Option<bool>,
+    /// Platform-provided launch parameters, including EIM unique device IDs.
+    pub params: serde_json::Value,
 }
 
 impl Input {
@@ -1266,6 +1268,7 @@ pub fn demo_inventory() -> Inventory {
                 port: "HDMI 1".into(),
                 connected: Some(true),
                 signal: None,
+                params: serde_json::json!({}),
             },
             Input {
                 id: "com.webos.app.hdmi2".into(),
@@ -1273,6 +1276,7 @@ pub fn demo_inventory() -> Inventory {
                 port: "HDMI 2".into(),
                 connected: Some(true),
                 signal: None,
+                params: serde_json::json!({}),
             },
             Input {
                 id: "com.webos.app.hdmi3".into(),
@@ -1280,6 +1284,7 @@ pub fn demo_inventory() -> Inventory {
                 port: "HDMI 3".into(),
                 connected: Some(false),
                 signal: None,
+                params: serde_json::json!({}),
             },
         ],
     };

@@ -371,6 +371,7 @@ fn effects(
             }
             Effect::FireWebhook(tile) => webhook.send(tile),
             Effect::UpdateDownload(release) => updates.request(update::Request::Download(release)),
+            Effect::OpenHomeChooser => platform.send(Request::OpenHomeChooser),
             Effect::Quit => return false,
             Effect::Uninstall(id) => platform.send(Request::Uninstall(id)),
             Effect::DeleteWallpaper(id) => {
@@ -1240,6 +1241,14 @@ fn run() -> Result<(), String> {
         }
         while let Ok(response) = platform.receiver.try_recv() {
             match response {
+                Response::ChooserOpened(result) => {
+                    state.home_chooser_busy = false;
+                    state.dirty = true;
+                    if let Err(error) = result {
+                        eprintln!("Luma Home Chooser launch: {error}");
+                        state.notify(state.preferences.language.t("homeChooserUnavailable"));
+                    }
+                }
                 Response::Inventory(Ok((mut inventory, warning))) => {
                     inventory_at = Some(Instant::now());
                     if warning.is_none() {
@@ -1256,6 +1265,13 @@ fn run() -> Result<(), String> {
                         state.preferences.language,
                     );
                     state.set_inventory(inventory, warning);
+                    assets.artwork.retain_sources(
+                        state
+                            .inventory
+                            .apps
+                            .iter()
+                            .filter_map(|app| app.icon.clone()),
+                    );
                     if !startup_inventory_reported {
                         // The first inventory names the dock's apps: decode their surfaces
                         // on the startup workers instead of one by one in the first frame.
@@ -1397,6 +1413,16 @@ fn run() -> Result<(), String> {
                     );
                 }
             }
+        }
+        if let Some(status) = home_chooser::take_status()
+            && state.home_chooser.as_ref() != Some(&status)
+        {
+            state.home_chooser = Some(status);
+            state.dirty = true;
+        }
+        if webos && !state.loading && home_chooser::take_changed() {
+            state.loading = true;
+            platform.send(Request::Refresh);
         }
         while let Ok(webhook::Response::Done { title, result }) =
             webhook_service.receiver.try_recv()
@@ -1612,8 +1638,12 @@ fn run() -> Result<(), String> {
                         visible = true;
                         // Shown and Restored can come from SDL itself; only focus confirms.
                         if matches!(win_event, WindowEvent::FocusGained) {
+                            let entering = !focused;
                             focused = true;
                             foreground.confirmed();
+                            if webos && entering {
+                                platform.send(Request::ChooserStatus);
+                            }
                         }
                         state.dirty = true;
                         if webos

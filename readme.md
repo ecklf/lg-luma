@@ -180,6 +180,9 @@ as the full-screen Home app without Luma's takeover scripts or an Input Hook map
 2. Install Home Chooser from Homebrew Channel and open it once to finish its root setup.
 3. Install or update Luma, then open Home Chooser, select **Luma**, and confirm. Press Home to try it.
 
+You can also open **Settings → System → Home Chooser** in Luma for setup guidance or to request
+using Luma as Home. Home Chooser asks you to confirm the change.
+
 <details>
 <summary>Old methods</summary>
 

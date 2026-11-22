@@ -221,6 +221,8 @@ pub fn redirect_to_home() -> Result<bool, String> {
 }
 
 pub enum Request {
+    ChooserStatus,
+    OpenHomeChooser,
     Refresh,
     RefreshInputs,
     Launch(String),
@@ -231,6 +233,7 @@ pub enum Request {
     },
 }
 pub enum Response {
+    ChooserOpened(Result<(), String>),
     Inventory(Result<(Inventory, Option<String>), String>),
     Inputs(Result<Vec<Input>, String>),
     Launched {
@@ -261,6 +264,7 @@ impl Platform {
         thread::spawn(move || {
             let mut desktop_inventory = demo_inventory();
             let mut storage = usb::Storage::default();
+            let mut input_params = std::collections::HashMap::new();
             let mut desktop_recents = if webos {
                 vec![]
             } else {
@@ -268,12 +272,31 @@ impl Platform {
             };
             while let Ok(request) = requests.recv() {
                 let response = match request {
+                    Request::ChooserStatus => {
+                        if webos {
+                            crate::home_chooser::refresh_status();
+                        }
+                        continue;
+                    }
+                    Request::OpenHomeChooser => Response::ChooserOpened(if webos {
+                        call(
+                            "luna://com.webos.applicationManager/launch",
+                            crate::home_chooser::request_payload(),
+                        )
+                        .map(|_| ())
+                    } else {
+                        Ok(())
+                    }),
                     Request::Recent {
                         generation,
                         command,
                     } => {
                         let result = if webos {
-                            recent_call(&command).and_then(|reply| {
+                            let params = match &command {
+                                crate::recents::Command::Launch(id) => input_params.get(id),
+                                _ => None,
+                            };
+                            recent_call(&command, params).and_then(|reply| {
                                 if command == crate::recents::Command::List {
                                     crate::recents::normalize(&reply).map(Some)
                                 } else {
@@ -385,7 +408,7 @@ impl Platform {
                             } else {
                                 call(
                                     "luna://com.webos.applicationManager/launch",
-                                    json!({"id": id}),
+                                    launch_payload(&id, input_params.get(&id)),
                                 )
                                 .map(|_| ())
                             }
@@ -395,6 +418,22 @@ impl Platform {
                         Response::Launched { id, result }
                     }
                 };
+                match &response {
+                    Response::Inventory(Ok((inventory, None))) => {
+                        input_params = inventory
+                            .inputs
+                            .iter()
+                            .map(|input| (input.id.clone(), input.params.clone()))
+                            .collect();
+                    }
+                    Response::Inputs(Ok(inputs)) => {
+                        input_params = inputs
+                            .iter()
+                            .map(|input| (input.id.clone(), input.params.clone()))
+                            .collect();
+                    }
+                    _ => {}
+                }
                 if responses.send(response).is_err() {
                     break;
                 }
@@ -635,9 +674,6 @@ pub fn read_app_icons(source: &app_artwork::Source) -> Result<Vec<Vec<u8>>, Stri
     if !cfg!(feature = "webos") {
         return Err("Installed artwork is only read on TV builds".into());
     }
-    if let Some(icons) = crate::home_chooser::icons(&source.id) {
-        return Ok(icons);
-    }
     let command = helper_command(
         "read-app-icon",
         &[serde_json::to_string(source).map_err(|e| e.to_string())?],
@@ -743,8 +779,14 @@ fn command_reply(envelope: &Value) -> Result<Value, String> {
     checked_response(response)
 }
 
-fn recent_call(command: &crate::recents::Command) -> Result<Value, String> {
-    let (uri, payload) = command.request()?;
+fn recent_call(
+    command: &crate::recents::Command,
+    input_params: Option<&Value>,
+) -> Result<Value, String> {
+    let (uri, mut payload) = command.request()?;
+    if let Some(params) = input_params {
+        payload["params"] = params.clone();
+    }
     // The native process uses its own authenticated Homebrew connection, as
     // inventory does. Fixed operations only; no app-ID impersonation or retries
     // of mutations after an ambiguous timeout. LG owns close/keep-alive policy.
@@ -823,6 +865,14 @@ pub fn normalize_apps(raw: &Value) -> Result<Vec<App>, String> {
         };
         let live = id == "com.webos.app.livetv";
         let visible = entry.get("visible");
+        let system = entry
+            .get("systemApp")
+            .and_then(Value::as_bool)
+            .unwrap_or_else(|| {
+                ["com.webos.", "com.palm.", "com.lge."]
+                    .iter()
+                    .any(|prefix| id.starts_with(prefix))
+            });
         if id == APP_ID
             || id == "com.luma.native"
             || id == "com.luma.launcher"
@@ -831,11 +881,7 @@ pub fn normalize_apps(raw: &Value) -> Result<Vec<App>, String> {
             || id.starts_with("com.webos.app.hdmi")
             || id.starts_with("com.webos.app.externalinput.")
             || (!live && (visible == Some(&json!(false)) || visible == Some(&json!("false"))))
-            || (!live
-                && ["com.webos.", "com.palm.", "com.lge."]
-                    .iter()
-                    .any(|prefix| id.starts_with(prefix))
-                && visible != Some(&json!(true)))
+            || (!live && system && visible != Some(&json!(true)))
             || !seen.insert(id)
         {
             continue;
@@ -887,11 +933,13 @@ pub fn normalize_inputs(raw: &Value) -> Result<Vec<Input>, String> {
             continue;
         }
         let port = format!("HDMI {number}");
+        let params = input_launch_params(entry)?;
         inputs.push(Input {
             id: id.into(),
             title: title(entry.get("label").and_then(Value::as_str), &port),
             port,
             signal: entry.get("hdmiSignalExist").and_then(Value::as_bool),
+            params,
             // Some firmware reports `connected: true` for every existing port;
             // `hdmiPlugIn` is the actual cable state where it is provided.
             connected: entry
@@ -901,6 +949,64 @@ pub fn normalize_inputs(raw: &Value) -> Result<Vec<Input>, String> {
         });
     }
     Ok(inputs)
+}
+
+fn input_launch_params(entry: &Value) -> Result<Value, String> {
+    if let Some(params) = entry.get("params") {
+        if !params.is_object() || params.to_string().len() > 4096 {
+            return Err("Invalid input launch parameters".into());
+        }
+        return Ok(params.clone());
+    }
+    // Legacy EIM reads do not have Home Chooser's normalized params field.
+    Ok(
+        match entry
+            .get("uniqueId")
+            .filter(|id| id.is_number() || id.is_string())
+        {
+            Some(id) => {
+                json!({"id": id, "value": id.as_str().map(str::to_owned).unwrap_or_else(|| id.to_string())})
+            }
+            None => json!({}),
+        },
+    )
+}
+
+fn launch_payload(id: &str, params: Option<&Value>) -> Value {
+    match params {
+        Some(params) => json!({"id": id, "params": params}),
+        None => json!({"id": id}),
+    }
+}
+
+#[cfg(test)]
+mod input_launch_tests {
+    use super::*;
+
+    #[test]
+    fn chooser_input_parameters_reach_the_platform_launch_unchanged() {
+        let params = json!({"id": 145, "value": "145"});
+        let raw =
+            json!([{"appId": "com.webos.app.hdmi1", "id": "HDMI_1", "port": 1, "params": params}]);
+        let input = normalize_inputs(&raw).unwrap().remove(0);
+        assert_eq!(input.params, params);
+        assert_eq!(
+            launch_payload(&input.id, Some(&input.params)),
+            json!({"id": "com.webos.app.hdmi1", "params": params})
+        );
+        assert_eq!(launch_payload("netflix", None), json!({"id": "netflix"}));
+    }
+
+    #[test]
+    fn legacy_unique_device_ids_follow_input_picker_semantics() {
+        assert_eq!(
+            input_launch_params(&json!({"uniqueId": 25})).unwrap(),
+            json!({"id": 25, "value": "25"})
+        );
+        assert_eq!(input_launch_params(&json!({})).unwrap(), json!({}));
+        assert!(input_launch_params(&json!({"params": null})).is_err());
+        assert!(input_launch_params(&json!({"params": {"value": "x".repeat(5000)}})).is_err());
+    }
 }
 
 #[cfg(test)]

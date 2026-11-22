@@ -95,6 +95,7 @@ fn normalize(raw: &Value) -> Result<Vec<Input>, String> {
             port: "USB".into(),
             connected: Some(true),
             signal: None,
+            params: json!({}),
         });
     }
     result.sort_by(|a, b| a.id.cmp(&b.id));

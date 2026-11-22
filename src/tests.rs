@@ -46,6 +46,44 @@ fn ready() -> State {
 }
 
 #[test]
+fn home_chooser_setup_row_is_actionable_localized_and_single_flight() {
+    for language in crate::i18n::Language::ALL {
+        for status in [
+            crate::home_chooser::Status::Unavailable,
+            crate::home_chooser::Status::SetupRequired,
+            crate::home_chooser::Status::PermissionRequired,
+            crate::home_chooser::Status::Ready { selected: false },
+            crate::home_chooser::Status::Ready { selected: true },
+        ] {
+            let mut state = ready();
+            state.preferences.language = language;
+            state.page = Page::Settings;
+            state.section = crate::state::SYSTEM_SECTION;
+            state.home_chooser = Some(status.clone());
+            state.focus = Target::HomeChooser;
+            let ui = scene(&state);
+            assert!(
+                ui.controls
+                    .iter()
+                    .any(|control| control.target == Target::HomeChooser)
+            );
+            assert!(ui.draw.iter().any(|draw| matches!(draw, crate::renderer::Draw::Text(text, ..) if text == language.t(status.message_key()))));
+            assert_eq!(state.activate(), vec![Effect::OpenHomeChooser]);
+            assert!(state.activate().is_empty());
+        }
+    }
+    let mut state = ready();
+    state.page = Page::Settings;
+    state.section = crate::state::SYSTEM_SECTION;
+    assert!(
+        !scene(&state)
+            .controls
+            .iter()
+            .any(|control| control.target == Target::HomeChooser)
+    );
+}
+
+#[test]
 fn animations_are_paced_when_vsync_is_unavailable() {
     use std::time::Duration;
 
@@ -582,6 +620,7 @@ fn auto_input_visibility_requires_a_positive_connection_report() {
         port: "HDMI 1".into(),
         connected: None,
         signal: None,
+        params: json!({}),
     };
     assert!(!preferences.input_visible(&input));
     input.connected = Some(true);
@@ -2276,6 +2315,7 @@ fn custom_input_names_keep_the_label_port_and_status_as_detail() {
         port: "HDMI 2".into(),
         connected: Some(true),
         signal: None,
+        params: json!({}),
     };
     let language = preferences.language;
     let status = |preferences: &Preferences| {
