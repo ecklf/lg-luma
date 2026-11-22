@@ -18,6 +18,9 @@ use std::{
 
 const MAX_REPLY: usize = 2 * 1024 * 1024;
 
+#[path = "luna-native-app.rs"]
+pub mod native_app;
+
 // Layout from the NDK's public luna-service2/lunaservice.h.
 #[repr(C)]
 struct Error {

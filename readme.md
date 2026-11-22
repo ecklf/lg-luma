@@ -131,6 +131,13 @@ Use **Clear name** to return to an unnamed greeting; names are saved only on you
 
 ## Installation
 
+> [!IMPORTANT]
+> This API-enabled release requires [Home Chooser](https://github.com/webosbrew/home-chooser/)
+> to be installed and opened once before installing or updating Luma. Its setup registers the
+> applications permission requested by Luma. If installation reports `Not allowed permission is
+> used`, open Home Chooser and reinstall Luma. The earlier selection-only integration does not
+> have this dependency.
+
 ### Homebrew Channel
 
 Add this custom repository URL to Homebrew Channel:

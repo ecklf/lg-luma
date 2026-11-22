@@ -13,6 +13,8 @@ mod feedback;
 mod font;
 mod gamepad;
 mod glass_backdrop;
+#[path = "home-chooser.rs"]
+mod home_chooser;
 mod i18n;
 #[path = "input-refresh.rs"]
 mod input_refresh;
@@ -662,6 +664,7 @@ fn run() -> Result<(), String> {
         return Err("This desktop build cannot run on a TV. Build with --features webos.".into());
     }
     if webos {
+        home_chooser::set_enabled(!options.webos_home);
         if !options.webos_home && platform::redirect_to_home()? {
             return Ok(());
         }
@@ -885,6 +888,10 @@ fn run() -> Result<(), String> {
             builder.resizable();
         }
         let window = builder.build().map_err(|e| e.to_string())?;
+        #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
+        if !options.webos_home {
+            luna::native_app::ready();
+        }
         let context = window.gl_create_context()?;
         Ok::<_, String>((window, context))
     };

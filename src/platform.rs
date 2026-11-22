@@ -594,6 +594,16 @@ fn inventory_read(uri: &str, field: &str) -> Result<Value, String> {
 }
 
 fn inventory_read_with_payload(uri: &str, field: &str, payload: Value) -> Result<Value, String> {
+    let chooser = match (uri, field) {
+        ("luna://com.webos.applicationManager/listApps", "apps") => crate::home_chooser::apps(),
+        ("luna://com.webos.service.eim/getAllInputStatus", "devices") => {
+            crate::home_chooser::inputs()
+        }
+        _ => None,
+    };
+    if let Some(value) = chooser {
+        return Ok(value);
+    }
     // In place of LG's Home, Luma holds LG Home's LS2 role and asks sam/EIM itself: an early
     // root integration can bring this Home up long before Homebrew's service starts (~21 s vs
     // ~51 s into a cold boot). A refused call answers at once and falls back below.
@@ -624,6 +634,9 @@ fn inventory_read_with_payload(uri: &str, field: &str, payload: Value) -> Result
 pub fn read_app_icons(source: &app_artwork::Source) -> Result<Vec<Vec<u8>>, String> {
     if !cfg!(feature = "webos") {
         return Err("Installed artwork is only read on TV builds".into());
+    }
+    if let Some(icons) = crate::home_chooser::icons(&source.id) {
+        return Ok(icons);
     }
     let command = helper_command(
         "read-app-icon",

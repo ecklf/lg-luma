@@ -17,6 +17,7 @@ default = []
 webos = ["dep:libc", "luma-tv-helper/webos"]
 
 [dependencies]
+base64 = "0.22"
 luma-tv-helper = { path = "tv-helper" }
 getrandom = "0.2"
 gl = "0.14"
