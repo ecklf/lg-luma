@@ -1031,6 +1031,20 @@ failures preserve the last valid inputs. No failed inventory read substitutes de
 
 ### Home Chooser integration
 
+On native webOS, Luma requests `SDL_WEBOS_ACCESS_POLICY_KEYS_HOME` before video initialization
+for every launch, not just legacy Home takeover. When the compositor delivers Home to Luma's
+foreground surface, it returns directly to the Home tab through `State::return_home`, dismissing
+overlays and saving in-progress keyboard edits. Repeated Home stays at the root, without exiting
+or opening Recents. Ordinary tile launches receive the same behavior, even when Luma is not the
+selected launcher. Desktop key handling is unchanged.
+
+This is a native window policy, not a global key filter or a Home Chooser API call. It adds no
+installation permission and works independently of the inventory/icon API integration.
+TV verification is pending: check Home from Apps, Settings, overlays and the root, repeated presses
+and holds, opening Luma from its tile without selecting it as Home, launching another app and
+pressing Home, and changing the selected launcher. A platform relaunch after the key is safe for
+navigation, but actual compositor delivery and background routing must be verified on hardware.
+
 The installed `appinfo.json` declares `appCategory: ["home"]`, so
 [Home Chooser](https://github.com/webosbrew/home-chooser/blob/main/docs/launcher-api.md) can select
 Luma under `com.ecklf.luma`. Keep the window full-screen (no `defaultWindowType: "overlay"`):

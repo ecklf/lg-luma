@@ -233,6 +233,10 @@ const SCRIPT_POINTER: u32 = u32::MAX - 1;
 // Keycode retains the raw value: SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_WEBOS_BACK).
 const WEBOS_BACK_KEYCODE: i32 = (1 << 30) | 482;
 
+fn is_home(key: Keycode, webos: bool) -> bool {
+    webos && i32::from(key) == sdl_events::WEBOS_HOME_KEYCODE
+}
+
 fn is_back(key: Keycode, webos: bool) -> bool {
     matches!(key, Keycode::Escape | Keycode::AcBack)
         || i32::from(key) == 461
@@ -682,11 +686,9 @@ fn run() -> Result<(), String> {
         // Magic Remotes send the separate Exit key for a long Back press.
         // Claim it before video init so the compositor does not close Luma.
         sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_EXIT", "true");
-        // SAM may not relaunch Home when its surface is already foreground. Handle the
-        // physical key ourselves only as Home; normal tile launches keep LG's routing.
-        if options.webos_home {
-            sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_HOME", "true");
-        }
+        // While Luma is foreground, Home returns to its Home tab, including normal tile
+        // and Home Chooser launches. This surface policy is not a global Home-key filter.
+        sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_HOME", "true");
         // SDL-webOS answers tvpower's screen saver requests with `ack: !suspend_screensaver`, and
         // SDL suspends the screen saver unless this hint allows it: LG's screen saver never
         // started while Luma was in front. A launcher has no video to protect.
@@ -1639,10 +1641,7 @@ fn run() -> Result<(), String> {
                         back_button.cancel();
                     }
                     match key {
-                        _ if webos
-                            && options.webos_home
-                            && i32::from(key) == sdl_events::WEBOS_HOME_KEYCODE =>
-                        {
+                        key if is_home(key, webos) => {
                             if !repeat {
                                 eprintln!("Luma Home key: returning to Home tab");
                                 press = None;
