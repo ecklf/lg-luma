@@ -1307,6 +1307,12 @@ pnpm assets
 xvfb-run -a pnpm test:smoke
 ```
 
+The ignored `renderer::layer_tests::layer_pixels_match_direct_rendering` test needs generated
+assets and an OpenGL display. After `pnpm assets`, run it with
+`xvfb-run -a cargo test --locked --workspace --all-features layer_pixels_match_direct_rendering -- --ignored --test-threads=1`.
+It compares direct and layered pixels across letterboxed, pillarboxed and 16:9 drawables,
+including clips, resizing and returning to direct rendering. CI runs it after asset generation.
+
 CI prepares checks, unit tests, native assets and the desktop binary once. Four independent
 jobs run navigation/rendering, the brand gallery, mocked weather and translations in parallel,
 each with its own Xvfb display, scratch preferences and diagnostic artifact. They consume a

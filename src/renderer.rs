@@ -416,6 +416,23 @@ struct LayerCache {
     key: u64,
 }
 
+/// The fitted viewport within a drawable-sized layer texture, flipped vertically for GL.
+/// Sampling the whole texture would fit its letterbox/pillarbox margins a second time.
+fn layer_uv(size: Size) -> [f32; 4] {
+    let viewport = Viewport::new(size);
+    let (width, height) = (size.width as f32, size.height as f32);
+    [
+        viewport.x as f32 / width,
+        (viewport.y + viewport.height) as f32 / height,
+        (viewport.x + viewport.width) as f32 / width,
+        viewport.y as f32 / height,
+    ]
+}
+
+#[cfg(test)]
+#[path = "layer-tests.rs"]
+mod layer_tests;
+
 /// A layer's content key. App artwork counts by identity: a changed icon is a new image.
 fn fingerprint(commands: &[Draw]) -> u64 {
     use std::hash::{DefaultHasher, Hasher};
@@ -1796,7 +1813,7 @@ impl Renderer {
                     // Radius -1: the plain textured program, no shape edge per fragment.
                     self.gradient_quad(
                         *rect,
-                        [0., 1., 1., 0.],
+                        layer_uv(Size::new(width, height)),
                         -1.,
                         0.,
                         [[tint[3]; 4]; 2],
