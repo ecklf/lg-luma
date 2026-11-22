@@ -133,10 +133,6 @@ Use **Clear name** to return to an unnamed greeting; names are saved only on you
 
 ### Homebrew Channel
 
-Install [Home Chooser](https://github.com/webosbrew/home-chooser/) and open it once to finish its
-root setup **before installing Luma**. Luma declares Home Chooser's applications API permission;
-if installation reports `Not allowed permission is used`, open Home Chooser and reinstall Luma.
-
 Add this custom repository URL to Homebrew Channel:
 
 ```text
@@ -180,10 +176,9 @@ takeover or autostart scripts alongside it.
 
 Luma keeps its own app identity and uses SDL-webOS's native lifecycle support to bring the
 existing window back on relaunch, retaining the current view. Back navigates within Luma rather
-than closing the full-screen Home app. Luma declares Home Chooser's applications API permission,
-so Home Chooser must be installed and opened once before installing Luma. The permission is
-declared for future API integration; inventory, artwork and app-management operations still use
-Luma's existing Homebrew Channel integration.
+than closing the full-screen Home app. Luma does not require Home Chooser to be installed.
+Inventory, artwork and app-management operations still use Luma's existing Homebrew Channel
+integration. The optional Home Chooser applications API will be introduced separately.
 
 Home Chooser supports webOS 4–12; this does not establish Luma compatibility on every version.
 On webOS 5, Home Chooser documents that LG Home remains loaded until the TV restarts. Memory

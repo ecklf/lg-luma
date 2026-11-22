@@ -1043,19 +1043,11 @@ launcher. This path uses SDL's existing registration, not Luma's separate LG-ide
 subscription. Home Chooser launches retain `APPID=com.ecklf.luma`; do not classify them as
 `options.webos_home`, which is reserved for the legacy takeover paths.
 
-Only the `home` category is required for selection. Luma also declares
-`org.webosbrew.homechooser.applications` in `requiredPermissions`, opting into the optional
-launcher API. The existing `requiredACG` already includes `application.query` and
-`application.launcher`. Home Chooser must be installed and opened once before installing Luma,
-so its access files make the permission available. If installation reports
-`Not allowed permission is used`, open Home Chooser and reinstall Luma. Reinstall after changing
-`requiredPermissions`.
-
-The permission declaration does not migrate runtime calls. Luma's platform workers currently
-register anonymously, whereas this API requires a native caller's exact app-named handle
-(already owned by SDL/libhelpers). Existing inventory/artwork and privileged app-management
-paths remain unchanged. Using the API requires routing calls through that handle, not adding
-another anonymous connection or impersonating the app with `luna-send -a`.
+Only the `home` category is required for selection. The optional
+`org.webosbrew.homechooser.applications` permission is not declared, so Luma can still install
+without Home Chooser. Existing inventory/artwork and privileged app-management paths remain
+unchanged. A separate follow-up will introduce API calls through SDL/libhelpers' app-named
+handle rather than Luma's anonymous platform connections.
 
 Disable the legacy takeover, autostart and any Input Hook Home mapping before selecting Luma.
 Home Chooser owns stock-Home suppression and boot recovery; do not run both integrations.
