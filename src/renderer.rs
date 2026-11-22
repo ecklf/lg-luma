@@ -23,6 +23,7 @@ pub const WHITE: Color = [0.96, 0.96, 0.96, 1.];
 mod font_size_tests;
 const GLYPH_GEOMETRY_BUDGET: usize = 8 * 1024 * 1024;
 const TEXT_GEOMETRY_BUDGET: usize = 32 * 1024 * 1024;
+const TEXT_RUN_LIMIT: usize = 512;
 const TEXTURE_BUDGET: usize = 48 * 1024 * 1024;
 /// Precomputed shadow coverage: at most this many texels per shadow and in total.
 const SHADOW_TEXELS: usize = 1024 * 1024;
@@ -383,6 +384,9 @@ fn physical_font_size(size: f32, scale: f32, snap: bool) -> f32 {
     }
 }
 
+/// Pixel size, corner radius and blur of a cached shadow coverage texture.
+pub type ShadowKey = (u32, u32, u32, u32);
+
 fn snap_rect(rect: Rect, scale: f32) -> Rect {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     if !*ENABLED.get_or_init(|| std::env::var("LUMA_SNAP").as_deref() != Ok("0")) {
@@ -697,6 +701,17 @@ impl Renderer {
         Ok(&glyph.geometry)
     }
 
+    /// Whether idle preparation may add text runs without evicting ones it prepared earlier:
+    /// a quarter of the cache stays free for what the next frames draw.
+    pub fn text_cache_has_room(&self) -> bool {
+        let bytes: usize = self
+            .text_runs
+            .values()
+            .map(|run| run.mesh.as_ref().map_or(0, |mesh| mesh.bytes))
+            .sum();
+        self.text_runs.len() < TEXT_RUN_LIMIT * 3 / 4 && bytes < TEXT_GEOMETRY_BUDGET * 3 / 4
+    }
+
     fn trim_text_geometry(&mut self) {
         let glyph_bytes =
             |glyph: &Glyph| glyph.geometry.len() * size_of::<luma_vector_geometry::Vertex>();
@@ -720,7 +735,7 @@ impl Renderer {
         }
         let run_bytes = |run: &TextRun| run.mesh.as_ref().map_or(0, |mesh| mesh.bytes);
         let mut bytes: usize = self.text_runs.values().map(run_bytes).sum();
-        if bytes > TEXT_GEOMETRY_BUDGET || self.text_runs.len() > 512 {
+        if bytes > TEXT_GEOMETRY_BUDGET || self.text_runs.len() > TEXT_RUN_LIMIT {
             let mut old: Vec<_> = self
                 .text_runs
                 .iter()
@@ -729,7 +744,7 @@ impl Renderer {
                 .collect();
             old.sort_by_key(|(_, frame)| *frame);
             for (key, _) in old {
-                if bytes <= TEXT_GEOMETRY_BUDGET && self.text_runs.len() <= 512 {
+                if bytes <= TEXT_GEOMETRY_BUDGET && self.text_runs.len() <= TEXT_RUN_LIMIT {
                     break;
                 }
                 if let Some(run) = self.text_runs.remove(&key) {
@@ -945,15 +960,14 @@ impl Renderer {
         {
             return None;
         }
+        let key = self.shadow_key_of(quad, radius, blur);
         let quad = self.snap(quad);
         let scale = self.stats.viewport.scale.max(0.01);
-        let width = (quad.w * scale).round() as u32;
-        let height = (quad.h * scale).round() as u32;
+        let (width, height) = (key.0, key.1);
         let texels = width as usize * height as usize;
         if width == 0 || height == 0 || texels > SHADOW_TEXELS {
             return None;
         }
-        let key = (width, height, radius.to_bits(), blur.to_bits());
         let frame = self.frame;
         if let Some(texture) = self.shadows.get_mut(&key) {
             texture.frame = frame;
@@ -1014,15 +1028,36 @@ impl Renderer {
         Some(id)
     }
 
-    /// Prepares one shadow texture seen since the last call; true while more remain.
+    /// Processes one pending shadow. Its cached coverage may now differ from the shader.
     /// Call when nothing animates: the next frame draws that shadow from the texture.
-    pub fn prepare_idle(&mut self) -> bool {
-        if let Some((quad, radius, blur)) = self.pending_shadows.pop() {
-            self.preparing_shadow = true;
-            self.shadow_texture(quad, radius, blur);
-            self.preparing_shadow = false;
+    /// Returns the texture's key: only shadows with that key look different now.
+    pub fn prepare_idle(&mut self) -> Option<ShadowKey> {
+        let (quad, radius, blur) = self.pending_shadows.pop()?;
+        self.preparing_shadow = true;
+        self.shadow_texture(quad, radius, blur);
+        self.preparing_shadow = false;
+        Some(self.shadow_key_of(quad, radius, blur))
+    }
+
+    /// The cached coverage texture a shadow command draws from, once prepared.
+    pub fn shadow_key(&self, draw: &Draw) -> Option<ShadowKey> {
+        match draw {
+            Draw::Shadow(rect, radius, blur, _) if *blur > 0. => {
+                Some(self.shadow_key_of(rect.inset(-*blur), *radius, *blur))
+            }
+            _ => None,
         }
-        !self.pending_shadows.is_empty()
+    }
+
+    fn shadow_key_of(&self, quad: Rect, radius: f32, blur: f32) -> ShadowKey {
+        let quad = self.snap(quad);
+        let scale = self.stats.viewport.scale.max(0.01);
+        (
+            (quad.w * scale).round() as u32,
+            (quad.h * scale).round() as u32,
+            radius.to_bits(),
+            blur.to_bits(),
+        )
     }
 
     /// Whether an image path already has a texture (or a cached failure).
@@ -1748,6 +1783,13 @@ impl Renderer {
             // Outside the damage the scissor would discard it anyway; skip its layout too.
             if let (Some(area), Some(bounds)) = (area, crate::damage::bounds(command))
                 && !crate::damage::intersects(area, bounds)
+            {
+                continue;
+            }
+            // Likewise outside the clip, e.g. list rows scrolled out of view: the scissor
+            // discards their pixels, but submitting them still costs CPU time per draw.
+            if let (Some(clip), Some(bounds)) = (self.clip, crate::damage::bounds(command))
+                && !crate::damage::intersects(clip.inset(-2.), bounds)
             {
                 continue;
             }

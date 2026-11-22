@@ -246,8 +246,9 @@ other apps need manual hardware verification. A desktop-only backend check is av
 The unavailable-backend check runs with
 `SDL_AUDIODRIVER=luma-unavailable cargo test --locked --bin luma unavailable_audio_ -- --ignored --test-threads=1`.
 
-Weather → Widget style persists `weather_style` (`standard`, the default, `compact`,
-or `one_line`). Home and Settings use the same native layout and painting functions.
+Weather → Widget style persists `weather_style` (`standard`, `compact`, or `one_line`, the default).
+Unset weather positions default to column 0, row 1 below Greeting. Saved styles and positions
+remain unchanged. Home and Settings use the same native layout and painting functions.
 The picker shows all three designs with offline sample weather, using the saved
 temperature unit and location visibility. Browsing does not change preferences or fetch a forecast. OK/click
 saves a style and returns to Weather, while Back/Left cancels without changing the style.
@@ -1028,6 +1029,34 @@ reply limit. Errors include URI and the bus refusal. Fixed inventory commands ru
 Homebrew Channel `exec`, parsing complete multi-line `luna-send -n 1` JSON replies. Input-read
 failures preserve the last valid inputs. No failed inventory read substitutes demo apps on TV.
 
+### Home Chooser integration
+
+The installed `appinfo.json` declares `appCategory: ["home"]`, so
+[Home Chooser](https://github.com/webosbrew/home-chooser/blob/main/docs/launcher-api.md) can select
+Luma under `com.ecklf.luma`. Keep the window full-screen (no `defaultWindowType: "overlay"`):
+Home Chooser uses this distinction for its empty-screen policy. Back must not exit the root Home.
+
+`handlesRelaunch: true` and `nativeLifeCycleInterfaceVersion: 2` let the pinned SDL-webOS library
+register the installed app through `registerApp`, raise the existing window on `relaunch`, and
+send SDL Quit on `close`. `noSplashOnLaunch: true` avoids SAM splash surfaces for the native
+launcher. This path uses SDL's existing registration, not Luma's separate LG-identity lifecycle
+subscription. Home Chooser launches retain `APPID=com.ecklf.luma`; do not classify them as
+`options.webos_home`, which is reserved for the legacy takeover paths.
+
+Only the `home` category is required for selection. The optional
+`org.webosbrew.homechooser.applications` permission is not declared, so Luma can still install
+without Home Chooser. Existing inventory/artwork and privileged app-management paths remain
+unchanged. A separate follow-up will introduce API calls through SDL/libhelpers' app-named
+handle rather than Luma's anonymous platform connections.
+
+Disable the legacy takeover, autostart and any Input Hook Home mapping before selecting Luma.
+Home Chooser owns stock-Home suppression and boot recovery; do not run both integrations.
+For manual TV verification: select Luma, launch an app/input and press Home repeatedly, check
+Back at the root and within settings, cold-boot, switch back to LG Home, and test removal of the
+selected launcher. Check SAM's running list for LG Home after selection and after a reboot;
+Home Chooser documents that webOS 5 keeps it loaded until restart. Host metadata tests do not
+verify compositor behavior or memory savings on hardware.
+
 ### Optional native Home integration
 
 `tv/home.sh` and the native Rust `luma-helper` executable are packaged beside `luma`. They are a root-only, explicit integration
@@ -1226,7 +1255,9 @@ visible, the widget enabled and a city configured. ureq/rustls uses embedded cer
 an eight-second timeout, no redirects/proxy and 256 KiB reply limits. Search/forecast/cache writes
 have separate workers and generation IDs, avoiding stale responses overwriting current state.
 Fresh Celsius readings are reused for 15 minutes; valid saved data lasts up to six hours and
-failure retries after five minutes. Unit changes convert unrounded cached Celsius immediately.
+failures with a usable saved reading retry after five minutes. Without a reading, retries happen
+after 10, 20, 30, 60 and 120 seconds, then every five minutes while Home is visible. Success or
+a location change resets this bounded startup backoff. Unit changes convert unrounded cached Celsius immediately.
 Removing a city clears its cache. The `.weather.json` sidecar uses Unix-seconds timestamps.
 Mock servers accept only literal loopback HTTP origins and are refused in TV builds.
 

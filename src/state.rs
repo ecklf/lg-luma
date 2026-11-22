@@ -80,6 +80,7 @@ pub enum Target {
     LumaSettings,
     TvSettings,
     InstallUpdate,
+    ConfirmUpdate,
     CheckUpdates,
     Recent(String),
     RecentEmpty,
@@ -176,6 +177,7 @@ pub struct Control {
 
 #[derive(Clone, Debug)]
 pub enum Overlay {
+    UpdateConfirmation { version: String },
     Inputs,
     Settings,
     Options { id: String, restore: Target },
@@ -3032,6 +3034,29 @@ impl State {
                     && let Some(version) = &self.available_update
                 {
                     let version = version.clone();
+                    if crate::update::requires_home_chooser_confirmation(
+                        env!("CARGO_PKG_VERSION"),
+                        &version,
+                    ) {
+                        self.overlay = Some(Overlay::UpdateConfirmation { version });
+                        self.focus = Target::CloseDialog;
+                        self.pressed = None;
+                        self.panel_started = None;
+                        return vec![];
+                    }
+                    self.update = crate::update::InstallStatus::Downloading(0);
+                    return vec![Effect::UpdateDownload(version)];
+                }
+            }
+            Target::ConfirmUpdate => {
+                if !self.update_busy()
+                    && let Some(Overlay::UpdateConfirmation { version }) = &self.overlay
+                    && self.available_update.as_ref() == Some(version)
+                {
+                    let version = version.clone();
+                    self.overlay = None;
+                    self.focus = Target::InstallUpdate;
+                    self.pressed = None;
                     self.update = crate::update::InstallStatus::Downloading(0);
                     return vec![Effect::UpdateDownload(version)];
                 }
@@ -3543,6 +3568,12 @@ impl State {
         }
         if let Some(overlay) = self.overlay.take() {
             self.panel_started = None;
+            if matches!(overlay, Overlay::UpdateConfirmation { .. }) {
+                self.focus = Target::InstallUpdate;
+                self.pressed = None;
+                self.reconcile_focus();
+                return vec![];
+            }
             if let Overlay::WidgetCatalog { restore, .. } = overlay {
                 self.focus = restore;
                 self.pressed = None;

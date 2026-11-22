@@ -1,3 +1,35 @@
+/// The migration notice must ship in a pre-v4 release to protect in-app upgrades.
+pub fn requires_home_chooser_confirmation(current: &str, latest: &str) -> bool {
+    matches!(
+        (discovery::version(current), discovery::version(latest)),
+        (Some([1..=3, _, _]), Some([major, _, _])) if major >= 4
+    )
+}
+
+#[cfg(test)]
+mod migration_tests {
+    use super::requires_home_chooser_confirmation as required;
+
+    #[test]
+    fn only_crossing_from_v1_v2_or_v3_into_v4_or_later_requires_confirmation() {
+        for current in ["1.0.0", "2.13.0", "3.12.1"] {
+            for latest in ["4.0.0", "4.1.2", "5.0.0"] {
+                assert!(required(current, latest));
+            }
+        }
+        for (current, latest) in [
+            ("3.12.1", "3.99.0"),
+            ("4.0.0", "4.0.1"),
+            ("4.0.0", "5.0.0"),
+            ("0.1.0", "4.0.0"),
+            ("invalid", "4.0.0"),
+            ("3.12.1", "4.0.0-beta"),
+        ] {
+            assert!(!required(current, latest));
+        }
+    }
+}
+
 pub mod discovery {
     use serde::{Deserialize, Serialize};
     use std::{io::Read, sync::mpsc, thread, time::Duration};
