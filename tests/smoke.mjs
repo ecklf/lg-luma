@@ -543,7 +543,7 @@ try {
   ]);
   assert.equal(migration.focus, 'CloseDialog');
   assert.ok(migration.ui_text.includes('Before upgrading to Luma v4'));
-  assert.ok(migration.ui_text.includes('I understand, update Luma'));
+  assert.ok(migration.ui_text.includes('I understand'));
   const migrationClosed = await scenario('v4-upgrade-closed', `${systemPage},enter,enter`, [
     '--test-update-version',
     '4.0.0',

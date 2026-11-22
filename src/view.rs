@@ -4733,10 +4733,17 @@ fn update_confirmation(out: &mut Scene, state: &State, assets: &Assets) {
         );
         let focused = state.focus == target;
         out.pill(rect, focused, false);
+        let label_style = text(21., 600, -0.02);
+        let label_height = label_style.size * label_style.line_height;
         out.text(
             language.t(key),
-            rect.inset(16.),
-            text(21., 600, -0.02),
+            Rect::new(
+                rect.x + 16.,
+                rect.y + (rect.h - label_height) / 2.,
+                rect.w - 32.,
+                label_height,
+            ),
+            label_style,
             if focused { c(0x242424, 1.) } else { WHITE },
             true,
         );
