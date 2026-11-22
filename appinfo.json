@@ -1,6 +1,6 @@
 {
   "id": "com.ecklf.luma",
-  "version": "3.12.0",
+  "version": "3.13.0",
   "vendor": "Luma",
   "type": "native",
   "main": "luma",
@@ -11,7 +11,9 @@
   "resolution": "1920x1080",
   "appCategory": ["home"],
   "requiredACG": ["application.launcher", "application.query", "lunabus.query"],
-  "handlesRelaunch": false,
+  "handlesRelaunch": true,
+  "nativeLifeCycleInterfaceVersion": 2,
+  "noSplashOnLaunch": true,
   "iconColor": "#25272d",
   "splashBackground": "splash.png",
   "bgColor": "#17191c"

@@ -537,6 +537,19 @@ try {
   assert.ok(updatePreview.ui_text.includes('Update available'));
   assert.ok(updatePreview.ui_text.some((label) => label.includes('Latest: 99.0.0')));
   assert.ok(updatePreview.ui_text.includes('Install 99.0.0'));
+  const migration = await scenario('v4-upgrade-confirmation', `${systemPage},enter`, [
+    '--test-update-version',
+    '4.0.0',
+  ]);
+  assert.equal(migration.focus, 'CloseDialog');
+  assert.ok(migration.ui_text.includes('Before upgrading to Luma v4'));
+  assert.ok(migration.ui_text.includes('I understand'));
+  const migrationClosed = await scenario('v4-upgrade-closed', `${systemPage},enter,enter`, [
+    '--test-update-version',
+    '4.0.0',
+  ]);
+  assert.equal(migrationClosed.focus, 'InstallUpdate');
+  assert.ok(!migrationClosed.ui_text.includes('Before upgrading to Luma v4'));
   const afterUpdatePreview = await scenario('update-preview-cleared', systemPage);
   assert.equal(afterUpdatePreview.focus, 'CheckUpdates');
   assert.ok(!afterUpdatePreview.ui_text.includes('Update available'));
@@ -725,10 +738,10 @@ try {
   assert.ok(!greetingConfig.ui_text.includes('Show widget'));
   const positioned = await scenario(
     'widget-position-setting',
-    `${widgetsPage},down,enter,down,enter,down,enter`,
+    `${widgetsPage},down,enter,down,enter,down,down,enter`,
   );
-  assert.deepEqual(positioned.preferences.greeting_position, { column: 0, row: 1 });
-  assert.deepEqual(positioned.focus, { WidgetCell: 6 });
+  assert.deepEqual(positioned.preferences.greeting_position, { column: 0, row: 2 });
+  assert.deepEqual(positioned.focus, { WidgetCell: 12 });
   await fs.writeFile(preferences, '{}');
   const removedWidget = await scenario(
     'widget-remove',
@@ -739,13 +752,13 @@ try {
   const addFlow = `${widgetsPage},enter,enter`;
   const cancelledAdd = await scenario('widget-add-cancel', `${addFlow},back`);
   assert.equal(cancelledAdd.preferences.show_greeting, false);
-  const added = await scenario('widget-add-save', `${addFlow},down,enter`);
+  const added = await scenario('widget-add-save', `${addFlow},down,down,enter`);
   assert.equal(added.preferences.show_greeting, true);
-  assert.deepEqual(added.preferences.greeting_position, { column: 0, row: 1 });
+  assert.deepEqual(added.preferences.greeting_position, { column: 0, row: 2 });
   const resetWidgets = await scenario('widget-reset-defaults', `${widgetsPage},left,enter`);
   assert.equal(resetWidgets.focus, 'WidgetReset');
   assert.deepEqual(resetWidgets.preferences.greeting_position, { column: 0, row: 0 });
-  assert.deepEqual(resetWidgets.preferences.weather_position, { column: 4, row: 0 });
+  assert.deepEqual(resetWidgets.preferences.weather_position, { column: 0, row: 1 });
   assert.equal(resetWidgets.preferences.show_greeting, true);
   assert.equal(resetWidgets.preferences.show_weather, true);
   await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));

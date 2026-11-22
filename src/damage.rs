@@ -18,6 +18,7 @@ pub struct Tracker {
     history: VecDeque<Damage>,
     /// Changed without a changed command (a fading layer), added to the next push.
     included: Rect,
+    refreshed: Rect,
 }
 
 impl Tracker {
@@ -30,6 +31,10 @@ impl Tracker {
         };
         let included = std::mem::take(&mut self.included);
         let damage = damage.map(|area| union(area, included));
+        // Idle preparation can change shadow coverage by one colour level without
+        // changing a Draw command. Propagate it through the ordinary buffer-age history.
+        let refreshed = std::mem::take(&mut self.refreshed);
+        let damage = damage.map(|area| union(area, refreshed));
         self.history.push_front(damage);
         self.history.truncate(HISTORY);
         self.previous = commands.to_vec();
@@ -43,6 +48,20 @@ impl Tracker {
     /// The scene recorded last, i.e. the one on screen after it was drawn.
     pub fn previous(&self) -> &[Draw] {
         &self.previous
+    }
+
+    /// Marks the presented shadows `changed` selects for redrawing in every back buffer.
+    pub fn refresh_shadows(
+        &mut self,
+        changed: impl Fn(&Draw) -> bool,
+        bounds: impl Fn(&Draw) -> Damage,
+    ) {
+        self.refreshed = self
+            .previous
+            .iter()
+            .filter(|draw| matches!(draw, Draw::Shadow(..)) && changed(draw))
+            .filter_map(bounds)
+            .fold(self.refreshed, union);
     }
 
     /// What to redraw into a back buffer holding the frame `age` presents ago; 0 means unknown.

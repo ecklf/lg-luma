@@ -135,6 +135,70 @@ fn hidden_weather_widgets_do_not_request_forecasts() {
 }
 
 #[test]
+fn cold_boot_retries_without_leaving_home_and_recovers_when_network_is_ready() {
+    let preferences = preferences();
+    let mut weather = Weather::default();
+    let Some(Command::Forecast { id, location }) = weather.sync(&preferences, true, 1000).0 else {
+        panic!()
+    };
+    weather.accept_forecast(id, &location.key(), Err("network not ready".into()), 1000);
+    assert!(weather.sync(&preferences, true, 1009).0.is_none());
+    let Some(Command::Forecast { id, location }) = weather.sync(&preferences, true, 1010).0 else {
+        panic!()
+    };
+    assert!(
+        weather.sync(&preferences, true, 1011).0.is_none(),
+        "Only one request may be in flight"
+    );
+    let (changed, persist) = weather.accept_forecast(id, &location.key(), Ok(reading()), 1012);
+    assert!(changed);
+    assert!(matches!(persist, Some(Command::Persist(_))));
+    assert_eq!(weather.reading(&place()), Some(reading()));
+    assert!(!weather.failed);
+    assert_eq!(weather.initial_failures, 0);
+    assert!(
+        weather
+            .sync(&preferences, true, 1012 + REFRESH_SECONDS - 1)
+            .0
+            .is_none()
+    );
+    assert!(
+        weather
+            .sync(&preferences, true, 1012 + REFRESH_SECONDS)
+            .0
+            .is_some()
+    );
+}
+
+#[test]
+fn initial_retry_backoff_is_bounded_and_resets_for_a_new_location() {
+    let mut preferences = preferences();
+    let mut weather = Weather::default();
+    let mut now = 1000;
+    for delay in [10, 20, 30, 60, 120, RETRY_SECONDS, RETRY_SECONDS] {
+        let Some(Command::Forecast { id, location }) = weather.sync(&preferences, true, now).0
+        else {
+            panic!()
+        };
+        weather.accept_forecast(id, &location.key(), Err("offline".into()), now);
+        assert!(
+            weather
+                .sync(&preferences, true, now + delay - 1)
+                .0
+                .is_none()
+        );
+        now += delay;
+    }
+    assert!(weather.sync(&preferences, false, now).0.is_none());
+    preferences.weather_location.as_mut().unwrap().latitude += 1.;
+    let Some(Command::Forecast { id, location }) = weather.sync(&preferences, true, now).0 else {
+        panic!()
+    };
+    weather.accept_forecast(id, &location.key(), Err("offline".into()), now);
+    assert_eq!(weather.next_fetch, now + 10);
+}
+
+#[test]
 fn weather_failure_keeps_valid_cache_labels_it_saved_and_retries_later() {
     let mut weather = Weather {
         cache: Some(cache(1000)),

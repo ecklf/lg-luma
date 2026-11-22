@@ -67,6 +67,29 @@ fn an_unchanged_scene_has_no_damage() {
 }
 
 #[test]
+fn an_idle_shadow_refresh_reaches_every_rotating_buffer() {
+    let shadow = Draw::Shadow(Rect::new(100., 90., 30., 20.), 8., 4., [0.; 4]);
+    let other = Draw::Shadow(Rect::new(900., 700., 60., 20.), 8., 4., [0.; 4]);
+    let scene = [wallpaper(), shadow, other];
+    let mut tracker = Tracker::default();
+    for _ in 0..4 {
+        tracker.push(&scene);
+    }
+    // Only the shadow whose prepared texture changed is redrawn, not every shadow.
+    tracker.refresh_shadows(
+        |draw| matches!(draw, Draw::Shadow(rect, ..) if rect.w == 30.),
+        bounds,
+    );
+    for _ in 0..3 {
+        tracker.push(&scene);
+        let rect = area(tracker.damage(3));
+        assert_eq!((rect.x, rect.y, rect.w, rect.h), (95., 85., 40., 30.));
+    }
+    tracker.push(&scene);
+    assert_eq!(area(tracker.damage(3)).w, 0.);
+}
+
+#[test]
 fn a_moved_shape_damages_its_old_and_new_place_only() {
     let mut tracker = Tracker::default();
     tracker.push(&[wallpaper(), shape(100.)]);
@@ -74,6 +97,25 @@ fn a_moved_shape_damages_its_old_and_new_place_only() {
     let damage = area(tracker.damage(1));
     assert_eq!((damage.x, damage.w), (99., 402.));
     assert_eq!((damage.y, damage.h), (299., 102.));
+}
+
+#[test]
+fn layer_damage_and_idle_shadow_refresh_share_buffer_age_history() {
+    let shadow = Draw::Shadow(Rect::new(100., 90., 30., 20.), 8., 4., [0.; 4]);
+    let scene = [wallpaper(), shadow];
+    let mut tracker = Tracker::default();
+    for _ in 0..4 {
+        tracker.push(&scene);
+    }
+    tracker.include(Rect::new(400., 300., 100., 80.));
+    tracker.refresh_shadows(|_| true, bounds);
+    for _ in 0..3 {
+        tracker.push(&scene);
+        let rect = area(tracker.damage(3));
+        assert_eq!((rect.x, rect.y, rect.w, rect.h), (95., 85., 405., 295.));
+    }
+    tracker.push(&scene);
+    assert_eq!(area(tracker.damage(3)).w, 0.);
 }
 
 #[test]

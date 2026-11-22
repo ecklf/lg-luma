@@ -147,7 +147,7 @@ to help make Luma available by default.
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_3.12.0_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_3.13.0_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -159,6 +159,30 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 ```
 
 ## Replacing LG Home
+
+### Home Chooser (recommended)
+
+[Home Chooser](https://github.com/webosbrew/home-chooser/) is the recommended way to select Luma
+as the full-screen Home app without Luma's takeover scripts or an Input Hook mapping:
+
+> [!IMPORTANT]
+> Disable any previous takeover, autostart or Home-key mapping **before selecting Luma in
+> Home Chooser**. See the **Old methods** block below for disable instructions.
+
+1. Disable any old methods you previously enabled (see **Old methods** below).
+2. Install Home Chooser from Homebrew Channel and open it once to finish its root setup.
+3. Install or update Luma, then open Home Chooser, select **Luma**, and confirm. Press Home to try it.
+
+Home Chooser will be the default method in v4. In-app upgrades from v1–v3 to v4 or later require
+explicit confirmation of these steps before downloading. **Close** is focused by default. This
+safeguard only applies to Luma releases that include it, not older installations or updates
+performed through Homebrew Channel or SSH.
+
+<details>
+<summary>Old methods</summary>
+
+These legacy methods are kept for reference. Use **Home Chooser (recommended)** above for new
+setups. Disable any enabled old method before switching to Home Chooser.
 
 ### Takeover Method
 
@@ -284,6 +308,8 @@ You can use [LG Input Hook](https://repo.webosbrew.org/apps/org.webosbrew.inputh
 
 Test on a spare button first. Disable the mapping in Input Hook to restore normal Home behavior.
 
+</details>
+
 ## Development
 
 ### Setup & Building
@@ -304,7 +330,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_3.12.0_arm.ipk
+dist/com.ecklf.luma_3.13.0_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png

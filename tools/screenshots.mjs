@@ -45,6 +45,7 @@ const weatherConfiguration = (name) => ({
   ...configuration,
   reduced_motion: true,
   weather_icons: 'kuankuan',
+  weather_position: { column: 4, row: 0 },
   weather_show_icon:
     !name.includes('no-icons') && !name.includes('none-picker') && name !== 'weather-style-no-icon',
   weather_show_location: name !== 'weather-style-private' && name !== 'weather-icon-picker',
