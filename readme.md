@@ -160,6 +160,25 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 
 ## Replacing LG Home
 
+### Home Chooser (recommended)
+
+[Home Chooser](https://github.com/webosbrew/home-chooser/) is the recommended way to select Luma
+as the full-screen Home app without Luma's takeover scripts or an Input Hook mapping:
+
+> [!IMPORTANT]
+> Disable any previous takeover, autostart or Home-key mapping **before selecting Luma in
+> Home Chooser**. See the **Old methods** block below for disable instructions.
+
+1. Disable any old methods you previously enabled (see **Old methods** below).
+2. Install Home Chooser from Homebrew Channel and open it once to finish its root setup.
+3. Install or update Luma, then open Home Chooser, select **Luma**, and confirm. Press Home to try it.
+
+<details>
+<summary>Old methods</summary>
+
+These legacy methods are kept for reference. Use **Home Chooser (recommended)** above for new
+setups. Disable any enabled old method before switching to Home Chooser.
+
 ### Takeover Method
 
 > [!NOTE]
@@ -283,6 +302,8 @@ You can use [LG Input Hook](https://repo.webosbrew.org/apps/org.webosbrew.inputh
 ```
 
 Test on a spare button first. Disable the mapping in Input Hook to restore normal Home behavior.
+
+</details>
 
 ## Development
 

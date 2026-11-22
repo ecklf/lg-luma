@@ -1029,6 +1029,34 @@ reply limit. Errors include URI and the bus refusal. Fixed inventory commands ru
 Homebrew Channel `exec`, parsing complete multi-line `luna-send -n 1` JSON replies. Input-read
 failures preserve the last valid inputs. No failed inventory read substitutes demo apps on TV.
 
+### Home Chooser integration
+
+The installed `appinfo.json` declares `appCategory: ["home"]`, so
+[Home Chooser](https://github.com/webosbrew/home-chooser/blob/main/docs/launcher-api.md) can select
+Luma under `com.ecklf.luma`. Keep the window full-screen (no `defaultWindowType: "overlay"`):
+Home Chooser uses this distinction for its empty-screen policy. Back must not exit the root Home.
+
+`handlesRelaunch: true` and `nativeLifeCycleInterfaceVersion: 2` let the pinned SDL-webOS library
+register the installed app through `registerApp`, raise the existing window on `relaunch`, and
+send SDL Quit on `close`. `noSplashOnLaunch: true` avoids SAM splash surfaces for the native
+launcher. This path uses SDL's existing registration, not Luma's separate LG-identity lifecycle
+subscription. Home Chooser launches retain `APPID=com.ecklf.luma`; do not classify them as
+`options.webos_home`, which is reserved for the legacy takeover paths.
+
+Only the `home` category is required for selection. The optional
+`org.webosbrew.homechooser.applications` permission is not declared, so Luma can still install
+without Home Chooser. Existing inventory/artwork and privileged app-management paths remain
+unchanged. A separate follow-up will introduce API calls through SDL/libhelpers' app-named
+handle rather than Luma's anonymous platform connections.
+
+Disable the legacy takeover, autostart and any Input Hook Home mapping before selecting Luma.
+Home Chooser owns stock-Home suppression and boot recovery; do not run both integrations.
+For manual TV verification: select Luma, launch an app/input and press Home repeatedly, check
+Back at the root and within settings, cold-boot, switch back to LG Home, and test removal of the
+selected launcher. Check SAM's running list for LG Home after selection and after a reboot;
+Home Chooser documents that webOS 5 keeps it loaded until restart. Host metadata tests do not
+verify compositor behavior or memory savings on hardware.
+
 ### Optional native Home integration
 
 `tv/home.sh` and the native Rust `luma-helper` executable are packaged beside `luma`. They are a root-only, explicit integration
