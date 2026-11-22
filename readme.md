@@ -166,36 +166,16 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 as the full-screen Home app without Luma's takeover scripts or an Input Hook mapping:
 
 > [!IMPORTANT]
-> If you previously enabled an old takeover or autostart method, disable it **before selecting
-> Luma in Home Chooser**. Also remove any Home-key mapping in LG Input Hook. Do not run the old
-> methods alongside Home Chooser.
+> Disable any previous takeover, autostart or Home-key mapping **before selecting Luma in
+> Home Chooser**. See the **Old methods** block below for disable instructions.
 
-Run the relevant disable command(s) in the TV's root SSH shell, only for methods you enabled:
-
-```sh
-# Old Home takeover: restore LG Home and remove the takeover boot hook.
-sh /var/lib/luma-home/home.sh disable
-# Old Luma autostart: remove its cold-boot launch hook.
-sh /media/developer/apps/usr/palm/applications/com.ecklf.luma/autostart.sh disable
-```
-
-1. Disable any old methods as described above.
+1. Disable any old methods you previously enabled (see **Old methods** below).
 2. Install Home Chooser from Homebrew Channel and open it once to finish its root setup.
 3. Install or update Luma, then open Home Chooser, select **Luma**, and confirm. Press Home to try it.
 
 Home Chooser manages the Home key, reboot persistence, stock-Home suppression and recovery if
 Luma is removed. To undo the selection, choose LG Home in Home Chooser. Do not enable Luma's
 takeover or autostart scripts alongside it.
-
-Luma keeps its own app identity and uses SDL-webOS's native lifecycle support to bring the
-existing window back on relaunch, retaining the current view. Back navigates within Luma rather
-than closing the full-screen Home app. Luma does not require Home Chooser to be installed.
-Inventory, artwork and app-management operations still use Luma's existing Homebrew Channel
-integration. The optional Home Chooser applications API will be introduced separately.
-
-Home Chooser supports webOS 4–12; this does not establish Luma compatibility on every version.
-On webOS 5, Home Chooser documents that LG Home remains loaded until the TV restarts. Memory
-savings and launch/return behavior need verification on your TV; no hardware validation is claimed.
 
 <details>
 <summary>Old methods</summary>
