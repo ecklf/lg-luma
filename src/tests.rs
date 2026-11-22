@@ -4137,11 +4137,11 @@ fn web_widget_layout_follows_the_tv_placement_rules() {
     use crate::model::HomeWidget;
     use crate::web_settings::WidgetChange;
     let mut state = ready();
-    // Weather is 2×2 at the top right by default; the 4×1 greeting cannot move onto it.
+    // Weather is a 2×1 line below the greeting by default; the 4×1 greeting cannot move onto it.
     let blocked = WidgetChange::Move {
         widget: HomeWidget::Greeting,
-        column: 2,
-        row: 0,
+        column: 0,
+        row: 1,
     };
     assert!(state.apply_web_widget(blocked).is_empty());
     let moved = WidgetChange::Move {
