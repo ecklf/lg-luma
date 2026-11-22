@@ -922,6 +922,44 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
     out.draw.push(Draw::Clip(None));
 }
 
+/// The app options menu's labels and icons, for idle preparation. Text runs are cached by
+/// layout size, not position, so these serve the menu beside any card.
+pub fn options_menu_draws(state: &State, assets: &Assets) -> Vec<Draw> {
+    let language = state.preferences.language;
+    let mut out = Scene::new();
+    let label_style = text(20.8, 600, -0.02);
+    let label_height = label_style.size * label_style.line_height;
+    for key in [
+        "open",
+        "removeFavorite",
+        "addFavorite",
+        "showApp",
+        "hideApp",
+        "move",
+        "deleteApp",
+    ] {
+        out.text(
+            language.t(key),
+            Rect::new(0., 0., 520. - 32. - 88., label_height),
+            label_style,
+            WHITE,
+            false,
+        );
+    }
+    for icon in [
+        "arrow",
+        "heart",
+        "heart-filled",
+        "eye",
+        "eye-off",
+        "left",
+        "circle-minus",
+    ] {
+        out.icon(assets, icon, Rect::new(0., 0., 21.6, 21.6), WHITE);
+    }
+    out.draw
+}
+
 /// Returns whether the card is focused (see batch_cards).
 fn tile(
     out: &mut Scene,
