@@ -245,6 +245,9 @@ fn home_relaunch_dismisses_overlays_without_cancelling_mutations() {
             restore: Target::Nav(1),
         },
         Overlay::WallpaperUpload,
+        Overlay::UpdateConfirmation {
+            version: "4.0.0".into(),
+        },
         Overlay::BackgroundOptions {
             id: "dunes".into(),
             restore: Target::Sidebar(1),
@@ -1843,9 +1846,8 @@ fn weather_location_keyboard_back_and_sidebar_routes_restore_focus() {
     assert_eq!(state.focus, Target::WidgetAdd);
     state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::WidgetCell(0));
-    for _ in 0..4 {
-        state.direction(Direction::Right, &controls(&state));
-    }
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::WidgetCell(6));
     state.activate();
     assert_eq!(
         state.focus,
@@ -1865,7 +1867,7 @@ fn weather_location_keyboard_back_and_sidebar_routes_restore_focus() {
     assert_eq!(state.focus, Target::WeatherLocation);
     assert_eq!(state.subpage, Some(crate::state::Subpage::Weather));
     state.back();
-    assert_eq!(state.focus, Target::WidgetCell(4));
+    assert_eq!(state.focus, Target::WidgetCell(6));
     assert!(state.subpage.is_none());
     state.back();
     assert_eq!(state.focus, Target::Sidebar(crate::state::WIDGETS_SECTION));
@@ -1932,7 +1934,7 @@ fn home_weather_setup_returns_through_the_widgets_weather_parent() {
     assert_eq!(state.focus, Target::WeatherLocation);
     state.back();
     assert!(state.subpage.is_none());
-    assert_eq!(state.focus, Target::WidgetCell(4));
+    assert_eq!(state.focus, Target::WidgetCell(6));
 }
 
 #[test]
@@ -3396,14 +3398,14 @@ fn update_card_shows_both_versions_and_explicitly_starts_installation() {
                 .iter()
                 .any(|control| control.target == Target::InstallUpdate)
         );
-        state.available_update = Some("9.0.0".into());
+        state.available_update = Some("3.99.0".into());
         let rendered = scene(&state);
         for label in [
             language.t("updateAvailable").to_owned(),
-            language.format("installUpdate", &[("version", "9.0.0")]),
+            language.format("installUpdate", &[("version", "3.99.0")]),
             language.format(
                 "updateVersions",
-                &[("current", "test"), ("latest", "9.0.0")],
+                &[("current", "test"), ("latest", "3.99.0")],
             ),
         ] {
             assert!(
@@ -3418,7 +3420,7 @@ fn update_card_shows_both_versions_and_explicitly_starts_installation() {
         assert_eq!(state.focus, Target::InstallUpdate);
         assert_eq!(
             state.activate(),
-            vec![Effect::UpdateDownload("9.0.0".into())]
+            vec![Effect::UpdateDownload("3.99.0".into())]
         );
         let button = rendered
             .controls
@@ -3505,6 +3507,115 @@ fn update_card_keeps_status_surface_and_button_only_action() {
             );
         }
     }
+}
+
+#[test]
+fn v4_upgrade_defaults_to_close_and_requires_explicit_confirmation() {
+    use crate::{i18n::Language, renderer::Draw, update::InstallStatus};
+    for language in Language::ALL {
+        let mut state = ready();
+        state.preferences.language = language;
+        state.open(2);
+        state.section = crate::state::SYSTEM_SECTION;
+        state.available_update = Some("4.0.0".into());
+        state.focus = Target::InstallUpdate;
+        assert!(state.activate().is_empty());
+        assert_eq!(state.update, InstallStatus::Idle);
+        assert_eq!(state.focus, Target::CloseDialog);
+        let modal = scene(&state);
+        assert!(modal.modal.is_some());
+        assert_eq!(modal.controls.len(), 2);
+        assert_eq!(modal.controls[0].target, Target::CloseDialog);
+        assert_eq!(modal.controls[1].target, Target::ConfirmUpdate);
+        for direction in [
+            Direction::Up,
+            Direction::Left,
+            Direction::Down,
+            Direction::Right,
+        ] {
+            state.direction(direction, &modal.controls);
+            assert!(matches!(
+                state.focus,
+                Target::CloseDialog | Target::ConfirmUpdate
+            ));
+        }
+        state.focus = Target::CloseDialog;
+        for key in [
+            "homeChooserUpgradeDefault",
+            "homeChooserUpgradeDisable",
+            "homeChooserUpgradeInstall",
+            "homeChooserUpgradeSelect",
+        ] {
+            assert!(
+                modal
+                    .draw
+                    .iter()
+                    .any(|draw| matches!(draw, Draw::Text(value, ..) if value == language.t(key)))
+            );
+        }
+        assert!(
+            state.activate().is_empty(),
+            "a second OK closes, never installs"
+        );
+        assert!(state.overlay.is_none());
+        assert_eq!(state.focus, Target::InstallUpdate);
+        assert_eq!(state.update, InstallStatus::Idle);
+        assert!(state.activate().is_empty());
+        assert!(state.back().is_empty());
+        assert_eq!(state.focus, Target::InstallUpdate);
+        assert!(state.activate().is_empty());
+        state.direction(Direction::Right, &controls(&state));
+        assert_eq!(state.focus, Target::ConfirmUpdate);
+        assert_eq!(
+            state.activate(),
+            vec![Effect::UpdateDownload("4.0.0".into())]
+        );
+        assert!(state.overlay.is_none());
+        assert_eq!(state.update, InstallStatus::Downloading(0));
+        assert!(state.activate().is_empty());
+    }
+}
+
+#[test]
+fn upgrade_confirmation_cannot_install_without_a_matching_pending_version() {
+    let mut state = ready();
+    state.available_update = Some("4.0.0".into());
+    state.focus = Target::ConfirmUpdate;
+    assert!(state.activate().is_empty());
+    state.overlay = Some(Overlay::UpdateConfirmation {
+        version: "4.0.0".into(),
+    });
+    state.available_update = Some("4.0.1".into());
+    assert!(state.activate().is_empty());
+    assert_eq!(state.update, crate::update::InstallStatus::Idle);
+}
+
+#[test]
+fn pointer_upgrade_confirmation_requires_the_explicit_confirm_button() {
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::SYSTEM_SECTION;
+    state.available_update = Some("4.0.1".into());
+    state.focus = Target::InstallUpdate;
+    assert!(state.activate().is_empty());
+    let modal = scene(&state);
+    assert!(state.hit_test(&modal.controls, 10., 10.).is_none());
+    for target in [Target::CloseDialog, Target::ConfirmUpdate] {
+        let button = modal
+            .controls
+            .iter()
+            .find(|control| control.target == target)
+            .unwrap();
+        let (x, y) = button.rect.center();
+        assert_eq!(state.hit_test(&modal.controls, x, y), Some(target.clone()));
+        state.pointer = true;
+        state.focus(target.clone(), &modal.controls);
+        assert_eq!(state.focus, target);
+    }
+    assert_eq!(
+        state.activate(),
+        vec![Effect::UpdateDownload("4.0.1".into())]
+    );
 }
 
 #[test]
@@ -3697,9 +3808,9 @@ fn update_card_shows_progress_restores_retry_and_ignores_presses_while_busy() {
         state.activate().is_empty(),
         "no second check while one runs"
     );
-    state.update_response(Ok(Some("9.9.9".into())));
+    state.update_response(Ok(Some("3.99.9".into())));
     assert!(scene(&state).draw.iter().any(|draw| {
-        matches!(draw, crate::renderer::Draw::Text(text, ..) if text == "Install 9.9.9")
+        matches!(draw, crate::renderer::Draw::Text(text, ..) if text == "Install 3.99.9")
     }));
     let initial = scene(&state);
     assert!(
@@ -3710,7 +3821,7 @@ fn update_card_shows_progress_restores_retry_and_ignores_presses_while_busy() {
     );
     assert_eq!(
         state.activate(),
-        vec![Effect::UpdateDownload("9.9.9".into())]
+        vec![Effect::UpdateDownload("3.99.9".into())]
     );
     assert_eq!(state.update, InstallStatus::Downloading(0));
     assert!(state.activate().is_empty());
@@ -3737,7 +3848,7 @@ fn update_card_shows_progress_restores_retry_and_ignores_presses_while_busy() {
         geometry(initial.controls),
         "progress must not move hit targets"
     );
-    state.install_response(Response::Installing("9.9.9".into()));
+    state.install_response(Response::Installing("3.99.9".into()));
     assert!(state.activate().is_empty());
     state.pressed = Some(Target::InstallUpdate);
     state.install_response(Response::Finished(Err("disk full".into())));
@@ -4070,4 +4181,47 @@ fn web_widget_layout_follows_the_tv_placement_rules() {
         state.preferences.greeting_position,
         HomeWidget::Greeting.default_position()
     );
+}
+
+#[test]
+fn settings_app_cards_draw_shadows_faces_then_logos_like_the_drawer() {
+    use crate::renderer::Draw;
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::APPS_SECTION;
+    state.focus = Target::Sidebar(crate::state::APPS_SECTION);
+    let draws = scene(&state).draw;
+    let clip = draws
+        .iter()
+        .position(|draw| matches!(draw, Draw::Clip(Some(_))))
+        .unwrap();
+    let end = clip
+        + draws[clip..]
+            .iter()
+            .position(|draw| matches!(draw, Draw::Clip(None)))
+            .unwrap();
+    let cards = &draws[clip..end];
+    let last_shadow = cards
+        .iter()
+        .rposition(|draw| matches!(draw, Draw::Shadow(..)))
+        .unwrap();
+    let first_logo = cards
+        .iter()
+        .position(|draw| matches!(draw, Draw::Image(path, ..) | Draw::TintedImage(path, ..) if path.ends_with(".lvec")))
+        .unwrap();
+    let last_face = cards
+        .iter()
+        .rposition(|draw| {
+            matches!(draw, Draw::AppImage(..))
+                || matches!(draw, Draw::Image(path, ..) if !path.ends_with(".lvec"))
+        })
+        .unwrap();
+    assert!(
+        cards
+            .iter()
+            .filter(|draw| matches!(draw, Draw::Shadow(..)))
+            .count()
+            > 3
+    );
+    assert!(last_shadow < last_face && last_face < first_logo);
 }

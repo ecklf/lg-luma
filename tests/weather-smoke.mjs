@@ -104,7 +104,14 @@ async function run(command, args) {
 async function writePreferences(patch = {}) {
   await fs.writeFile(
     preferences,
-    JSON.stringify({ background: 'midnight', reduced_motion: true, show_weather: true, ...patch }),
+    JSON.stringify({
+      background: 'midnight',
+      reduced_motion: true,
+      show_weather: true,
+      weather_style: 'standard',
+      weather_position: { column: 4, row: 0 },
+      ...patch,
+    }),
   );
 }
 async function writeCache(age = 0) {
@@ -156,6 +163,10 @@ const locationPage = `${weatherPage},enter`;
 try {
   if (process.env.LUMA_SMOKE_SKIP_BUILD !== '1')
     await run('cargo', ['build', '--locked', '--package', 'luma']);
+  await fs.writeFile(preferences, JSON.stringify({ reduced_motion: true }));
+  const defaults = await scenario('unset-defaults', 'home');
+  assert.equal(defaults.preferences.weather_style, 'one_line');
+  assert.deepEqual(defaults.preferences.weather_position, { column: 0, row: 1 });
   await writePreferences();
   await scenario('unconfigured', 'home,down');
   assert.equal(requests.length, 0, 'No geolocation or automatic city discovery');

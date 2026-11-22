@@ -9,6 +9,21 @@ import { isReleaseMerge, isVersionIncrease } from '../tools/release-gate.mjs';
 const root = path.resolve(import.meta.dirname, '..');
 const metadata = ['appinfo.json', 'Cargo.toml', 'Cargo.lock', 'readme.md'];
 
+test('installed native launcher supports Home Chooser without an API install dependency', async () => {
+  const app = JSON.parse(await fs.readFile(path.join(root, 'appinfo.json'), 'utf8'));
+  assert.equal(app.id, 'com.ecklf.luma');
+  assert.equal(app.type, 'native');
+  assert.ok(app.appCategory.includes('home'));
+  assert.notEqual(app.defaultWindowType, 'overlay', 'Luma is a full-screen navigation root');
+  assert.equal(app.handlesRelaunch, true);
+  assert.equal(app.nativeLifeCycleInterfaceVersion, 2);
+  assert.equal(app.noSplashOnLaunch, true);
+  assert.ok(!app.requiredPermissions?.includes('org.webosbrew.homechooser.applications'));
+  for (const permission of ['application.query', 'application.launcher']) {
+    assert.ok(app.requiredACG.includes(permission));
+  }
+});
+
 async function fixture(t, version = '2.0.4') {
   const scratch = path.join(root, '.build');
   await fs.mkdir(scratch, { recursive: true });

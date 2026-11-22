@@ -2700,8 +2700,12 @@ fn run() -> Result<(), String> {
             end_registration();
         }
         // Shadow textures seen in recent frames are prepared between them, never inside one.
-        if visible && !state.animating() {
-            renderer.prepare_idle();
+        let idle = visible && !state.animating();
+        if idle && let Some(key) = renderer.prepare_idle() {
+            damage_tracker.refresh_shadows(
+                |draw| renderer.shadow_key(draw) == Some(key),
+                damage::bounds,
+            );
         }
         if std::mem::take(&mut drawer_artwork_due) {
             let page = std::mem::replace(&mut state.page, state::Page::Apps);
@@ -2711,6 +2715,8 @@ fn run() -> Result<(), String> {
             let focus = state.focus.clone();
             let scroll = state.scroll;
             let mut views = view::scene(&state, &assets, now).draw;
+            let menu = view::options_menu_draws(&state, &assets);
+            views.extend(menu.iter().cloned());
             // Each Settings section as the sidebar opens it.
             state.page = state::Page::Settings;
             state.drawer_visibility = 0.;
@@ -2720,16 +2726,37 @@ fn run() -> Result<(), String> {
                 state.focus = state::Target::Sidebar(section);
                 views.extend(view::scene(&state, &assets, now).draw);
             }
+            // Then each subpage's labels as it first opens. Only labels: their images and
+            // logos would compete with the drawer's for the texture budget.
+            let mut subpage_labels = Vec::new();
+            for (section, subpage) in idle_subpages(&state) {
+                state.section = section;
+                state.subpage = Some(subpage);
+                state.focus = state::Target::Sidebar(section);
+                subpage_labels.extend(
+                    view::scene(&state, &assets, now)
+                        .draw
+                        .into_iter()
+                        .filter(|draw| matches!(draw, renderer::Draw::Text(..))),
+                );
+            }
+            state.subpage = None;
             state.page = page;
             state.drawer_visibility = visibility;
             state.section = section;
             state.subpage = subpage;
             state.focus = focus;
             state.scroll = scroll;
-            idle_text = views
-                .iter()
+            idle_text = menu
+                .into_iter()
                 .filter(|draw| matches!(draw, renderer::Draw::Text(..)))
-                .cloned()
+                .chain(
+                    views
+                        .iter()
+                        .filter(|draw| matches!(draw, renderer::Draw::Text(..)))
+                        .cloned(),
+                )
+                .chain(subpage_labels)
                 .collect();
             let paths: Vec<String> = views
                 .iter()
@@ -2756,9 +2783,11 @@ fn run() -> Result<(), String> {
                     _ => None,
                 })
                 .collect();
+            // Taken from the end: the drawer's logos first, then each Settings section's.
+            drawer_vectors.reverse();
         }
         // A few milliseconds of preparation per idle pass, so a key press never waits long.
-        if visible && !state.animating() {
+        if idle {
             let started = Instant::now();
             while started.elapsed() < Duration::from_millis(4) {
                 let image = match &drawer_artwork {
@@ -2777,6 +2806,9 @@ fn run() -> Result<(), String> {
                 } else if let Some(path) = drawer_vectors.pop() {
                     // Logos load on this thread: they become GL buffers.
                     renderer.preload_vector(&path);
+                } else if !idle_text.is_empty() && !renderer.text_cache_has_room() {
+                    // Further labels would evict the drawer's and sections' prepared ones.
+                    idle_text.clear();
                 } else if !idle_text.is_empty() {
                     // Text a few runs at a time: glyph outlines and run meshes.
                     let chunk: Vec<_> = idle_text.drain(..idle_text.len().min(4)).collect();
@@ -2902,4 +2934,49 @@ fn hit(
 ) -> Option<Target> {
     let (x, y) = pointer_position(window, x, y)?;
     state.hit_test(controls, x, y)
+}
+
+/// Every Settings subpage with the section it opens from, for idle preparation.
+fn idle_subpages(state: &state::State) -> Vec<(usize, state::Subpage)> {
+    use state::Subpage::*;
+    use state::{INPUTS_SECTION, SYSTEM_SECTION, WIDGETS_SECTION};
+    let mut list: Vec<(usize, state::Subpage)> = [
+        Clock,
+        ClockFormat,
+        TimeFormat,
+        Language,
+        AppDrawer,
+        AppSorting,
+        AppDrawerStyle,
+        RecentApps,
+    ]
+    .into_iter()
+    .map(|subpage| (0, subpage))
+    .collect();
+    list.push((SYSTEM_SECTION, TextRendering));
+    list.extend(
+        [
+            Greeting,
+            DateFormat,
+            Weather,
+            Shortcuts,
+            WeatherLocation,
+            Temperature,
+            WeatherStyle,
+        ]
+        .map(|subpage| (WIDGETS_SECTION, subpage)),
+    );
+    for widget in state.preferences.widgets() {
+        if matches!(
+            widget.kind(),
+            model::HomeWidget::Crypto | model::HomeWidget::Stocks
+        ) {
+            list.push((WIDGETS_SECTION, Market(widget)));
+        }
+    }
+    for input in &state.inventory.inputs {
+        list.push((INPUTS_SECTION, Input(input.id.clone())));
+        list.push((INPUTS_SECTION, InputIcons(input.id.clone())));
+    }
+    list
 }

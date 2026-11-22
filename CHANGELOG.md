@@ -1,5 +1,23 @@
 # lg-luma
 
+## 3.13.0
+
+### Minor Changes
+
+- 3ff03c5: Enable native relaunch handling for Luma selected through Home Chooser, suppress the native splash, and document migration from the standalone takeover scripts. Home Chooser manages stock-Home suppression; Luma retains its existing Homebrew Channel platform integration.
+
+  Home Chooser remains optional. Luma does not declare its applications API permission or require it for installation.
+
+### Patch Changes
+
+- 69eae29: Require explicit confirmation before an in-app upgrade from Luma v1, v2 or v3 to v4 or later. Default to Close and explain the Home Chooser migration steps before downloading.
+
+## 3.12.1
+
+### Patch Changes
+
+- 3085234: Default unconfigured weather widgets to the One line layout below Greeting without changing saved styles or positions. Retry weather more quickly when the network is unavailable during startup, using bounded backoff until the first reading succeeds.
+
 ## 3.12.0
 
 ### Minor Changes

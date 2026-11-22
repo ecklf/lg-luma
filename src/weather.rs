@@ -9,6 +9,7 @@ use std::collections::HashSet;
 pub const REFRESH_SECONDS: i64 = 15 * 60;
 pub const MAX_CACHE_AGE: i64 = 6 * 60 * 60;
 const RETRY_SECONDS: i64 = 5 * 60;
+const INITIAL_RETRY_SECONDS: [i64; 5] = [10, 20, 30, 60, 120];
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct Location {
@@ -243,6 +244,8 @@ pub struct Weather {
     #[serde(skip)]
     next_fetch: i64,
     #[serde(skip)]
+    initial_failures: usize,
+    #[serde(skip)]
     active_home: bool,
 }
 impl Weather {
@@ -304,6 +307,7 @@ impl Weather {
         self.pending = None;
         self.active_key = None;
         self.next_fetch = 0;
+        self.initial_failures = 0;
         self.loading = false;
         self.failed = false;
     }
@@ -422,12 +426,12 @@ impl Weather {
                 };
                 self.cache = Some(cache.clone());
                 self.failed = false;
+                self.initial_failures = 0;
                 self.next_fetch = now + REFRESH_SECONDS;
                 (true, Some(Command::Persist(cache)))
             }
             _ => {
                 self.failed = true;
-                self.next_fetch = now + RETRY_SECONDS;
                 if self
                     .cache
                     .as_ref()
@@ -435,6 +439,19 @@ impl Weather {
                 {
                     self.cache = None;
                 }
+                let usable_cache = self.cache.as_ref().is_some_and(|cache| cache.key == key);
+                let delay = if usable_cache {
+                    RETRY_SECONDS
+                } else {
+                    let delay = INITIAL_RETRY_SECONDS
+                        .get(self.initial_failures)
+                        .copied()
+                        .unwrap_or(RETRY_SECONDS);
+                    self.initial_failures =
+                        (self.initial_failures + 1).min(INITIAL_RETRY_SECONDS.len());
+                    delay
+                };
+                self.next_fetch = now.saturating_add(delay);
                 (true, None)
             }
         }
