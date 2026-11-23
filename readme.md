@@ -173,11 +173,6 @@ as the full-screen Home app without Luma's takeover scripts or an Input Hook map
 2. Install Home Chooser from Homebrew Channel and open it once to finish its root setup.
 3. Install or update Luma, then open Home Chooser, select **Luma**, and confirm. Press Home to try it.
 
-Home Chooser will be the default method in v4. In-app upgrades from v1–v3 to v4 or later require
-explicit confirmation of these steps before downloading. **Close** is focused by default. This
-safeguard only applies to Luma releases that include it, not older installations or updates
-performed through Homebrew Channel or SSH.
-
 <details>
 <summary>Old methods</summary>
 
