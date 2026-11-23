@@ -129,6 +129,15 @@ pub enum Target {
     TileTest(String),
     TileRemove(String),
     TileEditor,
+    /// A poster in a PlxNative row on Home: the widget and the item's index.
+    PlexItem(HomeWidget, usize),
+    /// Home's "Sign in" action on a PlxNative row that has no account yet.
+    PlexSetup(HomeWidget),
+    /// The widget popup's Size action for a PlxNative row: half or full width.
+    PlexSize(HomeWidget),
+    PlexAccount,
+    PlexServer,
+    PlexAction,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -176,11 +185,16 @@ pub enum Overlay {
     BackgroundDelete { id: String, restore: Target },
     WidgetOptions { cell: usize },
     WidgetCatalog { cell: usize, restore: Target },
+    PlexSignIn,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Subpage {
     Market(HomeWidget),
+    /// PlxNative account, server and OK action, opened from either row's Configure.
+    Plex(HomeWidget),
+    PlexServers(HomeWidget),
+    PlexAction(HomeWidget),
     WidgetPosition(HomeWidget),
     Greeting,
     DateFormat,
@@ -229,6 +243,11 @@ pub enum Effect {
     /// Refresh apps: read the inventory and every app icon again.
     Reload,
     Launch(String),
+    /// Launch with parameters, such as a PlxNative item.
+    LaunchWith {
+        id: String,
+        params: serde_json::Value,
+    },
     Uninstall(String),
     DeleteWallpaper(String),
     Recent {
@@ -253,6 +272,8 @@ pub struct State {
     pub active_weather: HomeWidget,
     pub extra_weather: Vec<weather::Weather>,
     pub markets: crate::markets::Markets,
+    /// PlxNative widgets: loaded only while one of them is on Home.
+    pub plex: crate::plex::Plex,
     pub page: Page,
     pub focus: Target,
     pub inventory: Inventory,
@@ -357,6 +378,7 @@ impl State {
             panel_started: None,
             weather: weather::Weather::default(),
             markets: crate::markets::Markets::default(),
+            plex: crate::plex::Plex::default(),
             active_weather: HomeWidget::Weather,
             widget_position_cell: 0,
             extra_weather: (0..HOME_GRID_CELLS)
@@ -1368,6 +1390,17 @@ impl State {
             Some(Subpage::Market(kind)) => {
                 Target::WidgetCell(self.preferences.widget_position(kind).cell())
             }
+            Some(Subpage::Plex(widget)) => {
+                Target::WidgetCell(self.preferences.widget_position(widget).cell())
+            }
+            Some(Subpage::PlexServers(widget)) => {
+                self.subpage = Some(Subpage::Plex(widget));
+                Target::PlexServer
+            }
+            Some(Subpage::PlexAction(widget)) => {
+                self.subpage = Some(Subpage::Plex(widget));
+                Target::PlexAction
+            }
             Some(Subpage::WidgetPosition(widget)) => {
                 Target::WidgetCell(self.preferences.widget_position(widget).cell())
             }
@@ -1630,6 +1663,14 @@ impl State {
                     .iter()
                     .position(|target| *target == self.focus)
                     .unwrap_or(0);
+                // Weather's setup action keeps its earlier reach; PlxNative rows are always reachable.
+                let first_lane = if self.page == Page::Home {
+                    self.home_lanes().into_iter().next().filter(|lane| {
+                        !matches!(lane, Target::WeatherConfigure) || !self.dock_apps().is_empty()
+                    })
+                } else {
+                    None
+                };
                 match direction {
                     Direction::Left => {
                         self.focus(targets[index.saturating_sub(1)].clone(), controls)
@@ -1638,6 +1679,11 @@ impl State {
                         targets[(index + 1).min(targets.len() - 1)].clone(),
                         controls,
                     ),
+                    Direction::Down if first_lane.is_some() => {
+                        if let Some(lane) = first_lane {
+                            self.focus_lane(lane, controls);
+                        }
+                    }
                     Direction::Down if self.page == Page::Home && self.dock_apps().is_empty() => {
                         self.open(1);
                         self.focus = self.first_content();
@@ -1679,7 +1725,17 @@ impl State {
                     return vec![];
                 }
             }
+            if self.page == Page::Home
+                && matches!(self.focus, Target::PlexItem(..) | Target::PlexSetup(_))
+            {
+                self.home_lane_direction(direction, controls);
+                return vec![];
+            }
             if self.page == Page::Home && self.focus == Target::WeatherConfigure {
+                if self.home_lanes().len() > 1 {
+                    self.home_lane_direction(direction, controls);
+                    return vec![];
+                }
                 match direction {
                     Direction::Down
                         if self.focus == Target::WeatherConfigure
@@ -1711,14 +1767,20 @@ impl State {
                             let id = apps[next].id.clone();
                             self.focus(Target::App(id), controls);
                         }
-                        Direction::Up => self.focus(
-                            if index < 3 {
-                                self.first_input_target()
+                        Direction::Up => {
+                            if let Some(lane) = self.lane_above_favorites(index) {
+                                self.focus_lane(lane, controls);
                             } else {
-                                Target::SettingsMenu
-                            },
-                            controls,
-                        ),
+                                self.focus(
+                                    if index < 3 {
+                                        self.first_input_target()
+                                    } else {
+                                        Target::SettingsMenu
+                                    },
+                                    controls,
+                                );
+                            }
+                        }
                         Direction::Down if self.drawer_apps().is_empty() => {}
                         Direction::Down => {
                             self.open(1);
@@ -1754,6 +1816,9 @@ impl State {
                     Target::Choice(2),
                 ]),
                 Some(Subpage::Clock) => Some(&[Target::ClockFormat, Target::ClockTimeFormat]),
+                Some(Subpage::Plex(_)) => {
+                    Some(&[Target::PlexAccount, Target::PlexServer, Target::PlexAction])
+                }
                 _ => None,
             };
             if let Some(rows) = setting_rows
@@ -1785,6 +1850,8 @@ impl State {
                                 | Target::WeatherIcons
                                 | Target::MarketSymbol(_)
                                 | Target::MoveWidget(_)
+                                | Target::PlexServer
+                                | Target::PlexAction
                         ) =>
                     {
                         return self.activate();
@@ -1808,6 +1875,11 @@ impl State {
                     Some(Subpage::InputIcons(_)) => crate::model::INPUT_ICONS.len() + 1,
                     Some(Subpage::Language) => Language::ALL.len(),
                     Some(Subpage::DateFormat) => crate::model::DateFormat::ALL.len(),
+                    Some(Subpage::PlexAction(_)) => crate::plex::Action::ALL.len(),
+                    Some(Subpage::PlexServers(_)) => match &self.plex.servers {
+                        crate::plex::Servers::Loaded(servers) => servers.len().max(1),
+                        _ => 1,
+                    },
                     _ => 3,
                 };
                 match direction {
@@ -2732,6 +2804,49 @@ impl State {
                     currencies[(current + 1) % currencies.len()].into();
                 return vec![Effect::Save];
             }
+            Target::PlexItem(widget, index) => return self.open_plex_item(widget, index),
+            Target::PlexSetup(widget) => {
+                self.open(2);
+                self.section = WIDGETS_SECTION;
+                self.subpage = Some(Subpage::Plex(widget));
+                self.focus = Target::PlexAccount;
+                self.scroll = 0.;
+                self.panel_started = None;
+            }
+            Target::PlexAccount => {
+                if self.plex.account.signed_in() {
+                    self.plex.request(crate::plex::Command::SignOut);
+                } else {
+                    self.plex.request(crate::plex::Command::SignIn);
+                    self.overlay = Some(Overlay::PlexSignIn);
+                    self.focus = Target::CloseDialog;
+                    self.pressed = None;
+                }
+            }
+            Target::PlexServer => {
+                if let Some(Subpage::Plex(widget)) = self.subpage
+                    && self.plex.account.signed_in()
+                {
+                    self.plex.request(crate::plex::Command::LoadServers);
+                    self.subpage = Some(Subpage::PlexServers(widget));
+                    self.focus = Target::Choice(0);
+                    self.scroll = 0.;
+                    if !self.preferences.reduced_motion {
+                        self.panel_started = Some(Instant::now());
+                    }
+                }
+            }
+            Target::PlexAction => {
+                if let Some(Subpage::Plex(widget)) = self.subpage {
+                    self.subpage = Some(Subpage::PlexAction(widget));
+                    self.focus = Target::Choice(usize::from(
+                        self.preferences.plex.action == crate::plex::Action::Open,
+                    ));
+                    if !self.preferences.reduced_motion {
+                        self.panel_started = Some(Instant::now());
+                    }
+                }
+            }
             Target::WeatherConfigure => {
                 self.active_weather = HomeWidget::Weather;
                 self.open(2);
@@ -2763,6 +2878,18 @@ impl State {
                     // at an edge may relocate Weather. Keep its popup attached.
                     self.overlay = Some(Overlay::WidgetOptions {
                         cell: self.preferences.widget_position(self.active_weather).cell(),
+                    });
+                }
+                return vec![Effect::Save];
+            }
+            Target::PlexSize(widget) => {
+                if !self.preferences.toggle_plex_widget_size(widget) {
+                    return vec![];
+                }
+                if matches!(self.overlay, Some(Overlay::WidgetOptions { .. })) {
+                    // Shrinking can drop the popup's cell and widening can move the row.
+                    self.overlay = Some(Overlay::WidgetOptions {
+                        cell: self.preferences.widget_position(widget).cell(),
                     });
                 }
                 return vec![Effect::Save];
@@ -2936,12 +3063,16 @@ impl State {
                     HomeWidget::Greeting => Subpage::Greeting,
                     HomeWidget::Weather => Subpage::Weather,
                     HomeWidget::Crypto | HomeWidget::Stocks => Subpage::Market(widget),
+                    HomeWidget::ContinueWatching | HomeWidget::RecentlyAdded => {
+                        Subpage::Plex(widget)
+                    }
                     _ => unreachable!(),
                 });
                 self.focus = match widget.kind() {
                     HomeWidget::Greeting => Target::DateToggle,
                     HomeWidget::Weather => Target::WeatherLocation,
                     HomeWidget::Crypto | HomeWidget::Stocks => Target::MarketSymbol(widget),
+                    HomeWidget::ContinueWatching | HomeWidget::RecentlyAdded => Target::PlexAccount,
                     _ => unreachable!(),
                 };
                 self.scroll = 0.;
@@ -3233,6 +3364,17 @@ impl State {
             }
             Target::Choice(index) => {
                 match self.subpage.clone() {
+                    Some(Subpage::PlexServers(_)) => {
+                        self.plex.request(crate::plex::Command::ChooseServer(index));
+                        return vec![];
+                    }
+                    Some(Subpage::PlexAction(_)) => {
+                        let action = crate::plex::Action::ALL[index.min(1)];
+                        let changed = self.preferences.plex.action != action;
+                        self.preferences.plex.action = action;
+                        self.close_subpage();
+                        return if changed { vec![Effect::Save] } else { vec![] };
+                    }
                     Some(Subpage::WidgetPosition(widget)) => {
                         let Some(position) = WidgetPosition::from_cell(index) else {
                             return vec![];
@@ -3326,6 +3468,7 @@ impl State {
                     Some(
                         Subpage::WeatherLocation
                         | Subpage::Market(_)
+                        | Subpage::Plex(_)
                         | Subpage::Greeting
                         | Subpage::Clock
                         | Subpage::AppDrawer
@@ -3549,6 +3692,12 @@ impl State {
                 self.pressed = None;
                 return vec![];
             }
+            if matches!(overlay, Overlay::PlexSignIn) {
+                self.plex.request(crate::plex::Command::CancelSignIn);
+                self.focus = Target::PlexAccount;
+                self.pressed = None;
+                return vec![];
+            }
             if let Overlay::Delete { id, restore } = overlay {
                 self.overlay = Some(Overlay::Options { id, restore });
                 self.focus = Target::Option(2);
@@ -3589,7 +3738,263 @@ impl State {
         if self.page != Page::Home {
             self.open(0);
             self.focus = self.first_content();
+        } else if matches!(self.focus, Target::PlexItem(..) | Target::PlexSetup(_)) {
+            self.focus = self.first_content();
         }
         vec![]
+    }
+}
+
+/// Focusable Home widgets: Weather's setup action and the PlxNative rows.
+impl State {
+    /// A PlxNative row's focus target, when it can take focus: its remembered poster, or Sign
+    /// in while no account is signed in. Rows that are loading, failed or empty are skipped.
+    fn plex_lane(&self, widget: HomeWidget) -> Option<Target> {
+        let list = crate::plex::List::of(widget)?;
+        if !self.preferences.has_widget(widget) || !self.plex.loaded() {
+            return None;
+        }
+        if !self.plex.account.signed_in() {
+            return Some(Target::PlexSetup(widget));
+        }
+        let count = self.plex.items(list).len();
+        (count > 0)
+            .then(|| Target::PlexItem(widget, self.plex.selected[list.index()].min(count - 1)))
+    }
+
+    /// Focusable Home widgets from top to bottom, then left to right.
+    pub fn home_lanes(&self) -> Vec<Target> {
+        self.placed_lanes()
+            .into_iter()
+            .map(|(_, target)| target)
+            .collect()
+    }
+
+    /// Focusable Home widgets with their grid anchors, top to bottom, then left to right.
+    fn placed_lanes(&self) -> Vec<(WidgetPosition, Target)> {
+        let mut lanes = Vec::new();
+        if self.preferences.weather_visible() && self.preferences.weather_location.is_none() {
+            lanes.push((self.preferences.weather_position, Target::WeatherConfigure));
+        }
+        for list in crate::plex::List::ALL {
+            let widget = list.widget();
+            if let Some(target) = self.plex_lane(widget) {
+                lanes.push((self.preferences.widget_position(widget), target));
+            }
+        }
+        lanes.sort_by_key(|(position, _)| (position.row, position.column));
+        lanes
+    }
+
+    /// The lane Up from favorites reaches: a PlxNative row on the lowest grid row, the left one
+    /// from the first three dock apps and the right one from the rest (as for the top controls).
+    fn lane_above_favorites(&self, dock_index: usize) -> Option<Target> {
+        let lanes: Vec<_> = self
+            .placed_lanes()
+            .into_iter()
+            .filter(|(_, lane)| !matches!(lane, Target::WeatherConfigure))
+            .collect();
+        let bottom = lanes.iter().map(|(position, _)| position.row).max()?;
+        let row = lanes
+            .into_iter()
+            .filter(|(position, _)| position.row == bottom);
+        if dock_index < 3 {
+            row.min_by_key(|(position, _)| position.column)
+        } else {
+            row.max_by_key(|(position, _)| position.column)
+        }
+        .map(|(_, lane)| lane)
+    }
+
+    fn same_lane(a: &Target, b: &Target) -> bool {
+        match (a, b) {
+            (
+                Target::PlexItem(a, _) | Target::PlexSetup(a),
+                Target::PlexItem(b, _) | Target::PlexSetup(b),
+            ) => a == b,
+            (a, b) => a == b,
+        }
+    }
+
+    fn focus_lane(&mut self, lane: Target, controls: &[Control]) {
+        if let Target::PlexItem(widget, index) = lane {
+            self.focus_plex_item(widget, index, controls);
+        } else {
+            self.focus(lane, controls);
+        }
+    }
+
+    fn focus_plex_item(&mut self, widget: HomeWidget, index: usize, controls: &[Control]) {
+        let Some(list) = crate::plex::List::of(widget) else {
+            return;
+        };
+        self.plex.select(
+            list,
+            index,
+            crate::plex::visible_posters(&self.preferences, list),
+        );
+        self.focus(
+            Target::PlexItem(widget, self.plex.selected[list.index()]),
+            controls,
+        );
+    }
+
+    /// Up and Down move between grid rows of widgets, then to the top controls or favorites,
+    /// choosing the widget nearest by column. Left and Right move one poster inside a row; at a
+    /// row's end they continue into the widget beside it on the same grid row, else stop.
+    fn home_lane_direction(&mut self, direction: Direction, controls: &[Control]) {
+        let lanes = self.placed_lanes();
+        let Some(here) = lanes
+            .iter()
+            .find(|(_, lane)| Self::same_lane(lane, &self.focus))
+            .map(|(position, _)| *position)
+        else {
+            match direction {
+                Direction::Up => self.focus(self.first_input_target(), controls),
+                Direction::Down => self.focus(self.first_content(), controls),
+                _ => {}
+            }
+            return;
+        };
+        let nearest = |rows: &mut dyn Iterator<Item = &(WidgetPosition, Target)>| {
+            rows.min_by_key(|(position, _)| position.column.abs_diff(here.column))
+                .map(|(_, lane)| lane.clone())
+        };
+        match direction {
+            Direction::Left | Direction::Right => {
+                let left = matches!(direction, Direction::Left);
+                if let Target::PlexItem(widget, item) = self.focus
+                    && let Some(list) = crate::plex::List::of(widget)
+                {
+                    let count = self.plex.items(list).len();
+                    let next = if left {
+                        item.checked_sub(1)
+                    } else {
+                        (item + 1 < count).then_some(item + 1)
+                    };
+                    if let Some(next) = next {
+                        self.focus_plex_item(widget, next, controls);
+                        return;
+                    }
+                }
+                let beside = lanes
+                    .iter()
+                    .filter(|(position, _)| {
+                        position.row == here.row
+                            && if left {
+                                position.column < here.column
+                            } else {
+                                position.column > here.column
+                            }
+                    })
+                    .min_by_key(|(position, _)| position.column.abs_diff(here.column))
+                    .map(|(_, lane)| lane.clone());
+                match beside {
+                    // Entering from the side lands on the visible poster nearest that side.
+                    Some(Target::PlexItem(widget, _)) => {
+                        if let Some(list) = crate::plex::List::of(widget) {
+                            let row = list.index();
+                            let first = self.plex.first[row];
+                            let last = (first
+                                + crate::plex::visible_posters(&self.preferences, list))
+                            .min(self.plex.items(list).len())
+                            .saturating_sub(1);
+                            self.focus_plex_item(widget, if left { last } else { first }, controls);
+                        }
+                    }
+                    Some(lane) => self.focus(lane, controls),
+                    None => {}
+                }
+            }
+            Direction::Up => {
+                let above = lanes.iter().filter(|(position, _)| position.row < here.row);
+                let top = above.clone().map(|(position, _)| position.row).max();
+                match nearest(&mut above.filter(|(position, _)| Some(position.row) == top)) {
+                    Some(lane) => self.focus_lane(lane, controls),
+                    None => self.focus(self.first_input_target(), controls),
+                }
+            }
+            Direction::Down => {
+                let below = lanes.iter().filter(|(position, _)| position.row > here.row);
+                let next = below.clone().map(|(position, _)| position.row).min();
+                match nearest(&mut below.filter(|(position, _)| Some(position.row) == next)) {
+                    Some(lane) => self.focus_lane(lane, controls),
+                    None if !self.dock_apps().is_empty() => {
+                        self.focus(self.first_content(), controls)
+                    }
+                    None => {
+                        self.open(1);
+                        self.focus = self.first_content();
+                    }
+                }
+            }
+        }
+    }
+
+    /// Keeps focus valid after a PlxNative row changed: the poster index stays inside the row,
+    /// and a row that can no longer take focus hands it to favorites.
+    pub fn reconcile_plex_focus(&mut self) {
+        let (Target::PlexItem(widget, _) | Target::PlexSetup(widget)) = self.focus else {
+            return;
+        };
+        match self.plex_lane(widget) {
+            Some(Target::PlexItem(widget, remembered)) => {
+                let index = match self.focus {
+                    Target::PlexItem(_, index) => index,
+                    _ => remembered,
+                };
+                if let Some(list) = crate::plex::List::of(widget) {
+                    self.plex.select(
+                        list,
+                        index,
+                        crate::plex::visible_posters(&self.preferences, list),
+                    );
+                    self.focus = Target::PlexItem(widget, self.plex.selected[list.index()]);
+                }
+            }
+            Some(lane) => self.focus = lane,
+            None if self.page == Page::Home => self.focus = self.first_content(),
+            None => {}
+        }
+        self.dirty = true;
+    }
+
+    /// OK on a poster: open it in PlxNative, to play or to show its page.
+    fn open_plex_item(&mut self, widget: HomeWidget, index: usize) -> Vec<Effect> {
+        let Some(list) = crate::plex::List::of(widget) else {
+            return vec![];
+        };
+        let (Some(item), Some(server)) = (
+            self.plex.items(list).get(index).cloned(),
+            self.plex.account.server.clone(),
+        ) else {
+            return vec![];
+        };
+        if self.launching {
+            return vec![];
+        }
+        self.plex.select(
+            list,
+            index,
+            crate::plex::visible_posters(&self.preferences, list),
+        );
+        if !self.loading
+            && !self
+                .inventory
+                .apps
+                .iter()
+                .any(|app| app.id == crate::plex::APP_ID)
+        {
+            self.notify(
+                self.preferences
+                    .language
+                    .format("plexAppMissing", &[("app", crate::plex::APP_NAME)]),
+            );
+            return vec![];
+        }
+        vec![Effect::LaunchWith {
+            id: crate::plex::APP_ID.into(),
+            params: crate::plex::launch_params(&item, &server.id, self.preferences.plex.action),
+        }]
     }
 }

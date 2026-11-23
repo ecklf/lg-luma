@@ -21,6 +21,7 @@ mod luna;
 mod markets;
 mod model;
 mod platform;
+mod plex;
 mod preload;
 mod raster;
 mod recents;
@@ -69,6 +70,7 @@ use time::OffsetDateTime;
 #[derive(Default)]
 struct Options {
     market_test_server: Option<String>,
+    plex_test_server: Option<String>,
     webos_home: bool,
     /// SAM preload launches must stay in the background until an ordinary Home launch.
     preload: Option<String>,
@@ -168,6 +170,7 @@ impl Options {
                 "--diagnostics" => result.diagnostics = Some(value.into()),
                 "--weather-test-server" => result.weather_test_server = Some(value),
                 "--market-test-server" => result.market_test_server = Some(value),
+                "--plex-test-server" => result.plex_test_server = Some(value),
                 "--test-update-version" => result.test_update_version = Some(value),
                 "--test-extra-apps" => {
                     result.test_extra_apps = value
@@ -315,6 +318,17 @@ impl BackButton {
 }
 
 fn launch_app(state: &mut State, webos: bool, id: String, send: impl FnOnce(Request)) {
+    launch_app_with(state, webos, id, None, send);
+}
+
+/// Launches an app, with launch parameters when an item should open inside it.
+fn launch_app_with(
+    state: &mut State,
+    webos: bool,
+    id: String,
+    params: Option<serde_json::Value>,
+    send: impl FnOnce(Request),
+) {
     if scroll_preview::is_placeholder(&id) {
         state.notify(state.preferences.language.t("scrollTestOnly"));
         return;
@@ -324,7 +338,10 @@ fn launch_app(state: &mut State, webos: bool, id: String, send: impl FnOnce(Requ
     }
     if webos {
         state.launching = true;
-        send(Request::Launch(id));
+        send(match params {
+            Some(params) => Request::LaunchWith { id, params },
+            None => Request::Launch(id),
+        });
     } else {
         let title = state
             .inventory
@@ -370,6 +387,11 @@ fn effects(
             }
             Effect::Launch(id) => {
                 launch_app(state, platform.webos, id, |request| platform.send(request));
+            }
+            Effect::LaunchWith { id, params } => {
+                launch_app_with(state, platform.webos, id, Some(params), |request| {
+                    platform.send(request)
+                });
             }
             Effect::FireWebhook(tile) => webhook.send(tile),
             Effect::UpdateDownload(release) => updates.request(update::Request::Download(release)),
@@ -447,6 +469,8 @@ fn script(
         "await-search" => vec![],
         "await-weather" => vec![],
         "await-recents" => vec![],
+        "await-plex" => vec![],
+        "await-plex-sign-in" => vec![],
         "await-upload" => vec![],
         "await-tile-editor" => vec![],
         _ => return Err(format!("Unknown scripted action: {action}")),
@@ -781,6 +805,21 @@ fn run() -> Result<(), String> {
             && options.frames.is_none()
             && options.screenshot.is_none(),
     )?;
+    if webos && options.plex_test_server.is_some() {
+        return Err("PlxNative test servers are only available in desktop builds".into());
+    }
+    // PlxNative starts its workers only once one of its widgets is on Home. Scripts, fixed-time
+    // captures and frame-limited previews make no requests, as for market prices.
+    let plex_network = match options.plex_test_server.as_deref() {
+        Some(server) => Some(plex::Origin::test(server)?),
+        None => (options.script.is_empty()
+            && options.time.is_none()
+            && options.frames.is_none()
+            && options.screenshot.is_none())
+        .then(plex::Origin::public),
+    };
+    let mut plex_service: Option<plex::Service> = None;
+    state.plex.set_paths(&preferences_path);
     let platform = Platform::new(webos);
     let webhook_service = webhook::Service::new();
     let update_service = update::Service::new(public_update_checks);
@@ -1418,6 +1457,13 @@ fn run() -> Result<(), String> {
             visible,
             OffsetDateTime::now_utc().unix_timestamp(),
         );
+        state.dirty |= plex::tick(
+            &mut state,
+            &mut plex_service,
+            plex_network.as_ref(),
+            visible,
+            OffsetDateTime::now_utc().unix_timestamp(),
+        );
         if std::mem::take(&mut state.update_check_requested) {
             if let Some(version) = &options.test_update_version {
                 state.update_response(Ok(
@@ -1930,6 +1976,11 @@ fn run() -> Result<(), String> {
                         && (state.weather.fetching()
                             || state.extra_weather.iter().any(weather::Weather::fetching)))
                     || (action == "await-recents" && state.recents.pending.is_some())
+                    || (action == "await-plex" && state.plex.busy(&state.preferences))
+                    || (action == "await-plex-sign-in"
+                        && (state.plex.sign_in.is_some()
+                            || state.plex.connecting.is_some()
+                            || matches!(state.plex.servers, plex::Servers::Loading)))
                     || (action == "await-upload"
                         && matches!(state.overlay, Some(Overlay::WallpaperUpload))
                         && state.wallpaper_upload.is_none())
@@ -1988,6 +2039,13 @@ fn run() -> Result<(), String> {
             &market_service,
             &state.preferences,
             state.page,
+            visible,
+            OffsetDateTime::now_utc().unix_timestamp(),
+        );
+        state.dirty |= plex::tick(
+            &mut state,
+            &mut plex_service,
+            plex_network.as_ref(),
             visible,
             OffsetDateTime::now_utc().unix_timestamp(),
         );
@@ -2441,6 +2499,10 @@ fn idle_subpages(state: &state::State) -> Vec<(usize, state::Subpage)> {
             model::HomeWidget::Crypto | model::HomeWidget::Stocks
         ) {
             list.push((WIDGETS_SECTION, Market(widget)));
+        }
+        if widget.is_plex() && state.preferences.has_widget(widget) {
+            list.push((WIDGETS_SECTION, Plex(widget)));
+            list.push((WIDGETS_SECTION, PlexAction(widget)));
         }
     }
     for input in &state.inventory.inputs {

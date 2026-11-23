@@ -78,6 +78,8 @@ pub enum Draw {
     TintedImage(String, Rect, f32, bool, Color),
     /// Installed icon and its backdrop, composited before opacity and edge fading.
     AppImage(Arc<crate::app_artwork::Artwork>, Rect, f32, Color),
+    /// A PlxNative poster, decoded and cropped on its worker; uploaded here on first draw.
+    Poster(Arc<crate::plex::PosterImage>, Rect, f32, Color),
     Clip(Option<Rect>),
     EdgeFade(Option<[f32; 4]>),
 }
@@ -355,6 +357,7 @@ fn profile_skip(command: &Draw) -> bool {
         }
         Draw::Image(..) | Draw::TintedImage(..) => "image",
         Draw::AppImage(..) => "app",
+        Draw::Poster(..) => "poster",
         Draw::Shape(..) => "shape",
         Draw::Glass(..) => "glass",
         Draw::RoundedGradient(..) => "gradient",
@@ -1649,6 +1652,35 @@ impl Renderer {
         );
     }
 
+    fn poster(&mut self, image: &crate::plex::PosterImage, rect: Rect, radius: f32, tint: Color) {
+        let entry = self.textures.entry(image.key.clone()).or_insert_with(|| {
+            Some(texture(
+                image.pixels.width(),
+                image.pixels.height(),
+                image.pixels.as_raw(),
+            ))
+        });
+        let Some(texture) = entry else {
+            return;
+        };
+        texture.frame = self.frame;
+        let id = texture.id;
+        let hole = (texture.opaque && tint[3] >= 1.)
+            .then(|| self.opaque_interior(rect, radius))
+            .flatten()
+            .map(Hole::Opaque);
+        self.gradient_quad(
+            rect,
+            [0., 0., 1., 1.],
+            plain_radius(radius),
+            0.,
+            [tint; 2],
+            id,
+            None,
+            hole,
+        );
+    }
+
     /// A logical damage rect in drawable pixels ([x, y, width, height], origin bottom-left),
     /// grown to whole pixels.
     pub fn damage_pixels(rect: Rect, width: u32, height: u32) -> [i32; 4] {
@@ -1862,6 +1894,9 @@ impl Renderer {
                 }
                 Draw::AppImage(image, rect, radius, tint) => {
                     self.app_image(image, *rect, *radius, *tint)
+                }
+                Draw::Poster(image, rect, radius, tint) => {
+                    self.poster(image, *rect, *radius, *tint)
                 }
                 Draw::Clip(clip) => self.clip = *clip,
                 Draw::EdgeFade(fade) => self.fade = *fade,

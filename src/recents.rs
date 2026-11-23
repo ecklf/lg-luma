@@ -251,7 +251,13 @@ impl State {
         match (self.preferences.recent_apps_behavior, long) {
             (RecentAppsBehavior::LongPress, true) => self.open_recents(),
             (RecentAppsBehavior::ShortPress, false)
-                if self.page == Page::Home && self.overlay.is_none() && self.moving.is_none() =>
+                if self.page == Page::Home
+                    && self.overlay.is_none()
+                    && self.moving.is_none()
+                    && !matches!(
+                        self.focus,
+                        crate::state::Target::PlexItem(..) | crate::state::Target::PlexSetup(_)
+                    ) =>
             {
                 self.open_recents()
             }

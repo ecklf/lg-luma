@@ -292,7 +292,8 @@ impl Scene {
                 | Draw::Shadow(_, _, _, color)
                 | Draw::Text(_, _, _, color, _)
                 | Draw::TintedImage(_, _, _, _, color)
-                | Draw::AppImage(_, _, _, color) => apply(color),
+                | Draw::AppImage(_, _, _, color)
+                | Draw::Poster(_, _, _, color) => apply(color),
                 Draw::RoundedGradient(_, _, a, b) => {
                     apply(a);
                     apply(b);
@@ -616,7 +617,8 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
         | Overlay::WidgetCatalog { .. }
         | Overlay::Keyboard
         | Overlay::WallpaperUpload
-        | Overlay::TileEditor),
+        | Overlay::TileEditor
+        | Overlay::PlexSignIn),
     ) = &state.overlay
     {
         let anchor = match overlay {
@@ -657,6 +659,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             Overlay::Keyboard => keyboard(&mut out, state, assets),
             Overlay::WallpaperUpload => wallpaper_upload(&mut out, state, assets),
             Overlay::TileEditor => tile_editor(&mut out, state, assets),
+            Overlay::PlexSignIn => plex_sign_in(&mut out, state, assets),
             Overlay::SystemKeyboard
             | Overlay::Recents { .. }
             | Overlay::Inputs
@@ -1330,7 +1333,7 @@ fn home_widget_rect(widget: HomeWidget, position: WidgetPosition) -> Rect {
 }
 
 fn configured_widget_rect(state: &State, widget: HomeWidget, position: WidgetPosition) -> Rect {
-    if widget.kind() != HomeWidget::Weather {
+    if widget.kind() != HomeWidget::Weather && !widget.is_plex() {
         return home_widget_rect(widget, position);
     }
     let (width, height) = state.preferences.widget_span(widget);
@@ -1353,6 +1356,10 @@ fn home_widgets(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDate
         }
         if matches!(widget.kind(), HomeWidget::Crypto | HomeWidget::Stocks) {
             market_widget(out, state, assets, widget, cell);
+            continue;
+        }
+        if widget.is_plex() {
+            plex_row(out, state, assets, widget, cell);
             continue;
         }
         if widget.kind() == HomeWidget::Weather {
@@ -2926,6 +2933,12 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::WidgetPosition(widget)) => {
                     Some(vec![language.t(widget.key()), language.t("widgetPosition")])
                 }
+                Some(Subpage::PlexServers(_)) => {
+                    Some(vec![crate::plex::APP_NAME, language.t("plexServer")])
+                }
+                Some(Subpage::PlexAction(_)) => {
+                    Some(vec![crate::plex::APP_NAME, language.t("plexOkAction")])
+                }
                 Some(Subpage::Input(id)) => Some(vec![
                     state
                         .inventory
@@ -2940,6 +2953,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
             };
             let sub = match &state.subpage {
                 Some(Subpage::Market(kind)) => language.t(kind.key()),
+                Some(Subpage::Plex(_)) => crate::plex::APP_NAME,
                 Some(Subpage::Greeting) => language.t("greeting"),
                 Some(Subpage::Weather) => language.t("weather"),
                 Some(Subpage::Shortcuts) => language.t("shortcuts"),
@@ -3028,6 +3042,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             subpage,
             Subpage::WeatherLocation
                 | Subpage::Market(_)
+                | Subpage::Plex(_)
                 | Subpage::Weather
                 | Subpage::WeatherStyle
                 | Subpage::WeatherIcons
@@ -3040,6 +3055,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         ) {
             match subpage {
                 Subpage::Market(kind) => market_settings(out, state, assets, *kind),
+                Subpage::Plex(_) => plex_settings(out, state, assets),
                 Subpage::WeatherLocation => location_settings(out, state, assets),
                 Subpage::Weather => weather_settings(out, state, assets),
                 Subpage::WeatherStyle => weather_style_settings(out, state, assets),
@@ -3194,10 +3210,51 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::Greeting
             | Subpage::Clock
             | Subpage::AppDrawer
-            | Subpage::Market(_) => {
+            | Subpage::Market(_)
+            | Subpage::Plex(_) => {
                 unreachable!()
             }
             Subpage::WidgetPosition(_) => unreachable!(),
+            Subpage::PlexAction(_) => crate::plex::Action::ALL
+                .into_iter()
+                .map(|action| {
+                    (
+                        language.t(action.label_key()),
+                        Some(language.t(match action {
+                            crate::plex::Action::Play => "plexActionPlayHelp",
+                            crate::plex::Action::Open => "plexActionOpenHelp",
+                        })),
+                        action == state.preferences.plex.action,
+                    )
+                })
+                .collect(),
+            Subpage::PlexServers(_) => match &state.plex.servers {
+                crate::plex::Servers::Loaded(servers) if !servers.is_empty() => servers
+                    .iter()
+                    .map(|server| {
+                        let chosen = state
+                            .plex
+                            .account
+                            .server
+                            .as_ref()
+                            .is_some_and(|chosen| chosen.id == server.id);
+                        let detail = if state.plex.connecting.as_deref() == Some(server.id.as_str())
+                        {
+                            Some(language.t("plexConnecting"))
+                        } else if server.owned {
+                            None
+                        } else {
+                            Some(language.t("plexShared"))
+                        };
+                        (server.name.as_str(), detail, chosen)
+                    })
+                    .collect(),
+                crate::plex::Servers::Loaded(_) => vec![(language.t("plexNoServers"), None, false)],
+                crate::plex::Servers::Failed => {
+                    vec![(language.t("plexServersFailed"), None, false)]
+                }
+                _ => vec![(language.t("plexLoadingServers"), None, false)],
+            },
             Subpage::Language => Language::ALL
                 .into_iter()
                 .map(|option| (option.name(), None, option == language))
@@ -4436,6 +4493,9 @@ fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, cat
         if widget.kind() == HomeWidget::Weather {
             actions.push((Target::WeatherSize, "widgetSize", "grid"));
         }
+        if widget.is_plex() {
+            actions.push((Target::PlexSize(widget), "widgetSize", "grid"));
+        }
         actions.push((Target::RemoveWidget(widget), "removeWidget", "circle-minus"));
     }
     let empty = actions.is_empty();
@@ -4516,7 +4576,10 @@ fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, cat
                 c(0xffffff, if focused { 0.96 } else { 0.10 })
             },
         );
-        let label = if target == Target::WeatherSize {
+        let label = if let Target::PlexSize(widget) = target {
+            let (w, h) = state.preferences.widget_span(widget);
+            format!("{} · {w} × {h}", language.t(key))
+        } else if target == Target::WeatherSize {
             format!(
                 "{} · {}",
                 language.t(key),
@@ -5015,6 +5078,348 @@ fn full_screen_fill(draw: &Draw) -> bool {
         Draw::Shape(rect, radius, border, _) => whole(rect) && *radius <= 0. && *border <= 0.,
         Draw::RoundedGradient(rect, radius, ..) => whole(rect) && *radius <= 0.,
         _ => false,
+    }
+}
+
+/// A PlxNative row on Home: heading, then posters with title, detail and progress. The row
+/// shows a window of posters around the remembered one; the focused poster gets the card ring.
+fn plex_row(out: &mut Scene, state: &State, assets: &Assets, widget: HomeWidget, cell: Rect) {
+    use crate::plex::{List, POSTER_GAP, POSTER_H, POSTER_TOP, POSTER_W, ROW_HEADING, Status};
+    let Some(list) = List::of(widget) else {
+        return;
+    };
+    let language = state.preferences.language;
+    let plex = &state.plex;
+    let (heading, style) =
+        assets.fit_line(language.t(widget.key()), text(22., 600, -0.02), cell.w, 16.);
+    out.text(
+        heading,
+        Rect::new(cell.x, cell.y, cell.w, ROW_HEADING),
+        style,
+        WHITE,
+        false,
+    );
+    let items = plex.items(list);
+    if plex.loaded() && !plex.account.signed_in() {
+        // Like Weather's "Set location": the row's one action until an account is signed in.
+        let target = Target::PlexSetup(widget);
+        let label = language.t("plexSignIn");
+        let style = text(20., 550, 0.);
+        let rect = Rect::new(
+            cell.x,
+            cell.y + POSTER_TOP + 8.,
+            assets.width(label, style) + 64.,
+            56.,
+        );
+        let focused = state.focus == target || state.hover.as_ref() == Some(&target);
+        out.pill(rect, focused, false);
+        out.text(
+            label,
+            Rect::new(rect.x, rect.y + 15., rect.w, 28.),
+            style,
+            if focused { c(0x171c20, 1.) } else { WHITE },
+            true,
+        );
+        out.control(target, rect, false);
+        out.text(
+            language.format("plexSignInRowHint", &[("app", crate::plex::APP_NAME)]),
+            Rect::new(cell.x, rect.y + rect.h + 16., cell.w, 26.),
+            text(18., 400, 0.),
+            c(0xf5f5f5, 0.65),
+            false,
+        );
+        return;
+    }
+    if items.is_empty() {
+        let key = if !plex.loaded() {
+            "plexLoading"
+        } else if plex.account.server.is_none() {
+            "plexChooseServerHint"
+        } else {
+            match plex.status {
+                Status::Expired => "plexSignInExpired",
+                Status::Failed => "plexServerUnreachable",
+                Status::Ready if plex.has_list(list) => list.empty_key(),
+                _ => "plexLoading",
+            }
+        };
+        let (label, style) = assets.fit_line(language.t(key), text(20., 450, 0.), cell.w, 14.);
+        out.text(
+            label,
+            Rect::new(cell.x, cell.y + POSTER_TOP + 8., cell.w, 28.),
+            style,
+            c(0xf5f5f5, 0.65),
+            false,
+        );
+        return;
+    }
+    let row = list.index();
+    let first = plex.first[row].min(items.len() - 1);
+    for (index, item) in items
+        .iter()
+        .enumerate()
+        .skip(first)
+        .take(crate::plex::visible_in(cell.w))
+    {
+        let x = cell.x + (index - first) as f32 * (POSTER_W + POSTER_GAP);
+        let rect = Rect::new(x, cell.y + POSTER_TOP, POSTER_W, POSTER_H);
+        let target = Target::PlexItem(widget, index);
+        let focused = state.focus == target || state.hover.as_ref() == Some(&target);
+        out.shadow(rect, 10., 18., 6., 0.28);
+        if let Some(image) = plex.poster(item) {
+            out.draw
+                .push(Draw::Poster(image.clone(), rect, 10., [1.; 4]));
+        } else {
+            // No poster (yet, or it failed): the title stands in, never a broken image.
+            out.glass(rect, 10.);
+            out.text(
+                item.title.clone(),
+                rect.inset(12.),
+                text(17., 550, -0.01).leading(1.3),
+                c(0xf5f5f5, 0.85),
+                true,
+            );
+        }
+        if item.progress > 0. {
+            let track = Rect::new(rect.x + 10., rect.y + rect.h - 14., rect.w - 20., 5.);
+            out.shape(track, 2.5, c(0x000000, 0.45));
+            out.shape(
+                Rect::new(
+                    track.x,
+                    track.y,
+                    track.w * item.progress.clamp(0.04, 1.),
+                    track.h,
+                ),
+                2.5,
+                c(0xe5a00d, 1.),
+            );
+        }
+        if focused {
+            out.ring(rect, 10.);
+        }
+        out.control(target, rect, false);
+        let caption = rect.y + rect.h + 10.;
+        let (title, style) = assets.fit_line(&item.title, text(17., 550, -0.01), rect.w, 12.);
+        out.text(
+            title,
+            Rect::new(rect.x, caption, rect.w, 22.),
+            style,
+            WHITE,
+            false,
+        );
+        if !item.subtitle.is_empty() {
+            let (subtitle, style) =
+                assets.fit_line(&item.subtitle, text(14., 450, 0.), rect.w, 11.);
+            out.text(
+                subtitle,
+                Rect::new(rect.x, caption + 24., rect.w, 18.),
+                style,
+                c(0xf5f5f5, 0.65),
+                false,
+            );
+        }
+    }
+}
+
+/// The plex.tv/link code with a QR code for the link page, and Close.
+fn plex_sign_in(out: &mut Scene, state: &State, _assets: &Assets) {
+    let language = state.preferences.language;
+    let panel = Rect::new(520., 144., 880., 816.);
+    out.modal = Some(panel);
+    out.shadow(panel, 24., 40., 12., 0.3);
+    out.shape(panel, 24., c(COMPANION_BACKGROUND, 1.));
+    out.text(
+        language.t("plexSignInTitle"),
+        Rect::new(584., 198., 752., 48.),
+        text(32., 550, -0.02),
+        WHITE,
+        true,
+    );
+    out.text(
+        language.format("plexSignInHint", &[("page", crate::plex::LINK_PAGE)]),
+        Rect::new(604., 264., 712., 64.),
+        text(19., 400, 0.).leading(1.5),
+        c(0xffffff, 0.65),
+        true,
+    );
+    if let Some((size, modules)) = crate::plex::link_qr() {
+        let scale = (232. / (size + 8) as f32).floor();
+        let side = (size + 8) as f32 * scale;
+        let x = (1920. - side) / 2.;
+        let y = 344.;
+        // Inverted, as in the companion dialogs, with the full quiet zone.
+        for row in 0..size {
+            let mut column = 0;
+            while column < size {
+                if !modules[(row * size + column) as usize] {
+                    column += 1;
+                    continue;
+                }
+                let start = column;
+                while column < size && modules[(row * size + column) as usize] {
+                    column += 1;
+                }
+                out.shape(
+                    Rect::new(
+                        x + (start + 4) as f32 * scale,
+                        y + (row + 4) as f32 * scale,
+                        (column - start) as f32 * scale,
+                        scale,
+                    ),
+                    0.,
+                    c(0xf5f4ef, 1.),
+                );
+            }
+        }
+    }
+    let sign_in = state.plex.sign_in.as_ref();
+    match sign_in.and_then(|sign_in| sign_in.pin.as_ref()) {
+        Some(pin) => {
+            out.text(
+                pin.code.clone(),
+                Rect::new(604., 610., 712., 84.),
+                text(64., 650, 0.18),
+                WHITE,
+                true,
+            );
+            out.text(
+                language.t("plexSignInWaiting"),
+                Rect::new(604., 716., 712., 52.),
+                text(16., 400, 0.).leading(1.4),
+                c(0xffffff, 0.75),
+                true,
+            );
+        }
+        None => {
+            let key = if sign_in.is_some_and(|sign_in| sign_in.failed) {
+                "plexSignInFailed"
+            } else {
+                "plexSignInStarting"
+            };
+            out.text(
+                language.t(key),
+                Rect::new(604., 630., 712., 90.),
+                text(22., 450, 0.).leading(1.5),
+                c(0xffffff, 0.75),
+                true,
+            );
+        }
+    }
+    out.text(
+        language.t("plexSignInPrivate"),
+        Rect::new(604., 800., 712., 44.),
+        text(15., 400, 0.).leading(1.4),
+        c(0xffffff, 0.5),
+        true,
+    );
+    let close = Rect::new(812., 862., 296., 56.);
+    out.pill(close, state.focus == Target::CloseDialog, false);
+    out.text(
+        language.t("close"),
+        Rect::new(close.x, close.y + 15., close.w, 28.),
+        text(20., 550, 0.),
+        c(0x171c20, 1.),
+        true,
+    );
+    out.control(Target::CloseDialog, close, false);
+}
+
+/// Account, server and OK action, shared by both PlxNative rows, with a short info card.
+fn plex_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let account = &state.plex.account;
+    let signed_in = account.signed_in();
+    let account_title = if !signed_in {
+        language.t("plexSignIn").to_owned()
+    } else if account.name.is_empty() {
+        language.t("plexSignedIn").to_owned()
+    } else {
+        language.format("plexSignedInAs", &[("name", &account.name)])
+    };
+    let server = account
+        .server
+        .as_ref()
+        .map_or(language.t("notSet"), |server| server.name.as_str());
+    let action = language.t(state.preferences.plex.action.label_key());
+    for (index, (target, title, icon, value, chevron)) in [
+        (
+            Target::PlexAccount,
+            account_title.as_str(),
+            "globe",
+            signed_in.then(|| language.t("plexSignOut")),
+            !signed_in,
+        ),
+        (
+            Target::PlexServer,
+            language.t("plexServer"),
+            "tv",
+            Some(server),
+            signed_in,
+        ),
+        (
+            Target::PlexAction,
+            language.t("plexOkAction"),
+            "settings",
+            Some(action),
+            true,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target,
+                rect: Rect::new(640., 164.8 + index as f32 * 84. - state.scroll, 1120., 72.),
+                title,
+                icon: Some(icon),
+                value,
+                description: None,
+                selected: false,
+                chevron,
+            },
+        );
+    }
+    let top = 164.8 + 3. * 84. + 16. - state.scroll;
+    let style = text(18., 400, 0.).leading(1.45);
+    let app = language.format("plexInfoApp", &[("app", crate::plex::APP_NAME)]);
+    let notes = [
+        ("tv", app.as_str()),
+        ("refresh", language.t("plexInfoRefresh")),
+        ("eye-off", language.t("plexInfoPrivacy")),
+    ];
+    let heights = notes.map(|(_, label)| {
+        assets.lines(label, style, 1000.) as f32 * style.size * style.line_height
+    });
+    let panel = Rect::new(640., top, 1120., 96. + heights.iter().sum::<f32>() + 32.);
+    out.glass(panel, 20.);
+    out.border(panel, 20., 1., c(0xffffff, 0.07));
+    out.text(
+        "Plex · plex.tv",
+        Rect::new(664., top + 24., 1072., 28.),
+        text(20., 550, -0.02),
+        WHITE,
+        false,
+    );
+    let mut y = top + 72.;
+    for ((icon, label), height) in notes.into_iter().zip(heights) {
+        out.icon(
+            assets,
+            icon,
+            Rect::new(664., y + 3., 20., 20.),
+            c(0xffffff, 0.55),
+        );
+        out.text(
+            label,
+            Rect::new(700., y, 1000., height),
+            style,
+            c(0xf5f5f5, 0.72),
+            false,
+        );
+        y += height + 16.;
     }
 }
 
@@ -5632,6 +6037,7 @@ mod tests {
                     match widget {
                         HomeWidget::Greeting => 1160.,
                         HomeWidget::Weather => 568.,
+                        HomeWidget::ContinueWatching | HomeWidget::RecentlyAdded => 864.,
                         _ => 272.,
                     }
                 );

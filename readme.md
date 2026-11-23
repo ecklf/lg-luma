@@ -33,6 +33,8 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 - Customizable app drawer with optional names beneath selected non-favorite apps (off by default), input icons and recent app switching.
 - Left/right navigation wraps between the first and last app in favorites and the app drawer.
 - Movable greeting, weather, stock and crypto widgets.
+- Optional PlxNative rows: Continue watching and Recently added from your Plex server, opened in
+  [PlxNative](https://github.com/GLinnik21/plx-native). Nothing is loaded until a row is on Home.
 - Choose Kuankuan (default), Breezy, Lucide or Kickstand weather artwork, toggle icons on/off, and optionally hide the location name. Layout previews follow these settings.
 - Offline credits in System → Attributions, with remote and mouse-wheel scrolling.
 - Midnight background and custom uploads, with optional rotation.
@@ -44,6 +46,11 @@ and media opening still need hardware verification across TV firmware versions.
 
 Personalize your greeting in **Settings → Widgets → Greeting → Configure → Name**.
 Use **Clear name** to return to an unnamed greeting; names are saved only on your TV.
+
+Add **Continue watching** or **Recently added** in **Settings → Widgets → Add widget**, then choose
+**Configure** to sign in with a plex.tv/link code and pick a server. Press Up from favorites to
+reach a row; OK plays the item or opens its page in PlxNative, as set in **OK opens**. PlxNative
+must be installed. Behavior on TV hardware still needs verification.
 
 ## Compatibility
 

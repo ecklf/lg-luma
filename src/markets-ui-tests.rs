@@ -365,7 +365,10 @@ fn market_defaults_and_corrupt_settings_preserve_existing_preferences() {
     };
     preferences.stocks.position = preferences.greeting_position;
     preferences.sanitize();
-    for widget in HomeWidget::ALL {
+    for widget in HomeWidget::ALL
+        .into_iter()
+        .filter(|widget| preferences.has_widget(*widget))
+    {
         assert!(preferences.can_place_widget(widget, preferences.widget_position(widget)));
     }
 }
