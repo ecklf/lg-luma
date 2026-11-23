@@ -231,46 +231,47 @@ fn home_relaunch_returns_from_apps_and_settings() {
 }
 
 #[test]
-fn home_key_policy_tracks_chooser_selection_without_affecting_legacy_home() {
-    use crate::home_chooser::Status;
-    let selected = Status::Ready { selected: true };
-    assert!(crate::claim_home_key(true, false, Some(&selected)));
-    assert!(!crate::claim_home_key(false, false, Some(&selected)));
-    assert!(!crate::claim_home_key(true, false, None));
-    for status in [
-        Status::Unavailable,
-        Status::UpdateRequired,
-        Status::SetupRequired,
-        Status::PermissionRequired,
-        Status::Ready { selected: false },
+fn foreground_home_key_is_native_only_without_a_takeover_or_chooser_requirement() {
+    let key = sdl2::keyboard::Keycode::from_i32(crate::sdl_events::WEBOS_HOME_KEYCODE).unwrap();
+    assert!(crate::is_home(key, true));
+    assert!(!crate::is_home(key, false));
+    for key in [
+        sdl2::keyboard::Keycode::AcBack,
+        sdl2::keyboard::Keycode::Escape,
+        sdl2::keyboard::Keycode::Return,
     ] {
-        assert!(!crate::claim_home_key(true, false, Some(&status)));
-        assert!(crate::claim_home_key(true, true, Some(&status)));
-        assert!(!crate::claim_home_key(false, true, Some(&status)));
+        assert!(!crate::is_home(key, true));
     }
-    assert!(crate::claim_home_key(true, true, None));
 }
 
 #[test]
-fn selected_chooser_home_returns_to_root_without_exiting_or_opening_recents() {
-    let status = crate::home_chooser::Status::Ready { selected: true };
-    for page in [0, 1, 2] {
-        let mut state = ready();
-        state.home_chooser = Some(status.clone());
-        state.open(page);
-        assert!(crate::claim_home_key(
-            true,
-            false,
-            state.home_chooser.as_ref()
-        ));
-        assert!(state.return_home().is_empty());
-        assert_eq!(state.page, Page::Home);
-        assert!(state.overlay.is_none());
-        // A platform relaunch after the physical key is harmless and idempotent.
-        assert!(state.return_home().is_empty());
-        assert_eq!(state.page, Page::Home);
-        assert!(state.overlay.is_none());
-        assert_eq!(state.recents.visibility, 0.);
+fn foreground_home_navigation_stays_at_root_and_a_second_delivery_is_harmless() {
+    use crate::home_chooser::Status;
+    for status in [
+        None,
+        Some(Status::Unavailable),
+        Some(Status::UpdateRequired),
+        Some(Status::SetupRequired),
+        Some(Status::PermissionRequired),
+        Some(Status::Ready { selected: false }),
+        Some(Status::Ready { selected: true }),
+    ] {
+        for page in [0, 1, 2] {
+            let mut state = ready();
+            state.home_chooser = status.clone();
+            state.open(page);
+            state.query = "YouTube".into();
+            state.pressed = Some(Target::Nav(page));
+            for _ in 0..2 {
+                assert!(state.return_home().is_empty());
+                assert_eq!(state.page, Page::Home);
+                assert_eq!(state.drawer_visibility, 0.);
+                assert!(state.query.is_empty());
+                assert!(state.pressed.is_none());
+                assert!(state.overlay.is_none());
+                assert_eq!(state.recents.visibility, 0.);
+            }
+        }
     }
 }
 
@@ -3971,4 +3972,47 @@ fn hovering_corner_controls_keeps_their_geometry_and_does_not_change_pages() {
     assert_eq!(state.page, Page::Home);
     state.hover = None;
     assert_eq!(tab(&state), idle);
+}
+
+#[test]
+fn settings_app_cards_draw_shadows_faces_then_logos_like_the_drawer() {
+    use crate::renderer::Draw;
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::APPS_SECTION;
+    state.focus = Target::Sidebar(crate::state::APPS_SECTION);
+    let draws = scene(&state).draw;
+    let clip = draws
+        .iter()
+        .position(|draw| matches!(draw, Draw::Clip(Some(_))))
+        .unwrap();
+    let end = clip
+        + draws[clip..]
+            .iter()
+            .position(|draw| matches!(draw, Draw::Clip(None)))
+            .unwrap();
+    let cards = &draws[clip..end];
+    let last_shadow = cards
+        .iter()
+        .rposition(|draw| matches!(draw, Draw::Shadow(..)))
+        .unwrap();
+    let first_logo = cards
+        .iter()
+        .position(|draw| matches!(draw, Draw::Image(path, ..) | Draw::TintedImage(path, ..) if path.ends_with(".lvec")))
+        .unwrap();
+    let last_face = cards
+        .iter()
+        .rposition(|draw| {
+            matches!(draw, Draw::AppImage(..))
+                || matches!(draw, Draw::Image(path, ..) if !path.ends_with(".lvec"))
+        })
+        .unwrap();
+    assert!(
+        cards
+            .iter()
+            .filter(|draw| matches!(draw, Draw::Shadow(..)))
+            .count()
+            > 3
+    );
+    assert!(last_shadow < last_face && last_face < first_logo);
 }

@@ -922,6 +922,44 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
     out.draw.push(Draw::Clip(None));
 }
 
+/// The app options menu's labels and icons, for idle preparation. Text runs are cached by
+/// layout size, not position, so these serve the menu beside any card.
+pub fn options_menu_draws(state: &State, assets: &Assets) -> Vec<Draw> {
+    let language = state.preferences.language;
+    let mut out = Scene::new();
+    let label_style = text(20.8, 600, -0.02);
+    let label_height = label_style.size * label_style.line_height;
+    for key in [
+        "open",
+        "removeFavorite",
+        "addFavorite",
+        "showApp",
+        "hideApp",
+        "move",
+        "deleteApp",
+    ] {
+        out.text(
+            language.t(key),
+            Rect::new(0., 0., 520. - 32. - 88., label_height),
+            label_style,
+            WHITE,
+            false,
+        );
+    }
+    for icon in [
+        "arrow",
+        "heart",
+        "heart-filled",
+        "eye",
+        "eye-off",
+        "left",
+        "circle-minus",
+    ] {
+        out.icon(assets, icon, Rect::new(0., 0., 21.6, 21.6), WHITE);
+    }
+    out.draw
+}
+
 /// Returns whether the card is focused (see batch_cards).
 fn tile(
     out: &mut Scene,
@@ -3242,18 +3280,23 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 .push(Draw::Clip(Some(state.app_settings_viewport())));
             let apps = state.apps();
             let mut y = 164.8;
+            let mut cards = Vec::new();
             for row in apps.chunks(3) {
                 for (column, app) in row.iter().enumerate() {
                     let rect = Rect::new(640. + column as f32 * 380., y - s, 360., 202.5);
-                    tile(out, state, assets, app, rect, None);
+                    let start = out.draw.len();
+                    let focused = tile(out, state, assets, app, rect, None);
                     if state.preferences.hidden.contains(&app.id) {
                         let badge = Rect::new(rect.x + 12., rect.y + 12., 30., 30.);
                         out.shape(badge, 15., c(0x202020, 0.85));
                         out.icon(assets, "eye-off", badge.inset(6.), WHITE);
                     }
+                    cards.push((start, out.draw.len(), focused));
                 }
                 y += 226.5;
             }
+            // As in the drawer: shadows, faces, borders, then logos, in fewer program switches.
+            batch_cards(&mut out.draw, &cards);
             out.draw.push(Draw::Clip(None));
         }
         0 => {

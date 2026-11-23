@@ -1031,17 +1031,19 @@ failures preserve the last valid inputs. No failed inventory read substitutes de
 
 ### Home Chooser integration
 
-When Home Chooser reports Luma as the selected, permitted Home, Luma claims the foreground
-Home key through `SDL_WEBOS_ACCESS_POLICY_KEYS_HOME`. Pressing Home in Apps, Settings or an
-overlay returns straight to Luma's Home tab. At the root it stays in Luma rather than exiting
-or opening Recents. A later status reporting unselected/unavailable releases the claim.
-The pinned SDL-webOS backend applies hint changes to existing surfaces through a callback.
-This is a native window policy, not a Home Chooser key-remapping API or a global key filter.
+On native webOS, Luma requests `SDL_WEBOS_ACCESS_POLICY_KEYS_HOME` before video initialization
+for every launch, not just legacy Home takeover. When the compositor delivers Home to Luma's
+foreground surface, it returns directly to the Home tab through `State::return_home`, dismissing
+overlays and saving in-progress keyboard edits. Repeated Home stays at the root, without exiting
+or opening Recents. Ordinary tile launches receive the same behavior, even when Luma is not the
+selected launcher. Desktop key handling is unchanged.
 
-TV verification is pending: test cold startup before/after the selection probe, Home from
-Apps/Settings/overlays, repeated Home at the root, launching another app and returning with
-Home, switching the selected launcher, and a firmware that also emits a relaunch. Host tests
-cover the selection policy and idempotent Home navigation, not compositor key delivery.
+This is a native window policy, not a global key filter or a Home Chooser API call. It adds no
+installation permission and works independently of the inventory/icon API integration.
+TV verification is pending: check Home from Apps, Settings, overlays and the root, repeated presses
+and holds, opening Luma from its tile without selecting it as Home, launching another app and
+pressing Home, and changing the selected launcher. A platform relaunch after the key is safe for
+navigation, but actual compositor delivery and background routing must be verified on hardware.
 
 The installed `appinfo.json` declares `appCategory: ["home"]`, so
 [Home Chooser](https://github.com/webosbrew/home-chooser/blob/main/docs/launcher-api.md) can select

@@ -140,14 +140,9 @@ Use **Clear name** to return to an unnamed greeting; names are saved only on you
 
 ### Homebrew Channel
 
-Add this custom repository URL to Homebrew Channel:
-
-```text
-https://github.com/ecklf/lg-luma/releases/latest/download/repo.json
-```
-
-Upvote [the official Homebrew Channel repository PR](https://github.com/webosbrew/apps-repo/pull/343)
-to help make Luma available by default.
+Open Homebrew Channel, find **Luma** in the default
+[webOS Homebrew apps repository](https://github.com/webosbrew/apps-repo), and select **Install**.
+No custom repository needs to be added manually.
 
 ### SSH
 
@@ -169,6 +164,11 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 
 ### Home Chooser (recommended)
 
+Luma requests foreground Home-key handling on native webOS, including ordinary tile launches:
+Home returns directly to Luma's Home tab and stays there at the root. This does not require the
+Home Chooser launcher API or add an installation permission. Actual key delivery and routing
+while another app is foreground still need TV verification.
+
 [Home Chooser](https://github.com/webosbrew/home-chooser/) is the recommended way to select Luma
 as the full-screen Home app without Luma's takeover scripts or an Input Hook mapping:
 
@@ -183,15 +183,10 @@ as the full-screen Home app without Luma's takeover scripts or an Input Hook map
 You can also open **Settings → System → Home Chooser** in Luma for setup guidance or to request
 using Luma as Home. Home Chooser asks you to confirm the change.
 
-When selected, Luma requests foreground Home-key handling to return directly from Apps,
-Settings or an overlay to its Home tab. Pressing Home at the root stays in Luma. This native
+While Luma is foreground, Home returns directly from Apps, Settings or an overlay to its Home
+tab, regardless of the selected launcher. Pressing Home at the root stays in Luma. This native
 key-delivery path still needs TV verification, including Home from another app and switching
 the selected launcher.
-
-Home Chooser will be the default method in v4. In-app upgrades from v1–v3 to v4 or later require
-explicit confirmation of these steps before downloading. **Close** is focused by default. This
-safeguard only applies to Luma releases that include it, not older installations or updates
-performed through Homebrew Channel or SSH.
 
 <details>
 <summary>Old methods</summary>
