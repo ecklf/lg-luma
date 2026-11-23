@@ -2460,6 +2460,17 @@ fn normal_app_preload_does_not_change_startup_visibility() {
 }
 
 #[test]
+fn direct_lifecycle_registration_preserves_app_and_legacy_home_identities() {
+    use crate::platform::{APP_ID, direct_lifecycle_id, home_id};
+    // Home Chooser and tile launches are the installed app, regardless of root status.
+    assert_eq!(direct_lifecycle_id(false, false), Some(APP_ID));
+    assert_eq!(direct_lifecycle_id(false, true), Some(APP_ID));
+    // Executable replacement keeps LG's identity; staged Home retains its existing fallback.
+    assert_eq!(direct_lifecycle_id(true, true), Some(home_id()));
+    assert_eq!(direct_lifecycle_id(true, false), None);
+}
+
+#[test]
 fn home_lifecycle_replies_map_for_both_registration_versions() {
     use crate::platform::Lifecycle;
     // Lifecycle v2 (registerApp, in place of LG's Home executable) names it in "event".
