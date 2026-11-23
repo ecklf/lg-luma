@@ -193,6 +193,39 @@ fn home_relaunch_returns_from_apps_and_settings() {
 }
 
 #[test]
+fn foreground_home_key_is_native_only_without_a_takeover_or_chooser_requirement() {
+    let key = sdl2::keyboard::Keycode::from_i32(crate::sdl_events::WEBOS_HOME_KEYCODE).unwrap();
+    assert!(crate::is_home(key, true));
+    assert!(!crate::is_home(key, false));
+    for key in [
+        sdl2::keyboard::Keycode::AcBack,
+        sdl2::keyboard::Keycode::Escape,
+        sdl2::keyboard::Keycode::Return,
+    ] {
+        assert!(!crate::is_home(key, true));
+    }
+}
+
+#[test]
+fn foreground_home_navigation_stays_at_root_and_a_second_delivery_is_harmless() {
+    for page in [0, 1, 2] {
+        let mut state = ready();
+        state.open(page);
+        state.query = "YouTube".into();
+        state.pressed = Some(Target::Nav(page));
+        for _ in 0..2 {
+            assert!(state.return_home().is_empty());
+            assert_eq!(state.page, Page::Home);
+            assert_eq!(state.drawer_visibility, 0.);
+            assert!(state.query.is_empty());
+            assert!(state.pressed.is_none());
+            assert!(state.overlay.is_none());
+            assert_eq!(state.recents.visibility, 0.);
+        }
+    }
+}
+
+#[test]
 fn home_relaunch_skips_drawer_animation_and_restores_home_scene() {
     for (style, reduced_motion) in [
         (crate::model::AppDrawerStyle::Minimal, false),
