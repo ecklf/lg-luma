@@ -171,7 +171,7 @@ async function scenario(name, script, frames = 360, mock = true) {
   assert.equal(render.capture.missing_images, 0);
   return state;
 }
-const row = (column, row) => ({ enabled: true, position: { column, row } });
+const row = (column, row, wide = false) => ({ enabled: true, position: { column, row }, wide });
 try {
   if (process.env.LUMA_SMOKE_SKIP_BUILD !== '1')
     await run('cargo', ['build', '--locked', '--package', 'luma']);
@@ -180,8 +180,8 @@ try {
   await scenario('off', 'home,wait,wait');
   assert.equal(requests.length, 0, 'No PlxNative widget, no requests');
 
-  // Continue watching under Greeting and Weather, focused from favorites.
-  await seed({ plex: { continue_watching: row(0, 2) } });
+  // A wide Continue watching row under Greeting and Weather, focused from favorites.
+  await seed({ plex: { continue_watching: row(0, 2, true) } });
   const home = await scenario('continue', 'home,await-plex,up');
   assert.ok(home.ui_text.includes('Continue watching'));
   assert.ok(home.ui_text.includes('Show 1'));
@@ -190,15 +190,13 @@ try {
   assert.ok(requests.some((r) => r.path === '/photo/:/transcode'));
   assert.ok(!requests.some((r) => r.path === '/library/recentlyAdded'), 'Only lists on Home');
 
-  // Both rows, Greeting and Weather removed.
-  await seed({
-    show_greeting: false,
-    show_weather: false,
-    plex: { continue_watching: row(0, 0), recently_added: row(0, 2) },
-  });
-  const both = await scenario('both', 'home,await-plex,up,right,right');
+  // Both half-width rows side by side, Greeting and Weather kept. Up from the last dock apps
+  // reaches the right-hand row.
+  await seed({ plex: { continue_watching: row(0, 2), recently_added: row(3, 2) } });
+  const both = await scenario('both', 'home,await-plex,right,right,right,up,right');
   assert.ok(both.ui_text.includes('Recently added'));
   assert.ok(both.ui_text.includes('Film 1'));
+  assert.ok(both.ui_text.includes('Show 1'), 'Continue watching shares the grid row');
 
   // A server that does not answer: no posters, a clear message, Home still works.
   mode = 'down';

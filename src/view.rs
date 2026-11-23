@@ -1333,7 +1333,7 @@ fn home_widget_rect(widget: HomeWidget, position: WidgetPosition) -> Rect {
 }
 
 fn configured_widget_rect(state: &State, widget: HomeWidget, position: WidgetPosition) -> Rect {
-    if widget.kind() != HomeWidget::Weather {
+    if widget.kind() != HomeWidget::Weather && !widget.is_plex() {
         return home_widget_rect(widget, position);
     }
     let (width, height) = state.preferences.widget_span(widget);
@@ -4493,6 +4493,9 @@ fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, cat
         if widget.kind() == HomeWidget::Weather {
             actions.push((Target::WeatherSize, "widgetSize", "grid"));
         }
+        if widget.is_plex() {
+            actions.push((Target::PlexSize(widget), "widgetSize", "grid"));
+        }
         actions.push((Target::RemoveWidget(widget), "removeWidget", "circle-minus"));
     }
     let empty = actions.is_empty();
@@ -4573,7 +4576,10 @@ fn widget_menu(out: &mut Scene, state: &State, assets: &Assets, cell: usize, cat
                 c(0xffffff, if focused { 0.96 } else { 0.10 })
             },
         );
-        let label = if target == Target::WeatherSize {
+        let label = if let Target::PlexSize(widget) = target {
+            let (w, h) = state.preferences.widget_span(widget);
+            format!("{} · {w} × {h}", language.t(key))
+        } else if target == Target::WeatherSize {
             format!(
                 "{} · {}",
                 language.t(key),
@@ -5153,7 +5159,7 @@ fn plex_row(out: &mut Scene, state: &State, assets: &Assets, widget: HomeWidget,
         .iter()
         .enumerate()
         .skip(first)
-        .take(crate::plex::VISIBLE)
+        .take(crate::plex::visible_in(cell.w))
     {
         let x = cell.x + (index - first) as f32 * (POSTER_W + POSTER_GAP);
         let rect = Rect::new(x, cell.y + POSTER_TOP, POSTER_W, POSTER_H);
@@ -6031,7 +6037,7 @@ mod tests {
                     match widget {
                         HomeWidget::Greeting => 1160.,
                         HomeWidget::Weather => 568.,
-                        HomeWidget::ContinueWatching | HomeWidget::RecentlyAdded => 1752.,
+                        HomeWidget::ContinueWatching | HomeWidget::RecentlyAdded => 864.,
                         _ => 272.,
                     }
                 );

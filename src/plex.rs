@@ -61,15 +61,28 @@ pub const POSTER_WIDTH: u32 = 200;
 pub const POSTER_HEIGHT: u32 = 300;
 const POSTERS_IN_FLIGHT: usize = 3;
 
-// Home row geometry inside the 6×2 footprint (1752×280 logical pixels).
+// Home row geometry: a half-width 3×2 row is 864×280 logical pixels, a wide 6×2 row 1752×280.
 pub const ROW_HEADING: f32 = 30.;
 pub const POSTER_TOP: f32 = 38.;
 pub const POSTER_W: f32 = 125.;
 pub const POSTER_H: f32 = 188.;
 pub const POSTER_GAP: f32 = 20.;
-pub const ROW_WIDTH: f32 = 1752.;
-/// Posters that fit side by side in the row.
-pub const VISIBLE: usize = ((ROW_WIDTH + POSTER_GAP) / (POSTER_W + POSTER_GAP)) as usize;
+const HALF_WIDTH: f32 = 864.;
+const WIDE_WIDTH: f32 = 1752.;
+
+/// Posters that fit side by side in a row of this width.
+pub fn visible_in(width: f32) -> usize {
+    (((width + POSTER_GAP) / (POSTER_W + POSTER_GAP)) as usize).max(1)
+}
+
+/// Posters a list's row shows at once: 6 at half width, 12 wide.
+pub fn visible_posters(preferences: &Preferences, list: List) -> usize {
+    visible_in(if placement(preferences, list).wide {
+        WIDE_WIDTH
+    } else {
+        HALF_WIDTH
+    })
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -102,6 +115,8 @@ impl Action {
 pub struct Placement {
     pub enabled: bool,
     pub position: WidgetPosition,
+    /// The whole width (6×2) instead of half (3×2).
+    pub wide: bool,
 }
 
 impl Default for Placement {
@@ -109,17 +124,32 @@ impl Default for Placement {
         Self {
             enabled: false,
             position: WidgetPosition { column: 0, row: 2 },
+            wide: false,
         }
     }
 }
 
-/// What preferences keep: where the widgets sit and what OK does. No account data.
-#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
+/// What preferences keep: where the widgets sit, their size and what OK does. No account data.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct Settings {
     pub continue_watching: Placement,
     pub recently_added: Placement,
     pub action: Action,
+}
+
+impl Default for Settings {
+    /// Both half-width rows side by side below Greeting and Weather.
+    fn default() -> Self {
+        Self {
+            continue_watching: Placement::default(),
+            recently_added: Placement {
+                position: WidgetPosition { column: 3, row: 2 },
+                ..Placement::default()
+            },
+            action: Action::default(),
+        }
+    }
 }
 
 pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(
@@ -165,6 +195,13 @@ pub fn placement(preferences: &Preferences, list: List) -> &Placement {
     match list {
         List::Continue => &preferences.plex.continue_watching,
         List::Recent => &preferences.plex.recently_added,
+    }
+}
+
+pub fn placement_mut(preferences: &mut Preferences, list: List) -> &mut Placement {
+    match list {
+        List::Continue => &mut preferences.plex.continue_watching,
+        List::Recent => &mut preferences.plex.recently_added,
     }
 }
 
@@ -1453,18 +1490,18 @@ impl Plex {
         }
     }
 
-    /// Selects a poster in a row and keeps it inside the visible window.
-    pub fn select(&mut self, list: List, index: usize) {
+    /// Selects a poster in a row and keeps it inside the window of `visible` posters.
+    pub fn select(&mut self, list: List, index: usize, visible: usize) {
         let count = self.items(list).len();
         let index = index.min(count.saturating_sub(1));
         let row = list.index();
         self.selected[row] = index;
         if index < self.first[row] {
             self.first[row] = index;
-        } else if index >= self.first[row] + VISIBLE {
-            self.first[row] = index + 1 - VISIBLE;
+        } else if index >= self.first[row] + visible {
+            self.first[row] = index + 1 - visible;
         }
-        self.first[row] = self.first[row].min(count.saturating_sub(VISIBLE));
+        self.first[row] = self.first[row].min(count.saturating_sub(visible));
     }
 
     fn load(&mut self, now: i64) {
@@ -1524,6 +1561,7 @@ pub fn tick(
     now: i64,
 ) -> bool {
     let lists = enabled_lists(&state.preferences);
+    let windows = List::ALL.map(|list| visible_posters(&state.preferences, list));
     let home = visible && state.page == Page::Home;
     let plex = &mut state.plex;
     if lists.is_empty() {
@@ -1562,7 +1600,7 @@ pub fn tick(
     sign_in_step(plex, service, visible, now);
     refresh_step(plex, service, &lists, home, visible, now, &mut out);
     for reply in service.replies.try_iter().collect::<Vec<_>>() {
-        reply_step(plex, service, reply, now, &mut out);
+        reply_step(plex, service, reply, now, windows, &mut out);
     }
     for reply in service.poster_replies.try_iter().collect::<Vec<_>>() {
         plex.posters_in_flight = plex.posters_in_flight.saturating_sub(1);
@@ -1818,7 +1856,14 @@ fn refresh_step(
     }
 }
 
-fn reply_step(plex: &mut Plex, service: &Service, reply: Reply, now: i64, out: &mut Outcome) {
+fn reply_step(
+    plex: &mut Plex,
+    service: &Service,
+    reply: Reply,
+    now: i64,
+    windows: [usize; 2],
+    out: &mut Outcome,
+) {
     out.changed = true;
     match reply {
         Reply::Pin(result) => {
@@ -1940,7 +1985,7 @@ fn reply_step(plex: &mut Plex, service: &Service, reply: Reply, now: i64, out: &
                     plex.posters_in_flight = 0;
                     for list in List::ALL {
                         let selected = plex.selected[list.index()];
-                        plex.select(list, selected);
+                        plex.select(list, selected, windows[list.index()]);
                     }
                 }
                 Err(Failure::Status(401)) => {

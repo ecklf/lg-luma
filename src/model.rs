@@ -393,7 +393,8 @@ impl HomeWidget {
             Self::Greeting => (4, 1),
             Self::Weather => (2, 2),
             Self::Crypto | Self::Stocks => (1, 1),
-            Self::ContinueWatching | Self::RecentlyAdded => (6, 2),
+            // Half width by default; `wide` rows use the whole width (Preferences::widget_span).
+            Self::ContinueWatching | Self::RecentlyAdded => (3, 2),
             _ => unreachable!(),
         }
     }
@@ -417,7 +418,8 @@ impl HomeWidget {
                 Self::Weather => 0,
                 Self::Crypto => 0,
                 Self::Stocks => 1,
-                Self::ContinueWatching | Self::RecentlyAdded => 0,
+                Self::ContinueWatching => 0,
+                Self::RecentlyAdded => 3,
                 _ => unreachable!(),
             },
             row: match self.kind() {
@@ -712,13 +714,17 @@ impl Preferences {
             } else {
                 widget.span()
             }
+        } else if let Some(list) = crate::plex::List::of(widget)
+            && crate::plex::placement(self, list).wide
+        {
+            (6, 2)
         } else {
             widget.span()
         }
     }
 
     pub fn widget_fits(&self, widget: HomeWidget, position: WidgetPosition) -> bool {
-        if widget.kind() != HomeWidget::Weather {
+        if widget.kind() != HomeWidget::Weather && !widget.is_plex() {
             return position.fits(widget);
         }
         let (w, h) = self.widget_span(widget);
@@ -733,20 +739,39 @@ impl Preferences {
 
     pub fn toggle_weather_widget_size(&mut self, widget: HomeWidget) {
         self.edit_weather(widget, |config| config.small = !config.small);
-        if !self.relocate_weather_widget(widget) {
+        if !self.relocate_widget(widget) {
             self.edit_weather(widget, |config| config.small = !config.small);
+        }
+    }
+
+    /// Switches a PlxNative row between half and full width, moving it when its anchor
+    /// cannot hold the wider footprint. Keeps the size when no position fits.
+    pub fn toggle_plex_widget_size(&mut self, widget: HomeWidget) -> bool {
+        let Some(list) = crate::plex::List::of(widget) else {
+            return false;
+        };
+        let flip = |preferences: &mut Self| {
+            let placement = crate::plex::placement_mut(preferences, list);
+            placement.wide = !placement.wide;
+        };
+        flip(self);
+        if self.relocate_widget(widget) {
+            true
+        } else {
+            flip(self);
+            false
         }
     }
 
     pub fn set_weather_widget_style(&mut self, widget: HomeWidget, style: WeatherStyle) {
         let previous = self.weather_settings(widget).style;
         self.edit_weather(widget, |config| config.style = style);
-        if !self.relocate_weather_widget(widget) {
+        if !self.relocate_widget(widget) {
             self.edit_weather(widget, |config| config.style = previous);
         }
     }
 
-    fn relocate_weather_widget(&mut self, widget: HomeWidget) -> bool {
+    fn relocate_widget(&mut self, widget: HomeWidget) -> bool {
         // Expanding at an edge or beside Greeting needs a new valid anchor.
         if !self.can_place_widget(widget, self.widget_position(widget)) {
             if let Some(position) = (0..HOME_GRID_CELLS)

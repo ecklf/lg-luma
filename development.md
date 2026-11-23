@@ -163,9 +163,11 @@ CI runs this as its own isolated smoke suite. Tests never call public market fee
 
 ### PlxNative widgets
 
-`plex` preferences hold `continue_watching` and `recently_added` (`enabled`, `position`) and
-`action` (`play`, the default, or `open`). Both widgets default off and occupy a fixed 6×2
-footprint (1752×280), so with Greeting and Weather on Home only one fits; without them both do.
+`plex` preferences hold `continue_watching` and `recently_added` (`enabled`, `position`, `wide`)
+and `action` (`play`, the default, or `open`). Both widgets default off. A row is half width,
+3×2 (864×280, six posters), by default, so both fit side by side below Greeting and Weather
+(defaults (0,2) and (3,2)); the widget popup's Size action switches it to the whole width, 6×2
+(twelve posters), relocating it or keeping its size when there is no room, as for Weather.
 The existing add/configure/move/remove workflow and Reset apply. Either widget's Configure opens
 one shared page: Sign in to Plex (or Signed in as … / Sign out), Server and OK opens.
 
@@ -199,13 +201,19 @@ refreshing until the owner signs in again. The last lists are saved in
 `<preferences>.plex-shelves.json` and shown for up to a week. A poster that fails shows the title
 and is retried after the next successful refresh.
 
-Home navigation: Up from favorites reaches the lowest PlxNative row with items, Down from the top
+Home navigation: Up from favorites reaches a PlxNative row on the lowest grid row with items (the
+left one from the first three dock apps, the right one from the rest), Down from the top
 controls reaches the topmost focusable widget (Weather's setup action keeps its earlier reach).
-Left/Right move one poster and stop at the row's ends; the row remembers its poster. Back
+Up/Down move between grid rows to the widget nearest by column. Left/Right move one poster; at a
+row's end they enter the row beside it on the same grid row, else stop. Each row remembers its
+poster. Back
 returns to favorites instead of opening Recent apps. A signed-out row offers Sign in to Plex,
 like Weather's Set location; loading, failed and empty rows cannot take focus. OK launches
 `com.beb.plxnative` with `{"plex":{"server","ratingKey","action"}}`; shows and seasons always
-open their page. When PlxNative is not installed a notice says so.
+open their page. When PlxNative is not installed a notice says so. Launch parameters reach a
+running app only where LG's SDL delivers its `relaunch` event (webOS 7.4 and newer, per
+PlxNative's `docs/launch-links.md`), so Luma first asks the application manager to close
+PlxNative and, when it was running, waits 600 ms before launching it with the item.
 
 `--plex-test-server http://127.0.0.1:PORT` replaces plex.tv with a loopback mock on desktop and
 is rejected on TV. `xvfb-run -a pnpm test:plex` checks the lazy start, both rows, focus, posters,

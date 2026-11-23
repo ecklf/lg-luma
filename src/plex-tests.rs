@@ -606,7 +606,9 @@ fn home_rows_are_reachable_from_favorites_and_the_top_and_keep_their_place() {
         state.focus,
         Target::PlexItem(HomeWidget::ContinueWatching, 25)
     );
-    assert!(state.plex.first[0] + VISIBLE > 25 && state.plex.first[0] <= 25);
+    let window = visible_posters(&state.preferences, List::Continue);
+    assert_eq!(window, 6, "a half-width row shows six posters");
+    assert!(state.plex.first[0] + window > 25 && state.plex.first[0] <= 25);
     for _ in 0..10 {
         state.direction(Direction::Right, &[]);
     }
@@ -703,20 +705,122 @@ fn a_shrinking_row_keeps_focus_inside_it_or_hands_it_to_favorites() {
 }
 
 #[test]
-fn both_rows_fit_only_with_a_compact_layout_and_reset_removes_them() {
+fn both_half_rows_fit_beside_greeting_and_weather_and_wide_rows_need_room() {
+    let (continue_watching, recently_added) =
+        (HomeWidget::ContinueWatching, HomeWidget::RecentlyAdded);
     let mut preferences = Preferences::default();
-    assert_eq!(HomeWidget::ContinueWatching.span(), (6, 2));
-    let position = WidgetPosition { column: 0, row: 2 };
-    assert!(preferences.can_place_widget(HomeWidget::ContinueWatching, position));
-    preferences.set_widget_present(HomeWidget::ContinueWatching, true);
-    assert!(
-        (0..crate::model::HOME_GRID_CELLS)
-            .filter_map(WidgetPosition::from_cell)
-            .all(|p| !preferences.can_place_widget(HomeWidget::RecentlyAdded, p)),
-        "Greeting and Weather leave room for one row"
-    );
+    assert_eq!(continue_watching.span(), (3, 2));
+    for widget in [continue_watching, recently_added] {
+        assert!(preferences.can_place_widget(widget, preferences.widget_position(widget)));
+        preferences.set_widget_present(widget, true);
+    }
     preferences.sanitize();
-    assert!(preferences.has_widget(HomeWidget::ContinueWatching));
+    assert!(
+        preferences.has_widget(HomeWidget::Greeting) && preferences.has_widget(HomeWidget::Weather)
+    );
+    assert_eq!(
+        [continue_watching, recently_added].map(|w| preferences.widget_position(w)),
+        [
+            WidgetPosition { column: 0, row: 2 },
+            WidgetPosition { column: 3, row: 2 }
+        ]
+    );
+    // Wide needs the whole width: refused while the other row is beside it.
+    assert!(!preferences.toggle_plex_widget_size(continue_watching));
+    assert_eq!(preferences.widget_span(continue_watching), (3, 2));
+    preferences.set_widget_present(recently_added, false);
+    assert!(preferences.toggle_plex_widget_size(continue_watching));
+    assert_eq!(preferences.widget_span(continue_watching), (6, 2));
+    assert_eq!(visible_posters(&preferences, List::Continue), 12);
+    assert_eq!(visible_posters(&preferences, List::Recent), 6);
+    // The widget popup's Size action saves and keeps the popup on the row.
+    let mut state = State::new(preferences.clone());
+    state.page = Page::Settings;
+    state.overlay = Some(Overlay::WidgetOptions { cell: 14 });
+    state.focus = Target::PlexSize(continue_watching);
+    assert_eq!(state.activate(), [Effect::Save]);
+    assert_eq!(state.preferences.widget_span(continue_watching), (3, 2));
+    assert!(matches!(
+        state.overlay,
+        Some(Overlay::WidgetOptions { cell: 12 })
+    ));
+    // Older saved rows without a size load as half width.
+    let old: Preferences = serde_json::from_str(
+        r#"{"plex": {"continue_watching": {"enabled": true, "position": {"column": 0, "row": 2}}}}"#,
+    )
+    .unwrap();
+    assert_eq!(old.widget_span(continue_watching), (3, 2));
+    assert_eq!(
+        old.widget_position(recently_added),
+        WidgetPosition { column: 3, row: 2 }
+    );
     assert!(preferences.reset_widgets());
-    assert!(!preferences.has_widget(HomeWidget::ContinueWatching));
+    assert!(!preferences.has_widget(continue_watching));
+}
+
+#[test]
+fn a_launch_with_an_item_closes_a_running_app_first_so_the_item_arrives_cold() {
+    use std::{cell::RefCell, time::Duration};
+    // Regression: launching PlxNative again while it ran only raised its window; launch
+    // parameters reach a running app only on webOS 7.4 or newer.
+    for running in [true, false] {
+        let steps = RefCell::new(Vec::new());
+        let result = crate::platform::launch_with_params(
+            || {
+                steps.borrow_mut().push("close".to_owned());
+                running
+            },
+            |pause: Duration| {
+                steps
+                    .borrow_mut()
+                    .push(format!("pause {}", pause.as_millis()))
+            },
+            || {
+                steps.borrow_mut().push("launch".to_owned());
+                Ok(())
+            },
+        );
+        assert!(result.is_ok());
+        let expected: &[&str] = if running {
+            &["close", "pause 600", "launch"]
+        } else {
+            &["close", "launch"]
+        };
+        assert_eq!(*steps.borrow(), expected, "running: {running}");
+    }
+}
+
+#[test]
+fn side_by_side_rows_are_reached_from_their_side_and_joined_by_left_and_right() {
+    let mut state = signed_in(10);
+    state.preferences.plex.recently_added.enabled = true;
+    state.plex.shelves.as_mut().unwrap().recently_added = Some((50..60).map(item).collect());
+    let (left, right) = (HomeWidget::ContinueWatching, HomeWidget::RecentlyAdded);
+    // Up from the first dock apps reaches the left row, from the others the right row.
+    let dock = state.dock_apps();
+    let first_dock = Target::App(dock[0].id.clone());
+    let last_dock = Target::App(dock[dock.len() - 1].id.clone());
+    state.focus = first_dock;
+    state.direction(Direction::Up, &[]);
+    assert_eq!(state.focus, Target::PlexItem(left, 0));
+    state.focus = last_dock;
+    state.direction(Direction::Up, &[]);
+    assert_eq!(state.focus, Target::PlexItem(right, 0));
+    // Left from the right row's first poster enters the left row at its last visible poster.
+    state.direction(Direction::Left, &[]);
+    assert_eq!(state.focus, Target::PlexItem(left, 5));
+    // Right moves on inside the left row to its end, then enters the right row.
+    state.direction(Direction::Right, &[]);
+    assert_eq!(state.focus, Target::PlexItem(left, 6));
+    for _ in 0..3 {
+        state.direction(Direction::Right, &[]);
+    }
+    assert_eq!(state.focus, Target::PlexItem(left, 9));
+    state.direction(Direction::Right, &[]);
+    assert_eq!(state.focus, Target::PlexItem(right, 0));
+    state.direction(Direction::Right, &[]);
+    assert_eq!(state.focus, Target::PlexItem(right, 1));
+    // Up from either row skips its neighbour: Weather's setup action is the row above.
+    state.direction(Direction::Up, &[]);
+    assert_eq!(state.focus, Target::WeatherConfigure);
 }

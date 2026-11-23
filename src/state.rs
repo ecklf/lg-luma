@@ -133,6 +133,8 @@ pub enum Target {
     PlexItem(HomeWidget, usize),
     /// Home's "Sign in" action on a PlxNative row that has no account yet.
     PlexSetup(HomeWidget),
+    /// The widget popup's Size action for a PlxNative row: half or full width.
+    PlexSize(HomeWidget),
     PlexAccount,
     PlexServer,
     PlexAction,
@@ -1766,12 +1768,7 @@ impl State {
                             self.focus(Target::App(id), controls);
                         }
                         Direction::Up => {
-                            if let Some(lane) = self
-                                .home_lanes()
-                                .into_iter()
-                                .rev()
-                                .find(|lane| !matches!(lane, Target::WeatherConfigure))
-                            {
+                            if let Some(lane) = self.lane_above_favorites(index) {
                                 self.focus_lane(lane, controls);
                             } else {
                                 self.focus(
@@ -2885,6 +2882,18 @@ impl State {
                 }
                 return vec![Effect::Save];
             }
+            Target::PlexSize(widget) => {
+                if !self.preferences.toggle_plex_widget_size(widget) {
+                    return vec![];
+                }
+                if matches!(self.overlay, Some(Overlay::WidgetOptions { .. })) {
+                    // Shrinking can drop the popup's cell and widening can move the row.
+                    self.overlay = Some(Overlay::WidgetOptions {
+                        cell: self.preferences.widget_position(widget).cell(),
+                    });
+                }
+                return vec![Effect::Save];
+            }
             Target::WeatherStyle => {
                 self.subpage = Some(Subpage::WeatherStyle);
                 self.focus = Target::Choice(
@@ -3755,6 +3764,14 @@ impl State {
 
     /// Focusable Home widgets from top to bottom, then left to right.
     pub fn home_lanes(&self) -> Vec<Target> {
+        self.placed_lanes()
+            .into_iter()
+            .map(|(_, target)| target)
+            .collect()
+    }
+
+    /// Focusable Home widgets with their grid anchors, top to bottom, then left to right.
+    fn placed_lanes(&self) -> Vec<(WidgetPosition, Target)> {
         let mut lanes = Vec::new();
         if self.preferences.weather_visible() && self.preferences.weather_location.is_none() {
             lanes.push((self.preferences.weather_position, Target::WeatherConfigure));
@@ -3766,7 +3783,27 @@ impl State {
             }
         }
         lanes.sort_by_key(|(position, _)| (position.row, position.column));
-        lanes.into_iter().map(|(_, target)| target).collect()
+        lanes
+    }
+
+    /// The lane Up from favorites reaches: a PlxNative row on the lowest grid row, the left one
+    /// from the first three dock apps and the right one from the rest (as for the top controls).
+    fn lane_above_favorites(&self, dock_index: usize) -> Option<Target> {
+        let lanes: Vec<_> = self
+            .placed_lanes()
+            .into_iter()
+            .filter(|(_, lane)| !matches!(lane, Target::WeatherConfigure))
+            .collect();
+        let bottom = lanes.iter().map(|(position, _)| position.row).max()?;
+        let row = lanes
+            .into_iter()
+            .filter(|(position, _)| position.row == bottom);
+        if dock_index < 3 {
+            row.min_by_key(|(position, _)| position.column)
+        } else {
+            row.max_by_key(|(position, _)| position.column)
+        }
+        .map(|(_, lane)| lane)
     }
 
     fn same_lane(a: &Target, b: &Target) -> bool {
@@ -3791,48 +3828,106 @@ impl State {
         let Some(list) = crate::plex::List::of(widget) else {
             return;
         };
-        self.plex.select(list, index);
+        self.plex.select(
+            list,
+            index,
+            crate::plex::visible_posters(&self.preferences, list),
+        );
         self.focus(
             Target::PlexItem(widget, self.plex.selected[list.index()]),
             controls,
         );
     }
 
-    /// Up and Down move between widgets, the top controls and favorites; Left and Right move
-    /// one poster inside a row and stop at its ends.
+    /// Up and Down move between grid rows of widgets, then to the top controls or favorites,
+    /// choosing the widget nearest by column. Left and Right move one poster inside a row; at a
+    /// row's end they continue into the widget beside it on the same grid row, else stop.
     fn home_lane_direction(&mut self, direction: Direction, controls: &[Control]) {
-        let lanes = self.home_lanes();
-        let index = lanes
+        let lanes = self.placed_lanes();
+        let Some(here) = lanes
             .iter()
-            .position(|lane| Self::same_lane(lane, &self.focus));
+            .find(|(_, lane)| Self::same_lane(lane, &self.focus))
+            .map(|(position, _)| *position)
+        else {
+            match direction {
+                Direction::Up => self.focus(self.first_input_target(), controls),
+                Direction::Down => self.focus(self.first_content(), controls),
+                _ => {}
+            }
+            return;
+        };
+        let nearest = |rows: &mut dyn Iterator<Item = &(WidgetPosition, Target)>| {
+            rows.min_by_key(|(position, _)| position.column.abs_diff(here.column))
+                .map(|(_, lane)| lane.clone())
+        };
         match direction {
             Direction::Left | Direction::Right => {
+                let left = matches!(direction, Direction::Left);
                 if let Target::PlexItem(widget, item) = self.focus
                     && let Some(list) = crate::plex::List::of(widget)
                 {
                     let count = self.plex.items(list).len();
-                    let next = if matches!(direction, Direction::Left) {
-                        item.saturating_sub(1)
+                    let next = if left {
+                        item.checked_sub(1)
                     } else {
-                        (item + 1).min(count.saturating_sub(1))
+                        (item + 1 < count).then_some(item + 1)
                     };
-                    self.focus_plex_item(widget, next, controls);
+                    if let Some(next) = next {
+                        self.focus_plex_item(widget, next, controls);
+                        return;
+                    }
+                }
+                let beside = lanes
+                    .iter()
+                    .filter(|(position, _)| {
+                        position.row == here.row
+                            && if left {
+                                position.column < here.column
+                            } else {
+                                position.column > here.column
+                            }
+                    })
+                    .min_by_key(|(position, _)| position.column.abs_diff(here.column))
+                    .map(|(_, lane)| lane.clone());
+                match beside {
+                    // Entering from the side lands on the visible poster nearest that side.
+                    Some(Target::PlexItem(widget, _)) => {
+                        if let Some(list) = crate::plex::List::of(widget) {
+                            let row = list.index();
+                            let first = self.plex.first[row];
+                            let last = (first
+                                + crate::plex::visible_posters(&self.preferences, list))
+                            .min(self.plex.items(list).len())
+                            .saturating_sub(1);
+                            self.focus_plex_item(widget, if left { last } else { first }, controls);
+                        }
+                    }
+                    Some(lane) => self.focus(lane, controls),
+                    None => {}
                 }
             }
-            Direction::Up => match index {
-                Some(index) if index > 0 => self.focus_lane(lanes[index - 1].clone(), controls),
-                _ => self.focus(self.first_input_target(), controls),
-            },
-            Direction::Down => match index {
-                Some(index) if index + 1 < lanes.len() => {
-                    self.focus_lane(lanes[index + 1].clone(), controls)
+            Direction::Up => {
+                let above = lanes.iter().filter(|(position, _)| position.row < here.row);
+                let top = above.clone().map(|(position, _)| position.row).max();
+                match nearest(&mut above.filter(|(position, _)| Some(position.row) == top)) {
+                    Some(lane) => self.focus_lane(lane, controls),
+                    None => self.focus(self.first_input_target(), controls),
                 }
-                _ if !self.dock_apps().is_empty() => self.focus(self.first_content(), controls),
-                _ => {
-                    self.open(1);
-                    self.focus = self.first_content();
+            }
+            Direction::Down => {
+                let below = lanes.iter().filter(|(position, _)| position.row > here.row);
+                let next = below.clone().map(|(position, _)| position.row).min();
+                match nearest(&mut below.filter(|(position, _)| Some(position.row) == next)) {
+                    Some(lane) => self.focus_lane(lane, controls),
+                    None if !self.dock_apps().is_empty() => {
+                        self.focus(self.first_content(), controls)
+                    }
+                    None => {
+                        self.open(1);
+                        self.focus = self.first_content();
+                    }
                 }
-            },
+            }
         }
     }
 
@@ -3849,7 +3944,11 @@ impl State {
                     _ => remembered,
                 };
                 if let Some(list) = crate::plex::List::of(widget) {
-                    self.plex.select(list, index);
+                    self.plex.select(
+                        list,
+                        index,
+                        crate::plex::visible_posters(&self.preferences, list),
+                    );
                     self.focus = Target::PlexItem(widget, self.plex.selected[list.index()]);
                 }
             }
@@ -3874,7 +3973,11 @@ impl State {
         if self.launching {
             return vec![];
         }
-        self.plex.select(list, index);
+        self.plex.select(
+            list,
+            index,
+            crate::plex::visible_posters(&self.preferences, list),
+        );
         if !self.loading
             && !self
                 .inventory

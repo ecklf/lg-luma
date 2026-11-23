@@ -385,11 +385,25 @@ impl Platform {
                         } else if !valid_app_id(&id) || !params.is_object() {
                             Err("Invalid application launch".into())
                         } else {
-                            call(
-                                "luna://com.webos.applicationManager/launch",
-                                json!({"id": id, "params": params}),
+                            launch_with_params(
+                                // Quiet: an app that is not running cannot be closed.
+                                || {
+                                    raw_call(
+                                        "luna://com.webos.applicationManager/closeByAppId",
+                                        &json!({"id": id}),
+                                    )
+                                    .and_then(checked_response)
+                                    .is_ok()
+                                },
+                                std::thread::sleep,
+                                || {
+                                    call(
+                                        "luna://com.webos.applicationManager/launch",
+                                        json!({"id": id, "params": params}),
+                                    )
+                                    .map(|_| ())
+                                },
                             )
-                            .map(|_| ())
                         };
                         Response::Launched { id, result }
                     }
@@ -572,6 +586,26 @@ pub fn inventory_confirms_removal(apps: &Value, id: &str) -> Result<bool, String
         present |= app_id == id;
     }
     Ok(!present)
+}
+
+/// How long a closed app gets to exit before it is launched again. PlxNative documents 600 ms
+/// as enough on an LG C2.
+pub(crate) const RELAUNCH_PAUSE: std::time::Duration = std::time::Duration::from_millis(600);
+
+/// Launches an app with parameters so that they arrive. Launched again while it runs, an app
+/// receives them as a `relaunch` event, which LG's SDL reads only from webOS 7.4 on (PlxNative's
+/// docs/launch-links.md); earlier, the window is raised and the parameters are lost. Closing the
+/// app first makes every launch a cold start. A close that fails means it was not running, and
+/// the launch goes ahead at once.
+pub(crate) fn launch_with_params(
+    close: impl FnOnce() -> bool,
+    pause: impl FnOnce(std::time::Duration),
+    launch: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    if close() {
+        pause(RELAUNCH_PAUSE);
+    }
+    launch()
 }
 
 fn raw_call(uri: &str, payload: &Value) -> Result<Value, String> {
