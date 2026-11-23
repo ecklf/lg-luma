@@ -133,14 +133,9 @@ Use **Clear name** to return to an unnamed greeting; names are saved only on you
 
 ### Homebrew Channel
 
-Add this custom repository URL to Homebrew Channel:
-
-```text
-https://github.com/ecklf/lg-luma/releases/latest/download/repo.json
-```
-
-Upvote [the official Homebrew Channel repository PR](https://github.com/webosbrew/apps-repo/pull/343)
-to help make Luma available by default.
+Open Homebrew Channel, find **Luma** in the default
+[webOS Homebrew apps repository](https://github.com/webosbrew/apps-repo), and select **Install**.
+No custom repository needs to be added manually.
 
 ### SSH
 
