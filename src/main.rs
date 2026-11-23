@@ -693,9 +693,11 @@ fn run() -> Result<(), String> {
         // SDL suspends the screen saver unless this hint allows it: LG's screen saver never
         // started while Luma was in front. A launcher has no video to protect.
         sdl2::hint::set("SDL_VIDEO_ALLOW_SCREENSAVER", "1");
-        // In place of LG's Home executable, SDL's own registration cannot reach the bus under
-        // LG's Home role; Luma registers with sam itself below (lifecycle v2).
-        if platform::runs_as_lg_home() {
+        // Luma owns lifecycle v2 below, both under its own identity and in place of LG Home.
+        // Disable SDL's competing app-named connection before video initialization. A staged
+        // LG Home keeps its existing SDL/root registration behavior.
+        if platform::direct_lifecycle_id(options.webos_home, platform::runs_as_lg_home()).is_some()
+        {
             sdl2::hint::set("SDL_WEBOS_REGISTER_APP", "0");
         }
     }
@@ -970,16 +972,14 @@ fn run() -> Result<(), String> {
     let mut captured = None;
     let mut last_drawable = None;
     let mut events = sdl.event_pump()?;
-    // Lifecycle as Home: sam sends "relaunch" (bring the running Luma to the front) instead of
+    // App lifecycle: sam sends "relaunch" (bring the running Luma to the front) instead of
     // killing and restarting it, and "close" when it wants Luma to exit. `end_registration`
     // drops a staged Home's registration (webOS 10/11) if a relaunch did not reach the front.
     type EndRegistration = Box<dyn Fn()>;
     #[cfg(not(all(feature = "webos", target_os = "linux", target_arch = "arm")))]
     let (lifecycle_event, end_registration): (Option<u32>, Option<EndRegistration>) = (None, None);
     #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
-    let (lifecycle_event, end_registration): (Option<u32>, Option<EndRegistration>) = if webos
-        && options.webos_home
-    {
+    let (lifecycle_event, end_registration): (Option<u32>, Option<EndRegistration>) = if webos {
         let subsystem = sdl.event()?;
         // SAFETY: registers one SDL user event type before any are pushed.
         let event_type = unsafe { subsystem.register_event()? };
@@ -1001,14 +1001,17 @@ fn run() -> Result<(), String> {
         };
         // SAFETY: geteuid has no preconditions.
         let as_root = unsafe { libc::geteuid() } == 0;
-        if platform::runs_as_lg_home() {
-            // In place of LG's Home executable (webOS 5/6), LG's role is bound to that path,
-            // so Luma registers through lifecycle v2 on its own connection.
+        if let Some(app_id) =
+            platform::direct_lifecycle_id(options.webos_home, platform::runs_as_lg_home())
+        {
+            // Ordinary launches use Luma's installed identity, without root or impersonation.
+            // In place of LG's Home executable (webOS 5/6), its path-bound role instead allows
+            // the LG Home identity. Both manifests use lifecycle v2.
             let push = pusher(subsystem.event_sender());
             luna::subscribe(
-                Some(platform::home_id()),
+                Some(app_id),
                 "luna://com.webos.applicationManager/registerApp",
-                &serde_json::json!({"id": platform::home_id()}),
+                &serde_json::json!({"id": app_id}),
                 // sam answers "registered" at once; without it sam would end Home later.
                 Duration::from_secs(10),
                 move |message| {

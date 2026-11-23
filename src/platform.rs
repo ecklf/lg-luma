@@ -150,7 +150,23 @@ impl ForegroundCheck {
     }
 }
 
-/// What sam asks of a registered Home, from one lifecycle reply. Only TV builds register.
+/// Identity for a direct lifecycle-v2 connection. A staged LG Home keeps its separate
+/// root/app-ID registration path; ordinary launches always use Luma's own identity.
+#[cfg_attr(
+    not(all(feature = "webos", target_os = "linux", target_arch = "arm")),
+    allow(dead_code)
+)]
+pub fn direct_lifecycle_id(as_home: bool, replaces_lg_home: bool) -> Option<&'static str> {
+    if !as_home {
+        Some(APP_ID)
+    } else if replaces_lg_home {
+        Some(home_id())
+    } else {
+        None
+    }
+}
+
+/// What sam asks of a registered app, from one lifecycle reply. Only TV builds register.
 #[cfg_attr(
     not(all(feature = "webos", target_os = "linux", target_arch = "arm")),
     allow(dead_code)

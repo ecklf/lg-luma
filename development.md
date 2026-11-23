@@ -1050,12 +1050,16 @@ The installed `appinfo.json` declares `appCategory: ["home"]`, so
 Luma under `com.ecklf.luma`. Keep the window full-screen (no `defaultWindowType: "overlay"`):
 Home Chooser uses this distinction for its empty-screen policy. Back must not exit the root Home.
 
-`handlesRelaunch: true` and `nativeLifeCycleInterfaceVersion: 2` let the pinned SDL-webOS library
-register the installed app through `registerApp`, raise the existing window on `relaunch`, and
-send SDL Quit on `close`. `noSplashOnLaunch: true` avoids SAM splash surfaces for the native
-launcher. This path uses SDL's existing registration, not Luma's separate LG-identity lifecycle
-subscription. Home Chooser launches retain `APPID=com.ecklf.luma`; do not classify them as
-`options.webos_home`, which is reserved for the legacy takeover paths.
+`handlesRelaunch: true` and `nativeLifeCycleInterfaceVersion: 2` match Luma's explicit
+`registerApp` subscription under `com.ecklf.luma`, held on its own app-named LS2 connection.
+SDL automatic registration is disabled before video initialization to avoid competing connections.
+On `relaunch`, Luma returns to its Home scene, restores/shows/raises the existing window and
+refreshes inventory; on `close` it exits. This needs neither root nor app-ID impersonation.
+`noSplashOnLaunch: true` avoids SAM splash surfaces for the native launcher. Home Chooser
+launches retain `APPID=com.ecklf.luma`; do not classify them as `options.webos_home`, which
+is reserved for the unchanged legacy takeover paths. On a TV, verify that background Home
+presses deliver relaunch events, preserve Luma's PID and actually focus the existing window;
+desktop tests do not establish SAM or compositor behavior.
 
 Only the `home` category is required for selection. The optional
 `org.webosbrew.homechooser.applications` permission is not declared, so Luma can still install
