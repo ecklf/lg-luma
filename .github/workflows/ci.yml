@@ -113,6 +113,9 @@ jobs:
           - suite: Mock market quotes
             script: tests/markets-smoke.mjs
             artifact: markets
+          - suite: Mock PlxNative lists
+            script: tests/plex-smoke.mjs
+            artifact: plex
           - suite: Translations
             script: tests/translations-smoke.mjs
             artifact: translations

@@ -72,6 +72,10 @@ shipping-default claim. Profiles count presentations; ordinary `--frames` is eve
 Weather uses ureq/rustls, fixed Open-Meteo origins, bounded replies/timeouts, no proxy/redirects,
 separate workers/cache and generation IDs. Cache Celsius and convert units without replacing it.
 Only configured/enabled/visible Home starts forecasts. Shared translations are bundled locally.
+PlxNative widgets (`src/plex.rs`) start no workers, file reads or requests until one is on Home.
+plex.tv is a fixed origin; server addresses come only from the account's resource list (IP
+literals or `*.plex.direct`, plain HTTP only to private local addresses). The token stays in its
+own 0600 file and is sent only as a header.
 Match the current native design without on-screen weather credits; attribution remains in docs.
 
 ## Assets

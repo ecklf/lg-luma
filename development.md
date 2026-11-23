@@ -161,6 +161,59 @@ and is rejected on TV. `xvfb-run -a pnpm test:markets` checks both widgets, edit
 currency, persistence, delayed timestamps, failures, bounded replies and redirect refusal.
 CI runs this as its own isolated smoke suite. Tests never call public market feeds.
 
+### PlxNative widgets
+
+`plex` preferences hold `continue_watching` and `recently_added` (`enabled`, `position`) and
+`action` (`play`, the default, or `open`). Both widgets default off and occupy a fixed 6×2
+footprint (1752×280), so with Greeting and Weather on Home only one fits; without them both do.
+The existing add/configure/move/remove workflow and Reset apply. Either widget's Configure opens
+one shared page: Sign in to Plex (or Signed in as … / Sign out), Server and OK opens.
+
+`src/plex.rs` owns everything else. Nothing is read, started or requested until one of the
+widgets is on Home: no `plex` or `plex-posters` worker threads, no account or cache file reads,
+no plex.tv or server requests and no posters. Removing both widgets drops the workers and the
+loaded lists and posters. Scripts, fixed-time captures and frame-limited previews make no
+requests, as for markets.
+
+The sign-in uses a plex.tv/link code (`strong=false` PIN), shown with a QR code for the link
+page, polled every two seconds and renewed before it expires. The account token, a random
+`luma-…` client identifier and the chosen server (machine identifier, connection, the server's
+own token) live in `<preferences>.plex.json` (mode 0600 via `write_atomic`), never in
+preferences, diagnostics or logs; tokens are sent only as `X-Plex-Token` headers. A single server
+is chosen automatically after sign-in; otherwise the server list opens.
+
+plex.tv is a fixed HTTPS origin. Server addresses come only from the account's plex.tv resource
+list and must be IP literals or `*.plex.direct` names, without credentials, path or query. Plain
+HTTP is accepted only for connections plex.tv marks as local and only to private IPv4 addresses;
+for those Luma also tries `http://address:port` first, like the Plex apps. Requests use no proxy
+and no redirects, 3–15 second deadlines, and 1 MiB (lists) or 2 MiB (posters) reply limits.
+Posters come from the server's photo transcoder at 200×300, are decoded with size limits and
+cropped on the poster worker, and uploaded on the SDL thread.
+
+Continue watching uses `/hubs/continueWatching`, falling back to `/library/onDeck` on servers
+without it; Recently added uses `/library/recentlyAdded`. Films and TV only, at most 20 items.
+Lists refresh while Home is visible: saved lists younger than ten minutes are kept, a return from
+another app refetches lists older than a minute, failures wait 2, 10, then 30 minutes, and a
+server that does not answer is looked up once through plex.tv for a new address. HTTP 401 stops
+refreshing until the owner signs in again. The last lists are saved in
+`<preferences>.plex-shelves.json` and shown for up to a week. A poster that fails shows the title
+and is retried after the next successful refresh.
+
+Home navigation: Up from favorites reaches the lowest PlxNative row with items, Down from the top
+controls reaches the topmost focusable widget (Weather's setup action keeps its earlier reach).
+Left/Right move one poster and stop at the row's ends; the row remembers its poster. Back
+returns to favorites instead of opening Recent apps. A signed-out row offers Sign in to Plex,
+like Weather's Set location; loading, failed and empty rows cannot take focus. OK launches
+`com.beb.plxnative` with `{"plex":{"server","ratingKey","action"}}`; shows and seasons always
+open their page. When PlxNative is not installed a notice says so.
+
+`--plex-test-server http://127.0.0.1:PORT` replaces plex.tv with a loopback mock on desktop and
+is rejected on TV. `xvfb-run -a pnpm test:plex` checks the lazy start, both rows, focus, posters,
+a server that does not answer, the full sign-in, token handling, offline previews and redirect
+refusal. Script steps `await-plex` (Home lists and posters) and `await-plex-sign-in` wait for
+the worker. Hardware behavior (TLS to plex.direct on older TVs, warm launches of PlxNative)
+still needs verification on a TV.
+
 `greeting_name` is a locally saved, trimmed, control-free name limited to 40 characters.
 Greeting settings reuse the native/desktop keyboard paths and commit typed replacements on
 Done, Back, keyboard dismissal or a system Home return. An empty edit preserves the old name;

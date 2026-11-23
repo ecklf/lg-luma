@@ -224,6 +224,11 @@ pub enum Request {
     Refresh,
     RefreshInputs,
     Launch(String),
+    /// Launch with parameters, for an item that should open inside the app.
+    LaunchWith {
+        id: String,
+        params: Value,
+    },
     Uninstall(String),
     Recent {
         generation: u64,
@@ -373,6 +378,20 @@ impl Platform {
                             }
                         });
                         Response::Uninstalled { id, result }
+                    }
+                    Request::LaunchWith { id, params } => {
+                        let result = if !webos {
+                            Ok(())
+                        } else if !valid_app_id(&id) || !params.is_object() {
+                            Err("Invalid application launch".into())
+                        } else {
+                            call(
+                                "luna://com.webos.applicationManager/launch",
+                                json!({"id": id, "params": params}),
+                            )
+                            .map(|_| ())
+                        };
+                        Response::Launched { id, result }
                     }
                     Request::Launch(id) => {
                         let result = if webos {

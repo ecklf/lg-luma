@@ -360,6 +360,8 @@ pub enum HomeWidget {
     ExtraWeather(u8),
     ExtraCrypto(u8),
     ExtraStocks(u8),
+    ContinueWatching,
+    RecentlyAdded,
 }
 
 impl HomeWidget {
@@ -372,13 +374,26 @@ impl HomeWidget {
         }
     }
 
-    pub const ALL: [Self; 4] = [Self::Greeting, Self::Weather, Self::Crypto, Self::Stocks];
+    pub const ALL: [Self; 6] = [
+        Self::Greeting,
+        Self::Weather,
+        Self::Crypto,
+        Self::Stocks,
+        Self::ContinueWatching,
+        Self::RecentlyAdded,
+    ];
+
+    /// The PlxNative rows: focusable on Home and filled from the owner's Plex server.
+    pub fn is_plex(self) -> bool {
+        matches!(self, Self::ContinueWatching | Self::RecentlyAdded)
+    }
 
     pub fn span(self) -> (u8, u8) {
         match self.kind() {
             Self::Greeting => (4, 1),
             Self::Weather => (2, 2),
             Self::Crypto | Self::Stocks => (1, 1),
+            Self::ContinueWatching | Self::RecentlyAdded => (6, 2),
             _ => unreachable!(),
         }
     }
@@ -389,6 +404,8 @@ impl HomeWidget {
             Self::Greeting => "greeting",
             Self::Crypto => "crypto",
             Self::Stocks => "stocks",
+            Self::ContinueWatching => "continueWatching",
+            Self::RecentlyAdded => "recentlyAdded",
             _ => unreachable!(),
         }
     }
@@ -400,11 +417,12 @@ impl HomeWidget {
                 Self::Weather => 0,
                 Self::Crypto => 0,
                 Self::Stocks => 1,
+                Self::ContinueWatching | Self::RecentlyAdded => 0,
                 _ => unreachable!(),
             },
             row: match self.kind() {
                 Self::Weather => 1,
-                Self::Crypto | Self::Stocks => 2,
+                Self::Crypto | Self::Stocks | Self::ContinueWatching | Self::RecentlyAdded => 2,
                 _ => 0,
             },
         }
@@ -495,6 +513,9 @@ pub struct Preferences {
     pub crypto: crate::markets::Settings,
     #[serde(deserialize_with = "crate::markets::deserialize_settings")]
     pub stocks: crate::markets::Settings,
+    /// PlxNative widget placement and OK action. The sign-in lives in its own file.
+    #[serde(deserialize_with = "crate::plex::deserialize_settings")]
+    pub plex: crate::plex::Settings,
     pub weather_small: bool,
     pub weather_show_location: bool,
     pub weather_show_icon: bool,
@@ -558,6 +579,7 @@ impl Default for Preferences {
                 position: HomeWidget::Stocks.default_position(),
                 ..Default::default()
             },
+            plex: crate::plex::Settings::default(),
             weather_small: false,
             weather_show_location: true,
             weather_show_icon: true,
@@ -763,6 +785,8 @@ impl Preferences {
             HomeWidget::ExtraWeather(i) => self.extra_weather[usize::from(i)].position,
             HomeWidget::ExtraCrypto(i) => self.extra_crypto[usize::from(i)].position,
             HomeWidget::ExtraStocks(i) => self.extra_stocks[usize::from(i)].position,
+            HomeWidget::ContinueWatching => self.plex.continue_watching.position,
+            HomeWidget::RecentlyAdded => self.plex.recently_added.position,
         }
     }
 
@@ -784,6 +808,8 @@ impl Preferences {
                 .extra_stocks
                 .get(usize::from(i))
                 .is_some_and(|s| s.enabled),
+            HomeWidget::ContinueWatching => self.plex.continue_watching.enabled,
+            HomeWidget::RecentlyAdded => self.plex.recently_added.enabled,
         }
     }
 
@@ -813,6 +839,8 @@ impl Preferences {
             HomeWidget::ExtraWeather(i) => self.extra_weather[usize::from(i)].enabled = present,
             HomeWidget::ExtraCrypto(i) => self.extra_crypto[usize::from(i)].enabled = present,
             HomeWidget::ExtraStocks(i) => self.extra_stocks[usize::from(i)].enabled = present,
+            HomeWidget::ContinueWatching => self.plex.continue_watching.enabled = present,
+            HomeWidget::RecentlyAdded => self.plex.recently_added.enabled = present,
         }
     }
 
@@ -860,6 +888,8 @@ impl Preferences {
             HomeWidget::ExtraWeather(i) => self.extra_weather[usize::from(i)].position = position,
             HomeWidget::ExtraCrypto(i) => self.extra_crypto[usize::from(i)].position = position,
             HomeWidget::ExtraStocks(i) => self.extra_stocks[usize::from(i)].position = position,
+            HomeWidget::ContinueWatching => self.plex.continue_watching.position = position,
+            HomeWidget::RecentlyAdded => self.plex.recently_added.position = position,
         }
     }
 
