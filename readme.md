@@ -38,13 +38,6 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 - Midnight background and custom uploads, with optional rotation.
 - Webhook shortcuts and 16 interface languages.
 
-Inputs also lists USB storage reported by webOS. Selecting a storage device opens an installed
-LG media browser, where you choose the device; it does not switch an HDMI source. USB discovery
-and media opening still need hardware verification across TV firmware versions.
-
-Personalize your greeting in **Settings → Widgets → Greeting → Configure → Name**.
-Use **Clear name** to return to an unnamed greeting; names are saved only on your TV.
-
 ## Compatibility
 
 > [!NOTE]
