@@ -1,5 +1,13 @@
 # lg-luma
 
+## 3.13.1
+
+### Patch Changes
+
+- ea94e4d: Switch to Settings → Apps faster on webOS TVs: draws entirely outside the current clip (rows scrolled out of a list) are no longer submitted, and the app cards there are grouped like the drawer's.
+- d0149ba: Handle the native foreground Home key in ordinary Luma launches as well as legacy Home takeover. Home returns directly from Apps, Settings or an overlay to Luma's Home tab, and stays there at the root, without requiring the Home Chooser launcher API.
+- 5866c28: Open the app options menu and Settings subpages without a first-frame stutter on webOS TVs: their labels are prepared while the launcher is idle. When a shadow finishes its idle preparation, only that shadow is redrawn instead of every shadow on screen, and drawer logos load before those of the Settings sections.
+
 ## 3.13.0
 
 ### Minor Changes
