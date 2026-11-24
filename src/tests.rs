@@ -194,6 +194,28 @@ fn home_focus_recovery_selects_the_first_favorite_and_ignores_stationary_pointer
 }
 
 #[test]
+fn restored_pointer_position_does_not_steal_home_focus_even_with_a_relative_delta() {
+    let mut state = ready();
+    let mut motion = crate::PointerMotion::default();
+    let favorite = Target::App("netflix".into());
+    for (x, y) in [(1800, 100), (1600, 120), (1700, 90)] {
+        state.pointer_focus(Target::InputsMenu);
+        motion.reset();
+        state.return_home();
+        assert_eq!(state.focus, favorite);
+        assert!(!motion.accept(&state, x, y, x, y));
+        assert!(!motion.accept(&state, x, y, 5, -3));
+        assert!(!motion.accept(&state, x, y, 0, 0));
+        assert_eq!(state.focus, favorite);
+        // Real movement after the position baseline still enables pointer use.
+        assert!(motion.accept(&state, x + 1, y, 1, 0));
+        state.pointer_focus(Target::InputsMenu);
+        assert!(state.pointer);
+        assert!(motion.accept(&state, x + 2, y, 1, 0));
+    }
+}
+
+#[test]
 fn general_settings_follow_the_visible_order_for_remote_navigation() {
     let mut state = ready();
     state.open(2);

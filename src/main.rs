@@ -500,6 +500,25 @@ fn pointer_motion_active(state: &State, xrel: i32, yrel: i32) -> bool {
     state.pointer || xrel != 0 || yrel != 0
 }
 
+#[derive(Default)]
+struct PointerMotion {
+    position: Option<(i32, i32)>,
+}
+
+impl PointerMotion {
+    fn reset(&mut self) {
+        self.position = None;
+    }
+
+    fn accept(&mut self, state: &State, x: i32, y: i32, xrel: i32, yrel: i32) -> bool {
+        let previous = self.position.replace((x, y));
+        // webOS may report the restored cursor position with a nonzero delta.
+        // Establish a fresh baseline before allowing hover to replace remote focus.
+        previous.is_some_and(|position| position != (x, y))
+            && pointer_motion_active(state, xrel, yrel)
+    }
+}
+
 fn animation_wait(vsync: bool, elapsed: Duration) -> u32 {
     if vsync {
         0
@@ -1116,6 +1135,7 @@ fn run() -> Result<(), String> {
     // Whether a staged Home's relaunch reached the front; see platform::ForegroundCheck.
     let mut foreground = platform::ForegroundCheck::default();
     let mut focused = !start_hidden;
+    let mut pointer_motion = PointerMotion::default();
     let mut press: Option<Press> = None;
     let mut back_button = BackButton::default();
     let mut last_minute = None;
@@ -1548,11 +1568,6 @@ fn run() -> Result<(), String> {
             if script_owns_input && external_input {
                 continue;
             }
-            // Remote keys only reach the focused surface.
-            if !controller_input && matches!(event, Event::KeyDown { .. } | Event::KeyUp { .. }) {
-                focused = true;
-                foreground.confirmed();
-            }
             // As Home, these go to /tmp/luma-home.log and show whether a relaunch reached the
             // compositor.
             if options.webos_home
@@ -1570,6 +1585,16 @@ fn run() -> Result<(), String> {
                 eprintln!("Luma window: {win_event:?}");
             }
             let mut pending = vec![];
+            // A key can precede FocusGained. Restore Home before marking the
+            // surface focused, otherwise the later window event skips recovery.
+            if !controller_input && matches!(event, Event::KeyDown { .. } | Event::KeyUp { .. }) {
+                if home_on_focus(&state, webos, focused) {
+                    pending.extend(state.return_home());
+                    pointer_motion.reset();
+                }
+                focused = true;
+                foreground.confirmed();
+            }
             let before_input = Route::capture(&state);
             let mut cue = None;
             match event {
@@ -1579,6 +1604,7 @@ fn run() -> Result<(), String> {
                         press = None;
                         back_button.cancel();
                         pending = state.return_home();
+                        pointer_motion.reset();
                         // A staged Home must come forward itself. If it does not, its
                         // registration would leave the Home key dead: check below.
                         if end_registration.is_some() {
@@ -1613,6 +1639,7 @@ fn run() -> Result<(), String> {
                         tile_editor_service.set_active(false, &[]);
                         visible = false;
                         focused = false;
+                        pointer_motion.reset();
                         press = None;
                         back_button.cancel();
                         if matches!(state.overlay, Some(Overlay::SystemKeyboard)) {
@@ -1625,6 +1652,7 @@ fn run() -> Result<(), String> {
                         state.dirty = true;
                     }
                     WindowEvent::FocusLost => {
+                        pointer_motion.reset();
                         if webos {
                             if matches!(
                                 state.overlay,
@@ -1647,6 +1675,7 @@ fn run() -> Result<(), String> {
                                 // Some firmware only restores the SDL surface on Home,
                                 // without delivering a lifecycle relaunch or Home key.
                                 pending.extend(state.return_home());
+                                pointer_motion.reset();
                             }
                             focused = true;
                             foreground.confirmed();
@@ -1688,6 +1717,7 @@ fn run() -> Result<(), String> {
                                 press = None;
                                 back_button.cancel();
                                 pending = state.return_home();
+                                pointer_motion.reset();
                             }
                         }
                         _ if native_hold => {
@@ -1785,6 +1815,10 @@ fn run() -> Result<(), String> {
                 Event::MouseMotion {
                     x, y, xrel, yrel, ..
                 } if state.moving.is_none()
+                    && (!webos
+                        || (focused
+                            && visible
+                            && pointer_motion.accept(&state, x, y, xrel, yrel)))
                     && pointer_motion_active(&state, xrel, yrel)
                     && !matches!(state.overlay, Some(Overlay::SystemKeyboard)) =>
                 {

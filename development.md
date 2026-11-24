@@ -120,7 +120,10 @@ Attributions action uses a copyright icon without a trailing chevron.
 
 Home returns select the first favorite, including TV focus restoration from Home or the drawer
 without a lifecycle relaunch. Focus-only restoration preserves settings and overlays. Stationary
-SDL mouse-motion notifications do not replace remote focus. Verify
+SDL mouse-motion notifications do not replace remote focus. On webOS, the first pointer-position
+report after startup or a Home return establishes a baseline, even if SDL supplies a nonzero
+relative delta; only subsequent position changes can replace remote focus. Remote keys arriving
+before the window-focus event also trigger Home recovery. Verify
 returning from an app and an HDMI input, and dismissing the system keyboard, on a TV.
 
 General → App drawer → App names is off by default, preserving the compact, unlabeled drawer.
