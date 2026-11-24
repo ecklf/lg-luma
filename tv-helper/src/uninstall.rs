@@ -21,6 +21,7 @@ pub fn allowed(id: &str) -> bool {
             "com.luma.launcher.native",
             "org.webosbrew.hbchannel",
             "org.webosbrew.hbchannel.service",
+            "org.webosbrew.homechooser",
         ]
         .contains(&id)
 }
