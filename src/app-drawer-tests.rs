@@ -395,14 +395,29 @@ fn general_groups_drawer_settings_in_a_submenu() {
         .collect();
     assert_eq!(
         settings.iter().map(|(index, _)| *index).collect::<Vec<_>>(),
-        [1, 4, 13, 2, 11, 12]
+        [1, 4, 11, 13, 12, 2]
     );
     assert!((settings[3].1 - settings[2].1 - 84.).abs() < 0.001);
     state.focus = Target::Setting(13);
     state.direction(Direction::Down, &controls(&state));
-    assert_eq!(state.focus, Target::Setting(2));
+    assert_eq!(state.focus, Target::Setting(12));
     state.direction(Direction::Up, &controls(&state));
     assert_eq!(state.focus, Target::Setting(13));
+}
+
+#[test]
+fn drawer_settings_use_distinct_layout_and_name_icons() {
+    let mut state = ready();
+    state.open(2);
+    state.focus = Target::Setting(13);
+    state.activate();
+    let rendered = scene(&state);
+    for name in ["panels-top-left", "text-cursor-input"] {
+        assert!(rendered.draw.iter().any(|draw| matches!(draw,
+            Draw::TintedImage(path, ..) if path.ends_with(&format!("/{name}.lvec")))));
+    }
+    assert!(rendered.draw.iter().any(|draw| matches!(draw,
+        Draw::Text(label, ..) if label == "App names")));
 }
 
 #[test]
@@ -424,7 +439,7 @@ fn app_drawer_picker_saves_only_on_selection_and_restores_its_parent() {
             state.pointer_focus(Target::Setting(13));
         } else {
             state.direction(Direction::Right, &controls(&state));
-            for _ in 0..2 {
+            for _ in 0..3 {
                 state.direction(Direction::Down, &controls(&state));
             }
         }

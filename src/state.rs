@@ -590,6 +590,7 @@ impl State {
         self.recents.closing_focus = None;
         self.wallpaper_upload = None;
         self.pointer = false;
+        self.hover = None;
         self.pressed = None;
         self.open(0);
         // A system relaunch reveals Home directly, not the previous app's drawer

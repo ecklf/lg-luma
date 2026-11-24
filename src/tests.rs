@@ -126,7 +126,7 @@ fn ui_sounds_default_off_and_toggle_without_moving_controls() {
         let mut state = ready();
         state.open(2);
         state.direction(Direction::Right, &controls(&state));
-        for _ in 0..4 {
+        for _ in 0..2 {
             state.direction(Direction::Down, &controls(&state));
         }
         assert_eq!(state.focus, Target::Setting(11));
@@ -162,6 +162,46 @@ fn ui_sounds_default_off_and_toggle_without_moving_controls() {
 fn manage_apps(state: &mut State) {
     state.open(2);
     state.section = crate::state::APPS_SECTION;
+}
+
+#[test]
+fn home_focus_recovery_selects_the_first_favorite_and_ignores_stationary_pointer_events() {
+    let mut state = ready();
+    state.preferences.favorites = Some(vec!["youtube.leanback.v4".into(), "netflix".into()]);
+    state.open(2);
+    assert!(!crate::home_on_focus(&state, true, false));
+    state.open(1);
+    assert!(crate::home_on_focus(&state, true, false));
+    assert!(!crate::home_on_focus(&state, false, false));
+    assert!(!crate::home_on_focus(&state, true, true));
+    state.loading = true;
+    assert!(!crate::home_on_focus(&state, true, false));
+    state.loading = false;
+    state.overlay = Some(Overlay::SystemKeyboard);
+    assert!(!crate::home_on_focus(&state, true, false));
+    state.overlay = None;
+    state.hover = Some(Target::InputsMenu);
+    state.return_home();
+    assert_eq!(state.focus, Target::App("youtube.leanback.v4".into()));
+    assert!(state.hover.is_none());
+    assert!(!crate::pointer_motion_active(&state, 0, 0));
+    assert!(crate::pointer_motion_active(&state, 1, 0));
+    assert!(crate::pointer_motion_active(&state, 0, -1));
+    state.pointer = true;
+    assert!(crate::pointer_motion_active(&state, 0, 0));
+    state.set_inventory(demo_inventory(), None);
+    assert_eq!(state.focus, Target::App("youtube.leanback.v4".into()));
+}
+
+#[test]
+fn general_settings_follow_the_visible_order_for_remote_navigation() {
+    let mut state = ready();
+    state.open(2);
+    state.direction(Direction::Right, &controls(&state));
+    for index in [1, 4, 11, 13, 12, 2] {
+        assert_eq!(state.focus, Target::Setting(index));
+        state.direction(Direction::Down, &controls(&state));
+    }
 }
 
 #[test]

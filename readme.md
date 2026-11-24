@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 
 ## Features
 
-- Customizable app drawer with optional names beneath selected non-favorite apps (off by default), input icons and recent app switching.
+- Customizable app drawer with optional names beneath selected non-favorite apps (General → App drawer → App names, off by default), input icons and recent app switching.
 - Left/right navigation wraps between the first and last app in favorites and the app drawer.
 - Movable greeting, weather, stock and crypto widgets.
 - Choose Kuankuan (default), Breezy, Lucide or Kickstand weather artwork, toggle icons on/off, and optionally hide the location name. Layout previews follow these settings.

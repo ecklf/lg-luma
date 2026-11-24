@@ -235,6 +235,32 @@ fn polling_only_runs_on_visible_focused_tv_input_screens_outside_interactions() 
 }
 
 #[test]
+fn transient_interactions_do_not_restart_the_polling_deadline() {
+    let now = Instant::now();
+    let mut refresh = Refresh::default();
+    assert!(!refresh.due(now, true));
+    assert!(!refresh.due(now + Duration::from_secs(1), false));
+    assert!(refresh.due(now + Duration::from_secs(2), true));
+}
+
+#[test]
+fn input_notifications_coalesce_and_wait_for_interactions_and_in_flight_reads() {
+    let now = Instant::now();
+    let mut refresh = Refresh::default();
+    for _ in 0..10 {
+        refresh.invalidate(now);
+    }
+    assert!(!refresh.due(now, false));
+    assert!(refresh.due(now, true));
+    refresh.invalidate(now);
+    assert!(!refresh.due(now, true));
+    refresh.completed(now, Ok(vec![])).unwrap();
+    assert!(!refresh.due(now, true));
+    refresh.invalidate(now);
+    assert!(refresh.due(now, true));
+}
+
+#[test]
 fn slow_reads_are_bounded_and_errors_preserve_the_last_valid_snapshot() {
     let now = Instant::now();
     let mut refresh = Refresh::default();
@@ -309,14 +335,14 @@ fn a_disconnect_snapshot_cannot_move_the_pressed_card_before_release() {
 }
 
 #[test]
-fn hidden_screens_cancel_scheduled_reads_without_duplicating_in_flight_requests() {
+fn hidden_screens_pause_reads_without_losing_the_deadline_or_duplicating_requests() {
     let now = Instant::now();
     let mut refresh = Refresh::default();
     assert!(!refresh.due(now, false));
     assert!(!refresh.due(now + Duration::from_secs(10), true));
     assert!(!refresh.due(now + Duration::from_secs(11), false));
-    assert!(!refresh.due(now + Duration::from_secs(20), true));
-    assert!(refresh.due(now + Duration::from_secs(22), true));
+    assert!(refresh.due(now + Duration::from_secs(20), true));
+    assert!(!refresh.due(now + Duration::from_secs(22), true));
     assert!(!refresh.due(now + Duration::from_secs(30), false));
     assert!(!refresh.due(now + Duration::from_secs(40), true));
     refresh
