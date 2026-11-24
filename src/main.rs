@@ -503,19 +503,40 @@ fn pointer_motion_active(state: &State, xrel: i32, yrel: i32) -> bool {
 #[derive(Default)]
 struct PointerMotion {
     position: Option<(i32, i32)>,
+    suppress_until: Option<Instant>,
 }
 
 impl PointerMotion {
     fn reset(&mut self) {
+        self.reset_at(Instant::now());
+    }
+
+    fn reset_at(&mut self, now: Instant) {
         self.position = None;
+        self.suppress_until = Some(now + Duration::from_millis(750));
     }
 
     fn accept(&mut self, state: &State, x: i32, y: i32, xrel: i32, yrel: i32) -> bool {
-        let previous = self.position.replace((x, y));
+        self.accept_at(state, (x, y), (xrel, yrel), Instant::now())
+    }
+
+    fn accept_at(
+        &mut self,
+        state: &State,
+        position: (i32, i32),
+        relative: (i32, i32),
+        now: Instant,
+    ) -> bool {
+        let previous = self.position.replace(position);
+        // An active Magic Pointer can keep moving across the foreground handoff.
+        // Track its position during the grace period without stealing Home focus.
+        if self.suppress_until.is_some_and(|until| now < until) {
+            return false;
+        }
         // webOS may report the restored cursor position with a nonzero delta.
         // Establish a fresh baseline before allowing hover to replace remote focus.
-        previous.is_some_and(|position| position != (x, y))
-            && pointer_motion_active(state, xrel, yrel)
+        previous.is_some_and(|previous| previous != position)
+            && pointer_motion_active(state, relative.0, relative.1)
     }
 }
 
@@ -1136,6 +1157,7 @@ fn run() -> Result<(), String> {
     let mut foreground = platform::ForegroundCheck::default();
     let mut focused = !start_hidden;
     let mut pointer_motion = PointerMotion::default();
+    pointer_motion.reset();
     let mut press: Option<Press> = None;
     let mut back_button = BackButton::default();
     let mut last_minute = None;
