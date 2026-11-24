@@ -1,5 +1,13 @@
 # lg-luma
 
+## 3.13.2
+
+### Patch Changes
+
+- b3f7115: Handle native app lifecycle registration explicitly for ordinary and Home Chooser launches, returning to the Home scene on relaunch while preserving legacy LG Home takeover paths.
+- b7aec89: Prevent uninstalling Home Chooser through Luma or its privileged helper.
+- 9f7da39: Fix the native startup black screen caused by duplicate lifecycle bus-name registration by sharing SDL/libhelpers' existing app connection.
+
 ## 3.13.1
 
 ### Patch Changes
