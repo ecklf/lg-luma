@@ -13,6 +13,8 @@ mod feedback;
 mod font;
 mod gamepad;
 mod glass_backdrop;
+#[cfg(any(test, all(feature = "webos", target_os = "linux", target_arch = "arm")))]
+mod helper_lifecycle;
 mod i18n;
 #[path = "input-refresh.rs"]
 mod input_refresh;
@@ -1001,12 +1003,30 @@ fn run() -> Result<(), String> {
         };
         // SAFETY: geteuid has no preconditions.
         let as_root = unsafe { libc::geteuid() } == 0;
-        if let Some(app_id) =
+        if !options.webos_home {
+            // SDL/libhelpers already owns APP_ID on LS2, even with SDL automatic lifecycle
+            // registration disabled. Share that connection rather than LSRegister it again.
+            let push = pusher(subsystem.event_sender());
+            match helper_lifecycle::subscribe(move |message| {
+                eprintln!("Luma lifecycle (shared libhelpers): {message}");
+                if let Some(lifecycle) = platform::Lifecycle::from_reply(&message) {
+                    push(lifecycle);
+                }
+            }) {
+                Ok(()) => {
+                    eprintln!("Luma lifecycle: registerApp submitted on SDL/libhelpers connection");
+                    (Some(event_type), None)
+                }
+                Err(error) => {
+                    eprintln!("Luma lifecycle: {error}; continuing without registration");
+                    (None, None)
+                }
+            }
+        } else if let Some(app_id) =
             platform::direct_lifecycle_id(options.webos_home, platform::runs_as_lg_home())
         {
-            // Ordinary launches use Luma's installed identity, without root or impersonation.
-            // In place of LG's Home executable (webOS 5/6), its path-bound role instead allows
-            // the LG Home identity. Both manifests use lifecycle v2.
+            // In place of LG's Home executable (webOS 5/6), its path-bound role allows
+            // the LG Home identity on Luma's own lifecycle-v2 connection.
             let push = pusher(subsystem.event_sender());
             luna::subscribe(
                 Some(app_id),
