@@ -150,13 +150,8 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 
 ### Home Chooser (recommended)
 
-Luma requests foreground Home-key handling on native webOS, including ordinary tile launches:
-Home returns directly to Luma's Home tab and stays there at the root. This does not require the
-Home Chooser launcher API or add an installation permission. Actual key delivery and routing
-while another app is foreground still need TV verification.
-
-[Home Chooser](https://github.com/webosbrew/home-chooser/) is the recommended way to select Luma
-as the full-screen Home app without Luma's takeover scripts or an Input Hook mapping:
+[Home Chooser](https://github.com/webosbrew/home-chooser/) is the recommended way to override
+your default Home application.
 
 > [!IMPORTANT]
 > Disable any previous takeover, autostart or Home-key mapping **before selecting Luma in
