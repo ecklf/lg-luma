@@ -3053,7 +3053,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                         (
                             15,
                             "style",
-                            "grid",
+                            "panels-top-left",
                             language.t(state.preferences.app_drawer_style.label_key()),
                             true,
                         ),
@@ -3067,7 +3067,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                         (
                             14,
                             "showAppNames",
-                            "grid",
+                            "text-cursor-input",
                             language.t(if state.preferences.show_drawer_app_names {
                                 "stateOn"
                             } else {
@@ -3303,18 +3303,6 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             for (position, (index, key, icon, value, chevron)) in [
                 (1, "clock", "clock", None, true),
                 (4, "language", "language", Some(language.name()), true),
-                (13, "appDrawer", "grid", None, true),
-                (
-                    2,
-                    "reducedMotion",
-                    "motion",
-                    Some(if state.preferences.reduced_motion {
-                        language.t("stateOn")
-                    } else {
-                        language.t("stateOff")
-                    }),
-                    false,
-                ),
                 (
                     11,
                     "uiSounds",
@@ -3326,12 +3314,24 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     })),
                     false,
                 ),
+                (13, "appDrawer", "grid", None, true),
                 (
                     12,
                     "recentApps",
                     "clock",
                     Some(language.t(state.preferences.recent_apps_behavior.label_key())),
                     true,
+                ),
+                (
+                    2,
+                    "reducedMotion",
+                    "motion",
+                    Some(if state.preferences.reduced_motion {
+                        language.t("stateOn")
+                    } else {
+                        language.t("stateOff")
+                    }),
+                    false,
                 ),
             ]
             .into_iter()
@@ -3611,7 +3611,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 ),
                 (9, language.t("resetIconCache"), "refresh", None, false),
                 (5, language.t("quitApp"), "power", None, false),
-                (16, language.t("attributions"), "type", None, true),
+                (16, language.t("attributions"), "copyright", None, false),
             ]
             .into_iter()
             .enumerate()

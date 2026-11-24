@@ -487,6 +487,19 @@ fn input_refresh_active(state: &State, webos: bool, focused: bool, visible: bool
         && state.recents.visibility == 0.
 }
 
+fn home_on_focus(state: &State, webos: bool, was_focused: bool) -> bool {
+    webos
+        && !was_focused
+        && !state.loading
+        && state.page != state::Page::Settings
+        && state.overlay.is_none()
+        && state.moving.is_none()
+}
+
+fn pointer_motion_active(state: &State, xrel: i32, yrel: i32) -> bool {
+    state.pointer || xrel != 0 || yrel != 0
+}
+
 fn animation_wait(vsync: bool, elapsed: Duration) -> u32 {
     if vsync {
         0
@@ -1630,6 +1643,11 @@ fn run() -> Result<(), String> {
                         visible = true;
                         // Shown and Restored can come from SDL itself; only focus confirms.
                         if matches!(win_event, WindowEvent::FocusGained) {
+                            if home_on_focus(&state, webos, focused) {
+                                // Some firmware only restores the SDL surface on Home,
+                                // without delivering a lifecycle relaunch or Home key.
+                                pending.extend(state.return_home());
+                            }
                             focused = true;
                             foreground.confirmed();
                         }
@@ -1764,9 +1782,11 @@ fn run() -> Result<(), String> {
                         cue = Some(Cue::Select);
                     }
                 }
-                Event::MouseMotion { x, y, .. }
-                    if state.moving.is_none()
-                        && !matches!(state.overlay, Some(Overlay::SystemKeyboard)) =>
+                Event::MouseMotion {
+                    x, y, xrel, yrel, ..
+                } if state.moving.is_none()
+                    && pointer_motion_active(&state, xrel, yrel)
+                    && !matches!(state.overlay, Some(Overlay::SystemKeyboard)) =>
                 {
                     let hovered = hit(&scene.controls, &window, x, y, &state);
                     if let Some(target) = hovered.clone() {
@@ -1995,6 +2015,9 @@ fn run() -> Result<(), String> {
         // stable until release, even if an input reply arrived in the same event-loop turn.
         let inputs_active =
             input_refresh_active(&state, webos, focused, visible) && press.is_none();
+        if platform.take_input_changed() {
+            input_refresh.invalidate(Instant::now());
+        }
         if let Some(inputs) = input_refresh.take_pending(inputs_active) {
             state.set_inputs(inputs);
         }

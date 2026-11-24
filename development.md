@@ -114,7 +114,16 @@ opened automatically. Input is ignored while Luma is unfocused or hidden; discon
 cancels pending holds. USB/Bluetooth availability depends on the TV firmware and SDL
 backend; verify both on hardware before claiming support for a specific TV.
 
-General → Show app names is off by default, preserving the compact, unlabeled drawer.
+General orders Clock, Language, UI sounds, App drawer, Recent apps and Reduced motion.
+App drawer uses distinct layout and text-field icons for Style and App names. System's
+Attributions action uses a copyright icon without a trailing chevron.
+
+Home returns select the first favorite, including TV focus restoration from Home or the drawer
+without a lifecycle relaunch. Focus-only restoration preserves settings and overlays. Stationary
+SDL mouse-motion notifications do not replace remote focus. Verify
+returning from an app and an HDMI input, and dismissing the system keyboard, on a TV.
+
+General → App drawer → App names is off by default, preserving the compact, unlabeled drawer.
 When enabled, the app drawer shows a centered, single-line name beneath the focused grid card
 in both styles, with wider row spacing and scroll padding for the name. Long names are ellipsized
 to the card width. Favorites, Home previews and app-management cards stay unlabeled; labels do not
@@ -502,6 +511,12 @@ preferences are not reloaded. At most one input read is queued, errors retain th
 and retry after ten seconds, and an unchanged snapshot does not redraw. Holds, reordering, other overlays,
 loading and hidden/unfocused pages pause polling and defer pending snapshots, keeping pointer
 targets stationary through release. A later complete inventory supersedes deferred input data.
+Pauses preserve the deadline, so repeated short interactions cannot postpone refresh forever.
+A native EIM `getAllInputStatus` subscription coalesces change notifications into an immediate
+worker refresh. Subscription refusal leaves polling available. The subscription does not query
+CEC power or switch inputs. Firmware may still return cached `hdmiSignalExist` values. Verify
+PS5 wake/rest transitions while remaining on Home, plus unplug/replug and keyboard dismissal,
+on hardware before treating signal freshness or focus restoration as confirmed.
 Auto visibility remains cable-based: boolean `hdmiPlugIn` takes priority over `connected`, with
 the existing fallback when unavailable or malformed. Optional boolean `hdmiSignalExist` changes
 only the detail to **No signal** when a cable is present. A stale positive signal cannot override
