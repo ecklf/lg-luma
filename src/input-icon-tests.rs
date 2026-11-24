@@ -16,6 +16,7 @@ fn usb_storage_has_native_controls_icons_and_launches_without_counting_app_usage
         port: "USB".into(),
         connected: Some(true),
         signal: None,
+        params: serde_json::json!({}),
     };
     let id = input.id.clone();
     state.set_inputs(vec![input]);

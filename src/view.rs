@@ -3645,6 +3645,32 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     },
                 );
             }
+            if let Some(status) = &state.home_chooser {
+                row(
+                    out,
+                    state,
+                    assets,
+                    Row {
+                        target: Target::HomeChooser,
+                        rect: Rect::new(640., 892.8 - s, 1120., 96.),
+                        title: "Home Chooser",
+                        icon: Some("grid"),
+                        value: Some(language.t(if state.home_chooser_busy {
+                            "opening"
+                        } else if matches!(
+                            status,
+                            crate::home_chooser::Status::Ready { selected: false }
+                        ) {
+                            "homeChooserUse"
+                        } else {
+                            "open"
+                        })),
+                        description: Some(language.t(status.message_key())),
+                        selected: false,
+                        chevron: true,
+                    },
+                );
+            }
         }
         _ => {}
     }
@@ -5166,6 +5192,7 @@ mod tests {
             port: "HDMI 4".into(),
             connected: None,
             signal: None,
+            params: serde_json::json!({}),
         });
         state.set_inventory(inventory, None);
         state

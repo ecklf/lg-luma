@@ -76,6 +76,93 @@ fn reset_icon_cache_removes_only_owned_cache_files() {
 }
 
 #[test]
+fn worker_batches_queued_apps_and_matches_each_reply_to_its_source() {
+    let (entered, started) = mpsc::sync_channel(1);
+    let (release, resume) = mpsc::sync_channel(1);
+    let batches = Arc::new(Mutex::new(Vec::new()));
+    let seen = batches.clone();
+    let bytes = encoded(ImageFormat::Png, 2, 2, [230, 30, 60, 255]);
+    let service = Service::with_batch_worker(
+        true,
+        REQUEST_SLOTS,
+        move |sources| {
+            let first = {
+                let mut seen = seen.lock().unwrap();
+                let first = seen.is_empty();
+                seen.push(
+                    sources
+                        .iter()
+                        .map(|source| source.id.clone())
+                        .collect::<Vec<_>>(),
+                );
+                first
+            };
+            if first {
+                entered.send(()).unwrap();
+                resume.recv_timeout(Duration::from_secs(3)).unwrap();
+            }
+            sources.iter().map(|_| decode(&bytes)).collect()
+        },
+        || {},
+    );
+    let first = Source::new("org.example.first", &json!({}));
+    assert!(service.get(&first).is_none());
+    started.recv_timeout(Duration::from_secs(3)).unwrap();
+    let sources: Vec<_> = (0..8)
+        .map(|n| Source::new(&format!("org.example.app{n}"), &json!({})))
+        .collect();
+    for source in &sources {
+        assert!(service.get(source).is_none());
+    }
+    release.send(()).unwrap();
+    poll_until(&service, || {
+        sources.iter().all(|source| service.get(source).is_some())
+    });
+    assert_eq!(
+        batches
+            .lock()
+            .unwrap()
+            .iter()
+            .map(Vec::len)
+            .collect::<Vec<_>>(),
+        [1, 8]
+    );
+    let mut keys: Vec<_> = sources
+        .iter()
+        .map(|source| service.get(source).unwrap().key.clone())
+        .collect();
+    keys.sort();
+    keys.dedup();
+    assert_eq!(keys.len(), 8);
+}
+
+#[test]
+fn replacing_inventory_drops_removed_and_changed_icon_keys() {
+    let bytes = encoded(ImageFormat::Png, 2, 2, [30, 40, 50, 255]);
+    let service = Service::with_loader(true, move |_| decode(&bytes));
+    let old = Source::new("org.example.changed", &json!({"version": "1"}));
+    let removed = Source::new("org.example.removed", &json!({"version": "1"}));
+    let kept = Source::new("org.example.kept", &json!({"version": "1"}));
+    for source in [&old, &removed, &kept] {
+        service.get(source);
+    }
+    poll_until(&service, || {
+        service
+            .cache
+            .borrow()
+            .entries
+            .values()
+            .all(|entry| entry.image.is_some())
+    });
+    let updated = Source::new("org.example.changed", &json!({"version": "2"}));
+    service.retain_sources([kept.clone(), updated]);
+    let cache = service.cache.borrow();
+    assert!(cache.entries.contains_key(&kept));
+    assert!(!cache.entries.contains_key(&old));
+    assert!(!cache.entries.contains_key(&removed));
+}
+
+#[test]
 fn reset_icon_cache_runs_after_in_flight_load_and_before_new_loads() {
     let (started, started_rx) = mpsc::channel();
     let (release, release_rx) = mpsc::channel();

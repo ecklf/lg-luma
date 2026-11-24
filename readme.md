@@ -124,6 +124,13 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 
 ## Installation
 
+> [!IMPORTANT]
+> This API-enabled release requires [Home Chooser](https://github.com/webosbrew/home-chooser/)
+> to be installed and opened once before installing or updating Luma. Its setup registers the
+> applications permission requested by Luma. If installation reports `Not allowed permission is
+> used`, open Home Chooser and reinstall Luma. The earlier selection-only integration does not
+> have this dependency.
+
 ### Homebrew Channel
 
 Open Homebrew Channel, find **Luma** in the default
@@ -165,6 +172,14 @@ as the full-screen Home app without Luma's takeover scripts or an Input Hook map
 1. Disable any old methods you previously enabled (see **Old methods** below).
 2. Install Home Chooser from Homebrew Channel and open it once to finish its root setup.
 3. Install or update Luma, then open Home Chooser, select **Luma**, and confirm. Press Home to try it.
+
+You can also open **Settings → System → Home Chooser** in Luma for setup guidance or to request
+using Luma as Home. Home Chooser asks you to confirm the change.
+
+While Luma is foreground, Home returns directly from Apps, Settings or an overlay to its Home
+tab, regardless of the selected launcher. Pressing Home at the root stays in Luma. This native
+key-delivery path still needs TV verification, including Home from another app and switching
+the selected launcher.
 
 <details>
 <summary>Old methods</summary>

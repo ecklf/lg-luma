@@ -10,6 +10,7 @@
   "appDescription": "A remote-first native webOS launcher.",
   "resolution": "1920x1080",
   "appCategory": ["home"],
+  "requiredPermissions": ["org.webosbrew.homechooser.applications"],
   "requiredACG": ["application.launcher", "application.query", "lunabus.query"],
   "handlesRelaunch": true,
   "nativeLifeCycleInterfaceVersion": 2,

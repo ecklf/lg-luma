@@ -67,6 +67,7 @@ pub enum Target {
     InstallUpdate,
     ConfirmUpdate,
     CheckUpdates,
+    HomeChooser,
     Recent(String),
     RecentEmpty,
     RecentRetry,
@@ -240,6 +241,7 @@ pub enum Effect {
     Quit,
     Weather(weather::Command),
     UpdateDownload(String),
+    OpenHomeChooser,
 }
 
 pub const KEYS: [&str; 40] = [
@@ -300,6 +302,8 @@ pub struct State {
     pub keyboard_field: TextField,
     pub input_name: String,
     pub recents: crate::recents::Recents,
+    pub home_chooser: Option<crate::home_chooser::Status>,
+    pub home_chooser_busy: bool,
 }
 
 impl State {
@@ -341,6 +345,8 @@ impl State {
             error: None,
             available_update: None,
             update_status: crate::update::Status::Unchecked,
+            home_chooser: None,
+            home_chooser_busy: false,
             update_check_requested: false,
             inventory_failures: 0,
             dirty: true,
@@ -1920,6 +1926,7 @@ impl State {
                     | Target::WeatherTemperature
                     | Target::WeatherStyle
                     | Target::Attributions
+                    | Target::HomeChooser
             ) && matches!(direction, Direction::Right)
             {
                 return self.activate();
@@ -2812,6 +2819,13 @@ impl State {
                 self.panel_started = (!self.preferences.reduced_motion).then(Instant::now);
             }
             Target::AttributionText => {}
+            Target::HomeChooser => {
+                if self.home_chooser.is_some() && !self.home_chooser_busy {
+                    self.home_chooser_busy = true;
+                    self.dirty = true;
+                    return vec![Effect::OpenHomeChooser];
+                }
+            }
             Target::WeatherQuery => self.open_keyboard(TextField::Location),
             Target::DateToggle => {
                 self.preferences.show_date = !self.preferences.show_date;

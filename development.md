@@ -1061,11 +1061,62 @@ is reserved for the unchanged legacy takeover paths. On a TV, verify that backgr
 presses deliver relaunch events, preserve Luma's PID and actually focus the existing window;
 desktop tests do not establish SAM or compositor behavior.
 
-Only the `home` category is required for selection. The optional
-`org.webosbrew.homechooser.applications` permission is not declared, so Luma can still install
-without Home Chooser. Existing inventory/artwork and privileged app-management paths remain
-unchanged. A separate follow-up will introduce API calls through SDL/libhelpers' app-named
-handle rather than Luma's anonymous platform connections.
+Only the `home` category is required for selection. The preceding compatibility release omits
+the API permission and installs independently. This follow-up declares
+`org.webosbrew.homechooser.applications`, making Home Chooser setup an installation prerequisite:
+install Home Chooser, open it once, then install/update Luma. If installation reports
+`Not allowed permission is used`, open Home Chooser and reinstall Luma. Reinstall after changing
+`requiredPermissions`. The existing ACGs already include `application.query` and
+`application.launcher`.
+
+`src/home-chooser.rs` detects `getInfo`, checks `apiVersion >= N`, then `root` and `permitted`.
+It caches detection (including failures) for 30 seconds across platform/artwork workers. Reads
+work before Luma is selected as Home. `listApps` uses level 1, `listInputs` and `getIcons` use
+level 2. Settings → System → Home Chooser shows localized install/open, update, root-setup or
+reinstall guidance. When Luma is not selected, its action offers “Use Luma as Home”, launching
+Home Chooser with `params.request: "com.ecklf.luma"`. Only the owner can confirm. Selection is
+rechecked with `getInfo` after returning to Luma, not inferred from a successful launch reply.
+
+On API level 2+, one `listApps` and one `listInputs` subscription cache complete snapshots.
+Repeated snapshots are ignored, changed snapshots schedule a worker refresh, and terminal errors
+discard the cache and revert to ordinary one-shot reads. Feeds end when the app closes. Their
+callback contexts remain stable until process exit, including after failure, so no late callback
+can use freed memory. Restart Luma to reopen a terminated feed. Without subscriptions, inventory
+refreshes when Luma becomes visible again and HDMI state retains the existing visible-screen
+polling. These use the same bounds and normalization as ordinary responses.
+
+HDMI fields adapt to the existing EIM normalization, preserving unknown signal and connection
+states. Each input's `params` object is kept with the inventory and forwarded unchanged through
+the platform launch call, including input launches from Recent apps. Legacy EIM `uniqueId`
+values are converted to the input picker's `{id, value}` parameters.
+
+The artwork worker drains queued apps into batches, requesting large/small candidates for up
+to 32 apps (64 items) per call. Only `overBudget` items are deferred into another batch, with a
+strict progress bound. Item errors do not discard other apps or valid size fallbacks. MIME,
+base64 and byte counts are checked against the API's 1 MiB per-icon limit. The existing
+version/path-keyed decoded and disk caches avoid repeated reads, while inventory replacement
+prunes removed apps and obsolete versions from memory. Missing icons keep normal placeholders.
+
+`src/luna-native-app.rs` calls the loaded libhelpers' public `HLunaServiceCall` with a one-shot
+`HContext`, plus at most two inventory feed contexts. This reuses SDL's app-named handle without
+registering another handle, impersonating an app or blocking SDL. The initial inventory worker
+waits until SDL initializes its window and
+libhelpers. Calls allow 70 seconds, cap JSON replies at 2 MiB, and retain at most eight pending
+contexts. Timed-out contexts remain valid for late callbacks, avoiding use-after-free. If all
+slots remain occupied, further calls fail into the legacy read fallback.
+
+Read failures log a diagnostic and fall back to the existing Homebrew path. The legacy takeover
+paths skip Home Chooser completely and retain their LG-identity lifecycle handling. USB discovery,
+recent history, closing, uninstall and self-update remain unchanged: `listRunning` is not recent
+history, and `uninstallApp.pending` must not be treated as successful removal. Runtime fallback
+does not remove the new installation prerequisite. Future mutation integration must preserve
+confirmation, reconcile ambiguous outcomes and never retry a mutation through a second backend.
+
+Host tests in `src/home-chooser-tests.rs` cover API-version/setup errors, selection requests,
+subscription replacement/failures, input mapping, cross-app icon batching, bounded decoding and
+error propagation without contacting a TV or real services. Additional tests cover forwarding
+input launch parameters, artwork-worker batching/pruning and localized single-flight setup UI.
+The native transport and the actual identity seen by Home Chooser require TV verification.
 
 Disable the legacy takeover, autostart and any Input Hook Home mapping before selecting Luma.
 Home Chooser owns stock-Home suppression and boot recovery; do not run both integrations.

@@ -6,7 +6,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::{
     cell::RefCell,
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     fs::File,
     io::{Cursor, Read},
     path::{Component, Path, PathBuf},
@@ -111,7 +111,7 @@ const ROOTS: [&str; 5] = [
     "/media/system/apps/usr/palm/applications",
     "/mnt/otncabi/usr/palm/applications",
 ];
-pub const MAX_FILE: usize = 512 * 1024;
+pub const MAX_FILE: usize = 1024 * 1024;
 const CACHE_BYTES: usize = 16 * 1024 * 1024;
 const CACHE_ENTRIES: usize = 256;
 const REQUEST_SLOTS: usize = 16;
@@ -478,6 +478,42 @@ fn load(source: &Source) -> Option<Artwork> {
     }
 }
 
+fn load_batch(sources: &[Source]) -> Vec<Option<Artwork>> {
+    let mut images: Vec<_> = sources
+        .iter()
+        .map(|source| {
+            if !valid_app_id(&source.id) {
+                return None;
+            }
+            load_local(source, read_bounded).or_else(|| disk_cache_read(source))
+        })
+        .collect();
+    let missing: Vec<_> = sources
+        .iter()
+        .enumerate()
+        .filter(|(index, source)| images[*index].is_none() && valid_app_id(&source.id))
+        .collect();
+    if missing.is_empty() {
+        return images;
+    }
+    let ids: Vec<_> = missing
+        .iter()
+        .map(|(_, source)| source.id.as_str())
+        .collect();
+    let batch = crate::home_chooser::icons_batch(&ids);
+    for (offset, (index, source)) in missing.into_iter().enumerate() {
+        images[index] = match batch.as_ref().and_then(|batch| batch.get(offset)) {
+            Some(Ok(icons)) => icons.iter().find_map(|bytes| {
+                let image = decode(bytes)?;
+                disk_cache_write(source, bytes);
+                Some(image)
+            }),
+            _ => load(source),
+        };
+    }
+    images
+}
+
 fn load_local(
     source: &Source,
     mut read: impl FnMut(&Path, usize) -> Option<Vec<u8>>,
@@ -594,9 +630,10 @@ pub struct Service {
 
 impl Service {
     pub fn new(enabled: bool) -> Self {
-        Self::with_loader(enabled, load)
+        Self::with_batch_worker(enabled, REQUEST_SLOTS, load_batch, clear_disk_cache)
     }
 
+    #[cfg(test)]
     fn with_loader(
         enabled: bool,
         loader: impl Fn(&Source) -> Option<Artwork> + Send + 'static,
@@ -604,9 +641,24 @@ impl Service {
         Self::with_worker(enabled, loader, clear_disk_cache)
     }
 
+    #[cfg(test)]
     fn with_worker(
         enabled: bool,
         loader: impl Fn(&Source) -> Option<Artwork> + Send + 'static,
+        clear_disk: impl Fn() + Send + 'static,
+    ) -> Self {
+        Self::with_batch_worker(
+            enabled,
+            1,
+            move |sources| sources.iter().map(&loader).collect(),
+            clear_disk,
+        )
+    }
+
+    fn with_batch_worker(
+        enabled: bool,
+        batch_size: usize,
+        loader: impl Fn(&[Source]) -> Vec<Option<Artwork>> + Send + 'static,
         clear_disk: impl Fn() + Send + 'static,
     ) -> Self {
         let queue = Arc::new((Mutex::new(Requests::default()), Condvar::new()));
@@ -617,7 +669,7 @@ impl Service {
             let queue = queue.clone();
             thread::spawn(move || {
                 loop {
-                    let request = {
+                    let requests = {
                         let (mutex, ready) = &*queue;
                         let mut queue = mutex.lock().unwrap();
                         loop {
@@ -633,23 +685,43 @@ impl Service {
                                 .pop_front()
                                 .or_else(|| queue.background.pop_front())
                             {
-                                break Some(request);
+                                let mut requests = vec![request];
+                                // Drain visible cards before prefetches. Limit both the
+                                // queue and batch so UI requests never grow without bound.
+                                while requests.len() < batch_size {
+                                    let next = queue
+                                        .visible
+                                        .pop_front()
+                                        .or_else(|| queue.background.pop_front());
+                                    let Some(next) = next else {
+                                        break;
+                                    };
+                                    requests.push(next);
+                                }
+                                break Some(requests);
                             }
                             queue = ready.wait(queue).unwrap();
                         }
                     };
-                    let Some(request) = request else {
+                    let Some(requests) = requests else {
                         // Serialized after any active read/write and before fresh requests.
                         // Do filesystem work without holding the queue lock used by the UI.
                         clear_disk();
                         continue;
                     };
-                    let image = loader(&request.source).map(|mut image| {
-                        image.key = format!("installed-icon:{}", request.token);
-                        Arc::new(image)
-                    });
-                    if responses.send(Reply { request, image }).is_err() {
-                        break;
+                    let sources: Vec<_> = requests
+                        .iter()
+                        .map(|request| request.source.clone())
+                        .collect();
+                    let images = loader(&sources);
+                    for (request, image) in requests.into_iter().zip(images) {
+                        let image = image.map(|mut image| {
+                            image.key = format!("installed-icon:{}", request.token);
+                            Arc::new(image)
+                        });
+                        if responses.send(Reply { request, image }).is_err() {
+                            return;
+                        }
                     }
                 }
             });
@@ -767,6 +839,28 @@ impl Service {
             .borrow_mut()
             .entries
             .retain(|_, entry| !matches!(entry.image, Some(None)));
+    }
+
+    /// A full inventory replaces its predecessor. Keep only current source keys
+    /// so removed apps and old versions do not linger in the decoded cache.
+    pub fn retain_sources(&self, sources: impl IntoIterator<Item = Source>) {
+        let sources: HashSet<_> = sources.into_iter().collect();
+        self.cache
+            .borrow_mut()
+            .entries
+            .retain(|source, _| sources.contains(source));
+        self.prefetch
+            .borrow_mut()
+            .retain(|source| sources.contains(source));
+        if let Some(sender) = &self.sender {
+            let mut queue = sender.queue.0.lock().unwrap();
+            queue
+                .visible
+                .retain(|request| sources.contains(&request.source));
+            queue
+                .background
+                .retain(|request| sources.contains(&request.source));
+        }
     }
 
     pub fn poll(&self) -> bool {
