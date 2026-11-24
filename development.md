@@ -1051,10 +1051,14 @@ Luma under `com.ecklf.luma`. Keep the window full-screen (no `defaultWindowType:
 Home Chooser uses this distinction for its empty-screen policy. Back must not exit the root Home.
 
 `handlesRelaunch: true` and `nativeLifeCycleInterfaceVersion: 2` match Luma's explicit
-`registerApp` subscription under `com.ecklf.luma`, held on its own app-named LS2 connection.
-SDL automatic registration is disabled before video initialization to avoid competing connections.
+`registerApp` subscription under `com.ecklf.luma`, submitted through SDL/libhelpers' existing
+app-named LS2 connection. Disabling SDL automatic lifecycle registration does not release that
+bus name, so Luma must not open a second connection claiming it. SDL automatic lifecycle
+registration is disabled before video initialization to avoid competing subscriptions.
 On `relaunch`, Luma returns to its Home scene, restores/shows/raises the existing window and
-refreshes inventory; on `close` it exits. This needs neither root nor app-ID impersonation.
+refreshes inventory; on `close` it exits. Submission is nonblocking, and a submission failure is
+logged rather than aborting before the first frame. Every reply is logged with
+`Luma lifecycle (shared libhelpers)`. This needs neither root nor app-ID impersonation.
 `noSplashOnLaunch: true` avoids SAM splash surfaces for the native launcher. Home Chooser
 launches retain `APPID=com.ecklf.luma`; do not classify them as `options.webos_home`, which
 is reserved for the unchanged legacy takeover paths. On a TV, verify that background Home
