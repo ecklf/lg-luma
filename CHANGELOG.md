@@ -1,5 +1,11 @@
 # lg-luma
 
+## 3.13.3
+
+### Patch Changes
+
+- f8f7eba: Restore favorite focus on Home returns, reorder General settings, clarify drawer labels and icons, and simplify the Attributions action. Refresh inputs on native EIM notifications and preserve polling deadlines across interactions.
+
 ## 3.13.2
 
 ### Patch Changes
