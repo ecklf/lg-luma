@@ -1610,6 +1610,7 @@ fn protected_apps_cannot_be_deleted_through_ui_or_worker() {
         "com.luma.launcher.native",
         "org.webosbrew.hbchannel",
         "org.webosbrew.hbchannel.service",
+        "org.webosbrew.homechooser",
         "custom.lamp",
         "invalid';command",
     ] {

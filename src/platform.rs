@@ -536,6 +536,7 @@ pub fn can_uninstall(id: &str) -> bool {
                 | "com.luma.launcher.native"
                 | "org.webosbrew.hbchannel"
                 | "org.webosbrew.hbchannel.service"
+                | "org.webosbrew.homechooser"
         )
 }
 
