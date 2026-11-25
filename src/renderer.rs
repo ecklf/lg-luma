@@ -213,6 +213,8 @@ enum BatchKind {
         backdrop: Option<[[u8; 3]; 2]>,
         /// Drawn without blending: lets the GPU discard hidden fragments beneath.
         opaque: bool,
+        /// Every fragment lies inside its shape (coverage 1): no edge distance needed.
+        interior: bool,
     },
     Vector {
         path: String,
@@ -252,6 +254,8 @@ enum Hole {
     Skip(Rect),
     /// Fully opaque: drawn without blending.
     Opaque(Rect),
+    /// Fully covered but translucent: blended, without the per-fragment edge distance.
+    Interior(Rect),
 }
 
 thread_local! {
@@ -406,11 +410,19 @@ struct PaintPrograms {
     tinted: GLuint,
     shape: GLuint,
     app: GLuint,
+    /// App artwork that is translucent or on its rounded edge (see app-shape.frag).
+    app_shape: GLuint,
 }
 
 impl Drop for PaintPrograms {
     fn drop(&mut self) {
-        for id in [self.texture, self.tinted, self.shape, self.app] {
+        for id in [
+            self.texture,
+            self.tinted,
+            self.shape,
+            self.app,
+            self.app_shape,
+        ] {
             if id != 0 {
                 unsafe { gl::DeleteProgram(id) };
             }
@@ -420,9 +432,9 @@ impl Drop for PaintPrograms {
 
 impl PaintPrograms {
     /// Use a short shader only if every triangle in this batch takes the same paint path.
-    fn select(&self, vertices: &[f32], opaque: bool, app: bool, fallback: GLuint) -> GLuint {
+    fn select(&self, vertices: &[f32], interior: bool, app: bool, fallback: GLuint) -> GLuint {
         let all = |predicate: fn(&[f32]) -> bool| vertices.chunks_exact(14).all(predicate);
-        let inside = opaque && all(|v| v[12] >= 0. && v[13] == 0.);
+        let inside = interior && all(|v| v[12] >= 0. && v[13] == 0.);
         if inside && app {
             return self.app;
         }
@@ -433,10 +445,10 @@ impl PaintPrograms {
                 self.tinted
             };
         }
-        if !app && all(|v| v[12] >= 0. && v[13] >= 0.) {
-            self.shape
-        } else {
-            fallback
+        match (app, all(|v| v[12] >= 0. && v[13] >= 0.)) {
+            (false, true) => self.shape,
+            (true, true) => self.app_shape,
+            _ => fallback,
         }
     }
 }
@@ -544,11 +556,13 @@ impl Renderer {
                     tinted: 0,
                     shape: 0,
                     app: 0,
+                    app_shape: 0,
                 };
                 programs.texture = build(include_str!("shaders/texture.frag"))?;
                 programs.tinted = build(include_str!("shaders/tinted.frag"))?;
                 programs.shape = build(include_str!("shaders/shape.frag"))?;
                 programs.app = build(include_str!("shaders/app-interior.frag"))?;
+                programs.app_shape = build(include_str!("shaders/app-shape.frag"))?;
                 Ok(programs)
             };
             load()
@@ -808,7 +822,7 @@ impl Renderer {
         // Pixels inside `hole` would leave the target unchanged (zero coverage) or are
         // overdrawn by an opaque draw: rasterize only the four strips around it.
         if let Some(region) = hole {
-            let (Hole::Skip(hole) | Hole::Opaque(hole)) = region;
+            let (Hole::Skip(hole) | Hole::Opaque(hole) | Hole::Interior(hole)) = region;
             // Whole physical pixels, rounded inward: the strips meet on pixel boundaries.
             let scale = self.stats.viewport.scale.max(0.01);
             let (left, top) = (
@@ -839,12 +853,13 @@ impl Renderer {
                     }
                 }
                 if count > 0 {
-                    self.paint_batch(start, count, texture, backdrop, false);
+                    self.paint_batch(start, count, texture, backdrop, false, false);
                 }
-                if let Hole::Opaque(_) = region {
+                if let Hole::Opaque(_) | Hole::Interior(_) = region {
                     let start = self.vertices.len() / 14;
                     self.quad_part(rect, [x0, y0, x1, y1], uv, radius, border, colors);
-                    self.paint_batch(start, 6, texture, backdrop, true);
+                    let opaque = matches!(region, Hole::Opaque(_));
+                    self.paint_batch(start, 6, texture, backdrop, opaque, true);
                 }
                 return;
             }
@@ -869,7 +884,7 @@ impl Renderer {
                 border,
             ]);
         }
-        self.paint_batch(start, 6, texture, backdrop, false);
+        self.paint_batch(start, 6, texture, backdrop, false, false);
     }
 
     /// Six paint vertices for the part [x0, y0, x1, y1] of `rect`, with the same attributes
@@ -924,7 +939,7 @@ impl Renderer {
             }
             _ => return None,
         };
-        self.opaque_interior(rect, radius)
+        self.fill_interior(rect, radius)
     }
 
     /// The opaque region of the later draw that covers `rect`'s centre, before the clip or
@@ -947,9 +962,17 @@ impl Renderer {
         None
     }
 
-    /// The part of an opaque rounded rect drawn with full coverage: inside the rounded
-    /// corners, two pixels clear of the antialiased edge and within an edge fade's plateau.
-    fn opaque_interior(&self, rect: Rect, radius: f32) -> Option<Rect> {
+    /// A translucent fill's fully covered part, split off only where a short shader then
+    /// draws it: the general paint shader would compute the same edge distance anyway.
+    fn translucent_interior(&self, rect: Rect, radius: f32) -> Option<Hole> {
+        self.paint_programs.as_ref()?;
+        self.fill_interior(rect, radius).map(Hole::Interior)
+    }
+
+    /// The part of a rounded rect drawn with full coverage: inside the rounded corners, two
+    /// pixels clear of the antialiased edge and within an edge fade's plateau. Opaque fills
+    /// draw it without blending; translucent ones still skip the edge distance there.
+    fn fill_interior(&self, rect: Rect, radius: f32) -> Option<Rect> {
         let mut hole = self.snap(rect).inset(radius.max(0.) * 0.3 + 2.);
         if let Some([_, top, bottom, _]) = self.fade.filter(|fade| fade[1] > fade[0]) {
             let y0 = hole.y.max(top);
@@ -1109,6 +1132,7 @@ impl Renderer {
         texture: GLuint,
         backdrop: Option<[[u8; 3]; 2]>,
         opaque: bool,
+        interior: bool,
     ) {
         if let Some(batch) = self.batches.last_mut() {
             let same_clip = match (batch.clip, self.clip) {
@@ -1123,11 +1147,13 @@ impl Renderer {
                     count: batch_count,
                     backdrop: previous_backdrop,
                     opaque: previous_opaque,
+                    interior: previous_interior,
                     ..
                 } = &mut batch.kind
                 && *previous == texture
                 && *previous_backdrop == backdrop
                 && *previous_opaque == opaque
+                && *previous_interior == interior
             {
                 *batch_count += count;
                 return;
@@ -1140,6 +1166,7 @@ impl Renderer {
                 count,
                 backdrop,
                 opaque,
+                interior,
             },
             clip: self.clip,
             fade: self.fade,
@@ -1196,6 +1223,7 @@ impl Renderer {
             texture,
             None,
             opaque && self.fade.is_none(),
+            false,
         );
     }
 
@@ -1526,10 +1554,14 @@ impl Renderer {
             rect = Rect::new(rect.x + (rect.w - w) / 2., rect.y + (rect.h - h) / 2., w, h);
         }
         if scrims.is_empty() {
-            let hole = opaque
-                .then(|| self.opaque_interior(rect, radius))
-                .flatten()
-                .map(Hole::Opaque);
+            // Square images take the plain texture path already: no edge distance to spare.
+            let hole = if opaque {
+                self.fill_interior(rect, radius).map(Hole::Opaque)
+            } else if radius > 0. {
+                self.translucent_interior(rect, radius)
+            } else {
+                None
+            };
             self.gradient_quad(
                 rect,
                 [0., 0., 1., 1.],
@@ -1652,10 +1684,11 @@ impl Renderer {
             [tint; 2],
             id,
             Some(image.backdrop),
-            (tint[3] >= 1.)
-                .then(|| self.opaque_interior(rect, radius))
-                .flatten()
-                .map(Hole::Opaque),
+            if tint[3] >= 1. {
+                self.fill_interior(rect, radius).map(Hole::Opaque)
+            } else {
+                self.translucent_interior(rect, radius)
+            },
         );
     }
 
@@ -1822,8 +1855,11 @@ impl Renderer {
                     [*color; 2],
                     self.white.id,
                     None,
-                    (*border > 0.)
-                        .then(|| Hole::Skip(self.snap(*rect).inset(radius + border + 2.))),
+                    if *border > 0. {
+                        Some(Hole::Skip(self.snap(*rect).inset(radius + border + 2.)))
+                    } else {
+                        self.translucent_interior(*rect, *radius)
+                    },
                 ),
                 Draw::RoundedGradient(rect, radius, top, bottom) => self.gradient_quad(
                     *rect,
@@ -1833,7 +1869,7 @@ impl Renderer {
                     [*top, *bottom],
                     self.white.id,
                     None,
-                    None,
+                    self.translucent_interior(*rect, *radius),
                 ),
                 Draw::Shadow(rect, radius, blur, color) => {
                     let hole = self.cover_after(&commands[index..], *rect).map(Hole::Skip);
@@ -1986,7 +2022,8 @@ impl Renderer {
             gl::ActiveTexture(gl::TEXTURE0);
             let mut paint_bound = false;
             let mut active_paint = 0;
-            let mut shape_configured = false;
+            // Programs whose u_aa (one drawable pixel) is set this frame: shape, app_shape.
+            let mut aa_configured = [false; 2];
             let mut mesh_state = MeshState::default();
             let mut current_fade = None;
             let mut blending = true;
@@ -2031,6 +2068,7 @@ impl Renderer {
                         count,
                         backdrop,
                         opaque,
+                        interior,
                     } => {
                         if *opaque == blending {
                             if *opaque {
@@ -2047,7 +2085,7 @@ impl Renderer {
                             .map_or(self.program, |programs| {
                                 programs.select(
                                     &self.vertices[start * 14..(start + count) * 14],
-                                    *opaque,
+                                    *interior,
                                     backdrop.is_some(),
                                     self.program,
                                 )
@@ -2056,17 +2094,17 @@ impl Renderer {
                             gl::UseProgram(program);
                             active_paint = program;
                         }
-                        if !shape_configured
-                            && self
-                                .paint_programs
-                                .as_ref()
-                                .is_some_and(|p| p.shape == program)
+                        let aa_slot = self.paint_programs.as_ref().and_then(|p| {
+                            [p.shape, p.app_shape].iter().position(|&id| id == program)
+                        });
+                        if let Some(slot) = aa_slot
+                            && !aa_configured[slot]
                         {
                             gl::Uniform1f(
                                 uniform_location(program, c"u_aa".as_ptr()),
                                 1. / scale.max(0.01),
                             );
-                            shape_configured = true;
+                            aa_configured[slot] = true;
                         }
                         if !paint_bound && self.paint_array != 0 {
                             // The paint attributes, recorded once: one bind after a mesh.
@@ -2774,5 +2812,46 @@ mod shadow_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod paint_program_tests {
+    use super::*;
+
+    /// Six paint vertices with `color`, corner radius and border (see quad_part).
+    fn quad(color: Color, radius: f32, border: f32) -> Vec<f32> {
+        let vertex = [
+            0., 0., 0., 0., color[0], color[1], color[2], color[3], 0., 0., 50., 30., radius,
+            border,
+        ];
+        vertex.repeat(6)
+    }
+
+    #[test]
+    fn translucent_interiors_and_app_edges_take_short_shaders() {
+        let programs = PaintPrograms {
+            texture: 1,
+            tinted: 2,
+            shape: 3,
+            app: 4,
+            app_shape: 5,
+        };
+        let faded = [1., 1., 1., 0.4];
+        // A translucent interior needs no edge distance: texture times colour.
+        assert_eq!(programs.select(&quad(faded, 12., 0.), true, false, 9), 2);
+        assert_eq!(programs.select(&quad([1.; 4], 12., 0.), true, false, 9), 1);
+        assert_eq!(programs.select(&quad(faded, 12., 0.), true, true, 9), 4);
+        // Its rounded edge keeps the coverage, now also for app artwork.
+        assert_eq!(programs.select(&quad(faded, 12., 0.), false, false, 9), 3);
+        assert_eq!(programs.select(&quad(faded, 12., 0.), false, true, 9), 5);
+        // Glass (border -1000) and blurred shadows keep the general shader.
+        assert_eq!(
+            programs.select(&quad(faded, 12., -1000.), false, true, 9),
+            9
+        );
+        assert_eq!(programs.select(&quad(faded, 12., -8.), false, false, 9), 9);
+        // Never delete GL programs without a context.
+        std::mem::forget(programs);
     }
 }
