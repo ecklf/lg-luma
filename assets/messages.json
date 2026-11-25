@@ -125,6 +125,24 @@
     "ca": "Noms de les apps",
     "hu": "Alkalmazásnevek"
   },
+  "smoothDrawerFade": {
+    "en": "Smoother animation",
+    "de": "Flüssigere Animation",
+    "es": "Animación más fluida",
+    "zh": "更流畅的动画",
+    "zh-tw": "更流暢的動畫",
+    "pt": "Animação mais fluida",
+    "it": "Animazione più fluida",
+    "ru": "Более плавная анимация",
+    "pl": "Płynniejsza animacja",
+    "fr": "Animation plus fluide",
+    "vi": "Hoạt ảnh mượt hơn",
+    "nl": "Vloeiendere animatie",
+    "sv": "Mjukare animering",
+    "cs": "Plynulejší animace",
+    "ca": "Animació més fluida",
+    "hu": "Simább animáció"
+  },
   "marketRefreshHelp": {
     "en": "Updates every 5 minutes on Home. Quotes may be delayed.",
     "de": "Aktualisierung alle 5 Minuten auf Home. Kurse können verzögert sein.",

@@ -504,6 +504,9 @@ pub struct Preferences {
     pub app_sorting: AppSorting,
     pub app_drawer_style: AppDrawerStyle,
     pub show_drawer_app_names: bool,
+    /// The drawer grid turns opaque at 70% of its motion, which keeps the animation at 60 fps
+    /// on webOS 5 TVs; off, it fades in over the whole motion.
+    pub smooth_drawer_fade: bool,
     pub app_launch_counts: BTreeMap<String, u64>,
     pub greeting_position: WidgetPosition,
     pub weather_position: WidgetPosition,
@@ -566,6 +569,7 @@ impl Default for Preferences {
             app_sorting: AppSorting::default(),
             app_drawer_style: AppDrawerStyle::default(),
             show_drawer_app_names: false,
+            smooth_drawer_fade: true,
             app_launch_counts: BTreeMap::new(),
             greeting_position: HomeWidget::Greeting.default_position(),
             weather_position: HomeWidget::Weather.default_position(),
