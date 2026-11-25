@@ -24,6 +24,8 @@ pub const SETTINGS_ORDER: [usize; SECTION_COUNT] = [
 ];
 pub const SETTINGS_BOTTOM_PADDING: f32 = 64.;
 pub const SETTINGS_LIST_BOTTOM_PADDING: f32 = 48.;
+/// App drawer row: the grid turns opaque before the motion ends (smooth_drawer_fade).
+pub const SMOOTH_DRAWER_FADE_SETTING: usize = 19;
 pub const APPS_COLUMNS: usize = 6;
 pub const DRAWER_PADDING: f32 = 24.;
 pub const DRAWER_NAME_TOP: f32 = 12.;
@@ -639,6 +641,17 @@ impl State {
         t * t * (3. - 2. * t)
     }
 
+    /// The fading grid's opacity. With smooth_drawer_fade it is opaque from 70% of the motion
+    /// on: translucent cards cost the GPU their whole backdrop and shadow, so a shorter fade
+    /// keeps the motion's last frames on the opaque path.
+    pub fn drawer_content_alpha(&self) -> f32 {
+        if self.preferences.smooth_drawer_fade {
+            (self.drawer_progress() / 0.7).min(1.)
+        } else {
+            self.drawer_progress()
+        }
+    }
+
     pub fn dock_y(&self) -> f32 {
         let home_y = match self.preferences.app_drawer_style {
             // Leave 57.6px below the glass, with room for the 24px app-row peek.
@@ -690,15 +703,12 @@ impl State {
                     && (!drawer || !dock.iter().any(|pinned| pinned.id == app.id))
             })
             .collect();
-        apps.sort_by(|a, b| {
-            let rank = |app: &App| {
-                ids.iter()
-                    .position(|id| id == &app.id)
-                    .unwrap_or(usize::MAX)
-            };
-            rank(a)
-                .cmp(&rank(b))
-                .then_with(|| self.preferences.compare_apps(a, b))
+        apps.sort_by_cached_key(|app| {
+            let rank = ids
+                .iter()
+                .position(|id| id == &app.id)
+                .unwrap_or(usize::MAX);
+            (rank, self.preferences.app_sort_key(app))
         });
         apps
     }
@@ -725,7 +735,7 @@ impl State {
                         && !apps.iter().any(|pinned| pinned.id == app.id)
                 })
                 .collect();
-            remaining.sort_by(|a, b| self.preferences.compare_apps(a, b));
+            remaining.sort_by_cached_key(|app| self.preferences.app_sort_key(app));
             apps.extend(remaining.into_iter().take(HOME_DOCK_SLOTS - apps.len()));
         }
         apps
@@ -3093,6 +3103,9 @@ impl State {
                     14 => {
                         self.preferences.show_drawer_app_names =
                             !self.preferences.show_drawer_app_names
+                    }
+                    SMOOTH_DRAWER_FADE_SETTING => {
+                        self.preferences.smooth_drawer_fade = !self.preferences.smooth_drawer_fade
                     }
                     13 => {
                         self.subpage = Some(Subpage::AppDrawer);

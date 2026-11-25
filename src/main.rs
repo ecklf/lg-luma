@@ -11,6 +11,7 @@ mod diagnostics;
 mod egl_damage;
 mod feedback;
 mod font;
+mod font_metrics;
 mod gamepad;
 mod glass_backdrop;
 #[cfg(any(test, all(feature = "webos", target_os = "linux", target_arch = "arm")))]
@@ -2158,7 +2159,7 @@ fn run() -> Result<(), String> {
                         damage_tracker.reset();
                     }
                     damage_tracker.include(layered);
-                    damage_tracker.push(&scene.draw);
+                    damage_tracker.compare(&scene.draw);
                     // A capture drew this frame already; keep its window frame whole.
                     if captured.is_some() && final_frame {
                         return None;
@@ -2260,6 +2261,9 @@ fn run() -> Result<(), String> {
                         );
                     }
                     last_drawable = Some(drawable);
+                }
+                if partial.is_some() {
+                    damage_tracker.remember(std::mem::take(&mut scene.draw));
                 }
             }
             state.dirty = false;
@@ -2472,7 +2476,7 @@ fn run() -> Result<(), String> {
             "error": state.error, "scroll": state.scroll, "home_scroll": state.home_scroll, "subpage": state.subpage, "modal": state.overlay.is_some(), "weather": state.weather,
             "inventory": state.inventory.apps,
             "recents": state.recents.entries, "recents_pending": state.recents.pending, "recents_error": state.recents.error, "recents_visibility": state.recents.visibility,
-            "ui_text": scene.draw.iter().filter_map(|draw| match draw { renderer::Draw::Text(value, ..) => Some(value), _ => None }).collect::<Vec<_>>() });
+            "ui_text": (if partial.is_some() { damage_tracker.previous() } else { &scene.draw }).iter().filter_map(|draw| match draw { renderer::Draw::Text(value, ..) => Some(value), _ => None }).collect::<Vec<_>>() });
         std::fs::write(
             path,
             serde_json::to_vec_pretty(&state).map_err(|e| e.to_string())?,

@@ -40,7 +40,7 @@ mod recents_view;
 pub struct Assets {
     pub root: PathBuf,
     pub version: String,
-    pub metrics: BTreeMap<String, BTreeMap<char, f32>>,
+    pub metrics: BTreeMap<String, crate::font_metrics::Advances>,
     pub artwork: crate::app_artwork::Service,
 }
 impl Assets {
@@ -1140,37 +1140,39 @@ fn batch_cards(draw: &mut Vec<Draw>, cards: &[(usize, usize, bool)]) {
     if cards.windows(2).any(|pair| pair[0].1 != pair[1].0) {
         return;
     }
-    let items: Vec<Draw> = draw.drain(begin..end).collect();
+    let mut items = draw.drain(begin..end);
     let mut shadows = Vec::new();
     let mut body = Vec::new();
     let mut borders = Vec::new();
     let mut overlays = Vec::new();
     for &(start, stop, focused) in cards {
         let mut border_taken = focused;
-        for (offset, command) in items[start - begin..stop - begin].iter().enumerate() {
-            match command {
-                Draw::Shadow(..) if !focused && offset == 0 => shadows.push(command.clone()),
+        for (offset, command) in items.by_ref().take(stop - start).enumerate() {
+            match &command {
+                Draw::Shadow(..) if !focused && offset == 0 => shadows.push(command),
                 Draw::Shape(_, _, width, _) if !border_taken && *width == 1. => {
                     border_taken = true;
-                    borders.push(command.clone());
+                    borders.push(command);
                 }
                 Draw::Image(path, ..) | Draw::TintedImage(path, ..)
                     if !focused && path.ends_with(".lvec") =>
                 {
-                    overlays.push(command.clone());
+                    overlays.push(command);
                 }
-                Draw::Text(..) if !focused => overlays.push(command.clone()),
-                _ => body.push(command.clone()),
+                Draw::Text(..) if !focused => overlays.push(command),
+                _ => body.push(command),
             }
         }
     }
-    let ordered: Vec<Draw> = shadows
-        .into_iter()
-        .chain(body)
-        .chain(borders)
-        .chain(overlays)
-        .collect();
-    draw.splice(begin..begin, ordered);
+    drop(items);
+    draw.splice(
+        begin..begin,
+        shadows
+            .into_iter()
+            .chain(body)
+            .chain(borders)
+            .chain(overlays),
+    );
 }
 
 fn favorite_badge(out: &mut Scene, assets: &Assets, card: Rect, color: Color) {
@@ -1359,7 +1361,7 @@ fn home(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime) {
         let start = out.draw.len();
         library_grid(out, state, assets);
         if !peek {
-            out.fade(start, state.drawer_progress(), 1.);
+            out.fade(start, state.drawer_content_alpha(), 1.);
         }
         // The Home peek is decorative, including while the drawer settles closed.
         out.controls.truncate(controls);
@@ -2197,7 +2199,7 @@ fn library(out: &mut Scene, state: &State, assets: &Assets, now: OffsetDateTime)
     let start = out.draw.len();
     library_grid(out, state, assets);
     if state.preferences.app_drawer_style == crate::model::AppDrawerStyle::Minimal {
-        out.fade(start, state.drawer_progress(), 1.);
+        out.fade(start, state.drawer_content_alpha(), 1.);
     }
     // The scrolling grid continues underneath the floating glass and pinned cards.
     favorites_dock(out, state, assets);
@@ -3129,6 +3131,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                             "showAppNames",
                             "text-cursor-input",
                             language.t(if state.preferences.show_drawer_app_names {
+                                "stateOn"
+                            } else {
+                                "stateOff"
+                            }),
+                            false,
+                        ),
+                        (
+                            crate::state::SMOOTH_DRAWER_FADE_SETTING,
+                            "smoothDrawerFade",
+                            "motion",
+                            language.t(if state.preferences.smooth_drawer_fade {
                                 "stateOn"
                             } else {
                                 "stateOff"
@@ -5329,11 +5342,20 @@ mod tests {
             root: PathBuf::new(),
             version: "test".into(),
             metrics: BTreeMap::from([
-                ("display-500".into(), BTreeMap::from([('W', 1.)])),
-                ("500".into(), BTreeMap::from([('W', 1.2)])),
+                (
+                    "display-500".into(),
+                    crate::font_metrics::Advances::Individual(BTreeMap::from([('W', 1.)])),
+                ),
+                (
+                    "500".into(),
+                    crate::font_metrics::Advances::Individual(BTreeMap::from([('W', 1.2)])),
+                ),
                 (
                     "fallback-500".into(),
-                    BTreeMap::from([('界', 1.), ('한', 1.)]),
+                    crate::font_metrics::Advances::Individual(BTreeMap::from([
+                        ('界', 1.),
+                        ('한', 1.),
+                    ])),
                 ),
             ]),
             artwork: crate::app_artwork::Service::new(false),

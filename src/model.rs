@@ -504,6 +504,9 @@ pub struct Preferences {
     pub app_sorting: AppSorting,
     pub app_drawer_style: AppDrawerStyle,
     pub show_drawer_app_names: bool,
+    /// The drawer grid turns opaque at 70% of its motion, which keeps the animation at 60 fps
+    /// on webOS 5 TVs; off, it fades in over the whole motion.
+    pub smooth_drawer_fade: bool,
     pub app_launch_counts: BTreeMap<String, u64>,
     pub greeting_position: WidgetPosition,
     pub weather_position: WidgetPosition,
@@ -566,6 +569,7 @@ impl Default for Preferences {
             app_sorting: AppSorting::default(),
             app_drawer_style: AppDrawerStyle::default(),
             show_drawer_app_names: false,
+            smooth_drawer_fade: true,
             app_launch_counts: BTreeMap::new(),
             greeting_position: HomeWidget::Greeting.default_position(),
             weather_position: HomeWidget::Weather.default_position(),
@@ -739,15 +743,12 @@ impl Preferences {
         true
     }
 
-    pub fn compare_apps(&self, a: &App, b: &App) -> std::cmp::Ordering {
-        let usage = |app: &App| self.app_launch_counts.get(&app.id).copied().unwrap_or(0);
+    pub fn app_sort_key<'a>(&self, app: &'a App) -> (std::cmp::Reverse<u64>, String, &'a str) {
         let count = match self.app_sorting {
-            AppSorting::Alphabetical => std::cmp::Ordering::Equal,
-            AppSorting::Usage => usage(b).cmp(&usage(a)),
+            AppSorting::Alphabetical => 0,
+            AppSorting::Usage => self.app_launch_counts.get(&app.id).copied().unwrap_or(0),
         };
-        count
-            .then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
-            .then_with(|| a.id.cmp(&b.id))
+        (std::cmp::Reverse(count), app.title.to_lowercase(), &app.id)
     }
 
     pub fn weather_visible(&self) -> bool {
