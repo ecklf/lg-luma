@@ -82,10 +82,13 @@ jobs:
         run: pnpm test
       - name: Generate native assets
         run: pnpm assets
-      - name: Check offscreen layer viewport pixels
+      - name: Check offscreen layer pixels and diagnostics
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
-        run: xvfb-run -a cargo test --locked --workspace --all-features renderer::layer_tests::layer_pixels_match_direct_rendering -- --exact --ignored --test-threads=1
+          SDL_VIDEO_X11_FORCE_EGL: '1'
+          SDL_VIDEODRIVER: x11
+        run: |
+          xvfb-run -a cargo test --locked --workspace --all-features renderer::layer_tests:: -- --ignored --test-threads=1
       - name: Build shared desktop preview
         run: cargo build --locked --package luma --no-default-features
       - name: Bundle shared smoke inputs

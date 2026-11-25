@@ -1380,11 +1380,17 @@ pnpm assets
 xvfb-run -a pnpm test:smoke
 ```
 
-The ignored `renderer::layer_tests::layer_pixels_match_direct_rendering` test needs generated
-assets and an OpenGL display. After `pnpm assets`, run it with
-`xvfb-run -a cargo test --locked --workspace --all-features layer_pixels_match_direct_rendering -- --ignored --test-threads=1`.
-It compares direct and layered pixels across letterboxed, pillarboxed and 16:9 drawables,
-including clips, resizing and returning to direct rendering. CI runs it after asset generation.
+The ignored GPU tests in `renderer::layer_tests` need generated assets and an OpenGL display.
+After `pnpm assets`, run them with
+`SDL_VIDEO_X11_FORCE_EGL=1 xvfb-run -a cargo test --locked --workspace --all-features renderer::layer_tests:: -- --ignored --test-threads=1`.
+They compare direct and layered pixels across letterboxed, pillarboxed and 16:9 drawables,
+including clips, resizing and returning to direct rendering, plus MSAA/analytic text on GL/GLES,
+sample-count cache invalidation, no-resolve fallback and stale/reused-layer diagnostics.
+CI runs them after asset generation. Layers use a sample-count-matched renderbuffer and resolve
+on core GL/GLES 3+; the multisample buffer is shared across layers, and multisampled contexts
+without that path retain per-command fading. Frame diagnostics include offscreen work and total
+CPU submission while retaining the window target's
+sample count and damage fraction. These host tests do not establish TV performance.
 
 CI prepares checks, unit tests, native assets and the desktop binary once. Four independent
 jobs run navigation/rendering, the brand gallery, mocked weather and translations in parallel,
