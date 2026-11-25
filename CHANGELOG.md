@@ -1,5 +1,17 @@
 # lg-luma
 
+## 3.13.5
+
+### Patch Changes
+
+- aa007ba: Reduce the CPU time needed to sort apps and compose the drawer while navigating.
+- c337da1: Start the launcher faster by storing consecutive fallback glyphs with identical advance widths as ranges. Existing font metric files remain readable.
+- af1da29: Shorten the main-thread pause when Luma prepares a new shadow. GLES 3 TVs upload a single coverage channel for each shadow and reuse the existing white color when sampling it.
+- 486d52c: Keep animated draw commands aligned when calculating partial redraw damage, and transfer ownership of the rendered scene to the damage tracker instead of cloning it.
+- 702f77d: Use the verified specialized paint shaders by default on the Mali-TDVX GLES 3.2 driver, while keeping the explicit environment override.
+- 55b5249: Keep the app drawer animation at 60 fps on webOS 5 TVs: the drawer grid now turns fully opaque at 70% of its motion, so the last frames take the opaque drawing path. Settings → App drawer → Smoother animation (on by default) restores the full-length fade when turned off.
+- dadf3fe: Keep the drawer's fade at 60 fps more often on webOS 5 Mali TVs: translucent cards, shapes and app icons now draw their fully covered interior without the per-pixel edge distance, and app icons on a rounded or fading card no longer fall back to the general paint shader.
+
 ## 3.13.4
 
 ### Patch Changes
