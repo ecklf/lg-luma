@@ -5,7 +5,11 @@ use crate::{
     storage, view,
 };
 use serde_json::json;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 
 #[path = "recents-tests.rs"]
 mod recent_tests;
@@ -191,6 +195,59 @@ fn home_focus_recovery_selects_the_first_favorite_and_ignores_stationary_pointer
     assert!(crate::pointer_motion_active(&state, 0, 0));
     state.set_inventory(demo_inventory(), None);
     assert_eq!(state.focus, Target::App("youtube.leanback.v4".into()));
+}
+
+#[test]
+fn restored_pointer_position_does_not_steal_home_focus_even_with_a_relative_delta() {
+    let mut state = ready();
+    let mut motion = crate::PointerMotion::default();
+    let favorite = Target::App("netflix".into());
+    for (x, y) in [(1800, 100), (1600, 120), (1700, 90)] {
+        state.pointer_focus(Target::InputsMenu);
+        let now = Instant::now();
+        motion.reset_at(now);
+        let resumed = now + Duration::from_millis(750);
+        state.return_home();
+        assert_eq!(state.focus, favorite);
+        assert!(!motion.accept_at(&state, (x, y), (x, y), resumed));
+        assert!(!motion.accept_at(&state, (x, y), (5, -3), resumed));
+        assert!(!motion.accept_at(&state, (x, y), (0, 0), resumed));
+        assert_eq!(state.focus, favorite);
+        // Real movement after the position baseline still enables pointer use.
+        assert!(motion.accept_at(&state, (x + 1, y), (1, 0), resumed));
+        state.pointer_focus(Target::InputsMenu);
+        assert!(state.pointer);
+        assert!(motion.accept_at(&state, (x + 2, y), (1, 0), resumed));
+    }
+}
+
+#[test]
+fn home_return_suppresses_continuing_pointer_motion_until_the_grace_period_ends() {
+    let mut state = ready();
+    let mut motion = crate::PointerMotion::default();
+    let now = Instant::now();
+    motion.reset_at(now);
+    state.return_home();
+    for millis in [0, 100, 400, 749] {
+        let x = 1600 + millis as i32;
+        assert!(!motion.accept_at(
+            &state,
+            (x, 100),
+            (10, 2),
+            now + Duration::from_millis(millis)
+        ));
+        assert_eq!(state.focus, Target::App("netflix".into()));
+    }
+    let resumed = now + Duration::from_millis(750);
+    // No stale hover is applied on expiry. A fresh position change is required.
+    assert!(!motion.accept_at(&state, (2349, 100), (10, 2), resumed));
+    assert!(motion.accept_at(&state, (2350, 100), (1, 0), resumed));
+    // Explicit clicks bypass hover suppression and can still focus immediately.
+    motion.reset_at(resumed);
+    state.pointer_focus(Target::InputsMenu);
+    assert_eq!(state.focus, Target::InputsMenu);
+    assert!(state.pointer);
+    assert!(!motion.accept_at(&state, (1600, 100), (10, 2), resumed));
 }
 
 #[test]
