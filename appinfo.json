@@ -11,6 +11,7 @@
   "resolution": "1920x1080",
   "appCategory": ["home"],
   "requiredACG": ["application.launcher", "application.query", "lunabus.query"],
+  "supportGIP": true,
   "handlesRelaunch": true,
   "nativeLifeCycleInterfaceVersion": 2,
   "noSplashOnLaunch": true,
