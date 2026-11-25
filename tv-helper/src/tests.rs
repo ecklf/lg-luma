@@ -90,6 +90,7 @@ impl Fixture {
         f.put(&format!("{DIR}/luma-helper"), b"native-helper");
         f.put(&format!("{DIR}/luma-early"), b"native-early");
         f.put(&format!("{DIR}/home-filter.js"), FILTER_SOURCE.as_bytes());
+        f.put(&format!("{DIR}/boot-logo.png"), b"png");
         f.put(&format!("{DIR}/home.sh"), b"#!/bin/sh\n");
         f.put_json(
             "/var/lib/eim/lastinput",
@@ -1096,6 +1097,7 @@ fn enable_installs_the_early_start_and_disable_removes_it_again() {
     let filter = String::from_utf8(f.read(home::FILTER)).unwrap();
     assert!(filter.contains("var lumaHomeTarget = 'com.webos.app.home';"));
     assert!(filter.contains("var lumaHomeInputOverride = false;"));
+    assert_eq!(f.read("/var/lib/luma-home/boot-logo.png"), b"png");
     let status = home::dispatch(&f, "status", None, None).unwrap();
     assert_eq!(status["earlyStart"], true);
     assert_eq!(status["startupHome"], false);

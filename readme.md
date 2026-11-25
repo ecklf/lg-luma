@@ -227,6 +227,10 @@ On webOS 5/6, Home takeover preserves the TV's input policy. An experimental
 [power-on and Back/Exit policy](#optional-power-on-and-backexit-policy-webos-56) can open Luma
 instead of the last input; tested on webOS 5.6.2 only, not verified on webOS 24.
 
+Until Luma's window opens in a cold boot, the key filter shows a loading screen in LG's compositor:
+Luma's mark on black and, after 2 s, a spinner. It ends as soon as an app is in front, on any key,
+or after 90 s.
+
 </details>
 
 <details>
