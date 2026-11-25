@@ -157,9 +157,8 @@ your default Home application.
 > Disable any previous takeover, autostart or Home-key mapping **before selecting Luma in
 > Home Chooser**. See the **Old methods** block below for disable instructions.
 
-1. Disable any old methods you previously enabled (see **Old methods** below).
-2. Install Home Chooser from Homebrew Channel and open it once to finish its root setup.
-3. Install or update Luma, then open Home Chooser, select **Luma**, and confirm. Press Home to try it.
+1. Install Home Chooser from Homebrew Channel and open it once to finish its root setup.
+2. Install or update Luma, then open Home Chooser, select **Luma**, and confirm. Press Home to try it.
 
 <details>
 <summary>Old methods</summary>
