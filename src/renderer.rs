@@ -500,6 +500,16 @@ impl Renderer {
             }
         }
         let fragment_highp = !gles || precision > 0;
+        let renderer_name = gl_string(gl::RENDERER);
+        let version_name = gl_string(gl::VERSION);
+        let verified_mali = gles
+            && renderer_name == "Mali-TDVX"
+            && version_name.starts_with("OpenGL ES 3.2 v1.r11p0");
+        let use_paint_programs = match std::env::var("LUMA_PAINT_SHADERS").as_deref() {
+            Ok("1") => true,
+            Ok("0") => false,
+            _ => verified_mali,
+        };
         let qualifier = if fragment_highp { "highp" } else { "mediump" };
         let vertex_prefix = if gles {
             format!("#version 100\nprecision highp float;\n#define PAINT_PRECISION {qualifier}\n")
@@ -520,7 +530,7 @@ impl Renderer {
             &(fragment_prefix.clone() + include_str!("shaders/paint.frag")),
             &[c"a_position", c"a_uv", c"a_color", c"a_shape", c"a_params"],
         )?;
-        let paint_programs = if std::env::var("LUMA_PAINT_SHADERS").as_deref() == Ok("1") {
+        let paint_programs = if use_paint_programs {
             let build = |source: &str| {
                 link(
                     &(vertex_prefix.clone() + include_str!("shaders/paint.vert")),
@@ -652,8 +662,8 @@ impl Renderer {
             stats: RenderStats::new(Size::HD),
             info: GraphicsInfo {
                 vendor: gl_string(gl::VENDOR),
-                renderer: gl_string(gl::RENDERER),
-                version: gl_string(gl::VERSION),
+                renderer: renderer_name,
+                version: version_name,
                 max_texture_size: max_texture_size.max(0) as u32,
                 max_viewport,
                 fragment_highp,
