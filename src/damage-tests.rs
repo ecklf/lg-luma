@@ -45,6 +45,48 @@ fn area(damage: Damage) -> Rect {
 }
 
 #[test]
+fn moving_a_presented_scene_into_the_tracker_preserves_damage() {
+    let mut tracker = Tracker::default();
+    tracker.compare(&[wallpaper(), shape(100.)]);
+    assert!(tracker.damage(1).is_none());
+    tracker.remember(vec![wallpaper(), shape(100.)]);
+
+    tracker.compare(&[wallpaper(), shape(400.)]);
+    let changed = area(tracker.damage(1));
+    assert_eq!((changed.x, changed.w), (99., 402.));
+    assert_eq!(tracker.previous().len(), 2);
+    tracker.remember(vec![wallpaper(), shape(400.)]);
+
+    tracker.compare(&[wallpaper(), shape(400.)]);
+    let unchanged = area(tracker.damage(1));
+    assert!(unchanged.w <= 0. || unchanged.h <= 0.);
+}
+
+#[test]
+fn moving_commands_stay_aligned_with_their_following_clip() {
+    let mut tracker = Tracker::default();
+    tracker.push(&[
+        wallpaper(),
+        Draw::Clip(Some(Rect::new(64., 100., 1792., 900.))),
+        shape(100.),
+        shape(400.),
+        shape(700.),
+        Draw::Clip(None),
+    ]);
+    tracker.push(&[
+        wallpaper(),
+        Draw::Clip(Some(Rect::new(64., 100., 1792., 900.))),
+        shape(120.),
+        shape(420.),
+        shape(720.),
+        Draw::Clip(None),
+    ]);
+    let changed = area(tracker.damage(1));
+    assert_eq!((changed.x, changed.x + changed.w), (99., 821.));
+    assert_eq!((changed.y, changed.h), (299., 102.));
+}
+
+#[test]
 fn the_first_frame_and_unknown_buffer_ages_redraw_everything() {
     let mut tracker = Tracker::default();
     tracker.push(&[wallpaper(), shape(100.)]);

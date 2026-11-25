@@ -21,7 +21,14 @@ pub struct Tracker {
 
 impl Tracker {
     /// Records the scene about to be drawn.
+    #[cfg(test)]
     pub fn push(&mut self, commands: &[Draw]) {
+        self.compare(commands);
+        self.remember(commands.to_vec());
+    }
+
+    /// Compares a new scene with the last scene actually presented.
+    pub fn compare(&mut self, commands: &[Draw]) {
         let damage = if self.previous.is_empty() {
             None
         } else {
@@ -33,7 +40,15 @@ impl Tracker {
         let damage = damage.map(|area| union(area, refreshed));
         self.history.push_front(damage);
         self.history.truncate(HISTORY);
-        self.previous = commands.to_vec();
+    }
+
+    /// Takes ownership after the renderer has finished using this scene.
+    pub fn remember(&mut self, commands: Vec<Draw>) {
+        self.previous = commands;
+    }
+
+    pub fn previous(&self) -> &[Draw] {
+        &self.previous
     }
 
     /// Marks the presented shadows `changed` selects for redrawing in every back buffer.
@@ -74,7 +89,7 @@ impl Tracker {
 fn diff(old: &[Draw], new: &[Draw]) -> Damage {
     let mut area = Rect::default();
     let mut j = 0;
-    for command in new {
+    for (index, command) in new.iter().enumerate() {
         if j < old.len() && same(&old[j], command) {
             j += 1;
             continue;
@@ -88,6 +103,16 @@ fn diff(old: &[Draw], new: &[Draw]) -> Damage {
             j = k + 1;
         } else {
             area = union(area, bounds(command)?);
+            // During an animation, the same command often changes position every frame.
+            // Consume its old position too, or all following commands lose alignment.
+            if let Some(previous) = old.get(j)
+                && !new[index + 1..new.len().min(index + 1 + LOOKAHEAD)]
+                    .iter()
+                    .any(|upcoming| same(previous, upcoming))
+            {
+                area = union(area, bounds(previous)?);
+                j += 1;
+            }
         }
     }
     for removed in &old[j.min(old.len())..] {
