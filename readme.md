@@ -148,7 +148,7 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 
 ## Replacing LG Home
 
-### Home Chooser (recommended)
+### Home Chooser
 
 [Home Chooser](https://github.com/webosbrew/home-chooser/) is the recommended way to override
 your default Home application.
@@ -163,9 +163,6 @@ your default Home application.
 
 <details>
 <summary>Old methods</summary>
-
-These legacy methods are kept for reference. Use **Home Chooser (recommended)** above for new
-setups. Disable any enabled old method before switching to Home Chooser.
 
 ### Takeover Method
 
