@@ -1,5 +1,33 @@
 # lg-luma
 
+## 3.13.4
+
+### Patch Changes
+
+- 4d30020: Keep the first favorite focused when returning Home by ignoring the initial restored pointer position and suppressing hover for 750 ms during the foreground handoff, including continued Magic Pointer movement. Remote navigation and pointer clicks remain immediate. Also restore Home when a remote key arrives before window focus.
+
+## 3.13.3
+
+### Patch Changes
+
+- f8f7eba: Restore favorite focus on Home returns, reorder General settings, clarify drawer labels and icons, and simplify the Attributions action. Refresh inputs on native EIM notifications and preserve polling deadlines across interactions.
+
+## 3.13.2
+
+### Patch Changes
+
+- b3f7115: Handle native app lifecycle registration explicitly for ordinary and Home Chooser launches, returning to the Home scene on relaunch while preserving legacy LG Home takeover paths.
+- b7aec89: Prevent uninstalling Home Chooser through Luma or its privileged helper.
+- 9f7da39: Fix the native startup black screen caused by duplicate lifecycle bus-name registration by sharing SDL/libhelpers' existing app connection.
+
+## 3.13.1
+
+### Patch Changes
+
+- ea94e4d: Switch to Settings → Apps faster on webOS TVs: draws entirely outside the current clip (rows scrolled out of a list) are no longer submitted, and the app cards there are grouped like the drawer's.
+- d0149ba: Handle the native foreground Home key in ordinary Luma launches as well as legacy Home takeover. Home returns directly from Apps, Settings or an overlay to Luma's Home tab, and stays there at the root, without requiring the Home Chooser launcher API.
+- 5866c28: Open the app options menu and Settings subpages without a first-frame stutter on webOS TVs: their labels are prepared while the launcher is idle. When a shadow finishes its idle preparation, only that shadow is redrawn instead of every shadow on screen, and drawer logos load before those of the Settings sections.
+
 ## 3.13.0
 
 ### Minor Changes

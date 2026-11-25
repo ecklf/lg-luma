@@ -13,6 +13,8 @@ mod feedback;
 mod font;
 mod gamepad;
 mod glass_backdrop;
+#[cfg(any(test, all(feature = "webos", target_os = "linux", target_arch = "arm")))]
+mod helper_lifecycle;
 mod i18n;
 #[path = "input-refresh.rs"]
 mod input_refresh;
@@ -232,6 +234,10 @@ const SCRIPT_POINTER: u32 = u32::MAX - 1;
 // SDL-webOS's Back scancode is outside rust-sdl2's standard Scancode enum.
 // Keycode retains the raw value: SDL_SCANCODE_TO_KEYCODE(SDL_SCANCODE_WEBOS_BACK).
 const WEBOS_BACK_KEYCODE: i32 = (1 << 30) | 482;
+
+fn is_home(key: Keycode, webos: bool) -> bool {
+    webos && i32::from(key) == sdl_events::WEBOS_HOME_KEYCODE
+}
 
 fn is_back(key: Keycode, webos: bool) -> bool {
     matches!(key, Keycode::Escape | Keycode::AcBack)
@@ -481,6 +487,59 @@ fn input_refresh_active(state: &State, webos: bool, focused: bool, visible: bool
         && state.recents.visibility == 0.
 }
 
+fn home_on_focus(state: &State, webos: bool, was_focused: bool) -> bool {
+    webos
+        && !was_focused
+        && !state.loading
+        && state.page != state::Page::Settings
+        && state.overlay.is_none()
+        && state.moving.is_none()
+}
+
+fn pointer_motion_active(state: &State, xrel: i32, yrel: i32) -> bool {
+    state.pointer || xrel != 0 || yrel != 0
+}
+
+#[derive(Default)]
+struct PointerMotion {
+    position: Option<(i32, i32)>,
+    suppress_until: Option<Instant>,
+}
+
+impl PointerMotion {
+    fn reset(&mut self) {
+        self.reset_at(Instant::now());
+    }
+
+    fn reset_at(&mut self, now: Instant) {
+        self.position = None;
+        self.suppress_until = Some(now + Duration::from_millis(750));
+    }
+
+    fn accept(&mut self, state: &State, x: i32, y: i32, xrel: i32, yrel: i32) -> bool {
+        self.accept_at(state, (x, y), (xrel, yrel), Instant::now())
+    }
+
+    fn accept_at(
+        &mut self,
+        state: &State,
+        position: (i32, i32),
+        relative: (i32, i32),
+        now: Instant,
+    ) -> bool {
+        let previous = self.position.replace(position);
+        // An active Magic Pointer can keep moving across the foreground handoff.
+        // Track its position during the grace period without stealing Home focus.
+        if self.suppress_until.is_some_and(|until| now < until) {
+            return false;
+        }
+        // webOS may report the restored cursor position with a nonzero delta.
+        // Establish a fresh baseline before allowing hover to replace remote focus.
+        previous.is_some_and(|previous| previous != position)
+            && pointer_motion_active(state, relative.0, relative.1)
+    }
+}
+
 fn animation_wait(vsync: bool, elapsed: Duration) -> u32 {
     if vsync {
         0
@@ -682,18 +741,18 @@ fn run() -> Result<(), String> {
         // Magic Remotes send the separate Exit key for a long Back press.
         // Claim it before video init so the compositor does not close Luma.
         sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_EXIT", "true");
-        // SAM may not relaunch Home when its surface is already foreground. Handle the
-        // physical key ourselves only as Home; normal tile launches keep LG's routing.
-        if options.webos_home {
-            sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_HOME", "true");
-        }
+        // While Luma is foreground, Home returns to its Home tab, including normal tile
+        // and Home Chooser launches. This surface policy is not a global Home-key filter.
+        sdl2::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_HOME", "true");
         // SDL-webOS answers tvpower's screen saver requests with `ack: !suspend_screensaver`, and
         // SDL suspends the screen saver unless this hint allows it: LG's screen saver never
         // started while Luma was in front. A launcher has no video to protect.
         sdl2::hint::set("SDL_VIDEO_ALLOW_SCREENSAVER", "1");
-        // In place of LG's Home executable, SDL's own registration cannot reach the bus under
-        // LG's Home role; Luma registers with sam itself below (lifecycle v2).
-        if platform::runs_as_lg_home() {
+        // Luma owns lifecycle v2 below, both under its own identity and in place of LG Home.
+        // Disable SDL's competing app-named connection before video initialization. A staged
+        // LG Home keeps its existing SDL/root registration behavior.
+        if platform::direct_lifecycle_id(options.webos_home, platform::runs_as_lg_home()).is_some()
+        {
             sdl2::hint::set("SDL_WEBOS_REGISTER_APP", "0");
         }
     }
@@ -971,16 +1030,14 @@ fn run() -> Result<(), String> {
     let mut captured = None;
     let mut last_drawable = None;
     let mut events = sdl.event_pump()?;
-    // Lifecycle as Home: sam sends "relaunch" (bring the running Luma to the front) instead of
+    // App lifecycle: sam sends "relaunch" (bring the running Luma to the front) instead of
     // killing and restarting it, and "close" when it wants Luma to exit. `end_registration`
     // drops a staged Home's registration (webOS 10/11) if a relaunch did not reach the front.
     type EndRegistration = Box<dyn Fn()>;
     #[cfg(not(all(feature = "webos", target_os = "linux", target_arch = "arm")))]
     let (lifecycle_event, end_registration): (Option<u32>, Option<EndRegistration>) = (None, None);
     #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
-    let (lifecycle_event, end_registration): (Option<u32>, Option<EndRegistration>) = if webos
-        && options.webos_home
-    {
+    let (lifecycle_event, end_registration): (Option<u32>, Option<EndRegistration>) = if webos {
         let subsystem = sdl.event()?;
         // SAFETY: registers one SDL user event type before any are pushed.
         let event_type = unsafe { subsystem.register_event()? };
@@ -1002,14 +1059,35 @@ fn run() -> Result<(), String> {
         };
         // SAFETY: geteuid has no preconditions.
         let as_root = unsafe { libc::geteuid() } == 0;
-        if platform::runs_as_lg_home() {
-            // In place of LG's Home executable (webOS 5/6), LG's role is bound to that path,
-            // so Luma registers through lifecycle v2 on its own connection.
+        if !options.webos_home {
+            // SDL/libhelpers already owns APP_ID on LS2, even with SDL automatic lifecycle
+            // registration disabled. Share that connection rather than LSRegister it again.
+            let push = pusher(subsystem.event_sender());
+            match helper_lifecycle::subscribe(move |message| {
+                eprintln!("Luma lifecycle (shared libhelpers): {message}");
+                if let Some(lifecycle) = platform::Lifecycle::from_reply(&message) {
+                    push(lifecycle);
+                }
+            }) {
+                Ok(()) => {
+                    eprintln!("Luma lifecycle: registerApp submitted on SDL/libhelpers connection");
+                    (Some(event_type), None)
+                }
+                Err(error) => {
+                    eprintln!("Luma lifecycle: {error}; continuing without registration");
+                    (None, None)
+                }
+            }
+        } else if let Some(app_id) =
+            platform::direct_lifecycle_id(options.webos_home, platform::runs_as_lg_home())
+        {
+            // In place of LG's Home executable (webOS 5/6), its path-bound role allows
+            // the LG Home identity on Luma's own lifecycle-v2 connection.
             let push = pusher(subsystem.event_sender());
             luna::subscribe(
-                Some(platform::home_id()),
+                Some(app_id),
                 "luna://com.webos.applicationManager/registerApp",
-                &serde_json::json!({"id": platform::home_id()}),
+                &serde_json::json!({"id": app_id}),
                 // sam answers "registered" at once; without it sam would end Home later.
                 Duration::from_secs(10),
                 move |message| {
@@ -1081,6 +1159,8 @@ fn run() -> Result<(), String> {
     // Whether a staged Home's relaunch reached the front; see platform::ForegroundCheck.
     let mut foreground = platform::ForegroundCheck::default();
     let mut focused = !start_hidden;
+    let mut pointer_motion = PointerMotion::default();
+    pointer_motion.reset();
     let mut press: Option<Press> = None;
     let mut back_button = BackButton::default();
     let mut last_minute = None;
@@ -1513,11 +1593,6 @@ fn run() -> Result<(), String> {
             if script_owns_input && external_input {
                 continue;
             }
-            // Remote keys only reach the focused surface.
-            if !controller_input && matches!(event, Event::KeyDown { .. } | Event::KeyUp { .. }) {
-                focused = true;
-                foreground.confirmed();
-            }
             // As Home, these go to /tmp/luma-home.log and show whether a relaunch reached the
             // compositor.
             if options.webos_home
@@ -1535,6 +1610,16 @@ fn run() -> Result<(), String> {
                 eprintln!("Luma window: {win_event:?}");
             }
             let mut pending = vec![];
+            // A key can precede FocusGained. Restore Home before marking the
+            // surface focused, otherwise the later window event skips recovery.
+            if !controller_input && matches!(event, Event::KeyDown { .. } | Event::KeyUp { .. }) {
+                if home_on_focus(&state, webos, focused) {
+                    pending.extend(state.return_home());
+                    pointer_motion.reset();
+                }
+                focused = true;
+                foreground.confirmed();
+            }
             let before_input = Route::capture(&state);
             let mut cue = None;
             match event {
@@ -1544,6 +1629,7 @@ fn run() -> Result<(), String> {
                         press = None;
                         back_button.cancel();
                         pending = state.return_home();
+                        pointer_motion.reset();
                         // A staged Home must come forward itself. If it does not, its
                         // registration would leave the Home key dead: check below.
                         if end_registration.is_some() {
@@ -1578,6 +1664,7 @@ fn run() -> Result<(), String> {
                         tile_editor_service.set_active(false, &[]);
                         visible = false;
                         focused = false;
+                        pointer_motion.reset();
                         press = None;
                         back_button.cancel();
                         if matches!(state.overlay, Some(Overlay::SystemKeyboard)) {
@@ -1590,6 +1677,7 @@ fn run() -> Result<(), String> {
                         state.dirty = true;
                     }
                     WindowEvent::FocusLost => {
+                        pointer_motion.reset();
                         if webos {
                             if matches!(
                                 state.overlay,
@@ -1608,6 +1696,12 @@ fn run() -> Result<(), String> {
                         visible = true;
                         // Shown and Restored can come from SDL itself; only focus confirms.
                         if matches!(win_event, WindowEvent::FocusGained) {
+                            if home_on_focus(&state, webos, focused) {
+                                // Some firmware only restores the SDL surface on Home,
+                                // without delivering a lifecycle relaunch or Home key.
+                                pending.extend(state.return_home());
+                                pointer_motion.reset();
+                            }
                             focused = true;
                             foreground.confirmed();
                         }
@@ -1642,15 +1736,13 @@ fn run() -> Result<(), String> {
                         back_button.cancel();
                     }
                     match key {
-                        _ if webos
-                            && options.webos_home
-                            && i32::from(key) == sdl_events::WEBOS_HOME_KEYCODE =>
-                        {
+                        key if is_home(key, webos) => {
                             if !repeat {
                                 eprintln!("Luma Home key: returning to Home tab");
                                 press = None;
                                 back_button.cancel();
                                 pending = state.return_home();
+                                pointer_motion.reset();
                             }
                         }
                         _ if native_hold => {
@@ -1745,9 +1837,15 @@ fn run() -> Result<(), String> {
                         cue = Some(Cue::Select);
                     }
                 }
-                Event::MouseMotion { x, y, .. }
-                    if state.moving.is_none()
-                        && !matches!(state.overlay, Some(Overlay::SystemKeyboard)) =>
+                Event::MouseMotion {
+                    x, y, xrel, yrel, ..
+                } if state.moving.is_none()
+                    && (!webos
+                        || (focused
+                            && visible
+                            && pointer_motion.accept(&state, x, y, xrel, yrel)))
+                    && pointer_motion_active(&state, xrel, yrel)
+                    && !matches!(state.overlay, Some(Overlay::SystemKeyboard)) =>
                 {
                     let hovered = hit(&scene.controls, &window, x, y, &state);
                     if let Some(target) = hovered.clone() {
@@ -1976,6 +2074,9 @@ fn run() -> Result<(), String> {
         // stable until release, even if an input reply arrived in the same event-loop turn.
         let inputs_active =
             input_refresh_active(&state, webos, focused, visible) && press.is_none();
+        if platform.take_input_changed() {
+            input_refresh.invalidate(Instant::now());
+        }
         if let Some(inputs) = input_refresh.take_pending(inputs_active) {
             state.set_inputs(inputs);
         }

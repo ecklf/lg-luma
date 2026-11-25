@@ -114,7 +114,21 @@ opened automatically. Input is ignored while Luma is unfocused or hidden; discon
 cancels pending holds. USB/Bluetooth availability depends on the TV firmware and SDL
 backend; verify both on hardware before claiming support for a specific TV.
 
-General → Show app names is off by default, preserving the compact, unlabeled drawer.
+General orders Clock, Language, UI sounds, App drawer, Recent apps and Reduced motion.
+App drawer uses distinct layout and text-field icons for Style and App names. System's
+Attributions action uses a copyright icon without a trailing chevron.
+
+Home returns select the first favorite, including TV focus restoration from Home or the drawer
+without a lifecycle relaunch. Focus-only restoration preserves settings and overlays. Stationary
+SDL mouse-motion notifications do not replace remote focus. On webOS, the first pointer-position
+report after startup or a Home return establishes a baseline, even if SDL supplies a nonzero
+relative delta. Hover is also suppressed for 750 ms during the foreground handoff while position
+tracking continues; remote navigation and explicit pointer clicks remain immediate. Afterward,
+only fresh position changes can replace remote focus. Remote keys arriving
+before the window-focus event also trigger Home recovery. Verify
+returning from an app and an HDMI input, and dismissing the system keyboard, on a TV.
+
+General → App drawer → App names is off by default, preserving the compact, unlabeled drawer.
 When enabled, the app drawer shows a centered, single-line name beneath the focused grid card
 in both styles, with wider row spacing and scroll padding for the name. Long names are ellipsized
 to the card width. Favorites, Home previews and app-management cards stay unlabeled; labels do not
@@ -502,6 +516,12 @@ preferences are not reloaded. At most one input read is queued, errors retain th
 and retry after ten seconds, and an unchanged snapshot does not redraw. Holds, reordering, other overlays,
 loading and hidden/unfocused pages pause polling and defer pending snapshots, keeping pointer
 targets stationary through release. A later complete inventory supersedes deferred input data.
+Pauses preserve the deadline, so repeated short interactions cannot postpone refresh forever.
+A native EIM `getAllInputStatus` subscription coalesces change notifications into an immediate
+worker refresh. Subscription refusal leaves polling available. The subscription does not query
+CEC power or switch inputs. Firmware may still return cached `hdmiSignalExist` values. Verify
+PS5 wake/rest transitions while remaining on Home, plus unplug/replug and keyboard dismissal,
+on hardware before treating signal freshness or focus restoration as confirmed.
 Auto visibility remains cable-based: boolean `hdmiPlugIn` takes priority over `connected`, with
 the existing fallback when unavailable or malformed. Optional boolean `hdmiSignalExist` changes
 only the detail to **No signal** when a cable is present. A stale positive signal cannot override
@@ -1031,17 +1051,39 @@ failures preserve the last valid inputs. No failed inventory read substitutes de
 
 ### Home Chooser integration
 
+On native webOS, Luma requests `SDL_WEBOS_ACCESS_POLICY_KEYS_HOME` before video initialization
+for every launch, not just legacy Home takeover. When the compositor delivers Home to Luma's
+foreground surface, it returns directly to the Home tab through `State::return_home`, dismissing
+overlays and saving in-progress keyboard edits. Repeated Home stays at the root, without exiting
+or opening Recents. Ordinary tile launches receive the same behavior, even when Luma is not the
+selected launcher. Desktop key handling is unchanged.
+
+This is a native window policy, not a global key filter or a Home Chooser API call. It adds no
+installation permission and works independently of the inventory/icon API integration.
+TV verification is pending: check Home from Apps, Settings, overlays and the root, repeated presses
+and holds, opening Luma from its tile without selecting it as Home, launching another app and
+pressing Home, and changing the selected launcher. A platform relaunch after the key is safe for
+navigation, but actual compositor delivery and background routing must be verified on hardware.
+
 The installed `appinfo.json` declares `appCategory: ["home"]`, so
 [Home Chooser](https://github.com/webosbrew/home-chooser/blob/main/docs/launcher-api.md) can select
 Luma under `com.ecklf.luma`. Keep the window full-screen (no `defaultWindowType: "overlay"`):
 Home Chooser uses this distinction for its empty-screen policy. Back must not exit the root Home.
 
-`handlesRelaunch: true` and `nativeLifeCycleInterfaceVersion: 2` let the pinned SDL-webOS library
-register the installed app through `registerApp`, raise the existing window on `relaunch`, and
-send SDL Quit on `close`. `noSplashOnLaunch: true` avoids SAM splash surfaces for the native
-launcher. This path uses SDL's existing registration, not Luma's separate LG-identity lifecycle
-subscription. Home Chooser launches retain `APPID=com.ecklf.luma`; do not classify them as
-`options.webos_home`, which is reserved for the legacy takeover paths.
+`handlesRelaunch: true` and `nativeLifeCycleInterfaceVersion: 2` match Luma's explicit
+`registerApp` subscription under `com.ecklf.luma`, submitted through SDL/libhelpers' existing
+app-named LS2 connection. Disabling SDL automatic lifecycle registration does not release that
+bus name, so Luma must not open a second connection claiming it. SDL automatic lifecycle
+registration is disabled before video initialization to avoid competing subscriptions.
+On `relaunch`, Luma returns to its Home scene, restores/shows/raises the existing window and
+refreshes inventory; on `close` it exits. Submission is nonblocking, and a submission failure is
+logged rather than aborting before the first frame. Every reply is logged with
+`Luma lifecycle (shared libhelpers)`. This needs neither root nor app-ID impersonation.
+`noSplashOnLaunch: true` avoids SAM splash surfaces for the native launcher. Home Chooser
+launches retain `APPID=com.ecklf.luma`; do not classify them as `options.webos_home`, which
+is reserved for the unchanged legacy takeover paths. On a TV, verify that background Home
+presses deliver relaunch events, preserve Luma's PID and actually focus the existing window;
+desktop tests do not establish SAM or compositor behavior.
 
 Only the `home` category is required for selection. The optional
 `org.webosbrew.homechooser.applications` permission is not declared, so Luma can still install

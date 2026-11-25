@@ -150,7 +150,23 @@ impl ForegroundCheck {
     }
 }
 
-/// What sam asks of a registered Home, from one lifecycle reply. Only TV builds register.
+/// Identity for a direct lifecycle-v2 connection. A staged LG Home keeps its separate
+/// root/app-ID registration path; ordinary launches always use Luma's own identity.
+#[cfg_attr(
+    not(all(feature = "webos", target_os = "linux", target_arch = "arm")),
+    allow(dead_code)
+)]
+pub fn direct_lifecycle_id(as_home: bool, replaces_lg_home: bool) -> Option<&'static str> {
+    if !as_home {
+        Some(APP_ID)
+    } else if replaces_lg_home {
+        Some(home_id())
+    } else {
+        None
+    }
+}
+
+/// What sam asks of a registered app, from one lifecycle reply. Only TV builds register.
 #[cfg_attr(
     not(all(feature = "webos", target_os = "linux", target_arch = "arm")),
     allow(dead_code)
@@ -252,12 +268,37 @@ pub struct Platform {
     sender: mpsc::Sender<Request>,
     pub receiver: mpsc::Receiver<Response>,
     pub webos: bool,
+    input_changed: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Platform {
     pub fn new(webos: bool) -> Self {
         let (sender, requests) = mpsc::channel();
         let (responses, receiver) = mpsc::channel();
+        let input_changed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        #[cfg(all(feature = "webos", target_os = "linux", target_arch = "arm"))]
+        if webos {
+            let changed = input_changed.clone();
+            // Subscribe from the native process, off the SDL and inventory threads.
+            // Coalesce bursts rather than queueing one inventory request per event.
+            thread::spawn(move || {
+                if let Err(error) = crate::luna::subscribe(
+                    None,
+                    "luna://com.webos.service.eim/getAllInputStatus",
+                    &json!({"subscribe": true}),
+                    std::time::Duration::from_secs(4),
+                    move |reply| {
+                        if reply.get("returnValue").and_then(Value::as_bool) == Some(true)
+                            && reply.get("devices").is_some_and(Value::is_array)
+                        {
+                            changed.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    },
+                ) {
+                    eprintln!("Luma input subscription: {error}; using periodic refresh");
+                }
+            });
+        }
         thread::spawn(move || {
             let mut desktop_inventory = demo_inventory();
             let mut storage = usb::Storage::default();
@@ -404,11 +445,17 @@ impl Platform {
             sender,
             receiver,
             webos,
+            input_changed,
         }
     }
 
     pub fn send(&self, request: Request) {
         let _ = self.sender.send(request);
+    }
+
+    pub fn take_input_changed(&self) -> bool {
+        self.input_changed
+            .swap(false, std::sync::atomic::Ordering::Relaxed)
     }
 }
 
@@ -520,6 +567,7 @@ pub fn can_uninstall(id: &str) -> bool {
                 | "com.luma.launcher.native"
                 | "org.webosbrew.hbchannel"
                 | "org.webosbrew.hbchannel.service"
+                | "org.webosbrew.homechooser"
         )
 }
 

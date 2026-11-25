@@ -30,20 +30,13 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 
 ## Features
 
-- Customizable app drawer with optional names beneath selected non-favorite apps (off by default), input icons and recent app switching.
+- Customizable app drawer with optional names beneath selected non-favorite apps (General → App drawer → App names, off by default), input icons and recent app switching.
 - Left/right navigation wraps between the first and last app in favorites and the app drawer.
 - Movable greeting, weather, stock and crypto widgets.
 - Choose Kuankuan (default), Breezy, Lucide or Kickstand weather artwork, toggle icons on/off, and optionally hide the location name. Layout previews follow these settings.
 - Offline credits in System → Attributions, with remote and mouse-wheel scrolling.
 - Midnight background and custom uploads, with optional rotation.
 - Webhook shortcuts and 16 interface languages.
-
-Inputs also lists USB storage reported by webOS. Selecting a storage device opens an installed
-LG media browser, where you choose the device; it does not switch an HDMI source. USB discovery
-and media opening still need hardware verification across TV firmware versions.
-
-Personalize your greeting in **Settings → Widgets → Greeting → Configure → Name**.
-Use **Clear name** to return to an unnamed greeting; names are saved only on your TV.
 
 ## Compatibility
 
@@ -133,21 +126,16 @@ Use **Clear name** to return to an unnamed greeting; names are saved only on you
 
 ### Homebrew Channel
 
-Add this custom repository URL to Homebrew Channel:
-
-```text
-https://github.com/ecklf/lg-luma/releases/latest/download/repo.json
-```
-
-Upvote [the official Homebrew Channel repository PR](https://github.com/webosbrew/apps-repo/pull/343)
-to help make Luma available by default.
+Open Homebrew Channel, find **Luma** in the default
+[webOS Homebrew apps repository](https://github.com/webosbrew/apps-repo), and select **Install**.
+No custom repository needs to be added manually.
 
 ### SSH
 
 On your computer, replace `TV_IP`:
 
 ```sh
-scp -O dist/com.ecklf.luma_3.13.0_arm.ipk root@TV_IP:/tmp/luma.ipk
+scp -O dist/com.ecklf.luma_3.13.4_arm.ipk root@TV_IP:/tmp/luma.ipk
 ssh root@TV_IP
 ```
 
@@ -160,29 +148,20 @@ luna-send -i luna://com.webos.appInstallService/dev/install \
 
 ## Replacing LG Home
 
-### Home Chooser (recommended)
+### Home Chooser
 
-[Home Chooser](https://github.com/webosbrew/home-chooser/) is the recommended way to select Luma
-as the full-screen Home app without Luma's takeover scripts or an Input Hook mapping:
+[Home Chooser](https://github.com/webosbrew/home-chooser/) is the recommended way to override
+your default Home application.
 
 > [!IMPORTANT]
 > Disable any previous takeover, autostart or Home-key mapping **before selecting Luma in
 > Home Chooser**. See the **Old methods** block below for disable instructions.
 
-1. Disable any old methods you previously enabled (see **Old methods** below).
-2. Install Home Chooser from Homebrew Channel and open it once to finish its root setup.
-3. Install or update Luma, then open Home Chooser, select **Luma**, and confirm. Press Home to try it.
-
-Home Chooser will be the default method in v4. In-app upgrades from v1–v3 to v4 or later require
-explicit confirmation of these steps before downloading. **Close** is focused by default. This
-safeguard only applies to Luma releases that include it, not older installations or updates
-performed through Homebrew Channel or SSH.
+1. Install Home Chooser from Homebrew Channel and open it once to finish its root setup.
+2. Install or update Luma, then open Home Chooser, select **Luma**, and confirm. Press Home to try it.
 
 <details>
 <summary>Old methods</summary>
-
-These legacy methods are kept for reference. Use **Home Chooser (recommended)** above for new
-setups. Disable any enabled old method before switching to Home Chooser.
 
 ### Takeover Method
 
@@ -330,7 +309,7 @@ checksum-pinned SDL-webOS library; both downloads are cached under `.build/`.
 Output:
 
 ```text
-dist/com.ecklf.luma_3.13.0_arm.ipk
+dist/com.ecklf.luma_3.13.4_arm.ipk
 dist/sha256sums
 dist/repo.json
 dist/app-icon-large.png

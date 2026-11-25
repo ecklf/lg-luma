@@ -839,6 +839,7 @@ fn uninstall_protects_system_apps_and_does_not_spawn_when_denied() {
         APP,
         "com.webos.app.home",
         "org.webosbrew.hbchannel",
+        "org.webosbrew.homechooser",
         "bad/id",
         "",
     ] {

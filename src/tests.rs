@@ -5,7 +5,11 @@ use crate::{
     storage, view,
 };
 use serde_json::json;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 
 #[path = "recents-tests.rs"]
 mod recent_tests;
@@ -126,7 +130,7 @@ fn ui_sounds_default_off_and_toggle_without_moving_controls() {
         let mut state = ready();
         state.open(2);
         state.direction(Direction::Right, &controls(&state));
-        for _ in 0..4 {
+        for _ in 0..2 {
             state.direction(Direction::Down, &controls(&state));
         }
         assert_eq!(state.focus, Target::Setting(11));
@@ -165,6 +169,99 @@ fn manage_apps(state: &mut State) {
 }
 
 #[test]
+fn home_focus_recovery_selects_the_first_favorite_and_ignores_stationary_pointer_events() {
+    let mut state = ready();
+    state.preferences.favorites = Some(vec!["youtube.leanback.v4".into(), "netflix".into()]);
+    state.open(2);
+    assert!(!crate::home_on_focus(&state, true, false));
+    state.open(1);
+    assert!(crate::home_on_focus(&state, true, false));
+    assert!(!crate::home_on_focus(&state, false, false));
+    assert!(!crate::home_on_focus(&state, true, true));
+    state.loading = true;
+    assert!(!crate::home_on_focus(&state, true, false));
+    state.loading = false;
+    state.overlay = Some(Overlay::SystemKeyboard);
+    assert!(!crate::home_on_focus(&state, true, false));
+    state.overlay = None;
+    state.hover = Some(Target::InputsMenu);
+    state.return_home();
+    assert_eq!(state.focus, Target::App("youtube.leanback.v4".into()));
+    assert!(state.hover.is_none());
+    assert!(!crate::pointer_motion_active(&state, 0, 0));
+    assert!(crate::pointer_motion_active(&state, 1, 0));
+    assert!(crate::pointer_motion_active(&state, 0, -1));
+    state.pointer = true;
+    assert!(crate::pointer_motion_active(&state, 0, 0));
+    state.set_inventory(demo_inventory(), None);
+    assert_eq!(state.focus, Target::App("youtube.leanback.v4".into()));
+}
+
+#[test]
+fn restored_pointer_position_does_not_steal_home_focus_even_with_a_relative_delta() {
+    let mut state = ready();
+    let mut motion = crate::PointerMotion::default();
+    let favorite = Target::App("netflix".into());
+    for (x, y) in [(1800, 100), (1600, 120), (1700, 90)] {
+        state.pointer_focus(Target::InputsMenu);
+        let now = Instant::now();
+        motion.reset_at(now);
+        let resumed = now + Duration::from_millis(750);
+        state.return_home();
+        assert_eq!(state.focus, favorite);
+        assert!(!motion.accept_at(&state, (x, y), (x, y), resumed));
+        assert!(!motion.accept_at(&state, (x, y), (5, -3), resumed));
+        assert!(!motion.accept_at(&state, (x, y), (0, 0), resumed));
+        assert_eq!(state.focus, favorite);
+        // Real movement after the position baseline still enables pointer use.
+        assert!(motion.accept_at(&state, (x + 1, y), (1, 0), resumed));
+        state.pointer_focus(Target::InputsMenu);
+        assert!(state.pointer);
+        assert!(motion.accept_at(&state, (x + 2, y), (1, 0), resumed));
+    }
+}
+
+#[test]
+fn home_return_suppresses_continuing_pointer_motion_until_the_grace_period_ends() {
+    let mut state = ready();
+    let mut motion = crate::PointerMotion::default();
+    let now = Instant::now();
+    motion.reset_at(now);
+    state.return_home();
+    for millis in [0, 100, 400, 749] {
+        let x = 1600 + millis as i32;
+        assert!(!motion.accept_at(
+            &state,
+            (x, 100),
+            (10, 2),
+            now + Duration::from_millis(millis)
+        ));
+        assert_eq!(state.focus, Target::App("netflix".into()));
+    }
+    let resumed = now + Duration::from_millis(750);
+    // No stale hover is applied on expiry. A fresh position change is required.
+    assert!(!motion.accept_at(&state, (2349, 100), (10, 2), resumed));
+    assert!(motion.accept_at(&state, (2350, 100), (1, 0), resumed));
+    // Explicit clicks bypass hover suppression and can still focus immediately.
+    motion.reset_at(resumed);
+    state.pointer_focus(Target::InputsMenu);
+    assert_eq!(state.focus, Target::InputsMenu);
+    assert!(state.pointer);
+    assert!(!motion.accept_at(&state, (1600, 100), (10, 2), resumed));
+}
+
+#[test]
+fn general_settings_follow_the_visible_order_for_remote_navigation() {
+    let mut state = ready();
+    state.open(2);
+    state.direction(Direction::Right, &controls(&state));
+    for index in [1, 4, 11, 13, 12, 2] {
+        assert_eq!(state.focus, Target::Setting(index));
+        state.direction(Direction::Down, &controls(&state));
+    }
+}
+
+#[test]
 fn home_relaunch_returns_from_apps_and_settings() {
     for page in [1, 2] {
         let mut state = ready();
@@ -189,6 +286,39 @@ fn home_relaunch_returns_from_apps_and_settings() {
         assert!(state.dirty);
         assert!(state.return_home().is_empty());
         assert!(state.overlay.is_none(), "Home again must not open Recents");
+    }
+}
+
+#[test]
+fn foreground_home_key_is_native_only_without_a_takeover_or_chooser_requirement() {
+    let key = sdl2::keyboard::Keycode::from_i32(crate::sdl_events::WEBOS_HOME_KEYCODE).unwrap();
+    assert!(crate::is_home(key, true));
+    assert!(!crate::is_home(key, false));
+    for key in [
+        sdl2::keyboard::Keycode::AcBack,
+        sdl2::keyboard::Keycode::Escape,
+        sdl2::keyboard::Keycode::Return,
+    ] {
+        assert!(!crate::is_home(key, true));
+    }
+}
+
+#[test]
+fn foreground_home_navigation_stays_at_root_and_a_second_delivery_is_harmless() {
+    for page in [0, 1, 2] {
+        let mut state = ready();
+        state.open(page);
+        state.query = "YouTube".into();
+        state.pressed = Some(Target::Nav(page));
+        for _ in 0..2 {
+            assert!(state.return_home().is_empty());
+            assert_eq!(state.page, Page::Home);
+            assert_eq!(state.drawer_visibility, 0.);
+            assert!(state.query.is_empty());
+            assert!(state.pressed.is_none());
+            assert!(state.overlay.is_none());
+            assert_eq!(state.recents.visibility, 0.);
+        }
     }
 }
 
@@ -1577,6 +1707,7 @@ fn protected_apps_cannot_be_deleted_through_ui_or_worker() {
         "com.luma.launcher.native",
         "org.webosbrew.hbchannel",
         "org.webosbrew.hbchannel.service",
+        "org.webosbrew.homechooser",
         "custom.lamp",
         "invalid';command",
     ] {
@@ -2424,6 +2555,17 @@ fn normal_app_preload_does_not_change_startup_visibility() {
         assert_eq!(options.preload, None);
         assert!(!options.start_hidden(), "{metadata}");
     }
+}
+
+#[test]
+fn direct_lifecycle_registration_preserves_app_and_legacy_home_identities() {
+    use crate::platform::{APP_ID, direct_lifecycle_id, home_id};
+    // Home Chooser and tile launches are the installed app, regardless of root status.
+    assert_eq!(direct_lifecycle_id(false, false), Some(APP_ID));
+    assert_eq!(direct_lifecycle_id(false, true), Some(APP_ID));
+    // Executable replacement keeps LG's identity; staged Home retains its existing fallback.
+    assert_eq!(direct_lifecycle_id(true, true), Some(home_id()));
+    assert_eq!(direct_lifecycle_id(true, false), None);
 }
 
 #[test]

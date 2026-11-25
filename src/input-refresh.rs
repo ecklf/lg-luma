@@ -15,7 +15,6 @@ impl Refresh {
 
     pub fn due(&mut self, now: Instant, active: bool) -> bool {
         if !active {
-            self.next = None;
             return false;
         }
         if self.in_flight || now < *self.next.get_or_insert(now + Self::INTERVAL) {
@@ -23,6 +22,11 @@ impl Refresh {
         }
         self.in_flight = true;
         true
+    }
+
+    /// An EIM event invalidates the timer without queueing another in-flight read.
+    pub fn invalidate(&mut self, now: Instant) {
+        self.next = Some(now);
     }
 
     pub fn completed(

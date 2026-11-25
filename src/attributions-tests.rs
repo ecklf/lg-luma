@@ -18,6 +18,34 @@ fn opened() -> State {
 }
 
 #[test]
+fn attribution_action_has_a_copyright_icon_and_no_chevron() {
+    let mut state = ready();
+    state.open(2);
+    state.section = SYSTEM_SECTION;
+    let rendered = scene(&state);
+    let rect = rendered
+        .controls
+        .iter()
+        .find(|control| control.target == Target::Attributions)
+        .unwrap()
+        .rect;
+    let icons: Vec<_> = rendered
+        .draw
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::TintedImage(path, icon, ..)
+                if icon.y >= rect.y && icon.y + icon.h <= rect.y + rect.h =>
+            {
+                Some(path.as_str())
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(icons.iter().any(|path| path.ends_with("/copyright.lvec")));
+    assert!(!icons.iter().any(|path| path.ends_with("/right.lvec")));
+}
+
+#[test]
 fn attributions_is_read_only_and_restores_system_parent_for_remote_and_pointer() {
     let mut state = opened();
     let prefs = serde_json::to_value(&state.preferences).unwrap();
