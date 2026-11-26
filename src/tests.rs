@@ -1364,6 +1364,11 @@ fn system_category_owns_refresh_and_quit_and_restores_sidebar_focus() {
         preferences
     );
     state.direction(Direction::Down, &controls(&state));
+    assert_eq!(
+        state.focus,
+        Target::Setting(crate::state::WEB_ACCESS_SETTING)
+    );
+    state.direction(Direction::Down, &controls(&state));
     assert_eq!(state.focus, Target::Setting(5));
     assert_eq!(state.activate(), vec![Effect::Quit]);
     state.back();
@@ -4029,6 +4034,295 @@ fn hovering_corner_controls_keeps_their_geometry_and_does_not_change_pages() {
     assert_eq!(state.page, Page::Home);
     state.hover = None;
     assert_eq!(tab(&state), idle);
+}
+
+#[test]
+fn web_access_settings_pair_list_and_remove_devices() {
+    let mut state = ready();
+    state.open(2);
+    state.section = crate::state::SYSTEM_SECTION;
+    state.focus = Target::Setting(crate::state::WEB_ACCESS_SETTING);
+    assert!(state.activate().is_empty());
+    assert_eq!(state.subpage, Some(crate::state::Subpage::WebAccess));
+    assert_eq!(state.focus, Target::WebAccessToggle);
+    assert!(!state.preferences.web_access, "web access is opt-in");
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.web_access);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!state.preferences.web_access);
+
+    // Whole-TV control is a separate opt-in below web access.
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::TvRemoteToggle);
+    assert!(!state.preferences.tv_remote, "whole-TV control is opt-in");
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.tv_remote);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(!state.preferences.tv_remote);
+
+    // Asking to pair turns web access on and opens the dialog.
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::WebAccessPair);
+    assert_eq!(state.activate(), vec![Effect::Save]);
+    assert!(state.preferences.web_access);
+    assert!(matches!(state.overlay, Some(Overlay::WebAccessPair)));
+    assert_eq!(state.focus, Target::CloseDialog);
+    state.back();
+    assert!(state.overlay.is_none());
+    assert_eq!(state.focus, Target::WebAccessPair);
+
+    let device: crate::web_access::Device = serde_json::from_value(serde_json::json!({
+        "id": "abc", "name": "iPhone · Safari", "hash": "00", "paired": 0
+    }))
+    .unwrap();
+    state.web_devices = vec![device];
+    state.direction(Direction::Down, &controls(&state));
+    assert_eq!(state.focus, Target::WebAccessDevice("abc".into()));
+    assert!(state.activate().is_empty());
+    assert!(state.web_devices.is_empty());
+    assert_eq!(state.forget_web_devices, vec!["abc".to_owned()]);
+    assert_eq!(state.focus, Target::WebAccessPair);
+
+    state.direction(Direction::Left, &controls(&state));
+    assert_eq!(state.subpage, None);
+    assert_eq!(
+        state.focus,
+        Target::Setting(crate::state::WEB_ACCESS_SETTING)
+    );
+}
+
+#[test]
+fn web_settings_apply_like_the_same_choices_on_the_tv() {
+    let mut state = ready();
+    let mut settings = crate::web_settings::Settings::of(&state.preferences);
+    assert!(state.apply_web_settings(settings.clone()).is_empty());
+    settings.hour_24 = true;
+    settings.language = crate::i18n::Language::De;
+    settings.wallpaper_cycle = !state.preferences.wallpaper_cycle;
+    assert_eq!(
+        state.apply_web_settings(settings.clone()),
+        vec![Effect::Save]
+    );
+    assert!(state.preferences.hour_24);
+    assert_eq!(state.preferences.language, crate::i18n::Language::De);
+    // Turning rotation on starts its timer, as the TV toggle does.
+    assert!(state.preferences.wallpaper_changed > 0);
+    assert_eq!(
+        crate::web_settings::Settings::of(&state.preferences),
+        settings
+    );
+}
+
+#[test]
+fn web_settings_cover_the_drawer_recents_greeting_and_weather_display() {
+    use crate::model::{AppDrawerStyle, RecentAppsBehavior, WeatherIconStyle};
+    let mut state = ready();
+    let mut settings = crate::web_settings::Settings::of(&state.preferences);
+    settings.app_drawer_style = AppDrawerStyle::Minimal;
+    settings.show_drawer_app_names = !settings.show_drawer_app_names;
+    settings.recent_apps_behavior = RecentAppsBehavior::ShortPress;
+    settings.weather_show_location = !settings.weather_show_location;
+    settings.weather_show_icon = !settings.weather_show_icon;
+    settings.weather_icons = WeatherIconStyle::Lucide;
+    // The same cleaning as the TV keyboard; an unknown icon style falls back to the default.
+    settings.greeting_name = "  Max\n ".into();
+    let settings = settings.cleaned();
+    assert_eq!(settings.greeting_name, "Max");
+    assert_eq!(
+        state.apply_web_settings(settings.clone()),
+        vec![Effect::Save]
+    );
+    let preferences = &state.preferences;
+    assert_eq!(preferences.app_drawer_style, AppDrawerStyle::Minimal);
+    assert_eq!(
+        preferences.recent_apps_behavior,
+        RecentAppsBehavior::ShortPress
+    );
+    assert_eq!(preferences.weather_icons, WeatherIconStyle::Lucide);
+    assert_eq!(preferences.greeting_name, "Max");
+    assert_eq!(
+        crate::web_settings::Settings::of(&state.preferences),
+        settings
+    );
+    let mut hidden = crate::web_settings::Settings::of(&state.preferences);
+    hidden.weather_icons = WeatherIconStyle::None;
+    assert_eq!(hidden.cleaned().weather_icons, WeatherIconStyle::default());
+}
+
+#[test]
+fn web_weather_size_and_style_move_the_widget_like_the_tv() {
+    use crate::model::HomeWidget;
+    let mut state = ready();
+    let mut settings = crate::web_settings::Settings::of(&state.preferences);
+    assert!(!settings.weather_small);
+    settings.weather_small = true;
+    assert_eq!(
+        state.apply_web_settings(settings.clone()),
+        vec![Effect::Save]
+    );
+    assert!(state.preferences.weather_small);
+    // Growing back goes through the TV's relocation: the 2 × 2 widget always fits somewhere.
+    settings.weather_small = false;
+    state.apply_web_settings(settings);
+    assert!(!state.preferences.weather_small);
+    let position = state.preferences.widget_position(HomeWidget::Weather);
+    assert!(
+        state
+            .preferences
+            .can_place_widget(HomeWidget::Weather, position)
+    );
+}
+
+#[test]
+fn web_widgets_list_add_and_configure_further_widgets_like_the_tv() {
+    use crate::model::{HomeWidget, WeatherStyle};
+    use crate::web_settings::{WebWidget, WidgetChange};
+    let mut state = ready();
+    let listed = WebWidget::all(&state.preferences);
+    // The four widgets, plus the next weather, crypto and stocks widget not yet created.
+    let next = HomeWidget::ExtraWeather(0);
+    let entry = listed.iter().find(|entry| entry.widget == next).unwrap();
+    assert!(!entry.present && entry.weather.is_none() && entry.number == 2);
+    // Only that next one can be added, not an arbitrary index.
+    let far = WidgetChange::Add {
+        widget: HomeWidget::ExtraWeather(5),
+        column: 0,
+        row: 2,
+    };
+    assert!(state.apply_web_widget(far).is_empty());
+    assert!(state.preferences.extra_weather.is_empty());
+    let free = (0..crate::model::HOME_GRID_CELLS)
+        .filter_map(crate::model::WidgetPosition::from_cell)
+        .find(|position| {
+            let mut preferences = state.preferences.clone();
+            preferences.prepare_widget(next);
+            preferences.can_place_widget(next, *position)
+        })
+        .unwrap();
+    let add = WidgetChange::Add {
+        widget: next,
+        column: free.column,
+        row: free.row,
+    };
+    assert_eq!(state.apply_web_widget(add), vec![Effect::Save]);
+    assert!(state.preferences.has_widget(next));
+    // Its own settings, through the TV's size and style rules.
+    let config = WidgetChange::Weather {
+        widget: next,
+        unit: crate::weather::Unit::Fahrenheit,
+        style: WeatherStyle::ALL[0],
+        small: true,
+        show_location: false,
+        show_icon: true,
+        icons: crate::model::WeatherIconStyle::Kickstand,
+    };
+    assert_eq!(state.apply_web_widget(config), vec![Effect::Save]);
+    let saved = state.preferences.weather_settings(next);
+    assert!(saved.small && !saved.show_location);
+    assert_eq!(saved.unit, crate::weather::Unit::Fahrenheit);
+    let entry = WebWidget::all(&state.preferences)
+        .into_iter()
+        .find(|entry| entry.widget == next)
+        .unwrap();
+    assert_eq!(
+        (entry.width, entry.height),
+        (1, 1),
+        "the grid shows the real size"
+    );
+    // A place for that widget leaves the first weather widget's place alone.
+    let first = state.preferences.weather_location.clone();
+    let place = crate::weather::Location {
+        name: "Berlin".into(),
+        region: String::new(),
+        country: "Germany".into(),
+        latitude: 52.5,
+        longitude: 13.4,
+    };
+    assert_eq!(
+        state.apply_web_weather_location(next, Some(place.clone())),
+        vec![Effect::Save]
+    );
+    assert_eq!(
+        state.preferences.weather_settings(next).location,
+        Some(place)
+    );
+    assert_eq!(state.preferences.weather_location, first);
+}
+
+#[test]
+fn web_market_widgets_take_checked_symbols_and_known_currencies() {
+    use crate::model::HomeWidget;
+    use crate::web_settings::WidgetChange;
+    let mut state = ready();
+    let market = |symbol: &str, currency: &str| WidgetChange::Market {
+        widget: HomeWidget::Stocks,
+        symbol: symbol.into(),
+        currency: currency.into(),
+    };
+    assert_eq!(
+        state.apply_web_widget(market(" aapl ", "EUR")),
+        vec![Effect::Save]
+    );
+    assert_eq!(state.preferences.stocks.symbol, "AAPL");
+    assert_eq!(state.preferences.stocks.currency, "EUR");
+    assert!(
+        state
+            .apply_web_widget(market("not a symbol!", "EUR"))
+            .is_empty()
+    );
+    assert!(state.apply_web_widget(market("MSFT", "XYZ")).is_empty());
+    assert_eq!(state.preferences.stocks.symbol, "AAPL");
+}
+
+#[test]
+fn web_widget_layout_follows_the_tv_placement_rules() {
+    use crate::model::HomeWidget;
+    use crate::web_settings::WidgetChange;
+    let mut state = ready();
+    // Weather is a 2×1 line below the greeting by default; the 4×1 greeting cannot move onto it.
+    let blocked = WidgetChange::Move {
+        widget: HomeWidget::Greeting,
+        column: 0,
+        row: 1,
+    };
+    assert!(state.apply_web_widget(blocked).is_empty());
+    let moved = WidgetChange::Move {
+        widget: HomeWidget::Greeting,
+        column: 0,
+        row: 3,
+    };
+    assert_eq!(state.apply_web_widget(moved), vec![Effect::Save]);
+    assert_eq!(state.preferences.greeting_position.row, 3);
+    // Off the grid, then back where it fits; removing keeps configuration.
+    let remove = WidgetChange::Remove {
+        widget: HomeWidget::Weather,
+    };
+    assert_eq!(state.apply_web_widget(remove), vec![Effect::Save]);
+    assert!(!state.preferences.has_widget(HomeWidget::Weather));
+    let outside = WidgetChange::Add {
+        widget: HomeWidget::Weather,
+        column: 5,
+        row: 0,
+    };
+    assert!(
+        state.apply_web_widget(outside).is_empty(),
+        "a 2-wide widget cannot start in column 6"
+    );
+    let add = WidgetChange::Add {
+        widget: HomeWidget::Weather,
+        column: 0,
+        row: 0,
+    };
+    assert_eq!(state.apply_web_widget(add), vec![Effect::Save]);
+    assert!(state.preferences.has_widget(HomeWidget::Weather));
+    assert_eq!(
+        state.apply_web_widget(WidgetChange::Reset),
+        vec![Effect::Save]
+    );
+    assert_eq!(
+        state.preferences.greeting_position,
+        HomeWidget::Greeting.default_position()
+    );
 }
 
 #[test]

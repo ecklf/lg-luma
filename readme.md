@@ -36,6 +36,8 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 - Choose Kuankuan (default), Breezy, Lucide or Kickstand weather artwork, toggle icons on/off, and optionally hide the location name. Layout previews follow these settings.
 - Offline credits in System → Attributions, with remote and mouse-wheel scrolling.
 - Midnight background and custom uploads, with optional rotation.
+- Optional web access: change Luma from a phone or computer browser, with a live picture and a
+  remote. See [Phone and computer](#phone-and-computer-web-access).
 - Webhook shortcuts and 16 interface languages.
 
 ## Compatibility
@@ -288,6 +290,33 @@ You can use [LG Input Hook](https://repo.webosbrew.org/apps/org.webosbrew.inputh
 Test on a spare button first. Disable the mapping in Input Hook to restore normal Home behavior.
 
 </details>
+
+## Phone and computer (web access)
+
+Change Luma from a phone or computer browser instead of the remote. Open
+**Settings → System → Phone & computer → Pair a device**, then scan the QR code, or open the
+shown address and enter the PIN. A device pairs once; afterwards it opens the page from a bookmark
+whenever Luma runs, also while another app is in front.
+
+The page looks like Luma and shows a live picture of what Luma shows on the TV (its Home while
+another app is in front; other apps are never captured). It covers **General**, **Apps**
+(favorites, their order, hidden apps), **Background** (including adding and deleting your own
+photos), **Widgets** (clock, date, weather location, shortcut tiles, inputs) and **System**
+(updates, refresh, icon cache, text rendering and the paired devices). Widgets and favorites move
+by dragging, and removing a photo, favorite or device can be undone for a few seconds.
+
+**Remote** under the picture works like the TV remote inside Luma: arrows, OK, Back, Home,
+Options, a tap on the picture, the TV's inputs, and the computer keyboard. Turn on **Control the
+whole TV** in System to reach every app: the TV asks "Allow?" once, through its own remote-app
+interface (as LG's phone apps do). Then volume (as a slider), mute, play/pause, typing into the
+focused field, screen off with the sound playing, a sleep timer and power off work too.
+
+Web access is off by default. The server answers only on the TV's home network address
+(port 8787) and only to private addresses, and refuses other sites' requests. Each paired device
+keeps a key in an HttpOnly cookie; the TV stores only its SHA-256 hash and lists the devices so any of
+them can be removed. A PIN exists only while the pairing dialog is open, pairs one device, and
+locks after five wrong tries until the dialog is opened again. Turn web access off in the same
+place to stop the server.
 
 ## Development
 

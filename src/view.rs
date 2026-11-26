@@ -327,6 +327,7 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
         state,
         assets,
         state.wallpaper_upload.as_ref(),
+        None,
         Companion {
             title: "uploadWallpaper",
             keep_open: "wallpaperUploadKeepOpen",
@@ -337,12 +338,45 @@ fn wallpaper_upload(out: &mut Scene, state: &State, assets: &Assets) {
     );
 }
 
+fn web_access_pair(out: &mut Scene, state: &State, assets: &Assets) {
+    let session = state.web_access_pairing.as_ref().map(|result| {
+        result
+            .as_ref()
+            .map(|pairing| pairing.session.clone())
+            .map_err(Clone::clone)
+    });
+    let pin = match &state.web_access_pairing {
+        Some(Ok(pairing)) => Some(format!("{} {}", &pairing.pin[..3], &pairing.pin[3..])),
+        _ => None,
+    };
+    companion(
+        out,
+        state,
+        assets,
+        session.as_ref(),
+        pin.as_deref(),
+        Companion {
+            title: "webAccessPairTitle",
+            keep_open: "webAccessPin",
+            private: "webAccessPrivate",
+            error: if matches!(&state.web_access_pairing, Some(Err(error)) if error == crate::web_access::LOCKED)
+            {
+                "webAccessLocked"
+            } else {
+                "webAccessError"
+            },
+            starting: "webAccessStarting",
+        },
+    );
+}
+
 fn tile_editor(out: &mut Scene, state: &State, assets: &Assets) {
     companion(
         out,
         state,
         assets,
         state.tile_editor.as_ref(),
+        None,
         Companion {
             title: "editTilesElsewhere",
             keep_open: "tileEditorKeepOpen",
@@ -359,6 +393,7 @@ fn companion(
     state: &State,
     assets: &Assets,
     session: Option<&Result<crate::companion::Session, String>>,
+    pin: Option<&str>,
     strings: Companion,
 ) {
     let language = state.preferences.language;
@@ -449,7 +484,9 @@ fn companion(
                 c(0xffffff, 0.65),
                 true,
             );
-            let display_url = session.url.trim_end_matches('/');
+            // A fragment (the pairing PIN) is for the QR code only.
+            let display_url = session.url.split('#').next().unwrap_or_default();
+            let display_url = display_url.trim_end_matches('/');
             out.text(
                 display_url,
                 Rect::new(568., 716., 784., 36.),
@@ -457,13 +494,24 @@ fn companion(
                 WHITE,
                 true,
             );
-            out.text(
-                language.t(strings.keep_open),
-                Rect::new(604., 766., 712., 52.),
-                text(16., 400, 0.).leading(1.4),
-                c(0xffffff, 0.75),
-                true,
-            );
+            if let Some(pin) = pin {
+                let line = language.format(strings.keep_open, &[("pin", pin)]);
+                out.text(
+                    &line,
+                    Rect::new(604., 762., 712., 48.),
+                    text(34., 650, 0.08),
+                    WHITE,
+                    true,
+                );
+            } else {
+                out.text(
+                    language.t(strings.keep_open),
+                    Rect::new(604., 766., 712., 52.),
+                    text(16., 400, 0.).leading(1.4),
+                    c(0xffffff, 0.75),
+                    true,
+                );
+            }
             out.text(
                 language.t(strings.private),
                 Rect::new(604., 820., 712., 22.),
@@ -616,7 +664,8 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
         | Overlay::WidgetCatalog { .. }
         | Overlay::Keyboard
         | Overlay::WallpaperUpload
-        | Overlay::TileEditor),
+        | Overlay::TileEditor
+        | Overlay::WebAccessPair),
     ) = &state.overlay
     {
         let anchor = match overlay {
@@ -657,6 +706,7 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             Overlay::Keyboard => keyboard(&mut out, state, assets),
             Overlay::WallpaperUpload => wallpaper_upload(&mut out, state, assets),
             Overlay::TileEditor => tile_editor(&mut out, state, assets),
+            Overlay::WebAccessPair => web_access_pair(&mut out, state, assets),
             Overlay::SystemKeyboard
             | Overlay::Recents { .. }
             | Overlay::Inputs
@@ -1122,6 +1172,40 @@ fn favorite_badge(out: &mut Scene, assets: &Assets, card: Rect, color: Color) {
 
 /// Shared card artwork for Home, Apps and Recents. Curated vectors always take
 /// precedence over installed artwork, with the same relative logo proportions.
+/// App tiles per companion page sheet, laid out on the authored 1920×1080 surface.
+pub const SHEET_COLUMNS: usize = 5;
+pub const SHEET_TILES: usize = 25;
+pub const SHEET_TILE: (f32, f32) = (360., 202.5);
+const SHEET_ORIGIN: (f32, f32) = (24., 24.);
+const SHEET_PITCH: (f32, f32) = (376., 210.);
+
+pub fn sheet_rect(index: usize) -> Rect {
+    let (column, row) = (index % SHEET_COLUMNS, index / SHEET_COLUMNS);
+    Rect::new(
+        SHEET_ORIGIN.0 + column as f32 * SHEET_PITCH.0,
+        SHEET_ORIGIN.1 + row as f32 * SHEET_PITCH.1,
+        SHEET_TILE.0,
+        SHEET_TILE.1,
+    )
+}
+
+/// App faces exactly as the TV draws them, in one picture the companion page cuts tiles from.
+pub fn app_sheet(state: &State, assets: &Assets, apps: &[&App]) -> Scene {
+    let mut out = Scene::new();
+    out.shape(Rect::new(0., 0., 1920., 1080.), 0., c(0x1c1f22, 1.));
+    for (index, app) in apps.iter().take(SHEET_TILES).enumerate() {
+        app_face(
+            &mut out,
+            assets,
+            app,
+            sheet_rect(index),
+            state.preferences.language,
+            19.2,
+        );
+    }
+    out
+}
+
 fn app_face(
     out: &mut Scene,
     assets: &Assets,
@@ -2221,7 +2305,37 @@ fn library_grid(out: &mut Scene, state: &State, assets: &Assets) {
 }
 
 /// The existing System status card owns the only update action.
-fn update_value(state: &State) -> String {
+/// The update card's title key in Settings › System.
+pub fn update_title(state: &State) -> &'static str {
+    if matches!(state.update, crate::update::InstallStatus::Failed(_)) {
+        "updateError"
+    } else if state.available_update.is_some() {
+        "updateAvailable"
+    } else {
+        match state.update_status {
+            crate::update::Status::Unchecked => "checkForUpdates",
+            crate::update::Status::Checking => "checkingUpdates",
+            crate::update::Status::Checked => "latestVersionInstalled",
+            crate::update::Status::Failed => "updateCheckFailed",
+        }
+    }
+}
+
+/// The installed version, and the newest one when an update is available.
+pub fn update_detail(state: &State, assets: &Assets) -> String {
+    let language = state.preferences.language;
+    if let Some(latest) = &state.available_update {
+        language.format(
+            "updateVersions",
+            &[("current", assets.version.trim()), ("latest", latest)],
+        )
+    } else {
+        language.format("currentVersion", &[("current", assets.version.trim())])
+    }
+}
+
+/// The update action's label: check again, install, or the running step.
+pub fn update_value(state: &State) -> String {
     use crate::update::{InstallStatus, Status};
     let language = state.preferences.language;
     match &state.update {
@@ -2952,6 +3066,7 @@ fn settings_sidebar(out: &mut Scene, state: &State, assets: &Assets) {
                 Some(Subpage::AppDrawer) => language.t("appDrawer"),
                 Some(Subpage::RecentApps) => language.t("recentApps"),
                 Some(Subpage::TextRendering) => language.t("textRendering"),
+                Some(Subpage::WebAccess) => language.t("webAccess"),
                 Some(Subpage::Attributions) => language.t("attributions"),
                 _ => "",
             };
@@ -3037,6 +3152,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 | Subpage::Shortcuts
                 | Subpage::Greeting
                 | Subpage::Clock
+                | Subpage::WebAccess
                 | Subpage::AppDrawer
                 | Subpage::WidgetPosition(_)
         ) {
@@ -3050,6 +3166,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 Subpage::Shortcuts => shortcut_settings(out, state, assets),
                 Subpage::Greeting => greeting_settings(out, state, assets),
                 Subpage::Clock => clock_settings(out, state, assets),
+                Subpage::WebAccess => web_access_settings(out, state, assets),
                 Subpage::AppDrawer => {
                     for (position, (index, key, icon, value, chevron)) in [
                         (
@@ -3206,6 +3323,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             | Subpage::Shortcuts
             | Subpage::Greeting
             | Subpage::Clock
+            | Subpage::WebAccess
             | Subpage::AppDrawer
             | Subpage::Market(_) => {
                 unreachable!()
@@ -3546,18 +3664,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         }
         SYSTEM_SECTION => {
             let rect = Rect::new(640., 164.8 - s, 1120., 220.);
-            let title = if matches!(state.update, crate::update::InstallStatus::Failed(_)) {
-                "updateError"
-            } else if state.available_update.is_some() {
-                "updateAvailable"
-            } else {
-                match state.update_status {
-                    crate::update::Status::Unchecked => "checkForUpdates",
-                    crate::update::Status::Checking => "checkingUpdates",
-                    crate::update::Status::Checked => "latestVersionInstalled",
-                    crate::update::Status::Failed => "updateCheckFailed",
-                }
-            };
+            let title = update_title(state);
             settings_surface(out, rect, 20.);
             out.text(
                 language.t(title),
@@ -3567,14 +3674,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 false,
             );
             out.text(
-                if let Some(latest) = &state.available_update {
-                    language.format(
-                        "updateVersions",
-                        &[("current", assets.version.trim()), ("latest", latest)],
-                    )
-                } else {
-                    language.format("currentVersion", &[("current", assets.version.trim())])
-                },
+                update_detail(state, assets),
                 Rect::new(rect.x + 24.2, rect.y + 74., rect.w - 48.4, 32.),
                 text(20.8, 450, -0.02).leading(1.4),
                 c(0xeeeeee, 0.73),
@@ -3623,6 +3723,17 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     false,
                 ),
                 (9, language.t("resetIconCache"), "refresh", None, false),
+                (
+                    crate::state::WEB_ACCESS_SETTING,
+                    language.t("webAccess"),
+                    "globe",
+                    Some(language.t(if state.preferences.web_access {
+                        "stateOn"
+                    } else {
+                        "stateOff"
+                    })),
+                    true,
+                ),
                 (5, language.t("quitApp"), "power", None, false),
                 (16, language.t("attributions"), "copyright", None, false),
             ]
@@ -4186,6 +4297,96 @@ fn settings_surface(out: &mut Scene, rect: Rect, radius: f32) {
     out.glass(rect, radius);
 }
 
+fn web_access_settings(out: &mut Scene, state: &State, assets: &Assets) {
+    let language = state.preferences.language;
+    let s = state.scroll;
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::WebAccessToggle,
+            rect: Rect::new(640., 164.8 - s, 1120., 90.7),
+            title: language.t("webAccessToggle"),
+            icon: Some("globe"),
+            value: Some(language.t(if state.preferences.web_access {
+                "stateOn"
+            } else {
+                "stateOff"
+            })),
+            description: Some(language.t("webAccessToggleHint")),
+            selected: false,
+            chevron: false,
+        },
+    );
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::TvRemoteToggle,
+            rect: Rect::new(640., 267.5 - s, 1120., 90.7),
+            title: language.t("webTvRemote"),
+            icon: Some("tv"),
+            value: Some(language.t(if state.preferences.tv_remote {
+                match state.tv_remote {
+                    crate::tv_remote::Status::Confirm => "webTvRemoteConfirm",
+                    crate::tv_remote::Status::Denied => "webTvRemoteDenied",
+                    crate::tv_remote::Status::Unavailable => "webTvRemoteUnavailable",
+                    _ => "stateOn",
+                }
+            } else {
+                "stateOff"
+            })),
+            description: Some(language.t("webTvRemoteHint")),
+            selected: false,
+            chevron: false,
+        },
+    );
+    row(
+        out,
+        state,
+        assets,
+        Row {
+            target: Target::WebAccessPair,
+            rect: Rect::new(640., 370.2 - s, 1120., 72.),
+            title: language.t("webAccessPair"),
+            icon: Some("arrow"),
+            value: None,
+            description: None,
+            selected: false,
+            chevron: false,
+        },
+    );
+    let remove = language.t("webAccessRemoveHint");
+    for (index, device) in state.web_devices.iter().enumerate() {
+        row(
+            out,
+            state,
+            assets,
+            Row {
+                target: Target::WebAccessDevice(device.id.clone()),
+                rect: Rect::new(640., 474.2 + index as f32 * 102.7 - s, 1120., 90.7),
+                title: &device.name,
+                icon: Some("circle-minus"),
+                value: None,
+                description: Some(remove),
+                selected: false,
+                chevron: false,
+            },
+        );
+    }
+    if state.web_devices.is_empty() {
+        out.text(
+            language.t("webAccessNoDevices"),
+            Rect::new(640., 486.2 - s, 1120., 32.),
+            text(19., 400, 0.),
+            c(0xffffff, 0.6),
+            true,
+        );
+    }
+}
+
 fn shortcut_settings(out: &mut Scene, state: &State, assets: &Assets) {
     let language = state.preferences.language;
     let tiles = &state.preferences.custom_tiles;
@@ -4261,7 +4462,7 @@ fn shorten(text: &str) -> String {
 }
 
 /// A custom name such as "PS5" can choose the icon; otherwise the TV's label.
-fn input_icon(input: &Input, custom: Option<&str>) -> &'static str {
+pub fn input_icon(input: &Input, custom: Option<&str>) -> &'static str {
     if input.is_usb_storage() {
         return "usb";
     }

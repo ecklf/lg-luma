@@ -119,8 +119,8 @@ impl Drop for Service {
 /// A tile as the page submits it. An empty id adds a new tile.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
-struct Edit {
-    id: String,
+pub(crate) struct Edit {
+    pub(crate) id: String,
     title: String,
     url: String,
     method: TileMethod,
@@ -129,7 +129,7 @@ struct Edit {
 
 impl Edit {
     /// The tile this edit describes, validated before saving to launcher preferences.
-    fn tile(&self) -> Result<CustomTile, String> {
+    pub(crate) fn tile(&self) -> Result<CustomTile, String> {
         let title = clean_input_name(&self.title);
         if title.is_empty() {
             return Err("Add a name for this shortcut.".into());
@@ -152,7 +152,7 @@ impl Edit {
 }
 
 /// Adds or replaces a tile and returns its id.
-fn save(tiles: &mut Vec<CustomTile>, edit: &Edit) -> Result<String, String> {
+pub(crate) fn save(tiles: &mut Vec<CustomTile>, edit: &Edit) -> Result<String, String> {
     let mut tile = edit.tile()?;
     if tile.id.is_empty() {
         if tiles.len() >= TILE_LIMIT {
@@ -170,7 +170,7 @@ fn save(tiles: &mut Vec<CustomTile>, edit: &Edit) -> Result<String, String> {
     Ok(tile.id)
 }
 
-fn remove(tiles: &mut Vec<CustomTile>, id: &str) -> Result<(), String> {
+pub(crate) fn remove(tiles: &mut Vec<CustomTile>, id: &str) -> Result<(), String> {
     let index = tiles
         .iter()
         .position(|tile| tile.id == id)
@@ -179,7 +179,7 @@ fn remove(tiles: &mut Vec<CustomTile>, id: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn icon_svg(icon: &str) -> &'static str {
+pub(crate) fn icon_svg(icon: &str) -> &'static str {
     match icon {
         "weather-moon" => include_str!("../assets/ui-icons/weather-moon.svg"),
         "weather-sun" => include_str!("../assets/ui-icons/weather-sun.svg"),

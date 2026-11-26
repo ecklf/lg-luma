@@ -501,7 +501,7 @@ try {
   const clockFocus = await scenario('clock-format-focus', `${clockEditor},enter,down`);
   assert.equal(clockFocus.subpage, 'ClockFormat');
   assert.deepEqual(clockFocus.focus, { Choice: 1 });
-  const system = await scenario('system-settings', `${systemPage},down,down,down,down`);
+  const system = await scenario('system-settings', `${systemPage},down,down,down,down,down`);
   assert.deepEqual(system.focus, { Setting: 5 });
   assert.ok(system.ui_text.includes('Refresh apps & inputs'));
   assert.ok(!system.ui_text.includes('Luma update'));
@@ -509,7 +509,7 @@ try {
   assert.ok(system.ui_text.includes('Text rendering'));
   assert.ok(system.ui_text.includes('Reset icon cache'));
   assert.ok(system.ui_text.includes('Attributions'));
-  const attributionPage = `${systemPage},down,down,down,down,down,enter`;
+  const attributionPage = `${systemPage},down,down,down,down,down,down,enter`;
   const credits = await scenario('attributions', attributionPage);
   assert.equal(credits.subpage, 'Attributions');
   assert.equal(credits.focus, 'AttributionText');
