@@ -60,10 +60,7 @@ esac
     ? `reply=$(luna-send -n 1 -w 5000 luna://com.webos.applicationManager/launch "{\\"id\\":\\"$3\\"}") || exit 1
 printf '%s\\n' "$reply" | grep -q '"returnValue": *true' || exit 1`
     : 'exit 1';
-  write(
-    `${app}/home.sh`,
-    `#!/bin/sh\necho refresh >> '${dir}/calls'\n${homeEnable}\nexit 0\n`,
-  );
+  write(`${app}/home.sh`, `#!/bin/sh\necho refresh >> '${dir}/calls'\n${homeEnable}\nexit 0\n`);
   write(
     `${homeState}/home.sh`,
     `#!/bin/sh\necho restore >> '${dir}/calls'\nexit ${recover ? 0 : 1}\n`,
