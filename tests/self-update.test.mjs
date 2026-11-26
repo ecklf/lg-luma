@@ -13,6 +13,7 @@ function run({
   reapply = true,
   recover = true,
   launch = true,
+  secondLaunch = launch,
   checksum = true,
   method = 'executable',
   homeId = 'com.webos.app.home',
@@ -46,11 +47,23 @@ function run({
 printf '%s\\n' "$*" >> '${dir}/calls'
 case "$*" in
   *dev/install*) echo '${install ? '{"returnValue":true,"state":"installed"}' : '{"returnValue":false,"errorText":"disk full"}'}' ;;
-  *) echo '{"returnValue":${launch}}' ;;
+  *applicationManager/launch*)
+    count=$(grep -c 'applicationManager/launch' '${dir}/calls')
+    if [ "$count" -eq 2 ]; then echo '{"returnValue":${secondLaunch}}'; else echo '{"returnValue":${launch}}'; fi
+    ;;
+  *) echo '{"returnValue":true}' ;;
 esac
 `,
   );
-  write(`${app}/home.sh`, `#!/bin/sh\necho refresh >> '${dir}/calls'\nexit ${reapply ? 0 : 1}\n`);
+  // A successful helper enable launches the selected Home before reporting success.
+  const homeEnable = reapply
+    ? `reply=$(luna-send -n 1 -w 5000 luna://com.webos.applicationManager/launch "{\\"id\\":\\"$3\\"}") || exit 1
+printf '%s\\n' "$reply" | grep -q '"returnValue": *true' || exit 1`
+    : 'exit 1';
+  write(
+    `${app}/home.sh`,
+    `#!/bin/sh\necho refresh >> '${dir}/calls'\n${homeEnable}\nexit 0\n`,
+  );
   write(
     `${homeState}/home.sh`,
     `#!/bin/sh\necho restore >> '${dir}/calls'\nexit ${recover ? 0 : 1}\n`,
@@ -114,11 +127,12 @@ test('both Home methods refresh from the new package and fail visibly when reapp
   }
 });
 test('a successful Home reapply is not rolled back by a redundant launch failure', () => {
-  const result = run({ home: true, launch: false });
+  const result = run({ home: true, launch: true, secondLaunch: false });
   assert.equal(result.exit, 0, result.status.message);
   assert.equal(result.status.state, 'success');
   assert.match(result.calls, /refresh/);
-  assert.doesNotMatch(result.calls, /applicationManager\/launch/);
+  assert.match(result.calls, /launch.*com\.webos\.app\.home/);
+  assert.equal((result.calls.match(/applicationManager\/launch/g) ?? []).length, 1);
   assert.doesNotMatch(result.calls, /restore/);
 });
 test('a rejected launch is not reported as a successful update', () => {
