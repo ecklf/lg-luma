@@ -680,6 +680,15 @@ try {
     'Clicking beside the card keeps the strip position',
   );
   await fs.writeFile(preferences, JSON.stringify({ show_weather: false }));
+  // The gradient cycles On -> Subtle -> Off.
+  const gradientSubtle = await scenario(
+    'wallpaper-gradient-subtle',
+    `${backgroundsPage},up,right,enter`,
+  );
+  assert.equal(gradientSubtle.focus, 'WallpaperGradient');
+  assert.equal(gradientSubtle.preferences.wallpaper_gradient, true);
+  assert.equal(gradientSubtle.preferences.subtle_photo_gradient, true);
+  assert.ok(gradientSubtle.ui_text.includes('Subtle'));
   const gradientDisabled = await scenario(
     'wallpaper-gradient-disabled',
     `${backgroundsPage},up,right,enter`,
@@ -694,6 +703,7 @@ try {
     `${backgroundsPage},up,right,enter`,
   );
   assert.equal(gradientEnabled.preferences.wallpaper_gradient, true);
+  assert.equal(gradientEnabled.preferences.subtle_photo_gradient, false);
   const cycleEnabled = await scenario(
     'wallpaper-cycle-enabled',
     `${backgroundsPage},up,right,right,enter`,

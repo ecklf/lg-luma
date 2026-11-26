@@ -971,6 +971,24 @@
     "ca": "Degradat",
     "hu": "Színátmenet"
   },
+  "gradientSubtle": {
+    "en": "Subtle",
+    "de": "Dezent",
+    "es": "Suave",
+    "zh": "柔和",
+    "zh-tw": "柔和",
+    "pt": "Suave",
+    "it": "Leggero",
+    "ru": "Мягкий",
+    "pl": "Delikatny",
+    "fr": "Léger",
+    "vi": "Nhẹ",
+    "nl": "Subtiel",
+    "sv": "Diskret",
+    "cs": "Jemný",
+    "ca": "Suau",
+    "hu": "Finom"
+  },
   "date": {
     "en": "Date",
     "de": "Datum",

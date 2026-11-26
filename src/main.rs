@@ -381,6 +381,7 @@ fn effects(
             Effect::DeleteWallpaper(id) => {
                 wallpapers.delete(id, state.preferences.background.clone())
             }
+            Effect::PrepareSubtleWallpapers => wallpapers.prepare_subtle(),
             Effect::Recent {
                 generation,
                 command,
@@ -810,6 +811,10 @@ fn run() -> Result<(), String> {
     // Scripted desktop captures must never open a server on the real LAN.
     let mut wallpaper_service =
         wallpapers::Service::new(&preferences_path, !webos && !options.script.is_empty())?;
+    if state.preferences.subtle_photo_gradient {
+        // Uploads from an older version; the worker handles this after its first catalog.
+        wallpaper_service.prepare_subtle();
+    }
     let mut tile_editor_service = tile_editor::Service::new(!webos && !options.script.is_empty())?;
     if options.test_extra_apps > 0 {
         eprintln!(

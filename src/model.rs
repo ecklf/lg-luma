@@ -545,6 +545,8 @@ pub struct Preferences {
     #[serde(deserialize_with = "crate::wallpaper_cycle::deserialize")]
     pub wallpaper_cycle: bool,
     pub wallpaper_gradient: bool,
+    /// With the gradient on: uploaded photos get the subtle, photo-aware one instead.
+    pub subtle_photo_gradient: bool,
     /// Unix seconds of the last automatic or chosen wallpaper change, for the timed modes.
     pub wallpaper_changed: u64,
 }
@@ -597,6 +599,7 @@ impl Default for Preferences {
             text_rendering: crate::text_rendering::TextRendering::default(),
             wallpaper_cycle: false,
             wallpaper_gradient: true,
+            subtle_photo_gradient: false,
             wallpaper_changed: 0,
         }
     }

@@ -6,6 +6,7 @@ fn custom(index: u32) -> Wallpaper {
         id: format!("custom-{index:032x}"),
         directory: PathBuf::from(format!("/preview/wallpapers/custom-{index:032x}")),
         has_original: true,
+        has_subtle: false,
     }
 }
 
@@ -195,6 +196,15 @@ fn gradient_toggle_is_saved_stable_and_switches_bundled_and_uploaded_images() {
     for language in crate::i18n::Language::ALL {
         state.preferences.language = language;
         let before = controls(&state);
+        // On, then subtle (only uploaded photos change), then off.
+        assert_eq!(
+            state.activate(),
+            vec![Effect::Save, Effect::PrepareSubtleWallpapers]
+        );
+        assert!(state.preferences.wallpaper_gradient && state.preferences.subtle_photo_gradient);
+        assert!(
+            matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("midnight.jpg"))
+        );
         assert_eq!(state.activate(), vec![Effect::Save]);
         assert!(!state.preferences.wallpaper_gradient);
         assert_eq!(state.focus, Target::WallpaperGradient);
@@ -215,6 +225,7 @@ fn gradient_toggle_is_saved_stable_and_switches_bundled_and_uploaded_images() {
         let restored: crate::model::Preferences = serde_json::from_str(&saved).unwrap();
         assert!(!restored.wallpaper_gradient);
         assert_eq!(state.activate(), vec![Effect::Save]);
+        assert!(!state.preferences.subtle_photo_gradient);
         assert!(
             matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("midnight.jpg"))
         );
@@ -225,9 +236,19 @@ fn gradient_toggle_is_saved_stable_and_switches_bundled_and_uploaded_images() {
     assert_eq!(state.focus, Target::UploadWallpaper);
     state.direction(Direction::Right, &controls(&state));
     assert_eq!(state.focus, Target::WallpaperGradient);
-    let item = custom(1);
+    let mut item = custom(1);
+    item.has_subtle = true;
     state.preferences.background = item.id.clone();
     state.set_wallpapers(vec![item]);
+    state.activate();
+    assert!(
+        matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("subtle.jpg"))
+    );
+    // An upload that predates the subtle variant keeps the classic gradient meanwhile.
+    state.wallpapers[0].has_subtle = false;
+    assert!(
+        matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("wallpaper.jpg"))
+    );
     state.activate();
     assert!(
         matches!(&scene(&state).draw[0], Draw::Image(path, ..) if path.ends_with("original.jpg"))
