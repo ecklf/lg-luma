@@ -50,6 +50,81 @@ fn ready() -> State {
 }
 
 #[test]
+fn magic_remote_hold_threshold_does_not_change_remote_ok_threshold() {
+    use std::time::{Duration, Instant};
+    let mut press = crate::Press {
+        target: Target::App("netflix".into()),
+        start: Instant::now(),
+        held: false,
+        pointer: false,
+        pointer_gap: None,
+    };
+    assert_eq!(press.hold_after(), Duration::from_millis(600));
+    press.pointer = true;
+    assert_eq!(press.hold_after(), Duration::from_millis(1100));
+}
+
+#[test]
+fn pointer_gap_blocks_holds_and_expires_without_more_motion() {
+    use std::time::{Duration, Instant};
+    let now = Instant::now();
+    let mut press = crate::Press {
+        target: Target::App("netflix".into()),
+        start: now - Duration::from_millis(1200),
+        held: false,
+        pointer: true,
+        pointer_gap: None,
+    };
+    assert!(press.hold_ready(now));
+    assert!(press.pointer_motion(None, now));
+    // Even at the hold threshold, an off-target cursor cannot open move/options.
+    assert!(!press.hold_ready(now));
+    // More empty-space motion must not restart the grace period.
+    assert!(press.pointer_motion(None, now + Duration::from_millis(100)));
+    let expired = now + crate::Press::POINTER_GAP_GRACE;
+    assert!(press.gap_expired(expired));
+    assert!(!press.hold_ready(expired));
+    assert!(!press.pointer_motion(Some(&press.target.clone()), expired));
+}
+
+#[test]
+fn pointer_gap_reentry_preserves_only_brief_same_target_presses() {
+    use std::time::{Duration, Instant};
+    let now = Instant::now();
+    let mut press = crate::Press {
+        target: Target::App("netflix".into()),
+        start: now - Duration::from_millis(1100),
+        held: false,
+        pointer: true,
+        pointer_gap: None,
+    };
+    assert!(press.pointer_motion(None, now));
+    assert!(press.pointer_motion(Some(&press.target.clone()), now + Duration::from_millis(50)));
+    assert!(press.pointer_gap.is_none());
+    assert!(press.hold_ready(now + Duration::from_millis(50)));
+    assert!(!press.pointer_motion(Some(&Target::SettingsMenu), now));
+}
+
+#[test]
+fn mixed_pointer_and_ok_releases_do_not_consume_each_other() {
+    use std::time::Instant;
+    for pointer in [false, true] {
+        let mut press = Some(crate::Press {
+            target: Target::App("netflix".into()),
+            start: Instant::now(),
+            held: false,
+            pointer,
+            pointer_gap: None,
+        });
+        assert!(crate::Press::release(&mut press, !pointer).is_none());
+        assert!(press.is_some());
+        assert!(crate::Press::release(&mut press, pointer).is_some());
+        assert!(press.is_none());
+        assert!(crate::Press::release(&mut press, pointer).is_none());
+    }
+}
+
+#[test]
 fn animations_are_paced_when_vsync_is_unavailable() {
     use std::time::Duration;
 
