@@ -769,7 +769,7 @@ impl Service {
             .retain(|_, entry| !matches!(entry.image, Some(None)));
     }
 
-    pub fn poll(&self) -> bool {
+    pub fn poll(&self, mut decoded: impl FnMut(&Arc<Artwork>)) -> bool {
         let mut changed = false;
         let mut cache = self.cache.borrow_mut();
         while let Ok(reply) = self.receiver.try_recv() {
@@ -777,6 +777,9 @@ impl Service {
             if let Some(entry) = cache.entries.get_mut(&reply.request.source)
                 && entry.token == reply.request.token
             {
+                if let Some(image) = &reply.image {
+                    decoded(image);
+                }
                 entry.image = Some(reply.image);
             }
         }

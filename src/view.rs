@@ -299,7 +299,7 @@ impl Scene {
                 }
                 Draw::Image(path, rect, radius, contain) => {
                     *draw = Draw::TintedImage(
-                        path.clone(),
+                        std::mem::take(path),
                         *rect,
                         *radius,
                         *contain,
@@ -922,6 +922,35 @@ fn corner_menu(out: &mut Scene, state: &State, assets: &Assets) {
     out.draw.push(Draw::Clip(None));
 }
 
+fn drawer_label(assets: &Assets, app: &App, rect: Rect) -> Draw {
+    let (label, style) = assets.fit_line(&app.title, text(22., 550, -0.02), rect.w, 22.);
+    Draw::Text(
+        label,
+        Rect::new(
+            rect.x,
+            rect.y + rect.h + DRAWER_NAME_TOP,
+            rect.w,
+            DRAWER_NAME_HEIGHT,
+        ),
+        style,
+        WHITE,
+        true,
+    )
+}
+
+/// Names are only visible on focus. Prepare the first four rows without changing focus.
+pub fn initial_drawer_labels(state: &State, assets: &Assets) -> Vec<Draw> {
+    if !state.preferences.show_drawer_app_names {
+        return Vec::new();
+    }
+    state
+        .drawer_apps()
+        .into_iter()
+        .take(4 * APPS_COLUMNS)
+        .map(|app| drawer_label(assets, app, Rect::new(0., 0., 270., FACE_HEIGHT)))
+        .collect()
+}
+
 /// The app options menu's labels and icons, for idle preparation. Text runs are cached by
 /// layout size, not position, so these serve the menu beside any card.
 pub fn options_menu_draws(state: &State, assets: &Assets) -> Vec<Draw> {
@@ -1042,19 +1071,7 @@ fn tile(
     if focused {
         out.ring(rect, 19.2);
         if dock.is_none() && state.page == Page::Apps && state.preferences.show_drawer_app_names {
-            let (label, style) = assets.fit_line(&app.title, text(22., 550, -0.02), rect.w, 22.);
-            out.text(
-                label,
-                Rect::new(
-                    rect.x,
-                    rect.y + rect.h + DRAWER_NAME_TOP,
-                    rect.w,
-                    DRAWER_NAME_HEIGHT,
-                ),
-                style,
-                WHITE,
-                true,
-            );
+            out.draw.push(drawer_label(assets, app, rect));
         }
     }
     if state.pressed.as_ref() == Some(&target) {
@@ -3545,6 +3562,7 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
             }
         }
         SYSTEM_SECTION => {
+            let start = out.draw.len();
             let rect = Rect::new(640., 164.8 - s, 1120., 220.);
             let title = if matches!(state.update, crate::update::InstallStatus::Failed(_)) {
                 "updateError"
@@ -3658,9 +3676,29 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                     },
                 );
             }
+            group_row_surfaces(&mut out.draw[start..]);
         }
         _ => {}
     }
+}
+
+/// System rows are painted top to bottom. If every glass surface is below all
+/// preceding labels and decorations, all glass can share a draw before the labels.
+fn group_row_surfaces(commands: &mut [Draw]) {
+    let mut bottom: f32 = f32::NEG_INFINITY;
+    for command in commands.iter() {
+        let Some(bounds) = crate::damage::bounds(command) else {
+            return;
+        };
+        if matches!(command, Draw::Glass(..)) {
+            if bounds.y < bottom + 4. {
+                return;
+            }
+        } else {
+            bottom = bottom.max(bounds.y + bounds.h);
+        }
+    }
+    commands.sort_by_key(|command| !matches!(command, Draw::Glass(..)));
 }
 
 fn inputs_settings(out: &mut Scene, state: &State, assets: &Assets) {
