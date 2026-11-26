@@ -113,6 +113,14 @@ test('both Home methods refresh from the new package and fail visibly when reapp
     assert.doesNotMatch(unrecovered.calls, /launch/);
   }
 });
+test('a successful Home reapply is not rolled back by a redundant launch failure', () => {
+  const result = run({ home: true, launch: false });
+  assert.equal(result.exit, 0, result.status.message);
+  assert.equal(result.status.state, 'success');
+  assert.match(result.calls, /refresh/);
+  assert.doesNotMatch(result.calls, /applicationManager\/launch/);
+  assert.doesNotMatch(result.calls, /restore/);
+});
 test('a rejected launch is not reported as a successful update', () => {
   assert.equal(run({ launch: false }).status.state, 'failed');
 });
