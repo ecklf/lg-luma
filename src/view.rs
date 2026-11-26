@@ -193,6 +193,8 @@ pub struct Scene {
     pub draw: Vec<Draw>,
     pub controls: Vec<Control>,
     pub modal: Option<Rect>,
+    /// Runs of commands that fade as one surface each (see renderer::Layer).
+    pub layers: Vec<crate::renderer::Layer>,
 }
 impl Scene {
     fn glass(&mut self, rect: Rect, radius: f32) {
@@ -211,6 +213,7 @@ impl Scene {
             draw: Vec::new(),
             controls: Vec::new(),
             modal: None,
+            layers: Vec::new(),
         }
     }
     fn shape(&mut self, rect: Rect, radius: f32, fill: Color) {
@@ -279,7 +282,29 @@ impl Scene {
         }
     }
     fn fade(&mut self, from: usize, alpha: f32, brightness: f32) {
-        for draw in &mut self.draw[from..] {
+        self.fade_range(from, self.draw.len(), alpha, brightness);
+    }
+    /// Fades everything from `from` as one surface (a renderer layer), or command by
+    /// command with LUMA_LAYER=0.
+    fn fade_as_layer(&mut self, from: usize, alpha: f32) {
+        if layers_enabled() && from < self.draw.len() && alpha < 1. {
+            self.layers.push(crate::renderer::Layer {
+                start: from,
+                end: self.draw.len(),
+                alpha,
+            });
+        } else {
+            self.fade(from, alpha, 1.);
+        }
+    }
+    /// Turns layers back into per-command fades, before their indices would shift.
+    fn flatten_layers(&mut self) {
+        for layer in std::mem::take(&mut self.layers) {
+            self.fade_range(layer.start, layer.end, layer.alpha, 1.);
+        }
+    }
+    fn fade_range(&mut self, from: usize, to: usize, alpha: f32, brightness: f32) {
+        for draw in &mut self.draw[from..to] {
             let apply = |color: &mut Color| {
                 for channel in &mut color[..3] {
                     *channel *= brightness;
@@ -516,6 +541,12 @@ pub fn recents_replaces_page(state: &State) -> bool {
     state.recents_open() && state.recents.visibility == 1.
 }
 
+/// Fading pages as offscreen layers (see renderer::Layer); LUMA_LAYER=0 fades each command.
+fn layers_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var("LUMA_LAYER").as_deref() != Ok("0"))
+}
+
 pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
     let mut out = Scene::new();
     if let Some((previous, start)) = &state.previous_background {
@@ -676,7 +707,13 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
         // belongs to the restored parent. No geometry or hit targets move.
         let parent_controls = std::mem::take(&mut out.controls);
         let parent_modal = out.modal;
-        out.fade(content_start, 1. - state.recents.visibility, 1.);
+        // The parent page fades as one layer: drawn once, then only its opacity changes.
+        // A layer inside it (a fading subpage) fades per command within that layer.
+        out.flatten_layers();
+        let layered = layers_enabled();
+        if !layered {
+            out.fade(content_start, 1. - state.recents.visibility, 1.);
+        }
         let start = out.draw.len();
         out.shape(
             Rect::new(0., 0., 1920., 1080.),
@@ -684,7 +721,10 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             c(0x080b12, RECENTS_BACKDROP_OPACITY),
         );
         recents_view::render(&mut out, state, assets);
-        out.fade(start, state.recents.visibility, 1.);
+        let recents_end = out.draw.len();
+        if !layered {
+            out.fade(start, state.recents.visibility, 1.);
+        }
         // Dim the wallpaper beneath the outgoing interface rather than over it. While both
         // fade, the backdrop and Recents' full-screen gradient then lie directly on the
         // wallpaper, and the renderer folds them into it instead of two more full-screen
@@ -693,8 +733,28 @@ pub fn scene(state: &State, assets: &Assets, now: OffsetDateTime) -> Scene {
             .iter()
             .take_while(|draw| full_screen_fill(draw))
             .count();
+        if layered {
+            // Outside both layers, the dimming fills still fade by themselves.
+            out.fade_range(start, start + fills, state.recents.visibility, 1.);
+        }
         let moved: Vec<_> = out.draw.drain(start..start + fills).collect();
         out.draw.splice(content_start..content_start, moved);
+        if layered {
+            // The moved fills stay outside both layers: they fold into the wallpaper.
+            for (start, end, alpha) in [
+                (
+                    content_start + fills,
+                    start + fills,
+                    1. - state.recents.visibility,
+                ),
+                (start + fills, recents_end, state.recents.visibility),
+            ] {
+                if start < end {
+                    out.layers
+                        .push(crate::renderer::Layer { start, end, alpha });
+                }
+            }
+        }
         if !state.recents_open() {
             out.controls = parent_controls;
             out.modal = parent_modal;
@@ -3119,8 +3179,11 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
                 }
                 _ => unreachable!(),
             }
-            if let Some(opened) = state.panel_started {
-                out.fade(start, (opened.elapsed().as_secs_f32() / 0.15).min(1.), 1.);
+            if let Some(alpha) = state
+                .panel_started
+                .map(|opened| (opened.elapsed().as_secs_f32() / 0.15).min(1.))
+            {
+                out.fade_as_layer(start, alpha);
             }
             return;
         }
@@ -3282,8 +3345,11 @@ fn settings_content(out: &mut Scene, state: &State, assets: &Assets) {
         if let Subpage::Input(id) = subpage {
             input_name_rows(out, state, assets, id, 164.8 + 3. * 102.7 + 16. - s);
         }
-        if let Some(opened) = state.panel_started {
-            out.fade(start, (opened.elapsed().as_secs_f32() / 0.15).min(1.), 1.);
+        if let Some(alpha) = state
+            .panel_started
+            .map(|opened| (opened.elapsed().as_secs_f32() / 0.15).min(1.))
+        {
+            out.fade_as_layer(start, alpha);
         }
         return;
     }

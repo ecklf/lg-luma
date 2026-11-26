@@ -167,6 +167,26 @@ pub struct RenderStats {
     pub redrawn_fraction: f64,
 }
 impl RenderStats {
+    /// Add work done by an offscreen pass, not its target metadata or cache snapshots.
+    fn include_work(&mut self, pass: &Self) {
+        self.glyph_tessellations += pass.glyph_tessellations;
+        self.glyph_ms += pass.glyph_ms;
+        self.vector_load_ms += pass.vector_load_ms;
+        self.image_load_ms += pass.image_load_ms;
+        self.glass_prepare_ms += pass.glass_prepare_ms;
+        self.glass_precomputed_loads += pass.glass_precomputed_loads;
+        self.glass_runtime_prepares += pass.glass_runtime_prepares;
+        self.glyph_failures += pass.glyph_failures;
+        self.missing_glyphs += pass.missing_glyphs;
+        self.missing_images += pass.missing_images;
+        self.text_triangles += pass.text_triangles;
+        self.vector_triangles += pass.vector_triangles;
+        self.draw_calls += pass.draw_calls;
+        self.max_logical_font_px = self.max_logical_font_px.max(pass.max_logical_font_px);
+        self.max_physical_font_px = self.max_physical_font_px.max(pass.max_physical_font_px);
+        self.high_resolution_wallpaper |= pass.high_resolution_wallpaper;
+    }
+
     fn new(target: Size) -> Self {
         Self {
             glass_surfaces: 0,
@@ -405,6 +425,120 @@ fn snap_rect(rect: Rect, scale: f32) -> Rect {
     Rect::new(x0, y0, x1 - x0, y1 - y0)
 }
 
+/// A run of commands (`start..end`) that fades as one surface: drawn unfaded once into an
+/// offscreen texture, then composited each frame at `alpha` instead of every command
+/// separately. A whole page crossfading costs one full-screen quad instead of all its glass,
+/// shadows and text. Overlapping parts no longer show through each other while it fades.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Layer {
+    pub start: usize,
+    pub end: usize,
+    pub alpha: f32,
+}
+
+/// The offscreen texture of the last layer and the content it holds.
+struct LayerCache {
+    texture: GLuint,
+    framebuffer: GLuint,
+    size: (u32, u32),
+    samples: u32,
+    key: u64,
+}
+
+impl Drop for LayerCache {
+    fn drop(&mut self) {
+        unsafe {
+            gl::DeleteFramebuffers(1, &self.framebuffer);
+            gl::DeleteTextures(1, &self.texture);
+        }
+    }
+}
+
+/// One stale layer is drawn at a time; only resolved textures need to be retained.
+/// Sharing this target avoids keeping a full MSAA color buffer for each cached page.
+struct LayerSamples {
+    framebuffer: GLuint,
+    color_buffer: GLuint,
+    target: (u32, u32, u32),
+}
+
+impl Drop for LayerSamples {
+    fn drop(&mut self) {
+        unsafe {
+            gl::DeleteFramebuffers(1, &self.framebuffer);
+            gl::DeleteRenderbuffers(1, &self.color_buffer);
+        }
+    }
+}
+
+/// Only core GL/GLES 3+ has the multisample storage and resolve path used here.
+/// Exported entry points alone do not establish support on a GLES 2 context.
+fn layer_resolve_version(version: &str) -> bool {
+    version
+        .strip_prefix("OpenGL ES ")
+        .unwrap_or(version)
+        .split('.')
+        .next()
+        .and_then(|major| major.parse::<u32>().ok())
+        .is_some_and(|major| major >= 3)
+}
+
+fn target_samples() -> u32 {
+    let mut samples = 0;
+    unsafe { gl::GetIntegerv(gl::SAMPLES, &mut samples) };
+    samples.max(0) as u32
+}
+
+/// The fitted viewport within a drawable-sized layer texture, flipped vertically for GL.
+/// Sampling the whole texture would fit its letterbox/pillarbox margins a second time.
+fn layer_uv(size: Size) -> [f32; 4] {
+    let viewport = Viewport::new(size);
+    let (width, height) = (size.width as f32, size.height as f32);
+    [
+        viewport.x as f32 / width,
+        (viewport.y + viewport.height) as f32 / height,
+        (viewport.x + viewport.width) as f32 / width,
+        viewport.y as f32 / height,
+    ]
+}
+
+#[cfg(test)]
+#[path = "layer-tests.rs"]
+mod layer_tests;
+
+/// A layer's content key. App artwork counts by identity: a changed icon is a new image.
+fn fingerprint(commands: &[Draw]) -> u64 {
+    use std::hash::{DefaultHasher, Hasher};
+    let mut hasher = DefaultHasher::new();
+    for command in commands {
+        let text = match command {
+            Draw::Glass(rect, radius, color) => format!("g{rect:?}{radius}{color:?}"),
+            Draw::Shape(rect, radius, blur, color) => format!("s{rect:?}{radius}{blur}{color:?}"),
+            Draw::RoundedGradient(rect, radius, top, bottom) => {
+                format!("r{rect:?}{radius}{top:?}{bottom:?}")
+            }
+            Draw::Shadow(rect, radius, blur, color) => format!("h{rect:?}{radius}{blur}{color:?}"),
+            Draw::Text(text, rect, style, color, centered) => {
+                format!("t{text}{rect:?}{style:?}{color:?}{centered}")
+            }
+            Draw::Image(path, rect, radius, contain) => format!("i{path}{rect:?}{radius}{contain}"),
+            Draw::TintedImage(path, rect, radius, contain, tint) => {
+                format!("n{path}{rect:?}{radius}{contain}{tint:?}")
+            }
+            Draw::AppImage(image, rect, radius, tint) => {
+                format!("a{:p}{rect:?}{radius}{tint:?}", Arc::as_ptr(image))
+            }
+            Draw::Clip(clip) => format!("c{clip:?}"),
+            Draw::EdgeFade(fade) => format!("e{fade:?}"),
+        };
+        hasher.write(text.as_bytes());
+    }
+    hasher.finish()
+}
+
+/// Followed by the layer's index, stands for its texture in a composed command list.
+const LAYER_PATH: &str = "\u{0}luma-layer";
+
 struct PaintPrograms {
     texture: GLuint,
     tinted: GLuint,
@@ -454,6 +588,13 @@ impl PaintPrograms {
 }
 
 pub struct Renderer {
+    /// The layers the next render() composites (see Layer), in command order.
+    layers: Vec<Layer>,
+    /// One offscreen texture per layer index, kept for the next crossfade.
+    layer_caches: Vec<LayerCache>,
+    /// Otherwise a multisampled target keeps the original per-command fade path.
+    layer_multisample: bool,
+    layer_samples: Option<LayerSamples>,
     paint_programs: Option<PaintPrograms>,
     program: GLuint,
     vector_program: GLuint,
@@ -648,6 +789,12 @@ impl Renderer {
         let white = texture(1, 1, &[255; 4]);
         Ok(Self {
             program,
+            layers: Vec::new(),
+            layer_caches: Vec::new(),
+            layer_multisample: layer_resolve_version(&gl_string(gl::VERSION))
+                && gl::RenderbufferStorageMultisample::is_loaded()
+                && gl::BlitFramebuffer::is_loaded(),
+            layer_samples: None,
             paint_programs,
             vector_program,
             text_program,
@@ -1802,6 +1949,31 @@ impl Renderer {
             if profile_skip(command) {
                 continue;
             }
+            if let Draw::TintedImage(path, rect, _, _, tint) = command
+                && let Some(index) = path.strip_prefix(LAYER_PATH)
+            {
+                if let Some(texture) = index
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|index| self.layer_caches.get(index))
+                    .map(|cache| cache.texture)
+                {
+                    // A texture rendered into: its first row is the bottom of the screen.
+                    // Alpha scales premultiplied colour and coverage alike.
+                    // Radius -1: the plain textured program, no shape edge per fragment.
+                    self.gradient_quad(
+                        *rect,
+                        layer_uv(Size::new(width, height)),
+                        -1.,
+                        0.,
+                        [[tint[3]; 4]; 2],
+                        texture,
+                        None,
+                        None,
+                    );
+                }
+                continue;
+            }
             if let Some(path) = plain_wallpaper(command)
                 && self.clip.is_none()
                 && self.fade.is_none()
@@ -1918,11 +2090,336 @@ impl Renderer {
     /// Draws the scene. With `damage` (drawable pixels from `damage_pixels`), only those pixels
     /// are cleared and drawn; commands entirely outside them are skipped, and the rest of the
     /// back buffer keeps its earlier contents.
+    /// Sets the layers the following render() calls composite (empty: draw every command).
+    pub fn set_layers(&mut self, layers: &[Layer]) {
+        self.layers = layers.to_vec();
+    }
+
+    /// Allocates the two layer textures Recents uses and draws `commands` into them once,
+    /// while idle: the first crossfade then neither allocates nor first-uses that path.
+    pub fn prepare_layers(&mut self, commands: &[Draw], width: u32, height: u32) {
+        let stats = self.stats.clone();
+        let samples = target_samples();
+        let mut work = RenderStats::new(Size::new(width, height));
+        for index in 0..2 {
+            if self.layer_caches.len() == index {
+                self.layer_texture(
+                    commands,
+                    commands,
+                    index,
+                    (width, height, samples),
+                    &mut 1,
+                    &mut work,
+                );
+            }
+        }
+        self.stats = stats;
+    }
+
     pub fn render(&mut self, commands: &[Draw], width: u32, height: u32, damage: Option<[i32; 4]>) {
+        let started = Instant::now();
+        let layers = std::mem::take(&mut self.layers);
+        if layers.is_empty() {
+            self.render_frame(commands, commands, width, height, damage, false);
+            self.stats.cpu_submission_ms = started.elapsed().as_secs_f64() * 1000.;
+            return;
+        }
+        let samples = target_samples();
+        let mut work = RenderStats::new(Size::new(width, height));
+        let ordered = layers
+            .iter()
+            .try_fold(0, |end, layer| {
+                (end <= layer.start && layer.start < layer.end && layer.end <= commands.len())
+                    .then_some(layer.end)
+            })
+            .is_some();
+        let mut composed = Vec::with_capacity(commands.len() + 4 * layers.len());
+        if ordered {
+            // Drawing a layer's texture costs about as much as drawing its commands faded:
+            // one per frame, so a crossfade's first frame never pays for two.
+            let mut render_budget = 1;
+            let mut next = 0;
+            for (index, layer) in layers.iter().enumerate() {
+                composed.extend_from_slice(&commands[next..layer.start]);
+                let (clip, fade) = paint_state(&commands[..layer.start]);
+                let (end_clip, end_fade) = paint_state(&commands[..layer.end]);
+                // The layer draws under the clip and edge fade it starts in; its quad then
+                // covers the screen unclipped, and later commands continue in its end state.
+                let mut content = vec![Draw::Clip(clip), Draw::EdgeFade(fade)];
+                content.extend_from_slice(&commands[layer.start..layer.end]);
+                if self.layer_texture(
+                    &content,
+                    commands,
+                    index,
+                    (width, height, samples),
+                    &mut render_budget,
+                    &mut work,
+                ) {
+                    composed.extend([
+                        Draw::Clip(None),
+                        Draw::EdgeFade(None),
+                        Draw::TintedImage(
+                            format!("{LAYER_PATH}{index}"),
+                            Rect::new(0., 0., 1920., 1080.),
+                            0.,
+                            false,
+                            [layer.alpha; 4],
+                        ),
+                        Draw::Clip(end_clip),
+                        Draw::EdgeFade(end_fade),
+                    ]);
+                } else {
+                    // Not drawn yet this frame, or no offscreen target: fade each command.
+                    composed.extend(
+                        commands[layer.start..layer.end]
+                            .iter()
+                            .cloned()
+                            .map(|draw| fade_draw(draw, layer.alpha)),
+                    );
+                }
+                next = layer.end;
+            }
+            composed.extend_from_slice(&commands[next..]);
+        } else {
+            composed = commands.to_vec();
+            for layer in layers.iter().filter(|layer| layer.end <= commands.len()) {
+                for draw in &mut composed[layer.start.min(layer.end)..layer.end] {
+                    *draw = fade_draw(std::mem::replace(draw, Draw::Clip(None)), layer.alpha);
+                }
+            }
+        }
+        // Glass samples the wallpaper of the full list, never a layer's texture.
+        self.render_frame(&composed, commands, width, height, damage, false);
+        self.stats.include_work(&work);
+        // Surfaces describe the logical scene, including cached layers, not duplicate passes.
+        self.stats.glass_surfaces = commands
+            .iter()
+            .filter(|draw| matches!(draw, Draw::Glass(..)))
+            .count();
+        self.stats.glass_backdrop_sampling = self.stats.glass_surfaces > 0
+            && self.info.fragment_highp
+            && std::env::var("LUMA_GLASS").as_deref() != Ok("0");
+        self.stats.cpu_submission_ms = started.elapsed().as_secs_f64() * 1000.;
+        self.layers = layers;
+    }
+
+    fn multisample_layer_target(&mut self, target: (u32, u32, u32)) -> Option<GLuint> {
+        if let Some(buffer) = &self.layer_samples
+            && buffer.target == target
+        {
+            return Some(buffer.framebuffer);
+        }
+        let (width, height, samples) = target;
+        let mut buffer = LayerSamples {
+            framebuffer: 0,
+            color_buffer: 0,
+            target,
+        };
+        let (mut previous, mut previous_read, mut previous_color) = (0, 0, 0);
+        let complete = unsafe {
+            gl::GetIntegerv(gl::FRAMEBUFFER_BINDING, &mut previous);
+            gl::GetIntegerv(gl::READ_FRAMEBUFFER_BINDING, &mut previous_read);
+            gl::GetIntegerv(gl::RENDERBUFFER_BINDING, &mut previous_color);
+            gl::GenRenderbuffers(1, &mut buffer.color_buffer);
+            gl::BindRenderbuffer(gl::RENDERBUFFER, buffer.color_buffer);
+            gl::RenderbufferStorageMultisample(
+                gl::RENDERBUFFER,
+                samples as i32,
+                gl::RGBA8,
+                width as i32,
+                height as i32,
+            );
+            gl::GenFramebuffers(1, &mut buffer.framebuffer);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, buffer.framebuffer);
+            gl::FramebufferRenderbuffer(
+                gl::FRAMEBUFFER,
+                gl::COLOR_ATTACHMENT0,
+                gl::RENDERBUFFER,
+                buffer.color_buffer,
+            );
+            let complete = gl::CheckFramebufferStatus(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE;
+            gl::BindRenderbuffer(gl::RENDERBUFFER, previous_color as GLuint);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, previous as GLuint);
+            gl::BindFramebuffer(gl::READ_FRAMEBUFFER, previous_read as GLuint);
+            complete
+        };
+        if !complete {
+            // A rejected format/sample combination must not change text rendering.
+            self.layer_multisample = false;
+            return None;
+        }
+        let framebuffer = buffer.framebuffer;
+        self.layer_samples = Some(buffer);
+        Some(framebuffer)
+    }
+
+    /// Draws a layer's commands into its texture unless it already holds them.
+    fn layer_texture(
+        &mut self,
+        content: &[Draw],
+        commands: &[Draw],
+        index: usize,
+        target: (u32, u32, u32),
+        budget: &mut usize,
+        work: &mut RenderStats,
+    ) -> bool {
+        let (width, height, samples) = target;
+        if samples > 1 && !self.layer_multisample {
+            return false;
+        }
+        let backdrops: Vec<Draw> = commands
+            .iter()
+            .filter(|draw| {
+                matches!(draw, Draw::Image(_, rect, _, false) | Draw::TintedImage(_, rect, _, false, _) if full_screen(rect))
+            })
+            .cloned()
+            .collect();
+        let key = fingerprint(content) ^ fingerprint(&backdrops).rotate_left(1);
+        if let Some(cache) = self.layer_caches.get(index)
+            && cache.size == (width, height)
+            && cache.samples == samples
+            && cache.key == key
+        {
+            return true;
+        }
+        if *budget == 0 {
+            return false;
+        }
+        *budget -= 1;
+        let multisample_framebuffer = if samples > 1 {
+            let Some(framebuffer) = self.multisample_layer_target(target) else {
+                return false;
+            };
+            framebuffer
+        } else {
+            0
+        };
+        if self
+            .layer_caches
+            .get(index)
+            .is_none_or(|cache| cache.size != (width, height) || cache.samples != samples)
+        {
+            let mut cache = LayerCache {
+                texture: 0,
+                framebuffer: 0,
+                size: (width, height),
+                samples,
+                key: 0,
+            };
+            let (mut previous, mut previous_read) = (0, 0);
+            let complete = unsafe {
+                gl::GetIntegerv(gl::FRAMEBUFFER_BINDING, &mut previous);
+                if self.layer_multisample {
+                    gl::GetIntegerv(gl::READ_FRAMEBUFFER_BINDING, &mut previous_read);
+                }
+                gl::GenTextures(1, &mut cache.texture);
+                gl::BindTexture(gl::TEXTURE_2D, cache.texture);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
+                gl::TexImage2D(
+                    gl::TEXTURE_2D,
+                    0,
+                    gl::RGBA as i32,
+                    width as i32,
+                    height as i32,
+                    0,
+                    gl::RGBA,
+                    gl::UNSIGNED_BYTE,
+                    std::ptr::null(),
+                );
+                gl::GenFramebuffers(1, &mut cache.framebuffer);
+                gl::BindFramebuffer(gl::FRAMEBUFFER, cache.framebuffer);
+                gl::FramebufferTexture2D(
+                    gl::FRAMEBUFFER,
+                    gl::COLOR_ATTACHMENT0,
+                    gl::TEXTURE_2D,
+                    cache.texture,
+                    0,
+                );
+                let complete =
+                    gl::CheckFramebufferStatus(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE;
+                gl::BindFramebuffer(gl::FRAMEBUFFER, previous as GLuint);
+                if self.layer_multisample {
+                    gl::BindFramebuffer(gl::READ_FRAMEBUFFER, previous_read as GLuint);
+                }
+                complete
+            };
+            if !complete {
+                if samples > 1 {
+                    // A rejected format/sample combination must not change text rendering.
+                    self.layer_multisample = false;
+                }
+                return false;
+            }
+            if let Some(old) = self.layer_caches.get_mut(index) {
+                *old = cache;
+            } else if index == self.layer_caches.len() {
+                self.layer_caches.push(cache);
+            } else {
+                return false;
+            }
+        }
+        let cache = &self.layer_caches[index];
+        let framebuffer = if samples > 1 {
+            multisample_framebuffer
+        } else {
+            cache.framebuffer
+        };
+        let (mut previous, mut previous_read) = (0, 0);
+        unsafe {
+            gl::GetIntegerv(gl::FRAMEBUFFER_BINDING, &mut previous);
+            if self.layer_multisample {
+                gl::GetIntegerv(gl::READ_FRAMEBUFFER_BINDING, &mut previous_read);
+            }
+            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer);
+        }
+        // Over a transparent start, the blend equation leaves premultiplied colour and the
+        // layer's coverage in alpha: composited with (ONE, ONE_MINUS_SRC_ALPHA).
+        self.render_frame(content, commands, width, height, None, true);
+        work.include_work(&self.stats);
+        if samples > 1 {
+            unsafe {
+                gl::BindFramebuffer(gl::READ_FRAMEBUFFER, framebuffer);
+                gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, self.layer_caches[index].framebuffer);
+                gl::BlitFramebuffer(
+                    0,
+                    0,
+                    width as i32,
+                    height as i32,
+                    0,
+                    0,
+                    width as i32,
+                    height as i32,
+                    gl::COLOR_BUFFER_BIT,
+                    gl::NEAREST,
+                );
+            }
+        }
+        unsafe {
+            gl::BindFramebuffer(gl::FRAMEBUFFER, previous as GLuint);
+            if self.layer_multisample {
+                gl::BindFramebuffer(gl::READ_FRAMEBUFFER, previous_read as GLuint);
+            }
+        };
+        self.layer_caches[index].key = key;
+        true
+    }
+
+    fn render_frame(
+        &mut self,
+        commands: &[Draw],
+        backdrop_source: &[Draw],
+        width: u32,
+        height: u32,
+        damage: Option<[i32; 4]>,
+        transparent: bool,
+    ) {
         let area = damage.map(|pixels| Self::damage_area(pixels, width, height));
         let started = Instant::now();
         self.build(commands, width, height, area);
-        let mut backdrops = commands.iter().filter_map(|draw| match draw {
+        let mut backdrops = backdrop_source.iter().filter_map(|draw| match draw {
             Draw::Image(path, rect, _, false) if full_screen(rect) => Some((path.as_str(), 1.)),
             Draw::TintedImage(path, rect, _, false, tint) if full_screen(rect) => {
                 Some((path.as_str(), tint[3]))
@@ -1985,7 +2482,11 @@ impl Renderer {
         unsafe {
             gl::Viewport(0, 0, width as i32, height as i32);
             scissor(damage);
-            gl::ClearColor(0.04, 0.04, 0.05, 1.);
+            if transparent {
+                gl::ClearColor(0., 0., 0., 0.);
+            } else {
+                gl::ClearColor(0.04, 0.04, 0.05, 1.);
+            }
             gl::Clear(gl::COLOR_BUFFER_BIT);
             gl::Viewport(vx, vy, vw, vh);
             if self.vao != 0 {
@@ -2020,6 +2521,11 @@ impl Renderer {
             );
             gl::Uniform1i(uniform_location(self.program, c"u_texture".as_ptr()), 0);
             gl::ActiveTexture(gl::TEXTURE0);
+            let layer_textures: Vec<GLuint> = self
+                .layer_caches
+                .iter()
+                .map(|cache| cache.texture)
+                .collect();
             let mut paint_bound = false;
             let mut active_paint = 0;
             // Programs whose u_aa (one drawable pixel) is set this frame: shape, app_shape.
@@ -2077,6 +2583,16 @@ impl Renderer {
                                 gl::Enable(gl::BLEND);
                             }
                             blending = !*opaque;
+                        }
+                        // The layer's texture holds premultiplied colour.
+                        let premultiplied = layer_textures.contains(texture);
+                        if premultiplied {
+                            gl::BlendFuncSeparate(
+                                gl::ONE,
+                                gl::ONE_MINUS_SRC_ALPHA,
+                                gl::ONE,
+                                gl::ONE_MINUS_SRC_ALPHA,
+                            );
                         }
                         let program = self
                             .paint_programs
@@ -2155,6 +2671,14 @@ impl Renderer {
                             }
                         }
                         gl::DrawArrays(gl::TRIANGLES, *start as i32, *count as i32);
+                        if premultiplied {
+                            gl::BlendFuncSeparate(
+                                gl::SRC_ALPHA,
+                                gl::ONE_MINUS_SRC_ALPHA,
+                                gl::ONE,
+                                gl::ONE_MINUS_SRC_ALPHA,
+                            );
+                        }
                     }
                     BatchKind::Vector { .. } | BatchKind::Text { .. } if !blending => {
                         gl::Enable(gl::BLEND);
@@ -2782,6 +3306,44 @@ fn link_source(vertex: &str, fragment: &str, attributes: &[&CStr]) -> Result<GLu
         }
         Ok(program)
     }
+}
+
+/// One command at `alpha`, as a fading view draws it (the fallback without a layer texture).
+fn fade_draw(mut draw: Draw, alpha: f32) -> Draw {
+    match &mut draw {
+        Draw::Glass(_, _, color)
+        | Draw::Shape(_, _, _, color)
+        | Draw::Shadow(_, _, _, color)
+        | Draw::Text(_, _, _, color, _)
+        | Draw::TintedImage(_, _, _, _, color)
+        | Draw::AppImage(_, _, _, color) => color[3] *= alpha,
+        Draw::RoundedGradient(_, _, top, bottom) => {
+            top[3] *= alpha;
+            bottom[3] *= alpha;
+        }
+        Draw::Image(path, rect, radius, contain) => {
+            return Draw::TintedImage(
+                std::mem::take(path),
+                *rect,
+                *radius,
+                *contain,
+                [1., 1., 1., alpha],
+            );
+        }
+        Draw::Clip(_) | Draw::EdgeFade(_) => {}
+    }
+    draw
+}
+
+/// The clip and edge fade in effect after `commands`.
+fn paint_state(commands: &[Draw]) -> (Option<Rect>, Option<[f32; 4]>) {
+    commands
+        .iter()
+        .fold((None, None), |(clip, fade), draw| match draw {
+            Draw::Clip(next) => (*next, fade),
+            Draw::EdgeFade(next) => (clip, *next),
+            _ => (clip, fade),
+        })
 }
 
 #[cfg(test)]

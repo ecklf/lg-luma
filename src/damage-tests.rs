@@ -142,6 +142,52 @@ fn a_moved_shape_damages_its_old_and_new_place_only() {
 }
 
 #[test]
+fn layer_damage_and_idle_shadow_refresh_share_buffer_age_history() {
+    let shadow = Draw::Shadow(Rect::new(100., 90., 30., 20.), 8., 4., [0.; 4]);
+    let scene = [wallpaper(), shadow];
+    let mut tracker = Tracker::default();
+    for _ in 0..4 {
+        tracker.push(&scene);
+    }
+    tracker.include(Rect::new(400., 300., 100., 80.));
+    tracker.refresh_shadows(|_| true, bounds);
+    for _ in 0..3 {
+        tracker.push(&scene);
+        let rect = area(tracker.damage(3));
+        assert_eq!((rect.x, rect.y, rect.w, rect.h), (95., 85., 405., 295.));
+    }
+    tracker.push(&scene);
+    assert_eq!(area(tracker.damage(3)).w, 0.);
+}
+
+#[test]
+fn owning_scenes_keeps_layer_damage_through_the_final_direct_frame() {
+    let scene = || vec![wallpaper(), shape(100.)];
+    let mut tracker = Tracker::default();
+    for _ in 0..4 {
+        tracker.compare(&scene());
+        tracker.remember(scene());
+    }
+    let layer = Rect::new(400., 300., 100., 80.);
+    // The fading frame and the first direct frame can have identical Draw commands.
+    for _ in 0..2 {
+        let mut presented = scene();
+        tracker.include(layer);
+        tracker.compare(&presented);
+        assert_eq!(area(tracker.damage(1)).w, layer.w);
+        tracker.remember(std::mem::take(&mut presented));
+        assert!(presented.is_empty());
+        assert_eq!(tracker.previous().len(), 2);
+    }
+    for frame in 0..3 {
+        tracker.compare(&scene());
+        let damage = area(tracker.damage(3));
+        assert_eq!(damage.w, if frame < 2 { layer.w } else { 0. });
+        tracker.remember(scene());
+    }
+}
+
+#[test]
 fn an_inserted_focus_ring_realigns_instead_of_redrawing_everything() {
     let mut tracker = Tracker::default();
     tracker.push(&[wallpaper(), shape(100.), shape(400.), shape(700.)]);

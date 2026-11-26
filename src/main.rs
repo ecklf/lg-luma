@@ -1019,6 +1019,9 @@ fn run() -> Result<(), String> {
         None;
     let mut drawer_vectors: Vec<String> = Vec::new();
     let mut idle_text: Vec<renderer::Draw> = Vec::new();
+    let mut last_layer_area = state::Rect::default();
+    // After the idle queue has been filled and worked off (see drawer_artwork_due).
+    let mut layers_prepared = None;
     // When the app inventory last arrived: a Home relaunch already refreshes it, so the
     // window events that follow (Restored, FocusGained) need not ask again right away.
     let mut inventory_at: Option<Instant> = None;
@@ -2132,6 +2135,7 @@ fn run() -> Result<(), String> {
             scene = compose(&mut state, &assets, now);
             let compose_ms = compose_started.elapsed().as_secs_f64() * 1000.;
             let (width, height) = window.drawable_size();
+            renderer.set_layers(&scene.layers);
             if width > 0 && height > 0 {
                 if final_frame && let Some(path) = &options.screenshot {
                     captured = Some(renderer.capture(
@@ -2140,10 +2144,21 @@ fn run() -> Result<(), String> {
                         options.capture_size.unwrap_or(Size::HD),
                     )?);
                 }
+                // A fading layer changes the pixels it covers without changing a command; so
+                // does its last frame give way to the commands drawn directly.
+                let layer_area = damage::area(
+                    scene
+                        .layers
+                        .iter()
+                        .flat_map(|layer| &scene.draw[layer.start..layer.end]),
+                );
+                let layered = damage::union(layer_area, last_layer_area);
+                last_layer_area = layer_area;
                 let damage = partial.as_ref().and_then(|partial| {
                     if last_drawable != Some(Size::new(width, height)) {
                         damage_tracker.reset();
                     }
+                    damage_tracker.include(layered);
                     damage_tracker.compare(&scene.draw);
                     // A capture drew this frame already; keep its window frame whole.
                     if captured.is_some() && final_frame {
@@ -2282,7 +2297,20 @@ fn run() -> Result<(), String> {
                 damage::bounds,
             );
         }
+        if idle
+            && layers_prepared == Some(false)
+            && !damage_tracker.previous().is_empty()
+            && drawer_artwork.is_none()
+            && drawer_vectors.is_empty()
+            && idle_text.is_empty()
+        {
+            // Last in the idle queue: the offscreen layers of a first Recents crossfade.
+            let (width, height) = window.drawable_size();
+            renderer.prepare_layers(damage_tracker.previous(), width, height);
+            layers_prepared = Some(true);
+        }
         if std::mem::take(&mut drawer_artwork_due) {
+            layers_prepared.get_or_insert(false);
             let page = std::mem::replace(&mut state.page, state::Page::Apps);
             let visibility = std::mem::replace(&mut state.drawer_visibility, 1.);
             let section = state.section;
