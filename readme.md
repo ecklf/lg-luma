@@ -42,87 +42,178 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 
 > [!NOTE]
 > Luma should start on any TV running webOS 4 or newer. The following configurations have been
-> confirmed to work by the community. Home takeover support varies, as noted below:
+> reported working by the community. These are device-specific reports, not a guarantee that every
+> feature works on every firmware or Luma release.
+
+**Home Chooser** is the recommended Home integration. Its [upstream requirements][hc-requirements]
+list webOS **4–12** (including webOS 22/7.x, 23/8.x, 24/9.x, 25/10.x and 26/11.x).
+See the [upstream per-webOS integration details][hc-platforms] for platform differences.
+Upstream also records a [firmware test matrix][hc-matrix], including emulated sets and test
+launchers. Those results are not physical-TV confirmations for Luma.
+Homebrew Channel **0.8.0 or newer is required on webOS 11 and later**.
+
+In the tables, **Upstream** means Home Chooser supports the reported webOS family, not that
+Luma + Home Chooser was tested on that exact model. **✅** links to a firsthand Home Chooser
+confirmation. **Home (old takeover)** records reports for Luma's legacy `home.sh` method:
+✅ worked, ❌ failed or unsupported, and Unknown means no confirmation. Older successes may
+have release-specific caveats. Model identifiers containing `*` or `?` are incomplete as reported.
+
+[hc-requirements]: https://github.com/webosbrew/home-chooser#requirements
+[hc-platforms]: https://github.com/webosbrew/home-chooser/blob/main/docs/architecture.md#the-home-key-and-the-idle-path-per-webos-family
+[hc-matrix]: https://github.com/webosbrew/home-chooser/issues/1
 
 <details>
 <summary>webOS 4</summary>
 
-| TV        | Model identifier | Takeover Support |
-| --------- | ---------------- | ---------------- |
-| LG C8     | `OLED??C8*`      | ❌               |
-| LG C9     | `OLED65C97LA`    | Unknown          |
-| LG UM7450 | `UM74507LA`      | ❌               |
+| TV | Model identifier | Home Chooser | Home (old takeover) |
+| --- | --- | --- | --- |
+| [LG B8](https://github.com/ecklf/lg-luma/issues/338) | `OLED55B8PLA` | Upstream | Unknown |
+| [LG B9](https://github.com/ecklf/lg-luma/issues/172) | `OLED55B9PLA` | Upstream | Unknown |
+| [LG C8](https://github.com/ecklf/lg-luma/issues/216) | `OLED65C8*` | Upstream | ❌ |
+| LG C9 | `OLED65C97LA` | Upstream | Unknown |
+| [LG C9](https://github.com/ecklf/lg-luma/issues/189) | `OLED65C9PLA` | Upstream | ❌ |
+| LG UM7450 | `UM74507LA` | Upstream | ❌ |
+| [LG UM7600](https://github.com/ecklf/lg-luma/issues/98#issuecomment-6504239681) | `65UM7600PTA` | Upstream | Patched scripts only |
+
+The B8 report confirms manual launch, but reports a black screen with cold-boot autostart and
+LG Input Hook installed ([#338](https://github.com/ecklf/lg-luma/issues/338)). The UM7600 success
+required locally widening the old takeover's version check, not the shipped setup.
 
 </details>
 
 <details>
 <summary>webOS 5</summary>
 
-| TV        | Model identifier | Takeover Support |
-| --------- | ---------------- | ---------------- |
-| LG UN7100 | `49UN71006LB`    | ✅               |
+| TV | Model identifier | Home Chooser | Home (old takeover) |
+| --- | --- | --- | --- |
+| [LG CX](https://github.com/ecklf/lg-luma/issues/109#issuecomment-6558898333) | `OLED55CXAUA` | Upstream | ✅ |
+| [LG GX](https://github.com/ecklf/lg-luma/issues/205) | `OLED65GXPUA` | Upstream | ✅ |
+| LG UN7100 | `49UN71006LB` | Upstream | ✅ |
 
 </details>
 
 <details>
 <summary>webOS 6</summary>
 
-| TV        | Model identifier | Takeover Support |
-| --------- | ---------------- | ---------------- |
-| LG B1     | `OLED65B19LA`    | ✅               |
-| LG C1     | `OLED48C1KNB`    | ✅               |
-| LG G1     | `OLED65G1RLA`    | ✅               |
-| LG UP8000 | `86UP80009LA`    | Unknown          |
+| TV | Model identifier | Home Chooser | Home (old takeover) |
+| --- | --- | --- | --- |
+| LG B1 | `OLED65B19LA` | Upstream | ✅ |
+| LG C1 | `OLED48C1KNB` | Upstream | ✅ |
+| [LG C1](https://github.com/ecklf/lg-luma/issues/208) | `OLED65C15LA` | Upstream | ✅, startup caveat |
+| [LG C1, 65-inch](https://github.com/ecklf/lg-luma/issues/407) | `OLED65C1*` | [✅, caveats](https://github.com/ecklf/lg-luma/issues/407) | ✅ |
+| [LG G1](https://github.com/ecklf/lg-luma/issues/125) | `OLED65G13LA` | Upstream | ✅, cold-boot caveat |
+| LG G1 | `OLED65G1RLA` | Upstream | ✅ |
+| [LG NANO77](https://github.com/ecklf/lg-luma/issues/399) | `50NANO773PA` | Upstream, 0.2.0 failed | ✅ |
+| LG UP8000 | `86UP80009LA` | Upstream | Unknown |
+
+Home Chooser activation was confirmed fixed with **Home Chooser 0.3.0 / Luma 3.13.2** after
+clearing a conflicting permanent Home-key setting ([#389](https://github.com/ecklf/lg-luma/issues/389#issuecomment-7131065084)).
+The NANO77 reporter has not confirmed a retest on that version. The C1 report in
+[#407](https://github.com/ecklf/lg-luma/issues/407) confirms Home Chooser activation and launches,
+but also reports slow cold boots and recurring Homebrew Channel failsafe warnings with no established cause.
+The cold-boot report is also tracked in [Home Chooser #20](https://github.com/webosbrew/home-chooser/issues/20).
+The two 65-inch C1 entries may describe the same variant, but #407 does not give its full identifier.
+
+</details>
+
+<details>
+<summary>webOS 22 (7.x)</summary>
+
+| TV / monitor | Model identifier | Home Chooser | Home (old takeover) |
+| --- | --- | --- | --- |
+| [LG SQ700S](https://github.com/ecklf/lg-luma/issues/181#issuecomment-6530301629) | `43SQ700S-WB` | Upstream | ❌ |
+
+</details>
+
+<details>
+<summary>webOS 23 (8.x)</summary>
+
+| TV / monitor | Model identifier | Home Chooser | Home (old takeover) |
+| --- | --- | --- | --- |
+| [LG SR50F](https://github.com/ecklf/lg-luma/issues/181) | `32SR50F` | Upstream | ❌ |
 
 </details>
 
 <details>
 <summary>webOS 24</summary>
 
-| TV        | Model identifier | Takeover Support |
-| --------- | ---------------- | ---------------- |
-| LG G4     | `OLED65G46LA`    | ✅               |
-| LG B2     | `OLED65B29LA`    | ✅               |
-| LG QNED81 | `50QNED816RE`    | ✅               |
+| TV | Model identifier | Home Chooser | Home (old takeover) |
+| --- | --- | --- | --- |
+| LG G4 | `OLED65G46LA` | Upstream | ✅ |
+| LG B2 | `OLED65B29LA` | Upstream | ✅ |
+| LG QNED81 | `50QNED816RE` | Upstream | ✅ |
 
 </details>
 
 <details>
 <summary>webOS 25</summary>
 
-| TV        | Model identifier | Takeover Support |
-| --------- | ---------------- | ---------------- |
-| LG B5     | `OLED77B5PUA`    | ✅               |
-| LG C2     | `OLED42C2PSA`    | ✅               |
-| LG C2     | `OLED65C2*`      | Unknown          |
-| LG C2     | `OLED77C2*`      | Unknown          |
-| LG C4     | `OLED42C4*`      | ✅               |
-| LG G3     | `OLED??G3*`      | Unknown          |
-| LG NANO77 | `55NANO776RA`    | ✅               |
-| LG QNED86 | `55QNED86T6A`    | Unknown          |
-| LG UT8050 | `50UT8050*`      | ✅               |
+| TV | Model identifier | Home Chooser | Home (old takeover) |
+| --- | --- | --- | --- |
+| LG B5 | `OLED77B5PUA` | Upstream | ✅ |
+| LG C2 | `OLED42C2PSA` | Upstream | ✅ |
+| LG C2 | `OLED65C2*` | Upstream | Unknown |
+| LG C2 | `OLED77C2*` | Upstream | Unknown |
+| [LG C3](https://github.com/ecklf/lg-luma/issues/79#issuecomment-6933087969) | `OLED48C34LA` | Upstream | ✅ |
+| LG C4 | `OLED42C4*` | Upstream | ✅ |
+| LG G3 | `OLED??G3*` | Upstream | Unknown |
+| [LG G4](https://github.com/ecklf/lg-luma/issues/156) | `OLED77G48LW` | Upstream | ✅, preload caveat |
+| LG NANO77 | `55NANO776RA` | Upstream | ✅ |
+| LG QNED86 | `55QNED86T6A` | Upstream | Unknown |
+| LG UT8050 | `50UT8050*` | Upstream | ✅ |
 
 </details>
 
 <details>
 <summary>webOS 26</summary>
 
-| TV    | Model identifier      | Takeover Support |
-| ----- | --------------------- | ---------------- |
-| LG C2 | `OLED65C2PSA`         | ✅               |
-| LG C3 | `OLED65C31LA`         | ✅               |
-| LG C3 | `OLED65C36LC`         | ✅               |
-| LG C4 | `OLED77C44LA`         | ✅               |
-| LG C5 | `OLED55C57LA`         | ✅               |
-| LG C5 | `OLED55C5PSA`         | Unknown          |
-| LG C6 | `OLED65C6*`           | Unknown          |
-| LG C6 | `OLED77C6*`           | ✅               |
-| LG G5 | `OLED83G5WUA.BUSYDJR` | ✅               |
-| LG G5 | `OLED77G5WUA.DUSQLJR` | ✅               |
+| TV | Model identifier | Home Chooser | Home (old takeover) |
+| --- | --- | --- | --- |
+| LG C2 | `OLED65C2PSA` | Upstream | ✅ |
+| LG C3 | `OLED65C31LA` | Upstream | ✅ |
+| LG C3 | `OLED65C36LC` | Upstream | ✅ |
+| LG C4 | `OLED77C44LA` | Upstream | ✅ |
+| LG C5 | `OLED55C57LA` | Upstream | ✅ |
+| LG C5 | `OLED55C5PSA` | Upstream | Unknown |
+| LG C6 | `OLED65C6*` | Upstream | [✅](https://github.com/ecklf/lg-luma/issues/170) |
+| LG C6 | `OLED77C6*` | Upstream | ✅ |
+| [LG G5](https://github.com/ecklf/lg-luma/issues/79#issuecomment-6600879821) | `OLED65G57LW` | Upstream | ✅ |
+| LG G5 | `OLED83G5WUA.BUSYDJR` | Upstream | ✅ |
+| LG G5 | `OLED77G5WUA.DUSQLJR` | Upstream | ✅ |
+
+Additional confirmations without a full model identifier:
+
+- [LG C2](https://github.com/ecklf/lg-luma/issues/269#issuecomment-7132068792): Home Chooser
+  Home returns keep the same process with Luma 3.13.2. The original report gives firmware 43.21.74.
+- [LG C5](https://github.com/ecklf/lg-luma/issues/269#issuecomment-7159942304): Home Chooser,
+  Homebrew Channel 0.8.0 and Luma 3.13.4 give same-process Home returns and direct cold-boot
+  launch. A brief black frame on Home return remains reported. The same reporter noted
+  repeated process restarts with old takeover on 3.13.4, despite earlier working releases.
+
+Reports sometimes call internal webOS **11.2.0** “webOS 25”. Here those configurations are
+grouped under **webOS 26**, including [the G5 report](https://github.com/ecklf/lg-luma/issues/128).
+
+</details>
+
+<details>
+<summary>webOS version not reported</summary>
+
+| TV | Model identifier | Home Chooser | Home (old takeover) |
+| --- | --- | --- | --- |
+| [LG G6, 65-inch](https://github.com/ecklf/lg-luma/issues/410) | Not reported | Unknown | Unknown |
+
+The G6 reporter confirms Luma works, but gives neither a webOS version nor a Home integration
+method. Home Chooser support cannot be inferred from the TV's model year alone.
 
 </details>
 
 ## Installation
+
+> [!IMPORTANT]
+> **Enable Quick Start+ in your TV's settings before installing Luma.** It helps the TV resume
+> from standby instead of doing a full cold boot each time, reducing the delay before Luma appears.
+> The setting's location varies by model and webOS version. Cold boots can still occur after a
+> power cut, reboot or firmware update, and startup timing varies by TV.
 
 ### Homebrew Channel
 
