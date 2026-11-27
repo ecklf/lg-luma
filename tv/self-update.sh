@@ -108,7 +108,6 @@ recover_home() {
 if grep -q '"enabled": *true' "$HOME_STATE/state.json" 2>/dev/null; then
   # Use the NEW scripts: refresh copied helpers and staged manifest as well as the executable.
   if ! printf 'y\n' | sh "$APP_DIR/home.sh" enable "$APP_DIR" "$HOME_ID" >>"$LOG" 2>&1; then recover_home; fi
-  launch "$HOME_ID" || recover_home
 else
   launch com.ecklf.luma || fail 'Update installed, but Luma could not be opened.'
 fi
