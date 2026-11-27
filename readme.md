@@ -165,10 +165,7 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 ## Installation
 
 > [!IMPORTANT]
-> **Enable Quick Start+ in your TV's settings before installing Luma.** It helps the TV resume
-> from standby instead of doing a full cold boot each time, reducing the delay before Luma appears.
-> The setting's location varies by model and webOS version. Cold boots can still occur after a
-> power cut, reboot or firmware update, and startup timing varies by TV.
+> Enabling **Quick Start+** (if available) is recommended.
 
 ### Homebrew Channel
 
