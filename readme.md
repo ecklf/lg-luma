@@ -65,15 +65,15 @@ have release-specific caveats. Model identifiers containing `*` or `?` are incom
 <details>
 <summary>webOS 4</summary>
 
-| TV | Model identifier | Home Chooser | Home (old takeover) |
-| --- | --- | --- | --- |
-| [LG B8](https://github.com/ecklf/lg-luma/issues/338) | `OLED55B8PLA` | Upstream | Unknown |
-| [LG B9](https://github.com/ecklf/lg-luma/issues/172) | `OLED55B9PLA` | Upstream | Unknown |
-| [LG C8](https://github.com/ecklf/lg-luma/issues/216) | `OLED65C8*` | Upstream | ❌ |
-| LG C9 | `OLED65C97LA` | Upstream | Unknown |
-| [LG C9](https://github.com/ecklf/lg-luma/issues/189) | `OLED65C9PLA` | Upstream | ❌ |
-| LG UM7450 | `UM74507LA` | Upstream | ❌ |
-| [LG UM7600](https://github.com/ecklf/lg-luma/issues/98#issuecomment-6504239681) | `65UM7600PTA` | Upstream | Patched scripts only |
+| TV                                                                              | Model identifier | Home Chooser | Home (old takeover)  |
+| ------------------------------------------------------------------------------- | ---------------- | ------------ | -------------------- |
+| [LG B8](https://github.com/ecklf/lg-luma/issues/338)                            | `OLED55B8PLA`    | Upstream     | Unknown              |
+| [LG B9](https://github.com/ecklf/lg-luma/issues/172)                            | `OLED55B9PLA`    | Upstream     | Unknown              |
+| [LG C8](https://github.com/ecklf/lg-luma/issues/216)                            | `OLED65C8*`      | Upstream     | ❌                   |
+| LG C9                                                                           | `OLED65C97LA`    | Upstream     | Unknown              |
+| [LG C9](https://github.com/ecklf/lg-luma/issues/189)                            | `OLED65C9PLA`    | Upstream     | ❌                   |
+| LG UM7450                                                                       | `UM74507LA`      | Upstream     | ❌                   |
+| [LG UM7600](https://github.com/ecklf/lg-luma/issues/98#issuecomment-6504239681) | `65UM7600PTA`    | Upstream     | Patched scripts only |
 
 The B8 report confirms manual launch, but reports a black screen with cold-boot autostart and
 LG Input Hook installed ([#338](https://github.com/ecklf/lg-luma/issues/338)). The UM7600 success
@@ -84,27 +84,27 @@ required locally widening the old takeover's version check, not the shipped setu
 <details>
 <summary>webOS 5</summary>
 
-| TV | Model identifier | Home Chooser | Home (old takeover) |
-| --- | --- | --- | --- |
-| [LG CX](https://github.com/ecklf/lg-luma/issues/109#issuecomment-6558898333) | `OLED55CXAUA` | Upstream | ✅ |
-| [LG GX](https://github.com/ecklf/lg-luma/issues/205) | `OLED65GXPUA` | Upstream | ✅ |
-| LG UN7100 | `49UN71006LB` | Upstream | ✅ |
+| TV                                                                           | Model identifier | Home Chooser | Home (old takeover) |
+| ---------------------------------------------------------------------------- | ---------------- | ------------ | ------------------- |
+| [LG CX](https://github.com/ecklf/lg-luma/issues/109#issuecomment-6558898333) | `OLED55CXAUA`    | Upstream     | ✅                  |
+| [LG GX](https://github.com/ecklf/lg-luma/issues/205)                         | `OLED65GXPUA`    | Upstream     | ✅                  |
+| LG UN7100                                                                    | `49UN71006LB`    | Upstream     | ✅                  |
 
 </details>
 
 <details>
 <summary>webOS 6</summary>
 
-| TV | Model identifier | Home Chooser | Home (old takeover) |
-| --- | --- | --- | --- |
-| LG B1 | `OLED65B19LA` | Upstream | ✅ |
-| LG C1 | `OLED48C1KNB` | Upstream | ✅ |
-| [LG C1](https://github.com/ecklf/lg-luma/issues/208) | `OLED65C15LA` | Upstream | ✅, startup caveat |
-| [LG C1, 65-inch](https://github.com/ecklf/lg-luma/issues/407) | `OLED65C1*` | [✅, caveats](https://github.com/ecklf/lg-luma/issues/407) | ✅ |
-| [LG G1](https://github.com/ecklf/lg-luma/issues/125) | `OLED65G13LA` | Upstream | ✅, cold-boot caveat |
-| LG G1 | `OLED65G1RLA` | Upstream | ✅ |
-| [LG NANO77](https://github.com/ecklf/lg-luma/issues/399) | `50NANO773PA` | Upstream, 0.2.0 failed | ✅ |
-| LG UP8000 | `86UP80009LA` | Upstream | Unknown |
+| TV                                                            | Model identifier | Home Chooser                                               | Home (old takeover)  |
+| ------------------------------------------------------------- | ---------------- | ---------------------------------------------------------- | -------------------- |
+| LG B1                                                         | `OLED65B19LA`    | Upstream                                                   | ✅                   |
+| LG C1                                                         | `OLED48C1KNB`    | Upstream                                                   | ✅                   |
+| [LG C1](https://github.com/ecklf/lg-luma/issues/208)          | `OLED65C15LA`    | Upstream                                                   | ✅, startup caveat   |
+| [LG C1, 65-inch](https://github.com/ecklf/lg-luma/issues/407) | `OLED65C1*`      | [✅, caveats](https://github.com/ecklf/lg-luma/issues/407) | ✅                   |
+| [LG G1](https://github.com/ecklf/lg-luma/issues/125)          | `OLED65G13LA`    | Upstream                                                   | ✅, cold-boot caveat |
+| LG G1                                                         | `OLED65G1RLA`    | Upstream                                                   | ✅                   |
+| [LG NANO77](https://github.com/ecklf/lg-luma/issues/399)      | `50NANO773PA`    | Upstream, 0.2.0 failed                                     | ✅                   |
+| LG UP8000                                                     | `86UP80009LA`    | Upstream                                                   | Unknown              |
 
 Home Chooser activation was confirmed fixed with **Home Chooser 0.3.0 / Luma 3.13.2** after
 clearing a conflicting permanent Home-key setting ([#389](https://github.com/ecklf/lg-luma/issues/389#issuecomment-7131065084)).
@@ -119,67 +119,67 @@ The two 65-inch C1 entries may describe the same variant, but #407 does not give
 <details>
 <summary>webOS 22 (7.x)</summary>
 
-| TV / monitor | Model identifier | Home Chooser | Home (old takeover) |
-| --- | --- | --- | --- |
-| [LG SQ700S](https://github.com/ecklf/lg-luma/issues/181#issuecomment-6530301629) | `43SQ700S-WB` | Upstream | ❌ |
+| TV / monitor                                                                     | Model identifier | Home Chooser | Home (old takeover) |
+| -------------------------------------------------------------------------------- | ---------------- | ------------ | ------------------- |
+| [LG SQ700S](https://github.com/ecklf/lg-luma/issues/181#issuecomment-6530301629) | `43SQ700S-WB`    | Upstream     | ❌                  |
 
 </details>
 
 <details>
 <summary>webOS 23 (8.x)</summary>
 
-| TV / monitor | Model identifier | Home Chooser | Home (old takeover) |
-| --- | --- | --- | --- |
-| [LG SR50F](https://github.com/ecklf/lg-luma/issues/181) | `32SR50F` | Upstream | ❌ |
+| TV / monitor                                            | Model identifier | Home Chooser | Home (old takeover) |
+| ------------------------------------------------------- | ---------------- | ------------ | ------------------- |
+| [LG SR50F](https://github.com/ecklf/lg-luma/issues/181) | `32SR50F`        | Upstream     | ❌                  |
 
 </details>
 
 <details>
 <summary>webOS 24</summary>
 
-| TV | Model identifier | Home Chooser | Home (old takeover) |
-| --- | --- | --- | --- |
-| LG G4 | `OLED65G46LA` | Upstream | ✅ |
-| LG B2 | `OLED65B29LA` | Upstream | ✅ |
-| LG QNED81 | `50QNED816RE` | Upstream | ✅ |
+| TV        | Model identifier | Home Chooser | Home (old takeover) |
+| --------- | ---------------- | ------------ | ------------------- |
+| LG G4     | `OLED65G46LA`    | Upstream     | ✅                  |
+| LG B2     | `OLED65B29LA`    | Upstream     | ✅                  |
+| LG QNED81 | `50QNED816RE`    | Upstream     | ✅                  |
 
 </details>
 
 <details>
 <summary>webOS 25</summary>
 
-| TV | Model identifier | Home Chooser | Home (old takeover) |
-| --- | --- | --- | --- |
-| LG B5 | `OLED77B5PUA` | Upstream | ✅ |
-| LG C2 | `OLED42C2PSA` | Upstream | ✅ |
-| LG C2 | `OLED65C2*` | Upstream | Unknown |
-| LG C2 | `OLED77C2*` | Upstream | Unknown |
-| [LG C3](https://github.com/ecklf/lg-luma/issues/79#issuecomment-6933087969) | `OLED48C34LA` | Upstream | ✅ |
-| LG C4 | `OLED42C4*` | Upstream | ✅ |
-| LG G3 | `OLED??G3*` | Upstream | Unknown |
-| [LG G4](https://github.com/ecklf/lg-luma/issues/156) | `OLED77G48LW` | Upstream | ✅, preload caveat |
-| LG NANO77 | `55NANO776RA` | Upstream | ✅ |
-| LG QNED86 | `55QNED86T6A` | Upstream | Unknown |
-| LG UT8050 | `50UT8050*` | Upstream | ✅ |
+| TV                                                                          | Model identifier | Home Chooser | Home (old takeover) |
+| --------------------------------------------------------------------------- | ---------------- | ------------ | ------------------- |
+| LG B5                                                                       | `OLED77B5PUA`    | Upstream     | ✅                  |
+| LG C2                                                                       | `OLED42C2PSA`    | Upstream     | ✅                  |
+| LG C2                                                                       | `OLED65C2*`      | Upstream     | Unknown             |
+| LG C2                                                                       | `OLED77C2*`      | Upstream     | Unknown             |
+| [LG C3](https://github.com/ecklf/lg-luma/issues/79#issuecomment-6933087969) | `OLED48C34LA`    | Upstream     | ✅                  |
+| LG C4                                                                       | `OLED42C4*`      | Upstream     | ✅                  |
+| LG G3                                                                       | `OLED??G3*`      | Upstream     | Unknown             |
+| [LG G4](https://github.com/ecklf/lg-luma/issues/156)                        | `OLED77G48LW`    | Upstream     | ✅, preload caveat  |
+| LG NANO77                                                                   | `55NANO776RA`    | Upstream     | ✅                  |
+| LG QNED86                                                                   | `55QNED86T6A`    | Upstream     | Unknown             |
+| LG UT8050                                                                   | `50UT8050*`      | Upstream     | ✅                  |
 
 </details>
 
 <details>
 <summary>webOS 26</summary>
 
-| TV | Model identifier | Home Chooser | Home (old takeover) |
-| --- | --- | --- | --- |
-| LG C2 | `OLED65C2PSA` | Upstream | ✅ |
-| LG C3 | `OLED65C31LA` | Upstream | ✅ |
-| LG C3 | `OLED65C36LC` | Upstream | ✅ |
-| LG C4 | `OLED77C44LA` | Upstream | ✅ |
-| LG C5 | `OLED55C57LA` | Upstream | ✅ |
-| LG C5 | `OLED55C5PSA` | Upstream | Unknown |
-| LG C6 | `OLED65C6*` | Upstream | [✅](https://github.com/ecklf/lg-luma/issues/170) |
-| LG C6 | `OLED77C6*` | Upstream | ✅ |
-| [LG G5](https://github.com/ecklf/lg-luma/issues/79#issuecomment-6600879821) | `OLED65G57LW` | Upstream | ✅ |
-| LG G5 | `OLED83G5WUA.BUSYDJR` | Upstream | ✅ |
-| LG G5 | `OLED77G5WUA.DUSQLJR` | Upstream | ✅ |
+| TV                                                                          | Model identifier      | Home Chooser | Home (old takeover)                               |
+| --------------------------------------------------------------------------- | --------------------- | ------------ | ------------------------------------------------- |
+| LG C2                                                                       | `OLED65C2PSA`         | Upstream     | ✅                                                |
+| LG C3                                                                       | `OLED65C31LA`         | Upstream     | ✅                                                |
+| LG C3                                                                       | `OLED65C36LC`         | Upstream     | ✅                                                |
+| LG C4                                                                       | `OLED77C44LA`         | Upstream     | ✅                                                |
+| LG C5                                                                       | `OLED55C57LA`         | Upstream     | ✅                                                |
+| LG C5                                                                       | `OLED55C5PSA`         | Upstream     | Unknown                                           |
+| LG C6                                                                       | `OLED65C6*`           | Upstream     | [✅](https://github.com/ecklf/lg-luma/issues/170) |
+| LG C6                                                                       | `OLED77C6*`           | Upstream     | ✅                                                |
+| [LG G5](https://github.com/ecklf/lg-luma/issues/79#issuecomment-6600879821) | `OLED65G57LW`         | Upstream     | ✅                                                |
+| LG G5                                                                       | `OLED83G5WUA.BUSYDJR` | Upstream     | ✅                                                |
+| LG G5                                                                       | `OLED77G5WUA.DUSQLJR` | Upstream     | ✅                                                |
 
 Additional confirmations without a full model identifier:
 
@@ -198,9 +198,9 @@ grouped under **webOS 26**, including [the G5 report](https://github.com/ecklf/l
 <details>
 <summary>webOS version not reported</summary>
 
-| TV | Model identifier | Home Chooser | Home (old takeover) |
-| --- | --- | --- | --- |
-| [LG G6, 65-inch](https://github.com/ecklf/lg-luma/issues/410) | Not reported | Unknown | Unknown |
+| TV                                                            | Model identifier | Home Chooser | Home (old takeover) |
+| ------------------------------------------------------------- | ---------------- | ------------ | ------------------- |
+| [LG G6, 65-inch](https://github.com/ecklf/lg-luma/issues/410) | Not reported     | Unknown      | Unknown             |
 
 The G6 reporter confirms Luma works, but gives neither a webOS version nor a Home integration
 method. Home Chooser support cannot be inferred from the TV's model year alone.
