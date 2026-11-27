@@ -42,87 +42,130 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 
 > [!NOTE]
 > Luma should start on any TV running webOS 4 or newer. The following configurations have been
-> confirmed to work by the community. Home takeover support varies, as noted below:
+> reported working by the community.
 
 <details>
 <summary>webOS 4</summary>
 
-| TV        | Model identifier | Takeover Support |
-| --------- | ---------------- | ---------------- |
-| LG C8     | `OLED??C8*`      | ❌               |
-| LG C9     | `OLED65C97LA`    | Unknown          |
-| LG UM7450 | `UM74507LA`      | ❌               |
+| TV                                                                              | Model identifier | Home Chooser | Home (old takeover)  |
+| ------------------------------------------------------------------------------- | ---------------- | ------------ | -------------------- |
+| [LG B8](https://github.com/ecklf/lg-luma/issues/338)                            | `OLED55B8PLA`    | ✅           | Unknown              |
+| [LG B9](https://github.com/ecklf/lg-luma/issues/172)                            | `OLED55B9PLA`    | ✅           | Unknown              |
+| [LG C8](https://github.com/ecklf/lg-luma/issues/216)                            | `OLED65C8*`      | ✅           | ❌                   |
+| LG C9                                                                           | `OLED65C97LA`    | ✅           | Unknown              |
+| [LG C9](https://github.com/ecklf/lg-luma/issues/189)                            | `OLED65C9PLA`    | ✅           | ❌                   |
+| LG UM7450                                                                       | `UM74507LA`      | ✅           | ❌                   |
+| [LG UM7600](https://github.com/ecklf/lg-luma/issues/98#issuecomment-6504239681) | `65UM7600PTA`    | ✅           | Patched scripts only |
 
 </details>
 
 <details>
 <summary>webOS 5</summary>
 
-| TV        | Model identifier | Takeover Support |
-| --------- | ---------------- | ---------------- |
-| LG UN7100 | `49UN71006LB`    | ✅               |
+| TV                                                                           | Model identifier | Home Chooser | Home (old takeover) |
+| ---------------------------------------------------------------------------- | ---------------- | ------------ | ------------------- |
+| [LG CX](https://github.com/ecklf/lg-luma/issues/109#issuecomment-6558898333) | `OLED55CXAUA`    | ✅           | ✅                  |
+| [LG GX](https://github.com/ecklf/lg-luma/issues/205)                         | `OLED65GXPUA`    | ✅           | ✅                  |
+| LG UN7100                                                                    | `49UN71006LB`    | ✅           | ✅                  |
 
 </details>
 
 <details>
 <summary>webOS 6</summary>
 
-| TV        | Model identifier | Takeover Support |
-| --------- | ---------------- | ---------------- |
-| LG B1     | `OLED65B19LA`    | ✅               |
-| LG C1     | `OLED48C1KNB`    | ✅               |
-| LG G1     | `OLED65G1RLA`    | ✅               |
-| LG UP8000 | `86UP80009LA`    | Unknown          |
+| TV                                                            | Model identifier | Home Chooser                                               | Home (old takeover)  |
+| ------------------------------------------------------------- | ---------------- | ---------------------------------------------------------- | -------------------- |
+| LG B1                                                         | `OLED65B19LA`    | ✅                                                         | ✅                   |
+| LG C1                                                         | `OLED48C1KNB`    | ✅                                                         | ✅                   |
+| [LG C1](https://github.com/ecklf/lg-luma/issues/208)          | `OLED65C15LA`    | ✅                                                         | ✅, startup caveat   |
+| [LG C1, 65-inch](https://github.com/ecklf/lg-luma/issues/407) | `OLED65C1*`      | [✅, caveats](https://github.com/ecklf/lg-luma/issues/407) | ✅                   |
+| [LG G1](https://github.com/ecklf/lg-luma/issues/125)          | `OLED65G13LA`    | ✅                                                         | ✅, cold-boot caveat |
+| LG G1                                                         | `OLED65G1RLA`    | ✅                                                         | ✅                   |
+| [LG NANO77](https://github.com/ecklf/lg-luma/issues/399)      | `50NANO773PA`    | ✅, 0.2.0 failed                                           | ✅                   |
+| LG UP8000                                                     | `86UP80009LA`    | ✅                                                         | Unknown              |
+
+</details>
+
+<details>
+<summary>webOS 22 (7.x)</summary>
+
+| TV / monitor                                                                     | Model identifier | Home Chooser | Home (old takeover) |
+| -------------------------------------------------------------------------------- | ---------------- | ------------ | ------------------- |
+| [LG SQ700S](https://github.com/ecklf/lg-luma/issues/181#issuecomment-6530301629) | `43SQ700S-WB`    | ✅           | ❌                  |
+
+</details>
+
+<details>
+<summary>webOS 23 (8.x)</summary>
+
+| TV / monitor                                            | Model identifier | Home Chooser | Home (old takeover) |
+| ------------------------------------------------------- | ---------------- | ------------ | ------------------- |
+| [LG SR50F](https://github.com/ecklf/lg-luma/issues/181) | `32SR50F`        | ✅           | ❌                  |
 
 </details>
 
 <details>
 <summary>webOS 24</summary>
 
-| TV        | Model identifier | Takeover Support |
-| --------- | ---------------- | ---------------- |
-| LG G4     | `OLED65G46LA`    | ✅               |
-| LG B2     | `OLED65B29LA`    | ✅               |
-| LG QNED81 | `50QNED816RE`    | ✅               |
+| TV        | Model identifier | Home Chooser | Home (old takeover) |
+| --------- | ---------------- | ------------ | ------------------- |
+| LG G4     | `OLED65G46LA`    | ✅           | ✅                  |
+| LG B2     | `OLED65B29LA`    | ✅           | ✅                  |
+| LG QNED81 | `50QNED816RE`    | ✅           | ✅                  |
 
 </details>
 
 <details>
 <summary>webOS 25</summary>
 
-| TV        | Model identifier | Takeover Support |
-| --------- | ---------------- | ---------------- |
-| LG B5     | `OLED77B5PUA`    | ✅               |
-| LG C2     | `OLED42C2PSA`    | ✅               |
-| LG C2     | `OLED65C2*`      | Unknown          |
-| LG C2     | `OLED77C2*`      | Unknown          |
-| LG C4     | `OLED42C4*`      | ✅               |
-| LG G3     | `OLED??G3*`      | Unknown          |
-| LG NANO77 | `55NANO776RA`    | ✅               |
-| LG QNED86 | `55QNED86T6A`    | Unknown          |
-| LG UT8050 | `50UT8050*`      | ✅               |
+| TV                                                                          | Model identifier | Home Chooser | Home (old takeover) |
+| --------------------------------------------------------------------------- | ---------------- | ------------ | ------------------- |
+| LG B5                                                                       | `OLED77B5PUA`    | ✅           | ✅                  |
+| LG C2                                                                       | `OLED42C2PSA`    | ✅           | ✅                  |
+| LG C2                                                                       | `OLED65C2*`      | ✅           | Unknown             |
+| LG C2                                                                       | `OLED77C2*`      | ✅           | Unknown             |
+| [LG C3](https://github.com/ecklf/lg-luma/issues/79#issuecomment-6933087969) | `OLED48C34LA`    | ✅           | ✅                  |
+| LG C4                                                                       | `OLED42C4*`      | ✅           | ✅                  |
+| LG G3                                                                       | `OLED??G3*`      | ✅           | Unknown             |
+| [LG G4](https://github.com/ecklf/lg-luma/issues/156)                        | `OLED77G48LW`    | ✅           | ✅, preload caveat  |
+| LG NANO77                                                                   | `55NANO776RA`    | ✅           | ✅                  |
+| LG QNED86                                                                   | `55QNED86T6A`    | ✅           | Unknown             |
+| LG UT8050                                                                   | `50UT8050*`      | ✅           | ✅                  |
 
 </details>
 
 <details>
 <summary>webOS 26</summary>
 
-| TV    | Model identifier      | Takeover Support |
-| ----- | --------------------- | ---------------- |
-| LG C2 | `OLED65C2PSA`         | ✅               |
-| LG C3 | `OLED65C31LA`         | ✅               |
-| LG C3 | `OLED65C36LC`         | ✅               |
-| LG C4 | `OLED77C44LA`         | ✅               |
-| LG C5 | `OLED55C57LA`         | ✅               |
-| LG C5 | `OLED55C5PSA`         | Unknown          |
-| LG C6 | `OLED65C6*`           | Unknown          |
-| LG C6 | `OLED77C6*`           | ✅               |
-| LG G5 | `OLED83G5WUA.BUSYDJR` | ✅               |
-| LG G5 | `OLED77G5WUA.DUSQLJR` | ✅               |
+| TV                                                                          | Model identifier      | Home Chooser | Home (old takeover)                               |
+| --------------------------------------------------------------------------- | --------------------- | ------------ | ------------------------------------------------- |
+| LG C2                                                                       | `OLED65C2PSA`         | ✅           | ✅                                                |
+| LG C3                                                                       | `OLED65C31LA`         | ✅           | ✅                                                |
+| LG C3                                                                       | `OLED65C36LC`         | ✅           | ✅                                                |
+| LG C4                                                                       | `OLED77C44LA`         | ✅           | ✅                                                |
+| LG C5                                                                       | `OLED55C57LA`         | ✅           | ✅                                                |
+| LG C5                                                                       | `OLED55C5PSA`         | ✅           | Unknown                                           |
+| LG C6                                                                       | `OLED65C6*`           | ✅           | [✅](https://github.com/ecklf/lg-luma/issues/170) |
+| LG C6                                                                       | `OLED77C6*`           | ✅           | ✅                                                |
+| [LG G5](https://github.com/ecklf/lg-luma/issues/79#issuecomment-6600879821) | `OLED65G57LW`         | ✅           | ✅                                                |
+| LG G5                                                                       | `OLED83G5WUA.BUSYDJR` | ✅           | ✅                                                |
+| LG G5                                                                       | `OLED77G5WUA.DUSQLJR` | ✅           | ✅                                                |
+
+</details>
+
+<details>
+<summary>webOS version not reported</summary>
+
+| TV                                                            | Model identifier | Home Chooser | Home (old takeover) |
+| ------------------------------------------------------------- | ---------------- | ------------ | ------------------- |
+| [LG G6, 65-inch](https://github.com/ecklf/lg-luma/issues/410) | Not reported     | Unknown      | Unknown             |
 
 </details>
 
 ## Installation
+
+> [!IMPORTANT]
+> Enabling **Quick Start+** (if available) is recommended.
 
 ### Homebrew Channel
 
