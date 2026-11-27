@@ -1,5 +1,12 @@
 # lg-luma
 
+## 3.13.6
+
+### Patch Changes
+
+- 64774a6: Draw resting Liquid Glass faster on webOS 5 Mali TVs: the interior of glass over a single wallpaper is rendered once per wallpaper and then read with one texture lookup, while rims keep the full lens and highlight shading.
+- 9894712: Reduce redraw work during app and settings navigation, reuse identical vector vertices, and prepare installed app icons and focus labels while the launcher is idle. Speed up transitions and stacked recent apps by simplifying common paint operations and skipping glass hidden behind opaque cards.
+
 ## 3.13.5
 
 ### Patch Changes
