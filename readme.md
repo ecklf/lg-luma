@@ -42,25 +42,7 @@ https://github.com/user-attachments/assets/cae57643-f6b4-47b5-ad7d-0483b32eeb2d
 
 > [!NOTE]
 > Luma should start on any TV running webOS 4 or newer. The following configurations have been
-> reported working by the community. These are device-specific reports, not a guarantee that every
-> feature works on every firmware or Luma release.
-
-**Home Chooser** is the recommended Home integration. Its [upstream requirements][hc-requirements]
-list webOS **4–12** (including webOS 22/7.x, 23/8.x, 24/9.x, 25/10.x and 26/11.x).
-See the [upstream per-webOS integration details][hc-platforms] for platform differences.
-Upstream also records a [firmware test matrix][hc-matrix], including emulated sets and test
-launchers. Those results are not physical-TV confirmations for Luma.
-Homebrew Channel **0.8.0 or newer is required on webOS 11 and later**.
-
-In the tables, **Upstream** means Home Chooser supports the reported webOS family, not that
-Luma + Home Chooser was tested on that exact model. **✅** links to a firsthand Home Chooser
-confirmation. **Home (old takeover)** records reports for Luma's legacy `home.sh` method:
-✅ worked, ❌ failed or unsupported, and Unknown means no confirmation. Older successes may
-have release-specific caveats. Model identifiers containing `*` or `?` are incomplete as reported.
-
-[hc-requirements]: https://github.com/webosbrew/home-chooser#requirements
-[hc-platforms]: https://github.com/webosbrew/home-chooser/blob/main/docs/architecture.md#the-home-key-and-the-idle-path-per-webos-family
-[hc-matrix]: https://github.com/webosbrew/home-chooser/issues/1
+> reported working by the community.
 
 <details>
 <summary>webOS 4</summary>
@@ -105,14 +87,6 @@ required locally widening the old takeover's version check, not the shipped setu
 | LG G1                                                         | `OLED65G1RLA`    | Upstream                                                   | ✅                   |
 | [LG NANO77](https://github.com/ecklf/lg-luma/issues/399)      | `50NANO773PA`    | Upstream, 0.2.0 failed                                     | ✅                   |
 | LG UP8000                                                     | `86UP80009LA`    | Upstream                                                   | Unknown              |
-
-Home Chooser activation was confirmed fixed with **Home Chooser 0.3.0 / Luma 3.13.2** after
-clearing a conflicting permanent Home-key setting ([#389](https://github.com/ecklf/lg-luma/issues/389#issuecomment-7131065084)).
-The NANO77 reporter has not confirmed a retest on that version. The C1 report in
-[#407](https://github.com/ecklf/lg-luma/issues/407) confirms Home Chooser activation and launches,
-but also reports slow cold boots and recurring Homebrew Channel failsafe warnings with no established cause.
-The cold-boot report is also tracked in [Home Chooser #20](https://github.com/webosbrew/home-chooser/issues/20).
-The two 65-inch C1 entries may describe the same variant, but #407 does not give its full identifier.
 
 </details>
 
